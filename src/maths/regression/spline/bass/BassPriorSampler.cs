@@ -23,6 +23,10 @@ namespace Maths.Regression.Spline.Bass;
 /// </list>
 /// Its account (<see cref="Attempts"/>, <see cref="Accepted"/>, refusals by reason) is the share of the prior F holds.
 /// A draw refuses after <see cref="MaxAttempts"/> attempts. Not thread-safe: it keeps its own design, one per chain.
+/// <para><b>Under a noise</b> (<see cref="VarianceMeanMixture"/>) the prior holds the latents too: <see cref="DrawPrior"/>, the b = 0
+/// member an exact reference rung and SMC's start draw, takes them from their prior with each attempt (<see cref="VarianceMeanMixture.PriorLatents"/>)
+/// and loads the structure on the working response they make, so F, which reads the weights, holds the pair. A chain's start
+/// (<see cref="DrawState"/>) needs no prior draw and keeps the model's working response, the latents at their start.</para>
 /// </summary>
 public sealed class BassPriorSampler : IReferenceSampler<BassState>
 {
@@ -32,6 +36,7 @@ public sealed class BassPriorSampler : IReferenceSampler<BassState>
     private readonly BassModel _model;
     private readonly BassDesign _design;
     private readonly double[] _countCdf;   // the truncated count law's CDF over M = 0, …, M_max
+    private BassState? _last;              // the last draw, which the design holds
 
     /// <summary>Exact draws from <paramref name="model"/>'s prior on F, each refusing after
     /// <paramref name="maxAttempts"/> attempts.</summary>
@@ -94,14 +99,27 @@ public sealed class BassPriorSampler : IReferenceSampler<BassState>
         InterceptTerms = counts.InterceptTerms;
     }
 
-    /// <summary>One exact draw of (structure, τ) from the prior on F, with its evaluation under the model's target.</summary>
+    /// <summary>One exact draw from the prior on F (<see cref="DrawPrior"/>), with its evaluation under the model's target.</summary>
     public (BassState State, ITargetEvaluation Evaluation) Draw(Xoshiro256PlusPlus rng)
     {
-        (BassState state, BassEvaluation evaluation) = DrawState(rng);
+        (BassState state, BassEvaluation evaluation) = DrawPrior(rng);
         return (state, evaluation);
     }
 
-    /// <summary><see cref="Draw"/>, its evaluation typed.</summary>
+    /// <summary>One exact draw from the whole prior on F, the likelihood path's b = 0 member: (structure, τ), and under a noise its latents
+    /// with them (<see cref="DrawState"/> where the model has none).</summary>
+    public (BassState State, BassEvaluation Evaluation) DrawPrior(Xoshiro256PlusPlus rng)
+        => _model.Observation is VarianceMeanMixture mixture ? DrawWithLatents(mixture, rng) : DrawState(rng);
+
+    /// <summary>An exact copy of this sampler's design at its last draw, for the holder of that state to adopt as its own (SMC's particle,
+    /// a ladder's replica under a noise).</summary>
+    internal BassDesignSnapshot LastDesign() => _design.Snapshot(shareColumns: true);
+
+    /// <summary>Whether <paramref name="state"/> is this sampler's last draw, the state <see cref="LastDesign"/> holds.</summary>
+    internal bool Holds(BassState state) => ReferenceEquals(state, _last);
+
+    /// <summary>One exact draw of (structure, τ) from the prior on F on the model's working response, with its evaluation under the model's
+    /// target: a chain's start, and the whole prior's draw where the model holds no latents.</summary>
     public (BassState State, BassEvaluation Evaluation) DrawState(Xoshiro256PlusPlus rng)
     {
         ArgumentNullException.ThrowIfNull(rng);
@@ -129,7 +147,8 @@ public sealed class BassPriorSampler : IReferenceSampler<BassState>
                 InterceptTerms++;
                 continue;
             }
-            if (_design.Load(terms) is { } refusal)
+            // On the model's working response, which a draw with latents (DrawPrior) may have moved this design off.
+            if (_design.Load(terms, _model.Working) is { } refusal)
             {
                 Refusals.Add(refusal);
                 continue;
@@ -143,10 +162,68 @@ public sealed class BassPriorSampler : IReferenceSampler<BassState>
                 continue;
             }
             Accepted++;
+            _last = state;
             return (state, evaluation);
         }
+        throw Exhausted(intercepts, before);
+    }
+
+    // DrawState's attempts with the latents drawn in each, after τ and σ²'s rate, whose prior σ² is drawn from; the structure is loaded on
+    // the working response they make.
+    private (BassState State, BassEvaluation Evaluation) DrawWithLatents(VarianceMeanMixture mixture, Xoshiro256PlusPlus rng)
+    {
+        ArgumentNullException.ThrowIfNull(rng);
+        BassStructurePrior prior = _model.Prior;
+        BassTarget target = _model.Target;
+        long intercepts = InterceptTerms;
+        Tally<BassRefusal> before = Refusals.Copy();
+        int n = _model.Working.Response.Observations;
+        for (long attempt = 0; attempt < MaxAttempts; attempt++)
+        {
+            Attempts++;
+            var terms = new BassTerm[DrawCount(rng)];
+            double logTermPrior = 0.0;
+            bool intercept = false;
+            for (int j = 0; j < terms.Length && !intercept; j++)
+            {
+                if (prior.DrawTerm(rng) is not { } term) intercept = true;
+                else
+                {
+                    terms[j] = term;
+                    logTermPrior += prior.LogPrior(term);
+                }
+            }
+            if (intercept)
+            {
+                InterceptTerms++;
+                continue;
+            }
+            double logTau = DrawLogTau(rng), logRate = target.Sigma2Rate?.SampleLogRate(rng) ?? double.NaN;
+            InverseGamma? sigma2Prior = target.Sigma2Rate is { } rate ? rate.PriorAt(logRate) : target.Sigma2;
+            WorkingResponse working = mixture.At(_model.Working, mixture.PriorLatents(n, sigma2Prior, rng));
+            if (_design.Load(terms, working) is { } refusal)
+            {
+                Refusals.Add(refusal);
+                continue;
+            }
+            var state = new BassState([.. _design.Terms], BassStructureFit.Of(_design, logTermPrior), logTau, logRate);
+            BassEvaluation evaluation = target.Evaluate(state);
+            if (evaluation.Refusal is { } exact)
+            {
+                Refusals.Add(exact);
+                continue;
+            }
+            Accepted++;
+            _last = state;
+            return (state, evaluation);
+        }
+        throw Exhausted(intercepts, before);
+    }
+
+    private InvalidOperationException Exhausted(long intercepts, Tally<BassRefusal> before)
+    {
         var refused = Refusals.Entries.Select(e => (e.Category, Count: e.Count - before.Count(e.Category))).Where(e => e.Count > 0);
-        throw new InvalidOperationException(
+        return new InvalidOperationException(
             $"No collection in F after {MaxAttempts} draws from the prior ({InterceptTerms - intercepts} with an intercept term; refusals " +
             $"{string.Join(", ", refused.Select(e => $"{e.Category} {e.Count}"))}): F holds too little of the prior's mass. Loosen the " +
             "support rule or the caps, or move the count prior towards fewer terms.");

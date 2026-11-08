@@ -32,7 +32,8 @@ public sealed class BassParticle
 
 /// <summary>
 /// BASS's particles for SMC (stage 8; D05), the sampler of the sequence's b = 0 end. A draw is an exact draw of the prior
-/// on F, τ from its prior when sampled (<see cref="BassPriorSampler"/>), loaded into the particle's own design. A fork
+/// on F, τ from its prior when sampled (<see cref="BassPriorSampler"/>), loaded into the particle's own design; under a noise the
+/// latents with it (<see cref="BassPriorSampler.DrawPrior"/>), riding the state's working response, whose design the particle adopts. A fork
 /// copies the design as the ladder's hand-over does, the factor and the fit copied and the columns shared, and gives the
 /// fork its own copy of the term array, so no two particles share a structure's identity (<see cref="BassLadder"/>'s
 /// clone-safe replicas). Draws may run concurrently, each on its own sampler; <see cref="PriorAttempts"/> counts the
@@ -62,6 +63,15 @@ public sealed class BassParticles : ISmcParticles<BassParticle>
     {
         ArgumentNullException.ThrowIfNull(rng);
         var sampler = new BassPriorSampler(_model);
+        if (_model.Observation is VarianceMeanMixture)
+        {
+            // The latents ride the state's working response, which the sampler's design was loaded on: the particle adopts that design.
+            BassState drawn = sampler.DrawPrior(rng).State;
+            Interlocked.Add(ref _attempts, sampler.Attempts);
+            var held = new BassStructureMoves(_model, drawn, new BassMovesSnapshot(sampler.LastDesign(), new Tally<BassRefusal>(), 0,
+                                                                                   new BassSupportTally(_model.Prior), new BassMoveTally()));
+            return new BassParticle(held, drawn);
+        }
         BassState start = sampler.DrawState(rng).State;
         Interlocked.Add(ref _attempts, sampler.Attempts);
         var moves = new BassStructureMoves(_model, start.Terms, start.LogTau, start.LogRate);

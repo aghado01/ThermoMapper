@@ -44,8 +44,9 @@ public sealed record BassConfig
 
     /// <summary>
     /// The noise beyond the Gaussian (E1; <see cref="BassNoise"/>): null, the default, is Gaussian BASS. Left out of the serialized form
-    /// when null, so a Gaussian config's form and fingerprint stand as they were. A fit under a declared noise runs chains: its blocks on
-    /// a tempered rung, SMC's particles and the flat histogram are E1's slice 5.
+    /// when null, so a Gaussian config's form and fingerprint stand as they were. A fit under a declared noise runs chains, tempered ladders
+    /// or SMC, each on the likelihood path in the integrated form, whose rungs temper the likelihood given the latents; not the flat
+    /// histogram, whose π_w reads the marginal over a and σ² that the latents couple.
     /// </summary>
     [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
     public BassNoise? Noise { get; init; }
@@ -129,9 +130,24 @@ public sealed record BassConfig
 
         if (Noise is { } noise)
         {
-            if (Sampling?.Tempering is not null) throw Bad("Noise", "takes no Sampling.Tempering yet: a latent noise's blocks on a tempered rung are E1's slice 5");
-            if (Sampling?.Smc is not null) throw Bad("Noise", "takes no Sampling.Smc yet: SMC's particles holding their own latents are E1's slice 5");
-            if (Sampling?.FlatHistogram is not null) throw Bad("Noise", "takes no Sampling.FlatHistogram yet: its walkers holding their own latents are E1's slice 5");
+            // The noise's blocks temper the likelihood given its latents, so a, σ², β and each vᵢ keep their conditionals at every b: the
+            // likelihood path in the integrated form. The linear form and the powered path temper the marginal over a and σ², which couples
+            // every latent, and the flat histogram's π_w and WHAM read that marginal's rung laws, prior·e^{b·ℓ₁}.
+            if (Sampling?.Tempering is { } ladder)
+            {
+                if (ladder.Path != TemperingPath.Likelihood)
+                    throw Bad("Sampling.Tempering.Path", "must be the likelihood path under a noise: the powered path powers the marginal over a and σ², which couples every latent");
+                if (ladder.Form != TemperedForm.Integrated)
+                    throw Bad("Sampling.Tempering.Form", "must be the integrated form under a noise: the linear form tempers the marginal over a and σ², b·ℓ₁, which couples every latent");
+            }
+            if (Sampling?.Smc is { Form: not TemperedForm.Integrated })
+                throw Bad("Sampling.Smc.Form", "must be the integrated form under a noise: the linear form tempers the marginal over a and σ², b·ℓ₁, which couples every latent");
+            if (Sampling?.FlatHistogram is not null)
+                throw Bad("Noise", "takes no Sampling.FlatHistogram: its walkers' π_w and WHAM read the rung laws prior·e^{b·ℓ₁} of the marginal over a and σ², "
+                               + "whose weights couple every latent, so no vᵢ keeps a step of its own; take Sampling.Tempering or Sampling.Smc");
+            bool drawsPrior = Sampling?.Smc is not null || Sampling?.Tempering is { ReferenceRung: true };
+            if (drawsPrior && noise.Skewed && !Sigma2.IsProper)
+                throw Bad("Sigma2", "is Jeffreys, improper, while the noise's skew puts σ² on the record and b = 0 draws it from its prior (an SMC start or a reference rung); take an inverse gamma, a held σ² or the hierarchical prior");
             if (noise.Reference == BassNoiseReference.None && (Intercept == GPriorCentre.Mean || Sigma2.ReadsResponse))
                 throw Bad("Noise.Reference", "is None, while the intercept's level or σ²'s prior reads the response; state Moments or Robust, or take priors that read nothing");
         }

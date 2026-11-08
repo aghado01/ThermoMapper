@@ -30,6 +30,8 @@ public sealed class GbpMixingTests(ITestOutputHelper output)
         [1.0, 0.5, 0.5, -2.0, 0.5, 0.7, 1.0],
         [1.0, 0.5, 0.5, 1.0, 1.0, 0.0, 0.5],
         [1.0, 0.5, 0.5, 1.0, 1.0, 0.0, 0.0],    // the prior
+        [1.0, 0.5, 0.5, -2.0, 0.5, 0.7, 0.5],   // a drift on a rung (E1's slice 5)
+        [1.0, 0.5, 0.5, 10.0, 1.0, 0.5, 0.5],   // far along the drift's ridge on a rung, r ≈ m·v near v = 20
         [0.5, 1.0, 0.5, 1.0, 2.0, -0.3, 1.0],
         [2.0, 1.5, 3.0, 0.8, 0.3, 0.2, 1.0],
     ];

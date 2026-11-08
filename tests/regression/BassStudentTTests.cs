@@ -197,10 +197,11 @@ public sealed class BassStudentTTests(ITestOutputHelper output)
         Assert.IsType<VarianceMeanMixture>(BassModel.Create(t, data).Observation);
         Assert.Same(GaussianObservation.Instance, BassModel.Create(gaussian, data).Observation);
 
-        // The slices not built yet, and a reference that cannot stand, are refused with the reason.
-        Assert.Contains("slice 5", Assert.Throws<ArgumentException>(() => (t with { Sampling = t.Sampling with { Tempering = new TemperingSpec() } }).Validate()).Message);
+        // A form that couples the latents, and a reference that cannot stand, are refused with the reason (slice 5 takes the rest).
+        Assert.Contains("Sampling.Tempering.Form",
+                        Assert.Throws<ArgumentException>(() => (t with { Sampling = t.Sampling with { Tempering = new TemperingSpec { Form = Spline.Bars.TemperedForm.Linear } } }).Validate()).Message);
         Assert.Contains("Noise.Reference", Assert.Throws<ArgumentException>(() => Config(BassNoise.StudentT(3, reference: BassNoiseReference.None)).Validate()).Message);
-        Assert.Throws<NotSupportedException>(() => BassModel.Create(t, SensitivityFixture.Functional()));
+        Assert.IsType<VarianceMeanMixture>(BassModel.Create(t, SensitivityFixture.Functional()).Observation);
         Assert.Throws<ArgumentException>(() => BassModel.Create(t, data, GaussianObservation.Instance));
     }
 

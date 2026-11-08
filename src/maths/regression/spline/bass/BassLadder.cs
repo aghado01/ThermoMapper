@@ -339,7 +339,10 @@ public sealed class BassLadder
     // adopts one, since a giver is usually a receiver too. A giver that hands over its pending candidate commits it, so
     // while replicas share one structure's array (their start) it can stop holding its own state; another holder of that
     // structure then hands it back in a further round. A state no replica holds came from the reference rung, and its
-    // replica loads it whole when it next needs it, by the admission the reference sampler's own load passed.
+    // replica loads it whole when it next needs it, by the admission the reference sampler's own load passed. Under a noise
+    // the reference's state rides the working response its latents make, which the sampler's design was loaded on, so the
+    // replica adopts that design instead (as SMC's particle does): a resumed ladder's designs read the response as the
+    // checkpointed model did, a new sampler's as the new model does, and a design takes a working response of its own reading.
     private void HandOver()
     {
         IReadOnlyList<ReversibleJumpChain<BassState>> replicas = Tempering.Replicas;
@@ -350,12 +353,12 @@ public sealed class BassLadder
             {
                 BassState state = replicas[i].Current;
                 if (_structures[i].Holds(state)) continue;
-                for (int j = 0; j < _structures.Length; j++)
-                    if (j != i && _structures[j].Holds(state))
-                    {
-                        (handed ??= []).Add((i, state, _structures[j].DesignFor(state)));
-                        break;
-                    }
+                BassDesignSnapshot? design = null;
+                for (int j = 0; j < _structures.Length && design is null; j++)
+                    if (j != i && _structures[j].Holds(state)) design = _structures[j].DesignFor(state);
+                if (design is null && Model.Observation is VarianceMeanMixture && Reference is { } reference && reference.Holds(state))
+                    design = reference.LastDesign();
+                if (design is not null) (handed ??= []).Add((i, state, design));
             }
             if (handed is null) return;
             foreach ((int receiver, BassState state, BassDesignSnapshot design) in handed) _structures[receiver].Adopt(state, design);

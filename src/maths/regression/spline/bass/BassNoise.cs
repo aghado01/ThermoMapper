@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.Text.Json.Serialization;
 using Maths.Distributions;
 using Maths.Regression.GPrior;
+using Maths.Regression.Spline.Bars;
 using Maths.Rng;
 using Maths.Samplers;
 using Maths.Samplers.Blocks;
@@ -365,7 +366,9 @@ public interface IBassNoiseLaw
 /// are drawn (<see cref="BassNoiseShapeBlock"/>). Under a pure scale mixture (t, or a skew held at 0) the structure step integrates σ² too
 /// and redraws it with a each sweep, so σ² has no block of its own. Under a skew, held away from 0 or drawn, σ² sits in the offset, so it
 /// is drawn apart and held on the record, where the target reads it; its draw is the modified half-normal on σ⁻¹, and a held σ² is the
-/// config's own. v's law is read at the record's γ. One model serves every chain: it holds no chain's state.
+/// config's own. v's law is read at the record's γ. On a tempered rung and an SMC stage the same blocks run at the rung's power b, the
+/// likelihood given the latents tempered (<see cref="BassCoefficientsBlock.Power"/>), and the prior's b = 0 draw takes the latents from
+/// theirs (<see cref="PriorLatents"/>). One model serves every chain: it holds no chain's state.
 /// </summary>
 public sealed class VarianceMeanMixture : IBassObservationModel, IBassNoiseLaw
 {
@@ -411,13 +414,12 @@ public sealed class VarianceMeanMixture : IBassObservationModel, IBassNoiseLaw
 
     /// <summary>
     /// The working response at v = 1, β and γ at their starts: under a skew, σ² starts at the response's variance over the noise's per unit
-    /// σ², β²Var[v] + c·E[v] (c where v's law has no finite moments), or at the held value; the reference is read from the response.
+    /// σ², β²Var[v] + c·E[v] (c where v's law has no finite moments), or at the held value; the reference is read from the response. A
+    /// direct functional response takes a latent per observation, case by case and location by location, as a scalar one does.
     /// </summary>
     public WorkingResponse Working(BassResponse response)
     {
         ArgumentNullException.ThrowIfNull(response);
-        if (response is FunctionalResponse)
-            throw new NotSupportedException("A per-observation latent under a direct functional design is E1's slice 5; a scalar response takes it now.");
         int n = response.Observations;
         var ones = new double[n];
         Array.Fill(ones, 1.0);
@@ -444,6 +446,33 @@ public sealed class VarianceMeanMixture : IBassObservationModel, IBassNoiseLaw
         var latents = new ObservationLatents(ones, Skew, sigma2, gamma);
         (double[]? offset, double[] weights) = Reading(latents);
         return new WorkingResponse(response, offset, weights, reference: reference, latents: latents);
+    }
+
+    /// <summary>
+    /// Latents for <paramref name="observations"/> observations from their prior, the b = 0 member of the likelihood path that an exact
+    /// reference rung and SMC's start draw: β from its prior where it is drawn (the kind's value otherwise), γ likewise, each vᵢ from its law
+    /// at that γ, and under a skew σ² from <paramref name="sigma2Prior"/>, the prior at the state (a held σ² as the config holds it).
+    /// Refused under a skew whose σ² prior is improper, which has no draw.
+    /// </summary>
+    internal ObservationLatents PriorLatents(int observations, InverseGamma? sigma2Prior, Xoshiro256PlusPlus rng)
+    {
+        ArgumentNullException.ThrowIfNull(rng);
+        double skew = Noise.SkewPrior is { IsHeld: false } b ? b.Mean + b.Sd * Normal.SampleStandard(rng) : Skew;
+        double? gamma = Noise.GammaPrior switch
+        {
+            { IsHeld: false } g => Normal.MeanSd(g.Mean, g.Sd).SampleOn(rng, 0.0, double.PositiveInfinity),
+            { } g => g.Mean,
+            null => null,
+        };
+        IMixingLaw law = Noise.MixingAt(gamma);
+        var v = new double[observations];
+        for (int i = 0; i < observations; i++) v[i] = law.SamplePrior(rng);
+        double? sigma2 = null;
+        if (Skewed)
+            sigma2 = _held ?? (sigma2Prior is { } prior
+                ? prior.Sample(rng)
+                : throw new InvalidOperationException("Under a skew σ² sits on the record, and an exact draw of it needs a proper prior: take an inverse gamma, a held σ² or the hierarchical prior."));
+        return new ObservationLatents(v, skew, sigma2, gamma);
     }
 
     /// <summary>
@@ -547,10 +576,12 @@ public sealed class VarianceMeanMixture : IBassObservationModel, IBassNoiseLaw
 
 /// <summary>
 /// The coefficients' block (D04's robust row, the coefficients' slot): σ² and a from their conditional given the structure, τ and the
-/// working response, exact, at the cost of a retained draw's composition (<see cref="BassStructureMoves.Compose"/>), with the fit f at
-/// every observation. They ride the chain's own moves to the blocks after it in the same sweep, which read the residuals y − f; being
-/// redrawn each sweep they are not state. A σ² held or given is taken as it stands. The likelihood's power is 1: a tempered rung's
-/// conditional is E1's slice 5.
+/// working response at the rung's power b, exact, at the cost of a retained draw's composition (<see cref="BassStructureMoves.Compose"/>),
+/// with the fit f at every observation. They ride the chain's own moves to the blocks after it in the same sweep, which read the
+/// residuals y − f; being redrawn each sweep they are not state. A σ² held or given is taken as it stands.
+/// <para><b>On a rung.</b> The noise's blocks temper the likelihood given the latents, p(θ)·p(v)·N(y | f + σβv, σ²c·v)^b, the integrated
+/// form on the likelihood path: a and σ² are integrated against the tempered likelihood (the structure step's ℓ_b), so their conditional
+/// is the same block's at b, and β and each vᵢ keep theirs at b (<see cref="Power"/>). At b = 0 every block draws from its prior.</para>
 /// </summary>
 public sealed class BassCoefficientsBlock : IBlock<ReversibleJumpChain<BassState>>
 {
@@ -562,18 +593,32 @@ public sealed class BassCoefficientsBlock : IBlock<ReversibleJumpChain<BassState
     {
         ArgumentNullException.ThrowIfNull(state);
         ArgumentNullException.ThrowIfNull(rng);
-        if (state.Temperature.InverseTemperature != 1.0)
-            throw new NotSupportedException("A latent noise's blocks on a tempered rung are E1's slice 5; run a chain at b = 1.");
         BassStructureMoves moves = BassStructureMoves.Of(state);
-        moves.DrawSweepFit(state.Current, rng, state.Target as BassTarget);
+        moves.DrawSweepFit(state.Current, rng, state.Target as BassTarget, Power(state));
         return true;
+    }
+
+    /// <summary>
+    /// The likelihood's power b at <paramref name="state"/>'s rung, which every latent block reads. Refused off the likelihood path or in the
+    /// linear form: the powered path and the linear form temper the marginal over a and σ², b·ℓ₁, whose weights 1/(c·vᵢ) couple every
+    /// latent, so no vᵢ keeps a conditional of its own there.
+    /// </summary>
+    internal static double Power(ReversibleJumpChain<BassState> state)
+    {
+        Temperature temperature = state.Temperature;
+        double b = temperature.InverseTemperature;
+        if (b == 1.0) return 1.0;
+        if (temperature.Path != TemperingPath.Likelihood || (state.Target as BassTarget)?.Form != TemperedForm.Integrated)
+            throw new NotSupportedException("A latent noise's blocks temper the likelihood given its latents, on the likelihood path in the integrated form; the "
+                                            + "linear form and the powered path temper the marginal over a and σ², which couples every latent.");
+        return b;
     }
 }
 
 /// <summary>
 /// The latent scales' block (the latent slot): each vᵢ by its law's step under its conditional given the residual rᵢ = yᵢ − fᵢ of this
 /// sweep's coefficients and σ² (<see cref="BassCoefficientsBlock"/>, which runs first), under the drift σβ and the unit variance σ²c
-/// (<see cref="IMixingLaw.StepConditional"/>): an exact draw where the law has one, else a step from the current vᵢ;
+/// (<see cref="IMixingLaw.StepConditional"/>) at the rung's power b: an exact draw where the law has one, else a step from the current vᵢ;
 /// then the chain follows the working response at the new v (<see cref="BassStructureMoves.Follow"/>), its offset and weights moved
 /// together. A draw that puts the current structure outside F is refused and the chain keeps its state, the exact step under the gate
 /// that reads W (decision 4); the scan's counters read its refusals.
@@ -608,7 +653,8 @@ public sealed class BassLatentScaleBlock : IBlock<ReversibleJumpChain<BassState>
         IMixingLaw mixing = _model.MixingAt(latents);
         int n = y.Length;
         var v = new double[n];
-        for (int i = 0; i < n; i++) v[i] = mixing.StepConditional(current[i], y[i] - fit.Fitted[i], unitVariance, drift, 1.0, rng);
+        double power = BassCoefficientsBlock.Power(state);
+        for (int i = 0; i < n; i++) v[i] = mixing.StepConditional(current[i], y[i] - fit.Fitted[i], unitVariance, drift, power, rng);
         WorkingResponse moved = _model.At(working, new ObservationLatents(v, latents.Skew, latents.Sigma2, latents.Gamma));
         return BassStructureMoves.Follow(state, moved) is null;
     }
@@ -618,9 +664,10 @@ public sealed class BassLatentScaleBlock : IBlock<ReversibleJumpChain<BassState>
 /// σ²'s block under a skew (the scale slot; E1's decision 2): σ² from its conditional given the coefficients of this sweep and the latents.
 /// With rᵢ = yᵢ − fᵢ, the coefficients' prior variance scaling with σ², K of them inside the prior with energy Q = τ(a − a₀)ᵀD(a − a₀)
 /// (<see cref="GPriorConditional.PriorEnergy"/>), and σ²'s prior IG(α₀, β₀) at the state (the hierarchical prior's at its rate; Jeffreys
-/// at α₀ = β₀ = 0), u = σ⁻¹ is the modified half-normal MHN(N + K + 2α₀, ½(Σᵢ rᵢ²/(c·vᵢ) + Q + 2β₀), βΣᵢ rᵢ/c) (Sun, Kong and Pal 2021;
-/// GBASS's w step with w's prior a kept, which GBASS drops, E1's slice 0). The chain follows the offset at the new σ², the weights
-/// shared; a draw that puts the structure outside F is refused as the latent block's is.
+/// at α₀ = β₀ = 0), u = σ⁻¹ is the modified half-normal MHN(bN + K + 2α₀, ½(bΣᵢ rᵢ²/(c·vᵢ) + Q + 2β₀), bβΣᵢ rᵢ/c) at the rung's power b
+/// (Sun, Kong and Pal 2021; GBASS's w step with w's prior a kept, which GBASS drops, E1's slice 0): the coefficients' prior is untempered.
+/// The chain follows the offset at the new σ², the weights shared; a draw that puts the structure outside F is refused as the latent
+/// block's is.
 /// </summary>
 public sealed class BassScaleBlock : IBlock<ReversibleJumpChain<BassState>>
 {
@@ -657,8 +704,8 @@ public sealed class BassScaleBlock : IBlock<ReversibleJumpChain<BassState>>
         }
         (double quadratic, int count) = fit.Conditional.PriorEnergy(fit.Centred);
         InverseGamma? prior = (state.Target as BassTarget ?? throw new InvalidOperationException("The chain's target is BASS's.")).Sigma2At(state.Current);
-        double shape = prior?.Shape ?? 0.0, scale = prior?.Scale ?? 0.0;
-        double u = ModifiedHalfNormal.Of(y.Length + count + 2.0 * shape, 0.5 * (squares + quadratic + 2.0 * scale), latents.Skew * sum / c).Sample(rng);
+        double shape = prior?.Shape ?? 0.0, scale = prior?.Scale ?? 0.0, b = BassCoefficientsBlock.Power(state);
+        double u = ModifiedHalfNormal.Of(b * y.Length + count + 2.0 * shape, 0.5 * (b * squares + quadratic + 2.0 * scale), b * latents.Skew * sum / c).Sample(rng);
         WorkingResponse moved = _model.At(working, latents.WithSigma2(1.0 / (u * u)), weightsMoved: false);
         return BassStructureMoves.Follow(state, moved) is null;
     }
@@ -667,7 +714,8 @@ public sealed class BassScaleBlock : IBlock<ReversibleJumpChain<BassState>>
 /// <summary>
 /// The noise's shape (the scale slot, after σ²): the skew β and the Normal-Wald's γ, each where it is drawn, from its conditional; GBASS's
 /// <c>nwbass</c> steps, γ's on its support. With rᵢ = yᵢ − fᵢ of this sweep's coefficients, σ² and c, rᵢ/σ = βvᵢ + √(c·vᵢ)ζᵢ makes β | ·
-/// normal with precision Σvᵢ/c + 1/s² and mean (Σrᵢ/(σc) + m/s²) over it, under β ~ N(m, s²). v ~ GIG(−½, γ², 1), whose normalizer is
+/// normal with precision bΣvᵢ/c + 1/s² and mean (bΣrᵢ/(σc) + m/s²) over it, under β ~ N(m, s²), at the rung's power b; γ reads v's prior
+/// alone, untempered. v ~ GIG(−½, γ², 1), whose normalizer is
 /// e^γ/√(2π), makes Πp(vᵢ | γ) ∝ exp(Nγ − γ²Σvᵢ/2), so γ | v is normal with precision Σvᵢ + 1/s² and mean (N + m/s²) over it, on γ &gt; 0,
 /// drawn there (<see cref="Normal.SampleOn"/>): the correction of GBASS's draw, which takes that normal on the whole line (E1's slice 0).
 /// The target reads neither, and neither prior enters it: no move of the structure changes them. The chain follows the offset at the new
@@ -707,8 +755,9 @@ public sealed class BassNoiseShapeBlock : IBlock<ReversibleJumpChain<BassState>>
             double sigma = Math.Sqrt(latents.Sigma2 ?? throw new InvalidOperationException("A drawn skew's latents hold σ².")), c = _model.VarianceScale;
             double sumR = 0.0;
             for (int i = 0; i < y.Length; i++) sumR += y[i] - fit.Fitted[i];
-            double inverse = 1.0 / (skewPrior.Sd * skewPrior.Sd), precision = sumV / c + inverse;
-            skew = (sumR / (sigma * c) + skewPrior.Mean * inverse) / precision + Normal.SampleStandard(rng) / Math.Sqrt(precision);
+            double b = BassCoefficientsBlock.Power(state);
+            double inverse = 1.0 / (skewPrior.Sd * skewPrior.Sd), precision = b * sumV / c + inverse;
+            skew = (b * sumR / (sigma * c) + skewPrior.Mean * inverse) / precision + Normal.SampleStandard(rng) / Math.Sqrt(precision);
         }
         double? gamma = latents.Gamma;
         if (_model.Noise.GammaPrior is { IsHeld: false } gammaPrior)
