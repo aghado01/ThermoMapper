@@ -1,6 +1,6 @@
 # Conformal prediction
 
-> The conformal layer (E16): prediction sets whose coverage holds in finite samples under exchangeability, whatever the model, from an engine's retained draws and pointwise densities with no refit. The layer owns the guarantee and the score owns the width, so the layer is built once, engine-free, and each engine contributes densities. Built: the full step (Fong and Holmes's conformal Bayes) over a training density and a candidate density; BASS's candidate density for every noise law; CB-3's reading of the scores' Monte Carlo error, with the margin, the inflated rule and two diagnostics; and the split form, with density, CQR and residual scores. The predictive distribution's natural score, the in-sample predictive CDF, was read and not adopted: it is not monotone in y where the draws' predictives at x separate (slice 4). The seams carry each draw's log CDF for whichever score the user chooses. The other engines' candidate seams follow.
+> The conformal layer (E16): prediction sets whose coverage holds in finite samples under exchangeability, whatever the model, from an engine's retained draws and pointwise densities with no refit. The layer owns the guarantee and the score owns the width, so the layer is built once, engine-free, and each engine contributes densities. Built: the full step (Fong and Holmes's conformal Bayes) over a training density and a candidate density; BASS's candidate density for every noise law; CB-3's reading of the scores' Monte Carlo error, with the margin, the inflated rule and two diagnostics; and the split form, with density, CQR and residual scores. And the conformal predictive distribution, with PIT, quantiles and CRPS (slice 4): the split form's, on the fit's predictive CDF, by default, and the full step's as an opt-in that flags the cases where its score falls, at the user's decision of 2026-11-08. The other engines' candidate seams follow.
 
 ## Overview
 
@@ -11,7 +11,7 @@ What it serves, by problem class:
 - coverage within strata, for partially exchangeable data (Mondrian conformal prediction, Vovk; grouped conformal Bayes, Fong and Holmes);
 - a guarantee that does not lean on the sampler: the split form, valid for any fit, a chain stopped early or a wrong model included;
 - intervals whose width follows the noise, from any fit's quantiles (CQR) or centre and scale;
-- later, a calibrated predictive distribution at each x.
+- a calibrated predictive distribution at each x, with its PIT, quantiles and CRPS.
 
 It does not reach a curve's or a parameter's own intervals: those stay with [calibrated intervals and resampling](../../issues/regression/bass/extensions-brief.md#calibrated-intervals-for-loss-based-posteriors).
 
@@ -50,7 +50,7 @@ Each choice below is decided; its alternatives and what they would change are re
 
 **Ties count for the candidate** (CB-1, `coverage_orderings`, `card_rankLe_le`). The rule is valid whatever the ties: coverage at least 1 − k/m, and at most 1 − k/m plus the share of units whose ties straddle the threshold (`coverage_orderings_le`). With every score tied it accepts every candidate.
 - *Never the strict rule*, which accepts when at least k units score strictly below: it covers at most 1 − k/m (`coverage_strict_le`) and refuses every candidate when every score ties.
-- *Random tie-breaking* (`coverage_tieBreak`) gives exactly 1 − k/m. It waits for the predictive distribution (slice 4), where a uniform p-value is wanted. The layer reports, for each grid value, how many units score strictly below (`Below`) and how many tie (`Tied`), so any rule reads from the step.
+- *Random tie-breaking* (`coverage_tieBreak`) gives exactly 1 − k/m. The predictive distribution (slice 4) takes it, as τ in Q(y, τ), where a uniform p-value is wanted. The layer reports, for each grid value, how many units score strictly below (`Below`) and how many tie (`Tied`), so any rule reads from the step.
 - *Ties are exact.* A candidate whose column equals a training unit's scores exactly as that unit does (see the numerics below), so the tie the rule counts is the one the model has, not one rounding made or broke.
 
 **Ranks within the candidate's stratum** (`coverage_law` with the stratum as the ranked set, `coverage_stratum`). The score may read the other strata in any way, through the posterior. A stratum of m units attains only levels 1 − k/m, and coverage exceeds 1 − α by less than 1/m.
@@ -183,13 +183,15 @@ The chains are AR(1) about the exact posterior, two chains of 500, so they mix m
 - *Its PIT would still be valid.* A conformal p-value needs no monotone score: π at the true y, ties broken at random, is uniform under exchangeability whatever the score. What a falling score loses is the CDF, and with it the quantiles, CRPS and a distribution to report.
 - *A probability rounds the upper tail.* Held as F, a score within 10⁻¹⁶ of 1 rounds to 1, so units rising toward it tie with the candidate. π's counts fell there on 4 to 54 of the 100 conjugate cases in a first reading. Held as ln F and compared tail by tail, those falls vanish, which is why the seams carry the log.
 
-**The alternatives,** for the user's choice:
+**The alternatives,** as they were put to the user:
 1. *The split form's predictive distribution*, Vovk et al.'s split conformal predictive system (Vovk, Petej, Nouretdinov, Manokhin and Gammerman 2020). The score is the training fit's own predictive CDF, F̂(y | x) = Σ_s W_s F(y | x, θ_s). The calibration scores do not move with the candidate, and the candidate's is a CDF in y, so both of Vovk's conditions hold by construction, and CB-2 makes it valid for any fit. It recalibrates the fit's predictive by its calibration PITs. It costs slice 3's split, plus one CDF read per draw and grid value per case, with no product over the units. This is the recommendation.
 2. *The full step's score with a per-case check.* It reads π as a CDF where its counts rise on the grid and flags the cases where they fall; its PIT is valid regardless. It costs a product per grid like the density score's. It fails where the sampler is in doubt, the case the full step's guarantee does not cover anyway.
 3. *A monotone envelope* of the full step's π, its running maximum. It is always a CDF, but its PIT is no longer uniform, since it moves mass up in one tail. Not recommended.
 4. *Cross-conformal predictive distributions* (Vovk, Nouretdinov, Manokhin and Gammerman 2018) average K split distributions, so every unit serves. Their validity is approximate, at K fits.
 
-**Built for whichever is chosen: the log CDF seams.** `PointwiseLogDensity.LogCdf` and `CandidateLogDensity.LogCdf` carry each draw's ln F beside its ln p. BASS fills them on `cdf: true` (`BassFit.PointwiseLogDensity`, `BassFit.CandidateLogDensity`) from the law at the draw, `IBassNoiseLaw.At`, or N(f, σ²).
+**Decided on 2026-11-08:** the first as the default and the second as an opt-in, built in the next section.
+
+**The log CDF seams,** which both forms read. `PointwiseLogDensity.LogCdf` and `CandidateLogDensity.LogCdf` carry each draw's ln F beside its ln p. BASS fills them on `cdf: true` (`BassFit.PointwiseLogDensity`, `BassFit.CandidateLogDensity`) from the law at the draw, `IBassNoiseLaw.At`, or N(f, σ²).
 - *The tails.* The CDF is a closed form for the t and the asymmetric Laplace. For the Normal-Wald, the skewed t and the generalized hyperbolic it is one table of tails per draw, held to its 10⁻⁵ relative. Above each draw's median the seam reads ln F as ln(1 − S) from the law's survival. The mixtures' tables end at their 10⁻¹² tails, and beyond the upper one their `LogCdf` integrates the lower side, losing 1 − F's digits and reading up to 3·10⁻¹⁵ above 0. No noise law changed.
 
 **Checks** (`ConformalDistributionTests`, `BassConformalDistributionTests`; the full readings with `BASS_QUALIFICATION=1`).
@@ -199,6 +201,86 @@ The chains are AR(1) about the exact posterior, two chains of 500, so they mix m
 - *Refusals:* a unit of two observations, the collapsed content, a matrix not of the density's shape, a value above 0 or NaN, and a weighted fit's units.
 - *The reading's own pieces:* the tail comparison holds the digits a probability loses near 1, and the two-draw slope matches its closed form to 10⁻⁶ on both sides of a ≈ 0.877.
 - *The quick reading* asserts the table's split on 20 conjugate cases a kind: the exact posterior and the chain stopped early never fall, two chains apart do.
+
+## The predictive distribution, built (slice 4)
+
+**The decision (2026-11-08).** On the reading above, the user chose the split form's CDF as the score ("Split-form CDF"). They then added the full step as an option beside it ("Yes, add it"). So the split form's predictive distribution is the default, and the full step's in-sample CDF is an opt-in that flags the cases where it falls. The full step stays an option because its trade-off depends on the regime, not because its design is flawed. Where the draws sit in one mode its score held monotone, and it spends no data on calibration. Where they separate it gives no distribution.
+
+**What a case reports** (`ConformalDistribution`). Each test case's candidate y is ranked by a CDF score among its stratum's m units: Q(y, τ) = (B + τ(T + 1))/m, with B the units below the candidate and T those tied with it.
+- *The distribution.* Q⁻ = B/m (`Lower`) and Q⁺ = (B + T + 1)/m (`Upper`, which is π(y) under the CDF score) bound it on the grid. `Mid` is their mean over τ.
+- *The PIT.* Q(y, τ) at the true y with τ uniform (`At`) is uniform whatever the score (`coverage_tieBreak`, `rank_uniform`).
+- *The set.* The equi-tailed set at α takes k = ⌊α·m/2⌋ in each tail, ties counted for the candidate in both (`Accepts`, `Intervals`, `Width`). It covers at least 1 − 2k/m, exactly with distinct scores (CB-1 per tail), and it is the whole line when k = 0.
+- *The quantiles.* `Quantile(p)` is the first grid value where Q's mean over τ reaches p, read to the grid's step. It is −∞ when the first grid value already reaches p, and +∞ when none does.
+- *The CRPS.* `Crps(y)` is E_τ ∫ (Q(z, τ) − 1{z ≥ y})² dz = ∫ (Q̄ − 1{z ≥ y})² + (Q⁺ − Q⁻)²/12 dz. Q̄ and the band are read linearly between grid values, and each piece's square is integrated exactly. The tails are cut at the grid's ends: the mass below the grid sits at its first value, the mass above at its last. Reading Q̄ linearly moves each of its m − 1 steps within a cell, which costs at most h(1 + 1/(3m)) in all.
+- *A case with no distribution.* Where Q falls along the grid, `Fall` (in units of 1/m) and `ScoreFall` (the candidate's own score) say how far. Such a case keeps its p-values and its set, and its quantiles and CRPS are NaN.
+
+**The split form, the default** (`SplitConformal.Distribution`; Vovk, Petej, Nouretdinov, Manokhin and Gammerman 2020).
+- *The score* is the training fit's predictive CDF, F̂(y | x) = Σ_s W̄_s F(y | x, θ_s), read from the seams' log CDF by both tails.
+- *Monotone by construction.* The calibration's scores do not move with the candidate, and the candidate's rises with y, so both of Vovk's conditions hold and every case has a distribution.
+- *What it is.* The fit's predictive, recalibrated by its calibration PITs. The distribution's steps sit at F̂⁻¹ of the calibration PITs' order statistics, so a fit whose PITs pile into the tails, as a wrong one's do, is widened there.
+- *Validity* is CB-2's for any fit, PIT included.
+- *Cost:* slice 3's split, then per case one CDF read per draw and grid value, with no product over the units.
+
+**The full step, an opt-in** (`ConformalBayes.Distribution`).
+- *The score* is the in-sample predictive CDF under the add-one-in weights, F̃ᵢ for each unit and F̃_c for the candidate: two (n × S)·(S × G) products a batch, one per tail. The candidate's own score is summed as the products' entries are, by fused multiply-adds in draw order, so a unit whose column equals the candidate's ties with it exactly.
+- *The flag.* Each case is read along its grid. One whose counts fall is flagged, with how far, and keeps its set but has no distribution. The flag is a readout in its own right: a falling score marks an x where the draws' predictives disagree, a mixing signal. π can fall while the candidate's own score rises, where a unit's score rises faster and overtakes it, so `Fall` and `ScoreFall` are read apart.
+- *Its PIT* holds on every case, flagged or not, up to the draws' Monte Carlo error, as the full step's sets do, for draws from the posterior. Draws that are not, a wrong fit's or a chain stopped early, break the full step's symmetry, and the split form is the guarantee there. No margin is read for this score.
+
+**Choices,** with what each changes:
+- *Both tails held* (the seams' log CDF): a probability would round F to 1 in the upper tail and make units tie with the candidate there.
+- *The equi-tailed set* is the distribution's own. The highest-density set stays slice 3's density score.
+- *Quantiles and set ends to the grid's step.* The split form's ends have a closed form, F̂⁻¹(· | x) at the calibration PITs' k-th and (n + 1 − k)-th order statistics. It would need the engine's quantile function, so it is not built: it would remove the step's error at two quantile solves per stratum and level.
+- *The tails cut at the grid's ends* for the CRPS. Q itself never reaches 0 or 1 (Q⁺ ≥ 1/m, Q⁻ ≤ n/m), so its CRPS over the whole line diverges, and a grid that holds the mass gives the integral that matters.
+
+**Checks** (`ConformalPredictiveDistributionTests`; `BassConformalDistributionTests`, the measured default and the cost row with `BASS_QUALIFICATION=1`).
+- *The counts against references* in seeded sweeps, with weighted draws, zero weights, chains, strata with no calibration unit, both tails far out and copied columns. The split form's counts equal the reference at all 1,968 grid values. The full step's equal it at all 3,122, and a quarter of its columns are copied from a unit and tie with it exactly.
+- *The readouts* on counts given by hand: Q⁻, Q⁺, the set at k per tail, quantiles at and beyond the grid, and a case with no distribution. The CRPS matches a midpoint sum of 10⁶ pieces to 10⁻⁶.
+- *The split form's PIT is uniform for any fit* (`coverage_tieBreak`, `split_coverage`), against the fits' own uncalibrated PITs:
+
+| Fit | m | PITs | Split form's PIT: largest bin gap (se), KS | The fit's own PIT, KS |
+|---|---|---|---|---|
+| Conjugate, the exact posterior | 20 | 40,000 | 0.004 (0.0021), 0.005 | 0.143 |
+| Conjugate, a wrong fit | 20 | 40,000 | 0.003 (0.0021), 0.005 | 0.363 |
+| Conjugate, a chain stopped early | 20 | 40,000 | 0.003 (0.0021), 0.005 | 0.335 |
+| BASS, a healthy fit | 200 | 2,000 | 0.015 (0.0082), 0.037 | 0.143 |
+| BASS, the Student t fit | 200 | 2,000 | 0.022 (0.0082), 0.036 | 0.044 |
+| BASS, a wrong fit | 200 | 2,000 | 0.014 (0.0082), 0.023 | 0.057 |
+| BASS, a chain stopped early | 200 | 2,000 | 0.018 (0.0082), 0.020 | 0.056 |
+
+- *Vovk's conditions hold by construction.* On every grid case of every fit, 100 a fit on the conjugate model and 200 on BASS, neither the score nor Q falls. Q⁻ is 0 below the grid and Q⁺ is 1 above it.
+- *The full step's opt-in.* On the conjugate exact posterior (m 50, 2,000 cases) no case is flagged, and its PIT is uniform over every case and over the unflagged ones (KS 0.030). On two chains stuck apart, 287 of 500 cases are flagged, 267 of them with the candidate's own score falling. Each flagged case keeps its set, with NaN quantiles and CRPS.
+- *Agreement with slice 3's sets.* The equi-tailed set is slice 3's split rule in each tail at α/2 on the CDF score, at every one of 61,127 grid values in the bulk. On a fit that is right (data from the model, m 2,000), its ends, the density set's and CQR's all meet the fit's own central 90% interval. The mean gaps run 0.001 to 0.020 over 100 cases, each within four of its standard errors and a grid step (0.02).
+- *CRPS against a quadrature reference.* The exact step distribution, read at 16 times the grid's resolution, gives the reference. The grid's CRPS lies within 1.3·10⁻³ of it at m 20 and 4.6·10⁻⁴ at m 200 (means 4.9·10⁻⁴ and 1.3·10⁻⁴), against the bound h(1 + 1/(3m)) = 0.010.
+
+**The measured default.** Both forms run on the same data. The split form fits the training split and calibrates on the rest; the full step fits all of it. On the conjugate model that is 30 + 19 units against 49, 500 replications of 10 test cases. On BASS it is 99 + 199 against 298, 20 fits of 100 test cases. Width and CRPS are read where both give a distribution, on 200 grid cases a fit; cost is the layer's per case, the seams built before the clock.
+
+| Fit | The full step flags | 90% width, split / full | CRPS, split / full | The full step's PIT, every case / unflagged, KS | Cost per case, split / full |
+|---|---|---|---|---|---|
+| Conjugate, the exact posterior | 0% | 6.22 / 5.97 | 0.902 / 0.814 | 0.019 / 0.019 | 4.7 / 12.1 ms |
+| Conjugate, a wrong fit | 1.6% | 7.46 / 7.99 | 1.262 / 1.178 | 0.021 / 0.018, a bin 4.1 se out | 7.4 / 13.4 ms |
+| Conjugate, a chain stopped early | 0% | 18.15 / 18.51 | 3.225 / 3.029 | 0.011 / 0.011 | 0.9 / 2.5 ms |
+| Conjugate, two chains stuck apart | 66% | 4.65 / 5.35 (66 cases) | 0.688 / 0.649 | 0.171 / 0.028 | 5.2 / 14.0 ms |
+| BASS, a healthy fit | 0.1% | 1.322 / 1.335 | 0.2044 / 0.1993 | 0.022 / 0.022 | 80 / 308 ms |
+| BASS, the Student t fit | 0.1% | 1.303 / 1.317 | 0.1956 / 0.1884 | 0.018 / 0.018 | 91 / 355 ms |
+| BASS, a wrong fit (it never sees x₀) | 0% | 2.478 / 2.448 | 0.4770 / 0.4632 | 0.018 / 0.018 | 65 / 233 ms |
+| BASS, a chain stopped early (one chain, no burn-in, 20 draws) | 8.5% | 2.030 / 2.161 (179 cases) | 0.3448 / 0.3439 | 0.031 / 0.036, a bin 3.8 se out | 1.0 / 4.7 ms |
+
+The conjugate costs are per grid of 401, and BASS's per grid of 901 at S 1,000.
+
+- *The split form's PIT holds on every fit.* Its data cost is the calibration: 19 of 49 units here, 199 of 298 on BASS.
+- *The full step is sharper where its draws are a posterior that mixed,* by more where the data are scarce: its CRPS is 10% lower at n 49 on the conjugate model and 2.5 to 3.7% lower at n 298 on BASS, where its width is the split form's. It flags almost no case there (0 to 0.1%). **That is the regime to opt in: draws a posterior that mixed, and data too scarce to spare a calibration split.**
+- *The full step needs draws that are a posterior.* The two chains stuck apart are not one, and its PIT breaks over every case (KS 0.17). Two thirds of those cases are flagged, so the flag marks where it fails. The conjugate wrong fit is not a posterior either, and its PIT is off by a bin at 4.1 se. The conjugate chain stopped early is a narrow cluster: the add-one-in weights barely move it, so every unit is read alike and its PIT holds. BASS's chain stopped early is no posterior either: 8.5% of its cases are flagged, and the full step's PIT sits a bin 3.8 se out over every case. BASS's wrong fit is a posterior that mixed, of a model that never sees x₀, and the full step holds there (KS 0.018): the model may be wrong, but the draws must be its posterior.
+- *So the default stays the split form,* as decided. The reading gives no reason to move it: the full step's gain is a few percent where it is valid, and where its premise fails the flag often catches it, though not always.
+
+**Cost** at n 1,000 units and G 200, on the cycle clock, best of five; indicative, on a machine loaded at about twice slice 3's reading (the density score's row read again in the same run).
+
+| S | The split form: calibration PITs, once per stratum | The split form: per grid | Slice 3's density score: per grid | The full step's opt-in: per grid |
+|---|---|---|---|---|
+| 1,000 | 51 ms | 7.0 ms | 4.4 ms | 161 ms |
+| 4,000 | 214 ms | 29.7 ms | 21.4 ms | 728 ms |
+
+- *The split form reads two tails,* one exp a value and a log above the median, about 1.6 times the density score's work, and needs no product.
+- *The full step's opt-in costs two products a batch,* a third to a half of the density full step's (334 to 412 ms at S 1,000 in the same run), which reads three products and the margin.
 
 ## Numerics
 
@@ -408,13 +490,14 @@ Run on `ConformalMarginTests`, and with `BASS_QUALIFICATION=1` on `BassConformal
 | A case's set | `ConformalSet`: `Stratum`, `Units` (m), `Level` (k), `Coverage`, `WholeSpace`, `Grid`, `PValues`, `Below`, `Tied`, `CandidateScores`, `EffectiveSampleSizes`, `Accepts(g)`, `Intervals` (`GridInterval(Lower, Upper)`), `Resolution`, `OpenBelow`, `OpenAbove`, `Width` |
 | CB-3's reading | `ConformalSet.Gap`, `SplitHalfMass`, `SplitHalfDisagreements`, `AcceptsPlain(g)`, `AcceptsInflated(g)`; `ConformalSet.Margin` → `ConformalMargin` (`Multiple`, `CandidateErrors`, `UniformErrors`, `Fragile`, `InflatedRanks`, `ParetoK`, `ParetoKThreshold`, `Bounds`, `Count`, `Untrusted(k)`); `ConformalSet.Inflated`, `ErrorLevel`, `CoverageUnderError`, `FallBack`; `MarginBounds` (`Uniform`, `Carried`); `ConformalScores.Errors`, `CandidateError` |
 | The split form | `SplitConformal.Density(calibration, candidates, alpha)` → `ConformalPrediction(Sets, Alpha, Form)`; `SplitConformal.Quantiles(QuantileReadings(Lower, Upper, StratumOf), response, test, alpha)` and `SplitConformal.Residuals(ResidualReadings(Center, Scale, StratumOf), response, test, alpha)` → `ConformalIntervals(Intervals, Alpha, Calibration)`; `ConformalInterval`: `Units`, `Level`, `Threshold`, `Lower`, `Upper`, `WholeSpace`, `Coverage`, `Empty`, `Width`, `Contains(y)`; `SplitConformal.Calibrate(scores, stratumOf, alpha)` → `SplitCalibration`: `Units(h)`, `Level(h)`, `Threshold(h)`, `Rank(h, s)`, `PValue(h, s)`, `Accepts(h, s)`; `ConformalForm` (`Full`, `Split`) |
+| The predictive distribution | `SplitConformal.Distribution(calibration, candidates)` (the default) and `ConformalBayes.Distribution(training, candidates)` (the opt-in) → `ConformalDistributions(Distributions, Form)` with `Flagged`; `ConformalDistribution`: `Units`, `Grid`, `Below`, `Tied`, `Form`, `Fall`, `ScoreFall`, `Monotone`, `Lower(g)`, `Upper(g)`, `At(g, τ)`, `Mid(g)`, `Level(α)`, `Coverage(α)`, `WholeSpace(α)`, `Accepts(g, α)`, `Intervals(α)`, `Width(α)`, `OpenBelow(α)`, `OpenAbove(α)`, `Quantile(p)`, `Crps(y)` |
 | The product | `DenseProduct.Multiply`, `Pack`, `FusedDot`; `PackedColumns` |
 
 ## Not built yet
 
 - A margin with bounds sure over every ordering, which needs each unit's error under every other unit's weights.
 - CQR's asymmetric form, cross-conformal and the jackknife+ (above).
-- The conformal predictive distribution, with PIT and CRPS, and random tie-breaking with it. Its natural score, the in-sample predictive CDF, is not monotone in y (slice 4's reading), so the score waits for the user's choice among the alternatives above.
+- The split form's set ends and quantiles in closed form, F̂⁻¹(· | x) at the calibration PITs' order statistics, which needs each engine's quantile function; and cross-conformal predictive distributions (slice 4's alternatives).
 - The candidate seams of BARS, BAPS, the hierarchical P-spline, BGP and the changepoint posterior (slice 5), and BASS's for a direct functional fit's curves (E17).
 - CB-4's latent-posterior reading, and Hoff's leave-one-out score.
 - Refining a set's boundaries between grid values.

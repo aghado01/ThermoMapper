@@ -11,6 +11,16 @@ Splits in the module's language (symbols, identifiers, terms), logged as session
 
 ## Entries
 
+### Q, the split form's threshold, beside Q(y, τ), the conformal predictive distribution (2026-11-08)
+
+- **Kind:** one name for several concepts.
+- **Readings:**
+  - Q, the split form's negated threshold, the k-th largest calibration nonconformity, in CQR's set [q_lo − Q, q_hi + Q] and the residual's μ ± Qρ (`docs/Maths/ConformalPrediction.md`, "The split form (CB-2)"; `SplitConformal.Quantiles`, `SplitConformal.Residuals`).
+  - Q(y, τ) = (B + τ(T + 1))/m, the conformal predictive distribution, with Q⁻ and Q⁺ its ends at τ = 0 and 1 (`ConformalDistribution.Lower`, `.Upper`, `.At`, `src/maths/regression/conformal/ConformalDistribution.cs`; `ConformalPrediction.md`, "The predictive distribution, built (slice 4)").
+  - F̂(y | x), the split form's score, the training fit's predictive CDF, beside F̃, the full step's in-sample one (entry of 2026-11-07 below).
+- **Found:** 2026-11-08, the conformal layer's slice 4 (the predictive distribution, built).
+- **Note:** Vovk et al. write Q for the distribution and the CQR paper writes Q for the threshold, so each is its source's own; the page keeps both, each in its own section.
+
 ### u and z of the z parameterization, beside u = ln v and z in a moving response, and BARS's w beside GBASS's (2026-11-08)
 
 - **Kind:** one name for several concepts.

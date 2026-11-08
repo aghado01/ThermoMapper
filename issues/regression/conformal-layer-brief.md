@@ -1,6 +1,6 @@
 # The conformal layer: E16's build (chip brief)
 
-Date: 2026-11-06. Status: slices 0, 1 and 2 built 2026-11-06, the fallback signal read from the inflated set on 2026-11-07 at the user's call, with a split-half comparator measured beside it; on 2026-11-07 both became diagnostics on every set, with no trigger, at the user's decision; slice 3, the split form, built 2026-11-07 at the user's go-ahead (reports below); slice 4 read on 2026-11-07: the in-sample predictive CDF is not monotone in y where the draws' predictives separate, so it was not adopted, the log CDF seams landed, and the predictive distribution's score waits for the user's choice. Written at the user's request from [E16](bass/extensions-brief.md#conformal-bayes-the-consumer) and the [conformal Lean contract](../../lean/Protolemmata/Conformal/conformal-lemmas.md).
+Date: 2026-11-06. Status: slices 0, 1 and 2 built 2026-11-06, the fallback signal read from the inflated set on 2026-11-07 at the user's call, with a split-half comparator measured beside it; on 2026-11-07 both became diagnostics on every set, with no trigger, at the user's decision; slice 3, the split form, built 2026-11-07 at the user's go-ahead (reports below); slice 4 read on 2026-11-07 (the in-sample predictive CDF is not monotone in y where the draws' predictives separate) and built on 2026-11-08 at the user's decision: the split form's predictive distribution by default, the full step's as an opt-in with its flag; slice 5 waits for the user. Written at the user's request from [E16](bass/extensions-brief.md#conformal-bayes-the-consumer) and the [conformal Lean contract](../../lean/Protolemmata/Conformal/conformal-lemmas.md).
 
 ## Why
 
@@ -54,6 +54,11 @@ It does not reach a curve's or a parameter's own intervals: those stay with E15'
   - every unit, the candidate included, is read by one density. The default is latents integrated; the alternative is the latent-posterior density with the candidate's latent drawn per draw. A matrix whose observation-scope latents are conditioned, or mixed, is refused, as is a candidate whose latents are treated otherwise than the training units';
   - the split form holds for any fit, the sampler's included;
   - an estimate within ε costs at most |M|/m, with |M| read from the estimates; ε must be a sure bound, or its failure probability adds to the miscoverage.
+
+**Decided by the user on 2026-11-08: the predictive distribution's score.**
+- *What the layer does.* The default is the split form's score, the training fit's predictive CDF F̂(y | x) ("Split-form CDF"; Vovk, Petej, Nouretdinov, Manokhin and Gammerman 2020). The full step's in-sample predictive CDF is an opt-in ("Yes, add it"). It flags each case whose counts fall along its grid, reporting how far, and returns that case's set without a distribution. There is no monotone envelope, which would break the PIT.
+- *Why.* Slice 4's reading (2026-11-07) found the full step's score monotone where the draws sit in one mode and falling where their predictives separate. The split form's is monotone by construction and valid for any fit. The full step's trade-off depends on the regime rather than on a flaw: it spends no data on calibration.
+- *The measured default (2026-11-08)* keeps the split form. The full step is 2.5 to 10% sharper in CRPS where its draws are a posterior that mixed, more where the data are scarce. It breaks where they are not. The page names that regime as the place to opt in.
 
 **Decided by the user on 2026-11-07: report the fallback diagnostics, with no trigger.**
 - *What the layer does.* Every set reports the inflated-set gap and the split-half mass; the split-half is the main session's construction, not from a paper. Neither fires anything, and nothing switches to the split form on its own. The fallback rule (the gap with k̂'s trust) stays as an opt-in with a caller-stated threshold, off by default.
@@ -116,6 +121,60 @@ Under "Reports" below, newest first, per slice: what landed by commit; the gates
 ## Reports
 
 Newest first.
+
+### 2026-11-08 — Slice 4, the predictive distribution built: the split form's by default, the full step's as an opt-in
+
+Built at the user's decisions of 2026-11-08, relayed by the main session: "Split-form CDF" for the default score, then "Yes, add it" for the full step as an opt-in beside it. They follow the reading of 2026-11-07, below.
+
+**Landed** on `main`, nothing pushed (the commits are in the log beside this report):
+- *`ConformalDistribution`,* per test case on its grid.
+  - Q(y, τ) = (B + τ(T + 1))/m, with Q⁻ and Q⁺ (π under the CDF score) and the PIT at the true y. `coverage_tieBreak` and `rank_uniform` make the PIT uniform whatever the score.
+  - The equi-tailed set takes k = ⌊α·m/2⌋ per tail, ties counted for the candidate in each, and covers 1 − 2k/m (CB-1 per tail).
+  - Quantiles are read to the grid's step.
+  - CRPS is τ-averaged, linear between grid values, its tails cut at the grid's ends, and within h(1 + 1/(3m)) of the exact value.
+  - `Fall` and `ScoreFall` say how far a case's counts and its own score fall. A case whose counts fall keeps its set but has no distribution.
+- *The default, `SplitConformal.Distribution`* (Vovk, Petej, Nouretdinov, Manokhin and Gammerman 2020). The score is the training fit's predictive CDF F̂(y | x), read by both tails from the seams' log CDF. Both of Vovk's conditions hold by construction, and CB-2 makes it valid for any fit.
+- *The opt-in, `ConformalBayes.Distribution`.* The score is the in-sample predictive CDF F̃ under the add-one-in weights, two products a batch, the candidate's own score summed as the products' entries are so equal columns tie. Each case is read along its grid and flagged where its counts fall. The flag is a readout of its own, a mixing signal.
+- *Shared pieces:* `CdfScore`, which compares on the tail that holds the digits; `CdfScores`; and `CdfScorer`. `SplitConformal.Density` and `Distribution` share one alignment check.
+- *The page* gains the built section, with the decision beside the reading, its checks, the measured default and the cost row. The ledger gains Q beside Q(y, τ).
+
+**Gates** (`ConformalPredictiveDistributionTests`; `BassConformalDistributionTests`, the measured default and the cost row with `BASS_QUALIFICATION=1`). The full numbers are on [the page](../../docs/Maths/ConformalPrediction.md#the-predictive-distribution-built-slice-4).
+- *The counts against references* in seeded sweeps: every count equal, the split form's at 1,968 grid values and the full step's at 3,122, copied columns tying exactly.
+- *The PIT is uniform on held-out data for any fit,* under the split form. On the conjugate model (m 20, 40,000 PITs a fit) the exact posterior, a wrong fit and a chain stopped early all read KS 0.005, with every bin within 0.004 of a tenth (se 0.0021). The fits' own PITs read KS 0.14 to 0.36. On BASS (m 200, 2,000 PITs a fit) the healthy, t, wrong and stopped-early fits are all within four se in every bin.
+- *Vovk's conditions hold by construction* on every grid case of every fit, conjugate and BASS: no fall of the score or of Q, and Q⁻ = 0 below the grid, Q⁺ = 1 above.
+- *The opt-in's PIT, over every case and the unflagged:*
+  - uniform on the conjugate exact posterior and on BASS's healthy, t and wrong fits, the last a posterior that mixed of a wrong model;
+  - off where the draws are no posterior: the conjugate wrong fit (a bin 4.1 se out), two chains stuck apart (KS 0.17 over every case) and BASS's chain stopped early (a bin 3.8 se out);
+  - where the draws are nearly a point mass, as with the conjugate chain stopped early, every unit is read alike and it holds.
+- *The flag.* The conjugate exact posterior flags no case. Two chains stuck apart flag 287 of 500, 267 of them with the candidate's own score falling; each keeps its set, with NaN quantiles and CRPS.
+- *Agreement with slice 3's sets.* The equi-tailed set is slice 3's split rule in each tail at α/2 on the CDF score at all 61,127 grid values in the bulk. On a fit that is right (m 2,000), its ends, the density set's and CQR's meet the fit's own central interval, each mean gap within four se and a grid step.
+- *CRPS against a quadrature reference:* within 1.3·10⁻³ at m 20 and 4.6·10⁻⁴ at m 200, against the bound 0.010.
+
+**The measured default.** Both forms ran on the same data, the full step fitting all of it.
+- *Where the draws are a posterior that mixed,* the full step is sharper by more where data are scarce. Its CRPS is 10% lower at n 49 on the conjugate model, and 2.5 to 3.7% lower at n 298 on BASS, at the split form's width. It flags 0 to 0.1% of cases there.
+- *Where they are not,* it breaks: two chains stuck apart flag 66% of cases.
+- *The default stays the split form, as decided.* The page writes down the regime to opt in: draws a posterior that mixed, and data too scarce to spare a calibration split.
+- *Cost.* The layer's own cost per case is 4.7 against 12.1 ms on the conjugate exact posterior at a grid of 401, and 80 against 308 ms on the healthy BASS fit at a grid of 901 and S 1,000. The split form's data cost is 19 of 49 units and 199 of 298.
+
+**Cost row** (cycle clock, indicative; the machine loaded at about twice slice 3's reading, the density row read again in the same run). Per grid of 200 at n 1,000:
+- *the split form:* 7.0 ms at S 1,000 and 29.7 ms at S 4,000, after its calibration PITs once per stratum (51 and 214 ms), against the density score's 4.4 and 21.4 ms;
+- *the full step's opt-in:* 161 and 728 ms, against the density full step's 334 to 412 ms at S 1,000.
+
+**Found in review and fixed.**
+- *The split form ran ten times the density score's cost.* It read 1 − F by expm1 below the median, where 1 − F ≥ ½ loses nothing, and walked the matrices down their columns. It now takes one exp a value and a log only above the median, and walks rows in the matrices' order with each column's sums unchanged. The per-grid cost went from about 20 ms to 7.0 ms at S 1,000.
+  - The BASS gates and the measured default ran on the build before this change. The change moves the upper sums by an ulp where ℓ ≤ −ln 2 and keeps every sum's order, so it cannot move their readings beyond rounding. The healthy BASS fit, rerun on the final build, reads the same to the last printed digit.
+- *The full step's own score was summed in another order than the products,* so a copied column did not tie with its unit. It now sums by fused multiply-adds in draw order, and the sweep's 296 near-ties became exact ones.
+- *The flag test asserted that a flagged case's own score falls.* π can fall while it rises, when a unit's score overtakes it: 20 of the 287 flagged cases do. `Fall` and `ScoreFall` are now read apart.
+- *Three ungated tests ran for one to two minutes.* They were shrunk to 13 to 49 s, each keeping its gate.
+
+**Notation:** Q, the split form's threshold, beside Q(y, τ), the distribution; F̂, the split form's score, beside F̃. Both are in the ledger.
+
+**Not built,** recorded on the page:
+- the split form's set ends and quantiles in closed form, F̂⁻¹ at the calibration PITs' order statistics, which needs each engine's quantile function;
+- cross-conformal predictive distributions;
+- a CB-3 margin for the CDF score.
+
+**Follow-ups:** none with a decision waiting. Slice 5, the other engines' candidate seams, waits for the user.
 
 ### 2026-11-07 — Slice 4, the predictive distribution: the reading, and the score not adopted
 
