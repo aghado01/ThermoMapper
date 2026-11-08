@@ -372,9 +372,23 @@ The user gathered the sources on 2026-11-08: `gauntlet/conformal-bayes` (1204.32
 - **Where it does not apply.**
   - *Adaptive designs.* Runs chosen adaptively (E30) are not exchangeable by design, so a martingale over them tests the design. Weighted conformal under covariate shift comes first there.
   - *Known structure.* A stream with a trend or a season needs a score that removes it, or the test flags the structure.
-- **Lean.** This entry fits the profile CB-1 to CB-4 had: the guarantee is the product, and its hypotheses are easy to break silently (the randomized tie, ranking against every earlier score, a betting function that integrates to 1 and reads only the past). Two statements would join `ConformalValidity.lean`:
-  - the smoothed p-values are i.i.d. uniform under exchangeability, a finite argument;
-  - Ville's inequality for the product, from Mathlib's martingale library (Doob's maximal inequality, with its limit over the horizon).
+- **Lean** (done 2026-11-08: M-1 and M-2 in `lean/Enthymemata/ConformalValidity.lean`, proof-closed, standard axioms only; the record and checks are in [`conformal-lemmas.md`](../../../lean/Protolemmata/Conformal/conformal-lemmas.md), section E35). This entry fits the profile CB-1 to CB-4 had: the guarantee is the product, and its hypotheses are easy to break silently.
+  - *M-1, the smoothed p-values* (`seqRank_uniform`, `seqRank_law`). The finite core is proved: the randomized ranks are independent and uniform. The lift to continuous p-values is checked exactly, not formalized.
+  - *M-2, the betting product.*
+    - `lintegral_capital` is the martingale link.
+    - `lintegral_stoppedCapital` makes the capital at any bounded stopping time an e-value.
+    - `ville` gives P(any alarm) ≤ 1/c. It is proved by switching the bet off at the alarm, not by Mathlib's maximal inequality; that route needs no conditional expectations.
+  - *Gates for the code:*
+    - the whole monitored sequence is exchangeable; in the inductive form, given the training set proper;
+    - each new score is ranked among every score so far, itself included, never against a fixed calibration set;
+    - ties are broken by a fresh θₙ, uniform and independent of the data and of earlier draws, with pₙ = (L + θₙT)/n;
+    - the scores at each time are a symmetric function of the units so far: a fixed A, or all recomputed. Never scores kept from earlier fits;
+    - each betting function is ≥ 0 and measurable, reads only p₁, …, p_{n−1}, and integrates to at most 1 on [0, 1], exactly 1 for the e-value's equality;
+    - the capital starts at 1.
+  - *Corrections to this entry.*
+    - Ville needs a bet integrating to at most 1, not exactly 1, so a quadrature-normalized plug-in can round down and stay valid.
+    - "The full form, each score recomputed" means every score, at every time.
+    - CUSUM and Shiryaev–Roberts are posed, not proved.
 - **Cost.** Per arrival: one score (S predictive densities for a Bayesian fit), and one rank among n earlier scores, O(log n) with an ordered structure.
 - **Ordered after the conformal layer's slice 5** by the user on 2026-11-08, as that layer's next slice ([the layer's brief](../conformal-layer-brief.md)).
 

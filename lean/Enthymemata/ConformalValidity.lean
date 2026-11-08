@@ -8,6 +8,9 @@ import Mathlib.Data.Fintype.BigOperators
 import Mathlib.Data.Fintype.Perm
 import Mathlib.Data.Prod.Lex
 import Mathlib.Data.Real.Basic
+import Mathlib.GroupTheory.Perm.Fin
+import Mathlib.MeasureTheory.Constructions.Pi
+import Mathlib.MeasureTheory.Integral.Lebesgue.Markov
 import Mathlib.Order.Interval.Set.OrdConnected
 import Mathlib.Tactic.FieldSimp
 import Mathlib.Tactic.Linarith
@@ -16,7 +19,7 @@ import Mathlib.Tactic.Positivity
 import Mathlib.Tactic.Ring
 
 /-!
-# Conformal validity (CB-1 to CB-4)
+# Conformal validity (CB-1 to CB-4, and E35's M-1 and M-2)
 
 The finite statements of `Protolemmata/Conformal/conformal-lemmas.md`: prediction sets valid
 whatever the model does, as `GuardedEstimator`'s means are valid whatever the emulator does.
@@ -45,6 +48,13 @@ unit's stratum.
   the deterministic part; `coverage_close` (bounds carried by the units) and `coverage_inflated`
   (bounds by ordering and position) over orderings; `card_fragile_le_estimated` and
   `fragileEstimated_mono`, the margin read from the estimated scores and any dominating bounds.
+* **M-1** (E35, the smoothed p-values). `seqRank_uniform`, the finite core: the randomized ranks of
+  the smoothed p-values are independent and uniform, `sum_tieRankProb` the tie class covering a
+  rank; `seqRank_law` under any exchangeable law.
+* **M-2** (E35, the betting product). `lintegral_capital_snoc` and `lintegral_capital`, the link
+  (a martingale with expectation 1); `lintegral_capital_le` its supermartingale form;
+  `lintegral_stoppedCapital`, the e-value at a stopping time; `ville_horizon` and `ville`, Ville's
+  inequality.
 -/
 
 open Finset
@@ -1082,5 +1092,452 @@ theorem card_fragile_le_estimated {Z : Type*} {C : Finset ι} {S : (ι → Z) �
   exact ⟨hu.1, fragileEstimated_of_fragile hclose hu.1 hu.2⟩
 
 end Margin
+
+/-! ### E35, M-1: the smoothed p-values' ranks are i.i.d. uniform -/
+
+section Sequential
+
+variable {Z α : Type*} [LinearOrder α]
+
+/-- The probability that a unit's randomized rank in `C` is `r`: the units strictly below it, plus
+a uniform draw among the units tied with it, itself included. This is the finite part of the
+smoothed p-value `(L + θ T)/n`: its rank `L + ⌈θ T⌉`. -/
+noncomputable def tieRankProb {ι : Type*} (C : Finset ι) (s : ι → α) (u : ι) (r : ℕ) : ℝ :=
+  if rankLt C s u < r ∧ r ≤ rankLe C s u then 1 / ((rankLe C s u - rankLt C s u : ℕ) : ℝ) else 0
+
+/-- A unit's rank splits into the units strictly below it and the units tied with it. -/
+theorem rankLe_eq_rankLt_add {ι : Type*} (C : Finset ι) (s : ι → α) (u : ι) :
+    rankLe C s u = rankLt C s u + (C.filter fun j => s j = s u).card := by
+  classical
+  unfold rankLe rankLt
+  rw [← card_union_of_disjoint]
+  · congr 1
+    ext j
+    simp only [mem_filter, mem_union]
+    constructor
+    · rintro ⟨hj, hle⟩
+      rcases hle.lt_or_eq with h | h
+      · exact Or.inl ⟨hj, h⟩
+      · exact Or.inr ⟨hj, h⟩
+    · rintro (⟨hj, h⟩ | ⟨hj, h⟩)
+      · exact ⟨hj, h.le⟩
+      · exact ⟨hj, h.le⟩
+  · rw [disjoint_filter]
+    intro j _ h₁ h₂
+    exact (ne_of_lt h₁) h₂
+
+/-- **The tie class covering a rank.** For each rank `1, …, |C|`, the units' probabilities of
+holding it sum to 1: one tie class straddles it, and its `T` members each hold it with
+probability `1/T`. -/
+theorem sum_tieRankProb {ι : Type*} (C : Finset ι) (s : ι → α) {r : ℕ} (hr : 1 ≤ r)
+    (hrC : r ≤ C.card) : ∑ u ∈ C, tieRankProb C s u r = 1 := by
+  classical
+  set A := C.filter fun u => rankLt C s u < r ∧ r ≤ rankLe C s u with hA
+  obtain ⟨u₀, hu₀⟩ : A.Nonempty := by
+    have h₁ := card_rankLe_le C s (r - 1)
+    have h₂ := le_card_rankLt_lt C s hrC
+    obtain ⟨u, hu, hnot⟩ := exists_mem_notMem_of_card_lt_card
+      (s := C.filter fun u => rankLe C s u ≤ r - 1) (t := C.filter fun u => rankLt C s u < r)
+      (by omega)
+    refine ⟨u, mem_filter.2 ⟨(mem_filter.1 hu).1, (mem_filter.1 hu).2, ?_⟩⟩
+    by_contra h
+    exact hnot (mem_filter.2 ⟨(mem_filter.1 hu).1, by omega⟩)
+  have hu₀' := mem_filter.1 hu₀
+  have hclass : A = C.filter fun v => s v = s u₀ := by
+    ext v
+    simp only [hA, mem_filter]
+    constructor
+    · rintro ⟨hv, hlt, hle⟩
+      refine ⟨hv, ?_⟩
+      rcases lt_trichotomy (s v) (s u₀) with h | h | h
+      · exfalso
+        have : rankLe C s v ≤ rankLt C s u₀ := card_le_card fun j hj => by
+          rw [mem_filter] at hj ⊢
+          exact ⟨hj.1, lt_of_le_of_lt hj.2 h⟩
+        omega
+      · exact h
+      · exfalso
+        have : rankLe C s u₀ ≤ rankLt C s v := card_le_card fun j hj => by
+          rw [mem_filter] at hj ⊢
+          exact ⟨hj.1, lt_of_le_of_lt hj.2 h⟩
+        omega
+    · rintro ⟨hv, heq⟩
+      have h1 : rankLt C s v = rankLt C s u₀ := by unfold rankLt; rw [heq]
+      have h2 : rankLe C s v = rankLe C s u₀ := by unfold rankLe; rw [heq]
+      rw [h1, h2]
+      exact ⟨hv, hu₀'.2⟩
+  have hT : ∀ v ∈ A, rankLe C s v - rankLt C s v = A.card := by
+    intro v hv
+    have hv' := mem_filter.1 (hclass ▸ hv)
+    rw [rankLe_eq_rankLt_add C s v, hclass]
+    have : (C.filter fun j => s j = s v) = C.filter fun j => s j = s u₀ := by rw [hv'.2]
+    rw [this]
+    omega
+  have hpos : (0 : ℝ) < A.card := by exact_mod_cast card_pos.2 ⟨u₀, hu₀⟩
+  unfold tieRankProb
+  rw [← sum_filter, ← hA, sum_congr rfl fun v hv => by rw [hT v hv], sum_const, nsmul_eq_mul]
+  field_simp
+
+omit [LinearOrder α] in
+theorem tieRankProb_comp {ι : Type*} [Fintype ι] [DecidableEq ι] [LinearOrder α] {C : Finset ι}
+    {σ : Equiv.Perm ι} (hσ : σ ∈ permsOn C) (s : ι → α) (u : ι) (r : ℕ) :
+    tieRankProb C (s ∘ σ) u r = tieRankProb C s (σ u) r := by
+  simp only [tieRankProb, rankLe_comp hσ, rankLt_comp hσ]
+
+/-- The probability that the randomized ranks, newest first, are `r`, for the units `v` in the
+order given (`v 0` the newest). At each time the newest unit is ranked among every unit so far,
+its ties broken by a fresh uniform draw; `S n` scores the first `n` units. -/
+noncomputable def seqRankProb (S : (n : ℕ) → (Fin n → Z) → Fin n → α) :
+    (n : ℕ) → (Fin n → Z) → List ℕ → ℝ
+  | 0, _, r => if r = [] then 1 else 0
+  | _ + 1, _, [] => 0
+  | n + 1, v, r₀ :: r' =>
+    tieRankProb univ (S (n + 1) v) 0 r₀ * seqRankProb S n (fun i => v i.succ) r'
+
+/-- The rank sequences, newest first, that `n` units can produce: the newest of `m` units has a
+rank in `1, …, m`. -/
+def ValidRanks : ℕ → List ℕ → Prop
+  | 0, r => r = []
+  | _ + 1, [] => False
+  | n + 1, r₀ :: r' => 1 ≤ r₀ ∧ r₀ ≤ n + 1 ∧ ValidRanks n r'
+
+theorem mem_permsOn_univ {ι : Type*} [Fintype ι] [DecidableEq ι] (σ : Equiv.Perm ι) :
+    σ ∈ permsOn (univ : Finset ι) :=
+  mem_filter.2 ⟨mem_univ _, fun i hi => absurd (mem_univ i) hi⟩
+
+/-- **M-1, the finite core.** For scores equivariant at every time, and over every ordering of a
+fixed data set, each rank sequence that `n` units can produce has total probability 1, so
+probability `1/n!` under a uniform ordering: the randomized ranks are independent, the newest of
+`m` units uniform on `1, …, m`. The premises are the definition's: every earlier unit ranked,
+calibration and test alike; ties broken by a fresh uniform draw; the scores at each time a
+symmetric function of the units so far. -/
+theorem seqRank_uniform (S : (n : ℕ) → (Fin n → Z) → Fin n → α)
+    (hS : ∀ n, Equivariant (univ : Finset (Fin n)) (S n)) :
+    ∀ (n : ℕ) (v : Fin n → Z) (r : List ℕ), ValidRanks n r →
+      ∑ σ : Equiv.Perm (Fin n), seqRankProb S n (v ∘ σ) r = 1 := by
+  intro n
+  induction n with
+  | zero =>
+    intro v r hr
+    simp only [ValidRanks] at hr
+    subst hr
+    simp [seqRankProb]
+  | succ n ih =>
+    intro v r hr
+    cases r with
+    | nil => exact absurd hr (by simp [ValidRanks])
+    | cons r₀ r' =>
+      obtain ⟨h₁, h₂, hr'⟩ := hr
+      rw [← Equiv.sum_comp Equiv.Perm.decomposeFin.symm, Fintype.sum_prod_type]
+      have hstep : ∀ (p : Fin (n + 1)) (e : Equiv.Perm (Fin n)),
+          seqRankProb S (n + 1) (v ∘ Equiv.Perm.decomposeFin.symm (p, e)) (r₀ :: r') =
+            tieRankProb univ (S (n + 1) v) p r₀ *
+              seqRankProb S n ((fun i => v (Equiv.swap 0 p i.succ)) ∘ e) r' := by
+        intro p e
+        have hσ := mem_permsOn_univ (Equiv.Perm.decomposeFin.symm (p, e))
+        have hfun : S (n + 1) (v ∘ Equiv.Perm.decomposeFin.symm (p, e)) =
+            S (n + 1) v ∘ Equiv.Perm.decomposeFin.symm (p, e) :=
+          funext fun i => hS (n + 1) _ hσ v i
+        simp only [seqRankProb]
+        rw [hfun, tieRankProb_comp hσ, Equiv.Perm.decomposeFin_symm_apply_zero]
+        congr 1
+        congr 1
+        funext i
+        simp [Equiv.Perm.decomposeFin_symm_apply_succ]
+      simp only [hstep, ← mul_sum]
+      rw [sum_congr rfl fun p _ => by rw [ih _ r' hr', mul_one]]
+      exact sum_tieRankProb univ (S (n + 1) v) h₁ (by simpa using h₂)
+
+/-- **M-1 under an exchangeable law.** For a law on data sets invariant under every reordering,
+each rank sequence `n` units can produce has probability `1/n!`. -/
+theorem seqRank_law [Fintype Z] (S : (n : ℕ) → (Fin n → Z) → Fin n → α)
+    (hS : ∀ n, Equivariant (univ : Finset (Fin n)) (S n)) (n : ℕ) (P : (Fin n → Z) → ℝ)
+    (hP1 : ∑ z, P z = 1) (hP : ∀ σ : Equiv.Perm (Fin n), ∀ z, P (z ∘ σ) = P z) (r : List ℕ)
+    (hr : ValidRanks n r) :
+    ∑ z, P z * seqRankProb S n z r = 1 / (n.factorial : ℝ) := by
+  rw [sum_law_average (C := univ) P (fun σ _ z => hP σ z)]
+  have hcard : ((permsOn (univ : Finset (Fin n))).card : ℝ) = n.factorial := by
+    have : permsOn (univ : Finset (Fin n)) = univ :=
+      eq_univ_of_forall fun σ => mem_permsOn_univ σ
+    rw [this, card_univ, Fintype.card_perm, Fintype.card_fin]
+  have hsum : ∀ z : Fin n → Z, ∑ σ ∈ permsOn (univ : Finset (Fin n)), seqRankProb S n (z ∘ σ) r =
+      1 := by
+    intro z
+    have : permsOn (univ : Finset (Fin n)) = univ :=
+      eq_univ_of_forall fun σ => mem_permsOn_univ σ
+    rw [this]
+    exact seqRank_uniform S hS n z r hr
+  simp only [hsum, hcard]
+  rw [← sum_mul, hP1, one_mul]
+
+end Sequential
+
+/-! ### E35, M-2: the betting product and Ville's inequality -/
+
+section Betting
+
+open MeasureTheory
+open scoped ENNReal
+
+variable (μ : Measure ℝ) (f : (n : ℕ) → (Fin n → ℝ) → ℝ → ℝ≥0∞)
+
+/-- The capital after `n` bets on the p-values `h`: the product of the betting functions, the
+`n`th chosen from the earlier p-values `Fin.init h` and read at the newest. -/
+noncomputable def capital : (n : ℕ) → (Fin n → ℝ) → ℝ≥0∞
+  | 0, _ => 1
+  | n + 1, h => capital n (Fin.init h) * f n (Fin.init h) (h (Fin.last n))
+
+theorem measurable_init (n : ℕ) : Measurable fun h : Fin (n + 1) → ℝ => Fin.init h :=
+  measurable_pi_lambda _ fun i => measurable_pi_apply (Fin.castSucc i)
+
+variable {f}
+
+theorem measurable_capital (hf : ∀ n, Measurable (Function.uncurry (f n))) :
+    ∀ n, Measurable (capital f n)
+  | 0 => measurable_const
+  | n + 1 => by
+    have h₁ := (measurable_capital hf n).comp (measurable_init n)
+    have h₂ := (hf n).comp ((measurable_init n).prodMk (measurable_pi_apply (Fin.last n)))
+    exact h₁.mul h₂
+
+/-- **The link, one step.** Given the history `h`, the next capital integrates over the newest
+p-value to the current one: the martingale property, with the betting function chosen from `h`
+and integrating to 1. -/
+theorem lintegral_capital_snoc (hf : ∀ n, Measurable (Function.uncurry (f n)))
+    (h1 : ∀ n h, ∫⁻ x, f n h x ∂μ = 1) (n : ℕ) (h : Fin n → ℝ) :
+    ∫⁻ x, capital f (n + 1) (Fin.snoc h x) ∂μ = capital f n h := by
+  simp only [capital, Fin.init_snoc, Fin.snoc_last]
+  have hm : Measurable fun x => f n h x := (hf n).comp (measurable_const.prodMk measurable_id)
+  rw [lintegral_const_mul _ hm, h1, mul_one]
+
+/-- Tonelli at the newest p-value: the capital's integral at `n + 1` is the history's integral of
+the next step's integral over the newest p-value. -/
+theorem lintegral_capital_succ [IsProbabilityMeasure μ]
+    (hf : ∀ n, Measurable (Function.uncurry (f n))) (n : ℕ) :
+    ∫⁻ h, capital f (n + 1) h ∂(Measure.pi fun _ : Fin (n + 1) => μ) =
+      ∫⁻ g, ∫⁻ x, capital f (n + 1) (Fin.snoc g x) ∂μ ∂(Measure.pi fun _ : Fin n => μ) := by
+  set e := MeasurableEquiv.piFinSuccAbove (fun _ : Fin (n + 1) => ℝ) (Fin.last n)
+  have hmp : MeasurePreserving e (Measure.pi fun _ : Fin (n + 1) => μ)
+      (μ.prod (Measure.pi fun _ : Fin n => μ)) :=
+    measurePreserving_piFinSuccAbove (fun _ : Fin (n + 1) => μ) (Fin.last n)
+  have hG : Measurable fun z : ℝ × (Fin n → ℝ) => capital f (n + 1) (e.symm z) :=
+    (measurable_capital hf (n + 1)).comp e.symm.measurable
+  have hsnoc : ∀ (g : Fin n → ℝ) (x : ℝ), e.symm (x, g) = Fin.snoc g x := fun g x => by
+    ext i
+    simp [e, MeasurableEquiv.piFinSuccAbove_symm_apply]
+  calc ∫⁻ h, capital f (n + 1) h ∂(Measure.pi fun _ : Fin (n + 1) => μ)
+      = ∫⁻ h, capital f (n + 1) (e.symm (e h)) ∂(Measure.pi fun _ : Fin (n + 1) => μ) := by
+        simp only [MeasurableEquiv.symm_apply_apply]
+    _ = ∫⁻ z, capital f (n + 1) (e.symm z) ∂(μ.prod (Measure.pi fun _ : Fin n => μ)) :=
+        hmp.lintegral_comp_emb e.measurableEmbedding fun z => capital f (n + 1) (e.symm z)
+    _ = ∫⁻ g, ∫⁻ x, capital f (n + 1) (e.symm (x, g)) ∂μ ∂(Measure.pi fun _ : Fin n => μ) :=
+        lintegral_prod_symm _ hG.aemeasurable
+    _ = ∫⁻ g, ∫⁻ x, capital f (n + 1) (Fin.snoc g x) ∂μ ∂(Measure.pi fun _ : Fin n => μ) := by
+        simp only [hsnoc]
+
+/-- **The link.** With the p-values independent with law `μ`, the capital at every horizon has
+expectation 1. -/
+theorem lintegral_capital [IsProbabilityMeasure μ] (hf : ∀ n, Measurable (Function.uncurry (f n)))
+    (h1 : ∀ n h, ∫⁻ x, f n h x ∂μ = 1) :
+    ∀ n, ∫⁻ h, capital f n h ∂(Measure.pi fun _ : Fin n => μ) = 1
+  | 0 => by simp [capital]
+  | n + 1 => by
+    rw [lintegral_capital_succ μ hf n]
+    simp only [lintegral_capital_snoc μ hf h1 n]
+    exact lintegral_capital hf h1 n
+
+/-- Under a bet integrating to at most 1, the next capital integrates to at most the current one:
+the capital is a supermartingale. -/
+theorem lintegral_capital_snoc_le (hf : ∀ n, Measurable (Function.uncurry (f n)))
+    (h1 : ∀ n h, ∫⁻ x, f n h x ∂μ ≤ 1) (n : ℕ) (h : Fin n → ℝ) :
+    ∫⁻ x, capital f (n + 1) (Fin.snoc h x) ∂μ ≤ capital f n h := by
+  simp only [capital, Fin.init_snoc, Fin.snoc_last]
+  have hm : Measurable fun x => f n h x := (hf n).comp (measurable_const.prodMk measurable_id)
+  rw [lintegral_const_mul _ hm]
+  calc capital f n h * ∫⁻ x, f n h x ∂μ ≤ capital f n h * 1 := by gcongr; exact h1 n h
+    _ = capital f n h := mul_one _
+
+/-- Under bets integrating to at most 1, the capital has expectation at most 1. -/
+theorem lintegral_capital_le [IsProbabilityMeasure μ]
+    (hf : ∀ n, Measurable (Function.uncurry (f n))) (h1 : ∀ n h, ∫⁻ x, f n h x ∂μ ≤ 1) :
+    ∀ n, ∫⁻ h, capital f n h ∂(Measure.pi fun _ : Fin n => μ) ≤ 1
+  | 0 => by simp [capital]
+  | n + 1 => by
+    rw [lintegral_capital_succ μ hf n]
+    calc ∫⁻ g, ∫⁻ x, capital f (n + 1) (Fin.snoc g x) ∂μ ∂(Measure.pi fun _ : Fin n => μ)
+        ≤ ∫⁻ g, capital f n g ∂(Measure.pi fun _ : Fin n => μ) :=
+          lintegral_mono fun g => lintegral_capital_snoc_le μ hf h1 n g
+      _ ≤ 1 := lintegral_capital_le hf h1 n
+
+/-- The times stopped at, by `n`: the rule `stop k` reads the first `k` p-values at time `k`. -/
+def stoppedSet (stop : (n : ℕ) → Set (Fin n → ℝ)) : (n : ℕ) → Set (Fin n → ℝ)
+  | 0 => stop 0
+  | n + 1 => (fun h => Fin.init h) ⁻¹' stoppedSet stop n ∪ stop (n + 1)
+
+open scoped Classical in
+variable (f) in
+/-- The bets switched off once stopped: still betting functions, still reading only the past. -/
+noncomputable def stoppedBet (stop : (n : ℕ) → Set (Fin n → ℝ)) (n : ℕ) (h : Fin n → ℝ) (x : ℝ) :
+    ℝ≥0∞ :=
+  if h ∈ stoppedSet stop n then 1 else f n h x
+
+theorem measurableSet_stoppedSet {stop : (n : ℕ) → Set (Fin n → ℝ)}
+    (hstop : ∀ n, MeasurableSet (stop n)) : ∀ n, MeasurableSet (stoppedSet stop n)
+  | 0 => hstop 0
+  | n + 1 => ((measurableSet_stoppedSet hstop n).preimage (measurable_init n)).union (hstop (n + 1))
+
+theorem measurable_stoppedBet (hf : ∀ n, Measurable (Function.uncurry (f n)))
+    {stop : (n : ℕ) → Set (Fin n → ℝ)} (hstop : ∀ n, MeasurableSet (stop n)) (n : ℕ) :
+    Measurable (Function.uncurry (stoppedBet f stop n)) := by
+  classical
+  have hS : MeasurableSet {z : (Fin n → ℝ) × ℝ | z.1 ∈ stoppedSet stop n} :=
+    (measurableSet_stoppedSet hstop n).preimage measurable_fst
+  exact Measurable.ite hS measurable_const (hf n)
+
+theorem lintegral_stoppedBet [IsProbabilityMeasure μ] (h1 : ∀ n h, ∫⁻ x, f n h x ∂μ = 1)
+    (stop : (n : ℕ) → Set (Fin n → ℝ)) (n : ℕ) (h : Fin n → ℝ) :
+    ∫⁻ x, stoppedBet f stop n h x ∂μ = 1 := by
+  classical
+  by_cases hs : h ∈ stoppedSet stop n
+  · simp [stoppedBet, hs]
+  · simp only [stoppedBet, hs, if_false]
+    exact h1 n h
+
+theorem lintegral_stoppedBet_le [IsProbabilityMeasure μ] (h1 : ∀ n h, ∫⁻ x, f n h x ∂μ ≤ 1)
+    (stop : (n : ℕ) → Set (Fin n → ℝ)) (n : ℕ) (h : Fin n → ℝ) :
+    ∫⁻ x, stoppedBet f stop n h x ∂μ ≤ 1 := by
+  classical
+  by_cases hs : h ∈ stoppedSet stop n
+  · simp [stoppedBet, hs]
+  · simp only [stoppedBet, hs, if_false]
+    exact h1 n h
+
+/-- **The capital at a stopping time is an e-value.** Stopped by any measurable rule, by the
+horizon `n` at the latest, the capital has expectation 1. -/
+theorem lintegral_stoppedCapital [IsProbabilityMeasure μ]
+    (hf : ∀ n, Measurable (Function.uncurry (f n))) (h1 : ∀ n h, ∫⁻ x, f n h x ∂μ = 1)
+    {stop : (n : ℕ) → Set (Fin n → ℝ)} (hstop : ∀ n, MeasurableSet (stop n)) (n : ℕ) :
+    ∫⁻ h, capital (stoppedBet f stop) n h ∂(Measure.pi fun _ : Fin n => μ) = 1 :=
+  lintegral_capital μ (measurable_stoppedBet hf hstop) (lintegral_stoppedBet μ h1 stop) n
+
+/-- Until it stops, the stopped capital is the capital. -/
+theorem capital_stoppedBet_of_notMem {stop : (n : ℕ) → Set (Fin n → ℝ)} :
+    ∀ (n : ℕ) (h : Fin n → ℝ), h ∉ stoppedSet stop n →
+      capital (stoppedBet f stop) n h = capital f n h
+  | 0, _, _ => rfl
+  | n + 1, h, hs => by
+    classical
+    have hinit : Fin.init h ∉ stoppedSet stop n := fun hh => hs (Or.inl hh)
+    simp only [capital, stoppedBet, hinit, if_false]
+    rw [capital_stoppedBet_of_notMem n (Fin.init h) hinit]
+
+/-- Once stopped, the stopped capital stays put. -/
+theorem capital_stoppedBet_of_mem {stop : (n : ℕ) → Set (Fin n → ℝ)} (n : ℕ)
+    (h : Fin (n + 1) → ℝ) (hs : Fin.init h ∈ stoppedSet stop n) :
+    capital (stoppedBet f stop) (n + 1) h = capital (stoppedBet f stop) n (Fin.init h) := by
+  classical
+  simp only [capital, stoppedBet, hs, if_true, mul_one]
+
+/-- Stopped by the alarm `c ≤ capital`, the stopped capital is at least `c` from then on. -/
+theorem le_capital_stoppedBet (c : ℝ≥0∞) :
+    ∀ (n : ℕ) (h : Fin n → ℝ), h ∈ stoppedSet (fun k => {h | c ≤ capital f k h}) n →
+      c ≤ capital (stoppedBet f fun k => {h | c ≤ capital f k h}) n h
+  | 0, _, hs => hs
+  | n + 1, h, hs => by
+    classical
+    by_cases hi : Fin.init h ∈ stoppedSet (fun k => {h | c ≤ capital f k h}) n
+    · rw [capital_stoppedBet_of_mem n h hi]
+      exact le_capital_stoppedBet c n (Fin.init h) hi
+    · have hs' : c ≤ capital f (n + 1) h := by
+        rcases hs with hs | hs
+        · exact absurd hs hi
+        · exact hs
+      have heq : capital (stoppedBet f fun k => {h | c ≤ capital f k h}) (n + 1) h =
+          capital f (n + 1) h := by
+        simp only [capital, stoppedBet, hi, if_false]
+        rw [capital_stoppedBet_of_notMem n (Fin.init h) hi]
+      rw [heq]
+      exact hs'
+
+/-- **M-2 at a horizon, Ville's inequality.** With the p-values independent with law `μ` and each
+bet chosen from the past and integrating to at most 1, the probability that the capital reaches
+`c` by the horizon `n` is at most `1/c`. The bet is switched off at the alarm, the stopped capital
+is again a betting product with expectation at most 1, and Markov's inequality finishes. -/
+theorem ville_horizon [IsProbabilityMeasure μ] (hf : ∀ n, Measurable (Function.uncurry (f n)))
+    (h1 : ∀ n h, ∫⁻ x, f n h x ∂μ ≤ 1) (c : ℝ≥0∞) (n : ℕ) :
+    (Measure.pi fun _ : Fin n => μ) (stoppedSet (fun k => {h | c ≤ capital f k h}) n) ≤ c⁻¹ := by
+  have hstop : ∀ k, MeasurableSet {h : Fin k → ℝ | c ≤ capital f k h} := fun k =>
+    measurableSet_le measurable_const (measurable_capital hf k)
+  have hg := measurable_capital (measurable_stoppedBet hf hstop) n
+  have hint := lintegral_capital_le μ (measurable_stoppedBet hf hstop)
+    (lintegral_stoppedBet_le μ h1 _) n
+  have hmarkov := mul_meas_ge_le_lintegral₀ (μ := Measure.pi fun _ : Fin n => μ) hg.aemeasurable c
+  have hsub : (Measure.pi fun _ : Fin n => μ) (stoppedSet (fun k => {h | c ≤ capital f k h}) n) ≤
+      (Measure.pi fun _ : Fin n => μ)
+        {h | c ≤ capital (stoppedBet f fun k => {h | c ≤ capital f k h}) n h} :=
+    measure_mono fun h hh => le_capital_stoppedBet c n h hh
+  rw [ENNReal.le_inv_iff_mul_le, mul_comm]
+  calc c * (Measure.pi fun _ : Fin n => μ) (stoppedSet (fun k => {h | c ≤ capital f k h}) n)
+      ≤ c * (Measure.pi fun _ : Fin n => μ)
+          {h | c ≤ capital (stoppedBet f fun k => {h | c ≤ capital f k h}) n h} := by gcongr
+    _ ≤ 1 := hmarkov.trans hint
+
+/-- The stopped set read along a path: stopped by `N` exactly when the rule fired at some
+`k ≤ N`. -/
+theorem mem_stoppedSet_iff (stop : (n : ℕ) → Set (Fin n → ℝ)) (x : ℕ → ℝ) :
+    ∀ N, (fun i : Fin N => x i) ∈ stoppedSet stop N ↔ ∃ k ≤ N, (fun i : Fin k => x i) ∈ stop k
+  | 0 => by simp [stoppedSet]
+  | N + 1 => by
+    have hinit : Fin.init (fun i : Fin (N + 1) => x i) = fun i : Fin N => x i := rfl
+    simp only [stoppedSet, Set.mem_union, Set.mem_preimage, hinit, mem_stoppedSet_iff stop x N]
+    constructor
+    · rintro (⟨k, hk, h⟩ | h)
+      · exact ⟨k, by omega, h⟩
+      · exact ⟨N + 1, le_rfl, h⟩
+    · rintro ⟨k, hk, h⟩
+      rcases Nat.lt_or_ge k (N + 1) with hlt | hge
+      · exact Or.inl ⟨k, by omega, h⟩
+      · obtain rfl : k = N + 1 := by omega
+        exact Or.inr h
+
+open Filter Topology in
+/-- **M-2, Ville's inequality for the betting product.** Let the p-values `p i` on a space `Ω` be
+independent with law `μ` at every horizon (M-1's conclusion, `μ` uniform on `[0, 1]`), and let each
+bet `f n` be measurable, integrate to at most 1 under `μ`, and read only the earlier p-values.
+Then the capital ever reaches `c` with probability at most `1/c`. -/
+theorem ville [IsProbabilityMeasure μ] (hf : ∀ n, Measurable (Function.uncurry (f n)))
+    (h1 : ∀ n h, ∫⁻ x, f n h x ∂μ ≤ 1) {Ω : Type*} [MeasurableSpace Ω] (P : Measure Ω)
+    (p : ℕ → Ω → ℝ) (hp : ∀ i, Measurable (p i))
+    (hlaw : ∀ n, P.map (fun ω (i : Fin n) => p i ω) = Measure.pi fun _ => μ) (c : ℝ≥0∞) :
+    P {ω | ∃ n, c ≤ capital f n (fun i : Fin n => p i ω)} ≤ c⁻¹ := by
+  set stop : (n : ℕ) → Set (Fin n → ℝ) := fun k => {h | c ≤ capital f k h} with hstopdef
+  have hstop : ∀ k, MeasurableSet (stop k) := fun k =>
+    measurableSet_le measurable_const (measurable_capital hf k)
+  set E : ℕ → Set Ω := fun N => {ω | (fun i : Fin N => p i ω) ∈ stoppedSet stop N} with hEdef
+  have hE : {ω | ∃ n, c ≤ capital f n (fun i : Fin n => p i ω)} = ⋃ N, E N := by
+    ext ω
+    simp only [Set.mem_setOf_eq, Set.mem_iUnion, hEdef, mem_stoppedSet_iff stop (fun i => p i ω)]
+    constructor
+    · rintro ⟨n, hn⟩
+      exact ⟨n, n, le_rfl, hn⟩
+    · rintro ⟨N, k, -, hk⟩
+      exact ⟨k, hk⟩
+  have hmono : Monotone E := by
+    intro N M hNM ω hω
+    simp only [hEdef, Set.mem_setOf_eq, mem_stoppedSet_iff stop (fun i => p i ω)] at hω ⊢
+    obtain ⟨k, hk, h⟩ := hω
+    exact ⟨k, hk.trans hNM, h⟩
+  have hbound : ∀ N, P (E N) ≤ c⁻¹ := by
+    intro N
+    have hφ : Measurable fun ω (i : Fin N) => p i ω := measurable_pi_lambda _ fun i => hp i
+    have : P (E N) = (P.map fun ω (i : Fin N) => p i ω) (stoppedSet stop N) := by
+      rw [Measure.map_apply hφ (measurableSet_stoppedSet hstop N)]
+      rfl
+    rw [this, hlaw N]
+    exact ville_horizon μ hf h1 c N
+  rw [hE]
+  exact le_of_tendsto' (tendsto_measure_iUnion_atTop hmono) hbound
+
+end Betting
 
 end Conformal

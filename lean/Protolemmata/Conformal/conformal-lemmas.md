@@ -2,7 +2,7 @@
 
 Pins the contract of the engine's conformal layer, one layer over retained draws and pointwise densities for every model with a pointwise density ([E16](../../../issues/regression/bass/extensions-brief.md#conformal-bayes-the-consumer)). The layer owns coverage and the score owns width. These are the finite statements of that split. They are the sibling of [GuardedEstimator](../BASS/guarded-estimator-lemmas.md): there, means valid whatever the emulator does; here, prediction sets valid whatever the model does. Written from the [chip brief](conformal-chip-brief.md).
 
-**Status (2026-11-06).** Proved in `lean/Enthymemata/ConformalValidity.lean`, namespace `Conformal`, with no apologies (89 declarations, PROOF-CLOSED; `#print axioms` shows `propext`, `Classical.choice`, `Quot.sound` only):
+**Status (2026-11-06).** Proved in `lean/Enthymemata/ConformalValidity.lean`, namespace `Conformal`, with no apologies (PROOF-CLOSED, 119 declarations counting E35's M-1 and M-2 at the end of this page; `#print axioms` shows `propext`, `Classical.choice`, `Quot.sound` only):
 - CB-1: `card_rankLe_le`, `coverage_orderings`, `coverage_orderings_eq`, `coverage_strict_le`, `coverage_orderings_le`, `rank_uniform`, `coverage_tieBreak`, `coverage_given`, `coverage_law`, `coverage_stratum`;
 - CB-2: `split_coverage`, `exchangeable_given_training`, `cqr_ordConnected`;
 - CB-4: `sum_jointU`, `post_addOneIn`, `integratedScore_equivariant`, `latentScore_equivariant`, `latentScore_eq`, `sum_jointU_addOneIn`, `integratedScore_le_latentScore`, `accepts_latent_of_mixed`, `mixed_counterexample`;
@@ -168,3 +168,85 @@ The bounds are sure in these statements. A Monte Carlo bound holds only with som
 - Barber, Candès, Ramdas and Tibshirani, *Conformal prediction beyond exchangeability* (AoS 2023, arXiv 2202.13415, "Nonexchangeable full conformal prediction" with §3.2).
   - An algorithm that treats one position specially is made valid by swapping the test unit with a random unit before fitting. The gap term vanishes under exchangeability.
   - For add-one-in that means draws given every unit but a random one, the candidate included: a refit per candidate, which the step exists to avoid.
+
+---
+
+## E35 — conformal test martingales: exchangeability checked online
+
+Posed and proved on 2026-11-08 for [E35](../../../issues/regression/bass/extensions-brief.md#conformal-test-martingales-exchangeability-checked-online-e35), before any C#. As with CB-1 to CB-4, the point is the contract: the guarantee is the product's, and its hypotheses are easy to break silently.
+
+**Status (2026-11-08).** Both statements are proved in `lean/Enthymemata/ConformalValidity.lean`, with no apologies: M-1's finite core and its law form, and M-2, the link and Ville. Two parts are not formalized, and both are checked exactly in [`conformal-checks.py`](conformal-checks.py): M-1's lift from ranks to continuous p-values, and the e-value at an unbounded stopping time. CUSUM and Shiryaev–Roberts are posed, not proved.
+
+**Conventions.** The scores are conformity scores, as E35's entry writes them. The nth smoothed p-value is pₙ = (#{i ≤ n : sᵢ < sₙ} + θₙ·#{i ≤ n : sᵢ = sₙ})/n, so a small p means a nonconforming newest unit. The Lean indexes the units newest first: `v 0` is the newest, and `v ∘ Fin.succ` are the units before it.
+
+### M-1 — the smoothed p-values are i.i.d. uniform
+
+**Claim.** Let the units' sequence be exchangeable, the θₙ i.i.d. uniform and independent of it, and the scores at each time a symmetric function of the units so far. Then p₁, p₂, … are i.i.d. uniform on [0, 1]. This is Vovk, Nouretdinov and Gammerman 2003, Theorem 1, and Vovk et al. 2021, Proposition 1.
+
+**The finite core** (`seqRank_uniform`). Write L for the units strictly below the newest and T for those tied with it, itself included. The rank part of pₙ is Rₙ = L + ⌈θₙT⌉, whose tie part is uniform on 1, …, T (`tieRankProb`). Over every ordering of a fixed data set, each rank sequence that n units can produce has total probability 1, so 1/n! under a uniform ordering. So the ranks are independent, and the newest of m units has a rank uniform on 1, …, m.
+
+**The proof's two steps.**
+- *Which unit is newest.* Every ordering splits into the newest unit p and an ordering e of the rest (`Equiv.Perm.decomposeFin`). Equivariance moves the newest unit's rank onto p's rank in the fixed data set, and the earlier ranks are those of a fixed (n − 1)-unit set in the order e, so the induction applies.
+- *The tie class covering a rank.* For each rank r, exactly one tie class straddles it, and its T members each hold it with probability 1/T, so the per-unit probabilities sum to 1 (`sum_tieRankProb`).
+
+**Under a law** (`seqRank_law`): for any law on data sets invariant under reordering, each valid rank sequence has probability 1/n!.
+
+**The lift, not formalized.** θT = (J − 1) + V with J = ⌈θT⌉ uniform on 1, …, T and V uniform on (0, 1], independent of J. So pₙ = (Rₙ − 1 + Vₙ)/n, with the Vₙ i.i.d. uniform and independent of the ranks, and the pₙ are i.i.d. uniform. The checks compute the joint CDF exactly from θ: 11,400 values of P(p₁ ≤ x₁, …, p_N ≤ x_N) equal x₁⋯x_N, ties included, for both kinds of score.
+
+**The premises, each explicit in the statement, and what breaks each in the checks.**
+- *Every earlier unit is ranked, calibration and test alike:* `univ` at every time in `seqRankProb`. Two tests ranked against one fixed calibration set each have uniform ranks, but they are dependent: P(both lowest) = 1/10 against 1/16 (three calibration units).
+- *Ties broken by a fresh uniform draw at each time:* `tieRankProb`, multiplied across times. Counting ties for the unit, CB-1's rule, makes an all-tied set accept with certainty, so the ranks are not uniform.
+- *The scores at each time a symmetric function of the units so far:* `Equivariant` for every n, which covers a fixed score (inductive) and scores all recomputed from the bag (full). The full form keeping each score from its own time breaks it, because in-sample scores drift.
+- *Exchangeability of the whole monitored sequence:* the sum over every ordering, or a law invariant under reordering. In the inductive form the training set proper fits the score and is not in the sequence (CB-2's conditioning).
+
+**Checks.**
+- The finite core holds exactly on 68 (data multiset, score) cases up to N = 4, ties included, with inductive and full scores.
+- Each premise was broken in turn, with the results above.
+- The joint CDF of the lift is exact.
+
+**Prior art, read.** Vovk, Nouretdinov and Gammerman 2003: Theorem 1, with its appendix proof by reverse σ-algebras Gₙ. The finite core here is that proof's inner step, conditioning on the bag at time n, made into a count. Vovk et al. 2021, Proposition 1 (from Vovk, Gammerman and Shafer 2005, Theorem 8.2).
+
+### M-2 — the betting product, Ville's inequality, and the e-value
+
+**The link** (`lintegral_capital_snoc`, `lintegral_capital`).
+- *The setting.* The p-values are i.i.d. with law μ, uniform on [0, 1] by M-1. The capital is Sₙ = Π f_i(p_i), with S₀ = 1 (`capital`).
+- *The premises on f_i.* Each f_i is ≥ 0 and measurable, chosen from p₁, …, p_{i−1} only, and integrates to 1 under μ. "Only" is the type: `f n` takes the history `Fin.init h`.
+- *The conclusion.* Given any history, the next capital integrates to the current one: the martingale property on the path space. So E Sₙ = 1 at every horizon.
+- *The proof.* Tonelli, through `MeasurableEquiv.piFinSuccAbove` at the last coordinate.
+
+**The e-value** (`lintegral_stoppedCapital`).
+- Stopped by any measurable rule that reads only the past, and by a horizon at the latest, the capital has expectation 1.
+- Stopping switches the bet off: the stopped bets `stoppedBet` are again betting functions. Until the stop the stopped capital is the capital (`capital_stoppedBet_of_notMem`), and after it the capital stays put (`capital_stoppedBet_of_mem`).
+- An unbounded stopping time gives E[S_τ; τ < ∞] ≤ 1 by Fatou over τ ∧ n. That is not formalized.
+
+**Ville's inequality** (`ville_horizon`, `ville`).
+- *At a horizon,* P(S_k ≥ c for some k ≤ n) ≤ 1/c. Stop at the alarm: the stopped capital is at least c on the alarm event, and has expectation at most 1, so Markov's inequality gives the bound.
+- *Over every horizon,* with the p-values on any space whose laws at every horizon are μⁿ (M-1's conclusion), P(∃ n, Sₙ ≥ c) ≤ 1/c. The alarm events increase with the horizon, and the bound passes to their union (`tendsto_measure_iUnion_atTop`).
+- *Ville needs only ∫ f ≤ 1.* The product is then a supermartingale, and every step above holds with ≤. `ville` takes that weaker premise, so a betting function normalized by quadrature can be scaled down by its rounding and stay valid. The martingale link and the e-value's equality keep the exact premise.
+
+**Not Mathlib's maximal inequality.** The brief asked for Doob's maximal inequality from Mathlib's martingale library. That needs the product as a martingale in conditional-expectation form, which needs a freezing lemma (independence, with the bet chosen from the past). Switching the bet off proves the finite-horizon bound with Tonelli and Markov alone. It states the code's premises directly, and needs no new Mathlib modules: `Probability.Martingale` was not cached, and nothing was fetched.
+
+**Checks.**
+- *Exact, on a 4-point grid standing in for [0, 1]:* every path of 4 p-values enumerated, with bets averaging 1 over the grid. Three strategies: Simple Jumper (Algorithm 1 of Vovk et al. 2021, J = 1/100), a power bet, and a power bet switched by the past. For each, E[Sₙ | history] = S_{n−1} on every history, E S₄ = 1, and c·P(max S ≥ c) ≤ 1.
+- *Each premise broken:* a bet integrating to 11/10, and one that reads the current p, both break the bound.
+- *Monte Carlo (seed 20261108):*
+  - Going all in on p₁ ≤ 1/c attains 1/c: 0.4993, 0.1002 and 0.0098 for c = 2, 10 and 100, at 200,000 runs.
+  - The bets 1 + λ(1 − 2p) run until absorbed approach it as λ shrinks: 0.0865 at λ = ½ and 0.0995 at λ = 1/5, against 0.1.
+  - Over 500 uniform p-values, Simple Jumper (0.42, 0.083) and the power bet with ε = ½ (0.26, 0.059) stay under 1/2 and 1/10.
+
+**Simple Jumper is in this form.** Its capital is a mixture over the Markov chain's paths, and its step ratio S_n/S_{n−1} = Σ_ε w_ε f_ε(pₙ), with w_ε from the past, is itself a betting function. The same holds for the power mixture, and for the plug-in martingale once its kernel density is renormalized on [0, 1].
+
+**Posed, not proved: CUSUM and Shiryaev–Roberts** (Vovk, *Statistical Science* 2021, Propositions 4.2 and 4.4, Corollaries 4.3 and 4.6). For a positive conformal martingale and c > 1:
+- the Shiryaev–Roberts alarm time satisfies E τ₁ ≥ c, from Rₙ − n being a martingale, Rₙ = Σ_{i<n} Sₙ/S_i;
+- the number of alarms Aₙ satisfies lim sup Aₙ/n ≤ 1/c almost surely;
+- both hold for CUSUM, which alarms no more often.
+
+Each Sₙ/S_i is the betting product from i + 1 to n, so `lintegral_capital` gives E Rₙ = n. The rest needs optional stopping at unbounded times and a strong law. That is a measure-theoretic step that changes no premise, so it is left posed.
+
+**Prior art, read.**
+- Vovk, Nouretdinov and Gammerman 2003 (power martingales, the e-value reading).
+- Fedorova, Gammerman, Nouretdinov and Vovk 2012 (plug-in).
+- Volkhonskiy, Burnaev, Nouretdinov, Gammerman and Vovk 2017 (inductive conformal martingales against classical CUSUM).
+- Vovk et al. 2021 (Simple Jumper).
+- Vovk, *Statistical Science* 2021 (Ville's procedure, CUSUM, Shiryaev–Roberts).
+- The text extractions were checked against the formulas used here: (6) of 2003, Algorithm 1 of 2021, and (12) to (15) of *Statistical Science*.

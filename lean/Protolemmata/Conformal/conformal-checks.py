@@ -1,4 +1,4 @@
-"""Numeric checks of conformal-lemmas.md (CB-1 to CB-4), labelled by item, before any Lean.
+"""Numeric checks of conformal-lemmas.md (CB-1 to CB-4, M-1 and M-2), labelled by item, before any Lean.
 
 Exhaustive enumeration over every ordering at small n, in exact rational arithmetic, so each check
 is an assertion and a printed figure, not an estimate. Standard library only.
@@ -11,6 +11,7 @@ Conventions, fixed in CB-1 and used throughout:
   Hoff's "c_{n+1} above the k-th order statistic", which he states without ties.
 """
 import itertools
+import math
 import random
 from fractions import Fraction as Q
 
@@ -728,6 +729,247 @@ for T in (20, 200):
                     f"{float(max(eps_u)):.3f}), |M| {M} (per unit {M_u}), exact {exact}, draws {cov}, "
                     f"inflated {cov_inf} (per unit {cov_inf_u}, by position {cov_inf_p})")
     print(f"CB-3 conformal Bayes by draws, T = {T}, N = 5, k = 1 (bound 4/5): " + "; ".join(rows))
+
+print()
+print("=== E35: conformal test martingales (M-1, M-2) ===")
+
+# M-1. The smoothed p-value of the nth unit, against every score so far (conformity scores):
+# p_n = (#{i <= n : s_i < s_n} + theta_n #{i <= n : s_i = s_n}) / n. Its finite part is the
+# randomized rank R_n = L_n + J_n, with J_n = ceil(theta_n T_n) uniform on {1..T_n}; then
+# p_n = (R_n - 1 + V_n)/n with V_n uniform on (0, 1], independent of J_n.
+
+
+def prefix_scores(seq, n, mode):
+    """The scores of the first n units at time n: a fixed A (inductive), or recomputed from the bag."""
+    w = tuple(seq[:n])
+    return tuple(Q(x) for x in w) if mode == 'inductive' else score_postpred(w)
+
+
+def rank_law(z, mode, tie='random', stale=False):
+    """The exact joint law of (R_1, ..., R_N) over every ordering of z and every tie-break draw."""
+    N = len(z)
+    law = {}
+    for order in itertools.permutations(range(N)):
+        seq = [z[o] for o in order]
+        kept = []
+        dists = []
+        for n in range(1, N + 1):
+            s = list(prefix_scores(seq, n, mode))
+            if stale:  # the full form keeping each score from its own time
+                kept.append(s[-1])
+                s = kept[:-1] + [s[-1]]
+            L = sum(1 for v in s if v < s[-1])
+            T = sum(1 for v in s if v == s[-1])
+            if tie == 'random':
+                dists.append({L + j: Q(1, T) for j in range(1, T + 1)})
+            else:  # ties counted for the unit, as CB-1's sets do
+                dists.append({L + T: Q(1)})
+        for combo in itertools.product(*[list(d.items()) for d in dists]):
+            key = tuple(r for r, _ in combo)
+            w = Q(1, math.factorial(N))
+            for _, pr in combo:
+                w *= pr
+            law[key] = law.get(key, Q(0)) + w
+    return law
+
+
+def is_uniform_ranks(law, N):
+    target = Q(1, math.factorial(N))
+    return all(law.get(r, Q(0)) == target for r in itertools.product(*[range(1, n + 1) for n in range(1, N + 1)]))
+
+
+
+n_m1 = 0
+for N in range(1, 5):
+    for z in multisets(range(3), N):
+        for mode in ('inductive', 'full'):
+            assert is_uniform_ranks(rank_law(z, mode), N)
+            n_m1 += 1
+print(f"M-1 finite core: {n_m1} (data multiset, score) cases up to N = 4, ties included, inductive and "
+      "full (recomputed) scores: the randomized ranks are exactly uniform on {1}x{1,2}x...x{1..N}")
+
+# The premises, broken one at a time.
+bad_tie = next(z for z in multisets(range(3), 3) if not is_uniform_ranks(rank_law(z, 'inductive', tie='le'), 3))
+bad_stale = next((z for N in (3, 4) for z in multisets(range(3), N)
+                  if not is_uniform_ranks(rank_law(z, 'full', stale=True), len(z))), None)
+print(f"M-1 premises: ties counted for the unit (no theta) break uniformity at {bad_tie}; the full form "
+      f"keeping each score from its own time breaks it at {bad_stale}")
+assert bad_stale is not None
+
+
+# Ranking against a fixed calibration set, as the split form's p-values for many test points do:
+# two test points sharing one calibration set have dependent p-values.
+def split_pair_law(z_cal_test):
+    """Units 0..m-1 calibration, m and m+1 tests; each test ranked against calibration plus itself."""
+    N = len(z_cal_test)
+    m = N - 2
+    law = {}
+    for order in itertools.permutations(range(N)):
+        seq = [Q(z_cal_test[o]) for o in order]
+        cal = seq[:m]
+        dists = []
+        for t in (seq[m], seq[m + 1]):
+            L = sum(1 for v in cal if v < t)
+            T = sum(1 for v in cal if v == t) + 1
+            dists.append({L + j: Q(1, T) for j in range(1, T + 1)})
+        for (r1, a), (r2, b) in itertools.product(dists[0].items(), dists[1].items()):
+            law[(r1, r2)] = law.get((r1, r2), Q(0)) + Q(1, math.factorial(N)) * a * b
+    return law
+
+
+law2 = split_pair_law((0, 1, 2, 3, 4))
+m1 = {r: sum(v for (a, b), v in law2.items() if a == r) for r in range(1, 5)}
+m2 = {r: sum(v for (a, b), v in law2.items() if b == r) for r in range(1, 5)}
+assert all(v == Q(1, 4) for v in m1.values()) and all(v == Q(1, 4) for v in m2.values())
+assert law2[(1, 1)] != m1[1] * m2[1]
+print(f"M-1 against a fixed calibration set (3 calibration, 2 tests): each test's rank is uniform, but "
+      f"P(both lowest) = {law2[(1, 1)]} against {m1[1] * m2[1]} if independent")
+
+
+# The continuous lift, exactly: P(p_1 <= x_1, ..., p_N <= x_N) = x_1 ... x_N on a grid of x, from the
+# theta-smoothed p-values directly (each theta's part is a clipped linear function).
+def joint_cdf(z, mode, xs):
+    N = len(z)
+    tot = Q(0)
+    for order in itertools.permutations(range(N)):
+        seq = [z[o] for o in order]
+        pr = Q(1)
+        for n in range(1, N + 1):
+            s = prefix_scores(seq, n, mode)
+            L = sum(1 for v in s if v < s[-1])
+            T = sum(1 for v in s if v == s[-1])
+            pr *= min(Q(1), max(Q(0), (n * xs[n - 1] - L) / T))
+        tot += pr
+    return tot / math.factorial(N)
+
+
+grid_x = [Q(1, 7), Q(2, 5), Q(1, 2), Q(3, 4), Q(1)]
+n_lift = 0
+for N in (2, 3, 4):
+    for z in multisets(range(3), N)[::2]:
+        for mode in ('inductive', 'full'):
+            for xs in itertools.product(grid_x, repeat=N):
+                assert joint_cdf(z, mode, xs) == prod(xs)
+                n_lift += 1
+print(f"M-1 lifted: {n_lift} exact joint CDF values of the smoothed p-values equal x_1...x_N "
+      "(i.i.d. uniform), ties included")
+
+# M-2. The capital S_n = prod_{i<=n} f_i(p_i), each f_i >= 0 with integral 1 on [0, 1], chosen from
+# p_1..p_{i-1} only. Exactly on a K-point midpoint grid standing in for [0, 1] (the betting
+# functions averaging 1 over it), every path enumerated: E[S_n | history] = S_{n-1}, E[S_N] = 1,
+# and P(max_{n <= N} S_n >= c) <= 1/c.
+K, N = 4, 4
+G = [Q(2 * k - 1, 2 * K) for k in range(1, K + 1)]
+
+
+def jumper_fn(eps):
+    return lambda p: 1 + eps * (p - Q(1, 2))
+
+
+def simple_jumper(path, J=Q(1, 100)):
+    """Algorithm 1 of Vovk et al. 2021 on a path of p-values: capital after each step."""
+    C = {e: Q(1, 3) for e in (-1, 0, 1)}
+    out = []
+    for p in path:
+        tot = sum(C.values())
+        C = {e: (1 - J) * C[e] + J / 3 * tot for e in C}
+        C = {e: C[e] * jumper_fn(e)(p) for e in C}
+        out.append(sum(C.values()))
+    return out
+
+
+def power_grid(eps):
+    """The power betting function eps p^(eps-1), renormalized to average 1 on the grid."""
+    raw = [eps * p ** (eps - 1) for p in G]
+    m = sum(raw) / K
+    return lambda p: eps * p ** (eps - 1) / m
+
+
+def product_capital(path, fs):
+    out, S = [], Q(1)
+    for i, p in enumerate(path):
+        S *= fs(path[:i])(p)
+        out.append(S)
+    return out
+
+
+strategies = {
+    "Simple Jumper": simple_jumper,
+    "power, eps = 2 (grid-normalized)": lambda path: product_capital(path, lambda h: power_grid(2)),
+    "power, eps = 3, switching on the past": lambda path: product_capital(
+        path, lambda h: power_grid(3) if (h and h[-1] > Q(1, 2)) else jumper_fn(-1)),
+}
+for name, strat in strategies.items():
+    paths = list(itertools.product(G, repeat=N))
+    caps = {path: strat(list(path)) for path in paths}
+    for n in range(1, N + 1):
+        for hist in itertools.product(G, repeat=n - 1):
+            prev = Q(1) if n == 1 else caps[hist + (G[0],) * (N - n + 1)][n - 2]
+            nxt = sum(caps[hist + (p,) + (G[0],) * (N - n)][n - 1] for p in G) / K
+            assert nxt == prev
+    assert sum(caps[pth][N - 1] for pth in paths) / len(paths) == 1
+    worst = max(sum(1 for pth in paths if max(caps[pth]) >= c) / Q(len(paths)) * c for c in (Q(3, 2), Q(2), Q(3), Q(5)))
+    assert worst <= 1
+    print(f"M-2 exact on the grid, {name}: E[S_n | history] = S_(n-1) on every history, E[S_4] = 1, "
+          f"max over c of c P(max S >= c) = {worst}")
+
+# The premises, broken: an f integrating to 11/10, and an f that reads the current p.
+over = lambda path: product_capital(path, lambda h: (lambda p: Q(11, 10)))
+look = lambda path: [Q(2) ** (i + 1) for i in range(len(path))]  # bets after seeing p: doubles surely
+for name, strat, c in (("integral 11/10", over, Q(5, 4)), ("reads the current p", look, Q(4))):
+    paths = list(itertools.product(G, repeat=N))
+    freq = sum(1 for pth in paths if max(strat(list(pth))) >= c) / Q(len(paths))
+    assert freq > 1 / c
+    print(f"M-2 broken, {name}: P(max S >= {c}) = {freq} > 1/c = {1 / c}")
+
+# Continuous: the integrals, and the one-step identity for the Simple Jumper, exactly (it is
+# polynomial in p): integral_0^1 f_eps(p) dp = 1 + eps (1/2 - 1/2) = 1.
+for eps in (-1, 0, 1):
+    integral = 1 + eps * (Q(1, 2) - Q(1, 2))
+    assert integral == 1
+print("M-2 continuous: each Simple Jumper bet integrates to 1 on [0, 1]; the power bet eps p^(eps-1) "
+      "integrates to [p^eps]_0^1 = 1 for every eps in (0, 1]")
+
+# Seeded Monte Carlo: Ville's bound attained, approached, and kept.
+mc = random.Random(20261108)
+R = 200_000
+for c in (2, 10, 100):
+    hits = sum(1 for _ in range(R) if mc.random() <= 1 / c)  # all in on p_1 <= 1/c: S_1 = c there
+    se = math.sqrt((1 / c) * (1 - 1 / c) / R)
+    assert abs(hits / R - 1 / c) < 4 * se
+    print(f"M-2 Ville attained, c = {c}: all in on p_1 <= 1/c reaches c with frequency {hits / R:.5f} "
+          f"(1/c = {1 / c:.5f}, se {se:.5f})")
+for lam in (Q(1, 2), Q(1, 5)):
+    c, R2, hits = 10, 4000, 0
+    for _ in range(R2):
+        S = 1.0
+        while 1e-4 < S < c:
+            S *= 1 + float(lam) * (1 - 2 * mc.random())
+        hits += S >= c
+    print(f"M-2 Ville approached, c = 10, bet 1 + {float(lam)}(1 - 2p) until absorbed: frequency "
+          f"{hits / R2:.4f} (bound 0.1; overshoot shrinks with the bet)")
+    assert hits / R2 <= 0.1 + 4 * math.sqrt(0.1 * 0.9 / R2)
+R3, Nmax = 2000, 500
+for c in (2, 10):
+    hj = hp = 0
+    for _ in range(R3):
+        path = [mc.random() for _ in range(Nmax)]
+        C = {e: 1 / 3 for e in (-1, 0, 1)}
+        Sp, peakj, peakp = 1.0, 0.0, 0.0
+        for p in path:
+            tot = sum(C.values())
+            C = {e: 0.99 * C[e] + 0.01 / 3 * tot for e in C}
+            C = {e: C[e] * (1 + e * (p - 0.5)) for e in C}
+            peakj = max(peakj, sum(C.values()))
+            Sp *= 0.5 * max(p, 1e-12) ** -0.5
+            peakp = max(peakp, Sp)
+        hj += peakj >= c
+        hp += peakp >= c
+    se = math.sqrt((1 / c) * (1 - 1 / c) / R3)
+    assert hj / R3 <= 1 / c + 4 * se and hp / R3 <= 1 / c + 4 * se
+    print(f"M-2 Ville kept over {Nmax} uniform p's, c = {c}: Simple Jumper {hj / R3:.4f}, power eps = 1/2 "
+          f"{hp / R3:.4f} (bound {1 / c})")
+
 
 print()
 print("All assertions hold.")

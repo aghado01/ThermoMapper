@@ -1,6 +1,6 @@
 # Conformal validity in the Lean harness — chip brief
 
-Date: 2026-11-05. Status: done 2026-11-06, CB-1 to CB-4 proved; report below. Written at the user's request, from E16's reading of the conformal literature.
+Date: 2026-11-05. Status: done 2026-11-06, CB-1 to CB-4 proved; E35's M-1 and M-2 proved on 2026-11-08; reports below. Written at the user's request, from E16's reading of the conformal literature.
 
 ## Context
 
@@ -97,9 +97,89 @@ Append a report below, newest first, under "Reports", and keep the protolemma's 
 - follow-ups only with the decision each would change. Record a question with no decision waiting as open, not proposed;
 - what stopped you, if anything did.
 
+## E35: conformal test martingales (2026-11-08)
+
+The user asked for this on 2026-11-08 ("Yes, start it"), relayed by the BASS extensions session. [E35](../../../issues/regression/bass/extensions-brief.md#conformal-test-martingales-exchangeability-checked-online-e35) tests exchangeability online. Its code comes after the conformal layer's slice 5, and these statements fix its contract first.
+- **M-1, the smoothed p-values.** Under exchangeability, with θ₁, θ₂, … i.i.d. uniform and independent of the data, p₁, p₂, … are i.i.d. uniform. The rank part is finite. The statement makes three premises explicit: the random tie-break, ranking against every earlier score (calibration and test alike), and exchangeability of the whole sequence.
+- **M-2, Ville's inequality for the betting product** Sₙ = Π f_i(p_i).
+  - Each f_i is ≥ 0, integrates to 1 on [0, 1], and is chosen from the earlier p-values.
+  - The link is its own lemma: the product is a martingale under i.i.d. uniform p-values.
+  - P(supₙ Sₙ ≥ c) ≤ 1/c, and the capital at a stopping time is an e-value.
+- **Optional:** pose the CUSUM and Shiryaev–Roberts guarantees.
+- **Method as for CB-1 to CB-4:**
+  - checks first: exhaustive at small n, and a seeded Monte Carlo of Ville's bound attained;
+  - Lean in the finite style where it fits, with standard axioms only;
+  - the module and barrel builds, meta-CI, and D:'s free space.
+- **Sources:**
+  - `gauntlet/conformal-bayes`: 1204.3251, 1706.03415, 2102.10439;
+  - `PDFs/Bayesian`: `Vovk2003.pdf`, `Vovk_StatSci2021.pdf`;
+  - text extractions in the requesting session's scratchpad, their math checked against the formulas used.
+
 ## Reports
 
 Newest first.
+
+### 2026-11-08 — E35: M-1 and M-2 proved
+
+**Proved** in `lean/Enthymemata/ConformalValidity.lean`, which is now 119 declarations and still PROOF-CLOSED. `#print axioms` on the E35 results shows the standard three only. [conformal-lemmas.md](conformal-lemmas.md) has the record, in its E35 section.
+- *M-1:*
+  - `seqRank_uniform`, the finite core: the randomized ranks of the smoothed p-values are independent and uniform over every ordering of a fixed data set, ties included, for any scores symmetric at each time;
+  - `sum_tieRankProb`: exactly one tie class covers each rank;
+  - `seqRank_law`: the same under any exchangeable law.
+- *M-2:*
+  - `lintegral_capital_snoc` and `lintegral_capital`, the link: given any history the next capital integrates to the current one, so E Sₙ = 1;
+  - `lintegral_capital_le`, its supermartingale form;
+  - `lintegral_stoppedCapital`: the capital at a bounded stopping time is an e-value;
+  - `ville_horizon` and `ville`: P(∃ n, Sₙ ≥ c) ≤ 1/c.
+
+**Not formalized, checked exactly instead.**
+- M-1's lift from ranks to continuous p-values: θT = (J − 1) + V. 11,400 exact joint CDF values equal x₁⋯x_N.
+- The e-value at an unbounded stopping time, by Fatou.
+- CUSUM and Shiryaev–Roberts: posed, with their route. E Rₙ = n follows from `lintegral_capital`; the rest needs optional stopping at unbounded times.
+
+**Checks first** (`conformal-checks.py`, section E35). All assertions hold.
+- *M-1:*
+  - the ranks are exactly uniform in 68 cases, inductive and full scores;
+  - each premise broken in turn fails: ties counted for the unit; stale full-form scores; tests sharing one calibration set, where P(both lowest) = 1/10, not 1/16.
+- *M-2, exact on a 4-point grid,* for Simple Jumper and two power strategies:
+  - the martingale property holds on every history;
+  - E S₄ = 1, and c·P(max S ≥ c) ≤ 1;
+  - a bet integrating to 11/10 breaks it, and so does one reading the current p.
+- *Seeded Monte Carlo:*
+  - going all in on p₁ ≤ 1/c attains 1/c;
+  - small bets approach it (0.0995 against 0.1);
+  - Simple Jumper and the power martingale stay under it.
+
+**What changed from the task.**
+- *Ville is not proved by Mathlib's maximal inequality.* The bet is switched off at the alarm: the stopped capital is again a betting product with expectation at most 1, and Markov's inequality gives the bound at each horizon. The limit over horizons is a monotone union. The route needs Tonelli and Markov only, and states the code's premises as they are. Mathlib's route needs the product as a conditional-expectation martingale, which needs a freezing lemma, and modules that were not cached. Nothing was fetched.
+- *Ville's premise is weaker than the task's.* Each bet need only integrate to at most 1, and the product is then a supermartingale. The martingale link and the e-value's equality keep the exact premise.
+
+**Gates for E35's code**, each a premise of a statement above:
+1. The whole monitored sequence is exchangeable. In the inductive form, it is exchangeable given the training set proper, which fits the score and is not ranked.
+2. Each new score is ranked among every score so far, itself included, calibration and test alike, never against a fixed calibration set.
+3. Ties are broken by a fresh θₙ, uniform and independent of the data and of earlier draws: pₙ = (L + θₙT)/n. Neither CB-1's tie rule nor the arrival order.
+4. The scores at time n are a symmetric function of the n units so far: a fixed A, or all recomputed from the bag. Never scores kept from earlier times.
+5. Each betting function is ≥ 0 and measurable, reads only p₁, …, p_{n−1}, and integrates to at most 1 on [0, 1]. It integrates to exactly 1 where the e-value's equality is wanted; a quadrature-normalized plug-in rounds down. Simple Jumper and the power mixture qualify, because their step ratios are predictable mixtures of betting functions.
+6. The capital starts at 1. An alarm or a stop rule reads only the capital and p-values so far.
+
+**Corrections to E35's entry**, written into its Lean bullet:
+- Ville needs ≤ 1, not = 1.
+- "The full form, each score recomputed" means every score, at every time.
+- The finite argument covers the ranks, and the lift is measure-theoretic.
+- Ville is proved without Mathlib's martingale library.
+- CUSUM and Shiryaev–Roberts are posed, not proved.
+
+**Gates.**
+- `lake build Enthymemata.ConformalValidity`: clean.
+- `lake build Enthymemata`: green.
+- `scripts/meta-ci.ps1 -NoBuild`: PASS.
+- D: had 40 GB free, and nothing was fetched.
+
+**Open, no decision waiting:**
+- formalizing the lift and the unbounded stopping time;
+- the CUSUM and Shiryaev–Roberts proofs.
+
+The CUSUM and Shiryaev–Roberts guarantees are cited from Vovk 2021, where they are proved.
 
 ### 2026-11-06 — CB-3 with an error bound per unit
 
