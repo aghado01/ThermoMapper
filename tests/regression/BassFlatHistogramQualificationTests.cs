@@ -215,6 +215,7 @@ public sealed class BassFlatHistogramQualificationTests
     // Seed 8017's accepted start, Friedman's one qualified reading, pinned before the warm start's remedy (2026-10-31): the
     // remedy runs only where the fixed point refuses, so this start must stay as it was, bit for bit.
     [Fact]
+    [Trait("Tier", "Pinned")]
     public void Friedman_ArmOne_WarmStart_IsPinned()
     {
         if (!BassQualification.Enabled) return;   // a pilot, about a minute

@@ -44,6 +44,7 @@ public sealed class BassTemperingSizingTests
     [InlineData("fixed g", "7a5ad501887e8497")]
     [InlineData("functional", "5bf78e576a989948")]
     [InlineData("categorical", "5306a0a8fe37b061")]
+    [Trait("Tier", "Pinned")]
     public void FixedLevels_RunAsS8Did(string option, string pinned)
     {
         (BassConfig config, BassData data) = BassTemperingTests.RunCase(option, samples: 120);

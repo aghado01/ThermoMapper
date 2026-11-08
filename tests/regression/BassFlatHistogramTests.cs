@@ -810,6 +810,7 @@ public sealed class BassFlatHistogramTests
     }
 
     [Fact]
+    [Trait("Tier", "Pinned")]
     public void Pilot_PoolsItsLaddersRungs_AndItsWhamStartMeetsTheExactLimit_WithinThePilotsSpread()
     {
         BassModel model = FixtureA(heldTau: false);
@@ -873,6 +874,7 @@ public sealed class BassFlatHistogramTests
     }, System.Threading.LazyThreadSafetyMode.ExecutionAndPublication);
 
     [Fact]
+    [Trait("Tier", "Pinned")]
     public void WarmStart_OnFortyEightFixtureAPilots_TiesTheSevenTheFixedPointRefuses_AndLeavesTheRestAsTheyWere()
     {
         // Fixture A's pilots over the shapes they resolve themselves, the window's margins reaching the hot rung's sparse
@@ -1025,6 +1027,7 @@ public sealed class BassFlatHistogramTests
     [Theory]
     [InlineData(7803, false)]
     [InlineData(7802, true)]
+    [Trait("Tier", "Pinned")]
     public void Fit_FromAPilotWithAGap_InterpolatesItsEmptyNodes_OrTiesItsThinOnes(int seed, bool tied)
     {
         // Three fixed rungs, b = 1, 0.9 and the reference rung's 0, leave the levels between the prior's and the posterior's
@@ -1090,6 +1093,7 @@ public sealed class BassFlatHistogramTests
     // Today's fits from the gap pilots' WHAM starts, accepted (7803) and tied (7802), pinned before the window's top became
     // adjustable (the loose ends' item 1, 2026-10-31): with the options left off, a fit stays as it was, bit for bit.
     [Fact]
+    [Trait("Tier", "Pinned")]
     public void TodaysFits_FromTheGapPilots_ArePinned()
     {
         BassModel model = FixtureA(heldTau: true);

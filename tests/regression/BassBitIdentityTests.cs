@@ -28,6 +28,7 @@ namespace Maths.Regression.Tests;
 /// environment all eight former values hold, which is the check that the pass's other levers left every bit; the structure sequences with
 /// tables on and off are identical (<c>BassPrefixTableTests</c>).</para>
 /// </summary>
+[Trait("Tier", "Pinned")]
 public sealed class BassBitIdentityTests
 {
     private readonly ITestOutputHelper _out;

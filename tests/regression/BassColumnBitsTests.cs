@@ -15,6 +15,7 @@ namespace Maths.Regression.Tests;
 /// equal to every NaN) over chosen cases and a seeded random parameter sweep, far ranges, ±0, ±∞ and NaN included. Run it
 /// again with <c>DOTNET_EnableHWIntrinsic=0</c> for the unaccelerated path.
 /// </summary>
+[Trait("Tier", "Pinned")]
 public sealed class BassColumnBitsTests
 {
     private readonly ITestOutputHelper _out;

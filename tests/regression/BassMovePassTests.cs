@@ -111,6 +111,7 @@ public sealed class BassMovePassTests
     }
 
     [Fact]
+    [Trait("Tier", "Pinned")]
     public void Friedman_AtN500_IsS10s()
     {
         Assert.Equal(S10Friedman, DataHash(BassQualificationRecoveryTests.Friedman()));
