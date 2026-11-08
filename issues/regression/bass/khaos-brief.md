@@ -158,6 +158,54 @@ Under "Reports" below, newest first, per slice: what landed by commit; the gates
 
 Newest first.
 
+### Slice 0 addendum: the corrected khaos samplers (chip, 2026-11-07)
+
+**The decision.** For slice 2's readout gate the user chose, on 2026-11-07, to patch khaos's g-prior sampler in R rather than drop the gate ("Patch khaos in R"). The defects shared by both samplers sit in the ridge's too, so the same patches correct both. Slice 1's ridge readouts then meet a corrected reference as well.
+
+**Landed** in `86873ee`: `khaos_corrected(prior)` in `khaos_helpers.R`, the new mode `khaos_exactlaw_oracle.R` with `KhaosExactLawTests`, `corrected=1` in the readouts mode, and two more defect tests. With `BASS_QUALIFICATION=1`, the 36 KHAOS tests pass, and all 36 printed their readings, the two gated runs included. They took about 11 minutes, one class at a time (`xUnit.ParallelizeTestCollections=false`). In parallel on the loaded machine, five R processes at once pushed calls past the bridge's 120 s.
+
+**How the patch is made.** Each patch replaces one expression of the pinned body, matched by `identical()`, and states how many times it must match, so a change in the pinned source stops the oracle rather than leaving a patch unapplied. Both samplers take:
+- *The birth's and death's proposal terms:* the exact forward probability Σ_{q₀} J(q₀)·P(χ \| q₀)/P(valid \| q₀) on both sides, by a Poisson-binomial over the coins; the uniform composition with its count C(d − 1, q − 1); and the move probabilities the draw itself gives at M = 0 and at `max_basis`.
+- *The degree mutation's count,* C(d − 1, q − 1).
+- *The degree draw* indexed through its support (see below).
+- *The death's prior ratio,* −ln M.
+- *The variable swap* onto inactive variables only.
+- *The mutation type* held at ½ (decision 5).
+
+The g-prior also takes:
+- ½Δln\|S₀⁻¹\| in all four structure ratios. The swap changes ΨᵀΨ, and the degree mutation changes both g and ΨᵀΨ.
+- The current state's Σ_n, Q and ln\|Σ_n\| refreshed at the g₀² the iteration holds.
+- g₀² by one slice step on ln g₀² against its derived conditional (below).
+- σ² given the structure, then β given σ².
+
+The ridge also takes σ² given the structure, IG(g1 + n/2, d/2), the marginal its ratios read, then β given σ².
+
+**g₀²'s kernel.** The g₀² step is replaced, not only re-targeted. khaos's independence proposal is a Laplace fit to `dgsq_full`, whose tails are lighter than the corrected conditional's. With it re-targeted, the exact-law check below read P(g₀² < 10⁴) as 0.869 against 0.826, with an effective sample size of 196 for ln g₀². That chain is valid but slow in the tail. One slice step on ln g₀², the kernel E19 decided for the engine, reads 0.833 with an effective sample size near 2,500. The step reads the conditional through a pencil: one Cholesky and one eigendecomposition per iteration, then O(p) per g₀².
+
+**The check: the exact structure law** (`khaos_exactlaw_oracle.R`, `KhaosExactLawTests`). The space: four inputs, degree 3, order 2, so 30 multi-indices and the 466 structures of at most two terms, on 40 cases weak enough to spread the posterior.
+- *The exact law* integrates λ against its Gamma prior. Under the g-prior it integrates g₀² by Simpson's rule through a pencil, written apart from the chain's; that pencil equals the dense multivariate t to 8·10⁻¹³.
+- *The test.* Each reading, P(M), each term's inclusion and under the g-prior P(g₀² < 300, 1000, 10⁴), is set against the chain's batch-means error. E ln g₀² is not used: with no term held, ln g₀² has a long right tail under the vague IG(0.001, 1000), and its mean's batch-means error is unreliable.
+
+| 8,000 iterations | P(M = 0, 1, 2) | Exact | Worst z |
+| --- | --- | --- | --- |
+| Ridge, corrected | 0.414 / 0.389 / 0.197 | 0.427 / 0.374 / 0.199 | 2.1 over 33 readings |
+| G-prior, corrected | 0.377 / 0.357 / 0.266; P(g₀² < 300, 1000, 10⁴) 0.036 / 0.338 / 0.833 against 0.035 / 0.334 / 0.826 | 0.389 / 0.350 / 0.261 | 2.9 over 36 |
+| Ridge, as written | 0.047 / 0.449 / 0.503; 5.8% of draws hold a term outside 𝒜 | 0.427 / 0.374 / 0.199 | 49 over 33 |
+| G-prior, as written | 0.002 / 0.179 / 0.819; P(g₀² < 300, 1000, 10⁴) 0.015 / 0.217 / 0.925; 16.7% outside 𝒜 | 0.389 / 0.350 / 0.261 | 67 over 36 |
+
+The as-written runs are long, so they sit behind `BASS_QUALIFICATION`.
+
+**The corrected readouts** (Ishigami with one inert input, 120 cases, degree 8, order 3, 6,000 iterations):
+- *Ridge:* M 10.2, s2 0.228 against the noise's 0.25, and the surface 0.21 RMSE from the function. Its total indices are 0.571 / 0.429 / 0.248 / 0.000 and its partial indices x₁ 0.317, x₂ 0.422 and x₁:x₃ 0.244, against Ishigami's 0.558 / 0.442 / 0.244 / 0 and 0.314, 0.442 and 0.244.
+- *G-prior:* M 13.9, s2 0.203, the surface 0.24 RMSE from the function, and g₀² 3,684 (90% [1,781, 6,965]). Its total indices are 0.577 / 0.423 / 0.251 / 0.001 and its partial indices x₁ 0.321, x₂ 0.417 and x₁:x₃ 0.246. As written, the same data read M 72, g₀² 43 and x₄ 0.153.
+- Neither keeps a term that repeats a variable. These, not the samplers as written, are what slices 1 and 2 meet.
+
+**Found here.**
+- *The g-prior's current state goes stale when g₀² moves.* Σ_n, Q and ln\|Σ_n\| are updated only when a structure move is accepted, while g₀² moves every iteration. Every structure ratio therefore sets a candidate at the current g₀² against a current state left at the g₀² of its last acceptance; β is drawn from that stale Σ_n too. A probe that draws nothing (the chain is the one written) reads the gap in the current state's log marginal before every move: on the defects' seeded chain (100 cases, 1,500 iterations) the gap is 7.4 nats on average and 32.1 at most, and it passes 1 nat on 84.7% of iterations. On a second data set, generated in R, it reads 39.5, 86.7 and 74%. Confirmed. Together with the missing normalizer, it plausibly accounts for most of the as-written g-prior's M ≈ 72.
+- *The degree draw fails where the order is the largest degree.* `sample(q:d_max, 1, prob = d_probs)` at q = d_max hands `sample` a single number, which R reads as 1:q, and it stops with "incorrect number of probabilities". So khaos as written cannot run with order equal to degree. At the defaults, degree 15 and order 5, it never meets this. Confirmed.
+
+**The follow-up is resolved.** Slice 2's g-prior readout gate meets `corrected=1`, and slice 1's ridge gate does too.
+
 ### Slice 0: the oracle modes (chip, 2026-11-07)
 
 **Landed** in `31362ad`: four modes under `r/oracles` that run from `r/` against the pinned khaos 2.1.1, sharing `khaos_helpers.R` (the namespace, khaos's expressions evaluated as written, and references that share nothing with its code), with their parity classes in `tests/oracle` and four rows in `r/README.md`'s oracle map. 26 tests (`Maths.Oracle.Tests`, filter `Khaos`), 26 passed, and all 26 printed their readings, so each ran against R; about 106 s together on the loaded machine. None is gated. The C# side reuses `GbassOracle`'s runner and computes its references itself: the collapsed marginal through `PriorPencil`, the Legendre recurrence, |𝒜|, compositions, `random_partition`'s law by counting, and the Poisson-binomial.
@@ -228,3 +276,5 @@ Newest first.
 **Follow-up, with the decision it changes.** Slice 2's gate reads "`adaptive_khaos_gprior` readouts under the corrected marginal", and the g-prior as written is no such reference. The choice is between two things:
 - *Patch khaos's g-prior sampler in the readouts mode,* body deparsed and replaced as GBASS's `nw_gamma_prior` was. The patches: the normalizer in the three ratios, g₀²'s conditional, σ²'s draw, the swap restricted to inactive variables, the death's prior ratio and the move probabilities at M = 0. Slice 2 then has an R readout to meet.
 - *Rest the g-prior's gates on the exact law, Geweke and recovery from truth,* with the ridge's readouts as the only R comparison. Slice 2 then drops that gate.
+
+Resolved the same day: the user chose the patch (the addendum above).
