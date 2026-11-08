@@ -1,6 +1,6 @@
 # The conformal layer: E16's build (chip brief)
 
-Date: 2026-11-06. Status: slices 0, 1 and 2 built 2026-11-06, the fallback signal read from the inflated set on 2026-11-07 at the user's call, with a split-half comparator measured beside it; on 2026-11-07 both became diagnostics on every set, with no trigger, at the user's decision; slice 3, the split form, built 2026-11-07 at the user's go-ahead (reports below); slice 4 read on 2026-11-07 (the in-sample predictive CDF is not monotone in y where the draws' predictives separate) and built on 2026-11-08 at the user's decision: the split form's predictive distribution by default, the full step's as an opt-in with its flag; slice 5 waits for the user. Written at the user's request from [E16](bass/extensions-brief.md#conformal-bayes-the-consumer) and the [conformal Lean contract](../../lean/Protolemmata/Conformal/conformal-lemmas.md).
+Date: 2026-11-06. Status: slices 0, 1 and 2 built 2026-11-06, the fallback signal read from the inflated set on 2026-11-07 at the user's call, with a split-half comparator measured beside it; on 2026-11-07 both became diagnostics on every set, with no trigger, at the user's decision; slice 3, the split form, built 2026-11-07 at the user's go-ahead (reports below); slice 4 read on 2026-11-07 (the in-sample predictive CDF is not monotone in y where the draws' predictives separate) and built on 2026-11-08 at the user's decision: the split form's predictive distribution by default, the full step's as an opt-in with its flag; CB-3's per-unit bounds built on 2026-11-08 at the user's order, a slice between 4 and 5; slice 5 waits for the user. Written at the user's request from [E16](bass/extensions-brief.md#conformal-bayes-the-consumer) and the [conformal Lean contract](../../lean/Protolemmata/Conformal/conformal-lemmas.md).
 
 ## Why
 
@@ -55,6 +55,10 @@ It does not reach a curve's or a parameter's own intervals: those stay with E15'
   - the split form holds for any fit, the sampler's included;
   - an estimate within ε costs at most |M|/m, with |M| read from the estimates; ε must be a sure bound, or its failure probability adds to the miscoverage.
 
+**Ordered by the user on 2026-11-08: CB-3's per-unit bounds.**
+- *What was asked.* The inflated rule on per-position bounds; the margin on per-unit bounds with the uniform fallback; the uniform forms kept reachable, so the two can be compared; each bound's estimate, and why it dominates. It follows the Lean chip's per-unit CB-3 (80a1993): `coverage_inflated` with bounds by ordering and position, `coverage_close` with bounds carried by the units, `fragileEstimated_mono`.
+- *Decided in building it, recorded in the report below.* A unit's carried bound is its largest over every ordering the draws represent, not the two slice 2 read, since two did not dominate. The uniform margin bound is the largest carried one.
+
 **Decided by the user on 2026-11-08: the predictive distribution's score.**
 - *What the layer does.* The default is the split form's score, the training fit's predictive CDF F̂(y | x) ("Split-form CDF"; Vovk, Petej, Nouretdinov, Manokhin and Gammerman 2020). The full step's in-sample predictive CDF is an opt-in ("Yes, add it"). It flags each case whose counts fall along its grid, reporting how far, and returns that case's set without a distribution. There is no monotone envelope, which would break the PIT.
 - *Why.* Slice 4's reading (2026-11-07) found the full step's score monotone where the draws sit in one mode and falling where their predictives separate. The split form's is monotone by construction and valid for any fit. The full step's trade-off depends on the regime rather than on a flaw: it spends no data on calibration.
@@ -84,6 +88,7 @@ One commit per concern; tests with the code they test; each slice ends with its 
 | 2. The margin and inflation | CB-3's margin, the 2ε set, the fallback signal | Slice 0; `PredictiveChecks`' influence machinery | The margin against the Lean statement's count on perturbed scores; inflated coverage on exact draws |
 | 3. The split form | CB-2 for any engine with a candidate seam: density, CQR and residual scores | Slice 1 | Coverage for any fit, a deliberately wrong one and a chain stopped early included; CQR's set an interval |
 | 4. The predictive distribution | π(y) as a CDF under a score monotone in y, PIT and CRPS | Slice 0; each draw's CDF at the candidate (`IBassNoiseLaw.At`) | The in-sample predictive CDF is the natural score; whether it stays monotone in y under the add-one-in weights is read first, and the score is adopted only if it does. PIT uniform on held-out data |
+| 4b. CB-3's per-unit bounds | The inflated rule on per-position bounds; the margin on bounds carried by the units, falling back to the uniform bound where no unit stands apart; the uniform forms kept as options. Ordered by the user on 2026-11-08 | Slice 2; the Lean chip's per-unit CB-3 (80a1993) | Coverage at 1 − α on the existing fixtures; no set wider than the uniform rule's; a fixture with a unit in a tail, where the margin gains; slice 2's readings beside the new ones |
 | 5. The other engines | BARS's, BAPS's, the hierarchical P-spline's, BGP's and the changepoint posterior's candidate seams | Slice 1's shape | Each one's candidate density equal to its pointwise column at training cases; coverage on one fit each |
 | 6. Conformal test martingales | Exchangeability checked online, as [E35](bass/extensions-brief.md#conformal-test-martingales-exchangeability-checked-online-e35) sets out: each new score ranked against every earlier one with the randomized tie, a betting function, and an alarm with its guarantee. Ordered by the user on 2026-11-08 to follow slice 5 | Slice 3's fixed-fit scores; slice 4's log CDF and its rank code | E35's, set when its brief is written |
 
@@ -122,6 +127,57 @@ Under "Reports" below, newest first, per slice: what landed by commit; the gates
 ## Reports
 
 Newest first.
+
+### 2026-11-08 — CB-3's per-unit bounds: the inflated rule per position, the margin on bounds carried over every ordering
+
+Built at the user's order of 2026-11-08, relayed by the main session, from the Lean chip's per-unit CB-3 (80a1993).
+
+**Found first: slice 2 had built most of the shape.** Its inflated rule read per-position bounds, and its margin had a carried option. Two of its bounds did not dominate what the Lean statements need:
+- its carried bound read two orderings, the held one and the unit's own turn as the candidate;
+- its uniform bound, the margin's default, read the held ordering alone, so it could sit below a unit's own-turn bound.
+
+A probe settled the first before any build. On the conjugate fixture, some other unit's turn as the candidate gave a unit a larger error than slice 2's bound at 64 to 87% of (unit, grid value) pairs, by a median 1.3 to 2.9 times and up to 68. A unit far out, or of high leverage, makes the weights degenerate when it is the candidate, and every unit's error widens.
+
+**Landed** on `main`, nothing pushed (the commits are in the log beside this report):
+- *The margin on carried bounds, the default* (`MarginBounds.Carried`). Each unit's bound is the largest of its held bound and its bounds under the weights of every unit of the stratum as the candidate: three (n × S)·(S × n) products once per stratum. The candidate's is the larger of its own and its bounds under each unit's weights: one more (n × S)·(S × G) product per batch, from sums the step holds. `MarginBounds.Uniform` is the largest carried bound.
+- *The inflated rule on per-position bounds, the default* (`InflationBounds.PerPosition`), with `InflationBounds.Uniform`, the largest of them, for comparison.
+- *`ConformalMargin`* gains `CandidateCarriedErrors`, `CarriedUniformErrors`, `UnitCarriedErrors` and `Inflation`. `UniformErrors` keeps the held ordering's largest bound, now the inflated rule's uniform one.
+- *Tests:* `ConformalPerUnitBoundsTests` (new); `ConformalMarginTests`' reference sweep and coverage test, for both forms; `BassConformalMarginTests`, reading both; the cost row, timing the orderings.
+- *The page:* the margin's and the inflated rule's paragraphs, how each bound is estimated and why it dominates, and a section with the checks, slice 2's readings side by side, and the cost. The ledger gains the two uniform bounds and ε.
+
+**How each bound is estimated, and why it dominates.** Every bound is z = Φ⁻¹(1 − ν/(2m)) of an estimate's Monte Carlo standard errors, under the weights its ordering puts on the draws.
+- *Per position:* each estimate in the held ordering against its own error, so the union over the m positions keeps every one within its bound with chance 1 − ν, which `coverage_inflated` asks of an ordering.
+- *Uniform, for the inflated rule:* the largest per-position bound, at least each by construction.
+- *Carried:* a unit's largest bound over every ordering the draws represent, so it is at least its error in each of them, by the same union in each.
+- *Uniform, for the margin:* the largest carried bound, at least each by construction.
+- *Still indicative:* the standard errors are estimated, the normal approximation fails where weights degenerate (k̂ reads that), and the other orderings are the held draws reweighted, not draws of each ordering's own posterior.
+
+**Gates** (`ConformalMarginTests`, `ConformalPerUnitBoundsTests`; the readings with `BASS_QUALIFICATION=1`). The full numbers are on [the page](../../docs/Maths/ConformalPrediction.md#the-per-unit-bounds-between-slices-4-and-5).
+- *Against a reference:* 395 candidates over 80 seeded fixtures with weights, chains and far ranges. Every bound matches the errors read from public steps to 10⁻⁷ relative, and every band is the literal `FragileEstimated` count.
+- *No set wider than the uniform rule's,* and no carried band above the uniform one, at every grid value of every fixture.
+- *Coverage at 1 − α* (exact draws, S 40, k 2 of 20, se 0.0048): plain 0.905; inflated 0.935 per position and 0.945 uniform, against 0.89. The plain set covers above the margin's readings, 0.732 carried and 0.358 uniform.
+- *A unit in a tail,* where the margin gains: the carried band reads 4.9 of 21 against the uniform 16.3 at S 40, and 3.4 against 8.1 at S 640. The plain set covers 0.950 and 0.943, above the carried readings of 0.790 and 0.843.
+- *No unit standing apart* (a symmetric Beta–Bernoulli posterior): every carried bound equals the uniform one to 10⁻⁹, and the bands are equal.
+
+**Which readings change, and by how much.** The seeds are slice 2's.
+- *Unchanged:* plain coverage, the per-position inflated set and the gap, exactly as slice 2 read them, on exact draws and on BASS.
+- *The margin's default reading* moves from slice 2's uniform band to the carried one: at S 40 on exact draws, m̂ from 12.8 to 5.04 of 20, and the coverage it reads from 0.485 to 0.732.
+- *The carried band, over every ordering:* on exact draws from 4.6 to 5.04 at S 40 and 2.5 to 2.57 at S 2,560. On BASS's median at the true values, from 72 to 97 of 100 (Gaussian) and 52 to 96 (t).
+- *The uniform band, now the largest carried bound:* from 12.8 to 14.08 and 7.7 to 8.44 of 20; on BASS, from 98 to 100 and 94 to 98.
+- *New, the uniform inflated rule:* on exact draws 0.4 to 1.4 points more coverage at 2.5 to 9% more width. On BASS it covers 0.986 and 0.945 at widths 3.44 and 1.83, against the per-position set's 0.958 and 0.937 at 2.07 and 1.49.
+
+**What the readings show.**
+- *The per-position bounds pay most on BASS.* The uniform bound there, a median 4.2 nats against each candidate's 0.08, widens the inflated set by two thirds.
+- *The carried margin pays on exact draws, a third of the uniform band, and little on BASS.* Each unit's error over the orderings is wide there, since a unit far out degenerates the weights in its turn. Slice 2's carried reading on BASS, 72 and 52, came from bounds that did not dominate.
+- *The tail unit carries the widest bound* in 37 and 32 of 40 data sets, 10 to 12 times the median unit's. Not in all: another unit's turn can widen its own bound past it.
+
+**Cost** (n 1,000, G 200, cycle clock, indicative). The units' orderings cost 0.33 to 0.45 s once per stratum at S 1,000 and 1.1 to 1.8 s at S 4,000, against 16 and 65 to 78 ms for the stratum's likelihoods. The fourth product brings the products to 70 and 261 ms per grid. On one grid the step costs 0.52 to 0.66 s and 1.7 to 2.4 s with the orderings built, which many cases share.
+
+**Found in review and fixed.** The units' carried bounds were rebuilt into a new array for every case; they are now built once per stratum and shared.
+
+**Follow-ups, each with the decision it would change.**
+- *Whether the margin stays always-on* (slice 2's question, still open). It now costs the orderings once per stratum on top of slice 2's 2.6 to 3.5 times the plain step, and on BASS it reads 96 to 100 units of 100 under either bound. The inflated rule needs only the per-position bounds. Opt-in would skip the orderings, the fourth product and the bands.
+- *A carried bound that leaves out the orderings whose weights degenerate,* adding their share of m to the miscoverage as ν is added. It would decide whether the margin can read anything on fits like BASS's, where a few units far out widen every bound.
 
 ### 2026-11-08 — Slice 4, the predictive distribution built: the split form's by default, the full step's as an opt-in
 

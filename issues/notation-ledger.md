@@ -11,6 +11,14 @@ Splits in the module's language (symbols, identifiers, terms), logged as session
 
 ## Entries
 
+### "Uniform bound" for the inflated rule and for the margin, and ε for CB-3's bounds beside Vovk's level (2026-11-08)
+
+- **Kind:** one name for several concepts.
+- **Readings:**
+  - The inflated rule's uniform bound, the held ordering's largest per-position bound (`InflationBounds.Uniform`, `ConformalMargin.UniformErrors`, `src/maths/regression/conformal/ConformalBayes.cs`), against the margin's uniform bound, the largest bound carried over the orderings (`MarginBounds.Uniform`, `ConformalMargin.CarriedUniformErrors`). `docs/Maths/ConformalPrediction.md`, "CB-3: the scores' error and what it costs".
+  - ε, CB-3's error bound, the Lean's εⱼ per unit and "the Lean's uniform ε" (`MarginBounds.Uniform`'s doc; the brief's contract line), against ε, the level in Vovk et al.'s conformal predictive distributions (the page's slice 4 notes, beside α_i).
+- **Found:** 2026-11-08, the conformal layer's per-unit bounds.
+
 ### κ, the skew's rescaling factor, beside κ in the priors for a moving response (2026-11-08)
 
 - **Kind:** one name for several concepts.

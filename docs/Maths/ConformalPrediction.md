@@ -87,11 +87,22 @@ The scores are Monte Carlo estimates, so the step's guarantee holds up to their 
 - *Alternatives:* a fixed multiple, 2 or 3, with no stated failure probability and narrower bounds; a concentration bound, which would be sure but wider.
 
 **The margin** (`coverage_close` with `card_fragile_le_estimated`) is always reported. For each grid value taken as the truth, it counts the band of units whose decision estimates within their bounds could change (`Fragile`). m̂ is the largest count over the grid values inside some draw's support, since any of them may be the truth. The plain set's coverage under error is then 1 − (k + m̂)/m − ν (`CoverageUnderError`).
-- *Read with the uniform bound by default* (`MarginBounds.Uniform`): the largest of the stratum's units' bounds and the candidate's, under this candidate's weights. That is the safe reading of `coverage_close`'s unit-carried bounds.
-- *Or with carried bounds* (`MarginBounds.Carried`): each unit takes the larger of its bound here and its bound as the candidate, under weights of its own density. Every unit is the candidate in some ordering, so this is the Lean chip's per-unit finding. It costs each unit's own weighting and, for chains, its r_eff, once per stratum.
-- *Both read the orderings the layer holds.* A bound sure over every ordering would need each unit's error under every other unit's weights, n² weightings per stratum. That is not built.
+- *Read with carried bounds by default* (`MarginBounds.Carried`, at the user's order of 2026-11-08). `coverage_close` needs bounds carried by the units, each holding in every ordering. So each unit takes its largest bound over the orderings the draws represent: the held one, and each in which a unit of the stratum, itself included, is the candidate. The candidate takes the larger of its own bound and its bounds under each unit's weights.
+- *Or with the uniform bound* (`MarginBounds.Uniform`): the largest carried bound, for every unit, the Lean's uniform ε. Its band holds the carried one (`fragileEstimated_mono`), so the carried margin is never the wider, and it falls back to the uniform one where no unit stands apart.
+- *Changed on 2026-11-08* ([below](#the-per-unit-bounds-between-slices-4-and-5)). Slice 2 read the uniform bound from the held ordering alone and the carried bound from two orderings, the held one and the unit's own turn. Neither dominated the units' errors over the orderings, which the band's guarantee needs.
+- *Not read:* each ordering's own draws. The other orderings' errors come from the held draws reweighted by each unit's density, not from a run on each ordering's data.
 
-**The inflated rule** (`coverage_inflated`, Ndiaye's stable set) is an option (`Inflate`, off by default) and always reported (`InflatedRanks`). It accepts y when more than k units have an estimate lowered by its bound at most the candidate's raised by its own. The bounds are per position, each unit's under this candidate's weights and the candidate's own. The rule keeps 1 − k/m − ν at the cost of width.
+**The inflated rule** (`coverage_inflated`, Ndiaye's stable set) is an option (`Inflate`, off by default) and always reported (`InflatedRanks`). It accepts y when more than k units have an estimate lowered by its bound at most the candidate's raised by its own. The rule keeps 1 − k/m − ν at the cost of width.
+- *Per-position bounds by default* (`InflationBounds.PerPosition`): each unit's under this candidate's weights, and the candidate's own. `coverage_inflated` takes bounds that differ by ordering and position, so the held ordering serves alone, and a candidate's wide error widens only its own comparisons.
+- *Or one uniform bound* (`InflationBounds.Uniform`), the largest per-position one, kept for comparison. Its set holds the per-position set.
+
+**How each bound is estimated, and why it dominates** (2026-11-08). A bound must be at least the error of the estimate it covers, in every ordering the guarantee averages over (`fragileEstimated_mono` lets any larger bound serve).
+- *The estimate.* Each bound is z of an estimate's Monte Carlo standard errors, z = Φ⁻¹(1 − ν/(2m)), the standard error being √log(1 + Σψ²/r_eff) under the weights that ordering puts on the draws, with r_eff the weighting density's along the chains.
+- *Per position.* In the held ordering, the m estimates each lie within their own bound with chance at least 1 − ν, by the union over the m positions under the normal approximation. That is what `coverage_inflated` asks of an ordering, and no position's bound reads another's error.
+- *Uniform, for the inflated rule.* The largest per-position bound is at least each of them, so it dominates them by construction.
+- *Carried.* A unit's bound must hold in every ordering. The layer reads each unit's error under the weights of every unit of the stratum as the candidate, the held draws reweighted by that unit's density: three (n × S)·(S × n) products once per stratum. The candidate's error under each unit's weights takes one more (n × S)·(S × G) product per batch, from sums the step already holds. A unit's carried bound at y is the largest of its held bound and these, so it dominates its error in every ordering the draws represent, by the same union in each.
+- *Uniform, for the margin.* The largest carried bound is at least every carried bound, so it dominates them by construction.
+- *Still indicative,* as slice 2's bounds were. The standard error is itself estimated, and the normal approximation fails where the weights degenerate, which k̂ reads. The other orderings are an importance sample from the held draws, not draws of each ordering's own posterior.
 
 **Trust** is PSIS's Pareto k̂ of the add-one-in log ratios (`PredictiveChecks`' k̂, shared). It is read where the inflated rule accepts, since there a decision rests on the bounds; above PSIS's threshold at S, the error estimate there cannot be trusted.
 
@@ -103,7 +114,7 @@ The scores are Monte Carlo estimates, so the step's guarantee holds up to their 
 - *Open, no decision waiting:* the main session's reading of why the halves disagree on BASS while coverage holds. BASS's chains move between structures slowly, so the two halves can sit in different regions of the posterior, and a chain held in one region may still score every unit nearly alike, where thin draws do not. If so, the split-half mass reads the set's instability, which differs from miscoverage. It is a reading, not a result.
 
 **What the readings showed** (the checks below).
-- *The margin reads far wider than the error costs.* With the uniform bound, m̂ falls from 12.8 to 7.7 of 20 on exact draws as S grows from 40 to 2,560, and is 98 of 100 (Gaussian) and 94 (t) on the BASS fits at S 1,000. Carried bounds narrow it to 2.5 to 4.6 of 20, and to 72 and 52 of 100.
+- *The margin reads far wider than the error costs.* With the uniform bound, m̂ falls from 14.1 to 8.4 of 20 on exact draws as S grows from 40 to 2,560, and its median is 100 of 100 (Gaussian) and 98 (t) on the BASS fits at S 1,000. Carried bounds narrow it to 5.0 to 2.6 of 20, but only to 97 and 96 of 100 on BASS, where a unit far out, as the candidate, widens every unit's error (read on 2026-11-08 with the bounds over every ordering; slice 2's, from fewer orderings, read 12.8 to 7.7 and 2.5 to 4.6 of 20, and 98, 94, 72 and 52 of 100).
 - *Why:* the band counts every unit whose rank adversarial errors of that size could move. With bounds of a few tenths of a nat beside log scores spread over a few nats, that is most units, while random errors move few decisions. The margin stays as a reported worst case.
 - *The gap tracks the error.* On exact draws its median falls from 0.157 at S 8 to 0.016 at S 2,560. It is 0.60 on the BASS Gaussian fits and 0.36 on the t fits, whose chains' r_eff widen the bounds.
 - *The plain set lost no coverage* on any fixture: 0.905 at every S on exact draws, and within its error on the BASS fits. The inflated set covers 0.912 to 0.958 at 2 to 73% more width.
@@ -440,6 +451,61 @@ Run on `ConformalMarginTests`, and with `BASS_QUALIFICATION=1` on `BassConformal
 - *Most of it is still the margin:* the two error products, the bands, k̂ and each candidate's r_eff.
 - *The gap needs only the per-position errors,* the two error products and r_eff, not the bands or k̂. So the margin's always-on question, slice 2's, would leave the gap's cost and remove the bands' and k̂'s, 60 to 160 ms per grid in these rows.
 
+## The per-unit bounds (between slices 4 and 5)
+
+Built on 2026-11-08 at the user's order, from the Lean chip's per-unit CB-3 (80a1993): `coverage_inflated` takes bounds by ordering and position, `coverage_close` bounds carried by the units, and `fragileEstimated_mono` lets any dominating bounds serve.
+
+**What changed.**
+- *The margin reads carried bounds by default:* each unit's largest bound over every ordering the draws represent, the candidate's the larger of its own and its bounds under each unit's weights. The uniform bound, kept as an option, is the largest carried one.
+- *The inflated rule keeps per-position bounds by default,* with a uniform option for comparison.
+- *Slice 2's two margin bounds are replaced.* Its carried bound read two orderings, the held one and the unit's own turn; its uniform bound read the held ordering alone, so it could sit below a unit's own-turn bound. Neither dominated the units' errors over the orderings.
+
+**Why two orderings were not enough** (`ConformalPerUnitBoundsTests`, a reading with `BASS_QUALIFICATION=1`). On the conjugate fixture (n 20, 20 data sets, 161 grid values each), every unit's error was read under every unit's weights from public steps. Some other unit's turn as the candidate gave a larger error than slice 2's bound at most (unit, grid value) pairs:
+
+| S | A unit in a tail | Pairs above slice 2's bound | By, median (largest) | m̂: slice 2's | Over every ordering | Uniform |
+|---|---|---|---|---|---|---|
+| 40 | no | 77% | 1.34 (11.6) | 3.60 | 4.10 | 13.30 |
+| 640 | no | 64% | 1.75 (38.4) | 2.80 | 3.50 | 10.90 |
+| 40 | yes | 84% | 1.43 (8.7) | 3.75 | 4.25 | 14.15 |
+| 640 | yes | 87% | 2.89 (67.9) | 3.00 | 3.85 | 10.25 |
+
+A unit far out, or of high leverage, makes the weights degenerate when it is the candidate, and that widens every unit's error. So a unit's worst error comes mostly from another unit's turn, not its own. The band moves by 0.5 to 0.85 of 21.
+
+**Checks** (`ConformalMarginTests`, `ConformalPerUnitBoundsTests`).
+- *The layer against a reference,* 395 candidates over 80 seeded fixtures with weights, chains and far ranges. Each unit's bound over the orderings and the candidate's carried bound match the same errors read from public steps, each unit's column taken as the candidate's, to 10⁻⁷ relative. The carried and uniform bands are the literal `FragileEstimated` counts on them, and both inflated ranks match their definitions.
+- *No set wider than the uniform rule's.* At every grid value of every fixture the per-position inflated rank is at most the uniform one, and the carried band at most the uniform band.
+- *Coverage at 1 − α* (exact draws, S 40, n 19, k 2, 3,850 true values, se 0.0048):
+
+| Set | Coverage | Width | The margin's reading at the true value |
+|---|---|---|---|
+| Plain | 0.905 | 5.09 | carried 0.732, uniform 0.358 (slice 2's uniform 0.485) |
+| Inflated, per position | 0.935, against 0.89 | 5.72 | |
+| Inflated, uniform | 0.945, against 0.89 | 6.19 | |
+
+- *A unit in a tail* (n 20, the last unit at x 3.5 with a residual of 6): the carried band reads 4.92 of 21 against the uniform 16.32 at S 40, and 3.38 against 8.10 at S 640. The tail unit's bound is the widest in 37 and 32 of 40 data sets, 10 to 12 times the median unit's, so the carried margin gains. The plain set covers 0.950 and 0.943 over 2,000 true values, above the carried readings of 0.790 and 0.843.
+- *No unit standing apart* (a Beta–Bernoulli posterior, ten ones and ten zeros, symmetric about ½, S 4,000): every carried bound equals the uniform one to 10⁻⁹, and the bands are equal at both candidates and every α (10, 10 and 0 at α 0.1, 0.3 and 0.5). The carried margin falls back to the uniform one.
+
+**Slice 2's readings, side by side** (the same seeds; `BASS_QUALIFICATION=1`). Plain coverage, the per-position inflated set and the gap read exactly as slice 2's did; the margin reads differently, and the uniform inflated rule is new.
+
+| Exact draws, m 20 | S 8 | S 40 | S 160 | S 2,560 |
+|---|---|---|---|---|
+| m̂ carried: slice 2 → now | – → 7.44 | 4.6 → 5.04 | – → 3.73 | 2.5 → 2.57 |
+| m̂ uniform: slice 2 → now | – → 17.10 | 12.8 → 14.08 | – → 11.60 | 7.7 → 8.44 |
+| Inflated coverage, per position / uniform (se 0.0067) | 0.941 / 0.955 | 0.937 / 0.946 | 0.927 / 0.936 | 0.912 / 0.916 |
+| Inflated width, per position / uniform | 6.15 / 6.71 | 5.85 / 6.28 | 5.68 / 5.95 | 5.47 / 5.60 |
+
+| BASS, n 99, k 10, S 1,000 | Gaussian | Student t |
+|---|---|---|
+| m̂ at the true values, median, carried: slice 2 → now | 72 → 97 | 52 → 96 |
+| m̂ uniform: slice 2 → now | 98 → 100 | 94 → 98 |
+| Coverage: plain / inflated per position / inflated uniform | 0.905 / 0.958 / 0.986 | 0.894 / 0.937 / 0.945 |
+| Width: plain / inflated per position / inflated uniform | 1.20 / 2.07 / 3.44 | 1.06 / 1.49 / 1.83 |
+
+- *The per-position inflated rule pays most on BASS.* The uniform bound, a median 4.2 nats on the Gaussian fits against each candidate's 0.08, widens the inflated set by two thirds there for 3 points of coverage the per-position set does not need.
+- *The carried margin pays on exact draws, about a third of the uniform band, and little on BASS,* where the units' errors over the orderings are wide for every unit. Slice 2's carried reading there, 72 and 52, came from bounds that did not dominate. The margin stays a reported worst case.
+
+**Cost** (n 1,000, G 200, cycle clock, best of five, indicative). The units' orderings cost 331 to 447 ms once per stratum at S 1,000 and 1,137 to 1,795 ms at S 4,000, against 16 and 65 to 78 ms for the stratum's likelihoods; with two chains, each unit's r_eff adds 35 to 58%. Per grid the fourth product, the candidates' errors under the units' weights, brings the products to 70 ms at S 1,000 and 261 ms at S 4,000. On a single grid the step costs 522 to 662 ms and 1,717 to 2,400 ms with the orderings built; the orderings are paid once per stratum, so many cases share them.
+
 ## Checks and cost (slice 3)
 
 **Checks** (`SplitConformalTests`; `BassSplitConformalTests` and the cost row with `BASS_QUALIFICATION=1`).
@@ -486,16 +552,16 @@ Run on `ConformalMarginTests`, and with `BASS_QUALIFICATION=1` on `BassConformal
 |---|---|
 | The seams | `PointwiseLogDensity` (training); `CandidateLogDensity(values, grids, latents, stratumOf, chainLengths)` with `Weights`, `Offset(t)`, `Cases`, `Draws`; `LogCdf` on both, each draw's ln F |
 | BASS's candidate density | `BassFit.CandidateLogDensity(data, cases, grids, strata, unseenLevels, quadrature, cdf)`; `BassFit.PointwiseLogDensity(..., cdf)`; `BassCandidates.UnitLogCdf`, `BassCandidates.LogCdf` and `BassPointwise.Latents` (internal, shared) |
-| The full step | `ConformalBayes.FullStep(training, candidates, ConformalOptions { Alpha, ErrorLevel, Inflate, FallbackShare (opt-in, null by default), MarginBounds })` → `ConformalPrediction(Sets, Alpha)`; `ConformalBayes.Scores(training, candidates, column)` → `ConformalScores(Units, Scores, Candidate, EffectiveSampleSize)` |
+| The full step | `ConformalBayes.FullStep(training, candidates, ConformalOptions { Alpha, ErrorLevel, Inflate, FallbackShare (opt-in, null by default), MarginBounds, InflationBounds })` → `ConformalPrediction(Sets, Alpha)`; `ConformalBayes.Scores(training, candidates, column)` → `ConformalScores(Units, Scores, Candidate, EffectiveSampleSize)` |
 | A case's set | `ConformalSet`: `Stratum`, `Units` (m), `Level` (k), `Coverage`, `WholeSpace`, `Grid`, `PValues`, `Below`, `Tied`, `CandidateScores`, `EffectiveSampleSizes`, `Accepts(g)`, `Intervals` (`GridInterval(Lower, Upper)`), `Resolution`, `OpenBelow`, `OpenAbove`, `Width` |
-| CB-3's reading | `ConformalSet.Gap`, `SplitHalfMass`, `SplitHalfDisagreements`, `AcceptsPlain(g)`, `AcceptsInflated(g)`; `ConformalSet.Margin` → `ConformalMargin` (`Multiple`, `CandidateErrors`, `UniformErrors`, `Fragile`, `InflatedRanks`, `ParetoK`, `ParetoKThreshold`, `Bounds`, `Count`, `Untrusted(k)`); `ConformalSet.Inflated`, `ErrorLevel`, `CoverageUnderError`, `FallBack`; `MarginBounds` (`Uniform`, `Carried`); `ConformalScores.Errors`, `CandidateError` |
+| CB-3's reading | `ConformalSet.Gap`, `SplitHalfMass`, `SplitHalfDisagreements`, `AcceptsPlain(g)`, `AcceptsInflated(g)`; `ConformalSet.Margin` → `ConformalMargin` (`Multiple`, `CandidateErrors`, `UniformErrors`, `CandidateCarriedErrors`, `CarriedUniformErrors`, `UnitCarriedErrors`, `Fragile`, `InflatedRanks`, `ParetoK`, `ParetoKThreshold`, `Bounds`, `Inflation`, `Count`, `Untrusted(k)`); `ConformalSet.Inflated`, `ErrorLevel`, `CoverageUnderError`, `FallBack`; `MarginBounds` (`Uniform`, `Carried`, the default); `InflationBounds` (`PerPosition`, the default, `Uniform`); `ConformalScores.Errors`, `CandidateError` |
 | The split form | `SplitConformal.Density(calibration, candidates, alpha)` → `ConformalPrediction(Sets, Alpha, Form)`; `SplitConformal.Quantiles(QuantileReadings(Lower, Upper, StratumOf), response, test, alpha)` and `SplitConformal.Residuals(ResidualReadings(Center, Scale, StratumOf), response, test, alpha)` → `ConformalIntervals(Intervals, Alpha, Calibration)`; `ConformalInterval`: `Units`, `Level`, `Threshold`, `Lower`, `Upper`, `WholeSpace`, `Coverage`, `Empty`, `Width`, `Contains(y)`; `SplitConformal.Calibrate(scores, stratumOf, alpha)` → `SplitCalibration`: `Units(h)`, `Level(h)`, `Threshold(h)`, `Rank(h, s)`, `PValue(h, s)`, `Accepts(h, s)`; `ConformalForm` (`Full`, `Split`) |
 | The predictive distribution | `SplitConformal.Distribution(calibration, candidates)` (the default) and `ConformalBayes.Distribution(training, candidates)` (the opt-in) → `ConformalDistributions(Distributions, Form)` with `Flagged`; `ConformalDistribution`: `Units`, `Grid`, `Below`, `Tied`, `Form`, `Fall`, `ScoreFall`, `Monotone`, `Lower(g)`, `Upper(g)`, `At(g, τ)`, `Mid(g)`, `Level(α)`, `Coverage(α)`, `WholeSpace(α)`, `Accepts(g, α)`, `Intervals(α)`, `Width(α)`, `OpenBelow(α)`, `OpenAbove(α)`, `Quantile(p)`, `Crps(y)` |
 | The product | `DenseProduct.Multiply`, `Pack`, `FusedDot`; `PackedColumns` |
 
 ## Not built yet
 
-- A margin with bounds sure over every ordering, which needs each unit's error under every other unit's weights.
+- A margin whose bounds read each ordering's own posterior, rather than the held draws reweighted, which needs a run per ordering.
 - CQR's asymmetric form, cross-conformal and the jackknife+ (above).
 - The split form's set ends and quantiles in closed form, F̂⁻¹(· | x) at the calibration PITs' order statistics, which needs each engine's quantile function; and cross-conformal predictive distributions (slice 4's alternatives).
 - The candidate seams of BARS, BAPS, the hierarchical P-spline, BGP and the changepoint posterior (slice 5), and BASS's for a direct functional fit's curves (E17).
