@@ -219,6 +219,11 @@ public sealed record BassConfig
             if (smc.Replicates < 1) throw Bad("Sampling.Smc.Replicates", "must be at least 1");
             if (!(smc.TargetConditionalEss > 0.0 && smc.TargetConditionalEss < 1.0)) throw Bad("Sampling.Smc.TargetConditionalEss", "must lie in (0, 1)");
             if (smc.MutationSteps < 0) throw Bad("Sampling.Smc.MutationSteps", "must not be negative; 0 makes the run sequential importance sampling");
+            if (smc.AdaptiveMutation is { } adaptive)
+            {
+                if (smc.MutationSteps < 1) throw Bad("Sampling.Smc.MutationSteps", "must be at least 1 under Sampling.Smc.AdaptiveMutation, which spends it per stage");
+                if (!(adaptive.StayProbability > 0.0 && adaptive.StayProbability < 1.0)) throw Bad("Sampling.Smc.AdaptiveMutation.StayProbability", "must lie in (0, 1)");
+            }
             if (!(smc.ResampleBelow >= 0.0 && smc.ResampleBelow <= 1.0)) throw Bad("Sampling.Smc.ResampleBelow", "must lie in [0, 1]");
             if (smc.Resampling is not (ResamplingScheme.Multinomial or ResamplingScheme.Stratified or ResamplingScheme.Systematic or ResamplingScheme.Residual))
                 throw Bad("Sampling.Smc.Resampling", "is not a known scheme");
@@ -651,6 +656,8 @@ public sealed record TemperingSpec
 /// (<see cref="BassSmcReadout.ReachedPosterior"/>), its posterior views refused, and its checkpoint continues it.</item>
 /// <item><see cref="TraceStages"/>: record each stage's population, for stepping-stone over the stages and, on the linear
 /// form, path sampling; off by default, when the evidence is the normalizer alone.</item>
+/// <item><see cref="AdaptiveMutation"/>: each stage's sweeps chosen from the fraction of particles whose structure the previous
+/// stage's sweeps changed, within <see cref="MutationSteps"/> per stage taken; null keeps the fixed count.</item>
 /// </list>
 /// </summary>
 public sealed record SmcSpec
@@ -682,6 +689,12 @@ public sealed record SmcSpec
 
     /// <summary>Whether each stage's population is recorded, for the evidence over the stages.</summary>
     public bool TraceStages { get; init; }
+
+    /// <summary>Each stage's sweeps chosen from the previous stage's moved fraction, within <see cref="MutationSteps"/> per stage
+    /// taken (<see cref="Maths.Samplers.Smc.AdaptiveMutation"/>); null keeps the fixed count. Left out of the serialized form when
+    /// null, so a fixed-count config's form and fingerprint stand as they were.</summary>
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public AdaptiveMutation? AdaptiveMutation { get; init; }
 }
 
 /// <summary>

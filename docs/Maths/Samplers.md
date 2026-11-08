@@ -301,7 +301,7 @@ Path sampling's rungs are positively correlated through swaps, which only the jo
 
 ### SMC's sweeps per stage (2026-11-08)
 
-`SmcOptions.MutationSteps` moves every particle k̄ times at every stage. Where one move does little, as BASS's reversible-jump sweep does on KHAOS's rich Legendre surfaces (about 2% of births accepted), k̄ moves leave many particles where resampling put them, and the next reweighting reads their duplicates. `SmcOptions.AdaptiveMutation` (null by default) chooses each stage's count instead. BASS's fit reads the core's readout per replicate (`BassSmcReplicate.StageReadout`); its config, `SmcSpec`, does not carry the option yet.
+`SmcOptions.MutationSteps` moves every particle k̄ times at every stage. Where one move does little, as BASS's reversible-jump sweep does on KHAOS's rich Legendre surfaces (about 2% of births accepted), k̄ moves leave many particles where resampling put them, and the next reweighting reads their duplicates. `SmcOptions.AdaptiveMutation` (null by default) chooses each stage's count instead. BASS's fit takes it through `SmcSpec.AdaptiveMutation` (null by default, and left out of the serialized config), and reads the core's readout per replicate (`BassSmcReplicate.StageReadout`).
 
 **The rule** (`AdaptiveMutation.StepsFor`). Stage t reads stage t − 1's report. Its $k_{t-1}$ moves left a fraction $1-m_{t-1}$ of the live particles where they were (`SmcStageReport.MovedFraction`; a particle moved when any of its moves was accepted). Read the moves as independent, each leaving a particle in place with one probability q: then $1-m=q^{k}$, and the count that leaves at most a fraction c in place (`StayProbability`) is
 

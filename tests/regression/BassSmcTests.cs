@@ -297,6 +297,7 @@ public sealed class BassSmcTests
     [InlineData("one replicate")]
     [InlineData("systematic")]
     [InlineData("importance sampling")]
+    [InlineData("adaptive")]
     public void Fit_UnderEachOption_ReachesThePosterior(string option)
     {
         BassConfig baseConfig = BassSweepTests.Config(maxBasis: 4);
@@ -317,6 +318,7 @@ public sealed class BassSmcTests
             case "one replicate": spec = spec with { Replicates = 1 }; break;
             case "systematic": spec = spec with { Resampling = ResamplingScheme.Systematic }; break;
             case "importance sampling": spec = spec with { MutationSteps = 0, Particles = 2000 }; break;
+            case "adaptive": spec = spec with { MutationSteps = 8, AdaptiveMutation = new AdaptiveMutation { StayProbability = 0.3 } }; break;
         }
         config = SmcConfig(spec, config);
         BassFit fit = Bass.Fit(config, data);
@@ -346,6 +348,18 @@ public sealed class BassSmcTests
             Assert.All(smc.Replicates, x => Assert.Equal(0, x.Account.Sweeps));
             Assert.True(double.IsNaN(fit.Diagnostics.AcceptanceRate));
         }
+        if (option == "adaptive")
+            foreach (BassSmcReplicate x in smc.Replicates)
+            {
+                // Each stage's count within the credit: no prefix of the run takes more sweeps than the fixed count would.
+                long spent = 0;
+                for (int s = 1; s < x.Stages.Count; s++)
+                {
+                    spent += x.Stages[s].Steps;
+                    Assert.True(x.Stages[s].Steps >= 1 && spent <= (long)spec.MutationSteps * s, $"stage {s}: {x.Stages[s].Steps} sweeps, {spent} so far");
+                }
+                _out.WriteLine($"adaptive, replicate {x.Seed}: sweeps {string.Join(" ", x.StageReadout.Steps)}");
+            }
         if (option == "linear, traced")
         {
             BassEvidence e = fit.Evidence!;
@@ -395,6 +409,8 @@ public sealed class BassSmcTests
         Refused(SmcConfig(Small with { MutationSteps = -1 }), "Sampling.Smc.MutationSteps");
         Refused(SmcConfig(Small with { ResampleBelow = 1.5 }), "Sampling.Smc.ResampleBelow");
         Refused(SmcConfig(Small with { MaxStages = 0 }), "Sampling.Smc.MaxStages");
+        Refused(SmcConfig(Small with { MutationSteps = 0, AdaptiveMutation = new AdaptiveMutation() }), "Sampling.Smc.MutationSteps");
+        Refused(SmcConfig(Small with { AdaptiveMutation = new AdaptiveMutation { StayProbability = 1.0 } }), "Sampling.Smc.AdaptiveMutation.StayProbability");
         Refused(SmcConfig(Small, BassSweepTests.Config(maxBasis: 4) with { Sigma2 = Sigma2Prior.Jeffreys }), "Sampling.Smc.Form");
         Refused(SmcConfig(Small, BassSweepTests.Config(maxBasis: 4) with { Intercept = GPriorCentre.Flat }), "Sampling.Smc.Form");
         // The config round-trips with its SMC, and the setting moves the fingerprint.
@@ -455,6 +471,42 @@ public sealed class BassSmcTests
         BassConfig mcmc = BassSweepTests.Config(maxBasis: 4) with { Sampling = new BassSampling { Chains = 2, BurnIn = 20, Samples = 10 } };
         BassFit chains = Bass.Fit(mcmc, data, run);
         Assert.Throws<ArgumentException>(() => Bass.Resume(chains.Checkpoint!, mcmc with { Sampling = mcmc.Sampling with { Smc = Small } }, data));
+    }
+
+    [Fact]
+    public void AdaptiveFit_ResumesBitForBit_AndIsSerializedOnlyWhenSet()
+    {
+        BassData data = BassSweepTests.Data(large: true);
+        SmcSpec adaptive = Small with { MutationSteps = 8, AdaptiveMutation = new AdaptiveMutation { StayProbability = 0.3 } };
+        BassFit whole = Bass.Fit(SmcConfig(adaptive), data);
+        Assert.Contains(whole.Diagnostics.Smc!.Replicates, x => x.Stages.Skip(1).Any(s => s.Steps != adaptive.MutationSteps));
+
+        // Each resume runs up to three more stages, its counts read from the reports the checkpoint carries.
+        BassConfig shortConfig = SmcConfig(adaptive with { MaxStages = 3 });
+        var run = new BassRunOptions { Checkpoint = true };
+        BassFit resumed = Bass.Fit(shortConfig, data, run);
+        int resumes = 0;
+        while (!resumed.Diagnostics.Smc!.ReachedPosterior)
+        {
+            resumed = Bass.Resume(resumed.Checkpoint!, shortConfig, data, run);
+            Assert.True(++resumes <= 200, "the resumes never reached b = 1");
+        }
+        SameDraws(whole, resumed);
+        for (int c = 0; c < adaptive.Replicates; c++)
+        {
+            BassSmcReplicate a = whole.Diagnostics.Smc!.Replicates[c], b = resumed.Diagnostics.Smc!.Replicates[c];
+            Assert.Equal(a.Stages, b.Stages);
+            Assert.Equal((a.LogNormalizer, a.LogNormalizerError), (b.LogNormalizer, b.LogNormalizerError));
+            Assert.Equal(a.Account.Moves, b.Account.Moves);
+        }
+        Assert.Equal(whole.Evidence!.LogEvidence, resumed.Evidence!.LogEvidence);
+
+        // Left out of the serialized form when null, so a fixed-count config's form and fingerprint stand; round-trips when set.
+        Assert.DoesNotContain("AdaptiveMutation", SmcConfig().ToJson());
+        BassConfig config = SmcConfig(adaptive);
+        Assert.Contains("\"AdaptiveMutation\":{\"StayProbability\":0.3}", config.ToJson());
+        Assert.Equal(config, BassConfig.FromJson(config.ToJson()));
+        Assert.NotEqual(Bass.Fingerprint(SmcConfig(adaptive with { AdaptiveMutation = null }), data), Bass.Fingerprint(config, data));
     }
 
     [Fact]

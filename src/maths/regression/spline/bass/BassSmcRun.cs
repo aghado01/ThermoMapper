@@ -25,6 +25,9 @@ namespace Maths.Regression.Spline.Bass;
 /// <item><b>Draws.</b> Each final particle is composed as a retained draw is (σ², the coefficients and λ; D04), with its
 /// normalized weight over the replicates' count, so the fit's weights sum to 1 and each replicate holds 1/R
 /// (<see cref="BassFit.DrawWeights"/>). The terms merge in replicate order.</item>
+/// <item><b>The sweeps.</b> <see cref="SmcSpec.MutationSteps"/> per particle at each stage, or under
+/// <see cref="SmcSpec.AdaptiveMutation"/> each stage's count from the previous stage's moved fraction, within that many per stage
+/// taken; the progress counts the sweeps each stage took, and the plan the fixed count's.</item>
 /// <item><b>The budget.</b> A replicate ends at b = 1 or after <see cref="SmcSpec.MaxStages"/> stages. A fit short of
 /// b = 1 is flagged (<see cref="BassSmcReadout.ReachedPosterior"/>) and reports no evidence or residual check, and its
 /// checkpoint continues it.</item>
@@ -79,7 +82,7 @@ internal static class BassSmcFit
         var smc = new SmcOptions
         {
             Particles = spec.Particles, Resampling = spec.Resampling, ResampleBelow = spec.ResampleBelow, MutationSteps = spec.MutationSteps,
-            MaxStages = budget, MaxDegreeOfParallelism = parallelism, TraceStages = spec.TraceStages,
+            AdaptiveMutation = spec.AdaptiveMutation, MaxStages = budget, MaxDegreeOfParallelism = parallelism, TraceStages = spec.TraceStages,
         };
         SmcRun<BassParticle> run = restart is null
             ? SmcRun<BassParticle>.Start(new SmcStage<BassParticle>(target, new Temperature(0.0, TemperingPath.Likelihood)), particles, kernel, smc, streams[0])
@@ -89,7 +92,7 @@ internal static class BassSmcFit
             options.Cancellation.ThrowIfCancellationRequested();
             double next = SmcSampler.NextInverseTemperature(run, spec.TargetConditionalEss);
             run.Advance(new SmcStage<BassParticle>(target, new Temperature(next, TemperingPath.Likelihood)));
-            progress.Add((long)spec.Particles * spec.MutationSteps);
+            progress.Add((long)spec.Particles * run.Reports[^1].Steps);
         }
         SmcResult<BassParticle> result = run.Result();
         BassSmcState? state = options.Checkpoint ? new BassSmcState(run.Checkpoint(), kernel.Account.Copy(), particles.PriorAttempts) : null;
