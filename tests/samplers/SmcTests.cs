@@ -16,7 +16,9 @@ namespace Maths.Samplers.Tests;
 /// recovers the modes' masses. Without resampling or moves the evidence telescopes to the plain importance-sampling
 /// estimate exactly. Results do not depend on parallelism, and a checkpoint resumes the uninterrupted run bit for bit.
 /// The genealogy estimate of the normalizer's variance reduces to importance sampling's without resampling, and is
-/// unbiased under multinomial resampling at every stage.
+/// unbiased under multinomial resampling at every stage. The adaptive count of moves takes its want within its credit, keeps
+/// the prior at b = 0 and reaches the posterior and evidence at b = 1, resumes bit for bit, and the stage readout reads
+/// what each stage's moves did.
 /// </summary>
 public sealed class SmcTests
 {
@@ -342,6 +344,144 @@ public sealed class SmcTests
             double ss = 0.0;
             foreach (double v in values) ss += (v - m) * (v - m);
             return (m, Math.Sqrt(ss / (values.Length - 1) / values.Length));
+        }
+    }
+
+    [Fact]
+    public void AdaptiveMutation_ReadsTheMovedFraction_WithinItsCredit()
+    {
+        var rule = new AdaptiveMutation { StayProbability = 0.1 };
+        var t = new Temperature(0.0, TemperingPath.Likelihood);
+        SmcStageReport Report(int index, int steps, double moved) => new(index, t, 100, 100, false, 100, 100, steps, moved, moved, 0.0, 0.0);
+        SmcStageReport initial = Report(0, 0, double.NaN);
+
+        // Stage 1 has nothing to read and takes the rate.
+        Assert.Equal(5, rule.StepsFor(5, [initial]));
+        // Half moved at one move: ⌈ln 0.1 / ln 0.5⌉ = 4, within the credit 5·2 − 1. The same rate read at four moves wants the same.
+        Assert.Equal(4, rule.StepsFor(5, [initial, Report(1, 1, 0.5)]));
+        Assert.Equal(4, rule.StepsFor(5, [initial, Report(1, 4, 1.0 - Math.Pow(0.5, 4))]));
+        // Every particle moved: 1. None moved: the whole credit, 5·3 − (5 + 1).
+        Assert.Equal(1, rule.StepsFor(5, [initial, Report(1, 5, 1.0)]));
+        Assert.Equal(9, rule.StepsFor(5, [initial, Report(1, 5, 1.0), Report(2, 1, 0.0)]));
+        // 2% moved at one move wants ⌈ln 0.1 / ln 0.98⌉ = 114; the credit, 5·2 − 1, takes 9, and with a stage's saving before it, 13.
+        Assert.Equal(9, rule.StepsFor(5, [initial, Report(1, 1, 0.02)]));
+        Assert.Equal(13, rule.StepsFor(5, [initial, Report(1, 1, 0.5), Report(2, 1, 0.02)]));
+
+        Assert.Throws<ArgumentOutOfRangeException>(() => rule.StepsFor(0, [initial]));
+        Assert.Throws<ArgumentOutOfRangeException>(() => rule.StepsFor(5, []));
+        (ISamplingTarget<double[]> target, _) = Conjugate();
+        var first = new SmcStage<double[]>(target, new Temperature(0.0, TemperingPath.Likelihood));
+        Assert.Throws<ArgumentOutOfRangeException>(() => SmcRun<double[]>.Start(first, new GaussianParticles(3, 1.0), new FixedWalk(1.0),
+            new SmcOptions { Particles = 10, MutationSteps = 0, AdaptiveMutation = rule }, seed: 1));
+        foreach (double c in new[] { 0.0, 1.0, double.NaN })
+            Assert.Throws<ArgumentOutOfRangeException>(() => SmcRun<double[]>.Start(first, new GaussianParticles(3, 1.0), new FixedWalk(1.0),
+                new SmcOptions { Particles = 10, AdaptiveMutation = new AdaptiveMutation { StayProbability = c } }, seed: 1));
+    }
+
+    [Fact]
+    public void AdaptiveMutation_KeepsThePriorAtBZero_AndReachesThePosteriorAndEvidenceAtBOne()
+    {
+        // The count reads the population only through earlier stages' reports, so every stage's moves keep its law. Held at
+        // b = 0 the population stays the prior; tempered to b = 1 it recovers the closed-form posterior and evidence, and held
+        // there it stays the posterior. A fixed-step walk accepts less as the posterior narrows, so the count moves: near the
+        // prior it wants fewer than the rate, and the stages near the posterior spend what those leave.
+        (ISamplingTarget<double[]> target, double[] y) = Conjugate();
+        var options = new SmcOptions { Particles = 4000, MutationSteps = 5, AdaptiveMutation = new AdaptiveMutation() };
+        var kernel = new FixedWalk(0.5);
+        var particles = new GaussianParticles(3, 1.0);
+
+        var prior = new List<SmcStage<double[]>>();
+        for (int s = 0; s <= 30; s++) prior.Add(new SmcStage<double[]>(target, new Temperature(0.0, TemperingPath.Likelihood)));
+        SmcResult<double[]> held = SmcSampler.Run(prior, particles, kernel, options, seed: 1209);
+        Assert.All(held.Stages, s => Assert.False(s.Resampled));
+        for (int j = 0; j < 3; j++)
+        {
+            (double mean, double variance) = Moments(held, j);
+            Assert.True(Math.Abs(mean) <= 4.0 / Math.Sqrt(4000), $"b = 0, mean[{j}] {mean:F4}");
+            Assert.True(Math.Abs(variance - 1.0) <= 4.0 * Math.Sqrt(2.0 / 4000), $"b = 0, var[{j}] {variance:F4}");
+        }
+        WithinBudget(held, 5);
+
+        double logZ = 0.0;
+        foreach (double yj in y) logZ += -0.5 * Math.Log(2.0 * Math.PI * 1.25) - yj * yj / (2.0 * 1.25);
+        SmcRun<double[]> run = SmcRun<double[]>.Start(prior[0], particles, kernel, options with { Particles = 2000 }, seed: 1210);
+        SmcResult<double[]> posterior = SmcSampler.TemperToPosterior(run, 0.95);
+        Assert.True(Math.Abs(posterior.LogNormalizerRatio - logZ) <= 0.15, $"log Z {posterior.LogNormalizerRatio:F4} vs {logZ:F4}");
+        int tempered = run.StagesDone;
+        for (int s = 0; s < 10; s++) run.Advance(new SmcStage<double[]>(target, new Temperature(1.0, TemperingPath.Likelihood)));
+        foreach (SmcResult<double[]> result in new[] { posterior, run.Result() })
+            for (int j = 0; j < 3; j++)
+            {
+                (double mean, double variance) = Moments(result, j);
+                Assert.True(Math.Abs(mean - 0.8 * y[j]) <= 0.06, $"b = 1, mean[{j}] {mean:F4} vs {0.8 * y[j]:F4}");
+                Assert.True(Math.Abs(variance - 0.2) <= 0.04, $"b = 1, var[{j}] {variance:F4}");
+            }
+        SmcStageReadout readout = SmcStageReadout.Of(run.Reports);
+        _out.WriteLine($"{tempered} stages to b = 1, then 10 held; steps {string.Join(" ", readout.Steps)}");
+        _out.WriteLine($"moved {string.Join(" ", Array.ConvertAll(readout.MovedFraction, m => m.ToString("F2")))}");
+        Assert.True(Array.Exists(readout.Steps, k => k > 0 && k != readout.Steps[1]), "the count never moved, so the run did not exercise the rule");
+        WithinBudget(run.Result(), 5);
+    }
+
+    [Fact]
+    public void AdaptiveMutation_ResumesBitForBit_AndDoesNotDependOnParallelism()
+    {
+        (ISamplingTarget<double[]> target, _) = Conjugate();
+        var particles = new GaussianParticles(3, 1.0);
+        var options = new SmcOptions { Particles = 300, MutationSteps = 4, AdaptiveMutation = new AdaptiveMutation { StayProbability = 0.05 } };
+        var first = new SmcStage<double[]>(target, new Temperature(0.0, TemperingPath.Likelihood));
+        SmcResult<double[]> whole = SmcSampler.RunTempered(target, TemperingPath.Likelihood, 0.9, particles, new FixedWalk(1.0), options, seed: 1211);
+        Assert.True(whole.Stages.Count - 1 >= 4, $"the run takes {whole.Stages.Count - 1} stages; the check needs at least 4");
+
+        SmcRun<double[]> cut = SmcRun<double[]>.Start(first, particles, new FixedWalk(1.0), options with { MaxStages = 3 }, seed: 1211);
+        Assert.False(SmcSampler.TemperToPosterior(cut, 0.9).ReachedPosterior);
+        SmcRun<double[]> resumed = SmcRun<double[]>.Resume(cut.Checkpoint(), particles, new FixedWalk(1.0), options);
+        AssertSame(whole, SmcSampler.TemperToPosterior(resumed, 0.9));
+        AssertSame(whole, SmcSampler.RunTempered(target, TemperingPath.Likelihood, 0.9, particles, new FixedWalk(1.0),
+                                                 options with { MaxDegreeOfParallelism = 4 }, seed: 1211));
+    }
+
+    [Fact]
+    public void StageReadout_ReadsEachStagesMovesAcceptanceAndEss()
+    {
+        // The moved fraction lies between the acceptance and the steps times it: a particle that moved accepted at least
+        // one of its k moves, and the accepted moves cover the particles that moved.
+        (ISamplingTarget<double[]> target, _) = Conjugate();
+        var options = new SmcOptions { Particles = 300, MutationSteps = 3 };
+        SmcResult<double[]> result = SmcSampler.RunTempered(target, TemperingPath.Likelihood, 0.9, new GaussianParticles(3, 1.0), new FixedWalk(1.0), options, seed: 1212);
+        SmcStageReadout readout = SmcStageReadout.Of(result.Stages);
+        int count = result.Stages.Count;
+        Assert.Equal(count, readout.Steps.Length);
+        Assert.Equal((0, 1.0), (readout.Steps[0], readout.EssFraction[0]));
+        Assert.True(double.IsNaN(readout.MovedFraction[0]) && double.IsNaN(readout.AcceptanceRate[0]));
+        Assert.Equal(3L * (count - 1), readout.Moves);
+        for (int s = 1; s < count; s++)
+        {
+            SmcStageReport r = result.Stages[s];
+            Assert.Equal(3, readout.Steps[s]);
+            Assert.Equal(r.EffectiveSampleSize / 300, readout.EssFraction[s]);
+            Assert.Equal((r.Resampled, r.Families), (readout.Resampled[s], readout.Families[s]));
+            Assert.InRange(readout.MovedFraction[s], r.AcceptanceRate - 1e-12, Math.Min(1.0, 3 * r.AcceptanceRate) + 1e-12);
+        }
+        (int least, double fraction) = readout.LeastMoved;
+        Assert.Equal(fraction, readout.MovedFraction[least]);
+        for (int s = 1; s < count; s++) Assert.True(readout.MovedFraction[s] >= fraction);
+
+        // Sequential importance sampling moves nothing: no stage to name.
+        SmcResult<double[]> still = SmcSampler.RunTempered(target, TemperingPath.Likelihood, 0.9, new GaussianParticles(3, 1.0), new FixedWalk(1.0),
+                                                           options with { MutationSteps = 0 }, seed: 1212);
+        Assert.Equal((-1, double.NaN), SmcStageReadout.Of(still.Stages).LeastMoved);
+    }
+
+    // Over every prefix of its stages, an adaptive run moves no more than the fixed count would.
+    private static void WithinBudget(SmcResult<double[]> result, int rate)
+    {
+        long spent = 0;
+        for (int s = 1; s < result.Stages.Count; s++)
+        {
+            spent += result.Stages[s].Steps;
+            Assert.True(result.Stages[s].Steps >= 1, $"stage {s} took no moves");
+            Assert.True(spent <= (long)rate * s, $"by stage {s} the run took {spent} moves, past {rate}·{s}");
         }
     }
 

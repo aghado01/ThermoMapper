@@ -19,8 +19,13 @@ public sealed record SmcOptions
     /// <summary>Resample when ESS/N falls below this fraction: 1 resamples at every stage, 0 never.</summary>
     public double ResampleBelow { get; init; } = 0.5;
 
-    /// <summary>Kernel moves per particle at each stage; 0 makes the run sequential importance sampling.</summary>
+    /// <summary>Kernel moves per particle at each stage; 0 makes the run sequential importance sampling. Under
+    /// <see cref="AdaptiveMutation"/>, the budget's moves per stage.</summary>
     public int MutationSteps { get; init; } = 1;
+
+    /// <summary>Each stage's moves chosen from the previous stage's moved fraction, within <see cref="MutationSteps"/> per
+    /// stage taken (<see cref="Smc.AdaptiveMutation"/>); null, the default, keeps the fixed count.</summary>
+    public AdaptiveMutation? AdaptiveMutation { get; init; }
 
     /// <summary>The most stages a run may take after its first: the adaptive schedule's cap, and the length of the
     /// stage seeds derived up front.</summary>
@@ -45,7 +50,10 @@ public sealed record SmcOptions
 /// diversity.</param>
 /// <param name="Families">Distinct initial particles among the current particles' lineages: the run's cumulative
 /// loss of diversity. Equal weights do not make the particles independent; this says how many lineages remain.</param>
+/// <param name="Steps">The kernel moves each particle took; 0 at stage 0.</param>
 /// <param name="AcceptanceRate">The kernel's acceptance over the stage's moves; NaN at stage 0 or with no moves.</param>
+/// <param name="MovedFraction">The fraction of particles of nonzero weight with at least one accepted move: the stage's
+/// diversification. NaN at stage 0 or with no moves.</param>
 /// <param name="LogNormalizerIncrement">log(Z_stage/Z_previous) as the reweighting estimates it; 0 at stage 0.</param>
 /// <param name="NormalizerRelativeVariance">The genealogy estimate of Var(Ẑ)/Z² for log(Z_stage/Z_first), read after
 /// the reweighting and before any resampling (<see cref="SmcWeights.GenealogyRelativeVariance"/>); 0 at stage 0. NaN
@@ -53,7 +61,7 @@ public sealed record SmcOptions
 /// estimate's factors do not describe.</param>
 public readonly record struct SmcStageReport(
     int Index, Temperature Temperature, double EffectiveSampleSize, double ConditionalEss, bool Resampled,
-    int DistinctAncestors, int Families, double AcceptanceRate, double LogNormalizerIncrement,
+    int DistinctAncestors, int Families, int Steps, double AcceptanceRate, double MovedFraction, double LogNormalizerIncrement,
     double NormalizerRelativeVariance);
 
 /// <summary>
@@ -203,7 +211,7 @@ public sealed class SmcRun<TState>
         Array.Fill(weights, 1.0 / n);
         var families = new int[n];
         for (int i = 0; i < n; i++) families[i] = i;
-        var reports = new List<SmcStageReport> { new(0, first.Temperature, n, n, false, n, n, double.NaN, 0.0, 0.0) };
+        var reports = new List<SmcStageReport> { new(0, first.Temperature, n, n, false, n, n, 0, double.NaN, double.NaN, 0.0, 0.0) };
         var run = new SmcRun<TState>(particles, kernel, options, seed, first, state, evaluations, weights, families, 0, 0.0, reports,
                                      genealogyHolds: true, options.TraceStages ? [] : null);
         run.RecordStage(newTarget: false);
@@ -311,10 +319,11 @@ public sealed class SmcRun<TState>
             if (_options.Resampling != ResamplingScheme.Multinomial) _genealogyHolds = false;
         }
 
-        // Mutate, each particle on its own stream; particles of zero weight are left as they are.
+        // Mutate, each particle on its own stream; particles of zero weight are left as they are. An adaptive count reads
+        // only the reports of the stages before this one.
         _kernel.Prepare(next, _state, _weights);
         var accepted = new int[n];
-        int steps = _options.MutationSteps;
+        int steps = _options.AdaptiveMutation is { } adaptive ? adaptive.StepsFor(_options.MutationSteps, _reports) : _options.MutationSteps;
         Parallel.For(0, n, new ParallelOptions { MaxDegreeOfParallelism = _options.MaxDegreeOfParallelism }, i =>
         {
             if (_weights[i] == 0.0 || steps == 0) return;
@@ -334,14 +343,21 @@ public sealed class SmcRun<TState>
         });
 
         long acceptedTotal = 0, attempted = 0;
+        int live = 0, moved = 0;
         for (int i = 0; i < n; i++)
         {
             acceptedTotal += accepted[i];
-            if (_weights[i] > 0.0) attempted += steps;
+            if (_weights[i] > 0.0)
+            {
+                attempted += steps;
+                live++;
+                if (accepted[i] > 0) moved++;
+            }
         }
         var lineages = new HashSet<int>(_families);
-        _reports.Add(new SmcStageReport(StagesDone, next.Temperature, ess, conditionalEss, resampled, distinct, lineages.Count,
-            attempted > 0 ? (double)acceptedTotal / attempted : double.NaN, logIncrement, relativeVariance));
+        _reports.Add(new SmcStageReport(StagesDone, next.Temperature, ess, conditionalEss, resampled, distinct, lineages.Count, steps,
+            attempted > 0 ? (double)acceptedTotal / attempted : double.NaN, attempted > 0 ? (double)moved / live : double.NaN,
+            logIncrement, relativeVariance));
         RecordStage(newTarget);
     }
 
@@ -404,6 +420,13 @@ public sealed class SmcRun<TState>
         if (options.Particles < 1) throw new ArgumentOutOfRangeException(nameof(options), "The population needs at least one particle.");
         if (!(options.ResampleBelow >= 0.0)) throw new ArgumentOutOfRangeException(nameof(options), "ResampleBelow must be at least 0.");
         if (options.MutationSteps < 0) throw new ArgumentOutOfRangeException(nameof(options), "MutationSteps must be at least 0.");
+        if (options.AdaptiveMutation is { } adaptive)
+        {
+            if (options.MutationSteps < 1)
+                throw new ArgumentOutOfRangeException(nameof(options), "An adaptive count spends MutationSteps per stage, which must then be at least 1.");
+            if (!(adaptive.StayProbability > 0.0 && adaptive.StayProbability < 1.0))
+                throw new ArgumentOutOfRangeException(nameof(options), "AdaptiveMutation.StayProbability must lie in (0, 1).");
+        }
         if (options.MaxStages < 0) throw new ArgumentOutOfRangeException(nameof(options), "MaxStages must be at least 0.");
         if (options.MaxDegreeOfParallelism < 1) throw new ArgumentOutOfRangeException(nameof(options), "MaxDegreeOfParallelism must be at least 1.");
     }
