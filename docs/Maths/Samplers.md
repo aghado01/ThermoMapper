@@ -86,7 +86,7 @@ flowchart LR
 | Readouts, traces, checkpoints | `IMergeable<T>`; `RunningMoments` (`Add(x, weight)`, `Merge`, `Of`), `WeightedSums` (`Add`, `AddSparse`, `Mean`), `DrawSample` (`Add`, `Quantile`), `Tally<TEnum>`; `ChainTrace` (`Add`, `Draws`, `Copy`); `DrawStore<T>(every = 1)` (`Add`, `AppendFrom`, `Copy`, `Every`, `Offered`), each engine's retained draws; `EnsembleCheckpoint`, `ChainCheckpoint`, `RunIdentity`, `IChainState`, `IResumableChainRun<T>`, `RunFingerprint`; `ReversibleJumpChain.Snapshot`/`Restore` (`ChainSnapshot<T>`), `ParallelTempering.Snapshot`/`Restore` (`LadderSnapshot<T>`) |
 | Blocks | `BlockScan<T>(blocks, state, rng, copy)` with `Step()`, `State`, `Steps`, `Attempts`, `Accepted`, `BlockStats()`, `Snapshot()` and static `Restore(blocks, snapshot, copy)` (`BlockScanSnapshot<T>`); `IBlock<T>` (`Name`, `Every`, `Update`); `GaussianConditional(dimension)` with `Draw(factor, rhs, rng, result, scale = 1)` and `Perturb(factor, mean, rng, result, scale = 1)`, and static `GaussianConditional.Perturb(factor, mean, rng, result, scale, z, innovation)` on the caller's scratch; `ConjugateUpdates.NormalVariance`, `ConjugateUpdates.NormalPrecision` (each also on a GIG prior), `GigParameters(P, A, B)` (`OfGamma`, `OfInverseGamma`, `IsGamma`, `IsInverseGamma`, `ToGamma`, `ToInverseGamma`, `LogKernel`); `RandomWalkMetropolis.Step(ref x, ref logTarget, step, logDensity, rng)`; `NewtonMetropolis(dimension, delta = 1/π)` with `Step(x, logDensity, rng)` and the `LogDensity(x, gradient, hessian)` delegate; `SliceSampler.Step(ref x, ref logTarget, width, maxSteps, logDensity, rng)` → evaluations |
 | Evidence | `LadderEvidence.SteppingStone(b, logRatios)`, `LadderEvidence.PathSampling(b, slopes)`, `LadderEvidence.FromLadders(ladders, method = DefaultEstimator)`, `LadderEvidence.FromSmc(result, method = DefaultEstimator)` with `SmcOptions.TraceStages` and `SmcStageTrace` (`Temperature`, `NewTarget`, `Weights`, `Slopes`, `LogRatios`) → `LadderEstimate` (`Method`, `LogRatio`, `MonteCarloError`, `DiscretizationError`, `Rungs` of `RungEstimate`); `LadderEvidence.Pool(chains)` → `PooledLadderEstimate` (the mean, `WithinChainError`, `BetweenChainError`, the larger reported, `BetweenToWithin`); `RungDraws.FromChains(chains)`, `RungDraws.FromPopulation(values, weights = null)`; `LadderEstimator` (`SteppingStone`, `PathSampling`) |
-| SMC (N8, N16) | `SmcRun<T>` (`Start(first, particles, kernel, options, seed)`, `Resume(checkpoint, particles, kernel, options)`, `Advance`, `ConditionalEss`, `Checkpoint`, `Result`, `Stage`, `StagesDone`, `MaxStages`, `Reports`, `StageTraces`); `SmcSampler` (`Run`, `RunTempered`, `TemperToPosterior`, `NextInverseTemperature`); `SmcOptions` (`Particles`, `Resampling`, `ResampleBelow` 0.5, `MutationSteps` 1, `MaxStages` 1,000, `MaxDegreeOfParallelism`, `TraceStages`); `SmcResult<T>` (`LogNormalizerRatio`, `LogNormalizerError`, `ReachedPosterior`, `Stages` of `SmcStageReport`); `SmcWeights` (`Normalize`, `EffectiveSampleSize`, `ConditionalEss`, `LargestStep`, `LogNormalizerIncrement`, `GenealogyRelativeVariance`, `LogNormalizerError`); `Resampling.Ancestors` (`ResamplingScheme`); `ISmcParticles<T>`, `ISmcKernel<T>`, `SmcStage<T>`, `SmcMove<T>`, `RandomWalkKernel` |
+| SMC (N8, N16) | `SmcRun<T>` (`Start(first, particles, kernel, options, seed)`, `Resume(checkpoint, particles, kernel, options)`, `Advance`, `ConditionalEss`, `Checkpoint`, `Result`, `Stage`, `StagesDone`, `MaxStages`, `Reports`, `StageTraces`); `SmcSampler` (`Run`, `RunTempered`, `TemperToPosterior`, `NextInverseTemperature`); `SmcOptions` (`Particles`, `Resampling`, `ResampleBelow` 0.5, `MutationSteps` 1, `AdaptiveMutation` null, `MaxStages` 1,000, `MaxDegreeOfParallelism`, `TraceStages`); `AdaptiveMutation` (`StayProbability` 0.1, `StepsFor(rate, reports)`); `SmcResult<T>` (`LogNormalizerRatio`, `LogNormalizerError`, `ReachedPosterior`, `Stages` of `SmcStageReport`, each with its `Steps` and `MovedFraction`); `SmcStageReadout` (`Of(stages)`, `Moves`, `LeastMoved`); `SmcWeights` (`Normalize`, `EffectiveSampleSize`, `ConditionalEss`, `LargestStep`, `LogNormalizerIncrement`, `GenealogyRelativeVariance`, `LogNormalizerError`); `Resampling.Ancestors` (`ResamplingScheme`); `ISmcParticles<T>`, `ISmcKernel<T>`, `SmcStage<T>`, `SmcMove<T>`, `RandomWalkKernel` |
 | Flat histogram (N17) | `MulticanonicalWeights(low, high, lowSlope, logWeights)` (`LogWeight`, `TryLocate`, `FlatOccupancy`, `Flat`, `WithLogWeights`, `ExtendedAbove`); `MulticanonicalTarget<T>(inner, weights)` → `MulticanonicalEvaluation` (`UntemperedLogLikelihood`, `LogWeight`, `Reweighed`); `SamcLearning(start, gainScale, gainStart)` (`Update`, `Gain`, `Save`, `ExtendAbove`, `FixedPoint`, with `tied` nodes, `Infeasibility`); `IMulticanonicalModel<T>`, `IMulticanonicalChain<T>`, `MulticanonicalChain<T>`; `MulticanonicalRun.Run(spec, target, model, masterSeed, pilot?, resumeFrom?, …)` → `MulticanonicalResult<T>` (with `TiedNodes`); `FlatHistogramSpec`; `FlatHistogramDiagnostics`; `Reweighting` (`Weigh`, `Expectation`, `LogEvidence` → `LogEvidenceCurve`); `TemperingPilot(b, levels, inefficiencies?)`, `TemperingPilot.FromLadders`; `Wham` (`Estimate` → `WhamEstimate`, `WarmStart`, with `thinDraws` and the nodes `tied`, `ThinDraws`, `NodeDraws`, `Window`, with `topMargin`, `Nodes`) |
 | i.i.d. and fields | `InverseTransform.Sample(rng, quantile, count)`, `InverseTransform.Exponential(rng, scale, count)`; `SpectralNoiseField.Generate(rng, gridSize, beta, boxMin, boxMax)` with `Sample`, `Min`, `Max` and presets `White` / `Pink` / `Brown` |
 
@@ -298,6 +298,58 @@ Path sampling's rungs are positively correlated through swaps, which only the jo
 - exact draws on the conjugate Normal, 400 replicates: coverage 0.963 and 0.953, mean z² 0.98 and 0.96, path sampling against the exact trapezoid of its rungs;
 - traced ladders on the enumerable target, 200 replicates, both estimators calibrated as above;
 - the traces' values against the rungs' states every scan, AdaptLadder's refusal, resumption with the traces, a target without a slope (NaN slopes, path sampling refused, stepping-stone served; the powered path always has a slope), input validation, and a ladder given in either order.
+
+### SMC's sweeps per stage (2026-11-08)
+
+`SmcOptions.MutationSteps` moves every particle k̄ times at every stage. Where one move does little, as BASS's reversible-jump sweep does on KHAOS's rich Legendre surfaces (about 2% of births accepted), k̄ moves leave many particles where resampling put them, and the next reweighting reads their duplicates. `SmcOptions.AdaptiveMutation` (null by default) chooses each stage's count instead. BASS's fit reads the core's readout per replicate (`BassSmcReplicate.StageReadout`); its config, `SmcSpec`, does not carry the option yet.
+
+**The rule** (`AdaptiveMutation.StepsFor`). Stage t reads stage t − 1's report. Its $k_{t-1}$ moves left a fraction $1-m_{t-1}$ of the live particles where they were (`SmcStageReport.MovedFraction`; a particle moved when any of its moves was accepted). Read the moves as independent, each leaving a particle in place with one probability q: then $1-m=q^{k}$, and the count that leaves at most a fraction c in place (`StayProbability`) is
+
+$$k_t^{\text{want}}=\Big\lceil k_{t-1}\,\frac{\ln c}{\ln(1-m_{t-1})}\Big\rceil .$$
+
+It is 1 when every particle moved, and unbounded when none did. Stage t takes it within its credit, k̄ = `MutationSteps`:
+
+$$k_t=\min\Big\{\max\big(1,k_t^{\text{want}}\big),\ \bar k\,t-\sum_{s<t}k_s\Big\}.$$
+
+Stage 1 has nothing to read and takes k̄.
+
+- **Why the moved fraction, not the acceptance.** The count ⌈ln c / ln(1 − p)⌉ from an acceptance rate p is Drovandi and Pettitt's rule: move each particle with probability 1 − c (Biometrics 2011, c = 0.01). When every particle accepts at one rate the two readings agree, since m = 1 − (1 − p)^k. When some particles are stuck and others move freely, the pooled acceptance overstates how many move. The moved fraction does not: its want grows with the stuck share until the credit stops it. It is also the readout's number (`SmcStageReadout`), so the count and the diagnosis read the same thing.
+- **Why a credit.** Without one, the want is the cost. At 2% of moves accepted and c = 0.1 a stage wants 114 sweeps, so a run's cost would follow its hardest stages with no bound the caller set. With the credit, k̄ stays the caller's budget:
+  - easy stages, near the prior where moves drawn from it are mostly accepted, pass their unspent moves to hard ones;
+  - a run never takes more moves than the fixed count over the same stages, so BASS's plan, N·k̄ per stage, stays an upper bound;
+  - a run whose every stage wants less than k̄ ends cheaper than the fixed count.
+- **Invariance and the estimates.**
+  - The count is fixed from earlier stages' reports before any move of its stage, so each move leaves π_t invariant, as a kernel tuned in `Prepare` does.
+  - Because the count is a function of the population, the run is an adaptive SMC in the sense of Beskos, Jasra, Kantas and Thiery (Annals of Applied Probability 2016). Their law of large numbers and CLT, for kernels tuned from the particles' history, put the adaptive run's limit at the run with the limiting kernels.
+  - Their adaptation maps are continuous; this ceiling is not. As N grows, though, the moved fraction converges, and the count settles at its limit's value unless that limit sits exactly on a step.
+  - The normalizer stays consistent and loses exact unbiasedness, as it already does under the adaptive schedule. The genealogy error (above) holds in the same consistent sense.
+- **Resume.** The count reads only the reports, which the checkpoint carries, so a resumed run takes the uninterrupted run's counts bit for bit. A resume under another k̄ reckons the credit at the new rate.
+
+**Alternatives not taken.**
+- *The pooled acceptance* (Drovandi and Pettitt): it is blind to stuck particles, as above, and equals this rule when acceptance is the same for every particle.
+- *The acceptance per move kind* (birth, death, change, swap):
+  - it needs the kernel's kinds, which the core does not see;
+  - the slowest kind can sit near zero by design (KHAOS's swaps), which pins the count at its credit whatever the other kinds do.
+- *The ESS before the moves*, as Durham and Geweke (2014) do, taking R or 3R Metropolis steps by whether the ESS clears a threshold (cited by Mathews et al. 2024, the library's cut SMC; the full text is not in the library). It reads how much diversity resampling lost, not how fast the kernel restores it.
+- *A statistic's decorrelation*: the correlation of each particle's log likelihood before and after a stage's moves, read as AR(1), ρ = r^k.
+  - It sees continuous coordinates that the accepted-move flag does not. τ's slice step and the latents always count as moved, and GBASS's skew–latent ridge lies in them.
+  - It is noisy where the population's spread in the statistic is small, and blind to directions the statistic does not load on.
+  - It is the candidate should the structure's moved fraction prove blind to a continuous ridge.
+- *Stopping within the stage* once a running statistic of the moves settles. It reads the moves themselves, so the stopping time depends on the trajectories it stops, and each particle keeps π_t only as N grows. This change keeps the count to what the stage knows before its moves.
+- *Waste-free SMC* (Dau and Chopin, JRSSB 2022): resample M ≪ N particles and keep every state of their chains, a different allocation of the same work; outside this change.
+
+The library (`codex-scientiae` gauntlet/bayesian and PDFs/Bayesian) holds none of the adaptive-SMC papers above. Its SMC paper is Mathews, Gopalan, Gattiker, Smith and Francom's cut SMC (2024), which uses a fixed 5 slice steps and cites Del Moral, Doucet and Jasra (2012) for adaptive resampling's CLT.
+
+**The measured reading (2026-11-08; `issues/regression/bass/smc-adaptive-mutation-report.md`).** BASS's SMC, N 500, compared the fixed count at 2, 5, 10 and 20 sweeps per stage with the adaptive count on budgets of 5 and 20. Equal cost is read as MSE × seconds against the fixed arm at the same budget.
+- *GBASS's t(5) and skewed GH evidence fixtures* (n 12, 32 replicates, ln p(y) by plain Monte Carlo).
+  - The structure move accepts 30–55% at every b, so no stage wanted fewer than 5 sweeps, and at that budget the adaptive run was the fixed run bit for bit.
+  - At a budget of 20 it saved 2–4% of the sweeps, with ln Ẑ work ratios of 0.86 [0.44, 1.54] and 0.74 [0.44, 1.25].
+- *KHAOS's Ishigami fit under the raw ridge* (n 120, 16 replicates). Every arm stayed trapped at near-empty structures, about 60 nats under the replicates that found the posterior.
+  - The fixed arms grew the structure in 6 of 64 replicates; the adaptive arms in none of 48.
+  - The count saved sweeps at b ≈ 0, where structure is found cheaply, and spent them just before the moved fraction collapsed, which left the hardest stages at the budget.
+  - Its lower work ratios there (0.72, 0.50) come from the trapped runs' lower cost against an equal bias, which is not a comparison at equal cost.
+
+So `AdaptiveMutation` stays an option, and the fixed count stays the default.
 
 ### Flat-histogram sampling (N17 Phase 1, 2026-10-29)
 
@@ -556,7 +608,7 @@ The power spectrum is $\propto|k|^{-\beta}$ in **grid-index** units: $\beta=0$ i
 | Reversible jump | `rjmcmc/ReversibleJumpChain.cs`, `IRjMove.cs`, `Proposal.cs`, `MoveStat.cs`, `ScheduledMove.cs`, `MoveStep.cs`, `ParallelTempering.cs`, `TemperingLadder.cs` |
 | Ensemble | `ensemble/ChainEnsemble.cs`, `ChainDiagnostics.cs`, `ConvergenceDiagnostics.cs`, `ConvergenceVerdict.cs`, `RHatDiagnostic.cs`, `RunningMoments.cs`, `Readouts.cs`, `ChainTrace.cs`, `DrawStore.cs`, `Checkpoint.cs`, `EnsembleRun.cs`, `IChain.cs`, `IEnsembleModel.cs` |
 | Evidence | `evidence/LadderEvidence.cs` |
-| SMC | `smc/SmcRun.cs` (`SmcRun`, `SmcSampler`, `SmcOptions`, `SmcResult`), `SmcWeights.cs`, `Resampling.cs`, `SmcContracts.cs`, `RandomWalkKernel.cs` |
+| SMC | `smc/SmcRun.cs` (`SmcRun`, `SmcSampler`, `SmcOptions`, `SmcResult`), `SmcMutation.cs` (`AdaptiveMutation`, `SmcStageReadout`), `SmcWeights.cs`, `Resampling.cs`, `SmcContracts.cs`, `RandomWalkKernel.cs` |
 | Flat histogram | `flathistogram/MulticanonicalWeights.cs`, `MulticanonicalTarget.cs`, `SamcLearning.cs`, `MulticanonicalChain.cs`, `MulticanonicalRun.cs`, `MulticanonicalDraws.cs`, `Reweighting.cs`, `TemperingPilot.cs`, `Wham.cs`, `FlatHistogramDiagnostics.cs`, `FlatHistogramSpec.cs` |
 | Blocks | `blocks/BlockScan.cs`, `GaussianConditional.cs`, `ConjugateUpdates.cs`, `GigParameters.cs`, `RandomWalkMetropolis.cs`, `NewtonMetropolis.cs`, `SliceSampler.cs` |
 | i.i.d. and fields | `iid/InverseTransform.cs`; `SpectralNoiseField.cs` (at the `samplers/` root) |
