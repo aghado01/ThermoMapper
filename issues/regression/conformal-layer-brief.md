@@ -1,6 +1,6 @@
 # The conformal layer: E16's build (chip brief)
 
-Date: 2026-11-06. Status: slices 0, 1 and 2 built 2026-11-06, the fallback signal read from the inflated set on 2026-11-07 at the user's call, with a split-half comparator measured beside it; on 2026-11-07 both became diagnostics on every set, with no trigger, at the user's decision; slice 3, the split form, built 2026-11-07 at the user's go-ahead (reports below); slice 4 read on 2026-11-07 (the in-sample predictive CDF is not monotone in y where the draws' predictives separate) and built on 2026-11-08 at the user's decision: the split form's predictive distribution by default, the full step's as an opt-in with its flag; CB-3's per-unit bounds built on 2026-11-08 at the user's order, a slice between 4 and 5; slice 5 waits for the user. Written at the user's request from [E16](bass/extensions-brief.md#conformal-bayes-the-consumer) and the [conformal Lean contract](../../lean/Protolemmata/Conformal/conformal-lemmas.md).
+Date: 2026-11-06. Status: slices 0, 1 and 2 built 2026-11-06, the fallback signal read from the inflated set on 2026-11-07 at the user's call, with a split-half comparator measured beside it; on 2026-11-07 both became diagnostics on every set, with no trigger, at the user's decision; slice 3, the split form, built 2026-11-07 at the user's go-ahead (reports below); slice 4 read on 2026-11-07 (the in-sample predictive CDF is not monotone in y where the draws' predictives separate) and built on 2026-11-08 at the user's decision: the split form's predictive distribution by default, the full step's as an opt-in with its flag; CB-3's per-unit bounds built on 2026-11-08 at the user's order, a slice between 4 and 5, and the margin made opt-in the same day at the user's decision; slice 5 waits for the user. Written at the user's request from [E16](bass/extensions-brief.md#conformal-bayes-the-consumer) and the [conformal Lean contract](../../lean/Protolemmata/Conformal/conformal-lemmas.md).
 
 ## Why
 
@@ -55,6 +55,11 @@ It does not reach a curve's or a parameter's own intervals: those stay with E15'
   - the split form holds for any fit, the sampler's included;
   - an estimate within ε costs at most |M|/m, with |M| read from the estimates; ε must be a sure bound, or its failure probability adds to the miscoverage.
 
+**Decided by the user on 2026-11-08: the margin is opt-in** ("Make it opt-in").
+- *What the layer does.* The margin, its carried band, its uniform form and the per-stratum orderings only it needs, is off by default (`MarginBounds`, null). Not asked for, it says so: `ConformalMargin.Computed` is false, the band, its count and the carried bounds are null, and the plain set's coverage under error is NaN. The inflated rule stays on every set, per position by default with its uniform option.
+- *Where it applies.* It changes the 2026-11-07 decision, diagnostics on every set, for the margin only. The fallback signal and the split-half comparator stay as decided; neither reads the margin's band.
+- *Why* (the user's reasons, relayed). On BASS the margin reads 96 to 100 of 100 units, so it fires on every fit and says little. It costs 0.33 to 1.8 s per stratum at n 1,000. The inflated rule gives the protection at no per-stratum cost. It still pays where a unit stands apart, 4.9 against 16.3 in the tail fixture, so it stays available.
+
 **Ordered by the user on 2026-11-08: CB-3's per-unit bounds.**
 - *What was asked.* The inflated rule on per-position bounds; the margin on per-unit bounds with the uniform fallback; the uniform forms kept reachable, so the two can be compared; each bound's estimate, and why it dominates. It follows the Lean chip's per-unit CB-3 (80a1993): `coverage_inflated` with bounds by ordering and position, `coverage_close` with bounds carried by the units, `fragileEstimated_mono`.
 - *Decided in building it, recorded in the report below.* A unit's carried bound is its largest over every ordering the draws represent, not the two slice 2 read, since two did not dominate. The uniform margin bound is the largest carried one.
@@ -74,7 +79,7 @@ It does not reach a curve's or a parameter's own intervals: those stay with E15'
 1. **One seam, not one type per engine.** The layer reads `PointwiseLogDensity` and the candidate matrix. An engine joins by adding the candidate density; nothing in the layer knows BASS.
 2. **The full step's content is the retained parameters,** Fong and Holmes's in-sample score. Hoff's leave-one-out score, which carries his optimality, is a later option: it needs the weight g(y_c | θ)/g(y_i | θ) per data unit, add-one-in and leave-one-out at once, with PSIS's instability.
 3. **Sets on a grid in y,** its resolution stated with the set. π(y) need not be monotone, so a set can be a union of intervals, and the layer reports it as one. Refinement of the boundaries is an option, not the default.
-4. **CB-3's ε from the add-one-in estimate's Monte Carlo error,** through `PredictiveChecks`' influence machinery, reported as indicative: it is not a sure bound, and the Lean chip leaves ε's probabilistic form open. The margin |M| is always reported, inflation by 2ε is an option, and a wide margin is the signal to use the split form. ε's form is the decision the Lean follow-up would change.
+4. **CB-3's ε from the add-one-in estimate's Monte Carlo error,** through `PredictiveChecks`' influence machinery, reported as indicative: it is not a sure bound, and the Lean chip leaves ε's probabilistic form open. The margin |M| is always reported (opt-in since 2026-11-08), inflation by 2ε is an option, and a wide margin is the signal to use the split form. ε's form is the decision the Lean follow-up would change.
 5. **Weighted draws work as they are.** An SMC population's or the flat histogram's draw weights multiply the add-one-in weights.
 
 ## The slices
@@ -127,6 +132,26 @@ Under "Reports" below, newest first, per slice: what landed by commit; the gates
 ## Reports
 
 Newest first.
+
+### 2026-11-08 — The margin made opt-in
+
+Built at the user's decision of 2026-11-08, "Make it opt-in", relayed by the main session after it read 3fc80f9 and ran the Commit scope on HEAD (1,685 of 1,685).
+
+**Landed** on `main`, nothing pushed (the commits are in the log beside this report):
+- *`ConformalOptions.MarginBounds` is null by default.* Asked for, `Carried` or `Uniform` reads the margin as before. Not asked for, the scorer builds no orderings, runs no fourth product and counts no bands.
+- *The readout says when it was not computed.* `ConformalMargin.Computed` is false; `Fragile`, `Count`, `Bounds` and the carried bounds are null; the plain set's `CoverageUnderError` is NaN. The inflated rule's readings are on every set.
+- *Tests:* `TheMargin_IsOptIn_AndEveryOtherReadingStandsWithoutIt` (new). Slice 2's and the per-unit bounds' tests ask for the margin, and the coverage test checks that the default's decisions are the margin's. The fallback test checks that asking for the margin moves no fallback signal. The cost row times the default step and the margin's apart.
+- *The page and this brief* record the decision with its date and words; E16's line too.
+
+**Read before changing anything:** the fallback rule reads the inflated-set gap and k̂, and the split-half comparator reads two half-step plain sets. Neither reads the margin's band, so both stay as decided on 2026-11-07. Nothing serializes `ConformalOptions`, so no fingerprint moves.
+
+**Gates** (`ConformalMarginTests`, `ConformalPerUnitBoundsTests`, `BassConformalMarginTests`; the readings with `BASS_QUALIFICATION=1`).
+- *Both states,* over 60 seeded fixtures with weights, chains, far ranges and a candidate outside every draw's support, under both inflation bounds: 240 sets read without the margin and with it under each bound. Without it, the not-computed readout holds. With it, the margin is read. Every other reading is the same bit for bit: p-values, counts, scores, ESS, errors, inflated ranks, k̂, the gap, the split-half mass, the fallback signal and the widths.
+- *The margin's readings, asked for,* are the per-unit bounds' report's, every printed line the same to its last digit as at 3fc80f9: on exact draws m̂ 5.04 and 2.57 carried at S 40 and 2,560, on BASS 97 and 96, the tail fixture 4.92 against 16.32, and the coverage test's readings 0.732 and 0.358.
+- *Cost* (n 1,000, G 200, one grid, on a busier machine): the default step 170 to 193 ms at S 1,000 and 579 to 864 ms at S 4,000, against 728 to 803 and 1,550 to 3,222 ms with the margin.
+- *Per commit,* the selected classes and the pinned tier: 673 of 673. *At the slice's end:* below.
+
+**Closed:** the per-unit bounds' follow-up, whether the margin stays always-on. **Open, no decision waiting:** a carried bound that leaves out the orderings whose weights degenerate, recorded in the per-unit bounds' report.
 
 ### 2026-11-08 — CB-3's per-unit bounds: the inflated rule per position, the margin on bounds carried over every ordering
 
