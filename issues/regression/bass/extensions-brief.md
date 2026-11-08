@@ -429,10 +429,16 @@ The user asked for this on 2026-11-08, after the Kimi review raised it under ABM
   - *Σ's prior.* The IW keeps the collapse. Huang and Wand's (2013) scale-mixture form gives marginally uniform correlations, but it is only conditionally conjugate, so its scales would take a slice step as τ does.
   - *Inclusion* is shared across outputs, as the collapse needs. Inclusion specific to each output would need an indicator per (term, output) and loses the matrix-t.
   - *Missing outputs* are refused at first. A case missing some outputs breaks the matrix-normal form, and its missing entries can be drawn as latents.
+  - *Output units.* With a fixed Ψ₀, rescaling one output changes which terms the posterior selects. The options are to standardize the outputs, set Ψ₀ from the data's scale (an empirical prior, stated as one), or have the user declare Ψ₀ in the outputs' units.
   - *The oracle.* None is known in CRAN's lineage. The checks instead:
     - the marginal against an integral over Σ: by quadrature at K = 2, by Monte Carlo at K = 3;
     - the law by enumeration on small structure spaces, and Geweke;
-    - recovery of a known Σ and of surfaces from outside the model.
+    - recovery of a known Σ and of surfaces from outside the model;
+    - *the Kronecker convention:* the collapsed marginal against the dense vec form with an asymmetric Σ at K = 2, so that Σ ⊗ S₀ and S₀ ⊗ Σ cannot pass for each other under the code's vec order;
+    - *equivariance:* Y → YL with Ψ₀ → LᵀΨ₀L leaves the structure posterior unchanged, for an invertible L that rescales and mixes the outputs;
+    - *properness under tempering:* a rung whose degrees of freedom fall to ν₀ − n(1 − b) ≤ K − 1 is refused, and the evidence path's hot end is placed above it.
+
+  These need no Lean. The marginal is a textbook integral that the tests pin numerically, and the structure chain is BASS's. The nearby place where a precise statement pays is E22's parameter expansion for R, whose validity rests on the expansion prior's invariance.
 - **Ordered after E8** by the user on 2026-11-08 ([the build order](lineage-review.md#build-order)).
 
 ## Multi-fidelity emulation through the offset
