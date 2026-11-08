@@ -1925,6 +1925,83 @@ The weights' path runs the arithmetic of a design built there and loaded, to the
 
 GBASS's noise on this core, a normal variance-mean mixture whose working response and weights move with its latents, has its own page: [Variance-mean mixture noise](./VarianceMeanMixtures.md), with Student t (robust BASS) and the asymmetric Laplace (quantile regression) built so far. It fills the observation-model and sweep-slot seams above, on the weighted core and the moving working response below.
 
+### BASS: random-effect intercepts (E21)
+
+Built 2026-11-08 as KHAOS's slice 3 ([the report](../../issues/regression/bass/khaos-brief.md#reports)), as a capability of the core: any grouping, any coefficient form, hinge and Legendre terms alike. KHAOS is one consumer.
+
+**The model.** `BassConfig.RandomIntercept = new BassRandomIntercept(s)`, on data that hold a grouping, `new BassData(predictors, response, grouping)`. The grouping is a `CategoricalPredictor` beside the predictors, and no term reads it.
+
+$$y_i=\alpha+\sum_j\beta_jB_j(x_i)+u_{g(i)}+\varepsilon_i,\qquad u\mid\sigma^2\sim N(0,\ \sigma^2s^2\Pi)\ \text{on the }L\text{ observed levels}.$$
+
+- *s* is the effects' standard deviation in units of σ, and it is held.
+- *The convention* (`RandomInterceptConvention.ObservationCentred`, the only one built).
+  - Π projects onto Σ_g n_g u_g = 0. Zu then has mean zero over the cases, and the intercept alone carries the level, as level centring reads it.
+  - The unweighted sum-to-zero is not built. On unbalanced levels Zu keeps a nonzero mean, which is the overlap with the intercept that the convention exists to remove.
+  - The qualification shows the difference: the fitted level sits at the surface's mean plus Σ n_g u*_g / n, not plus the levels' unweighted mean.
+- *The levels* are the ones the training cases take. A declared level no case takes has no effect, and prediction treats it as unseen.
+
+**Integrated by whitening** (`RandomInterceptBlock`).
+- *The covariance.* With Z the level indicators, D = ZᵀZ and H an orthonormal basis of n's complement, y has covariance σ²V, with V = I + s²(ZH)(ZH)ᵀ.
+  - V1 = 1, so V^(−½) keeps the intercept's column, every column's mean and ȳ.
+  - With HᵀDH = EΛEᵀ, V^(−½)x = x + Z·M·Zᵀx, where M = HE·diag(((1 + s²λ)^(−½) − 1)/λ)·EᵀHᵀ. That costs O(n + L²) a column, and ln|V| = Σ ln(1 + s²λ).
+- *What is whitened.* The model whitens the working response, as an offset y − V^(−½)y, and the design whitens each column as it evaluates it. The support check reads the raw column.
+- *The price* −½ln|V| rides on the weighting's Σ ln w: `WorkingResponse`'s `logJacobian`, which the model sets to −ln|V|. Every marginal then carries it at its b: each rung, each particle, and the evidence.
+- *σ²'s scaled prior* (`Sigma2Prior.ScaledToResponse`) reads the whitened response's mean square. That is σ²'s own scale there, the noise within the levels.
+- *The coefficient forms* read the whitened design as they read any design. The g-form's and the modified g-prior's Gram becomes ΨᵀV⁻¹Ψ, and the ridges take their columns whitened.
+- *Why whitening, not block columns.* The brief placed the block on slice 2's prior-precision builder, `BassPriorPrecision`. As columns of a ridge block there, the effects would be L more columns in every structure's factor and residual sum of squares, through every move, rung and particle.
+  - Whitening leaves the factor, the samplers and their caches as they are, and its marginal is exact.
+  - Its cost is a held s: a drawn s re-whitens every column, O(nM) per value.
+  - This was decided in slice 3, beyond the brief.
+- *The group effects* are drawn last in each composed draw, from their exact conditional given α, β and σ²:
+  - γ ~ N((HᵀDH + I/s²)⁻¹HᵀZᵀr, σ²(HᵀDH + I/s²)⁻¹) and u = Hγ, with r = y − α − Xβ on the raw columns. The pair is a joint draw.
+  - `BassDraw.GroupEffects` holds u over the observed levels.
+  - A fit without the block draws as it did, and its hashes hold.
+
+**Readouts.**
+- *Prediction.*
+  - A case whose grouping column names an observed level reads f + u_g.
+  - A case without the column, a population case, reads f, and its predictive draw adds its own effect σs·z.
+  - An unseen level is refused (`UnseenLevel.Refuse`) or placed at the population (`OutsideEverySubset`).
+  - The mean surface adds E[u | S, τ, y]: the effects' conditional mean at the coefficients' conditional means, since it is linear in them and free of σ².
+- *The training fit* is the prediction at the training cases, f + u_g. It puts back no offset, since the whitening is not one.
+- *Sensitivity and the gradient* read f alone, since u is flat in x.
+- *The pointwise density.* The retained content is N(yᵢ | fᵢ + u_g, σ²), and it reports the group effects as conditioned on, at the group's scope.
+
+**The engine's reach.**
+
+| Path | Under the block | Gate or reason |
+|---|---|---|
+| A chain; the ladder, its reference rung included | Runs | Each rung's law against the enumeration, on a hinge fit (the g-form, τ drawn) and a Legendre fit (the modified g-prior, g₀² drawn) |
+| SMC and its flags | Runs | ln p(y) against the enumeration, hinge and Legendre, with the flags clear |
+| The ladder's evidence | Runs | Against the enumeration, hinge and Legendre |
+| The flat histogram | Runs | Against the enumeration, Legendre |
+| Resume | Runs | Bit for bit, the group effects included |
+| The retained pointwise content | Runs | Against the dense Normal at f + u_g |
+| The collapsed pointwise content | Refused | Leaving a unit out would leave it out of the block too, whose whitening couples every case of its level |
+| The candidate density, and so conformal prediction | Refused | A new case's group effect, and the exchangeability across groups that the conformal layer reads, need a reading of their own |
+| Noise beyond the Gaussian (E1) | Refused | The block whitens under unit weights, and a noise's latent weights move every sweep |
+| A direct functional response; a decomposition's components | Refused | The block serves a scalar response, and a decomposition's components share no grouping |
+
+**Checks** (`RandomInterceptTests`, `RandomInterceptQualificationTests`).
+- *Dense algebra.*
+  - The whitening: W·V·W = I to 3·10⁻¹⁵, W·1 = 1, and ln|V| against a dense Cholesky.
+  - The effects' conditional: the mean to 10⁻¹⁵; the covariance and Σ n_g u_g = 0 over 200,000 draws.
+  - The target's ln p(y | S, τ) against the dense multivariate t, absolutely, to 10⁻¹³. This holds for the raw ridge and the modified g-prior, with and without the block.
+  - The mean surface against the dense joint posterior mean, to 2·10⁻¹⁴.
+- *Recovery from outside the model.*
+  - The generator: twelve unbalanced levels (4 to 37 cases), and effects from a centred exponential, sorted onto the levels by size, which the block's Normal prior does not hold. There are four datasets and s = 2 against a generator spread of 0.8/0.3.
+  - The hinge fit's 90% intervals cover 44 of 48 effects and the Legendre fit's 43, with standardized errors' mean squares of 1.03 and 1.04.
+  - The level sits within 2 posterior sd of the convention's target. Its squared gaps sum to 0.002, against 0.35 from the unweighted mean's.
+  - σ comes out at 0.29 to 0.33 against the generator's 0.3. Without the block it comes out at 0.38 to 1.0.
+  - At held-out cases of the observed levels, the RMSE against the true mean is 0.11 to 0.15. Without the block it is 0.39 to 1.0.
+
+**Not built** (follow-ups):
+- a drawn s, a variance component, which re-whitens per value;
+- more than one grouping, crossed or nested;
+- random slopes;
+- the collapsed pointwise content, the candidate density and conformal prediction;
+- noise, weights and a functional response under the block.
+
 ### BAPS: penalized splines
 
 **Penalty.** The order-r difference operator has coefficients $c_l=(-1)^l\binom rl$ and penalty $P=D^\top D$, which has half-bandwidth r and null space of dimension r. The default is $r=2$. `AccumulateStrided` writes the penalty at a stride, which lets two 1-D penalties compose a Kronecker penalty.
@@ -2348,6 +2425,7 @@ The draws give what the marginals cannot: which breaks occur together, per-draw 
 | `BassStructureSpec` CategoricalSubsets / OrderWeight / VariableWeight | `SizeUniform` / 5 / 5 | R's subset measure (`Uniform` is the paper's); w₁ and w₂, validated positive |
 | `BassConfig` Count / Coefficients | `BassCountPrior(10, 10)` / `BassCoefficientPrior.G()` | λ ~ Gamma(h₁, rate h₂), integrated out; the g-form with τ ~ Gamma(½, rate N/2), Zellner–Siow. `G(TauPrior.Held())` holds τ at 1/N; hyper-g and hyper-g/n are selectable; `Ridge(scale)` is the normalized ridge, its held τ declared |
 | `BassConfig` Sigma2 / Intercept | `Sigma2Prior.ScaledToResponse(1e-3)` / `GPriorCentre.Mean` | IG(c, c·s²) and level centring; Jeffreys, a declared inverse gamma, a held σ², `Flat` and `Zero` selectable, `Median` refused |
+| `BassConfig` RandomIntercept | null | Random-effect intercepts on the data's grouping ([E21](#bass-random-effect-intercepts-e21)): `BassRandomIntercept(s)`, s the effects' sd over σ, held, observation-centred |
 | `BassSampling` Chains / MasterSeed / BurnIn / Samples / Thin | 4 / 0 / 9000 / 1000 / 1 | R's split of 10,000, provisional; read by the run (S7) |
 | `BassSampling` RHatTarget / BatchSize / MinEssPerChain / ReportEvidence | 0 / 0 / 100 / true | No early stop; read by the run (S7) and the ladder (S8) |
 | `BassSampling` StoppingScope | `All` | The groups an R̂ target gates: every group, or `Predictive` alone (D10, decided 2026-10-29) |
@@ -2466,7 +2544,7 @@ Every source is checked, papers and their code included (the user's decision, 20
 |---|---|
 | Spline core | `spline/KnotConfig.cs`, `IBasis.cs`, `SplineBasis.cs`, `BSpline.cs`, `BandedDesign.cs` |
 | BARS | `spline/bars/Bars.cs`, `BarsEnsemble.cs`, `SplineTarget.cs`, `KnotMoves.cs`, `KnotKernels.cs`, `AdaptiveLocalBetaKernel.cs`, `DmgkSchedule.cs`, `ComplexityPriors.cs`, `WeightedNormalModel.cs`, `PoissonModel.cs`, `WhittleModel.cs`, `GibbsLossModel.cs`, `WeightResampling.cs`, `StepBasis.cs`, `SplineExtrema.cs`, `IObservationModel.cs`, `IConditionalFit.cs`, `IKnotKernel.cs` |
-| BASS | `spline/bass/Bass.cs` (the fit, resume and the fingerprint), `BassRun.cs`, `BassRunOptions.cs`, `BassFit.cs`, `BassDiagnostics.cs`, `BassPriorSampler.cs`, `BassLadder.cs`, `BassEvidence.cs`, `BassPointwise.cs`, `BassResidualDependence.cs`, `BassConfig.cs`, `BassData.cs`, `BassResolved.cs`, `BassInputTransform.cs`, `BassInputs.cs`, `BassTerm.cs`, `BassBasis.cs`, `DesignKernel.cs`, `DesignKernels.cs`, `BassObservationModel.cs`, `BassNoise.cs` (E1's noise and its blocks; [its page](./VarianceMeanMixtures.md)), `BassStructurePrior.cs`, `BassTermProposal.cs`, `BassDesign.cs`, `BassTarget.cs`, `BassModel.cs`, `BassState.cs`, `BassSweep.cs`; stage 5: `spline/bass/output/` (`BassDecomposition.cs`, `BassComponents.cs`) and `spline/bass/posterior/` (`BassPrediction.cs`, `BassPredictionInputs.cs`, `BassSurface.cs`, `BassGradient.cs`, `PredictiveMixture.cs`, `BassJointDraws.cs`, `BassBasisPrediction.cs`, `BassBasisDensity.cs`); stage 6: `spline/bass/sensitivity/` (`BassSensitivity.cs`, `BassBasisSensitivity.cs`, `BassBasisEffects.cs`, `SobolDecomposition.cs`, `PolynomialChaosSensitivity.cs`, `EffectFunctions.cs`, `BassMoments.cs`, `PiecewisePolynomial.cs`, `InputMeasures.cs`); stage 9: `spline/bass/presentation/` (`BassSummary.cs`, `BassTraces.cs`, `BassTrainingFit.cs`, `PosteriorSummary.cs`, `SobolSummary.cs`); stage 7: `spline/bass/calibration/` (`BassEmulators.cs`, `CalibrationBlocks.cs`, `CalibrationConfig.cs`, `CalibrationCovariance.cs`, `CalibrationEmulator.cs`, `CalibrationModel.cs`, `CalibrationParameter.cs`, `CalibrationSampler.cs`, `MeasurementModel.cs`, `NestedCalibration.cs`); stage 8: `spline/bass/BassSmc.cs`, `BassSmcRun.cs`, and `calibration/CalibrationBridge.cs`, `CutSmcKernel.cs`, `CutSmcOrdering.cs`, `CutSmc.cs`; N17: `spline/bass/BassMulticanonical.cs`, `BassFlatHistogramRun.cs` |
+| BASS | `spline/bass/Bass.cs` (the fit, resume and the fingerprint), `BassRun.cs`, `BassRunOptions.cs`, `BassFit.cs`, `BassDiagnostics.cs`, `BassPriorSampler.cs`, `BassLadder.cs`, `BassEvidence.cs`, `BassPointwise.cs`, `BassResidualDependence.cs`, `BassConfig.cs`, `BassData.cs`, `BassResolved.cs`, `BassInputTransform.cs`, `BassInputs.cs`, `BassTerm.cs`, `BassBasis.cs`, `DesignKernel.cs`, `DesignKernels.cs`, `BassObservationModel.cs`, `BassNoise.cs` (E1's noise and its blocks; [its page](./VarianceMeanMixtures.md)), `BassRandomIntercepts.cs` (E21's random-effect intercepts), `BassStructurePrior.cs`, `BassTermProposal.cs`, `BassDesign.cs`, `BassTarget.cs`, `BassModel.cs`, `BassState.cs`, `BassSweep.cs`; stage 5: `spline/bass/output/` (`BassDecomposition.cs`, `BassComponents.cs`) and `spline/bass/posterior/` (`BassPrediction.cs`, `BassPredictionInputs.cs`, `BassSurface.cs`, `BassGradient.cs`, `PredictiveMixture.cs`, `BassJointDraws.cs`, `BassBasisPrediction.cs`, `BassBasisDensity.cs`); stage 6: `spline/bass/sensitivity/` (`BassSensitivity.cs`, `BassBasisSensitivity.cs`, `BassBasisEffects.cs`, `SobolDecomposition.cs`, `PolynomialChaosSensitivity.cs`, `EffectFunctions.cs`, `BassMoments.cs`, `PiecewisePolynomial.cs`, `InputMeasures.cs`); stage 9: `spline/bass/presentation/` (`BassSummary.cs`, `BassTraces.cs`, `BassTrainingFit.cs`, `PosteriorSummary.cs`, `SobolSummary.cs`); stage 7: `spline/bass/calibration/` (`BassEmulators.cs`, `CalibrationBlocks.cs`, `CalibrationConfig.cs`, `CalibrationCovariance.cs`, `CalibrationEmulator.cs`, `CalibrationModel.cs`, `CalibrationParameter.cs`, `CalibrationSampler.cs`, `MeasurementModel.cs`, `NestedCalibration.cs`); stage 8: `spline/bass/BassSmc.cs`, `BassSmcRun.cs`, and `calibration/CalibrationBridge.cs`, `CutSmcKernel.cs`, `CutSmcOrdering.cs`, `CutSmc.cs`; N17: `spline/bass/BassMulticanonical.cs`, `BassFlatHistogramRun.cs` |
 | BASS's shared pieces | `gprior/PriorPencil.cs` (`PriorPencil`, `CollapsedPencilPrior`), `gprior/CollapsedGPrior.cs` (`GPriorWeights`, `FromCentredLeastSquares`, `CentredMarginalAt`, `CentredPencilMarginalAt`, `GPriorMarginal.LogMarginalSlope`, `LogMarginalGiven`, `LogMarginalGivenSlope`, `GPriorConditional.SampleGiven`, `LeaveOutLogDensityGiven`, `CentredRidgeMarginalAt`, `RidgeSpectrum`, `CollapsedRidgePrior`), `gprior/Sigma2Prior.cs`, `gprior/TauPrior.cs`; under `src/maths/`: `distributions/Wallenius.cs`, `distributions/SpecialFunctions.cs` (`Digamma`), `linalg/BorderedCholesky.cs`, `linalg/DenseEigen.cs` (the ridge's spectrum), `linalg/KhatriRao.cs`, `linalg/InnerProduct.cs`, `linalg/WideBandCholesky.cs`, `linalg/PairwiseSum.cs`, `linalg/ThinSvd.cs`, `linalg/DiagonalPlusLowRank.cs`, `samplers/rjmcmc/ReversibleJumpChain.cs`, `samplers/rjmcmc/ParallelTempering.cs` (the per-replica blocks, for S8), `samplers/blocks/BlockScan.cs`, `samplers/blocks/SliceSampler.cs`, `samplers/blocks/ConjugateUpdates.cs`, `samplers/blocks/GigParameters.cs`; for stage 6, `distributions/IIntervalMoments.cs` with `Uniform.cs`, `Mixture.cs`, `Empirical.cs`, `GaussLegendre.cs` and the interval moments of `Normal`, `StudentT` and `Truncated<T>` |
 | BAPS | `spline/baps/DifferencePenalty.cs`, `IBandPenalty.cs`, `PenalizedSpline.cs`, `Baps.cs`, `HierarchicalPSpline.cs`, `TensorProductDesign.cs`, `TensorPenalty.cs`, `PenaltySpectrum.cs`, `ComponentSmoothing.cs`, `SmoothingVariancePriors.cs`, `AnisotropicTensorSpline.cs`; `NelderMead.cs` (the REML optimum's search) |
 | BGP | `bgp/GpKernel.cs`, `GpTransform.cs`, `GpRegression.cs`, `EmpiricalBayesBandwidthPrior.cs`, `BgpSampler.cs` |

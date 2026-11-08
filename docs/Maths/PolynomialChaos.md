@@ -20,6 +20,7 @@ KHAOS (Rumsey, Francom et al., *Bayesian Adaptive Polynomial Chaos Expansions*, 
 | Sobol and the Jacobi measure from the coefficients | `BassSensitivity.FromCoefficients` → `PolynomialChaosSensitivity` | 4 |
 | The gradient readout | `BassFit.Gradient` → `BassGradient`; `BassSurface.EvaluateDerivative` | 4 |
 | The engine's reach | The ladder, SMC, the flat histogram, the pointwise and candidate densities and GBASS's noise laws, unchanged; gated on Legendre terms | 5 |
+| Random-effect intercepts (E21) | `BassRandomIntercept`, `RandomInterceptBlock`: a capability of the core, gated on a hinge fit and a Legendre fit ([BayesianRegression](./BayesianRegression.md#bass-random-effect-intercepts-e21)) | 3 |
 
 ## The basis (E19)
 

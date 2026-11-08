@@ -11,6 +11,15 @@ Splits in the module's language (symbols, identifiers, terms), logged as session
 
 ## Entries
 
+### V, D and s in the random-intercept block beside the ridge's spectrum and σ²'s scaled prior (2026-11-08)
+
+- **Kind:** one name for several concepts.
+- **Readings:**
+  - V: the block's covariance factor, σ²V = Cov(y), V = I + s²(ZH)(ZH)ᵀ (`RandomInterceptBlock`, `src/maths/regression/spline/bass/BassRandomIntercepts.cs`; `docs/Maths/BayesianRegression.md`, "BASS: random-effect intercepts (E21)"), against V, the eigenvectors of G̃ = VΛVᵀ and of L⁻¹AL⁻ᵀ in the ridge's and the pencil's spectra (the same page, "the coefficient prior's two axes, and the ridge").
+  - D: the levels' counts ZᵀZ in the block, against D = diag(G_c)/N in the normalized ridge, and the prior precision τD of the pencil with its D_α, D_β.
+  - s: the block's scale, the effects' sd over σ (`BassRandomIntercept.Scale`), against s² in `Sigma2Prior.ScaledToResponse`'s IG(c, c·s²), the response's variance, and s = ±1, a hinge's sign.
+- **Found:** 2026-11-08, KHAOS slice 3 (E21).
+
 ### "Uniform bound" for the inflated rule and for the margin, and ε for CB-3's bounds beside Vovk's level (2026-11-08)
 
 - **Kind:** one name for several concepts.

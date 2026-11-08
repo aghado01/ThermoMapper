@@ -1,6 +1,6 @@
 # KHAOS on the BASS core: E19's build (chip brief)
 
-Date: 2026-11-07. Status: slice 0 landed 2026-11-07 (`31362ad`); slice 1 landed 2026-11-07 (`fa05048`, `b408bf4`, `baf69f9`), with declared input domains (`3eb56e1`, the user's decision of 2026-11-07); the check on slice 1's input-box finding done 2026-11-08 (real, not a trap); slice 2 landed 2026-11-08 (`f289af3`); the rest in the user's order of 2026-11-08 ("Yes, 5 first"): slice 5, then 4, then 3, each after the coordinating session's verification of the one before; slice 5 landed 2026-11-08 (`98b0e7e`); slice 4 landed 2026-11-08 (`8f57487`); slice 3 waits on the coordinating session's verification; and SMC's trap is flagged (`42739ac`, the coordinating session's call of 2026-11-08), its remedies recorded, not built. Written at the user's request after GBASS's slices 0–4, from the KHAOS paper's TeX, the `khaos` 2.1.1 source and the engine.
+Date: 2026-11-07. Status: slice 0 landed 2026-11-07 (`31362ad`); slice 1 landed 2026-11-07 (`fa05048`, `b408bf4`, `baf69f9`), with declared input domains (`3eb56e1`, the user's decision of 2026-11-07); the check on slice 1's input-box finding done 2026-11-08 (real, not a trap); slice 2 landed 2026-11-08 (`f289af3`); the rest in the user's order of 2026-11-08 ("Yes, 5 first"): slice 5, then 4, then 3, each after the coordinating session's verification of the one before; slice 5 landed 2026-11-08 (`98b0e7e`); slice 4 landed 2026-11-08 (`8f57487`); slice 3 landed 2026-11-08 (`0a2168c`), random-effect intercepts as a capability of the core, which completes KHAOS's slices, its verification by the coordinating session pending, and E8 the build order's next item; and SMC's trap is flagged (`42739ac`, the coordinating session's call of 2026-11-08), its remedies recorded, not built. Written at the user's request after GBASS's slices 0–4, from the KHAOS paper's TeX, the `khaos` 2.1.1 source and the engine.
 
 ## Why
 
@@ -157,6 +157,94 @@ Under "Reports" below, newest first, per slice: what landed by commit; the gates
 ## Reports
 
 Newest first.
+
+### Slice 3: random-effect intercepts (chip, 2026-11-08)
+
+At the user's order (5, then 4, then 3), after the coordinating session verified slice 4. With it, KHAOS's slices are complete, and the build order's next item is E8.
+
+**Landed** on `main`, nothing pushed:
+- `0a2168c`: the block and its gates.
+  - `BassRandomIntercept` and `RandomInterceptBlock` (`BassRandomIntercepts.cs`).
+  - The grouping on `BassData`, the config's field, the fingerprint and the refusals.
+  - The whitening, through `WorkingResponse`'s log-Jacobian and `BassDesign`.
+  - The group effects' draw in the sweep's composition (`BassDraw.GroupEffects`).
+  - Prediction, the mean surface, the training fit and the retained pointwise content, each reading f + u_g.
+  - The gates: `RandomInterceptTests` and `RandomInterceptQualificationTests`. `BassRunTests.AssertSameFit` now compares the group effects too.
+- This commit: `BayesianRegression.md`'s section, its config row and source map; `PolynomialChaos.md`'s row; the notation ledger's entry; the status line and this report.
+
+**What is built,** as a capability of the core, not a KHAOS feature. Any grouping and any coefficient form, on hinge and Legendre terms alike, as [the section](../../../docs/Maths/BayesianRegression.md#bass-random-effect-intercepts-e21) states it.
+- *The model:* y = α + Σⱼ βⱼBⱼ(x) + u_g + ε, with u | σ² ~ N(0, σ²s²Π) on the observed levels. s is the effects' sd over σ, and it is held.
+- *The grouping* is a `CategoricalPredictor` that `BassData` holds beside the predictors. No term reads it, so the hinge's categorical terms leave it alone, and the Legendre basis's refusal of categorical inputs does not fire.
+- *The block is integrated out exactly,* by whitening the response and every column by V^(−½), V = I + s²(ZH)(ZH)ᵀ.
+  - The price −½ln|V| rides on the working response as the weights' Σ ln w does, so every marginal, rung and particle, and the evidence, carries it.
+  - The effects are drawn last in each composed draw, from their exact conditional given α, β and σ².
+
+**The convention under level centring,** declared as `RandomInterceptConvention.ObservationCentred`.
+- Σ_g n_g u_g = 0, so Zu has mean zero over the cases and the intercept alone carries the level.
+- V1 = 1, so the whitening keeps the intercept's column, every column's mean and ȳ.
+- The unweighted sum-to-zero is not built. On unbalanced levels it leaves Zu a nonzero mean, which overlaps the level-centred intercept.
+
+**The engine's reach,** as the coordinating session asked. The section's table holds the detail.
+- *Run and gated,* on a hinge fit (the g-form, τ drawn) and a Legendre fit (the modified g-prior, g₀² drawn):
+  - a chain, and the ladder with its reference rung: each rung's law against the enumeration;
+  - SMC and its flags: ln p(y) against the enumeration, with the flags clear;
+  - the ladder's evidence, against the enumeration;
+  - the flat histogram, against the enumeration (Legendre);
+  - resume, bit for bit;
+  - the retained pointwise content.
+- *Refused, each with its reason in the message:*
+  - the collapsed pointwise content: leaving a unit out would leave it out of the block too, whose whitening couples its level's cases;
+  - the candidate density, and so the conformal layer: a new case's group effect, and the exchangeability across groups that the layer reads, need a reading of their own;
+  - GBASS's noise: the block whitens under unit weights, and the latent weights move every sweep;
+  - a direct functional response, and a decomposition's components, which share no grouping.
+
+**The gates.**
+
+| Gate | Reading |
+| --- | --- |
+| The whitening against dense algebra | W·V·W = I to 2.6·10⁻¹⁵, W symmetric, W·1 = 1 to 2·10⁻¹⁶, and ln\|V\| against a dense Cholesky to 10⁻¹², on 30 cases over six unbalanced levels |
+| The effects' conditional against dense algebra | The mean s²ΠZᵀV⁻¹r to 8·10⁻¹⁶. Over 200,000 draws, the covariance σ²(s²Π − s⁴ΠZᵀV⁻¹ZΠ) to 0.4% of the largest variance and the mean's worst z 1.6. Σ n_g u_g = 0 to 5·10⁻¹⁵ in every draw |
+| The target, absolutely | ln p(y \| S, τ) against the dense multivariate t with scale V + ΨS₀Ψᵀ under σ²'s inverse gamma: to 7·10⁻¹⁴ for the raw ridge and 4·10⁻¹⁴ for the modified g-prior with the block, and to 10⁻¹³ without it |
+| Each rung's law | Ladders of 3 and 4 rungs, the reference rung included, against the enumeration of every structure's tempered law, on a hinge fit and a Legendre fit: within 5 standard errors at every M and for E[ln τ] |
+| The evidence | SMC (2,000 particles, 4 replicates): hinge −16.550 ± 0.015 and Legendre −74.124 ± 0.018, against the enumeration's −16.539 and −74.106, the flags clear. The ladder: −16.472 ± 0.030 and −74.113 ± 0.038 |
+| The flat histogram | Against the enumeration on the Legendre fit with the block, as slice 5's gate reads it |
+| The pointwise density | The retained content against N(yᵢ \| fᵢ + u_g, σ²) to 6·10⁻¹⁶ over 60 draws. The group effects are reported as conditioned on, at the group's scope. The collapsed content and the candidate density are refused |
+| Prediction and the mean surface | A case of an observed level reads f + u_g to 10⁻¹². A population case's predictive spread over σ² is 2.67 against 1 + s² = 2.69, and an observed level's is 1.006. An unseen level is refused, or placed at the population. The mean surface against the dense joint posterior mean, E[Ψa + Zu \| S, y] with C = V + ΨΨᵀ/τ, to 2·10⁻¹⁴ |
+| The convention | Each draw's mean fit over the cases is the intercept's and the terms', to 10⁻¹². The fits' mean level is 2.1341 against ȳ 2.1333 |
+| Recovery from outside the model | Twelve unbalanced levels (4 to 37 cases), and effects drawn as 0.8·(E − 1) with E ~ Exp(1), sorted onto the levels by size, which the block's centred Normal does not hold. Four datasets, s = 2. The hinge fit's 90% intervals cover 44 of 48 effects and the Legendre fit's 43, with standardized errors' mean squares of 1.03 and 1.04. σ comes out at 0.29 to 0.33 against 0.3, and at 0.38 to 1.0 without the block. At held-out cases of the observed levels, the RMSE is 0.11 to 0.15, and 0.39 to 1.0 without the block. The population surface is no worse in any dataset, and 3× better where the effects are large |
+| The convention, from outside | The fitted level lies within 2 posterior sd of the surface's mean plus Σ n_g u*_g / n in all eight fits. Its squared gaps sum to 0.0018 (hinge) and 0.0017 (Legendre), against 0.35 from the levels' unweighted mean |
+| Hinge BASS | The whole regression assembly at the slice's end, once, on HEAD `76f3781` with the slice: 2,396 of 2,396, the pinned hashes and the SMC baseline among them. The commit's selection with the pinned tier: 1,710 of 1,710, after the defect below was fixed (17 had failed). Every fit without the block draws as before: its effects are drawn last, and the pinned tier holds. The slow tier was rewritten from that profile (48 methods), with three of the new gates among them |
+
+**The cost.** Wall clock, one run on the shared machine, indicative.
+- *The qualification's fits* (n 246; 2 chains of 2,000 + 1,000 sweeps on Legendre terms, 3,000 + 1,000 on hinges): the four Legendre fits took 9.5 s with the block and 6.9 s without, and the four hinge fits 0.3 s and 0.2 s.
+- *What that measures.* Without the block, σ is larger and the structures smaller, so the pair bounds the whitening's cost rather than isolating it.
+- *Where the cost sits.* Each column the design evaluates adds O(n + L²) for the whitening. The hinge's prefix tables, which build raw columns, are off under the block. The block's setup is one eigendecomposition of size L − 1.
+
+**Found here.**
+- *My own defect, caught by the commit's selection.* The log-Jacobian's line went in between an `if` and its `else if` in `WorkingResponse`'s constructor. The frozen prior Gram's unit weights then replaced a weighted response's own weights, and 17 frozen-route tests failed, `BassMovingResponseTests` and `BassPriorReferenceTests` among them. The line now follows the chain, and all 196 tests in those classes pass.
+- *Two readers took the whitened response for the observations.* The retained pointwise content read the working response, Wy, and the training fit would have put the whitening back as an offset. Both were found in review and fixed, and the dense check holds the first.
+- *The first qualification gates were unsound,* and they failed before they were rewritten.
+  - The effects' RMSE was gated against their realised spread. Hinge dataset 0 drew a spread of 0.32, so the ratio read 0.27 against 0.25, at the posterior's own spread.
+  - The population surface was gated as better with the block than without. Where the effects are small, approximation bias dominates both fits, and Legendre dataset 2 read 0.0796 against 0.0783.
+  - The rewrite gates standardized errors pooled over the 48 levels, and the predictive mean at held-out cases of the observed levels, where the block's gain is the effects themselves.
+  - The surface is now gated as no worse, by at most 10%.
+  - The generator now sorts the effects onto the levels by size, so that the convention's target and the unweighted alternative differ in every dataset.
+
+**Decisions beyond the brief.**
+- *Whitening, not columns in slice 2's builder.* The brief placed the block on `BassPriorPrecision`.
+  - As columns there, the effects would join every structure's factor and residual sum of squares, through every move, rung and particle.
+  - Whitening keeps the factor, the samplers and their caches as they are, and its marginal is exact.
+  - The cost is a held s: a drawn s re-whitens every column, O(nM) per value.
+- *Edits in files this chip does not own.*
+  - The conformal session owns `posterior/BassPrediction.cs`, and its tree was clean. My edit adds the group effects to the latent, a population case's own effect to the predictive draw, and E[u | S, τ, y] to the mean surface.
+  - `presentation/BassTrainingFit.cs` puts back no offset under the block.
+  - `output/BassComponents.cs` refuses a component config that declares the block.
+
+**Left unbuilt, and why.**
+- *A drawn s,* a variance component: each value re-whitens, at O(nM). It is E21's next step if a consumer needs one.
+- *More than one grouping, crossed or nested, and random slopes.* The whitening generalizes, but V loses its two-level structure.
+- *The collapsed pointwise content, the candidate density and conformal prediction,* for the reasons in their refusals.
+- *GBASS's noise, weights, and a functional response under the block.* Each needs V^(−½) under moving or non-unit weights, or across locations.
 
 ### Slice 4: readouts past the paper (chip, 2026-11-08)
 
