@@ -16,9 +16,11 @@ namespace Maths.Oracle.Tests;
 /// traces, each difference stated beside the comparison. Slice 0 checks that each mode runs from <c>r/</c> and reads what its quantities
 /// mean. Under the ridge (degree 8, order 3, 6,000 iterations) the surface follows the function and the total indices are Ishigami's
 /// to a few hundredths, the x₁:x₃ interaction included, on every seed tried. Under the g-prior as written the chain carries the defects
-/// <see cref="KhaosDefectParityTests"/> confirms: it keeps about 67 terms on these 120 cases, a quarter of them repeating a variable, and
+/// <see cref="KhaosDefectParityTests"/> confirms: it keeps about 70 terms on these 120 cases, a quarter of them repeating a variable, and
 /// its indices move with the seed (x₁'s total 0.69 on one, 0.19 on another, at 4,000 iterations), so its readouts are checked for their
-/// form only, never for their values.
+/// form only, never for their values. The corrected samplers (<c>corrected=1</c>), which reproduce the exact structure law
+/// (<see cref="KhaosExactLawTests"/>), are the reference the engine meets: under both priors they read Ishigami's indices to a few
+/// hundredths, with no term repeating a variable.
 /// </summary>
 public sealed class KhaosReadoutParityTests(ITestOutputHelper output)
 {
@@ -69,18 +71,29 @@ public sealed class KhaosReadoutParityTests(ITestOutputHelper output)
     private static readonly Dictionary<string, Lazy<JsonElement?>> Fits = new()
     {
         ["ridge"] = new(() => Readout("ridge", 6000, 3000, "degree=8", "order=3")),
-        // The g-prior as written keeps about 67 terms here, so its chain, predict and sobol_khaos cost several times the ridge's: a
+        // The g-prior as written keeps about 70 terms here, so its chain, predict and sobol_khaos cost several times the ridge's: a
         // shorter chain, thinned, keeps the mode inside the bridge's 120 s on a loaded machine.
         ["gprior"] = new(() => Readout("gprior", 2500, 1250, "degree=8", "order=3", "thin=2")),
+        // The corrected reference, khaos's samplers with slice 0's corrections (khaos_corrected), which reproduce the exact structure
+        // law (KhaosExactLawTests): what the engine meets.
+        ["ridge corrected"] = new(() => Readout("ridge", 6000, 3000, "degree=8", "order=3", "corrected=1")),
+        ["gprior corrected"] = new(() => Readout("gprior", 6000, 3000, "degree=8", "order=3", "corrected=1")),
     };
+
+    private static string PriorOf(string fit) => fit.Split(' ')[0];
 
     [Theory]
     [InlineData("ridge")]
     [InlineData("gprior")]
-    public void EachPrior_RunsFromR_AndEmitsItsReadouts(string prior)
+    [InlineData("ridge corrected")]
+    [InlineData("gprior corrected")]
+    public void EachPrior_RunsFromR_AndEmitsItsReadouts(string fit)
     {
-        if (Fits[prior].Value is not { } r) return;
+        if (Fits[fit].Value is not { } r) return;
+        string prior = PriorOf(fit);
+        bool corrected = fit.EndsWith("corrected");
         Assert.Equal(prior, r.GetProperty("prior").GetString());
+        Assert.Equal(corrected, r.GetProperty("corrected").GetBoolean());
         Assert.Equal(Observations, r.GetProperty("N").GetInt32());
         Assert.Equal(Inputs, r.GetProperty("p").GetInt32());
         JsonElement surface = r.GetProperty("surface");
@@ -95,35 +108,38 @@ public sealed class KhaosReadoutParityTests(ITestOutputHelper output)
         double[] proposed = GbassOracle.Numbers(r.GetProperty("count_propose")), accepted = GbassOracle.Numbers(r.GetProperty("count_accept"));
         Assert.True(accepted.Sum() > 0 && proposed.Zip(accepted).All(t => t.First >= t.Second));
         JsonElement terms = r.GetProperty("terms");
-        output.WriteLine($"{prior}: {r.GetProperty("seconds").GetDouble():F1} s; M {r.GetProperty("M").GetProperty("mean").GetDouble():F2}, s2 {r.GetProperty("s2").GetProperty("mean").GetDouble():G4} " +
+        output.WriteLine($"{fit}: {r.GetProperty("seconds").GetDouble():F1} s; M {r.GetProperty("M").GetProperty("mean").GetDouble():F2}, s2 {r.GetProperty("s2").GetProperty("mean").GetDouble():G4} " +
                          $"(noise {NoiseSd * NoiseSd}); the surface's RMSE against the function {rmse:F3} (its sd 3.72), 90% bands cover {covered} of {grid.Length}; " +
                          $"acceptance B/D/degree/swap {string.Join("/", accepted.Zip(proposed, (a, p) => p > 0 ? (a / p).ToString("F3") : "-"))}; " +
                          $"{terms.GetProperty("repeated").GetInt32()} of {terms.GetProperty("count").GetInt32()} kept terms repeat a variable");
         if (prior == "gprior")
             output.WriteLine($"g₀²: mean {r.GetProperty("g0sq").GetProperty("mean").GetDouble():G4}, 90% [{r.GetProperty("g0sq").GetProperty("q05").GetDouble():G4}, {r.GetProperty("g0sq").GetProperty("q95").GetDouble():G4}]");
-        else Assert.True(rmse < 1.0, $"the ridge's surface is {rmse:F2} from the function");
+        if (corrected) Assert.Equal(0, terms.GetProperty("repeated").GetInt32());
+        if (fit != "gprior") Assert.True(rmse < 1.0, $"{fit}'s surface is {rmse:F2} from the function");
     }
 
     [Theory]
     [InlineData("ridge")]
     [InlineData("gprior")]
-    public void SobolKhaos_ReadsTheIndices_AndUnderTheRidgeIshigamis(string prior)
+    [InlineData("ridge corrected")]
+    [InlineData("gprior corrected")]
+    public void SobolKhaos_ReadsTheIndices_AndIshigamisWhereTheChainHoldsTheLaw(string fit)
     {
-        if (Fits[prior].Value is not { } r) return;
+        if (Fits[fit].Value is not { } r) return;
         JsonElement s = r.GetProperty("sobol");
         double[] total = GbassOracle.Numbers(s.GetProperty("T_f_mean")), truth = IshigamiTotals();
         double[] lo = GbassOracle.Numbers(s.GetProperty("T_q05")), hi = GbassOracle.Numbers(s.GetProperty("T_q95"));
         string[] labels = [.. s.GetProperty("labels").EnumerateArray().Select(e => e.GetString()!)];
         double[] first = GbassOracle.Numbers(s.GetProperty("S_mean"));
-        output.WriteLine($"{prior}: total indices over Var f {string.Join(", ", total.Select((t, j) => $"x{j + 1} {t:F3} (true {truth[j]:F3})"))}; " +
+        output.WriteLine($"{fit}: total indices over Var f {string.Join(", ", total.Select((t, j) => $"x{j + 1} {t:F3} (true {truth[j]:F3})"))}; " +
                          $"sobol_khaos's own, over Var f + s2: {string.Join(", ", GbassOracle.Numbers(s.GetProperty("T_mean")).Select(t => t.ToString("F3")))}, " +
                          $"the noise's share {s.GetProperty("leftover_mean").GetDouble():F3}");
         output.WriteLine($"  partial indices: {string.Join(", ", labels.Zip(first).Where(t => t.Second > 0.005).Select(t => $"{t.First} {t.Second:F3}"))}");
         Assert.Equal(Inputs, total.Length);
         Assert.All(Enumerable.Range(0, Inputs), j => Assert.True(lo[j] <= hi[j] && total[j] >= 0));
         Assert.InRange(s.GetProperty("leftover_mean").GetDouble(), 0.0, 1.0);
-        if (prior != "ridge") return;
-        // Under the ridge: each total index within 0.05 of Ishigami's, the inert input's below 0.02.
+        if (fit == "gprior") return;
+        // Under the ridge, and under either corrected sampler: each total index within 0.05 of Ishigami's, the inert input's below 0.02.
         for (int j = 0; j < 3; j++) Assert.InRange(total[j], truth[j] - 0.05, truth[j] + 0.05);
         Assert.True(total[3] < 0.02, $"the inert input's total index {total[3]:F3}");
     }

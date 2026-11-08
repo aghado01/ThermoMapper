@@ -19,7 +19,8 @@ namespace Maths.Oracle.Tests;
 /// <item><b>Struck for the code:</b> SC-1's printed inversions (every factor of the code's birth, death and degree mutation points the
 /// Metropolis–Hastings way) and the paper's slips (the code reads P₁(x) = x, coins over p, degrees up to d_max).</item>
 /// <item><b>Found here:</b> the death's prior ratio off by K/(K + 1) against the birth's; the move probabilities at M = 0; σ²'s draw
-/// given β without β's prior; the degree weights indexed from q.</item>
+/// given β without β's prior; the g-prior's current state left at the g₀² of its last acceptance; the degree draw failing where the
+/// order is the largest degree; the degree weights indexed from q.</item>
 /// </list>
 /// </summary>
 public sealed class KhaosDefectParityTests(ITestOutputHelper output)
@@ -278,6 +279,29 @@ public sealed class KhaosDefectParityTests(ITestOutputHelper output)
             Assert.Equal(0.0, birthCode, 14);
             Assert.Equal(0.0, deathCode, 14);
         }
+    }
+
+    [Fact]
+    public void GPriorCurrentState_IsStale_AfterG0SqMoves()
+    {
+        if (Fixture.Value is not { } d) return;
+        JsonElement s = d.GetProperty("swap_chain").GetProperty("stale");
+        double mean = s.GetProperty("mean_abs").GetDouble(), greatest = s.GetProperty("greatest").GetDouble();
+        double overOne = s.GetProperty("over_one").GetDouble();
+        output.WriteLine($"the g-prior's current state as its ratios read it, against its value at the iteration's g₀², over {s.GetProperty("iterations").GetInt32()} iterations: " +
+                         $"mean |gap| {mean:F2} nats, greatest {greatest:F2}, over 1 nat on {overOne:P1} of them");
+        Assert.True(greatest > 1 && overOne > 0.1);
+    }
+
+    [Fact]
+    public void DegreeDraw_FailsWhereTheOrderIsTheLargestDegree()
+    {
+        if (Fixture.Value is not { } d) return;
+        JsonElement s = d.GetProperty("degree_draw");
+        string written = s.GetProperty("written").GetString()!;
+        output.WriteLine($"the degree draw at q = d_max = 2: as written \"{written}\"; corrected {s.GetProperty("corrected").GetDouble()}");
+        Assert.Contains("incorrect number of probabilities", written);
+        Assert.Equal(2.0, s.GetProperty("corrected").GetDouble());
     }
 
     [Fact]

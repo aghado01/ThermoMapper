@@ -5,7 +5,9 @@
 #
 # Usage (cwd = r/):  Rscript oracles/khaos_readouts_oracle.R <data.csv> <out.json> <prior> <grid.csv> <nmcmc> <nburn> <seed> [key=value ...]
 #   data: headerless CSV, inputs in [0, 1] then y in the last column. grid: headerless CSV of inputs, the surface's points.
-#   prior: ridge or gprior (adaptive_khaos's prior_type); key=value pairs go to it as numeric arguments (degree, order, zeta, tau2, ...).
+#   prior: ridge or gprior (adaptive_khaos's prior_type); key=value pairs go to it as numeric arguments (degree, order, zeta, tau2, ...),
+#   except corrected=1, which runs the sampler with slice 0's corrections (khaos_corrected) in place of the one written: the corrected
+#   reference the engine meets, checked against the exact structure law by khaos_exactlaw_oracle.R.
 #
 # Emits { prior, args, N, p, nmcmc, nburn, seed, seconds, surface: {mean, q05, q50, q95} at the grid (the draws' f, predict as
 #   written), M, s2, lambda, g0sq (gprior): {mean, sd, q05, q50, q95}, count_accept, count_propose (birth, death, degree mutation,
@@ -26,9 +28,15 @@ extra <- if (length(args) > 7) {
 if (!prior %in% c("ridge", "gprior")) stop("unknown prior ", prior)
 X <- D[, -ncol(D), drop = FALSE]; y <- D[, ncol(D)]
 
+corrected <- isTRUE(extra$corrected == 1)
+extra$corrected <- NULL
 set.seed(seed)
 t0 <- proc.time()[["elapsed"]]
-fit <- do.call(adaptive_khaos, c(list(X = X, y = y, prior_type = prior, nmcmc = nmcmc, nburn = nburn, verbose = FALSE), extra))
+fit <- if (corrected) {
+  f <- do.call(khaos_corrected(prior), c(list(X = X, y = y, nmcmc = nmcmc, nburn = nburn, verbose = FALSE), extra))
+  class(f) <- "adaptive_khaos"
+  f
+} else do.call(adaptive_khaos, c(list(X = X, y = y, prior_type = prior, nmcmc = nmcmc, nburn = nburn, verbose = FALSE), extra))
 secs <- proc.time()[["elapsed"]] - t0
 
 summ <- function(x) if (is.null(x) || all(is.na(x))) NULL else
@@ -44,7 +52,7 @@ terms <- sum(held)
 repeated <- sum(mapply(function(i, m) anyDuplicated(fit$vars[i, m, seq_len(fit$nint[i, m])]) > 0,
                         row(fit$nint)[held], col(fit$nint)[held]))
 
-emit_json(list(prior = prior, args = extra, N = length(y), p = ncol(X), nmcmc = nmcmc, nburn = nburn, seed = seed, seconds = secs,
+emit_json(list(prior = prior, corrected = corrected, args = extra, N = length(y), p = ncol(X), nmcmc = nmcmc, nburn = nburn, seed = seed, seconds = secs,
                surface = list(mean = colMeans(f_grid), q05 = pick(0.05), q50 = pick(0.5), q95 = pick(0.95)),
                M = summ(fit$nbasis), s2 = summ(fit$s2), lambda = summ(fit$lam), g0sq = summ(fit$g2),
                count_accept = unname(fit$count_accept), count_propose = unname(fit$count_propose),

@@ -16,12 +16,16 @@
 #     (1/2) ln|S0^-1|; and the namespace's functions whose bodies call either core (its callers).
 #   partition: random_partition's law (partition_law) at (d, q) in ((4, 2), (5, 3), (6, 3), (7, 4), (8, 3), (6, 1)), beside the
 #     uniform 1 / C(d - 1, q - 1) and the ratios' 1 / C(d, q).
-#   swap_chain: adaptive_khaos_gprior on the data (nmcmc, nmcmc / 2 burn-in, seed), the kept draws' terms that repeat a variable.
+#   swap_chain: adaptive_khaos_gprior on the data (nmcmc, nmcmc / 2 burn-in, seed), the kept draws' terms that repeat a variable; the
+#     run is khaos_gprior_probed, the sampler as written with a probe that draws nothing, so it also reads, before every move, how far
+#     the current state's log marginal as the ratios read it (its Sigma_n and Q from the g0^2 of its last acceptance) is from its value
+#     at the g0^2 the iteration holds (stale: the mean and greatest |gap|, and the shares of iterations over 0.1 and 1 nat).
 #   normal: the death's P(q > order | q0) per q0 as written (term_q_j, its normal with the continuity correction) beside the
 #     Poisson-binomial by enumeration, and P(q = 0 | q0), at four (eta, order) cases.
 #   typos: the paper's slips in the code's own reading: legendre_poly(x, 1); the birth's coin draw (deparsed); the support of the
 #     birth's degree draw as written (5000 draws at q = 2, degree 6, p = 3); the degree weights as written at s_d = 1 beside the
 #     paper's d^(-s_d); the count in the degree mutation's ratio (deparsed).
+#   degree_draw: the birth's degree draw as written at q = d_max = 2 (the error it raises) and the corrected draw's value.
 #   directions: each factor's exponent in the code's lprop.alpha for the birth, the death and the degree mutation, as written: the
 #     change of lprop.alpha when one factor is scaled, over the change of that factor's log.
 #   floor: s2_lower's default in each sampler and the clamp its sigma^2 draw applies (deparsed).
@@ -88,10 +92,12 @@ partition <- lapply(list(c(4, 2), c(5, 3), c(6, 3), c(7, 4), c(8, 3), c(6, 1)), 
 
 # ---- swap_chain ----------------------------------------------------------------------------------------------------------------
 X <- D[, -ncol(D), drop = FALSE]; y <- D[, ncol(D)]
+probed <- khaos_gprior_probed()
 set.seed(seed)
 t0 <- proc.time()[["elapsed"]]
-fit <- adaptive_khaos(X, y, prior_type = "gprior", nmcmc = nmcmc, nburn = nmcmc %/% 2, verbose = FALSE)
+fit <- probed$fit(X, y, nmcmc = nmcmc, nburn = nmcmc %/% 2, verbose = FALSE)
 secs <- proc.time()[["elapsed"]] - t0
+stale <- probed$stale()
 terms <- repeated <- 0; draws_with <- 0
 for (i in seq_along(fit$nbasis)) {
   any_rep <- FALSE
@@ -103,7 +109,9 @@ for (i in seq_along(fit$nbasis)) {
   if (any_rep) draws_with <- draws_with + 1
 }
 swap_chain <- list(nmcmc = nmcmc, seed = seed, seconds = secs, terms = terms, repeated = repeated, draws = length(fit$nbasis),
-                   draws_with_repeat = draws_with, swaps_proposed = fit$count_propose[[4]], swaps_accepted = fit$count_accept[[4]])
+                   draws_with_repeat = draws_with, swaps_proposed = fit$count_propose[[4]], swaps_accepted = fit$count_accept[[4]],
+                   stale = list(iterations = length(stale), mean_abs = mean(abs(stale)), greatest = max(abs(stale)),
+                                over_tenth = mean(abs(stale) > 0.1), over_one = mean(abs(stale) > 1)))
 
 # ---- normal --------------------------------------------------------------------------------------------------------------------
 term_q <- source_assignment(rd, "term_q_j", 2)
@@ -133,6 +141,15 @@ typos <- list(p1 = list(x = xs, code = kns$legendre_poly(xs, 1)),
               degree_support = list(q = 2, degree = 6, p = 3, support = support),
               degree_weights = list(q = 2, degree = 6, s_d = 1, code = we$d_probs, paper = (2:6)^-1 / sum((2:6)^-1)),
               mutate_count = paste(deparse(source_assignment(rd, "lprop.alpha", 3)), collapse = ""))
+
+# ---- degree_draw ---------------------------------------------------------------------------------------------------------------
+# The degree draw as written where the term's order is the largest degree: sample(q:d_max, 1, prob = d_probs) with q = d_max hands
+# sample a single number, which it reads as 1:q, so the one probability no longer fits. The corrected draw indexes the support.
+dd_env <- code_env(rd, nint.cand = 2, degree = 2, degree_penalty = 0)
+as_written(rd, dd_env, "d_probs", 1); as_written(rd, dd_env, "d_probs", 2)
+degree_draw_section <- list(q = 2, degree = 2,
+                            written = tryCatch({ eval(degree_draw, dd_env); "" }, error = function(e) conditionMessage(e)),
+                            corrected = eval(quote((nint.cand:degree)[sample.int(length(d_probs), 1, prob = d_probs)]), dd_env))
 
 # ---- directions ----------------------------------------------------------------------------------------------------------------
 # lprop.alpha as written at a base point, and the exponent of one factor: (lprop with the factor moved - lprop at the base) / (the
@@ -164,4 +181,4 @@ floor_section <- list(gprior_default = eval(formals(gp)$s2_lower), ridge_default
                       gprior_clamp = clamp(gp), ridge_clamp = clamp(rd))
 
 emit_json(list(normalizer = normalizer, evidence = evidence, partition = partition, swap_chain = swap_chain, normal = normal,
-               typos = typos, directions = directions, floor = floor_section), args[2], null = "null", na = "null")
+               typos = typos, degree_draw = degree_draw_section, directions = directions, floor = floor_section), args[2], null = "null", na = "null")
