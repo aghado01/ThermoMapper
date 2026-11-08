@@ -83,7 +83,7 @@ One commit per concern; tests with the code they test; each slice ends with its 
 
 ## Gates common to every slice
 
-- **Nothing upstream moves.** The layer reads; every pinned hash and fingerprint holds.
+- **Nothing upstream moves.** The layer reads; every pinned hash and fingerprint holds: the pinned tier at each commit, the whole assembly at the slice's end ([targeted runs](../../CONTRIBUTING.md#testing-standards)).
 - **The contract, in C#.** CB-1 to CB-4 as tests on enumerable or exact-draw fixtures, each test naming its Lean declaration.
 - **Coverage from truth outside the model.** Data from a process the model does not share; coverage over replications against 1 − α within its binomial error, and the width beside it.
 - **Primitives.** Chosen cases and a seeded random sweep, far ranges included: log-weights far in a tail, scores that tie, strata of one.
@@ -104,7 +104,7 @@ Each is recorded in E16, with the decision it would change:
 
 - On `main`, committing by pathspec with nothing left staged and nothing pushed. Commit messages describe the work, with no attribution lines ([CLAUDE.md](../../CLAUDE.md)).
 - Builds set `ArtifactsRoot` inline into `artifacts\chip-conformal\`, deleted at the end.
-- Heavy runs at below-normal priority with capped threads; the machine is shared.
+- Heavy runs at below-normal priority with capped threads; the machine is shared. Tests run by [targeted runs](../../CONTRIBUTING.md#testing-standards) (`scripts/test-select.ps1`): the selected classes per edit, with the pinned tier per commit, the whole assembly once at the slice's end, and the qualification gates as each slice states.
 - New beside old; a removal is its own question to the user, with what is lost.
 - Findings framed by problem class, not by any one application.
 - A follow-up goes in a report with the decision it would change and what each outcome would do. A question with no decision waiting on it is recorded as open, not proposed.

@@ -13,7 +13,7 @@ writing code.
 | `src/`      | C# source, one folder per functional area (`maths`, `graphs`, `clustering`, `tda`, `viz`, `viz-core`, `synthetic`, `hashish`, `archivory`, `user-repl`, `repo-audit`, `storage-audit`, `test-harness`) |
 | `projects/` | `.csproj` files, one per assembly (`Maths.LinAlg`, `Graphs.Observables`, `Clustering.Graphical.SPC`, …) pointing into `src/` |
 | `tests/`    | xUnit test projects mirroring `projects/` (`*.Tests`), plus harness plumbing |
-| `scripts/`  | PowerShell entry points (`repo-audit.ps1`, `storage-audit.ps1` (disk-use profile and a reviewed cleanup; [README](src/storage-audit/README.md)), `fact-harness.ps1`, `portable-python.ps1`, `venv-boostrap.ps1`, `parse-lean-docs.ps1`) |
+| `scripts/`  | PowerShell entry points (`repo-audit.ps1`, `storage-audit.ps1` (disk-use profile and a reviewed cleanup; [README](src/storage-audit/README.md)), `fact-harness.ps1`, `test-select.ps1` (targeted test runs by change and tier; [CONTRIBUTING.md](CONTRIBUTING.md#testing-standards)), `portable-python.ps1`, `venv-boostrap.ps1`, `parse-lean-docs.ps1`) |
 | `r/`        | R oracle package (renv-managed) — reference implementations that validate the C# engine (`r/oracles`) |
 | `lean/`     | Lean 4 rigor harness (`Protolemmata` → `Enthymemata` → `Lemmas`, with consequential results in `Theorems` and retired material in `Archeion`) |
 | `datasets/` | Benchmark datasets (`iris`, `isolet`, `landsat`, …) + prep and reference material |

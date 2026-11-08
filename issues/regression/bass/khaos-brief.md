@@ -119,7 +119,7 @@ One commit per concern; tests with the code they test; each slice ends with its 
 
 ## Gates common to every slice
 
-- **Hinge BASS untouched.** The eight pinned hashes and every existing fingerprint hold.
+- **Hinge BASS untouched.** The eight pinned hashes and every existing fingerprint hold: the pinned tier at each commit, the whole assembly at the slice's end ([targeted runs](../../../CONTRIBUTING.md#testing-standards)).
 - **The law.**
   - Exact by enumeration on term spaces small enough to list.
   - Geweke's joint-distribution test on a design small enough to run long, with proper priors.
@@ -145,7 +145,7 @@ One commit per concern; tests with the code they test; each slice ends with its 
 - On `main`, committing by pathspec with nothing left staged and nothing pushed. Commit messages describe the work, with no attribution lines ([CLAUDE.md](../../../CLAUDE.md)).
 - Other chips may be writing in the checkout. Before editing a file, check `git diff -- <file>` for changes you did not make; build from a snapshot (`git archive HEAD` plus your files); commit only compiling states.
 - Builds set `ArtifactsRoot` inline into `artifacts\chip-khaos\`, deleted at the end.
-- Heavy runs at below-normal priority with capped threads, MSBuild node reuse off; the machine is shared.
+- Heavy runs at below-normal priority with capped threads, MSBuild node reuse off; the machine is shared. Tests run by [targeted runs](../../../CONTRIBUTING.md#testing-standards) (`scripts/test-select.ps1`, `-SourceRoot` at your snapshot): the selected classes per edit, with the pinned tier per commit, the whole assembly once at the slice's end, and the qualification gates as each slice states.
 - New beside old; a removal is its own question to the user, with what is lost.
 - Findings framed by problem class, not by any one application.
 - A follow-up goes in a report with the decision it would change and what each outcome would do. A question with no decision waiting on it is recorded as open, not proposed.

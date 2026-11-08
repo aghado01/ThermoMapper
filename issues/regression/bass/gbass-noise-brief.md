@@ -110,7 +110,7 @@ The carrier and the noise law in slice 1 also serve E20's Pólya–Gamma and pro
 
 ## Gates common to every slice
 
-- **Gaussian untouched.** The eight pinned hashes unmoved and every existing fingerprint the same.
+- **Gaussian untouched.** The eight pinned hashes unmoved and every existing fingerprint the same: the pinned tier at each commit, the whole assembly at the slice's end ([targeted runs](../../../CONTRIBUTING.md#testing-standards)).
 - **The law.**
   - A discrete mixing law on an enumerable design is exact by enumeration per value, the moving-response tests' `Joint`.
   - For continuous v, Geweke's joint-distribution test: the marginal-conditional and successive-conditional simulators, on a design small enough to run long, with proper priors.
@@ -144,7 +144,7 @@ No cost report prices this chain, and [the efficiency pass](efficiency-pass-brie
 
 - On `main`, committing by pathspec with nothing left staged and nothing pushed. Commit messages describe the work, with no attribution lines ([CLAUDE.md](../../../CLAUDE.md)).
 - Builds set `ArtifactsRoot` inline into `artifacts\chip-gbass-noise\`, deleted at the end.
-- Heavy runs at below-normal priority with capped threads; the machine is shared, and basin-hold's chains were running when this was written.
+- Heavy runs at below-normal priority with capped threads; the machine is shared, and basin-hold's chains were running when this was written. Tests run by [targeted runs](../../../CONTRIBUTING.md#testing-standards) (`scripts/test-select.ps1`): the selected classes per edit, with the pinned tier per commit, the whole assembly once at the slice's end, and the qualification gates as each slice states.
 - New beside old; a removal is its own question to the user, with what is lost.
 - Findings framed by problem class, not by any one application.
 - A follow-up goes in a report with the decision it would change and what each outcome would do. A question with no decision waiting on it is recorded as open, not proposed.
