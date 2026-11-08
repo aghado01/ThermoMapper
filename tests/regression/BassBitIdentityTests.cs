@@ -122,4 +122,30 @@ public sealed class BassBitIdentityTests
         _out.WriteLine($"BARS tempered: {hash}");
         Assert.Equal("7edb59818f141da9", hash.ToString());
     }
+
+    // SMC fits, hashed on fc39acc before SMC's self-flags were built (the KHAOS trap's decision, 2026-11-08), so the flags,
+    // which read the population, are seen to change no draw, weight or normalizer: the draws as Hash reads them, each draw's
+    // weight, and each replicate's ln Ẑ, its genealogy error and its stages' b and sweeps. A hinge fit on BassSmcTests' fixture
+    // and a KHAOS fit on slice 0's exact-law fixture under the modified g-prior.
+    [Theory]
+    [InlineData("hinge", "3440c6398ce3c0d5")]
+    [InlineData("khaos", "a51939ff36591784")]
+    public void Smc_KeepsTheBaseline(string fixture, string expected)
+    {
+        var smc = new SmcSpec { Particles = 300, Replicates = 2, MutationSteps = 3 };
+        (BassConfig config, BassData data) = fixture == "hinge"
+            ? (BassSweepTests.Config(maxBasis: 4), BassSweepTests.Data(large: true))
+            : (KhaosReachTests.Config("modified g"), KhaosChainTests.Data());
+        config = config with { Sampling = config.Sampling with { MasterSeed = 13, Smc = smc } };
+        BassFit fit = Bass.Fit(config, data);
+        var hash = new RunFingerprint();
+        hash.Add(Hash(fit)).Add(fit.DrawWeights!);
+        foreach (BassSmcReplicate r in fit.Diagnostics.Smc!.Replicates)
+        {
+            hash.Add(r.LogNormalizer).Add(r.LogNormalizerError);
+            foreach (var stage in r.Stages) hash.Add(stage.Temperature.InverseTemperature).Add(stage.Steps);
+        }
+        _out.WriteLine($"SMC, {fixture}: {hash}");
+        Assert.Equal(expected, hash.ToString());
+    }
 }

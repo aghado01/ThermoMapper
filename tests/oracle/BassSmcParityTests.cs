@@ -135,6 +135,10 @@ public sealed class BassSmcParityTests
         BassEvidence evidence = fit.Evidence!;
         BassSmcReadout readout = fit.Diagnostics.Smc!;
         Assert.True(readout.ReachedPosterior);
+        // SMC's flags (the KHAOS trap's decision, 2026-11-08) read clear on these fits, which meet R's enumeration.
+        _out.WriteLine($"{form}: between-to-within {readout.NormalizerBetweenToWithin:F2}; last steps from b " +
+                       string.Join(", ", readout.Replicates.Select(x => $"{x.LastStepFrom:G3} over {x.StructuresBeforeLastStep} of {x.Particles}")));
+        Assert.Empty(readout.Flags);
         foreach (BassSmcReplicate x in readout.Replicates)
         {
             _out.WriteLine($"{form}: replicate {x.Seed}, {x.StageCount} stages, ln Ẑ {x.LogNormalizer:F4} ± {x.LogNormalizerError:F4} " +
@@ -179,6 +183,10 @@ public sealed class BassSmcParityTests
         const int replicates = 8;
         BassFit fit = Bass.Fit(SmcConfig(maxBasis, new SmcSpec { Particles = 1000, Replicates = replicates }, fixedG: fixedG), BassTargetParityTests.Data(rows));
         Assert.True(fit.Diagnostics.Smc!.ReachedPosterior);
+        BassSmcReadout flags = fit.Diagnostics.Smc;
+        _out.WriteLine($"{option}: between-to-within {flags.NormalizerBetweenToWithin:F2}; last steps from b " +
+                       string.Join(", ", flags.Replicates.Select(x => $"{x.LastStepFrom:G3} over {x.StructuresBeforeLastStep} of {x.Particles}")));
+        Assert.Empty(flags.Flags);
 
         // Each replicate's weighted estimate; their spread gives each comparison's error.
         double[] w = fit.DrawWeights!;

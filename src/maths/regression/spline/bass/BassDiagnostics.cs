@@ -1,9 +1,11 @@
 using System;
 using System.Collections.Generic;
+using System.Globalization;
 using System.Linq;
 using Maths.Regression.Spline.Bars;
 using Maths.Samplers;
 using Maths.Samplers.Ensemble;
+using Maths.Samplers.Evidence;
 using Maths.Samplers.FlatHistogram;
 using Maths.Samplers.Rjmcmc;
 using Maths.Samplers.Smc;
@@ -188,6 +190,11 @@ public sealed record BassTemperingReadout(
 /// <item>Particles share ancestry, so a Kish ESS, or a Monte Carlo error that treats them as independent (the pointwise
 /// checks'), reads optimistic: each replicate's families say how many lineages remain, and the replicates' spread is the
 /// honest error.</item>
+/// <item><b>The flags the fit raises on itself</b> (decided 2026-11-08, on KHAOS's trap): a replicate whose last step jumped to
+/// b = 1 over a collapsed population (<see cref="BassSmcReplicate.JumpedOverACollapse"/>, counted in
+/// <see cref="JumpedReplicates"/>), and replicates whose ln Ẑ disagree beyond their own errors (<see cref="Overdispersed"/>, the
+/// evidence's rule). <see cref="Flags"/> says each in words, and says when the disagreement cannot be read. The flags read the
+/// populations the run already holds and change no draw, weight or normalizer.</item>
 /// </list>
 /// </summary>
 public sealed record BassSmcReadout(IReadOnlyList<BassSmcReplicate> Replicates, IReadOnlyList<BassSmcSpread> Spread)
@@ -200,6 +207,54 @@ public sealed record BassSmcReadout(IReadOnlyList<BassSmcReplicate> Replicates, 
             foreach (BassSmcReplicate r in Replicates)
                 if (r.InverseTemperature != 1.0) return false;
             return true;
+        }
+    }
+
+    /// <summary>The replicates whose last step jumped to b = 1 over a collapsed population.</summary>
+    public int JumpedReplicates => Replicates.Count(r => r.JumpedOverACollapse == true);
+
+    /// <summary>The replicates' ln Ẑ between-to-within ratio, pooled as the evidence pools them (<see cref="LadderEvidence.Pool"/>):
+    /// the SD of their normalizers over √R against their genealogy errors' root sum of squares over R. NaN short of b = 1, with
+    /// one replicate, or where a genealogy error is NaN.</summary>
+    public double NormalizerBetweenToWithin
+    {
+        get
+        {
+            if (!ReachedPosterior || Replicates.Count < 2) return double.NaN;
+            PooledLadderEstimate pooled = LadderEvidence.Pool(
+                [.. Replicates.Select(r => new LadderEstimate(LadderEstimator.SteppingStone, r.LogNormalizer, r.LogNormalizerError, 0.0, []))]);
+            return pooled.BetweenChainError / pooled.WithinChainError;
+        }
+    }
+
+    /// <summary>Whether the replicates' ln Ẑ disagree beyond their own errors, by <see cref="BassEvidence.Overdispersed"/>'s rule;
+    /// null where it cannot be read: short of b = 1, with one replicate, or where a genealogy error is NaN.</summary>
+    public bool? Overdispersed
+        => double.IsNaN(NormalizerBetweenToWithin) ? null : NormalizerBetweenToWithin > BassEvidence.OverdispersionThreshold;
+
+    /// <summary>The flags in words, one line each, for a summary to print: each replicate that jumped over a collapse, the
+    /// replicates' disagreement, and that it could not be read where it could not. Empty when nothing is flagged.</summary>
+    public IReadOnlyList<string> Flags
+    {
+        get
+        {
+            var flags = new List<string>();
+            for (int c = 0; c < Replicates.Count; c++)
+            {
+                BassSmcReplicate r = Replicates[c];
+                if (r.JumpedOverACollapse == true)
+                    flags.Add(string.Create(CultureInfo.InvariantCulture,
+                        $"Replicate {c}: its last step went from b = {r.LastStepFrom:G3} to 1 over a population of {r.StructuresBeforeLastStep} distinct structures of {r.Particles}, which reweighted alike, so the schedule saw nothing to slow it; its draws and ln Ẑ may hold one region of the posterior, or none of it."));
+            }
+            if (!ReachedPosterior) return flags;
+            if (Replicates.Count < 2)
+                flags.Add("One replicate: whether replicates' ln Ẑ disagree beyond their errors cannot be read; run two or more to read it.");
+            else if (Overdispersed is null)
+                flags.Add("A genealogy error is NaN (a resampling scheme other than multinomial): whether the replicates' ln Ẑ disagree beyond their errors cannot be read.");
+            else if (Overdispersed == true)
+                flags.Add(string.Create(CultureInfo.InvariantCulture,
+                    $"The replicates' ln Ẑ disagree at {NormalizerBetweenToWithin:G3} times their own errors (above {BassEvidence.OverdispersionThreshold}): the evidence's error is their spread, and their posteriors may differ."));
+            return flags;
         }
     }
 
@@ -218,12 +273,35 @@ public sealed record BassSmcReadout(IReadOnlyList<BassSmcReplicate> Replicates, 
 /// One SMC replicate's account: its stream's seed; its stage reports, the initial draw first; the b it ended at, 1 unless
 /// its budget ran out; its log normalizer ln Ẑ with the genealogy error (NaN unless every resampling was multinomial);
 /// its final population's Kish ESS and surviving families; the attempts its prior draws took; its kernel's account
-/// (<see cref="BassSmcAccount"/>); and its weighted mass at M_max.
+/// (<see cref="BassSmcAccount"/>); its weighted mass at M_max; the distinct structures in the population its last step
+/// reweighted to b = 1 (−1 where not counted); and its N.
 /// </summary>
 public sealed record BassSmcReplicate(
     int Seed, IReadOnlyList<SmcStageReport> Stages, double InverseTemperature, double LogNormalizer, double LogNormalizerError,
-    double EffectiveSampleSize, int Families, long PriorAttempts, BassSmcAccount Account, double MassAtCap)
+    double EffectiveSampleSize, int Families, long PriorAttempts, BassSmcAccount Account, double MassAtCap,
+    int StructuresBeforeLastStep = -1, int Particles = 0)
 {
+    /// <summary>The b below which a last step to b = 1 is a jump. On KHAOS's trap the trapped replicates' last steps left from
+    /// 0.003 to 0.35, and those that reached the posterior from 0.98 up (2026-11-08).</summary>
+    public const double JumpBelow = 0.5;
+
+    /// <summary>The share of N at or below which a population's distinct structures make it collapsed. The trapped replicates held
+    /// 1 to 9 of 500 (at most 1.8%) before their jump.</summary>
+    public const double CollapsedShare = 0.05;
+
+    /// <summary>The b the last step left from; NaN short of b = 1 or with no step taken.</summary>
+    public double LastStepFrom => InverseTemperature == 1.0 && Stages.Count >= 2 ? Stages[^2].Temperature.InverseTemperature : double.NaN;
+
+    /// <summary>
+    /// Whether the last step jumped to b = 1 over a collapsed population: from b below <see cref="JumpBelow"/>, over at most
+    /// <see cref="CollapsedShare"/> of N distinct structures. Such a population reweights alike, so the conditional ESS sees no
+    /// spread and allows the jump, and ln Ẑ is read across it: the trap measured on KHAOS's raw ridge, where the tempered law
+    /// below b ≈ 0.005 sits at near-empty structures. Null where not read: short of b = 1, or the population not counted.
+    /// </summary>
+    public bool? JumpedOverACollapse
+        => double.IsNaN(LastStepFrom) || StructuresBeforeLastStep < 0 || Particles < 1 ? null
+           : LastStepFrom < JumpBelow && StructuresBeforeLastStep <= CollapsedShare * Particles;
+
     /// <summary>The stages taken after the initial draw.</summary>
     public int StageCount => Stages.Count - 1;
 

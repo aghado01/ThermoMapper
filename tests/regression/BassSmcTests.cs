@@ -461,12 +461,17 @@ public sealed class BassSmcTests
             Assert.Equal((a.LogNormalizer, a.LogNormalizerError, a.PriorAttempts), (b.LogNormalizer, b.LogNormalizerError, b.PriorAttempts));
             Assert.Equal(a.Account.Moves, b.Account.Moves);
             Assert.Equal(a.Account.Kinds.Entries, b.Account.Kinds.Entries);
+            Assert.Equal((a.StructuresBeforeLastStep, a.JumpedOverACollapse), (b.StructuresBeforeLastStep, b.JumpedOverACollapse));
         }
         Assert.Equal(whole.Evidence!.LogEvidence, resumed.Evidence!.LogEvidence);
+        Assert.All(readout.Replicates, x => Assert.Null(x.JumpedOverACollapse));   // short of b = 1, not read
+        Assert.Null(readout.Overdispersed);
 
-        // A complete run has nothing left: its resume gives the fit again. Another config's checkpoint, and an MCMC one, are refused.
+        // A complete run has nothing left: its resume gives the fit again, its flags with it. Another config's checkpoint, and an MCMC
+        // one, are refused.
         BassFit again = Bass.Resume(resumed.Checkpoint!, shortConfig, data, run);
         SameDraws(resumed, again);
+        Assert.Equal(resumed.Diagnostics.Smc!.Replicates.Select(x => x.StructuresBeforeLastStep), again.Diagnostics.Smc!.Replicates.Select(x => x.StructuresBeforeLastStep));
         Assert.Throws<ArgumentException>(() => Bass.Resume(resumed.Checkpoint!, SmcConfig(), data));
         BassConfig mcmc = BassSweepTests.Config(maxBasis: 4) with { Sampling = new BassSampling { Chains = 2, BurnIn = 20, Samples = 10 } };
         BassFit chains = Bass.Fit(mcmc, data, run);
@@ -535,6 +540,75 @@ public sealed class BassSmcTests
         }
         // The kernels' sweeps are the readout's moves over the particles of nonzero weight.
         Assert.InRange(sweeps, 1, moves);
+    }
+
+    // ---- the flags a fit raises on itself (the KHAOS trap's decision, 2026-11-08) ----------------------------------------------------
+
+    [Fact]
+    public void Flags_ReadClearOnAHealthyFit_AndSayWhenTheDisagreementCannotBeRead()
+    {
+        BassData data = BassSweepTests.Data(large: true);
+        BassFit fit = Bass.Fit(SmcConfig(), data);
+        BassSmcReadout readout = fit.Diagnostics.Smc!;
+        foreach (BassSmcReplicate x in readout.Replicates)
+        {
+            _out.WriteLine($"replicate {x.Seed}: last step from b {x.LastStepFrom:G3} over {x.StructuresBeforeLastStep} structures of {x.Particles}");
+            Assert.Equal(Small.Particles, x.Particles);
+            Assert.InRange(x.StructuresBeforeLastStep, 1, Small.Particles);
+            Assert.Equal(x.Stages[^2].Temperature.InverseTemperature, x.LastStepFrom);
+            Assert.False(x.JumpedOverACollapse);
+        }
+        Assert.Equal(0, readout.JumpedReplicates);
+        _out.WriteLine($"between-to-within {readout.NormalizerBetweenToWithin:F3}");
+        Assert.False(readout.Overdispersed);
+        Assert.Empty(readout.Flags);
+        Assert.Equal(readout.Overdispersed, fit.Evidence!.Overdispersed);
+        Assert.Equal(readout.NormalizerBetweenToWithin, fit.Evidence.SteppingStone!.BetweenToWithin, 12);
+
+        // One replicate: the disagreement cannot be read, and the readout says so rather than reading clear.
+        BassFit one = Bass.Fit(SmcConfig(Small with { Replicates = 1 }), data);
+        Assert.Null(one.Diagnostics.Smc!.Overdispersed);
+        Assert.Null(one.Evidence!.Overdispersed);
+        Assert.False(one.Diagnostics.Smc.Replicates[0].JumpedOverACollapse);
+        Assert.Equal(new[] { "One replicate: whether replicates' ln Ẑ disagree beyond their errors cannot be read; run two or more to read it." },
+                     one.Diagnostics.Smc.Flags);
+    }
+
+    // A replicate's stage reports from b = 0 through `rungs`, the rest of each report immaterial to the flags.
+    private static SmcStageReport[] Stages(params double[] rungs)
+        => [.. rungs.Select((b, i) => new SmcStageReport(i, new Temperature(b, TemperingPath.Likelihood), 100, 100, false, 100, 100, 1, 0.5, 0.5, 0.0, 0.0))];
+
+    private static BassSmcReplicate Replicate(BassModel model, double[] rungs, double logZ, double error, int structures, int particles = 500)
+        => new(1, Stages(rungs), rungs[^1], logZ, error, particles, particles, 0, new BassSmcAccount(model.Prior), 0.0, structures, particles);
+
+    [Fact]
+    public void Flags_FireOnAJumpOverACollapse_AndOnReplicatesThatDisagree_AtTheirThresholds()
+    {
+        BassModel model = Model();
+        // The trap: from b 0.01 to 1 over 3 structures of 500. The edges: from b exactly ½ is no jump; 25 of 500 (5%) is collapsed, 26 is not.
+        Assert.True(Replicate(model, [0.0, 0.001, 0.01, 1.0], -350, 0.1, 3).JumpedOverACollapse);
+        Assert.False(Replicate(model, [0.0, 0.5, 1.0], -350, 0.1, 3).JumpedOverACollapse);
+        Assert.True(Replicate(model, [0.0, 0.3, 1.0], -350, 0.1, 25).JumpedOverACollapse);
+        Assert.False(Replicate(model, [0.0, 0.3, 1.0], -350, 0.1, 26).JumpedOverACollapse);
+        Assert.Null(Replicate(model, [0.0, 0.3, 0.6], -350, 0.1, 3).JumpedOverACollapse);   // short of b = 1
+        Assert.Null(Replicate(model, [0.0, 0.3, 1.0], -350, 0.1, -1).JumpedOverACollapse);  // not counted
+
+        // A trapped replicate beside one that reached the posterior: ln Ẑ 60 apart against errors under 1.
+        var readout = new BassSmcReadout([Replicate(model, [0.0, 0.01, 1.0], -350, 0.1, 3), Replicate(model, [0.0, 0.98, 1.0], -290, 0.8, 400)], []);
+        Assert.Equal(1, readout.JumpedReplicates);
+        // between = √(Σ(x − x̄)²/(R(R − 1))) = 30, within = √(0.1² + 0.8²)/2.
+        Assert.Equal(30.0 / (Math.Sqrt(0.01 + 0.64) / 2), readout.NormalizerBetweenToWithin, 10);
+        Assert.True(readout.Overdispersed);
+        Assert.Equal(2, readout.Flags.Count);
+        Assert.StartsWith("Replicate 0: its last step went from b = 0.01 to 1 over a population of 3 distinct structures of 500", readout.Flags[0]);
+        Assert.StartsWith("The replicates' ln Ẑ disagree at 74.4 times their own errors (above 3)", readout.Flags[1]);
+        // Replicates trapped alike agree, so only the jump reads them.
+        var alike = new BassSmcReadout([Replicate(model, [0.0, 0.01, 1.0], -350.0, 0.1, 3), Replicate(model, [0.0, 0.02, 1.0], -349.9, 0.1, 2)], []);
+        Assert.Equal((2, false), (alike.JumpedReplicates, alike.Overdispersed));
+        // The ratio's threshold, and a NaN genealogy error, which leaves it unread.
+        Assert.False(BassEvidence.IsOverdispersed(3.0, 1.0));
+        Assert.True(BassEvidence.IsOverdispersed(3.0001, 1.0));
+        Assert.Null(new BassSmcReadout([Replicate(model, [0.0, 0.98, 1.0], -290, double.NaN, 400), Replicate(model, [0.0, 0.98, 1.0], -291, 0.8, 400)], []).Overdispersed);
     }
 
     [Fact]

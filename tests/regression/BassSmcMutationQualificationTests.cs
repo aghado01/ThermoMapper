@@ -70,7 +70,7 @@ public sealed class BassSmcMutationQualificationTests(ITestOutputHelper output)
     // ---- the fixtures ---------------------------------------------------------------------------------------------------------------
 
     // GBASS slice 5's evidence fixture (BassNoiseReachQualificationTests): twelve cases of sin(7x) + 0.4·N(0, 1), M_max 2, σ² ~ IG(8, 6).
-    private static Fixture Gbass(string form)
+    internal static Fixture Gbass(string form)
     {
         double[] x = [.. Enumerable.Range(0, 12).Select(i => i / 11.0)];
         var noiseRng = new Xoshiro256PlusPlus(20261109);

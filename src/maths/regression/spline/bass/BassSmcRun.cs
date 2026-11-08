@@ -86,15 +86,19 @@ internal static class BassSmcFit
         SmcRun<BassParticle> run = restart is null
             ? SmcRun<BassParticle>.Start(new SmcStage<BassParticle>(target, new Temperature(0.0, TemperingPath.Likelihood)), particles, kernel, smc, streams[0])
             : SmcRun<BassParticle>.Resume(Retarget(restart.Run, target), particles, kernel, smc);
+        // The distinct structures in the population the last step reweights to b = 1, which the jump flag reads
+        // (BassSmcReplicate.JumpedOverACollapse); counted once, from the particles as they stand, so nothing the run draws moves.
+        int structures = restart?.StructuresBeforeLastStep ?? -1;
         while (run.Stage.Temperature.InverseTemperature < 1.0 && run.StagesDone < budget)
         {
             options.Cancellation.ThrowIfCancellationRequested();
             double next = SmcSampler.NextInverseTemperature(run, spec.TargetConditionalEss);
+            if (next >= 1.0) structures = DistinctStructures(run.Result().Particles);
             run.Advance(new SmcStage<BassParticle>(target, new Temperature(next, TemperingPath.Likelihood)));
             progress.Add((long)spec.Particles * run.Reports[^1].Steps);
         }
         SmcResult<BassParticle> result = run.Result();
-        BassSmcState? state = options.Checkpoint ? new BassSmcState(run.Checkpoint(), kernel.Account.Copy(), particles.PriorAttempts) : null;
+        BassSmcState? state = options.Checkpoint ? new BassSmcState(run.Checkpoint(), kernel.Account.Copy(), particles.PriorAttempts, structures) : null;
 
         int[] composition = SeedTree.Derive(streams[1], spec.Particles);
         var terms = new BassTermTable();
@@ -104,7 +108,15 @@ internal static class BassSmcFit
             BassParticle p = result.Particles[i];
             draws[i] = p.Moves.Compose(p.State, new Xoshiro256PlusPlus(composition[i]), terms);
         }
-        return new Replicate(seed, result, terms, draws, kernel.Account.Copy(), particles.PriorAttempts, state);
+        return new Replicate(seed, result, terms, draws, kernel.Account.Copy(), particles.PriorAttempts, state, structures);
+    }
+
+    // The distinct structures among a population's particles, each structure its terms by value.
+    private static int DistinctStructures(IReadOnlyList<BassParticle> particles)
+    {
+        var seen = new HashSet<string>(StringComparer.Ordinal);
+        foreach (BassParticle p in particles) seen.Add(string.Join(" + ", p.State.Terms.Select(t => t.ToString()).Order(StringComparer.Ordinal)));
+        return seen.Count;
     }
 
     // The checkpoint's run on this model's target: the stage's target replaced and each particle evaluated under it, which
@@ -190,7 +202,7 @@ internal static class BassSmcFit
             SmcStageReport last = result.Stages[^1];
             accounts[c] = new BassSmcReplicate(runs[c].Seed, result.Stages, last.Temperature.InverseTemperature, result.LogNormalizerRatio,
                                                result.LogNormalizerError, SmcWeights.EffectiveSampleSize(result.Weights), last.Families,
-                                               runs[c].PriorAttempts, runs[c].Account, atCap);
+                                               runs[c].PriorAttempts, runs[c].Account, atCap, runs[c].StructuresBeforeLastStep, n);
             account.MergeFrom(runs[c].Account);
         }
         var readout = new BassSmcReadout(accounts, spread);
@@ -262,10 +274,10 @@ internal static class BassSmcFit
         return new BassSmcSpread(name, means, pooled, sd, spread);
     }
 
-    // A replicate's run, its composed draws in its own table, its kernel's account, its prior attempts and, when asked, its
-    // restart state.
+    // A replicate's run, its composed draws in its own table, its kernel's account, its prior attempts, when asked its restart
+    // state, and the distinct structures before its last step (−1 where not counted).
     private sealed record Replicate(int Seed, SmcResult<BassParticle> Result, BassTermTable Terms, BassDraw[] Draws, BassSmcAccount Account,
-                                    long PriorAttempts, BassSmcState? State);
+                                    long PriorAttempts, BassSmcState? State, int StructuresBeforeLastStep);
 
     // Sweeps over every replicate, reported each time they pass a multiple of the interval, and once at the end.
     private sealed class Progress(BassRunOptions options, long planned)
@@ -288,5 +300,6 @@ internal static class BassSmcFit
     }
 }
 
-/// <summary>An SMC replicate's restart state: its run's checkpoint, its kernel's account and its prior draws' attempts.</summary>
-internal sealed record BassSmcState(SmcCheckpoint<BassParticle> Run, BassSmcAccount Account, long PriorAttempts) : IChainState;
+/// <summary>An SMC replicate's restart state: its run's checkpoint, its kernel's account, its prior draws' attempts, and the
+/// distinct structures before its last step once taken (−1 before), so a fit resumed past it still reads the jump flag.</summary>
+internal sealed record BassSmcState(SmcCheckpoint<BassParticle> Run, BassSmcAccount Account, long PriorAttempts, int StructuresBeforeLastStep = -1) : IChainState;

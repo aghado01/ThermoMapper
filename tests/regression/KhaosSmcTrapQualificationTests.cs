@@ -192,6 +192,69 @@ public sealed class KhaosSmcTrapQualificationTests(ITestOutputHelper output)
         if (parts.Contains("ladder")) Ladder(raw, threads);
     }
 
+    // ---- the flags as built (the main session's decision, 2026-11-08) ------------------------------------------------------------
+
+    /// <summary>
+    /// SMC's flags as BASS's fit raises them (<see cref="BassSmcReplicate.JumpedOverACollapse"/>, <see cref="BassSmcReadout.Overdispersed"/>),
+    /// on production fits of N 500 at 5 sweeps a stage: the raw-ridge trap fixture with 32 replicates and KHAOS's g-prior with 16, each
+    /// replicate read trapped or found by its own weighted σ²; and, for false alarms, GBASS slice 5's t(5) and skewed GH evidence fixtures
+    /// at the adaptive-mutation measurement's size, 32 replicates. The disagreement is read over each whole fit and over its groups of
+    /// four, a default fit's replicates. Gates: no replicate that reached the posterior jumps; every fit and group on the trap fixtures is
+    /// flagged one way or the other; the healthy fits raise nothing.
+    /// </summary>
+    [Fact]
+    public void Flags_OnTheTrap_AndNoneOnHealthyFits()
+    {
+        if (!BassQualification.Enabled) return;   // heavy
+        var options = new BassRunOptions { MaxDegreeOfParallelism = Setting("KHAOS_TRAP_THREADS", 4) };
+        (string Name, BassSmcMutationQualificationTests.Fixture F, int Replicates, bool Healthy)[] fits =
+        [
+            ("KHAOS raw ridge", BassSmcMutationQualificationTests.Khaos(), 32, false),
+            ("KHAOS g-prior", GPrior(BassSmcMutationQualificationTests.Khaos()), 16, false),
+            ("GBASS t(5)", BassSmcMutationQualificationTests.Gbass("t"), 32, true),
+            ("GBASS skewed GH", BassSmcMutationQualificationTests.Gbass("gh"), 32, true),
+        ];
+        output.WriteLine("fit | reached | jumped (reached, trapped) | between-to-within, whole | groups of four flagged | flags");
+        output.WriteLine("--- | --- | --- | --- | --- | ---");
+        foreach ((string name, BassSmcMutationQualificationTests.Fixture f, int replicates, bool healthy) in fits)
+        {
+            BassConfig config = f.Config with
+            {
+                Sampling = f.Config.Sampling with
+                {
+                    MasterSeed = 20261109, ReportEvidence = true, Smc = new SmcSpec { Particles = Particles, Replicates = replicates, MutationSteps = 5 },
+                },
+            };
+            BassSmcReadout readout = Bass.Fit(config, f.Data, options).Diagnostics.Smc!;
+            Assert.True(readout.ReachedPosterior);
+            double[] sigma2 = readout.Quantity("sigma2").ReplicateMeans;
+            bool[] reached = [.. sigma2.Select(v => healthy || v < FoundBelow)];
+            int jumpedReached = readout.Replicates.Where((r, c) => reached[c] && r.JumpedOverACollapse == true).Count();
+            int jumpedTrapped = readout.Replicates.Where((r, c) => !reached[c] && r.JumpedOverACollapse == true).Count();
+            int groups = replicates / 4, flaggedGroups = 0;
+            for (int g = 0; g < groups; g++)
+            {
+                var group = new BassSmcReadout([.. readout.Replicates.Skip(4 * g).Take(4)], []);
+                if (group.JumpedReplicates > 0 || group.Overdispersed == true) flaggedGroups++;
+            }
+            output.WriteLine($"{name} | {reached.Count(r => r)}/{replicates} | {jumpedReached}, {jumpedTrapped}/{reached.Count(r => !r)} | " +
+                             $"{readout.NormalizerBetweenToWithin:F2} | {flaggedGroups}/{groups} | {readout.Flags.Count}");
+            foreach (BassSmcReplicate r in readout.Replicates.Take(4))
+                output.WriteLine($"  last step from b {r.LastStepFrom:G3} over {r.StructuresBeforeLastStep} of {r.Particles}, ln Ẑ {r.LogNormalizer:F2} ± {r.LogNormalizerError:F2}");
+            Assert.Equal(0, jumpedReached);
+            if (healthy)
+            {
+                Assert.Empty(readout.Flags);
+                Assert.Equal(0, flaggedGroups);
+            }
+            else
+            {
+                Assert.True(readout.JumpedReplicates > 0 || readout.Overdispersed == true, $"{name}: unflagged");
+                Assert.Equal(groups, flaggedGroups);
+            }
+        }
+    }
+
     // The tempering ladder on the raw-ridge fixture: the cold chains against the long chains, and its evidence.
     private void Ladder(BassSmcMutationQualificationTests.Fixture f, int threads)
     {

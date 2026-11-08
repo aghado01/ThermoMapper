@@ -36,10 +36,14 @@ namespace Maths.Regression.Spline.Bass;
 /// <see cref="RejectionThreshold"/>), where stepping-stone's importance weights grow heavy-tailed and its delta-method error
 /// stops reading them; whether a self-sizing ladder reached its budget (<see cref="AtMaxLevels"/>), where the count the
 /// barrier asked for may not have been taken; and the between-to-within ratio of the errors
-/// (<see cref="BassEvidenceEstimate.BetweenToWithin"/>), well above 1 where the chains disagree beyond their own errors.</para>
+/// (<see cref="BassEvidenceEstimate.BetweenToWithin"/>), well above 1 where the chains disagree beyond their own errors. An SMC fit
+/// reads that ratio over its replicates as a flag (<see cref="Overdispersed"/>): each replicate's genealogy error sees only the
+/// spread its own population holds, so replicates that settle in different regions each report an error that misses the
+/// difference.</para>
 /// </summary>
 public sealed record BassEvidence(BassEvidenceEstimate? SteppingStone, BassEvidenceEstimate? PathSampling, BassEvidencePriors Priors,
-                                  double MaxPairRejection, bool AtMaxLevels, BassFlatHistogramEvidence? FlatHistogram = null)
+                                  double MaxPairRejection, bool AtMaxLevels, BassFlatHistogramEvidence? FlatHistogram = null,
+                                  bool? Overdispersed = null)
 {
     /// <summary>
     /// The pair rejection above which the evidence is flagged <see cref="Saturated"/>. Under a Gaussian reading of the swap,
@@ -50,6 +54,14 @@ public sealed record BassEvidence(BassEvidenceEstimate? SteppingStone, BassEvide
     /// </summary>
     public const double RejectionThreshold = 0.9;
 
+    /// <summary>
+    /// The between-to-within ratio of an SMC fit's errors above which its evidence is flagged <see cref="Overdispersed"/>. Where
+    /// each replicate's genealogy error is right, the ratio squared is about χ²_{R−1}/(R − 1), which passes 9 with probability
+    /// 0.27% at R = 2 and below 10⁻⁵ at R = 4. On KHAOS's raw-ridge Ishigami fixture, groups of four replicates read 5.5 to 80
+    /// wherever they settled apart (the trap's measurement, 2026-11-08).
+    /// </summary>
+    public const double OverdispersionThreshold = 3.0;
+
     /// <summary>The run's evidence, by stepping-stone, or a flat-histogram fit's ratio estimator.</summary>
     public double LogEvidence => SteppingStone?.LogEvidence ?? FlatHistogram!.LogRatio;
 
@@ -59,6 +71,19 @@ public sealed record BassEvidence(BassEvidenceEstimate? SteppingStone, BassEvide
 
     /// <summary>Whether a pair's rejection rose above <see cref="RejectionThreshold"/>.</summary>
     public bool Saturated => MaxPairRejection > RejectionThreshold;
+
+    /// <summary>
+    /// An SMC fit's: whether its replicates' ln Ẑ disagree beyond their own errors, the between-to-within ratio above
+    /// <see cref="OverdispersionThreshold"/>. <see cref="MonteCarloError"/> is then the replicates' spread, the larger of the two
+    /// by the pooling rule, and the replicates' own errors are not to be read. Null where it cannot be read: an SMC fit of one
+    /// replicate, one whose genealogy errors are NaN (a resampling scheme other than multinomial), and a ladder's or a flat
+    /// histogram's evidence, whose flags are <see cref="Saturated"/> and <see cref="AtMaxLevels"/>.
+    /// </summary>
+    public bool? Overdispersed { get; init; } = Overdispersed;
+
+    /// <summary>Whether a between error exceeds <see cref="OverdispersionThreshold"/> within errors; null where either is not finite.</summary>
+    internal static bool? IsOverdispersed(double between, double within)
+        => double.IsFinite(between) && double.IsFinite(within) ? between > OverdispersionThreshold * within : null;
 
     /// <summary>
     /// The evidence over <paramref name="ladders"/>, one per chain, each traced since burn-in ended
@@ -99,7 +124,9 @@ public sealed record BassEvidence(BassEvidenceEstimate? SteppingStone, BassEvide
         BassEvidenceEstimate? pathSampling = null;
         if (traced && model.Target.Form == TemperedForm.Linear)
             pathSampling = Pooled([.. replicates.Select(r => LadderEvidence.FromSmc(r, LadderEstimator.PathSampling))]);
-        return new BassEvidence(Pooled(normalizers), pathSampling, BassEvidencePriors.Of(model.Config, model.Resolved), double.NaN, false);
+        BassEvidenceEstimate stones = Pooled(normalizers);
+        return new BassEvidence(stones, pathSampling, BassEvidencePriors.Of(model.Config, model.Resolved), double.NaN, false,
+                                Overdispersed: IsOverdispersed(stones.BetweenChainError, stones.WithinChainError));
     }
 
     /// <summary>

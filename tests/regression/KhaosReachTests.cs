@@ -97,6 +97,12 @@ public sealed class KhaosReachTests(ITestOutputHelper output)
         output.WriteLine($"{prior}, {sampler}: ln p(y) {evidence.LogEvidence:F4} ± {evidence.MonteCarloError:F4} against the enumeration's {exact.LogZ:F4}");
         Assert.True(Math.Abs(evidence.LogEvidence - exact.LogZ) <= 4 * evidence.MonteCarloError + 0.01,
                     $"{prior}, {sampler}: {evidence.LogEvidence:F4} ± {evidence.MonteCarloError:F4} against {exact.LogZ:F4}");
+        if (fit.Diagnostics.Smc is { } readout)   // a healthy fit raises neither of SMC's flags
+        {
+            output.WriteLine($"{prior}, {sampler}: between-to-within {readout.NormalizerBetweenToWithin:F2}; last steps from b " +
+                             string.Join(", ", readout.Replicates.Select(r => $"{r.LastStepFrom:G3} over {r.StructuresBeforeLastStep} of {r.Particles}")));
+            Assert.Empty(readout.Flags);
+        }
 
         // The count law: each chain's (each replicate's) weighted frequencies, their spread for the error.
         double[] weights = fit.DrawWeights ?? [.. Enumerable.Repeat(1.0, fit.Draws.Sum(c => c.Count))];

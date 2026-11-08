@@ -255,7 +255,14 @@ public sealed class BassNoiseReachQualificationTests(ITestOutputHelper output)
         BassConfig ladder = config with { Sampling = config.Sampling with { Tempering = new TemperingSpec { Levels = 10, HotEnd = 0.02, ReferenceRung = true } } };
         BassConfig smc = config with { Sampling = config.Sampling with { Smc = new SmcSpec { Particles = 2000, Replicates = 4, MutationSteps = 4 } } };
         var options = new BassRunOptions { MaxDegreeOfParallelism = 4 };
-        BassEvidence tempered = Bass.Fit(ladder, data, options).Evidence!, sequential = Bass.Fit(smc, data, options).Evidence!;
+        BassEvidence tempered = Bass.Fit(ladder, data, options).Evidence!;
+        BassFit smcFit = Bass.Fit(smc, data, options);
+        BassEvidence sequential = smcFit.Evidence!;
+        // SMC's flags (the KHAOS trap's decision, 2026-11-08) read clear on this healthy fit.
+        BassSmcReadout readout = smcFit.Diagnostics.Smc!;
+        output.WriteLine($"{form}: SMC's between-to-within {readout.NormalizerBetweenToWithin:F2}; last steps from b " +
+                         string.Join(", ", readout.Replicates.Select(r => $"{r.LastStepFrom:G3} over {r.StructuresBeforeLastStep} of {r.Particles}")));
+        Assert.Empty(readout.Flags);
         output.WriteLine($"{form}: plain Monte Carlo over {draws:N0} prior draws ln p(y) {brute:F4} ± {bruteError:F4} (prior attempts {sampler.Attempts:N0}); " +
                          $"the ladder's {tempered.LogEvidence:F4} ± {tempered.MonteCarloError:F4}; SMC's {sequential.LogEvidence:F4} ± {sequential.MonteCarloError:F4}");
         foreach ((string name, BassEvidence e) in new[] { ("ladder", tempered), ("SMC", sequential) })
