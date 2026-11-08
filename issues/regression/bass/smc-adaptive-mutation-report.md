@@ -1,9 +1,9 @@
 # SMC's adaptive mutation count: report
 
 **Status (2026-11-08).** The option and the readout are built and gated, the measurement has run, and the rule is recorded
-in `Samplers.md`. The adaptive count **stays an option**; the fixed count stays the default (reading below). One piece
-waits on a file another chip holds: `SmcSpec.AdaptiveMutation`, with its validation, `BassSmcRun`'s pass-through and its
-`BassSmcTests`, waits on `BassConfig.cs` (KHAOS slice 2). It is written, and passes in a snapshot.
+in `Samplers.md`, and BASS's fit takes the option as `SmcSpec.AdaptiveMutation`. The adaptive count **stays an option**;
+the fixed count stays the default (reading below). Left for a later pass: `BayesianRegression.md`'s `SmcSpec` row and its
+"with no adaptation" line, which wait on another chip's uncommitted edit there.
 
 The chip's assignment (2026-11-08, from the GBASS/KHAOS coordinating session): let the engine's SMC choose how many
 mutation sweeps each stage takes, and measure whether that beats the fixed count at equal cost. Found in the Kimi review
@@ -58,6 +58,7 @@ Otherwise it stays an option, with this reading recorded.
 | `ebe5757` | The oracle law test under the adaptive count |
 | `7d0869a` | The measurement harness (`BassSmcMutationQualificationTests`), its tables (`smc-adaptive-mutation-results.csv`, `-replicates.csv`, `-stages.csv`) and this report |
 | `11436c4` | `Samplers.md`: the rule, its alternatives and trade-offs, the library's holdings, the measured reading |
+| `7dee840` | `SmcSpec.AdaptiveMutation` (validation, serialized only when set), `BassSmcRun`'s pass-through and progress, `BassSmcTests` |
 
 **The rule.** Stage t reads stage t − 1's report: k sweeps left a fraction 1 − m of the live particles where they were (a
 particle moved when any of its moves was accepted). So stage t wants ⌈k·ln c / ln(1 − m)⌉, at least 1. It takes that
@@ -80,8 +81,8 @@ On KHAOS it reads 0.02–0.06 at the last stages, which is the trap below.
     count moved off the budget.
 - *Resume bit for bit.*
   - Core: resume, and independence from the parallelism.
-  - BASS, in the snapshot with `SmcSpec` wired: `BassSmcTests` 21 of 21, including an adaptive fit resumed in 3-stage
-    pieces.
+  - BASS: an adaptive fit whose count moves resumes bit for bit in 3-stage pieces. The wiring's commit scope passed
+    1,597 of 1,597, pinned tier included.
 
 ## The measurement
 
