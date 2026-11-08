@@ -115,8 +115,18 @@ public sealed record BassFit(
     }
 
     /// <summary>
+    /// The posterior's partial derivatives at <paramref name="cases"/> (KHAOS slice 4, E8's input; <see cref="BassGradient"/>): each
+    /// continuous predictor's ∂f/∂z per draw, case and location, in the predictor's own units, for the draws
+    /// <paramref name="draws"/> selects in pooled order (all by default). A pointwise readout under no measure. <paramref name="data"/>
+    /// must be the data the fit was run on; data with another fingerprint are refused.
+    /// </summary>
+    public BassGradient Gradient(BassData data, PredictionCases cases, IReadOnlyList<int>? draws = null)
+        => BassGradients.Of(ModelOn(data), Terms, Draws, DrawWeights, cases, draws);
+
+    /// <summary>
     /// The Sobol decomposition of the draws (D08, stage 6; <see cref="BassSensitivity.Of"/>) under <paramref name="spec"/>'s
-    /// product measure, the training range's uniform by default. <paramref name="data"/> must be the data the fit was run
+    /// product measure, by default the uniform law on each input's box: its declared domain, else its training range. A Legendre
+    /// fit's decomposition under that law reads off its coefficients too (<see cref="BassSensitivity.FromCoefficients"/>). <paramref name="data"/> must be the data the fit was run
     /// on, whose knots and levels the terms index and whose values the empirical measure reads; data with another
     /// fingerprint are refused.
     /// </summary>

@@ -18,6 +18,7 @@ internal sealed class BassSurface
     private readonly CaseInputs _cases;
     private readonly OutputInputs? _outputs;
     private readonly Dictionary<int, (double[] Case, double[]? Output)> _columns = [];
+    private readonly Dictionary<(int Id, int Variable), double[]> _derivatives = [];
 
     /// <summary>The surface of <paramref name="basis"/>'s fit, whose draws index <paramref name="terms"/>, at
     /// <paramref name="cases"/> and, for a direct functional fit, <paramref name="outputs"/>.</summary>
@@ -62,15 +63,40 @@ internal sealed class BassSurface
         return (a, h);
     }
 
+    /// <summary>Term <paramref name="id"/>'s case factor's partial derivative in continuous predictor <paramref name="variable"/>
+    /// (its position among the continuous predictors), in the transformed units (<see cref="BassBasis.CaseDerivative"/>).</summary>
+    public double[] DerivativeColumn(int id, int variable)
+    {
+        if (_derivatives.TryGetValue((id, variable), out double[]? cached)) return cached;
+        Columns(id);   // validates the term
+        var a = new double[_cases.Cases];
+        _basis.CaseDerivative(_terms[id], variable, _cases, a);
+        _derivatives.Add((id, variable), a);
+        return a;
+    }
+
     /// <summary>The function of <paramref name="coefficients"/> (the intercept, then one per id of
     /// <paramref name="ids"/>) at every case and location, case by case, into <paramref name="f"/>.</summary>
-    public void Evaluate(ReadOnlySpan<int> ids, ReadOnlySpan<double> coefficients, Span<double> f)
+    public void Evaluate(ReadOnlySpan<int> ids, ReadOnlySpan<double> coefficients, Span<double> f) => Accumulate(ids, coefficients, -1, f);
+
+    /// <summary>The function's partial derivative in continuous predictor <paramref name="variable"/>, in the transformed units,
+    /// at every case and location, into <paramref name="f"/>: the intercept drops, and each term contributes its derivative
+    /// column times its output factor.</summary>
+    public void EvaluateDerivative(ReadOnlySpan<int> ids, ReadOnlySpan<double> coefficients, int variable, Span<double> f)
+    {
+        if (variable < 0) throw new ArgumentOutOfRangeException(nameof(variable), "A continuous predictor's position is nonnegative.");
+        Accumulate(ids, coefficients, variable, f);
+    }
+
+    // Σ coefficients × columns: the values' (variable −1, from the intercept) or one variable's derivatives (from 0).
+    private void Accumulate(ReadOnlySpan<int> ids, ReadOnlySpan<double> coefficients, int variable, Span<double> f)
     {
         int cases = Cases, locations = Locations;
-        f.Fill(coefficients[0]);
+        f.Fill(variable < 0 ? coefficients[0] : 0.0);
         for (int q = 0; q < ids.Length; q++)
         {
-            (double[] a, double[]? h) = Columns(ids[q]);
+            (double[] values, double[]? h) = Columns(ids[q]);
+            double[] a = variable < 0 ? values : DerivativeColumn(ids[q], variable);
             double c = coefficients[q + 1];
             if (h is null)
             {

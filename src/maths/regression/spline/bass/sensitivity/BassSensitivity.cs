@@ -83,6 +83,77 @@ public static class BassSensitivity
     }
 
     /// <summary>
+    /// A Legendre fit's sensitivity from its coefficients (KHAOS slice 4; <see cref="PolynomialChaosSensitivity"/>), under the product
+    /// uniform law on each input's box, where the ψ_α are orthonormal: the decomposition of the same draws <see cref="Of"/> reads
+    /// through the moment service, at O(M) per draw in place of O(M²), and the Jacobi derivative measure. Subsets are reported to
+    /// <paramref name="maxOrder"/> (the largest term order by default) within <see cref="SensitivitySpec.SubsetBudget"/>, as
+    /// <see cref="Of"/> reports them. <paramref name="data"/> must be the data the fit was run on. Refused, with its reason, for a
+    /// fit with a hinge or categorical term, whose coefficients are not on an orthonormal basis, and for a functional response.
+    /// Another measure is <see cref="Of"/>'s: the coefficients' closed forms hold under this law alone.
+    /// </summary>
+    public static PolynomialChaosSensitivity FromCoefficients(BassFit fit, BassData data, int? maxOrder = null)
+    {
+        var spec = new SensitivitySpec { MaxOrder = maxOrder };   // the uniform law on each box, every measure's default
+        Setup s = Setup.Of(fit, data, spec);
+        if (s.Form is not null || s.Moments.Inputs.Outputs is not null)
+            throw new ArgumentException("A functional fit's decomposition is the moment route's (Of): the coefficients read here are a scalar Legendre fit's.", nameof(fit));
+        foreach (int id in s.TermIds)
+        {
+            BassTerm term = fit.Terms[id];
+            if (term.Legendre.Count == 0 || term.Continuous.Count > 0 || term.Categorical.Count > 0 || term.Functional.Count > 0)
+                throw new ArgumentException($"Term {term} is not a Legendre product, so its coefficient is not on an orthonormal basis; take Of, the moment route.", nameof(fit));
+        }
+        int order = maxOrder ?? Math.Max(1, s.TermIds.Select(id => fit.Terms[id].Legendre.Count).DefaultIfEmpty(0).Max());
+        int[][] subsets = Subsets(s.TermIds.Select(id => s.Moments.Variables(fit.Terms[id])), order, spec.SubsetBudget);
+        var index = new Dictionary<int[], int>(subsets.Length, SubsetComparer.Instance);
+        for (int k = 0; k < subsets.Length; k++) index[subsets[k]] = k;
+
+        // Each term's variables in the measure's numbering beside its degrees: both ascend with the variable.
+        var shapes = new Dictionary<int, (int[] Variables, int Subset, int[] Degrees)>();
+        (int[] Variables, int Subset, int[] Degrees) Shape(int id)
+        {
+            if (shapes.TryGetValue(id, out var shape)) return shape;
+            BassTerm term = fit.Terms[id];
+            int[] variables = [.. s.Moments.Variables(term)];
+            if (variables.Length != term.Legendre.Count) throw new InvalidOperationException($"Term {term}'s factors do not meet the measure's variables one for one.");
+            int[] degrees = [.. term.Legendre.Select(f => f.Degree)];
+            shape = (variables, variables.Length <= order && index.TryGetValue(variables, out int k) ? k : -1, degrees);
+            shapes[id] = shape;
+            return shape;
+        }
+
+        int inputs = s.Moments.Measure.Count, draws = s.Draws.Length;
+        var main = new double[draws, subsets.Length];
+        var total = new double[draws, inputs];
+        var jacobi = new double[draws, inputs];
+        var variance = new double[draws];
+        var status = new DecompositionStatus[draws];
+        for (int d = 0; d < draws; d++)
+        {
+            BassDraw draw = s.Draws[d];
+            int[] ids = draw.Structure.TermIds;
+            double v = 0.0;
+            for (int j = 0; j < ids.Length; j++)
+            {
+                double b = draw.Coefficients[1 + j], b2 = b * b;
+                (int[] variables, int subset, int[] degrees) = Shape(ids[j]);
+                v += b2;
+                if (subset >= 0) main[d, subset] += b2;
+                for (int k = 0; k < variables.Length; k++)
+                {
+                    total[d, variables[k]] += b2;
+                    jacobi[d, variables[k]] += b2 * degrees[k] * (degrees[k] + 1.0);
+                }
+            }
+            variance[d] = v;
+            status[d] = Status(v, v, spec.RoundingTolerance, main, total, d);
+        }
+        var decomposition = new SobolDecomposition(s.Moments.Measure.Names, subsets, main, total, variance, status, spec.RoundingTolerance,
+                                                   s.Chains, s.DrawIndex, s.Weights);
+        return new PolynomialChaosSensitivity(new SobolAnalysis(null, s.Moments.Measure, order, [decomposition], null, null, null, 0.0), jacobi);
+    }
+
+    /// <summary>
     /// The main and two-way effect functions of <paramref name="fit"/>'s draws under <paramref name="spec"/>'s measure and the
     /// fit's degree, on <paramref name="data"/>, the data the fit was run on. Refused, with its reason, for an effect of any
     /// other size, an input no variable has, a grid under two points, or more values than <see cref="EffectSpec.CellBudget"/>.
