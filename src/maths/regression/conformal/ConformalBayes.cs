@@ -120,22 +120,26 @@ public sealed record ConformalMargin(double Multiple, double[] CandidateErrors, 
 /// <see cref="Tied"/> equal to it, so π(y_g) = (Below + Tied + 1)/m, ties counted for the candidate (CB-1), and y_g is accepted
 /// when π(y_g) > k/m, or under <see cref="Inflated"/> when the inflated rank exceeds k. π need not be monotone in y, so the set
 /// can be a union of intervals (<see cref="Intervals"/>). A stratum too small for the level (k = 0) has the whole space as its
-/// set, and nothing is computed: <see cref="WholeSpace"/>, with the per-value arrays and the margin null.
+/// set, and nothing is computed: <see cref="WholeSpace"/>, with the per-value arrays and the margin null. The split form's density
+/// score (<see cref="SplitConformal.Density"/>) reports its sets here too, ranked among the stratum's calibration units: its
+/// scores are the training split's predictive, with no add-one-in weights, so no ESS, no margin and no diagnostics, and the
+/// draws' error costs no coverage (CB-2).
 /// </summary>
 /// <param name="Case">The test case, in the candidates' order.</param>
 /// <param name="Stratum">Its stratum.</param>
-/// <param name="Units">m: the stratum's training units and the candidate.</param>
+/// <param name="Units">m: the stratum's training units and the candidate; in the split form, its calibration units and the
+/// candidate.</param>
 /// <param name="Level">k = ⌊α·m⌋.</param>
 /// <param name="Grid">The case's candidate values, ascending.</param>
 /// <param name="PValues">π(y_g) for each grid value; null for the whole space.</param>
 /// <param name="Below">The training units of the stratum scoring strictly below the candidate at y_g.</param>
 /// <param name="Tied">Those scoring equal to it; the strict rule (accept when Below ≥ k) and random tie-breaking read
 /// these with <see cref="Below"/>.</param>
-/// <param name="CandidateScores">The candidate's own log conformity score at y_g, ln p(y_g | all m units); −∞ outside every
-/// draw's support.</param>
+/// <param name="CandidateScores">The candidate's own log conformity score at y_g, ln p(y_g | all m units), in the split form
+/// ln p(y_g | the training split); −∞ outside every draw's support.</param>
 /// <param name="EffectiveSampleSizes">Kish's ESS of the add-one-in weights at y_g, 1/Σ w̃²; 0 outside every draw's
-/// support.</param>
-/// <param name="Margin">CB-3's reading; null for the whole space.</param>
+/// support; null in the split form.</param>
+/// <param name="Margin">CB-3's reading; null for the whole space and in the split form.</param>
 /// <param name="Inflated">Whether the set is the inflated rule's.</param>
 /// <param name="ErrorLevel">ν, which the bounds' coverage gives up.</param>
 /// <param name="FallBack">The opt-in fallback rule's reading (<see cref="ConformalOptions.FallbackShare"/>): whether the scores'
@@ -144,7 +148,7 @@ public sealed record ConformalMargin(double Multiple, double[] CandidateErrors, 
 /// values where the plain sets of the draws' two halves disagree (each chain's first and second halves, or alternate draws without
 /// chains), the coverage Monte Carlo error could shift here, read at its typical size; conservative, since each half carries √2
 /// the run's error. The main session's construction (2026-11-07), not from a paper. NaN on a grid of one value, where it has no
-/// width, for the whole space, and when the draws do not split.</param>
+/// width, for the whole space, when the draws do not split, and in the split form.</param>
 /// <param name="SplitHalfDisagreements">The grid values where the two halves' plain sets disagree.</param>
 public sealed record ConformalSet(int Case, int Stratum, int Units, int Level, double[] Grid, double[]? PValues, int[]? Below,
                                   int[]? Tied, double[]? CandidateScores, double[]? EffectiveSampleSizes,
@@ -160,10 +164,11 @@ public sealed record ConformalSet(int Case, int Stratum, int Units, int Level, d
     /// <summary>
     /// The coverage the set keeps under its scores' Monte Carlo error, indicative since the bounds are not sure ones:
     /// 1 − (k + m̂)/m − ν for the plain rule (<c>coverage_close</c> with <c>card_fragile_le_estimated</c>), 1 − k/m − ν for the
-    /// inflated one (<c>coverage_inflated</c>). 1 for the whole space.
+    /// inflated one (<c>coverage_inflated</c>). 1 for the whole space; 1 − k/m with no margin, the split form's, whose guarantee
+    /// holds for any fit (<c>split_coverage</c>).
     /// </summary>
-    public double CoverageUnderError => WholeSpace ? 1.0
-        : Inflated ? Coverage - ErrorLevel : 1.0 - (double)(Level + Margin!.Count) / Units - ErrorLevel;
+    public double CoverageUnderError => WholeSpace ? 1.0 : Margin is null ? Coverage
+        : Inflated ? Coverage - ErrorLevel : 1.0 - (double)(Level + Margin.Count) / Units - ErrorLevel;
 
     /// <summary>Whether grid value <paramref name="g"/> is in the set: the inflated rule's under <see cref="Inflated"/>, the plain
     /// rule's otherwise.</summary>
@@ -173,8 +178,9 @@ public sealed record ConformalSet(int Case, int Stratum, int Units, int Level, d
     public bool AcceptsPlain(int g) => WholeSpace || Below![g] + Tied![g] + 1 > Level;
 
     /// <summary>Whether the inflated rule accepts grid value <paramref name="g"/>. It accepts every value the plain rule does,
-    /// since raising the candidate's estimate and lowering the units' only adds units at or below it.</summary>
-    public bool AcceptsInflated(int g) => WholeSpace || Margin!.InflatedRanks[g] > Level;
+    /// since raising the candidate's estimate and lowering the units' only adds units at or below it. With no margin, the split
+    /// form's, it is the plain rule.</summary>
+    public bool AcceptsInflated(int g) => WholeSpace || (Margin is null ? AcceptsPlain(g) : Margin.InflatedRanks[g] > Level);
 
     /// <summary>
     /// How much more the inflated set holds than the plain one, as a share of the plain set: (|I| − |A|)/|A|, read on the grid's
@@ -245,8 +251,9 @@ public sealed record ConformalSet(int Case, int Stratum, int Units, int Level, d
     }
 }
 
-/// <summary>The full step's sets, one per test case in the candidates' order, at miscoverage <paramref name="Alpha"/>.</summary>
-public sealed record ConformalPrediction(IReadOnlyList<ConformalSet> Sets, double Alpha);
+/// <summary>The sets, one per test case in the candidates' order, at miscoverage <paramref name="Alpha"/>, from the full step or the
+/// split form's density score (<paramref name="Form"/>).</summary>
+public sealed record ConformalPrediction(IReadOnlyList<ConformalSet> Sets, double Alpha, ConformalForm Form = ConformalForm.Full);
 
 /// <summary>One candidate's conformity scores (<see cref="ConformalBayes.Scores"/>): the log scores of its stratum's training
 /// units, in <paramref name="Units"/>' order, the candidate's own, the add-one-in weights' Kish ESS, and each score's Monte Carlo
@@ -552,7 +559,7 @@ public static class ConformalBayes
             throw new ArgumentException("The candidates' draw weights are not the training density's.", nameof(candidates));
     }
 
-    private static bool SameLatents(IReadOnlyList<LatentReport> a, IReadOnlyList<LatentReport> b)
+    internal static bool SameLatents(IReadOnlyList<LatentReport> a, IReadOnlyList<LatentReport> b)
     {
         if (a.Count != b.Count) return false;
         var counts = new Dictionary<LatentReport, int>();
@@ -565,7 +572,7 @@ public static class ConformalBayes
         return true;
     }
 
-    private static bool SameSequence<T>(IReadOnlyList<T>? a, IReadOnlyList<T>? b) where T : IEquatable<T>
+    internal static bool SameSequence<T>(IReadOnlyList<T>? a, IReadOnlyList<T>? b) where T : IEquatable<T>
     {
         if (a is null || b is null) return a is null && b is null;
         if (a.Count != b.Count) return false;

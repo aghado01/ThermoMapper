@@ -116,11 +116,13 @@ public static class PredictiveChecks
     }
 
     // The draws a check reads, as rows of the density, and their normalized log weights: every row and null for equal
-    // weights; the rows of positive weight for weighted draws. The conformal layer reads them too.
-    internal static (int[] Rows, double[]? LogWeights) Rows(PointwiseLogDensity density)
+    // weights; the rows of positive weight for weighted draws. The conformal layer reads them too, the split form's from the
+    // candidate density's weights.
+    internal static (int[] Rows, double[]? LogWeights) Rows(PointwiseLogDensity density) => Rows(density.Weights, density.Draws);
+
+    internal static (int[] Rows, double[]? LogWeights) Rows(IReadOnlyList<double>? drawWeights, int s)
     {
-        int s = density.Draws;
-        if (density.Weights is not { } weights)
+        if (drawWeights is not { } weights)
         {
             var all = new int[s];
             for (int d = 0; d < s; d++) all[d] = d;
