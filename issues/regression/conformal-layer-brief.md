@@ -149,6 +149,7 @@ Built at the user's decisions of 2026-11-08, relayed by the main session: "Split
 - *The flag.* The conjugate exact posterior flags no case. Two chains stuck apart flag 287 of 500, 267 of them with the candidate's own score falling; each keeps its set, with NaN quantiles and CRPS.
 - *Agreement with slice 3's sets.* The equi-tailed set is slice 3's split rule in each tail at α/2 on the CDF score at all 61,127 grid values in the bulk. On a fit that is right (m 2,000), its ends, the density set's and CQR's meet the fit's own central interval, each mean gap within four se and a grid step.
 - *CRPS against a quadrature reference:* within 1.3·10⁻³ at m 20 and 4.6·10⁻⁴ at m 200, against the bound 0.010.
+- *Per commit,* the selected classes and the pinned tier: 129 of 129. *At the slice's end* (`scripts/test-select.ps1 -Scope Slice` on a snapshot of 77d0c24): the whole `Maths.Regression.Tests` assembly, 2,297 of 2,297, the eight pinned hashes among them, in 12 m 1 s. Nothing broke, so no follow-up commit was needed.
 
 **The measured default.** Both forms ran on the same data, the full step fitting all of it.
 - *Where the draws are a posterior that mixed,* the full step is sharper by more where data are scarce. Its CRPS is 10% lower at n 49 on the conjugate model, and 2.5 to 3.7% lower at n 298 on BASS, at the split form's width. It flags 0 to 0.1% of cases there.
