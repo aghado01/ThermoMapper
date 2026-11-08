@@ -183,6 +183,9 @@ public sealed record ConformalIntervals(IReadOnlyList<ConformalInterval> Interva
 /// q_hi(x) − y), the negative of their max(q_lo − y, y − q_hi). Its set is the interval [q_lo − Q, q_hi + Q] with Q the
 /// negated threshold (<c>cqr_ordConnected</c>).</item>
 /// <item><b>The standardized residual</b> (<see cref="Residuals"/>): −|y − μ(x)|/ρ(x). Its set is the interval μ ± Qρ.</item>
+/// <item><b>The predictive CDF</b> (<see cref="Distribution"/>; Vovk, Petej, Nouretdinov, Manokhin &amp; Gammerman 2020): F̂(y | x) =
+/// Σ_s W̄_s F(y | x, θ_s), the fit's predictive CDF, whose ranks give the conformal predictive distribution
+/// (<see cref="ConformalDistribution"/>), the layer's default.</item>
 /// </list>
 /// Ranks are taken within each test case's stratum, among the calibration units of that stratum (<c>coverage_stratum</c>).
 /// Thread-safe: it reads its inputs and writes only its own buffers.
@@ -204,21 +207,7 @@ public static class SplitConformal
     public static ConformalPrediction Density(CandidateLogDensity calibration, CandidateLogDensity candidates, double alpha = 0.1)
     {
         CheckAlpha(alpha);
-        ArgumentNullException.ThrowIfNull(calibration);
-        ArgumentNullException.ThrowIfNull(candidates);
-        for (int i = 0; i < calibration.Cases; i++)
-            if (calibration.Grids[i].Length != 1)
-                throw new ArgumentException($"Calibration case {i}'s grid holds {calibration.Grids[i].Length} values: each calibration unit is read at its "
-                                            + "observed response, a grid of one value.", nameof(calibration));
-        const string same = "every unit, calibration or test, is read by one function of the unit (CB-2, splitScore_equivariant)";
-        if (candidates.Draws != calibration.Draws)
-            throw new ArgumentException($"The candidates hold {candidates.Draws} draws, the calibration {calibration.Draws}: {same}.", nameof(candidates));
-        if (!ConformalBayes.SameSequence(calibration.ChainLengths, candidates.ChainLengths))
-            throw new ArgumentException($"The candidates' chain lengths are not the calibration's: {same}.", nameof(candidates));
-        if (!ConformalBayes.SameSequence(calibration.Weights, candidates.Weights))
-            throw new ArgumentException($"The candidates' draw weights are not the calibration's: {same}.", nameof(candidates));
-        if (!ConformalBayes.SameLatents(calibration.Latents, candidates.Latents))
-            throw new ArgumentException($"The candidates' latents are not treated as the calibration's are: {same}.", nameof(candidates));
+        CheckPair(calibration, candidates);
 
         (int[] rows, double[]? logWeights) = PredictiveChecks.Rows(calibration.Weights, calibration.Draws);
         var scores = new double[calibration.Cases];
@@ -248,6 +237,78 @@ public static class SplitConformal
             sets[t] = new ConformalSet(t, h, m, k, grid, p, below, tied, own, null);
         }
         return new ConformalPrediction(sets, alpha, ConformalForm.Split);
+    }
+
+    /// <summary>
+    /// The split form's conformal predictive distribution, the layer's default (the user's decision of 2026-11-08; Vovk, Petej,
+    /// Nouretdinov, Manokhin and Gammerman 2020). The score is the fit's predictive CDF F̂(y | x) = Σ_s W̄_s F(y | x, θ_s), read by both
+    /// tails from the seams' log CDF: <paramref name="calibration"/> at the calibration cases, each on a grid of its observed response,
+    /// gives the calibration PITs, and <paramref name="candidates"/> the test cases on their grids. The calibration's scores do not move
+    /// with the candidate and the candidate's rises with y, so both of Vovk's conditions hold by construction and every case has a
+    /// distribution (its <see cref="ConformalDistribution.Fall"/> is 0, and reads the CDFs' rounding if not). It is the fit's predictive
+    /// recalibrated by the calibration PITs, valid for any fit (CB-2), PIT included. Both seams must hold their log CDF, the same
+    /// draws, chain lengths, weights and latent report.
+    /// </summary>
+    public static ConformalDistributions Distribution(CandidateLogDensity calibration, CandidateLogDensity candidates)
+    {
+        CheckPair(calibration, candidates);
+        double[,] calibrationLogCdf = calibration.LogCdf
+            ?? throw new ArgumentException("The calibration carries no log CDF; the predictive distribution's score is the fit's predictive CDF.", nameof(calibration));
+        double[,] candidateLogCdf = candidates.LogCdf
+            ?? throw new ArgumentException("The candidates carry no log CDF; the predictive distribution's score is the fit's predictive CDF.", nameof(candidates));
+        (int[] rows, double[]? logWeights) = PredictiveChecks.Rows(calibration.Weights, calibration.Draws);
+        double[] weights = CdfScores.Weights(rows, logWeights);
+        var scores = new CdfScore[calibration.Cases];
+        CdfScores.Fixed(calibrationLogCdf, rows, weights, 0, calibration.Cases, scores);
+        var strata = new Dictionary<int, List<CdfScore>>();
+        for (int i = 0; i < scores.Length; i++)
+        {
+            int h = calibration.StratumOf[i];
+            if (!strata.TryGetValue(h, out List<CdfScore>? list)) strata.Add(h, list = []);
+            list.Add(scores[i]);
+        }
+        var sorted = new Dictionary<int, CdfScore[]>();
+        foreach ((int h, List<CdfScore> list) in strata)
+        {
+            CdfScore[] array = [.. list];
+            Array.Sort(array);
+            sorted.Add(h, array);
+        }
+        var distributions = new ConformalDistribution[candidates.Cases];
+        for (int t = 0; t < candidates.Cases; t++)
+        {
+            int h = candidates.StratumOf[t];
+            CdfScore[] units = sorted.TryGetValue(h, out CdfScore[]? found) ? found : [];
+            double[] grid = candidates.Grids[t];
+            var own = new CdfScore[grid.Length];
+            CdfScores.Fixed(candidateLogCdf, rows, weights, candidates.Offset(t), grid.Length, own);
+            var below = new int[grid.Length];
+            var tied = new int[grid.Length];
+            for (int g = 0; g < grid.Length; g++) (below[g], tied[g]) = CdfScores.Rank(units, own[g]);
+            distributions[t] = new ConformalDistribution(t, h, units.Length + 1, grid, below, tied, ConformalForm.Split,
+                                                         CdfScores.Fall(below, tied), CdfScores.ScoreFall(own));
+        }
+        return new ConformalDistributions(distributions, ConformalForm.Split);
+    }
+
+    // CB-2's alignment: calibration units each on their response, and every unit read by one function.
+    private static void CheckPair(CandidateLogDensity calibration, CandidateLogDensity candidates)
+    {
+        ArgumentNullException.ThrowIfNull(calibration);
+        ArgumentNullException.ThrowIfNull(candidates);
+        for (int i = 0; i < calibration.Cases; i++)
+            if (calibration.Grids[i].Length != 1)
+                throw new ArgumentException($"Calibration case {i}'s grid holds {calibration.Grids[i].Length} values: each calibration unit is read at its "
+                                            + "observed response, a grid of one value.", nameof(calibration));
+        const string same = "every unit, calibration or test, is read by one function of the unit (CB-2, splitScore_equivariant)";
+        if (candidates.Draws != calibration.Draws)
+            throw new ArgumentException($"The candidates hold {candidates.Draws} draws, the calibration {calibration.Draws}: {same}.", nameof(candidates));
+        if (!ConformalBayes.SameSequence(calibration.ChainLengths, candidates.ChainLengths))
+            throw new ArgumentException($"The candidates' chain lengths are not the calibration's: {same}.", nameof(candidates));
+        if (!ConformalBayes.SameSequence(calibration.Weights, candidates.Weights))
+            throw new ArgumentException($"The candidates' draw weights are not the calibration's: {same}.", nameof(candidates));
+        if (!ConformalBayes.SameLatents(calibration.Latents, candidates.Latents))
+            throw new ArgumentException($"The candidates' latents are not treated as the calibration's are: {same}.", nameof(candidates));
     }
 
     /// <summary>

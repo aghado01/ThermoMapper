@@ -15,7 +15,9 @@ namespace Maths.Regression.Tests;
 /// band and k̂, with the training side's once-per-stratum likelihoods beside them, at the cost harness's base (n 1,000, S 1,000)
 /// and at n 1,000 with S 4,000, for independent draws and for two chains; the product beside the scalar loop it replaces. The
 /// split form's row (slice 3): the calibration's predictive once per stratum, then per grid the predictive and the ranks, and CQR's
-/// and the residual's calibration and intervals. Indicative: the best of five on a shared machine.
+/// and the residual's calibration and intervals. The predictive distribution's row (slice 4): the split form's calibration PITs once per
+/// stratum and its whole call on one grid, beside the full step's opt-in, two products a batch. Indicative: the best of five on a shared
+/// machine.
 /// </summary>
 public sealed class ConformalCostTests(ITestOutputHelper output)
 {
@@ -152,5 +154,51 @@ public sealed class ConformalCostTests(ITestOutputHelper output)
         output.WriteLine($"  the density score: calibration side (once per stratum) {calibrationSide:F2} ms; per grid {perGrid:F2} ms, "
                          + $"{1e3 * perGrid / Grid:F1} µs per candidate; the whole step on one grid {step:F2} ms");
         output.WriteLine($"  CQR, calibration and {Grid} intervals: {cqr:F3} ms; the residual's: {residual:F3} ms");
+    }
+
+    [Theory]
+    [InlineData(1000, 1000)]
+    [InlineData(1000, 4000)]
+    public void DistributionCostRow(int n, int s)
+    {
+        // The predictive distribution at n units and S draws, one grid of G: the split form's calibration PITs (n by both tails and a
+        // sort, once per stratum), then per grid the candidate's CDF by both tails and its ranks, and its whole call; the full step's
+        // whole call, two (n × S)·(S × G) products and the counts.
+        if (!BassQualification.Enabled) return;
+        var rng = new Xoshiro256PlusPlus(n + s + 2);
+        var ll = new double[s, n];
+        var lcdf = new double[s, n];
+        for (int d = 0; d < s; d++)
+            for (int i = 0; i < n; i++) { ll[d, i] = -1 - 4 * rng.NextDouble(); lcdf[d, i] = Math.Log(rng.NextDouble() + 1e-300); }
+        var lc = new double[s, Grid];
+        var cc = new double[s, Grid];
+        for (int d = 0; d < s; d++)
+            for (int g = 0; g < Grid; g++) { lc[d, g] = -1 - 6 * rng.NextDouble() * (1 + g / 50.0); cc[d, g] = Math.Log((g + rng.NextDouble()) / (Grid + 1)); }
+        LatentReport[] latents = [new("θ", LatentScope.Global, LatentTreatment.Conditioned)];
+        var calibration = new CandidateLogDensity(ll, [.. Enumerable.Range(0, n).Select(i => new[] { (double)i })], latents) { LogCdf = lcdf };
+        var candidates = new CandidateLogDensity(lc, [[.. Enumerable.Range(0, Grid).Select(g => (double)g)]], latents) { LogCdf = cc };
+        var training = new PointwiseLogDensity(ll, UnitPartition.EachObservation(n), latents) { LogCdf = lcdf };
+        int[] rows = [.. Enumerable.Range(0, s)];
+        double[] weights = CdfScores.Weights(rows, null);
+        var scores = new CdfScore[n];
+        double calibrationSide = Best(() =>
+        {
+            CdfScores.Fixed(lcdf, rows, weights, 0, n, scores);
+            Array.Sort(scores);
+        });
+        CdfScore[] sorted = [.. scores];
+        var own = new CdfScore[Grid];
+        double perGrid = Best(() =>
+        {
+            CdfScores.Fixed(cc, rows, weights, 0, Grid, own);
+            for (int g = 0; g < Grid; g++) CdfScores.Rank(sorted, own[g]);
+        });
+        double split = Best(() => SplitConformal.Distribution(calibration, candidates));
+        double full = Best(() => ConformalBayes.Distribution(training, candidates));
+        string clock = BassCost.Cycles ? "cycles" : "wall";
+        output.WriteLine($"the predictive distribution, n {n} units, S {s}, G {Grid} ({clock} clock, indicative, best of {Repeats}):");
+        output.WriteLine($"  the split form: calibration PITs (once per stratum) {calibrationSide:F2} ms; per grid {perGrid:F2} ms, "
+                         + $"{1e3 * perGrid / Grid:F1} µs per candidate; the whole call on one grid {split:F2} ms");
+        output.WriteLine($"  the full step's opt-in: the whole call on one grid {full:F2} ms, {1e3 * full / Grid:F1} µs per candidate");
     }
 }

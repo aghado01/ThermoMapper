@@ -293,8 +293,9 @@ public sealed record ConformalScores(int[] Units, double[] Scores, double Candid
 /// candidate whose latents are treated otherwise than the training units'; draws that do not align.</item>
 /// </list>
 /// The guarantee is exact for exact posterior weights; from Monte Carlo draws it holds up to the estimates' error, which the
-/// margin reads. A candidate whose density is zero under every draw scores −∞ and takes π = 1/m. Thread-safe: it reads its
-/// inputs and writes only its own buffers.
+/// margin reads. A candidate whose density is zero under every draw scores −∞ and takes π = 1/m. The full step's predictive
+/// distribution (<see cref="Distribution"/>) is an opt-in beside the split form's default. Thread-safe: it reads its inputs and
+/// writes only its own buffers.
 /// </summary>
 public static class ConformalBayes
 {
@@ -369,6 +370,55 @@ public static class ConformalBayes
             }
         }
         return new ConformalPrediction(sets, alpha);
+    }
+
+    /// <summary>
+    /// The full step's conformal predictive distribution, an opt-in beside the split form's default (the user's decision of
+    /// 2026-11-08; <see cref="SplitConformal.Distribution"/>). The score is the in-sample predictive CDF under the add-one-in weights,
+    /// each unit's F̃ᵢ = Σ_s w̃_s F(y_i | x_i, θ_s) and the candidate's F̃_c = Σ_s w̃_s F(y | x_t, θ_s), read by both tails from the
+    /// seams' log CDF (<see cref="PointwiseLogDensity.LogCdf"/>, <see cref="CandidateLogDensity.LogCdf"/>), two (n × S)·(S × G)
+    /// products a batch. It spends no data on calibration, but it is not monotone in y: it falls where the draws' predictives at x
+    /// disagree (slice 4's reading). So each case is read along its grid, and one whose counts fall is flagged with how far
+    /// (<see cref="ConformalDistribution.Fall"/>, <see cref="ConformalDistribution.ScoreFall"/>): it keeps its p-values and its set,
+    /// with no distribution. A conformal p-value needs no monotone score, so for draws from the posterior the PIT holds on every case,
+    /// flagged or not, up to their Monte Carlo error as the full step's sets do. Draws that are no posterior, a wrong fit's or two
+    /// chains stuck apart, break the score's symmetry, and the split form is the guarantee there. No margin is read for this score.
+    /// CB-4's refusals and alignment are the full step's.
+    /// </summary>
+    public static ConformalDistributions Distribution(PointwiseLogDensity training, CandidateLogDensity candidates)
+    {
+        Check(training, candidates);
+        double[,] unitLogCdf = training.LogCdf
+            ?? throw new ArgumentException("The training density carries no log CDF; the predictive distribution's score is the in-sample predictive CDF.", nameof(training));
+        double[,] candidateLogCdf = candidates.LogCdf
+            ?? throw new ArgumentException("The candidates carry no log CDF; the predictive distribution's score is the in-sample predictive CDF.", nameof(candidates));
+        (int[] rows, double[]? logWeights) = PredictiveChecks.Rows(training);
+        Dictionary<int, List<int>> units = UnitsByStratum(training.Units);
+        var casesOf = new SortedDictionary<int, List<int>>();
+        for (int t = 0; t < candidates.Cases; t++)
+        {
+            int h = candidates.StratumOf[t];
+            if (!casesOf.TryGetValue(h, out List<int>? list)) casesOf.Add(h, list = []);
+            list.Add(t);
+        }
+        var distributions = new ConformalDistribution[candidates.Cases];
+        foreach ((int h, List<int> cases) in casesOf)
+        {
+            int[] members = units.TryGetValue(h, out List<int>? found) ? [.. found] : [];
+            var scorer = new CdfScorer(unitLogCdf, rows, logWeights, members);
+            foreach (int t in cases)
+            {
+                int g = candidates.Grids[t].Length, offset = candidates.Offset(t);
+                var below = new int[g];
+                var tied = new int[g];
+                var own = new CdfScore[g];
+                for (int b0 = 0; b0 < g; b0 += Batch)
+                    scorer.Score(candidates.Values, candidateLogCdf, offset + b0, Math.Min(Batch, g - b0), below, tied, own, b0);
+                distributions[t] = new ConformalDistribution(t, h, members.Length + 1, candidates.Grids[t], below, tied, ConformalForm.Full,
+                                                             CdfScores.Fall(below, tied), CdfScores.ScoreFall(own));
+            }
+        }
+        return new ConformalDistributions(distributions, ConformalForm.Full);
     }
 
     /// <summary>

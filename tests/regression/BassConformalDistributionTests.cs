@@ -2,6 +2,7 @@ using System;
 using System.Collections.Generic;
 using System.Linq;
 using Maths.Distributions;
+using Maths.Regression.Conformal;
 using Maths.Regression.Spline.Bass;
 using Maths.Rng;
 using Xunit;
@@ -175,5 +176,123 @@ public sealed class BassConformalDistributionTests(ITestOutputHelper output)
             }
         }
         ConformalDistributionTests.Report(output, kind, readings, Train + 1);
+    }
+
+    // ---- the predictive distribution on BASS: PIT, Vovk's conditions and the measured default ----------------------------------------
+
+    [Fact]
+    public void Distribution_AHealthyFit() => Distribution("a healthy fit");
+
+    [Fact]
+    public void Distribution_AStudentTFit() => Distribution("a Student t fit");
+
+    [Fact]
+    public void Distribution_AWrongFit() => Distribution("a wrong fit");
+
+    [Fact]
+    public void Distribution_AChainStoppedEarly() => Distribution("a chain stopped early");
+
+    private const int CalibrationUnits = 199, PitTests = 100, PitReps = 20, GridCases = 10;
+
+    // Both forms on the same data each replication: the split form's fit on 99 training units, its calibration 199 units (m 200),
+    // and the full step's fit on all 298 (m 299). The PIT at 100 held-out responses: the split form's for any fit; the full step's over
+    // every case and over those its flag passes, the flag read on a grid of step 0.05, asserted where the fit is a posterior that mixed
+    // (a healthy fit, the t fit, the fit that never sees x₀) and reported for the chain stopped early. On ten cases a grid of step 0.01:
+    // Vovk's conditions for the split form, and where both give a distribution, the 90% width and CRPS beside the fit's own CRPS. The
+    // cost per case is the layer's alone, the seams built before the clock.
+    private void Distribution(string kind)
+    {
+        if (!BassQualification.Enabled) return;
+        double[] fine = [.. Enumerable.Range(0, 901).Select(g => -4.0 + 0.01 * g)], coarse = [.. Enumerable.Range(0, 181).Select(g => -4.0 + 0.05 * g)];
+        int[] seeds = SeedTree.Derive(2026_1117, PitReps);
+        var splitPit = new List<double>();
+        var ownPit = new List<double>();
+        var fullPit = new List<double>();
+        var fullUnflagged = new List<double>();
+        int flagged = 0, both = 0;
+        double splitWidth = 0, fullWidth = 0, splitCrps = 0, fullCrps = 0, ownCrps = 0, largestFall = 0;
+        long splitTicks = 0, fullTicks = 0;
+        for (int r = 0; r < PitReps; r++)
+        {
+            var rng = new Xoshiro256PlusPlus(seeds[r]);
+            (double[] x0, double[] x1, double[] y) = BassCandidateTests.Draw(Train, rng);
+            (double[] c0, double[] c1, double[] yc) = BassCandidateTests.Draw(CalibrationUnits, rng);
+            (double[] t0, double[] t1, double[] yt) = BassCandidateTests.Draw(PitTests, rng);
+            bool blind = kind == "a wrong fit";
+            BassPredictor[] Predictors(double[] a, double[] b)
+                => blind ? [new ContinuousPredictor("x1", b)] : [new ContinuousPredictor("x0", a), new ContinuousPredictor("x1", b)];
+            var splitData = new BassData(Predictors(x0, x1), new ScalarResponse(y));
+            var allData = new BassData(Predictors([.. x0, .. c0], [.. x1, .. c1]), new ScalarResponse([.. y, .. yc]));
+            BassFit split = Bass.Fit(ConfigFor(kind), splitData), full = Bass.Fit(ConfigFor(kind), allData);
+            PredictionCases tests = PredictionCases.Of(Predictors(t0, t1)), few = PredictionCases.Of(Predictors(t0[..GridCases], t1[..GridCases]));
+            double[][] atTruth = [.. yt.Select(v => new[] { v })];
+
+            CandidateLogDensity calibration = split.CandidateLogDensity(splitData, PredictionCases.Of(Predictors(c0, c1)), [.. yc.Select(v => new[] { v })], cdf: true);
+            CandidateLogDensity splitAtTruth = split.CandidateLogDensity(splitData, tests, atTruth, cdf: true);
+            ConformalDistributions splitTruth = SplitConformal.Distribution(calibration, splitAtTruth);
+            PointwiseLogDensity training = full.PointwiseLogDensity(allData, cdf: true);
+            ConformalDistributions fullTruth = ConformalBayes.Distribution(training, full.CandidateLogDensity(allData, tests, atTruth, cdf: true));
+            ConformalDistributions fullCoarse = ConformalBayes.Distribution(training, full.CandidateLogDensity(allData, tests, [.. Enumerable.Repeat(coarse, PitTests)], cdf: true));
+            var tau = new Xoshiro256PlusPlus(seeds[r] ^ 0x5bd1e995);
+            for (int t = 0; t < PitTests; t++)
+            {
+                splitPit.Add(splitTruth.Distributions[t].At(0, tau.NextDouble()));
+                double s = 0.0;
+                for (int d = 0; d < splitAtTruth.Draws; d++) s += Math.Exp(splitAtTruth.LogCdf![d, t]) / splitAtTruth.Draws;
+                ownPit.Add(s);
+                double pit = fullTruth.Distributions[t].At(0, tau.NextDouble());
+                fullPit.Add(pit);
+                if (fullCoarse.Distributions[t].Monotone) fullUnflagged.Add(pit);
+                else { flagged++; largestFall = Math.Max(largestFall, fullCoarse.Distributions[t].ScoreFall); }
+            }
+
+            CandidateLogDensity splitFine = split.CandidateLogDensity(splitData, few, [.. Enumerable.Repeat(fine, GridCases)], cdf: true);
+            CandidateLogDensity fullFine = full.CandidateLogDensity(allData, few, [.. Enumerable.Repeat(fine, GridCases)], cdf: true);
+            long tick0 = System.Diagnostics.Stopwatch.GetTimestamp();
+            ConformalDistributions splitOn = SplitConformal.Distribution(calibration, splitFine);
+            long tick1 = System.Diagnostics.Stopwatch.GetTimestamp();
+            ConformalDistributions fullOn = ConformalBayes.Distribution(training, fullFine);
+            long tick2 = System.Diagnostics.Stopwatch.GetTimestamp();
+            splitTicks += tick1 - tick0;
+            fullTicks += tick2 - tick1;
+            Assert.Equal(0, splitOn.Flagged);
+            for (int t = 0; t < GridCases; t++)
+            {
+                ConformalDistribution sd = splitOn.Distributions[t], fd = fullOn.Distributions[t];
+                Assert.Equal((0, 0.0), (sd.Fall, sd.ScoreFall));
+                if (!fd.Monotone) continue;
+                both++;
+                splitWidth += sd.Width(0.1);
+                fullWidth += fd.Width(0.1);
+                splitCrps += sd.Crps(yt[t]);
+                fullCrps += fd.Crps(yt[t]);
+                var own = new double[fine.Length];
+                for (int g = 0; g < fine.Length; g++)
+                {
+                    for (int d = 0; d < splitFine.Draws; d++) own[g] += Math.Exp(splitFine.LogCdf![d, splitFine.Offset(t) + g]);
+                    own[g] /= splitFine.Draws;
+                }
+                ownCrps += ConformalPredictiveDistributionTests.GridCrps(fine, own, yt[t]);
+            }
+        }
+        int cases = PitReps * PitTests;
+        double perCase = 1e3 / System.Diagnostics.Stopwatch.Frequency / (PitReps * GridCases);
+        output.WriteLine($"{kind}: the full step flags {flagged} of {cases} cases ({100.0 * flagged / cases:F1}%), the largest fall of its score {largestFall:G3}");
+        output.WriteLine($"  where both give a distribution ({both} of {PitReps * GridCases} grid cases): 90% width {splitWidth / both:F3} split against {fullWidth / both:F3} full; "
+                         + $"CRPS {splitCrps / both:F4} split, {fullCrps / both:F4} full, {ownCrps / both:F4} the split fit's own");
+        output.WriteLine($"  per case on a grid of {fine.Length}: {splitTicks * perCase:F2} ms split, {fullTicks * perCase:F2} ms full; the split form's data cost "
+                         + $"{CalibrationUnits} of {Train + CalibrationUnits} units");
+        bool mixed = kind != "a chain stopped early";
+        Report("the split form's PIT", splitPit, CalibrationUnits + 1, assert: true);
+        Report("the split fit's own PIT, F̂(y)", ownPit, CalibrationUnits + 1, assert: false);
+        Report("the full step's PIT, every case", fullPit, Train + CalibrationUnits + 1, assert: mixed);
+        Report("the full step's PIT, unflagged cases", fullUnflagged, Train + CalibrationUnits + 1, assert: mixed);
+    }
+
+    private void Report(string label, List<double> pits, int m, bool assert)
+    {
+        (double[] share, double se, double ks) = ConformalPredictiveDistributionTests.Uniformity(pits, m, PitReps);
+        output.WriteLine($"  {label}: {pits.Count} PITs, bins {string.Join(" ", share.Select(v => v.ToString("F3")))} (se {se:F4}), KS {ks:F4}");
+        if (assert) Assert.All(share, v => Assert.True(Math.Abs(v - 0.1) <= 4 * se, $"{label}: a bin holds {v:F4}"));
     }
 }
