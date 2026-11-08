@@ -60,6 +60,7 @@ public sealed class BassStructurePrior
             throw new ArgumentOutOfRangeException(nameof(subsets));
         Count = count;
         Subsets = subsets;
+        _collectionWeight = CollectionWeightTable(count);
 
         CaseInputs cases = inputs.Cases;
         int present = (maxInteraction > 0 ? 1 : 0) + (maxCategoricalInteraction > 0 ? 1 : 0) + (maxFunctionalInteraction > 0 ? 1 : 0);
@@ -91,6 +92,7 @@ public sealed class BassStructurePrior
         if (!(count.Rate > 0.0 && double.IsFinite(count.Rate))) throw new ArgumentOutOfRangeException(nameof(count), "h₂ must be positive and finite.");
         Count = count;
         Subsets = CategoricalSubsetMeasure.SizeUniform;
+        _collectionWeight = CollectionWeightTable(count);
         _parts[(int)BassPart.Legendre] = Part.Legendre(space);
     }
 
@@ -216,17 +218,23 @@ public sealed class BassStructurePrior
     public double LogCollectionWeight(int terms)
     {
         if (terms < 0) throw new ArgumentOutOfRangeException(nameof(terms));
-        if (terms >= CollectionWeights) return CollectionWeightAt(terms);
-        double cached = _collectionWeight[terms];   // a pure function of M, kept once read: τ's slice step asks it six times a sweep
-        if (!double.IsNaN(cached)) return cached;
-        return _collectionWeight[terms] = CollectionWeightAt(terms);
+        return terms < CollectionWeights ? _collectionWeight[terms] : CollectionWeightAt(Count, terms);
     }
 
+    // The weights of M below 1,024, tabled when the prior is made: τ's slice step asks one six times a sweep, and every
+    // chain and rung of a fit reads the one table, which nothing writes after.
     private const int CollectionWeights = 1024;
-    private readonly double[] _collectionWeight = Enumerable.Repeat(double.NaN, CollectionWeights).ToArray();
+    private readonly double[] _collectionWeight;
 
-    private double CollectionWeightAt(int terms)
-        => SpecialFunctions.LogGamma(Count.Shape + terms) - SpecialFunctions.LogGamma(Count.Shape) - terms * Math.Log(Count.Rate + 1.0);
+    private static double[] CollectionWeightTable(BassCountPrior count)
+    {
+        var table = new double[CollectionWeights];
+        for (int terms = 0; terms < table.Length; terms++) table[terms] = CollectionWeightAt(count, terms);
+        return table;
+    }
+
+    private static double CollectionWeightAt(BassCountPrior count, int terms)
+        => SpecialFunctions.LogGamma(count.Shape + terms) - SpecialFunctions.LogGamma(count.Shape) - terms * Math.Log(count.Rate + 1.0);
 
     /// <summary>
     /// ln p(M + 1)/p(M) = ln[(M + h₁)/((M + 1)(h₂ + 1))], the count law's ratio with λ integrated out: a birth's count
