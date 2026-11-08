@@ -105,6 +105,34 @@ Three open items this chip left. The user asked for them on 2026-11-08, relayed 
 
 ## Reports
 
+### 2026-11-08: SC-5's proper inverse-gamma form proved
+
+**Proved,** in `lean/Enthymemata/BassContractionCover.lean` (now 31 declarations, PROOF-CLOSED; `#print axioms` shows the standard three only).
+- `invGammaProfile`, the collapsed marginal's profile under IG(c, c·s²): −(ν/2 + c)·log(κ + (1 + g(1 − R²))/(1 + g)), with κ = 2c·s²/TSS.
+- `invGammaProfile_zero`: at c = κ = 0 it is the Jeffreys profile.
+- `invGammaProfile_mono`: it increases in R² for g > 0, κ ≥ 0 and ν/2 + c ≥ 0.
+- `invGamma_superset_ge`: the superset step falls by at most (k/2) log(1 + g), as under the Jeffreys form.
+
+**What changed in the statement.** Nothing. "c added to the exponent and c·s² to the sum" is exactly the profile above.
+- *Derivation.* Given σ², the centred response is N(0, σ²(I + gP)), with |I + gP| = (1 + g)^M and quadratic form S = TSS·(1 + g(1 − R²))/(1 + g). Integrating σ² against IG(c, b) gives −(M/2) log(1 + g) − (ν/2 + c) log(b + S/2) plus a constant common to every structure.
+- *Scope.* s² reads the response alone, so κ is the same for every structure. The bound needs the g-form, whose marginal is a function of R².
+
+**Checks first** (`lineage-gap-checks.py`, SC-5 under IG).
+- *The setup:* 400 seeded nested designs, with N from 8 to 29, M from 1 to 4, k from 1 to 3, c in {10⁻³, ½, 2}, and g from e⁻² to e⁷.
+- *The closed form:* the log marginal, from the design's determinant and quadratic form and σ² by quadrature, equals −(M/2) log(1 + g) plus the profile, up to one constant within 9e-13.
+- *The superset step* never fails.
+
+**The decision: SC-5's bound holds under the σ² prior BASS fits actually run.** The default (`docs/Maths/BayesianRegression.md`, D03) is the g-form with level centring (ν = N) and `Sigma2Prior.ScaledToResponse(10⁻³)`, which is IG(10⁻³, 10⁻³·s²). The Jeffreys option was already covered.
+- *The readings need no caveat on the g-form.* The path profile's superset reading (32,577,747 edges, no violation) and the G1 readings that cite SC-5 are now backed by a proof under either σ² prior.
+- *The path profile's report does not name its σ² prior.* Either one is covered, so this changes nothing, but the brief could say which it ran.
+- *A caveat applies only to the other coefficient forms* (`RidgeForm`, `RawRidge`, `ModifiedG`). Their marginals are not functions of R² alone, so SC-5 makes no claim there. No reading is known to have used them.
+
+**Gates.**
+- `lake build Enthymemata.BassContractionCover`: clean, no warnings.
+- `lake build Enthymemata`: green.
+- `scripts/meta-ci.ps1 -NoBuild`: PASS.
+- D: had 40 GB free.
+
 ### 2026-11-08: SG-4(b)'s tensor form proved
 
 **Proved,** in `lean/Enthymemata/BassIntegrals.lean` (now 44 declarations, PROOF-CLOSED; `#print axioms` on the eight new results shows `propext`, `Classical.choice` and `Quot.sound` only).

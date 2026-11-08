@@ -3,6 +3,7 @@
 Checks, not proofs: each line prints a residual or an estimate to compare by eye. Needs numpy.
 """
 import itertools
+import math
 
 import numpy as np
 from numpy.polynomial import legendre as leg
@@ -400,3 +401,60 @@ for q in (3, 4):
         n = max(10.0, 3 * np.log(n) / c)
     print(f"SC-4 Potts q={q}: barrier per site {c:.5f}, across N=64..2048 e^{c * (2048 - 64):.2f} against"
           f" N^3's e^{3 * np.log(32):.2f}, e^(cN) overtakes N^3 near N={n:,.0f}")
+
+# SC-5 under the proper sigma^2 prior IG(c, c s^2), BASS's default (Sigma2Prior.ScaledToResponse(1e-3)),
+# with the g-prior. Given sigma^2 the centred response is N(0, sigma^2 (I + g P_X)), so
+# |I + g P| = (1 + g)^M and y'(I + gP)^(-1) y = S = TSS (1 + g(1 - R^2))/(1 + g). Integrating sigma^2
+# against IG(c, b) gives log p = -(M/2) log(1 + g) - (nu/2 + c) log(b + S/2) + const(nu, c, b).
+def ig_log_marginal_direct(Xc, yc, g, c, b, nu):
+    """The log marginal from the design itself: the Gaussian's determinant and quadratic form, and
+    the sigma^2 integral by quadrature in log sigma^2."""
+    P = Xc @ np.linalg.pinv(Xc)
+    A = np.eye(len(yc)) + g * P
+    _, logdet = np.linalg.slogdet(A)
+    S = yc @ np.linalg.solve(A, yc)
+    t = np.linspace(-12, 12, 20001)
+    s2 = np.exp(t)
+    logint = (-nu / 2 * t - S / (2 * s2) + c * np.log(b) - math.lgamma(c) - (c + 1) * t - b / s2) + t
+    m = logint.max()
+    return -logdet / 2 + m + np.log(np.sum(np.exp(logint - m)) * (t[1] - t[0])), S
+
+
+def ig_profile(g, nu, c, kappa, R2):
+    return -(nu / 2 + c) * np.log(kappa + (1 + g * (1 - R2)) / (1 + g))
+
+
+worst_closed, worst_const, least_slack = 0.0, 0.0, np.inf
+for trial in range(400):
+    N = int(rng.integers(8, 30))
+    M = int(rng.integers(1, 5))
+    k = int(rng.integers(1, 4))
+    X = rng.normal(size=(N, M + k))
+    y = X[:, :M] @ rng.normal(size=M) * rng.uniform(0, 2) + rng.normal(size=N) * rng.uniform(0.1, 3)
+    yc = y - y.mean()
+    Xc = X - X.mean(axis=0)
+    tss = yc @ yc
+    s2 = tss / N
+    c = [1e-3, 0.5, 2.0][trial % 3]
+    b = c * s2
+    g = float(np.exp(rng.uniform(-2, 7)))
+    nu = N - 1
+    L1, S1 = ig_log_marginal_direct(Xc[:, :M], yc, g, c, b, nu)
+    L2, S2 = ig_log_marginal_direct(Xc, yc, g, c, b, nu)
+    R1 = 1 - (Xc[:, :M] @ np.linalg.lstsq(Xc[:, :M], yc, rcond=None)[0] - yc) @ (
+        Xc[:, :M] @ np.linalg.lstsq(Xc[:, :M], yc, rcond=None)[0] - yc) / tss
+    R2_ = 1 - (Xc @ np.linalg.lstsq(Xc, yc, rcond=None)[0] - yc) @ (Xc @ np.linalg.lstsq(Xc, yc, rcond=None)[0] - yc) / tss
+    kappa = 2 * b / tss
+    # closed form: -(M/2) log(1+g) + profile + a constant the same for both structures
+    const1 = L1 - (-(M / 2) * np.log1p(g) + ig_profile(g, nu, c, kappa, R1))
+    const2 = L2 - (-((M + k) / 2) * np.log1p(g) + ig_profile(g, nu, c, kappa, R2_))
+    worst_const = max(worst_const, abs(const1 - const2))
+    worst_closed = max(worst_closed, abs(S1 - tss * (1 + g * (1 - R1)) / (1 + g)))
+    least_slack = min(least_slack, L2 - (L1 - k * np.log1p(g) / 2))
+assert worst_const < 1e-6 and worst_closed < 1e-6 * 1e3 and least_slack >= -1e-9
+print(f"SC-5 under IG(c, c s^2), 400 seeded nested designs (N 8-29, M 1-4, k 1-3, c in {{1e-3, 1/2, 2}}, "
+      f"g from e^-2 to e^7): the log marginal from the design and sigma^2 quadrature is -(M/2) log(1+g) plus "
+      f"the profile up to one constant, worst gap {worst_const:.1e}; the superset step's least slack "
+      f"{least_slack:.2e} >= 0")
+print(f"SC-5 at c = kappa = 0 the IG profile is the Jeffreys profile: "
+      f"{abs(ig_profile(3.0, 20, 0, 0, 0.4) - 10 * (np.log(4.0) - np.log(1 + 3.0 * 0.6))):.1e}")

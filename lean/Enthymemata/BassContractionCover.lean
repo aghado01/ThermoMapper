@@ -39,8 +39,9 @@ via
 * `jeffreysProfile_mono`, `rSquaredOf_mono`, `jeffreys_superset_ge`: D03's Jeffreys marginal is
   increasing in `R²`, and `R²` cannot fall when the column space grows, so SC-5's superset step
     holds
-  for it with no hypothesis on the profile. They sit here for the logarithm's import and the design
-  norm.
+  for it with no hypothesis on the profile. `invGammaProfile_mono` and `invGamma_superset_ge` do
+  the same under BASS's default proper prior IG(c, c·s²). They sit here for the logarithm's
+  import and the design norm.
 
 The space is any normed space over `ℝ`. BASS's has the design vectors in `ℝ^N` and `‖·‖ₙ`, the
 Euclidean norm scaled; the dictionary is the terms' columns, the intercept among them.
@@ -641,6 +642,43 @@ theorem jeffreysProfile_mono {g ν R2 R2' : ℝ} (hg : 0 < g) (hν : 0 ≤ ν) (
   have := Real.log_le_log hpos hle
   exact mul_le_mul_of_nonneg_left (by linarith) (by positivity)
 
+/-- The profile of the collapsed marginal under the proper σ² prior `IG(c, c·s²)`, BASS's default
+(`Sigma2Prior.ScaledToResponse`), up to the Occam term and a constant common to every structure:
+`−(ν/2 + c) log(κ + (1 + g(1 − R²))/(1 + g))`, with `κ = 2c·s²/TSS` the prior's sum on the total's
+scale. The prior adds `c` to the exponent and `c·s²` to the sum (`invGammaProfile_zero`: at
+`c = κ = 0` it is the Jeffreys profile). -/
+noncomputable def invGammaProfile (g ν c κ R2 : ℝ) : ℝ :=
+  -(ν / 2 + c) * Real.log (κ + (1 + g * (1 - R2)) / (1 + g))
+
+theorem invGammaProfile_zero {g R2 : ℝ} (hg : 0 < g) (hR : R2 ≤ 1) (ν : ℝ) :
+    invGammaProfile g ν 0 0 R2 = jeffreysProfile g ν R2 := by
+  unfold invGammaProfile jeffreysProfile
+  have h₁ : 1 + g * (1 - R2) ≠ 0 := by
+    have : 0 ≤ g * (1 - R2) := mul_nonneg hg.le (by linarith)
+    linarith
+  have h₂ : 1 + g ≠ 0 := by linarith
+  rw [zero_add, add_zero, Real.log_div h₁ h₂]
+  ring
+
+/-- **SC-5 under IG(c, c·s²).** The profile increases in `R²`, for `g > 0`, `κ ≥ 0`, `ν/2 + c ≥ 0`
+and `R² ≤ 1`, so `collapsedLogMarginal_superset_ge` applies with the same Occam cost
+`½ log(1 + g)`. -/
+theorem invGammaProfile_mono {g ν c κ R2 R2' : ℝ} (hg : 0 < g) (hνc : 0 ≤ ν / 2 + c) (hκ : 0 ≤ κ)
+    (hR : R2 ≤ R2') (hR' : R2' ≤ 1) : invGammaProfile g ν c κ R2 ≤ invGammaProfile g ν c κ R2' := by
+  unfold invGammaProfile
+  have hg1 : 0 < 1 + g := by linarith
+  have hpos : 0 < κ + (1 + g * (1 - R2')) / (1 + g) := by
+    have : 0 ≤ g * (1 - R2') := mul_nonneg hg.le (by linarith)
+    have : 0 < (1 + g * (1 - R2')) / (1 + g) := div_pos (by linarith) hg1
+    linarith
+  have hle : κ + (1 + g * (1 - R2')) / (1 + g) ≤ κ + (1 + g * (1 - R2)) / (1 + g) := by
+    have : 1 + g * (1 - R2') ≤ 1 + g * (1 - R2) := by nlinarith
+    have := div_le_div_of_nonneg_right this hg1.le
+    linarith
+  have hlog := Real.log_le_log hpos hle
+  have := mul_le_mul_of_nonneg_left hlog hνc
+  linarith
+
 section Nesting
 
 variable {N : ℕ}
@@ -690,6 +728,20 @@ theorem jeffreys_superset_ge {V V' : Set (Fin N → ℝ)} (hV : V.Nonempty) (hsu
         (rSquaredOf V' y tss) :=
   collapsedLogMarginal_superset_ge M k
     (jeffreysProfile_mono hg hν (rSquaredOf_mono hV hsub y ht) (rSquaredOf_le_one V' y ht))
+
+/-- **SC-5 under BASS's default σ² prior, IG(c, c·s²).** With `V ⊆ V'` the column spaces of a
+structure and of its superset by `k` columns, the collapsed log marginal falls by at most
+`(k/2) log(1 + g)`, as under the Jeffreys form, whatever `N` and whatever variance the new columns
+explain. `s²` reads the response alone, so `κ` is the same for both structures. -/
+theorem invGamma_superset_ge {V V' : Set (Fin N → ℝ)} (hV : V.Nonempty) (hsub : V ⊆ V')
+    (y : Fin N → ℝ) {tss g ν c κ : ℝ} (ht : 0 < tss) (hg : 0 < g) (hνc : 0 ≤ ν / 2 + c)
+    (hκ : 0 ≤ κ) (M k : ℕ) :
+    collapsedLogMarginal (Real.log (1 + g) / 2) (invGammaProfile g ν c κ) M (rSquaredOf V y tss) -
+        (k : ℝ) * (Real.log (1 + g) / 2) ≤
+      collapsedLogMarginal (Real.log (1 + g) / 2) (invGammaProfile g ν c κ) (M + k)
+        (rSquaredOf V' y tss) :=
+  collapsedLogMarginal_superset_ge M k
+    (invGammaProfile_mono hg hνc hκ (rSquaredOf_mono hV hsub y ht) (rSquaredOf_le_one V' y ht))
 
 end Nesting
 

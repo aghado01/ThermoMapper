@@ -2,7 +2,7 @@
 
 Grounds what the mixing results rest on, and the checks a new reversible-jump kernel owes before it lands (F-X4). Gap G1 of the [lineage-gaps register](../../../issues/regression/bass/lineage-gaps-register.md), and the KHAOS pieces of E4 and E5.
 
-**Status (2026-11-01).** SC-1, SC-2, SC-3 and SC-5 proved in `lean/Enthymemata/BassStructureChain.lean`, with no apologies. SC-4's walks are done, below, and they correct what SC-4 first expected. [`lineage-gap-checks.py`](lineage-gap-checks.py) keeps the numeric checks, and SC-0's measurement is [reported](../../../issues/regression/bass/spectral-gap-brief.md) apart: γ falls exponentially in N on every replicate cell, with all the growth at modes at the count cap, and one mode needing k = 2 nearly stops deepening at two free slots, as SC-5 gives. Weak directions, where a term's gain is comparable to ½ ln N, are unread.
+**Status (2026-11-01; SC-5's proper IG form 2026-11-08).** SC-1, SC-2, SC-3 and SC-5 proved in `lean/Enthymemata/BassStructureChain.lean`, with no apologies; SC-5's Jeffreys and IG(c, c·s²) forms in `BassContractionCover.lean`. SC-4's walks are done, below, and they correct what SC-4 first expected. [`lineage-gap-checks.py`](lineage-gap-checks.py) keeps the numeric checks, and SC-0's measurement is [reported](../../../issues/regression/bass/spectral-gap-brief.md) apart: γ falls exponentially in N on every replicate cell, with all the growth at modes at the count cap, and one mode needing k = 2 nearly stops deepening at two free slots, as SC-5 gives. Weak directions, where a term's gain is comparable to ½ ln N, are unread.
 
 **Statements that changed.**
 - `gap_le_cut` drops `∑ π = 1`. The inequality never uses it: normalization is what makes the left side a variance, and `varianceOf_indicator` holds without it.
@@ -186,6 +186,14 @@ Both walks read the papers on 2026-11-01. Each verdict names the lines it rests 
 
 Posed by the Ronen walk above, and proved in Lean.
 
-- `collapsedLogMarginal_superset_ge`: for any profile h increasing in R², L(M + k, R²′) ≥ L(M, R²) − k·c, with c the Occam cost per column. `jeffreys_superset_ge` (in `BassContractionCover`, for its imports) discharges the hypothesis on D03's Jeffreys form: `jeffreysProfile_mono` for the profile, and `rSquaredOf_mono` for the nesting, that R² cannot fall when the column space grows. The proper IG(c, c·s²) form has the same shape, with c added to the exponent and c·s² to the sum, so it should follow the same way, though it is not written out. This bounds the log marginal, not π. The [path profile](../../../issues/regression/bass/path-profile-brief.md#reports) read it on 32,577,747 superset edges with no violation, and the least slack is 0, where a term adds nothing.
+- `collapsedLogMarginal_superset_ge`: for any profile h increasing in R², L(M + k, R²′) ≥ L(M, R²) − k·c, with c the Occam cost per column. `jeffreys_superset_ge` (in `BassContractionCover`, for its imports) discharges the hypothesis on D03's Jeffreys form: `jeffreysProfile_mono` for the profile, and `rSquaredOf_mono` for the nesting, that R² cannot fall when the column space grows. The proper IG(c, c·s²) form, BASS's default (`Sigma2Prior.ScaledToResponse(10⁻³)`), is written out and proved (2026-11-08).
+  - `invGammaProfile` is −(ν/2 + c)·log(κ + (1 + g(1 − R²))/(1 + g)), with κ = 2c·s²/TSS: c added to the exponent and c·s² to the sum.
+  - `invGammaProfile_zero`: at c = κ = 0 it is the Jeffreys profile.
+  - `invGammaProfile_mono`: it increases in R² for g > 0, κ ≥ 0 and ν/2 + c ≥ 0.
+  - `invGamma_superset_ge`: SC-5 under that prior, with the same Occam cost ½ log(1 + g). s² reads the response alone, so κ is common to every structure.
+  - The checks (`lineage-gap-checks.py`, SC-5 under IG) compare the log marginal, from the design's determinant and quadratic form and σ² quadrature, with −(M/2) log(1 + g) plus the profile. On 400 seeded nested designs they agree to one constant within 9e-13, and the superset step never fails.
+  - *The coefficient-prior form is the scope.* The bound needs the g-form, D03's default, whose marginal is a function of R². Under `RidgeForm` it is not, so SC-5 says nothing there.
+
+  This bounds the log marginal, not π. The [path profile](../../../issues/regression/bass/path-profile-brief.md#reports) read it on 32,577,747 superset edges with no violation, and the least slack is 0, where a term adds nothing.
 - `cutFlow_le_separator`, `gap_le_separator`: if every step out of A lands in W or stays in A, then γ·π(A)(1 − π(A)) ≤ e·π(W), with e the largest chance of stepping from W into A. Ronen et al.'s Lemma 3 is W = {T₀}.
 - `gap_le_cut_of_stationary`: the bound for a stationary kernel that is not reversible, the case SC-0 raises for a sweep's block scan. Its γ is the constant of the kernel's Dirichlet form, which is that of the additive symmetrization.
