@@ -458,3 +458,42 @@ print(f"SC-5 under IG(c, c s^2), 400 seeded nested designs (N 8-29, M 1-4, k 1-3
       f"{least_slack:.2e} >= 0")
 print(f"SC-5 at c = kappa = 0 the IG profile is the Jeffreys profile: "
       f"{abs(ig_profile(3.0, 20, 0, 0, 0.4) - 10 * (np.log(4.0) - np.log(1 + 3.0 * 0.6))):.1e}")
+
+# CW-1: UV-1 in the empirical norm. Truth N(m0_i, s0^2), model N(m_i, s^2), i = 1..n. With
+# ||m - m0||_n <= s0 eps/6 and |s - s0| <= s0 eps/6, the average KL and log-ratio variance are <= eps^2,
+# through UV-1's per-observation bounds K_i <= 10D + 2 Delta_i and V_i <= 18D + 16 Delta_i (r in [1/2, 2]).
+def kl_i(m0, s0, m, s):
+    r = s0 / s
+    return -np.log(r) + (r**2 - 1) / 2 + (m - m0) ** 2 * r**2 / (2 * s0**2)
+
+
+def var_i(m0, s0, m, s):
+    r = s0 / s
+    return (r**2 - 1) ** 2 / 2 + (m - m0) ** 2 * r**4 / s0**2
+
+
+worst_k, worst_v, worst_lin = -np.inf, -np.inf, -np.inf
+for trial in range(5000):
+    n = int(rng.integers(1, 40))
+    s0 = float(np.exp(rng.uniform(-2, 2)))
+    eps = float(rng.uniform(0, 3))
+    m0 = rng.normal(size=n) * 3
+    d = rng.normal(size=n)
+    d = d / max(np.sqrt(np.mean(d**2)), 1e-12) * s0 * eps / 6 * rng.uniform(0, 1)  # ||d||_n <= s0 eps/6
+    m = m0 + d
+    s = s0 + s0 * eps / 6 * rng.uniform(-1, 1)
+    K, V = kl_i(m0, s0, m, s), var_i(m0, s0, m, s)
+    D, Delta = (s - s0) ** 2 / s0**2, d**2 / s0**2
+    worst_lin = max(worst_lin, np.max(K - (10 * D + 2 * Delta)), np.max(V - (18 * D + 16 * Delta)))
+    worst_k = max(worst_k, K.mean() / eps**2 if eps > 0 else 0)
+    worst_v = max(worst_v, V.mean() / eps**2 if eps > 0 else 0)
+assert worst_lin <= 1e-12 and worst_k <= 1 / 3 + 1e-12 and worst_v <= 17 / 18 + 1e-12
+print(f"CW-1, 5000 seeded draws (n 1-39, eps in [0, 3], sigma0 from e^-2 to e^2): per observation "
+      f"K_i - (10D + 2Delta_i) and V_i - (18D + 16Delta_i) at most {worst_lin:.1e}; mean K/eps^2 at most "
+      f"{worst_k:.3f} (bound 1/3), mean V/eps^2 at most {worst_v:.3f} (bound 17/18)")
+eps = 5.9
+s0 = 1.0
+s = s0 * (1 - eps / 6)
+print(f"CW-1 needs eps <= 3 (r in [1/2, 2]): at eps = {eps}, sigma = sigma0 (1 - eps/6) and f = f*, "
+      f"mean K = {kl_i(0.0, s0, 0.0, s):.1f} against eps^2 = {eps**2:.1f}")
+assert kl_i(0.0, s0, 0.0, s) > eps**2

@@ -105,6 +105,33 @@ Three open items this chip left. The user asked for them on 2026-11-08, relayed 
 
 ## Reports
 
+### 2026-11-08: CW-1 proved, with ε ≤ 3 added
+
+**Proved,** in `lean/Enthymemata/BgpGaussianKL.lean` (now 27 declarations, PROOF-CLOSED; `#print axioms` shows the standard three only).
+- `klDiv_le_and_evariance_le_linear`: UV-1's per-observation bounds K ≤ 10D + 2Δ and V ≤ 18D + 16Δ, under |σ − σ₀| ≤ σ₀/2.
+- `klBall_of_designNorm`: CW-1. With Σ_i (m_i − m₀_i)² ≤ n(σ₀ε/6)², that is ‖f − f*‖ₙ ≤ σ₀ε/6, and with |σ − σ₀| ≤ σ₀ε/6 and ε ≤ 3, the summed KL divergences and log-ratio variances are at most nε².
+- `klBall_needs_eps_le`: without a bound on ε the statement is false.
+
+**What changed in the statement: ε ≤ 3 is added.** The per-observation bounds need r ∈ [½, 2], which the slab gives only for ε ≤ 3, as in `klDiv_le_and_evariance_le_of_slab`.
+- *Without it,* ε = 5.9 lets σ = σ₀/60 and the KL divergence is about 1795, against ε² = 34.8.
+- *The route is unaffected:* the contraction route takes ε → 0, so the hypothesis costs it nothing.
+- *The averages are tighter than stated:* at most ε²/3 and 17ε²/18.
+- *The hypothesis 0 ≤ ε is not needed,* since a negative ε empties the conditions.
+
+**Checks first** (`lineage-gap-checks.py`, CW-1): 5,000 seeded draws, with n up to 39 and ε ∈ [0, 3].
+- The per-observation bounds hold in every draw.
+- The averages reach at most 0.12ε² and 0.69ε².
+- The ε = 5.9 failure is reproduced.
+
+**What it decides.** The prior-mass step can be stated in the empirical norm BASS's fits use, with no sup-norm slab: CW-1 sits between `BgpGaussianKL` and the contraction route.
+- The walk's other items, which were not in scope, stay open: the local `fixed_constant_contraction`, σ²'s upper tail by one test, and the fast rate at K ≥ 2.
+
+**Gates.**
+- `lake build Enthymemata.BgpGaussianKL`: clean, no warnings.
+- `lake build Enthymemata`: green.
+- `scripts/meta-ci.ps1 -NoBuild`: PASS.
+- D: had 40 GB free.
+
 ### 2026-11-08: SC-5's proper inverse-gamma form proved
 
 **Proved,** in `lean/Enthymemata/BassContractionCover.lean` (now 31 declarations, PROOF-CLOSED; `#print axioms` shows the standard three only).

@@ -27,6 +27,11 @@ Variances enter as `(σ ^ 2).toNNReal`, so σ₀ and σ stay real and the identi
 UV-1b and UV-1d (`BgpUnknownVariance.lean`) in the same `(μ₀, σ₀, μ, σ)` parameterization.
 `klDiv_le_and_evariance_le_of_slab` is that composition: the protolemma's inclusion of the
 `|μ − μ₀|`, `|σ − σ₀|` slab of radius `σ₀ε/6` in the KL neighbourhood `{K ≤ ε², V ≤ ε²}`.
+
+CW-1 (`Protolemmata/BASS/contraction-walk.md`) reads the same bounds in the design norm BASS's fits
+use: `klDiv_le_and_evariance_le_linear` keeps them linear in `Δ = δ²/σ₀²`, and
+`klBall_of_designNorm` averages them over `n` observations with `‖m − m₀‖ₙ ≤ σ₀ε/6`.
+`klBall_needs_eps_le` shows the bound on `ε` is needed.
 -/
 
 open MeasureTheory ProbabilityTheory InformationTheory Real
@@ -405,5 +410,114 @@ theorem klDiv_le_and_evariance_le_of_slab {μ₀ μ σ₀ σ ε : ℝ} (h0 : 0 <
       mul_le_mul_of_nonneg_right hr4 hΔ0
     rw [e]
     nlinarith
+
+/-! ### CW-1: UV-1 in the empirical norm -/
+
+/-- **UV-1 per observation, linear in `Δ`.** With `|σ − σ₀| ≤ σ₀/2`, so that `r = σ₀/σ ∈ [½, 2]`,
+`K ≤ 10D + 2Δ` and `V ≤ 18D + 16Δ`, for `D = (σ − σ₀)²/σ₀²` and `Δ = (μ − μ₀)²/σ₀²`. These are the
+bounds inside `klDiv_le_and_evariance_le_of_slab`, before the slab is spent on them. -/
+theorem klDiv_le_and_evariance_le_linear {μ₀ μ σ₀ σ : ℝ} (h0 : 0 < σ₀) (hσ : |σ - σ₀| ≤ σ₀ / 2) :
+    klDiv (gaussianReal μ₀ (σ₀ ^ 2).toNNReal) (gaussianReal μ (σ ^ 2).toNNReal)
+        ≤ ENNReal.ofReal (10 * ((σ - σ₀) ^ 2 / σ₀ ^ 2) + 2 * ((μ - μ₀) ^ 2 / σ₀ ^ 2)) ∧
+      evariance (llr (gaussianReal μ₀ (σ₀ ^ 2).toNNReal) (gaussianReal μ (σ ^ 2).toNNReal))
+          (gaussianReal μ₀ (σ₀ ^ 2).toNNReal)
+        ≤ ENNReal.ofReal (18 * ((σ - σ₀) ^ 2 / σ₀ ^ 2) + 16 * ((μ - μ₀) ^ 2 / σ₀ ^ 2)) := by
+  obtain ⟨hr, hr1⟩ := scale_ratio_bridge h0 hσ
+  have hσpos : 0 < σ := by
+    have := (abs_le.1 hσ).1
+    linarith
+  have hΔ0 : 0 ≤ (μ - μ₀) ^ 2 / σ₀ ^ 2 := by positivity
+  have hr1' : (σ₀ / σ - 1) ^ 2 ≤ 4 * ((σ - σ₀) ^ 2 / σ₀ ^ 2) := by rwa [mul_div_assoc] at hr1
+  obtain ⟨hrlo, hrhi⟩ := hr
+  have hr2 : (σ₀ / σ) ^ 2 ≤ 4 := by nlinarith
+  have hr4 : (σ₀ / σ) ^ 4 ≤ 16 := by nlinarith
+  have hK1 := gaussian_kl_scale_part_le (σ₀ / σ) hrlo
+  have hV1 := gaussian_v_scale_part_le (σ₀ / σ) ⟨hrlo, hrhi⟩
+  refine ⟨?_, ?_⟩
+  · rw [klDiv_gaussianReal μ₀ μ h0 hσpos]
+    apply ENNReal.ofReal_le_ofReal
+    have e : (μ - μ₀) ^ 2 * (σ₀ / σ) ^ 2 / (2 * σ₀ ^ 2)
+        = (σ₀ / σ) ^ 2 / 2 * ((μ - μ₀) ^ 2 / σ₀ ^ 2) := by
+      field_simp
+    have hδK : (σ₀ / σ) ^ 2 / 2 * ((μ - μ₀) ^ 2 / σ₀ ^ 2) ≤ 2 * ((μ - μ₀) ^ 2 / σ₀ ^ 2) :=
+      mul_le_mul_of_nonneg_right (by linarith) hΔ0
+    rw [e]
+    nlinarith
+  · rw [evariance_llr_gaussianReal μ₀ μ h0 hσpos]
+    apply ENNReal.ofReal_le_ofReal
+    have e : (μ - μ₀) ^ 2 * (σ₀ / σ) ^ 4 / σ₀ ^ 2 = (σ₀ / σ) ^ 4 * ((μ - μ₀) ^ 2 / σ₀ ^ 2) := by
+      field_simp
+    have hδV : (σ₀ / σ) ^ 4 * ((μ - μ₀) ^ 2 / σ₀ ^ 2) ≤ 16 * ((μ - μ₀) ^ 2 / σ₀ ^ 2) :=
+      mul_le_mul_of_nonneg_right hr4 hΔ0
+    rw [e]
+    nlinarith
+
+/-- **CW-1, UV-1 in the empirical norm.** For `n` observations, `N(m₀ i, σ₀²)` under the truth and
+`N(m i, σ²)` under the model, let `‖m − m₀‖ₙ ≤ σ₀ε/6`, written `Σ_i (m i − m₀ i)² ≤ n (σ₀ε/6)²`, let
+`|σ − σ₀| ≤ σ₀ε/6`, and let `ε ≤ 3`. Then the KL divergences and the log-ratio variances
+average at most `ε²`: `(f, σ)` lies in the KL ball of radius `ε`, read in the design norm BASS's
+fits use. The averages are in fact at most `ε²/3` and `17ε²/18`. `ε ≤ 3` keeps `r` in `[½, 2]`,
+and without it the statement is false. -/
+theorem klBall_of_designNorm {n : ℕ} (m₀ m : Fin n → ℝ) {σ₀ σ ε : ℝ} (h0 : 0 < σ₀) (hε : ε ≤ 3)
+    (hδ : ∑ i, (m i - m₀ i) ^ 2 ≤ n * (σ₀ * ε / 6) ^ 2)
+    (hσ : |σ - σ₀| ≤ σ₀ * ε / 6) :
+    ∑ i, klDiv (gaussianReal (m₀ i) (σ₀ ^ 2).toNNReal) (gaussianReal (m i) (σ ^ 2).toNNReal)
+        ≤ ENNReal.ofReal (n * ε ^ 2) ∧
+      ∑ i, evariance (llr (gaussianReal (m₀ i) (σ₀ ^ 2).toNNReal)
+          (gaussianReal (m i) (σ ^ 2).toNNReal)) (gaussianReal (m₀ i) (σ₀ ^ 2).toNNReal)
+        ≤ ENNReal.ofReal (n * ε ^ 2) := by
+  have hσ2 : |σ - σ₀| ≤ σ₀ / 2 := hσ.trans (by nlinarith)
+  have hs0 : 0 < σ₀ ^ 2 := by positivity
+  set D := (σ - σ₀) ^ 2 / σ₀ ^ 2 with hDdef
+  have hD : D ≤ ε ^ 2 / 36 := by
+    rw [hDdef, div_le_iff₀ hs0]
+    have h := pow_le_pow_left₀ (abs_nonneg _) hσ 2
+    rw [sq_abs] at h
+    nlinarith
+  have hD0 : 0 ≤ D := by positivity
+  have hsum : ∑ i, (m i - m₀ i) ^ 2 / σ₀ ^ 2 ≤ n * (ε ^ 2 / 36) := by
+    rw [← Finset.sum_div, div_le_iff₀ hs0]
+    nlinarith
+  have hn : (0 : ℝ) ≤ n := Nat.cast_nonneg n
+  have hlin := fun i => klDiv_le_and_evariance_le_linear (μ₀ := m₀ i) (μ := m i) h0 hσ2
+  have hnonneg : ∀ i, 0 ≤ (m i - m₀ i) ^ 2 / σ₀ ^ 2 := fun i => by positivity
+  refine ⟨?_, ?_⟩
+  · calc ∑ i, klDiv (gaussianReal (m₀ i) (σ₀ ^ 2).toNNReal) (gaussianReal (m i) (σ ^ 2).toNNReal)
+        ≤ ∑ i, ENNReal.ofReal (10 * D + 2 * ((m i - m₀ i) ^ 2 / σ₀ ^ 2)) :=
+          Finset.sum_le_sum fun i _ => (hlin i).1
+      _ = ENNReal.ofReal (∑ i, (10 * D + 2 * ((m i - m₀ i) ^ 2 / σ₀ ^ 2))) :=
+          (ENNReal.ofReal_sum_of_nonneg fun i _ => by have := hnonneg i; positivity).symm
+      _ ≤ ENNReal.ofReal (n * ε ^ 2) := by
+          apply ENNReal.ofReal_le_ofReal
+          rw [Finset.sum_add_distrib, Finset.sum_const, Finset.card_univ, Fintype.card_fin,
+            nsmul_eq_mul, ← Finset.mul_sum]
+          nlinarith
+  · calc ∑ i, evariance (llr (gaussianReal (m₀ i) (σ₀ ^ 2).toNNReal)
+          (gaussianReal (m i) (σ ^ 2).toNNReal)) (gaussianReal (m₀ i) (σ₀ ^ 2).toNNReal)
+        ≤ ∑ i, ENNReal.ofReal (18 * D + 16 * ((m i - m₀ i) ^ 2 / σ₀ ^ 2)) :=
+          Finset.sum_le_sum fun i _ => (hlin i).2
+      _ = ENNReal.ofReal (∑ i, (18 * D + 16 * ((m i - m₀ i) ^ 2 / σ₀ ^ 2))) :=
+          (ENNReal.ofReal_sum_of_nonneg fun i _ => by have := hnonneg i; positivity).symm
+      _ ≤ ENNReal.ofReal (n * ε ^ 2) := by
+          apply ENNReal.ofReal_le_ofReal
+          rw [Finset.sum_add_distrib, Finset.sum_const, Finset.card_univ, Fintype.card_fin,
+            nsmul_eq_mul, ← Finset.mul_sum]
+          nlinarith
+
+/-- **CW-1 fails without a bound on `ε`.** At `ε = 59/10`, the truth `N(0, 1)` and the model
+`N(0, (1/60)²)` satisfy both of CW-1's closeness conditions, yet the KL divergence exceeds `ε²`. -/
+theorem klBall_needs_eps_le :
+    ENNReal.ofReal ((59 / 10 : ℝ) ^ 2) <
+      klDiv (gaussianReal 0 ((1 : ℝ) ^ 2).toNNReal)
+        (gaussianReal 0 ((1 / 60 : ℝ) ^ 2).toNNReal) := by
+  rw [klDiv_gaussianReal 0 0 one_pos (by norm_num)]
+  have hlog : Real.log 60 ≤ 59 := by
+    have := Real.log_le_sub_one_of_pos (show (0 : ℝ) < 60 by norm_num)
+    linarith
+  have hreal : (59 / 10 : ℝ) ^ 2 < -Real.log (1 / (1 / 60)) + ((1 / (1 / 60)) ^ 2 - 1) / 2 +
+      ((0 : ℝ) - 0) ^ 2 * (1 / (1 / 60)) ^ 2 / (2 * 1 ^ 2) := by
+    norm_num
+    linarith
+  exact (ENNReal.ofReal_lt_ofReal_iff (lt_of_le_of_lt (by positivity) hreal)).2 hreal
 
 end BGP
