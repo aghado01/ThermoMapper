@@ -112,11 +112,12 @@ public sealed record PredictionCases
     /// extrapolate linearly. An unseen level is refused or placed outside every subset, as <paramref name="unseen"/> says.
     /// Refused: a predictor with no column, a column of the wrong kind, and a column that names no predictor.
     /// </summary>
-    internal (CaseInputs Inputs, bool[] OutsideRange) Prepare(BassInputTransform transform, BassInputs inputs, UnseenLevel unseen)
+    internal (CaseInputs Inputs, bool[] OutsideRange) Prepare(BassInputTransform transform, BassInputs inputs, UnseenLevel unseen, string? grouping = null)
     {
         if (unseen is not (UnseenLevel.Refuse or UnseenLevel.OutsideEverySubset)) throw new ArgumentOutOfRangeException(nameof(unseen));
         var byName = new Dictionary<string, PredictionColumn>(StringComparer.Ordinal);
         foreach (PredictionColumn c in _columns) byName.Add(c.Name, c);
+        if (grouping is not null) byName.Remove(grouping);   // random intercepts read it (GroupsOf), no term does
         var continuous = new double[inputs.Cases.ContinuousCount][];
         var categorical = new int[inputs.Cases.CategoricalCount][];
         var outside = new bool[Cases];
@@ -196,11 +197,43 @@ public sealed record PredictionCases
     }
 
     /// <summary>The training data's cases as prediction columns, by name: each continuous predictor's values and each
-    /// categorical predictor's levels.</summary>
+    /// categorical predictor's levels, and the grouping's levels when the data hold one (E21).</summary>
     public static PredictionCases Of(BassData data)
     {
         ArgumentNullException.ThrowIfNull(data);
-        return Of(data.Predictors);
+        if (data.Grouping is not { } grouping) return Of(data.Predictors);
+        return new PredictionCases([.. Of(data.Predictors).Columns, Column(grouping)]);
+    }
+
+    // A categorical column's cases by level name.
+    private static CategoricalColumn Column(CategoricalPredictor f) => new(f.Name, Array.ConvertAll(f.Codes.ToArray(), code => f.Levels[code]));
+
+    /// <summary>
+    /// Each case's observed level of the fit's random-intercept <paramref name="block"/> on <paramref name="grouping"/>, the training data's
+    /// (E21), or −1 for the population: every case when no column gives the grouping, and a level no training case took when
+    /// <paramref name="unseen"/> places it outside every subset; refused otherwise, naming the level.
+    /// </summary>
+    internal int[] GroupsOf(RandomInterceptBlock block, CategoricalPredictor grouping, UnseenLevel unseen)
+    {
+        ArgumentNullException.ThrowIfNull(block);
+        ArgumentNullException.ThrowIfNull(grouping);
+        var groups = new int[Cases];
+        Array.Fill(groups, -1);
+        PredictionColumn? given = null;
+        foreach (PredictionColumn c in _columns)
+            if (c.Name == grouping.Name) given = c;
+        if (given is null) return groups;
+        if (given is not CategoricalColumn levels) throw new ArgumentException($"The grouping '{grouping.Name}' is categorical; its column gives no levels.", "cases");
+        var codeOf = new Dictionary<string, int>(StringComparer.Ordinal);
+        for (int l = 0; l < grouping.Levels.Count; l++) codeOf.Add(grouping.Levels[l], l);
+        for (int i = 0; i < Cases; i++)
+        {
+            int observed = codeOf.TryGetValue(levels.Levels[i], out int code) ? block.ObservedOf(code) : -1;
+            if (observed < 0 && unseen == UnseenLevel.Refuse)
+                throw new ArgumentException($"The grouping '{grouping.Name}' has no training case at level '{levels.Levels[i]}'; place it at the population (UnseenLevel.OutsideEverySubset) or leave it out.", "cases");
+            groups[i] = observed;
+        }
+        return groups;
     }
 
     /// <summary>The cases of <paramref name="predictors"/>, as <see cref="Of(BassData)"/> reads a data set's.</summary>

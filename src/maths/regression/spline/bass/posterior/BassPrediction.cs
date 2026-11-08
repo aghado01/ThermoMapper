@@ -253,7 +253,10 @@ internal static class BassDirectPrediction
             throw new ArgumentException("A direct fit has no truncation residuals: its predictive draws add noise, and BasisParts is a basis fit's.", nameof(options));
         (List<BassDraw> pooled, _) = BassDrawFit.Pool(draws, terms, options.MeanSurface, nameof(draws));
         (int[] selected, double[] weights) = Draws3.Select(options.Draws, pooled.Count, drawWeights);
-        (CaseInputs caseInputs, bool[] caseOutside) = cases.Prepare(model.Transform, model.Inputs, options.UnseenLevels);
+        (CaseInputs caseInputs, bool[] caseOutside) = cases.Prepare(model.Transform, model.Inputs, options.UnseenLevels, model.Data.Grouping?.Name);
+        // Random intercepts (E21): a case of an observed level reads its draw's u_g; one of the population, u = 0 in f, and its own effect
+        // ~ N(0, σ²s²) in the predictive draw.
+        int[]? groups = model.RandomIntercept is { } block ? cases.GroupsOf(block, model.Data.Grouping!, options.UnseenLevels) : null;
 
         OutputInputs? locations = null;
         bool[] locationOutside;
@@ -288,6 +291,9 @@ internal static class BassDirectPrediction
                 shifts![d] = law.MeanShift(draw.Sigma2, globals);
             }
             surface.Evaluate(draw.Structure.TermIds, draw.Coefficients, f);
+            if (groups is not null)
+                for (int i = 0; i < n; i++)
+                    if (groups[i] >= 0) f[i * m] += draw.GroupEffects![groups[i]];
             for (int i = 0; i < n; i++)
                 for (int l = 0; l < m; l++) latent[d, i, l] = f[i * m + l];
         }
@@ -309,6 +315,9 @@ internal static class BassDirectPrediction
                 double sd = Math.Sqrt(noise[d]);
                 for (int i = 0; i < n; i++)
                     for (int l = 0; l < m; l++) predictive[d, i, l] = latent[d, i, l] + sd * Normal.SampleStandard(rng);
+                if (groups is not null)   // a population case's own group effect, after every case's noise
+                    for (int i = 0; i < n; i++)
+                        if (groups[i] < 0) predictive[d, i, 0] += sd * model.RandomIntercept!.Spec.Scale * Normal.SampleStandard(rng);
             }
         }
 
@@ -320,7 +329,17 @@ internal static class BassDirectPrediction
             for (int d = 0; d < s; d++)
             {
                 BassDraw draw = pooled[selected[d]];
-                surface.Evaluate(draw.Structure.TermIds, means.Coefficients(draw), f);
+                double[] a = means.Coefficients(draw);
+                surface.Evaluate(draw.Structure.TermIds, a, f);
+                if (groups is not null)   // E[u | S, τ, y], linear in α and β: the effects' conditional mean at their conditional means
+                {
+                    RandomInterceptBlock intercepts = model.RandomIntercept!;
+                    var structure = new BassTerm[draw.Structure.TermIds.Length];
+                    for (int j = 0; j < structure.Length; j++) structure[j] = terms[draw.Structure.TermIds[j]];
+                    double[] u = intercepts.EffectMean(intercepts.ResidualSums(model, structure, a));
+                    for (int i = 0; i < n; i++)
+                        if (groups[i] >= 0) f[i * m] += u[groups[i]];
+                }
                 for (int i = 0; i < n; i++)
                     for (int l = 0; l < m; l++) meanSurface[i, l] += weights[d] * f[i * m + l];
             }

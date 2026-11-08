@@ -150,6 +150,7 @@ public sealed class BassDesign
     private readonly BassAdmission _rules;
     private readonly bool _functional, _ridge;
     private readonly BassPriorPrecision _precision; // how the prior's precision reads the columns (E21)
+    private readonly RandomInterceptBlock? _block;  // random intercepts, integrated out by whitening each column (E21)
     private readonly bool _khatriRao;               // a direct response held as case and output factors, its rows unweighted
     private readonly int _cases, _locations, _rows;
     private BassDesignResponse _response;           // what the design reads of the working response it is on
@@ -212,7 +213,7 @@ public sealed class BassDesign
     internal void WarmTables()
     {
         int degree = _basis.Degree;
-        if (!TablesOn || _functional || _khatriRao || _priorColumns is not null || _counted is not null || degree is not (1 or 2)) return;
+        if (!TablesOn || _functional || _khatriRao || _priorColumns is not null || _counted is not null || _block is not null || degree is not (1 or 2)) return;
         int variables = _basis.Inputs.Cases.ContinuousCount, served = Math.Min(variables, TableVariables());
         double[]? roots = _response.Roots;
         for (int v = 0; v < served; v++)
@@ -260,8 +261,9 @@ public sealed class BassDesign
     /// <paramref name="precision"/> is the prior-precision builder: the g-form's or the normalized ridge's, as
     /// <paramref name="ridge"/> says, when null, and one that agrees with <paramref name="ridge"/> when given.</summary>
     public BassDesign(BassBasis basis, BassData data, BassAdmission rules, bool ridge = false, WorkingResponse? working = null,
-                      GPriorCentre intercept = GPriorCentre.Mean, BassPriorPrecision? precision = null)
+                      GPriorCentre intercept = GPriorCentre.Mean, BassPriorPrecision? precision = null, RandomInterceptBlock? block = null)
     {
+        _block = block;
         ArgumentNullException.ThrowIfNull(basis);
         ArgumentNullException.ThrowIfNull(data);
         ArgumentNullException.ThrowIfNull(rules);
@@ -867,6 +869,7 @@ public sealed class BassDesign
         var a = new double[_cases];
         _basis.CaseColumn(term, _basis.Inputs.Cases, a);
         if (!Supported(a, _rules.SupportMinimum, _counted)) return null;
+        _block?.Whiten(a);   // the support reads the column as evaluated, the fit its whitened image
         if (!_functional)
         {
             if (response.Roots is not null) return Whitened(term, a, response);

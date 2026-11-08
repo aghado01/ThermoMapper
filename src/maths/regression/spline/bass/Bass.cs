@@ -135,6 +135,12 @@ public static class Bass
                     foreach (int code in k.Codes.Span) f.Add(code);
                     break;
             }
+        if (data.Grouping is { } grouping)
+        {
+            f.Add("grouping").Add(grouping.Name).Add(grouping.Levels.Count);
+            foreach (string level in grouping.Levels) f.Add(level);
+            foreach (int code in grouping.Codes.Span) f.Add(code);
+        }
         BassResponse response = data.Response;
         f.Add(response is FunctionalResponse ? "functional" : "scalar").Add(response.Cases).Add(response.Locations).Add(response.Values);
         if (response is FunctionalResponse functional)

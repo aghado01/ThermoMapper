@@ -80,6 +80,8 @@ public static class BassPointwise
         {
             if (model.Observation.Law is not null)
                 throw new NotSupportedException("The collapsed predictive integrates a Gaussian noise; under a noise law it waits for a check of its own. Take the retained content, which integrates each observation's latent.");
+            if (model.RandomIntercept is not null)
+                throw new NotSupportedException("The collapsed predictive under random intercepts would leave a unit out of the block as well, whose whitening couples every case of its level; not built (E21). Take the retained content, which reads each draw's group effects.");
             if (model.Working is { IsUnweighted: false, Meaning: WeightMeaning.Replication })
                 throw new NotSupportedException("The collapsed predictive leaves a row out whole; under weights that count rows it would leave out all its copies at once. Take the retained content.");
             // The predictive conditions on the observations outside the unit, beyond the one a flat intercept's integral
@@ -113,7 +115,9 @@ public static class BassPointwise
         var latents = new List<LatentReport> { new("structure", LatentScope.Global, LatentTreatment.Conditioned) };
         if (model.Target.SamplesTau) latents.Add(new LatentReport("prior precision τ", LatentScope.Global, LatentTreatment.Conditioned));
         if (model.Target.Sigma2Rate is not null) latents.Add(new LatentReport("σ²'s rate", LatentScope.Global, LatentTreatment.Conditioned));
-        if (model.Observation.Law is not null)
+        if (model.RandomIntercept is not null)   // the whitening is the block's integral, not an offset conditioned on
+            latents.Add(new LatentReport("the group effects u_g", LatentScope.Group, LatentTreatment.Conditioned));
+        else if (model.Observation.Law is not null)
             latents.Add(new LatentReport("the noise's latent per observation", LatentScope.Observation, LatentTreatment.Integrated));
         else if (pooled.Exists(d => !ReferenceEquals(d.WorkingOn(model), model.Working)))
             latents.Add(new LatentReport("the working response's offset and weights", LatentScope.Observation, LatentTreatment.Conditioned));
@@ -145,7 +149,8 @@ public static class BassPointwise
                 continue;
             }
             WorkingResponse working = draw.WorkingOn(model);
-            ReadOnlySpan<double> y = working.Values;
+            // Under random intercepts the working response is the whitened one, and the fit reads f + u_g at the observations (E21).
+            ReadOnlySpan<double> y = model.RandomIntercept is null ? working.Values : model.Data.Response.Values;
             double[]? weights = working.WeightArray;
             bool counts = working.Meaning == WeightMeaning.Replication;
             fit.Evaluate(draw, f);
@@ -258,6 +263,7 @@ internal sealed class BassDrawFit
 
     public BassDrawFit(BassModel model, BassTermTable terms)
     {
+        _block = model.RandomIntercept;
         _model = model;
         _terms = terms;
         _cases = model.Data.Response.Cases;
@@ -343,8 +349,19 @@ internal sealed class BassDrawFit
         return (a, h);
     }
 
-    /// <summary>The draw's fit at every observation, into <paramref name="fit"/>.</summary>
+    private readonly RandomInterceptBlock? _block;
+
+    /// <summary>The draw's fit at every observation, into <paramref name="fit"/>: f, and under random intercepts f + u_g, each case reading
+    /// its level's effect (E21).</summary>
     public void Evaluate(BassDraw draw, Span<double> fit)
+    {
+        EvaluateTerms(draw, fit);
+        if (_block is null) return;
+        double[] u = draw.GroupEffects ?? throw new ArgumentException("A random-intercept fit's draw carries its group effects.", nameof(draw));
+        for (int i = 0; i < _cases; i++) fit[i] += u[_block.GroupOf(i)];
+    }
+
+    private void EvaluateTerms(BassDraw draw, Span<double> fit)
     {
         int[] ids = draw.Structure.TermIds;
         fit.Fill(draw.Coefficients[0]);

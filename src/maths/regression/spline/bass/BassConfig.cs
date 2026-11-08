@@ -51,6 +51,14 @@ public sealed record BassConfig
     [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
     public BassNoise? Noise { get; init; }
 
+    /// <summary>
+    /// Random-effect intercepts on the data's grouping (E21; <see cref="BassRandomIntercept"/>): null, the default, holds none. Left out of
+    /// the serialized form when null, so a config without them keeps its form and fingerprint. Refused beside a noise, whose latent weights
+    /// move each sweep while the block is integrated under unit weights.
+    /// </summary>
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public BassRandomIntercept? RandomIntercept { get; init; }
+
     /// <summary>The run: chains or SMC's replicates, seeds, lengths, the R̂ stop and the move schedule.</summary>
     public BassSampling Sampling { get; init; } = new();
 
@@ -159,6 +167,15 @@ public sealed record BassConfig
                 throw Bad("Sigma2", "is Jeffreys, improper, while the noise's skew puts σ² on the record and b = 0 draws it from its prior (an SMC start or a reference rung); take an inverse gamma, a held σ² or the hierarchical prior");
             if (noise.Reference == BassNoiseReference.None && (Intercept == GPriorCentre.Mean || Sigma2.ReadsResponse))
                 throw Bad("Noise.Reference", "is None, while the intercept's level or σ²'s prior reads the response; state Moments or Robust, or take priors that read nothing");
+        }
+
+        if (RandomIntercept is { } block)
+        {
+            if (!(block.Scale > 0.0) || !double.IsFinite(block.Scale))
+                throw Bad("RandomIntercept.Scale", "must be positive and finite: the group effects' standard deviation in units of σ");
+            if (block.Convention != RandomInterceptConvention.ObservationCentred) throw Bad("RandomIntercept.Convention", "is not a known convention");
+            if (Noise is not null)
+                throw Bad("RandomIntercept", "takes no Noise: the block is integrated by whitening the response under unit weights, and a noise's latent weights move each sweep; not built");
         }
 
         BassSampling run = Sampling ?? throw Bad("Sampling", "is missing");

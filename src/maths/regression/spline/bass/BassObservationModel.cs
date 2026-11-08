@@ -200,12 +200,15 @@ public sealed class WorkingResponse
     /// identity; a direct functional response's only), and <paramref name="reference"/>, what the priors read in place of this
     /// working response (none reads it as it stands). <see cref="WeightedPriorGram.Frozen"/> takes its W₀ from the reference, and alone
     /// does; with no weights of its own it reads unit weights. <paramref name="latents"/> are the observation model's latents at this
-    /// reading (one value per observation), none for a model with none. The arrays are copied.</summary>
+    /// reading (one value per observation), none for a model with none. <paramref name="logJacobian"/> is the log-Jacobian of a linear map
+    /// the offset applied to the response, which the likelihood carries beside the weights' Σ ln wᵢ: a random-intercept block's −ln|V| for
+    /// its whitening (<see cref="RandomInterceptBlock.Whitened"/>), 0 otherwise. The arrays are copied.</summary>
     public WorkingResponse(BassResponse response, ReadOnlySpan<double> offset = default, ReadOnlySpan<double> weights = default,
                            IInnerProduct? output = null, WeightMeaning meaning = WeightMeaning.Precision,
                            WeightedPriorGram priorGram = WeightedPriorGram.Unweighted, BassPriorReference? reference = null,
-                           ObservationLatents? latents = null)
+                           ObservationLatents? latents = null, double logJacobian = 0.0)
     {
+        if (!double.IsFinite(logJacobian)) throw new ArgumentOutOfRangeException(nameof(logJacobian));
         ArgumentNullException.ThrowIfNull(response);
         if (meaning is not (WeightMeaning.Precision or WeightMeaning.Replication)) throw new ArgumentOutOfRangeException(nameof(meaning));
         if (priorGram is not (WeightedPriorGram.Unweighted or WeightedPriorGram.Weighted or WeightedPriorGram.Frozen)) throw new ArgumentOutOfRangeException(nameof(priorGram));
@@ -249,6 +252,7 @@ public sealed class WorkingResponse
             _weights = new double[n];
             Array.Fill(_weights, 1.0);
         }
+        if (logJacobian != 0.0) Weighting = Weighting with { SumLogWeights = Weighting.SumLogWeights + logJacobian };
         ResponseMean = MeanOf(_weights, Values, Weighting, n);
     }
 

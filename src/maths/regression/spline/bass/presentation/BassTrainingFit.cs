@@ -64,7 +64,8 @@ public sealed record BassTrainingFit(
         (List<BassDraw> pooled, _) = BassDrawFit.Pool(fit.Draws, fit.Terms, false, nameof(fit));
         BassModel model = fit.ModelFor(data);
         double[,]? offset = null;
-        if (BassDrawFit.MeanOffset(pooled, prediction.Weights, n * m, d => d.WorkingOn(model)) is { } mean)
+        // A random-intercept fit's offset is its whitening, and its prediction already reads f + u_g (E21).
+        if (model.RandomIntercept is null && BassDrawFit.MeanOffset(pooled, prediction.Weights, n * m, d => d.WorkingOn(model)) is { } mean)
         {
             offset = new double[n, m];
             for (int i = 0; i < n; i++)

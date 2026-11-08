@@ -141,6 +141,19 @@ public sealed record BassResolved
         int cases = response.Cases, locations = response.Locations, n = response.Observations;
         bool functional = response is FunctionalResponse;
         log.Add(new("Observations", Text(n), functional ? $"N = n_x · n_r = {cases} · {locations}" : "N = n_x, a scalar response"));
+        if (config.RandomIntercept is null && data.Grouping is { } unread)
+            throw new ArgumentException($"The data hold a grouping ('{unread.Name}'), which only random intercepts read; declare RandomIntercept or leave the grouping out.", nameof(data));
+        if (config.RandomIntercept is { } block)
+        {
+            CategoricalPredictor grouping = data.Grouping
+                ?? throw new ArgumentException("The config declares random intercepts (RandomIntercept), and the data hold no grouping.", nameof(data));
+            if (functional) throw new ArgumentException("Random intercepts serve a scalar response; a direct functional response's block is not built.", nameof(data));
+            var counts = new int[grouping.Levels.Count];
+            foreach (int code in grouping.Codes.Span) counts[code]++;
+            int[] observed = [.. counts.Where(c => c > 0)];
+            log.Add(new("RandomIntercept", $"{observed.Length} levels of '{grouping.Name}', s = {Text(block.Scale)}",
+                        $"observation-centred, Σ n_g u_g = 0, {observed.Min()} to {observed.Max()} cases a level; integrated out by whitening the response and every column, which each coefficient form reads as its design"));
+        }
         IEnumerable<ContinuousPredictor> columns = data.Predictors.OfType<ContinuousPredictor>();
         if (response is FunctionalResponse withOutputs) columns = columns.Concat(withOutputs.OutputVariables);
         foreach (ContinuousPredictor c in columns)

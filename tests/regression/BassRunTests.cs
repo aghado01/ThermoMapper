@@ -270,6 +270,7 @@ public sealed class BassRunTests
                 Assert.Equal(x.Sigma2, y.Sigma2);
                 Assert.Equal(x.Coefficients, y.Coefficients);
                 Assert.Equal(x.Lambda, y.Lambda);
+                Assert.Equal(x.GroupEffects, y.GroupEffects);
             }
         }
         AssertSameDiagnostics(a.Diagnostics, b.Diagnostics);

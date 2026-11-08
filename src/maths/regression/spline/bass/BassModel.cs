@@ -13,8 +13,9 @@ public sealed class BassModel
 {
     private BassModel(BassConfig config, BassData data, BassResolved resolved, BassInputTransform transform, BassInputs inputs,
                       BassBasis basis, BassAdmission admission, BassStructurePrior prior, BassTermProposal? proposal, IBassProposalKernel kernel,
-                      BassTarget target, IBassObservationModel observation, WorkingResponse working)
+                      BassTarget target, IBassObservationModel observation, WorkingResponse working, RandomInterceptBlock? block)
     {
+        RandomIntercept = block;
         Config = config;
         Observation = observation;
         Working = working;
@@ -50,6 +51,15 @@ public sealed class BassModel
         if (config.Noise is { } declared && !(observation is VarianceMeanMixture mixture && mixture.Noise == declared))
             throw new ArgumentException("The config declares its noise, so the observation model is the config's.", nameof(observation));
         WorkingResponse working = observation.Working(data.Response);
+        RandomInterceptBlock? block = null;
+        if (config.RandomIntercept is { } intercepts)
+        {
+            config.Validate();
+            CategoricalPredictor grouping = data.Grouping
+                ?? throw new ArgumentException("The config declares random intercepts (RandomIntercept), and the data hold no grouping.", nameof(data));
+            block = RandomInterceptBlock.Of(grouping, intercepts);
+            working = block.Whitened(working);
+        }
         BassResolved resolved = BassResolved.Resolve(config, data, working);
         BassInputTransform transform = BassInputTransform.Fit(data);
         BassInputs inputs = BassInputs.Prepare(data, transform);
@@ -59,8 +69,11 @@ public sealed class BassModel
         BassTermProposal? proposal = config.Structure.Legendre is null ? BassTermProposal.From(config, prior) : null;
         IBassProposalKernel kernel = proposal ?? (IBassProposalKernel)new LegendreTermProposal(prior, config.Structure.Legendre!);
         var target = new BassTarget(config, resolved, prior, form ?? config.Sampling.Tempering?.Form ?? config.Sampling.Smc?.Form ?? TemperedForm.Integrated, working);
-        return new(config, data, resolved, transform, inputs, basis, admission, prior, proposal, kernel, target, observation, working);
+        return new(config, data, resolved, transform, inputs, basis, admission, prior, proposal, kernel, target, observation, working, block);
     }
+
+    /// <summary>The random-intercept block (E21), integrated out of every marginal by whitening; null for a config without one.</summary>
+    public RandomInterceptBlock? RandomIntercept { get; }
 
     /// <summary>The config.</summary>
     public BassConfig Config { get; }
@@ -117,5 +130,6 @@ public sealed class BassModel
 
     /// <summary>A new intercept-only design over the data, one per chain, on <paramref name="working"/>; null is the model's.</summary>
     public BassDesign NewDesign(WorkingResponse? working = null)
-        => new(Basis, Data, Admission, Config.Coefficients.Form is RidgeForm, working ?? Working, Config.Intercept, BassPriorPrecision.Of(Config.Coefficients.Form));
+        => new(Basis, Data, Admission, Config.Coefficients.Form is RidgeForm, working ?? Working, Config.Intercept, BassPriorPrecision.Of(Config.Coefficients.Form),
+               RandomIntercept);
 }
