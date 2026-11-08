@@ -177,9 +177,7 @@ public sealed class BassPointwiseTests
     /// </summary>
     private static double Refit(double[,] x, double[] y, int[] unit, double tau, GPriorCentre intercept, InverseGamma? prior, bool ridge)
     {
-        int n = y.Length, p = x.GetLength(1), m = unit.Length;
-        var inUnit = new bool[n];
-        foreach (int i in unit) inUnit[i] = true;
+        int n = y.Length, p = x.GetLength(1);
         var lambda0 = new double[p, p];
         for (int a = 0; a < p; a++)
             for (int b = 0; b < p; b++)
@@ -191,6 +189,16 @@ public sealed class BassPointwiseTests
         var mu0 = new double[p];
         if (intercept == GPriorCentre.Mean) mu0[0] = y.Average();
         int k0 = intercept == GPriorCentre.Flat ? p - 1 : p;
+        return Refit(x, y, unit, lambda0, mu0, k0, prior);
+    }
+
+    /// <summary>The refit above under a given prior: precision <paramref name="lambda0"/> and centre <paramref name="mu0"/> on
+    /// <paramref name="x"/>'s columns, <paramref name="k0"/> of them proper, and σ² ~ <paramref name="prior"/> (Jeffreys when null).</summary>
+    internal static double Refit(double[,] x, double[] y, int[] unit, double[,] lambda0, double[] mu0, int k0, InverseGamma? prior)
+    {
+        int n = y.Length, p = x.GetLength(1), m = unit.Length;
+        var inUnit = new bool[n];
+        foreach (int i in unit) inUnit[i] = true;
 
         var lambdaN = (double[,])lambda0.Clone();
         var rhs = new double[p];

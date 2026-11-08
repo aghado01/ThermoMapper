@@ -127,10 +127,11 @@ internal static class BassKernelEnumeration
     }
 
     /// <summary>Every term of <paramref name="model"/>'s term space: each part's order up to its cap, its variables, and
-    /// each variable's signs and knots or proper subsets; the empty term, the intercept, left out.</summary>
+    /// each variable's signs and knots or proper subsets; the empty term, the intercept, left out. Under a Legendre basis, its 𝒜.</summary>
     internal static List<BassTerm> AllTerms(BassModel model)
     {
         BassStructurePrior prior = model.Prior;
+        if (prior.Legendre is { } legendre) return [.. legendre.Terms()];
         List<HingeFactor[]> HingeSets(BassPart part, Func<int, int> knots)
         {
             var sets = new List<HingeFactor[]> { Array.Empty<HingeFactor>() };

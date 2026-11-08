@@ -443,7 +443,8 @@ internal static class BassMixing
     private static string Key(BassTerm t) => string.Join("·",
         t.Continuous.Select(h => $"x{h.Variable}{(h.Sign > 0 ? "+" : "-")}{h.Knot}")
             .Concat(t.Categorical.Select(c => $"z{c.Variable}{{{string.Join(",", c.Levels)}}}"))
-            .Concat(t.Functional.Select(h => $"t{h.Variable}{(h.Sign > 0 ? "+" : "-")}{h.Knot}")));
+            .Concat(t.Functional.Select(h => $"t{h.Variable}{(h.Sign > 0 ? "+" : "-")}{h.Knot}"))
+            .Concat(t.Legendre.Select(f => $"ψ{f.Degree}(x{f.Variable})")));
 
     /// <summary>The sum of the terms' ln π.</summary>
     internal static double LogTermPrior(BassModel model, IEnumerable<BassTerm> terms)

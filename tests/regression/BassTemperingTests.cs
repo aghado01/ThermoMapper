@@ -525,33 +525,9 @@ public sealed class BassTemperingTests
         if (option.Contains("jeffreys")) config = config with { Sigma2 = Sigma2Prior.Jeffreys };
         if (option == "fixed g") config = config with { Coefficients = BassCoefficientPrior.G(TauPrior.Held()) };
         BassModel model = BassModel.Create(config, BassSweepTests.Data());
-        const int ladders = 4, burn = 2_000, scans = 40_000, batches = 20;
+        const int ladders = 4, batches = 20;
         int levels = inverseTemperatures.Length;
-        var count = new double[levels][,];
-        var logTau = new double[levels][];
-        for (int r = 0; r < levels; r++)
-        {
-            count[r] = new double[model.MaxBasis + 1, ladders * batches];
-            logTau[r] = new double[ladders * batches];
-        }
-        var sampler = new BassPriorSampler(model);
-        for (int l = 0; l < ladders; l++)
-        {
-            BassState start = sampler.DrawState(new Xoshiro256PlusPlus(100 + l)).State;
-            var ladder = new BassLadder(model, spec, inverseTemperatures, start.Terms, start.LogTau, seed: 200 + l);
-            for (int t = 0; t < burn; t++) ladder.Step();
-            for (int t = 0; t < scans; t++)
-            {
-                ladder.Step();
-                int batch = l * batches + t / (scans / batches);
-                for (int r = 0; r < levels; r++)
-                {
-                    BassState s = ladder.Tempering.Replicas[r].Current;
-                    count[r][s.Count, batch] += 1.0 / (scans / batches);
-                    logTau[r][batch] += s.LogTau / (scans / batches);
-                }
-            }
-        }
+        (double[][,] count, double[][] logTau) = RungBatches(model, spec, inverseTemperatures, ladders, batches);
 
         RungLaw[] exact = powered ? ExactPowered(model, inverseTemperatures) : Exact(model, inverseTemperatures);
         for (int r = 0; r < levels; r++)
@@ -572,12 +548,49 @@ public sealed class BassTemperingTests
         }
     }
 
+    /// <summary>
+    /// Each rung's batch means of the count's indicators and of ln τ, from <paramref name="ladders"/> ladders on <paramref name="rungs"/>,
+    /// each started from an exact prior draw (seed 100 + l, the ladder's 200 + l), <paramref name="scans"/> scans after
+    /// <paramref name="burn"/>, in <paramref name="batches"/> batches per ladder.
+    /// </summary>
+    internal static (double[][,] Count, double[][] LogTau) RungBatches(BassModel model, TemperingSpec spec, double[] rungs, int ladders = 4,
+                                                                      int batches = 20, int burn = 2_000, int scans = 40_000)
+    {
+        int levels = rungs.Length;
+        var count = new double[levels][,];
+        var logTau = new double[levels][];
+        for (int r = 0; r < levels; r++)
+        {
+            count[r] = new double[model.MaxBasis + 1, ladders * batches];
+            logTau[r] = new double[ladders * batches];
+        }
+        var sampler = new BassPriorSampler(model);
+        for (int l = 0; l < ladders; l++)
+        {
+            BassState start = sampler.DrawState(new Xoshiro256PlusPlus(100 + l)).State;
+            var ladder = new BassLadder(model, spec, rungs, start.Terms, start.LogTau, seed: 200 + l);
+            for (int t = 0; t < burn; t++) ladder.Step();
+            for (int t = 0; t < scans; t++)
+            {
+                ladder.Step();
+                int batch = l * batches + t / (scans / batches);
+                for (int r = 0; r < levels; r++)
+                {
+                    BassState s = ladder.Tempering.Replicas[r].Current;
+                    count[r][s.Count, batch] += 1.0 / (scans / batches);
+                    logTau[r][batch] += s.LogTau / (scans / batches);
+                }
+            }
+        }
+        return (count, logTau);
+    }
+
     // The powered path's rung laws, (prior · p₁)^b with τ powered in u = ln τ, by the same enumeration; its left tail in u
     // decays as e^{b(a + k/2)u}, so the rule starts lower.
     private static RungLaw[] ExactPowered(BassModel model, double[] rungs)
         => Enumerate(model, rungs, -150.0, (e, b) => b * Temperature.LogPosterior(e), withLogZ: false);
 
-    private static (double Mean, double Error) Summary(double[] batchMeans)
+    internal static (double Mean, double Error) Summary(double[] batchMeans)
     {
         double mean = batchMeans.Average();
         double variance = batchMeans.Sum(v => (v - mean) * (v - mean)) / (batchMeans.Length - 1);

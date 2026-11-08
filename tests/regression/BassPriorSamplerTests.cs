@@ -436,6 +436,7 @@ internal static class BassTermSpace
 {
     public static List<BassTerm> Terms(BassModel model)
     {
+        if (model.Prior.Legendre is { } legendre) return [.. legendre.Terms()];   // KHAOS's 𝒜
         var terms = new List<BassTerm>();
         foreach (HingeFactor[]? continuous in Hinges(model, BassPart.Continuous))
             foreach (CategoricalFactor[]? categorical in Subsets(model))

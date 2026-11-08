@@ -325,28 +325,35 @@ public sealed class BassFlatHistogramTests
     [InlineData(false, true, 0.0)]
     [InlineData(false, false, 0.3)]
     public void Fit_OnFixtureA_MatchesTheEnumeration(bool heldTau, bool ridge, double lowSlope)
+        => MatchesTheEnumeration(FixtureA(heldTau, ridge), lowSlope, $"Fixture A, τ {(heldTau ? "held" : "sampled")}, {(ridge ? "ridge" : "g-form")}, b_lo = {lowSlope}", _out);
+
+    /// <summary>
+    /// A flat-start fit of <paramref name="model"/> on its exact window (<see cref="ExactShape"/>, <paramref name="nodes"/> nodes, <paramref name="lowSlope"/>),
+    /// 8 chains × 30,000 learning and 30,000 production, against the enumeration (<see cref="BassFlatHistogramSpace"/>): the learned weights
+    /// against SAMC's limit, the reweighted count law, inclusions, likeliest structures and E[τ], and ln Z(b) − ln Z(b_lo) on the grid.
+    /// </summary>
+    internal static void MatchesTheEnumeration(BassModel model, double lowSlope, string label, ITestOutputHelper output, int nodes = 12)
     {
-        BassModel model = FixtureA(heldTau, ridge);
         BassData data = model.Data;
+        bool heldTau = !model.Target.SamplesTau;
         var space = BassFlatHistogramSpace.Of(model);
-        MulticanonicalWeights shape = ExactShape(space, 12, lowSlope);
+        MulticanonicalWeights shape = ExactShape(space, nodes, lowSlope);
         (double[] levels, double[] masses) = space.DensityOfStates();
         MulticanonicalWeights exact = SamcLearning.FixedPoint(shape, levels, masses, out bool[] empty);
         BassConfig config = model.Config with { Sampling = model.Config.Sampling with { MasterSeed = 7301 } };
         BassFit fit = Bass.Fit(WithFlatHistogram(config, new BassFlatHistogramSpec { Run = DeclaredRun(shape, 30_000, 30_000) }), data);
         BassFlatHistogramReadout fh = fit.Diagnostics.FlatHistogram!;
-        string label = $"τ {(heldTau ? "held" : "sampled")}, {(ridge ? "ridge" : "g-form")}, b_lo = {lowSlope}";
-        _out.WriteLine($"## Fixture A, {label}: {space.States.Count:N0} structures; window [{fh.Window.Low:F2}, {fh.Window.High:F2}], K = {fh.Nodes}, " +
-                       $"t₀ = {fh.GainScale}, gain from {fh.GainStart}; {FitChains} chains × 30,000 learning + 30,000 production");
+        output.WriteLine($"## {label}: {space.States.Count:N0} structures; window [{fh.Window.Low:F2}, {fh.Window.High:F2}], K = {fh.Nodes}, " +
+                         $"t₀ = {fh.GainScale}, gain from {fh.GainStart}; {FitChains} chains × 30,000 learning + 30,000 production");
         Assert.True(fh.Complete);
         Assert.Equal((shape.Low, shape.High, shape.Nodes, shape.LowSlope), (fh.Weights.Low, fh.Weights.High, fh.Weights.Nodes, fh.Weights.LowSlope));
         Assert.Equal(10.0 * shape.Nodes, fh.GainScale);
 
         // The learned weights against SAMC's limit on the exact density of states.
         double rms = CentredRms(fh.Weights.LogWeights, exact.LogWeights, empty);
-        _out.WriteLine($"learned ln w against θ*: centred RMS {rms:F4} over {empty.Count(e => !e)} nodes (tolerance 0.15); " +
-                       $"production flatness {fh.Production!.MaxFlatnessDeviation:F3}, round trips {fh.Production.TotalRoundTrips}, b = 1 Kish ESS " +
-                       $"{fh.EffectiveSampleSize:F0} of {FitChains * 30_000}");
+        output.WriteLine($"learned ln w against θ*: centred RMS {rms:F4} over {empty.Count(e => !e)} nodes (tolerance 0.15); " +
+                         $"production flatness {fh.Production!.MaxFlatnessDeviation:F3}, round trips {fh.Production.TotalRoundTrips}, b = 1 Kish ESS " +
+                         $"{fh.EffectiveSampleSize:F0} of {FitChains * 30_000}");
         Assert.True(rms <= 0.15, $"learned ln w sits {rms:F4} from θ*");
         Assert.Empty(fh.Production.ChainsWithoutRoundTrip);
 
@@ -362,13 +369,13 @@ public sealed class BassFlatHistogramTests
             foreach (BassTerm t in space.States[s].Terms) inclusion[t] = inclusion.GetValueOrDefault(t) + law[s];
             meanTau += law[s] * space.MeanTau(space.States[s], l => l);
         }
-        _out.WriteLine("quantity | exact | reweighted ± chains' SE | z | allowance");
-        _out.WriteLine("--- | --- | --- | --- | ---");
+        output.WriteLine("quantity | exact | reweighted ± chains' SE | z | allowance");
+        output.WriteLine("--- | --- | --- | --- | ---");
         void Check(string name, double expected, Func<BassDraw, double> g, double slack)
         {
             (double mean, double se) = Reweighted(fit, g);
             double allowance = 5 * se + slack;
-            _out.WriteLine($"{name} | {expected:F4} | {mean:F4} ± {se:F4} | {(se > 0 ? $"{(mean - expected) / se:F2}" : "—")} | {allowance:F4}");
+            output.WriteLine($"{name} | {expected:F4} | {mean:F4} ± {se:F4} | {(se > 0 ? $"{(mean - expected) / se:F2}" : "—")} | {allowance:F4}");
             Assert.True(Math.Abs(mean - expected) <= allowance, $"{name}: reweighted {mean:F4} ± {se:F4}, exact {expected:F4}");
         }
         BassTerm[] Terms(BassDraw d) => [.. d.Structure.TermIds.Select(id => fit.Terms[id])];
@@ -386,14 +393,14 @@ public sealed class BassFlatHistogramTests
         Assert.Equal(lowSlope == 0.0, curve.IsEvidence);
         double[] grid = curve.Curve.InverseTemperatures;
         Assert.Equal((BassFlatHistogramEvidence.GridPoints, lowSlope, 1.0), (grid.Length, grid[0], grid[^1]));
-        _out.WriteLine("b | exact ln Z(b) − ln Z(b_lo) | curve ± error | z");
-        _out.WriteLine("--- | --- | --- | ---");
+        output.WriteLine("b | exact ln Z(b) − ln Z(b_lo) | curve ± error | z");
+        output.WriteLine("--- | --- | --- | ---");
         foreach (int k in new[] { 10, 25, 50, 75, 100 })
         {
             double b = grid[k];
             double expected = space.LogEvidence(b) - space.LogEvidence(lowSlope);
             (double value, double error) = curve.Curve.LogRatio(0, k);
-            _out.WriteLine($"{b:F3} | {expected:F4} | {value:F4} ± {error:F4} | {(value - expected) / error:F2}");
+            output.WriteLine($"{b:F3} | {expected:F4} | {value:F4} ± {error:F4} | {(value - expected) / error:F2}");
             Assert.True(Math.Abs(value - expected) <= 5 * error + 0.01, $"ln Z({b}) − ln Z(b_lo): {value:F4} ± {error:F4} against {expected:F4}");
         }
         Assert.Equal(curve.Curve.LogRatio(0, grid.Length - 1), (curve.LogRatio, curve.MonteCarloError));

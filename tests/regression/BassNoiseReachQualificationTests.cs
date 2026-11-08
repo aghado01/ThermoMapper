@@ -56,10 +56,13 @@ public sealed class BassNoiseReachQualificationTests(ITestOutputHelper output)
         _ => BassNoise.Horseshoe(new BassNoisePrior(0.0, 0.5), reference: BassNoiseReference.None),
     };
 
-    private static BassConfig GewekeConfig(string form, double alpha, bool interweave = false) => new()
+    // KHAOS slice 5's rows (`legendre`) put the noise on Legendre terms of degree up to 3 under KHAOS's modified g-prior, g₀² drawn.
+    private static BassConfig GewekeConfig(string form, double alpha, bool interweave = false, bool legendre = false) => new()
     {
-        Structure = new BassStructureSpec { MaxInteraction = 1, MaxBasis = 2, Support = new SupportRule(SupportKind.Count, 2) },
-        Coefficients = BassCoefficientPrior.G(TauPrior.UnitInformationGamma(5)),
+        Structure = legendre
+            ? new BassStructureSpec { MaxInteraction = 1, MaxBasis = 2, Legendre = new LegendreBasis { MaxDegree = 3 } }
+            : new BassStructureSpec { MaxInteraction = 1, MaxBasis = 2, Support = new SupportRule(SupportKind.Count, 2) },
+        Coefficients = legendre ? BassCoefficientPrior.ModifiedG(TauPrior.Gamma(2.0, 2.0)) : BassCoefficientPrior.G(TauPrior.UnitInformationGamma(5)),
         Intercept = GPriorCentre.Zero,
         Sigma2 = Sigma2Prior.InverseGamma(alpha, Beta0),
         Noise = GewekeNoise(form) with { Interweave = interweave },
@@ -116,12 +119,18 @@ public sealed class BassNoiseReachQualificationTests(ITestOutputHelper output)
     [InlineData("horseshoe+rescale", 0.75, 20261107, false, 1)]
     [InlineData("horseshoe+rescale", 0.75, 20261107, false, 4)]
     [InlineData("horseshoe+rescale", 0.75, 20261108, false, 1)]
-    public void Geweke_ARungLeavesItsTiltedJointInvariant(string form, double b, int seed, bool interweave, int scale)
+    // KHAOS slice 5: the noise on Legendre terms, at b = 1 and on a rung; the skewed horseshoe with the move along β·v, its default.
+    [InlineData("t", 1.0, 20261107, false, 1, true)]
+    [InlineData("t", 0.4, 20261107, false, 1, true)]
+    [InlineData("quantile", 1.0, 20261107, true, 1, true)]
+    [InlineData("horseshoe+rescale", 1.0, 20261108, false, 1, true)]
+    [InlineData("horseshoe+rescale", 0.75, 20261108, false, 1, true)]
+    public void Geweke_ARungLeavesItsTiltedJointInvariant(string form, double b, int seed, bool interweave, int scale, bool legendre = false)
     {
         if (!BassQualification.Enabled) return;   // heavy
         int draws = 400_000 * scale, steps = 600_000 * scale;
         const int batches = 50;
-        BassConfig config = GewekeConfig(form, Alpha0, interweave), tilted = GewekeConfig(form, Alpha0 - 0.5 * GewekeN * (1.0 - b), interweave);
+        BassConfig config = GewekeConfig(form, Alpha0, interweave, legendre), tilted = GewekeConfig(form, Alpha0 - 0.5 * GewekeN * (1.0 - b), interweave, legendre);
         BassNoise noise = config.Noise!;
         double c = noise.VarianceScale;
         var sigmaTilted = InverseGamma.ShapeScale(Alpha0 - 0.5 * GewekeN * (1.0 - b), Beta0);
@@ -200,7 +209,7 @@ public sealed class BassNoiseReachQualificationTests(ITestOutputHelper output)
             worst = Math.Max(worst, Math.Abs(z));
             output.WriteLine($"{GewekeNames[g],-10} marginal-conditional {meanA,10:F5}  successive {meanB,10:F5}  z {z,6:F2}");
         }
-        output.WriteLine($"{form} at b = {b}, seed {seed}, {(interweave ? "interwoven" : "plain")}, {scale}× the size: moves refused {refused}; " +
+        output.WriteLine($"{form}{(legendre ? " on Legendre terms" : "")} at b = {b}, seed {seed}, {(interweave ? "interwoven" : "plain")}, {scale}× the size: moves refused {refused}; " +
                          $"block draws refused {blockRefused} of {steps}");
         Assert.True(worst < 4.0, $"Geweke's worst |z| {worst:F2}");
     }

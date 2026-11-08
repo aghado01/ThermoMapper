@@ -58,7 +58,7 @@ public sealed class BassSmcMutationQualificationTests(ITestOutputHelper output)
         new("adaptive 20, c 0.01", 20, new AdaptiveMutation { StayProbability = 0.01 }),
     ];
 
-    private sealed record Fixture(string Name, BassConfig Config, BassData Data);
+    internal sealed record Fixture(string Name, BassConfig Config, BassData Data);
 
     private sealed record Reference(double LogZ, double LogZError, double M, double MError, double Sigma2, double Sigma2Error, double Skew, double SkewError);
 
@@ -93,7 +93,7 @@ public sealed class BassSmcMutationQualificationTests(ITestOutputHelper output)
     // KHAOS slice 0's Ishigami readout fixture on its raw inputs with [0, 1] declared (KhaosRichStartTests), under the raw ridge at
     // khaos's τ² = 10⁵, h₁ = 4, h₂ = 40/n and the zero centre; σ² ~ IG(3, 0.5) in place of Jeffreys, so the run starts from a proper
     // prior in the integrated form and its normalizer is the evidence.
-    private static Fixture Khaos()
+    internal static Fixture Khaos()
     {
         const int inputs = 4, cases = 120;
         var rng = new Xoshiro256PlusPlus(20261107);
