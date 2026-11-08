@@ -58,8 +58,7 @@ internal static class BassSmcFit
         }
         int[] seeds = resumeFrom is null ? SeedTree.Derive(sampling.MasterSeed, replicates) : (int[])resumeFrom.ChainSeeds.Clone();
 
-        int bound = options.MaxDegreeOfParallelism == -1 ? Environment.ProcessorCount : options.MaxDegreeOfParallelism;
-        int outer = Math.Min(replicates, bound), inner = Math.Max(1, bound / outer);
+        (int outer, int inner) = options.Split(replicates);
         long planned = (long)replicates * spec.Particles * spec.MutationSteps * spec.MaxStages;
         var progress = new Progress(options, planned);
         var runs = new Replicate[replicates];

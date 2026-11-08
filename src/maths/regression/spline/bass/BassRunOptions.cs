@@ -15,7 +15,7 @@ public sealed record BassRunOptions
     /// The most chains that run at once; −1, the default, leaves it to the machine. It is the run's one bound on
     /// parallelism over chains, replicas, particles and workers (the posterior-ownership rules), so tempering and SMC
     /// read it too: what the chains leave of it can go to each one's rungs (<see cref="RungWorkers"/>), as what SMC's
-    /// replicates leave goes to each one's particles. Results do not depend on it.
+    /// replicates leave goes to each one's particles (<see cref="Split"/>). Results do not depend on it.
     /// </summary>
     public int MaxDegreeOfParallelism { get; init; } = -1;
 
@@ -43,8 +43,8 @@ public sealed record BassRunOptions
     public int ProgressInterval { get; init; } = 1000;
 
     /// <summary>
-    /// The bound P split between <paramref name="units"/> chains and the work within each, the rule SMC's replicates and
-    /// particles split it by: min(units, P) units at once, and ⌊P / that⌋ workers, at least 1, left for each one's rungs.
+    /// The bound P split between <paramref name="units"/> chains (or SMC's replicates) and the work within each: min(units, P)
+    /// units at once, and ⌊P / that⌋ workers, at least 1, left for each one's rungs (or particles).
     /// Unbounded, P is the machine's processor count. A pure function of the bound and the count, never of the machine's load.
     /// </summary>
     public (int Units, int Within) Split(int units)
