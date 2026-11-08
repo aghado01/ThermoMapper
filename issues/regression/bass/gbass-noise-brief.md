@@ -157,6 +157,37 @@ Under "Reports" below, newest first, per slice: what landed by commit; the gates
 
 Newest first.
 
+### The move along β·v, the skew's rescaling (chip, 2026-11-08)
+
+**Landed** in `3be066e` (the code and its tests) and the commit that carries this report (`docs/Maths`, the ledger, the checklist). The user's go-ahead came through the main session on 2026-11-08 ("Yes, build it"), as slice 5's and slice 7's follow-up. [The page's section](../../../docs/Maths/VarianceMeanMixtures.md#the-skews-rescaling-a-move-along-βv-slices-5s-and-7s-follow-up) holds the derivation, κ's proposal against its alternatives, and the measurement.
+
+| Piece | Where |
+|---|---|
+| The switch | `BassNoise.SkewRescale`, serialized only when on, refused without a drawn skew; on `BassNoise`, since `BassConfig.cs` was KHAOS's |
+| The move | `BassSkewRescaleBlock`, in the latent slot after v's block: (β, v) → (β/κ, κ·v), the weights refitted once, accepted on the sweep's joint with the Jacobian κ^(N−1) |
+| κ's proposal | ln κ ~ N(0, h(x)²), h = 2.4/√C(x) from the log target's curvature along ln κ at the state, the Hastings ratio of the state-dependent scale in A |
+
+**Gates.**
+- *Gaussian untouched:* the whole regression assembly once at the end (`scripts/test-select.ps1 -Scope Slice` on a snapshot of `3be066e`), 2,317 of 2,317, the pinned tier among them. Before the commit, the selected classes and the pinned tier (`scripts/test-select.ps1 -Scope Commit` from a snapshot): 1,558 of 1,558.
+- *Its detailed balance by its statement on a frozen state:* from one state the move stays on its orbit, whose exact law ∝ π(Tₜ(x₀))·e^((N−1)t) the engine's target gives on a grid. 60,000 moves meet its mean and mean square, |z| ≤ 0.87, under the skewed horseshoe and the generalized hyperbolic at b = 1 and ½, at 44% acceptance; the forward and reverse acceptances cancel to 2·10⁻¹³.
+- *Geweke with the move under the other skewed laws:* the generalized hyperbolic, the Normal-Wald and the skewed t at b = 1, worst |z| 2.19, 2.61 and 2.03; the generalized hyperbolic and the Normal-Wald at b = ½, 2.96 and 1.38.
+- *The run:* a tempered fit with the move and a reference rung resumes bit for bit.
+- *The cost row:* a sweep at the base point 2,794 µs with the move against 1,097 without (2.5×), 481 against 307 at n 200 (1.6×).
+
+**The measurement, and the decision it made.** The move does not pass where the scan failed:
+- *The skewed horseshoe's Geweke with the move,* worst |z|: on seed 20261107, 2.36, 5.70 and 11.13 at b = 1, ¾ and ½, and 4.04, 4.69 and 4.26 at four times the size; on the control seed 20261108, 2.02, 5.47 and 3.46. The scan alone on seed 20261107 at four times the size: 4.13 at b = 1, 3.13 at ¾, and slice 5's 9.16 at ½.
+- *Effective sizes per second,* with the move over without it at seeds 11 and 23: ln σ² 1.03 and 0.76 (skewed horseshoe), 0.53 and 0.35 (skewed GH), 0.23 and 0.73 (skewed Normal-Wald); β 0.22 to 0.82; mean ln v 0.49 to 3.33.
+- *A ladder's swap rates* under the skewed horseshoe (6 rungs to 0.05): the cold pair accepts no swap with the move or without it, the others 0.007 to 0.040 without and 0.001 to 0.035 with; no round trip either way.
+- **So the move stays opt-in, and the skewed horseshoe's failures stand as that noise's mixing limit under the sweep, recorded with these numbers.** The readings change size and side with seed and size, the scan alone fails at b = 1 at four times the size, and the move holds its law on its orbit and under the lighter-tailed laws, on rungs too.
+
+**Decisions taken beyond the brief.**
+- *κ's scale from the state's curvature, not adapted in burn-in.* D10's adaptation needs a scale per replica in its restart state and a burn-in signal to the block, state that would live in `BassStructureMoves` and the run, which other chips hold, and a ladder's rungs would each want their own. The curvature scale needs neither and holds 44% acceptance across laws, rungs and data. A slice step on ln κ was the other route, at some six refits a move.
+- *The move needs a drawn skew,* which it moves; a held skew refuses it.
+
+**Left unbuilt, and why.** A default for the move: the measurement decided against it.
+
+**Follow-ups, with the decision each would change.** None new. The skewed horseshoe's slow mixing has had the three moves this brief proposed: the scan, interweaving and the move along β·v. A further move would come with its own measurement on these readings.
+
 ### The mixture's tail table past its ends (chip, 2026-11-08)
 
 **Landed** in the commit that carries this entry, after slice 7 and apart from it, at the main session's ask (the defect the conformal chip found in its slice 4).
