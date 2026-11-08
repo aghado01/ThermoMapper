@@ -1047,7 +1047,7 @@ Stage 8's C4 (2026-10-29; [the chip's report](../../issues/regression/bass/stage
 - each particle's incremental weight is ℓ_{b′} − ℓ_b;
 - stages are placed by conditional ESS (`TargetConditionalEss` 0.99);
 - the population is resampled multinomially when its ESS falls below half (`ResampleBelow` 0.5);
-- the mutation is `MutationSteps` 5 of D04's sweep at the stage's b, with no adaptation.
+- the mutation is `MutationSteps` 5 of D04's sweep at the stage's b. `AdaptiveMutation` (null by default) instead sets each stage's count from the previous stage's fraction of particles whose structure changed, within 5 per stage taken; measured against the fixed count on 2026-11-08, it stays an option ([Samplers.md](Samplers.md), "SMC's sweeps per stage"). The kernel itself reads nothing from the population.
 
 **A particle** is a `BassState` with its own moves and design. A fork copies the design as the ladder's hand-over does, the factor copied and the columns shared.
 
@@ -2334,7 +2334,7 @@ The draws give what the marginals cannot: which breaks occur together, per-draw 
 | `BassSampling` Chains / MasterSeed / BurnIn / Samples / Thin | 4 / 0 / 9000 / 1000 / 1 | R's split of 10,000, provisional; read by the run (S7) |
 | `BassSampling` RHatTarget / BatchSize / MinEssPerChain / ReportEvidence | 0 / 0 / 100 / true | No early stop; read by the run (S7) and the ladder (S8) |
 | `BassSampling` StoppingScope | `All` | The groups an R̂ target gates: every group, or `Predictive` alone (D10, decided 2026-10-29) |
-| `BassSampling` Smc | null: MCMC | `SmcSpec`: `Particles` 1,000, `Replicates` 4, `TargetConditionalEss` 0.99, `MutationSteps` 5, `ResampleBelow` 0.5, multinomial, `Form` integrated, `MaxStages` 1,000, `TraceStages` false (stage 8; provisional) |
+| `BassSampling` Smc | null: MCMC | `SmcSpec`: `Particles` 1,000, `Replicates` 4, `TargetConditionalEss` 0.99, `MutationSteps` 5, `ResampleBelow` 0.5, multinomial, `Form` integrated, `MaxStages` 1,000, `TraceStages` false, `AdaptiveMutation` null (stage 8; provisional) |
 | `CalibrationConfig` Parameters / Measurement / Covariance | required | The calibration inputs, the variance groups with their priors, and the declared formulation (D09) |
 | `CalibrationConfig` EnumerationCap | 1,024 | Categorical combinations enumerated whole; single-site steps above |
 | `CalibrationConfig` Sampling | `BurnIn` 2,000, `Samples` 2,000, `Thin` 1, `DecorrelationEvery` 100, `Tempering` null | The conditional sampler; no default ladder |
