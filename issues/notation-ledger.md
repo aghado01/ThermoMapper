@@ -11,6 +11,16 @@ Splits in the module's language (symbols, identifiers, terms), logged as session
 
 ## Entries
 
+### b, the rung's inverse temperature, beside the GIG's and the GBP's b (2026-11-07)
+
+- **Kind:** one name for several concepts.
+- **Readings:**
+  - b, the likelihood's power at a rung (`Temperature.InverseTemperature`, `src/maths/samplers/targets/SamplingTarget.cs:67`; `BassCoefficientsBlock.Power`, `src/maths/regression/spline/bass/BassNoise.cs:606`), which the noise's blocks now read: v's conditional p(v)·v^(−b/2)·exp(−b(r − m·v)²/(2s²v)), σ²'s MHN(bN + K + 2α₀, …) and β's precision bΣvᵢ/c + 1/s².
+  - b, the GIG's rate on 1/v, GIG(p, a, b) (`GigParameters.B`, `src/maths/samplers/blocks/GigParameters.cs:19`), and the GBP's second shape, GBP(p, a, b) (`GbpParameters.B`, `src/maths/regression/MixingLaw.cs:258`).
+  - The brief writes the GIG's as b_v where the two meet, GIG(p − b/2, a + bβ²/c, b_v + b·r²/(w·c)); `docs/Maths/VarianceMeanMixtures.md` does the same in slice 5's section.
+- **Found:** 2026-11-07, E1's slice 5 (the engine's reach under a noise).
+- **Note:** Friel and Pettitt (2008) write the power posterior's exponent t; D05 and the samplers write b.
+
 ### p, a, b of the GBP beside the GIG's, and hbass's c and w against the core's σ² (2026-11-06)
 
 - **Kind:** one name for several concepts, and one concept in two parameterizations.
