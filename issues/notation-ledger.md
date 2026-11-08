@@ -11,6 +11,17 @@ Splits in the module's language (symbols, identifiers, terms), logged as session
 
 ## Entries
 
+### g in KHAOS's modified g-prior beside BASS's g-form and τ (2026-11-08)
+
+- **Kind:** one concept under two names, and one name for several concepts.
+- **Readings:**
+  - KHAOS's g₀², the modified g-prior's overall scale, is the engine's τ inverted, τ = 1/g₀² (`BassState.LogTau`; `ModifiedGForm`, `src/maths/regression/spline/bass/BassPriorPrecision.cs:14`), and `khaos`'s IG(a_g, b_g) on it is `TauPrior.Gamma(a, b)` on τ (`src/maths/regression/gprior/TauPrior.cs`). BASS's g-form writes the same scale as 1/τ in σ²G_c⁻¹/τ (`docs/Maths/BayesianRegression.md`, D03), so g₀² is the g-form's g at ζ = 0.
+  - g_m, a term's complexity factor (1 + q(d + q − 2))^(−ζ/2) (`ModifiedGForm.Factor`), scales one coefficient, not the prior; BASS has no counterpart.
+  - `khaos`'s g₁ and g₂ are its ridge's σ² hyperparameters (`adaptive_khaos_ridge`), and its `g2` field is the draws of g₀² (`fit$g2`), so `khaos` spells two quantities g2.
+  - TauPrior's Gamma kinds: `UnitInformationGamma` is Gamma(a, rate a/τ₀) on the form's unit information, and `Gamma` is Gamma(a, rate b) on τ itself.
+- **Found:** 2026-11-08, KHAOS slice 2 (the modified g-prior).
+- **Note:** the paper writes g₀² and g_m; `khaos`'s code writes `g2` for g₀² and `g_vec` for the g_m.
+
 ### Q, the split form's threshold, beside Q(y, τ), the conformal predictive distribution (2026-11-08)
 
 - **Kind:** one name for several concepts.

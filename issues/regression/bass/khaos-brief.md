@@ -1,6 +1,6 @@
 # KHAOS on the BASS core: E19's build (chip brief)
 
-Date: 2026-11-07. Status: slice 0 landed 2026-11-07 (`31362ad`); slice 1 landed 2026-11-07 (`fa05048`, `b408bf4`, `baf69f9`), with declared input domains (`3eb56e1`, the user's decision of 2026-11-07); the check on slice 1's input-box finding done 2026-11-08 (real, not a trap); slice 2 under way (the user's go-ahead of 2026-11-08). Written at the user's request after GBASS's slices 0–4, from the KHAOS paper's TeX, the `khaos` 2.1.1 source and the engine.
+Date: 2026-11-07. Status: slice 0 landed 2026-11-07 (`31362ad`); slice 1 landed 2026-11-07 (`fa05048`, `b408bf4`, `baf69f9`), with declared input domains (`3eb56e1`, the user's decision of 2026-11-07); the check on slice 1's input-box finding done 2026-11-08 (real, not a trap); slice 2 landed 2026-11-08 (`f289af3`); slice 3 waits for the user. Written at the user's request after GBASS's slices 0–4, from the KHAOS paper's TeX, the `khaos` 2.1.1 source and the engine.
 
 ## Why
 
@@ -157,6 +157,70 @@ Under "Reports" below, newest first, per slice: what landed by commit; the gates
 ## Reports
 
 Newest first.
+
+### Slice 2: the modified g-prior (chip, 2026-11-08)
+
+**Landed** on `main`, nothing pushed, the commit messages without attribution lines:
+- `f289af3`: the prior on τ stated on τ itself (`TauPrior.Gamma`); the prior-precision builder (`BassPriorPrecision`, E21) with slice 1's raw ridge folded into it; KHAOS's modified g-prior (`ModifiedGForm`) through the builder; its config and resolution; two overflow fixes in the shared g-prior code (below); and the gates.
+- This commit: `PolynomialChaos.md`, `BayesianRegression.md`, the notation ledger and this report.
+
+GBASS committed `BassConfig.cs` in `211d768` while the slice was in its gates, so the config's piece went into the working tree before the slice commit. Until then it lived in the build snapshot only.
+
+**What it is.**
+- *The model.* `adaptive_khaos_gprior`'s as written: (β₀, β) | σ², g₀² ~ N(0, σ²S₀) on the columns as evaluated, the intercept's column of ones among them, with S₀ = g₀²·D_g(ΨᵀΨ)⁻¹D_g, D_g = diag(1, g₁, …, g_M) and g_m = (1 + q_m(d_m + q_m − 2))^(−ζ/2). `khaos`'s defaults are ζ = 1 and g₀² ~ IG(0.001, 1,000).
+- *The builder.* The design held a flag per form, the normalized ridge's and slice 1's raw ridge's. It now holds a `BassPriorPrecision`, which says:
+  - whether the prior stands apart from the Gram;
+  - what each term's prior-side column is;
+  - the pencil's D_α and D_β;
+  - whether the angle gate reads the prior's Gram.
+
+  It has four members: the g-form, the normalized ridge, the raw ridge (D = I) and the modified g-prior.
+- *The modified g-prior is the g-form's pencil on scaled columns.* In the design's coordinates it is the g-form's prior-apart pencil on the prior-side columns scaled by 1/g_m: D_α = N, δ = z̄_u/g − z̄_w and D_β = D_g⁻¹G_uD_g⁻¹. No new pencil code was needed, and the angle gate reads it as it reads the g-form's.
+- *g₀²'s step is τ's.* τ = 1/g₀², and IG(a, b) on g₀² is Gamma(a, rate b) on τ. τ's slice step on ln τ (D04) is then g₀²'s on ln g₀², reflected, against the conditional with β and σ² integrated, at O(p) per g₀² after one decomposition per structure. The brief's "one `SliceSampler` step on ln g₀²" needed no block of its own.
+- *ζ = 0* is the g-form with the intercept inside under the zero centre.
+
+**The gates.**
+
+| Gate | Reading |
+| --- | --- |
+| g₀²'s conditional against the joint | At six structures and g₀² from 0.5 to 10⁶, for ζ = 0, 1 and 2.5: the target's log marginal against a dense multivariate t from the columns alone, y \| g₀² ~ t with scale I + B S₀ Bᵀ, 1.3·10⁻¹⁰ after one constant; the conditional τ's step reads against the joint, per structure, 1.3·10⁻¹⁰ |
+| ζ = 0 against `CollapsedGPrior` | The pencil against the g-form with the intercept inside, both with g₀² drawn: 466 enumerated structures at five τ each, 4·10⁻¹⁶ relative |
+| The exact law, g₀² integrated | Each of the 466 structures' weight by Simpson's rule over ln τ on the oracle's nodes, against `khaos_exactlaw_oracle.R`: 1.6·10⁻¹⁵ in P(M) and the 30 inclusions, 1.7·10⁻¹⁵ in g₀²'s posterior CDF at 300, 1,000 and 10⁴, on both boxes. The production chain with g₀² ~ IG(0.001, 1,000) drawn against it over 400,000 steps: worst \|z\| 1.46 |
+| Geweke, g₀² drawn | 12 cases, M ≤ 3, σ² ~ IG(3, 2), g₀² ~ IG(2, 2): worst \|z\| 2.37 and 1.52 (ζ = 1, two seeds), 2.14 (ζ = 0), over nine functions, ln g₀² among them |
+| `adaptive_khaos_gprior` readouts | Corrected, degree 8, order 3; R 6,000 iterations with 3,000 kept, the engine two chains of 10,000 after 10,000. On the raw inputs with [0, 1] declared: M 14.66 against 13.87, σ² 0.201 against 0.203, g₀²'s median 3,137 against 3,256, the surfaces 0.068 apart, total indices within 0.003. On the rescaled inputs: M 20.23 against 19.08, σ² 0.221 against 0.236, the surfaces 0.074 apart, the indices within 0.003. Long runs on the declared box settle the gap in M: eight engine chains of 40,000 read M 15.06 (sd 0.36), σ² 0.197, g₀²'s median about 3,130; two `khaos` runs of 40,000 read M 15.06 and 15.03, σ² 0.198 and g₀²'s median 3,125 and 3,115 |
+| Slice 1 under the builder | The raw ridge's exact-law chain and Geweke read as before to the printed digit (\|z\| 1.79, 0.71; 2.15, 1.39, 1.31) |
+| Hinge BASS | The whole regression assembly at the slice's end, 2,253 of 2,253, the eight pinned hashes and every fingerprint among them; the commit's selection on the later HEAD, 1,849 of 1,849 |
+
+**Parity with `khaos`.** The engine's model is `khaos`'s as written. Two parts differ, each a slice 0 defect:
+- *g₀²'s kernel.* The engine takes the brief's slice step on the derived conditional. `khaos` takes an independence step from a Laplace approximation to a conditional without the data term.
+- *The structure ratio.* The engine's carries ½Δln|S₀⁻¹|, which `khaos`'s leaves out.
+
+**Refusals.** Each is refused at resolution with its reason:
+- the modified g-prior on a hinge basis, since its factor reads a Legendre term's order and degree;
+- the modified g-prior under weights whose prior Gram is the weighted one, which moves with W.
+
+**The cost row** (`KhaosCostTests`, the cycle clock, indicative): at the base a modified g-prior sweep is 343 µs at M 20, beside the raw ridge's 363 µs, the normalized ridge's 35 µs and the hinge fit's 21 µs in the same run. Each candidate is decomposed afresh, as under the raw ridge. At p 20, q_max 5 it is 58 µs at M 6.
+
+**Found here.**
+- *Two overflows in the shared g-prior code, fixed.* `khaos`'s IG(0.001, 1,000) on g₀² puts about half its mass on τ below 10⁻³⁰⁰, where the density is finite. Two computations broke there:
+  - The spectral terms' ln(1 + bλ/τ) (`RidgeColumns`, every pencil and spectrum) read +∞ once bλ/τ overflowed.
+  - Goldberg's ln(1 + x) (`LogFunctions.Log1p`) overflowed in its product ln(u)·x above x ≈ 2.5·10³⁰⁵.
+
+  The log marginal read −∞ at such a τ, and a band of −∞ for u between about −709.8 and −703.2 stopped τ's slice step below it. On the cost row the chain sat at u ≈ −711 and M 0 for 4,000 sweeps, every birth refused. Each computation now takes ln bλ − ln τ or ln u where it overflowed, and keeps its operations everywhere else, so every finite reading stands (the whole assembly, with its pinned hashes). From u = −721.7 the chain now reaches u ≈ −31 by sweep 100 and M 20 by sweep 1,000. A test pins the marginal's ½-per-direction slope through the old wall, and the climb.
+- *The box matters less under the g-prior.* On Ishigami the g-prior reads M about 15 and σ² 0.20 on the declared box, and M about 20 and σ² 0.22 on the rescaled one; the raw ridge read 10 and 0.23 against 6 and 0.95. A term costs about ½ln(1 + g₀²g_m²) + ln|𝒜| ≈ 3 + 6 nats here against the raw ridge's 14, so the rescaled box's denser expansion still pays.
+- *The readout gate's M gap was Monte Carlo.* R's single chain of 3,000 kept draws read M 0.8 below the engine's. Long runs of both agree to 0.03.
+
+**Decisions beyond the brief.**
+- *g₀² is τ inverted, through τ's existing block,* with a Gamma on τ itself, rather than a g₀² block. The draws record τ, and g₀² = 1/τ.
+- *The builder holds the prior side, not the target's dispatch.* The target already reads a structure's fit, whether a factor, a spectrum or a pencil, and needed no change. The g-form's and the normalized ridge's fast forms stand wherever the prior is not apart, so their draws are unchanged.
+- *The raw ridge's prior-apart pencil folded into the builder* as its unit member, its draws unchanged.
+- *ζ is finite and not negative,* and the factor is the paper's for every ζ, so ζ = 0 needs no special case.
+
+**Left unbuilt, and why.**
+- *The modified g-prior on hinges.* Its factor reads a Legendre term's order and degree, and a hinge analogue is not KHAOS's.
+- *The weighted prior Gram for the modified g-prior* (above).
+- *Tempering and SMC under KHAOS's priors* are not gated, as for slice 1's raw ridge. The pencil serves them as it serves weighted g-form fits.
+- *Slices 3 and on,* waiting for the user.
 
 ### Slice 1 addendum: the input box's effect is the posterior's, not a trap (chip, 2026-11-08)
 

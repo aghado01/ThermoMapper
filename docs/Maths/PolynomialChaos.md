@@ -16,7 +16,7 @@ KHAOS (Rumsey, Francom et al., *Bayesian Adaptive Polynomial Chaos Expansions*, 
 | KHAOS's raw ridge | `RawRidgeForm`, through `BassDesign`'s prior-apart pencil | 1 |
 | The config | `BassStructureSpec.Legendre` (`LegendreBasis`), `BassCoefficientPrior.RawRidge` | 1 |
 | Declared input domains | `InputDomain` on `ContinuousPredictor`; `RangeScale` scales by it | 1 |
-| The modified g-prior, g₀² by slice steps | `PriorPencil` as a prior-precision builder | 2 |
+| The modified g-prior, g₀² by τ's slice step | `ModifiedGForm`; `BassPriorPrecision`, the design's prior-precision builder (E21); `TauPrior.Gamma` | 2 |
 
 ## The basis (E19)
 
@@ -88,13 +88,22 @@ each validity the Poisson-binomial's, by dynamic programming over the p coins in
 - *The alternative* was a bordered pencil, a rank-one update of L⁻¹AL⁻ᵀ per birth. Not built.
 - *When each serves:* on a Legendre basis the columns sit near unit root mean square, so the two ridges nearly agree. The raw ridge is the oracle's model, for parity. The normalized ridge is scale-free across term types.
 
-σ²'s prior is the core's; `khaos` defaults to g₁ = g₂ = 0, Jeffreys. The modified g-prior, KHAOS's other prior, is slice 2's.
+**KHAOS's modified g-prior** (`ModifiedGForm`, `BassCoefficientPrior.ModifiedG`): (β₀, β) | σ², g₀² ~ N(0, σ²S₀) on the columns as evaluated, the intercept's column of ones among them, with S₀ = g₀²·D_g(ΨᵀΨ)⁻¹D_g, D_g = diag(1, g₁, …, g_M) and g_m = (1 + q_m(d_m + q_m − 2))^(−ζ/2). A richer term's coefficient is shrunk harder. This is `adaptive_khaos_gprior`'s model, with its defaults ζ = 1 and g₀² ~ IG(0.001, 1,000).
+- *Through the builder (E21).* The design holds a prior-precision builder, `BassPriorPrecision`, one per coefficient form, in place of a flag per form. It says whether the prior stands apart from the Gram, what each term's prior-side column is, the pencil's D_α and D_β, and whether the angle gate reads the prior's Gram. In the design's coordinates the modified g-prior is the g-form's prior-apart pencil on the prior-side columns scaled by 1/g_m: D_α = N, δ = z̄_u/g − z̄_w and D_β = D_g⁻¹G_uD_g⁻¹. Scaling a column leaves its angles alone, so F is the g-form's. The raw ridge is the builder's unit member, D = I. The g-form and the normalized ridge keep their own forms, a factor and a spectrum, wherever the prior does not stand apart, so their draws are unchanged.
+- *g₀²'s step is τ's.* τ = 1/g₀², and IG(a, b) on g₀² is Gamma(a, rate b) on τ: `TauPrior.Gamma(a, b)`, stated on τ itself whatever the form's τ₀. τ's slice step on ln τ (D04) is then g₀²'s on ln g₀², reflected, against the conditional with β and σ² integrated: the IG prior, |Σ_n|^½|S₀|^(−½) and the data term. The pencil is decomposed once per structure, after which each g₀² costs O(p). The draws record τ, and g₀² = 1/τ.
+- *ζ = 0* is the g-form with the intercept inside under the zero centre. The two agree at every enumerated structure and τ (the checks).
+- *The alternative* was `khaos`'s own step: an independence proposal from a Laplace approximation fitted to a conditional without the data term, which slice 0 confirmed as a defect. The brief chose the slice step on the derived conditional (E19).
+- *Refused:* a hinge basis, since the factor reads a Legendre term's order and degree; and, under weights, the weighted prior Gram, which moves the prior with W. The unweighted and frozen prior Grams serve it.
+- *Where τ is subnormal.* `khaos`'s IG(0.001, 1,000) on g₀² puts about half its mass on τ below 10⁻³⁰⁰, where the density is finite. Two products overflowed there: the spectral terms' ln(1 + bλ/τ), and Goldberg's ln(1 + x) above x ≈ 2.5·10³⁰⁵. Each now takes ln bλ − ln τ or ln(1 + x) where it overflowed, and keeps its operations elsewhere. A chain started from such a draw climbs to the posterior's τ in about a hundred sweeps, where before it could not move.
+- *The box under the g-prior.* On Ishigami the g-prior reads M about 15 and σ² 0.20 on the declared box, and M about 20 and σ² 0.22 on the rescaled one; the raw ridge read 10 and 0.23 against 6 and 0.95. A term costs about ½ln(1 + g₀²g_m²) + ln|𝒜| ≈ 3 + 6 nats there, against the raw ridge's 14, so the rescaled box's denser expansion still pays.
+
+σ²'s prior is the core's; `khaos` defaults to g₁ = g₂ = 0 for the ridge's σ² and a_σ = b_σ = 0 for the g-prior's, Jeffreys both.
 
 ## The config
 
 `BassStructureSpec.Legendre` is a `LegendreBasis`; null, the default, is BASS's hinges. It holds d_max (`MaxDegree`, `khaos`'s 15), s_q (`OrderPenalty`, 1), s_d (`DegreePenalty`, 0), `make_weights`' α, ε and passes (1, 2, 3), the swap's pseudo-count (1) and the mutation probability (½). q_max is `MaxInteraction`, a term's continuous factors, resolved to at most p. `Legendre` and `RawRidge` are left out of the JSON when unused, so a hinge config's form and fingerprint stand as they were. A Legendre fit's `BassModel.Proposal` (D01's) is refused, and `BassModel.Kernel` is its proposal.
 
-## What was checked (slice 1)
+## What was checked (slices 1 and 2)
 
 | Gate | Reading |
 |---|---|
@@ -107,18 +116,24 @@ each validity the Poisson-binomial's, by dynamic programming over the p coins in
 | Geweke | 12 cases, M ≤ 3, σ² ~ IG(3, 2), τ held, p 4: worst \|z\| 2.15 and 1.39 (raw ridge, two seeds), 1.31 (normalized) over M, σ², the surface at two points, two inclusions, the degree sum and a scaled residual |
 | Readouts | Against corrected `adaptive_khaos_ridge` on Ishigami (degree 8, order 3; R 6,000 iterations with 3,000 kept, the engine two chains of 10,000 after 10,000): on the raw inputs with [0, 1] declared, M 10.15 against 10.15, σ² 0.2275 against 0.2278, the surfaces 0.005 apart (root mean square, function sd 3.72), total Sobol indices within 0.001; on the inputs rescaled to [0, 1], M 6.22 against 6.13, σ² 0.929 against 1.005, the surfaces 0.035 apart, the indices within 0.004. Eight engine chains of 30,000 on the raw inputs read M 10.13 and σ² 0.2282, and two `khaos` runs of 30,000 read 10.14 to 10.15 and 0.2274 to 0.2275 |
 | Declared domain | The exact law with [0, 1] declared on the raw rows against `khaos_exactlaw_oracle.R` (3·10⁻¹⁵); with inputs in [0.05, 0.95] and [0, 1] declared, π against a dense marginal on ψ at the raw values (3·10⁻¹⁵), where the training range's law differs by up to 0.019; refusals, the box and the flags, the fingerprint, the measure and the log (`InputDomainTests`) |
-| Hinge BASS | The whole regression assembly, 2,172 of 2,172, the eight pinned hashes and every fingerprint among them; a hinge config's JSON holds neither `Legendre` nor `RawRidge` |
+| The modified g-prior's target | At six structures and g₀² from 0.5 to 10⁶, for ζ = 0, 1 and 2.5: the log marginal against a dense multivariate t built from the columns alone, y \| g₀² ~ t with scale I + B S₀ Bᵀ (1.3·10⁻¹⁰ after one constant), so g₀²'s conditional, which τ's step reads, is the joint's |
+| ζ = 0 | The pencil against the g-form's `CollapsedGPrior` with the intercept inside, both with g₀² drawn: 466 enumerated structures at five τ each, 4·10⁻¹⁶ relative |
+| The exact law, g₀² integrated | Each of the 466 structures' weight by Simpson's rule over ln τ on the oracle's nodes, against `khaos_exactlaw_oracle.R`: 1.6·10⁻¹⁵ in P(M) and the inclusions and 1.7·10⁻¹⁵ in g₀²'s posterior CDF at 300, 1,000 and 10⁴, on both boxes. The production chain with g₀² ~ IG(0.001, 1,000) drawn, against it over 400,000 steps: worst \|z\| 1.46 |
+| Geweke, g₀² drawn | 12 cases, p 4, M ≤ 3, σ² ~ IG(3, 2), g₀² ~ IG(2, 2) drawn by τ's step; 200,000 marginal-conditional draws against 300,000 successive steps over M, σ², ln g₀², the surface at two points, two inclusions, the degree sum and a scaled residual: worst \|z\| 2.37 and 1.52 (ζ = 1, two seeds), 2.14 (ζ = 0) |
+| `adaptive_khaos_gprior` readouts | Corrected, degree 8, order 3, R 6,000 iterations with 3,000 kept against the engine's two chains of 10,000 after 10,000. On the raw inputs with [0, 1] declared: M 14.66 against 13.87, σ² 0.201 against 0.203, g₀²'s median 3,137 against 3,256, the surfaces 0.068 apart, total indices within 0.003. On the rescaled inputs: M 20.23 against 19.08, σ² 0.221 against 0.236, the surfaces 0.074 apart, the indices within 0.003. Long runs on the declared box: eight engine chains of 40,000 read M 15.06 (sd 0.36), σ² 0.197 and g₀²'s median about 3,130; two `khaos` runs of 40,000 read M 15.06 and 15.03, σ² 0.198 and g₀²'s median 3,125 and 3,115 |
+| Hinge BASS | The whole regression assembly at the slice's end, 2,253 of 2,253, the eight pinned hashes and every fingerprint among them, and the commit's selection on the later HEAD, 1,849 of 1,849; a hinge config's JSON holds neither `Legendre`, `RawRidge` nor `ModifiedG`, and a τ prior other than the Gamma on τ writes no rate |
 
 **The cost row** (`KhaosCostTests`, the thread's cycle clock, read round-robin in one process; indicative, the machine loaded):
 - *A column* at n = 1,000, in two runs, the second on a quieter machine: ψ₈·ψ₇ 11.9 and 8.6 µs and ψ₁₅ 10.4 and 7.3 µs, against 66 and 46 µs for the scalar per-point form that divides at each step, and 2.6 and 1.4 µs for a product of two hinges. ψ₈·ψ₇ reads 4.5× and 6.2× the hinges.
 - *A sweep* at the cost report's base (n 1,000, p 10, M_max 20, q_max 2, d_max 15), at M 20: 37.7 and 18.9 µs under the normalized ridge and 356 and 190 µs under KHAOS's raw ridge, against 22.3 and 10.2 µs for the hinge fit there. The raw ridge's pencil decomposes each candidate anew, the brief's accepted design for a prior apart from the Gram, which slice 2's g-prior shares.
 - *A sweep at p 20, d_max 15, q_max 5,* where the chains sat at M 2 to 4: 38.2 and 16.3 µs (raw) and 48.5 and 20.0 µs (normalized).
+- *The modified g-prior* (slice 2, a third run): at the base, a sweep 343 µs at M 20, beside the raw ridge's 363 and the normalized ridge's 35 in the same run, since each candidate is decomposed afresh as under the raw ridge; at p 20, q_max 5, 58 µs at M 6
 
 ## Notation
 
 This page takes KHAOS's symbols. α is a multi-index, q a term's order (its variables), d its degree (Σα), q_max and d_max their caps, and 𝒜 the term space. Where they cross BASS's:
 - *q:* KHAOS's q is a term's interaction order, BASS's K. BASS's q is the hinges' power, the config's `Structure.Degree`.
 - *d / degree:* KHAOS's degree is a sum over the term's factors. BASS's `Degree` is the hinge power, so a Legendre fit refuses it and caps its degree by `Legendre.MaxDegree`.
-- *g:* KHAOS's g_m and g₀ (slice 2) meet BASS's g-form, σ²G_c⁻¹/τ.
+- *g:* KHAOS's g₀² is the engine's 1/τ, as the g-form's g is in σ²G_c⁻¹/τ, so the two meet at ζ = 0. g_m is a term's complexity factor, with no BASS counterpart. `khaos`'s g₁ and g₂ are the ridge's σ² hyperparameters.
 
-The code follows the page: `LegendreFactor.Degree` is α, `LegendreDegree` is d, `MaxInteraction` is q_max. These crossings go to [the notation ledger](../../issues/notation-ledger.md) once its open edit is committed.
+The code follows the page: `LegendreFactor.Degree` is α, `LegendreDegree` is d, `MaxInteraction` is q_max. These crossings are in [the notation ledger](../../issues/notation-ledger.md).
