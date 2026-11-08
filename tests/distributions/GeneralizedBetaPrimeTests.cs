@@ -293,6 +293,36 @@ public sealed class GeneralizedBetaPrimeTests(ITestOutputHelper output)
         return top + Math.Log(parts.Sum(v => Math.Exp(v - top)));
     }
 
+    [Fact]
+    public void PastTheTablesEnds_TheSideNearOne_KeepsTheFarTailsDigits()
+    {
+        // Past an end of the tail table the side near 1 is read as ln(1 − e^(far tail)): never above 0, and 1 − F the far tail's own integral.
+        // Before, it was its own integral, which lost 1 − F's digits (+2.9·10⁻¹⁵ for the generalized hyperbolic at 32 scales).
+        var laws = new (string Name, NormalVarianceMeanMixture Law)[]
+        {
+            ("generalized hyperbolic", GeneralizedHyperbolic.Of(0.7, 1.2, 0.8, 0.5, 1.0)),
+            ("Normal-Wald, γ = 1.5", GeneralizedHyperbolic.Of(-0.5, 2.25, 1.0, 0.4, 0.8)),
+            ("skewed t, ν = 5", GeneralizedHyperbolic.Of(-2.5, 0.0, 5.0, 0.3, 1.0)),
+            ("horseshoe, skewed", NormalGeneralizedBetaPrime.Of(1.0, 0.5, 0.5, 0.3, 1.0)),
+        };
+        foreach ((string name, NormalVarianceMeanMixture law) in laws)
+        {
+            double worst = 0.0, integratedAbove = double.NegativeInfinity;
+            foreach (double side in new[] { -1.0, 1.0 })
+                foreach (double scales in new[] { 8.0, 16.0, 32.0, 64.0, 1e3 })
+                {
+                    double x = side * scales * law.Scale, f = law.LogCdf(x), s = law.LogSurvival(x);
+                    Assert.True(f <= 0.0 && s <= 0.0, $"{name} at {x}: ln F {f:R}, ln S {s:R}");
+                    // The side near 1 against the far tail's own mass: near = ln(1 − e^(far)), measured against e^(far) where that is normal.
+                    double near = side > 0.0 ? f : s, far = side > 0.0 ? s : f;
+                    if (far > -700.0) worst = Math.Max(worst, Math.Abs(near - SpecialFunctions.Log1p(-Math.Exp(far))) / Math.Exp(far));
+                    integratedAbove = Math.Max(integratedAbove, side > 0.0 ? law.IntegratedLogCdf(x) : law.IntegratedLogSurvival(x));
+                }
+            output.WriteLine($"{name}: the near side against ln(1 − e^(far tail)), worst gap over e^(far) {worst:E2}; the near side's own integral, highest {integratedAbove:E2}");
+            Assert.True(worst < 1e-9, $"{name}: {worst:E2}");
+        }
+    }
+
     [Theory]
     [MemberData(nameof(Mixtures))]
     public void DensityAndTails_MeetAFixedStepRule(double p, double a, double b, double drift, double scale)

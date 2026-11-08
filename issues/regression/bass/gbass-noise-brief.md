@@ -157,6 +157,15 @@ Under "Reports" below, newest first, per slice: what landed by commit; the gates
 
 Newest first.
 
+### The mixture's tail table past its ends (chip, 2026-11-08)
+
+**Landed** in the commit that carries this entry, after slice 7 and apart from it, at the main session's ask (the defect the conformal chip found in its slice 4).
+
+- *The defect.* Past either end of `NormalVarianceMeanMixture`'s tail table (beyond the 10⁻¹² quantiles) `TailTable.Read` returned the integral on the side asked for, so the side whose mass is near 1 there lost 1 − F's digits and could read above 0: +3.0·10⁻¹⁵ for a generalized hyperbolic, +6.3·10⁻¹⁵ for a Normal-Wald, +2.2·10⁻¹⁶ for a skewed horseshoe. It reached the Normal-Wald, the skewed t, the generalized hyperbolic and the GBP mixtures.
+- *The fix.* Past an end, that side is ln(1 − e^(far tail)), the far tail integrated on its own side. Inside the table both sides already came from one normal score, read as ln Φ(±z) with `Log1mExp`.
+- *Checked* (`GeneralizedBetaPrimeTests.PastTheTablesEnds_TheSideNearOne_KeepsTheFarTailsDigits`): at 8 to 1,000 scales on both sides, under the four families, no log tail above 0, and the near side equals ln(1 − e^(far tail)) exactly. Before the commit, the distributions' selected class (31 of 31) and the regression selection with the pinned tier (1,724 of 1,724).
+- `docs/Maths/ProbabilityAndInformation.md`'s table sentence says how the ends are read.
+
 ### Slice 7: interweaving, the z parameterization beside v (chip, 2026-11-08)
 
 **Landed** in `211d768` (the code and its tests) and the commit that carries this report (`docs/Maths`, the checklist). [The page's section](../../../docs/Maths/VarianceMeanMixtures.md#interweaving-the-z-parameterization-beside-v-e1s-slice-7) holds σ's conditional given z, its draw against the exact GIG route, and what it buys.

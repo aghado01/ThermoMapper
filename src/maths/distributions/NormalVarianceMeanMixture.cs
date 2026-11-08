@@ -388,7 +388,13 @@ public abstract class NormalVarianceMeanMixture : IContinuousDistribution
         {
             if (double.IsNaN(x)) return double.NaN;
             double at = Math.Asinh(x / _owner.Scale);
-            if (at < _at[0] || at > _at[^1]) return _owner.LogTail(x, below);
+            if (at < _at[0] || at > _at[^1])
+            {
+                // Past an end the side whose mass is near 1 there is read as ln(1 − e^(far tail)), the far tail integrated on its own side:
+                // its own integral would lose 1 − F's digits and could read above 0.
+                bool nearOne = at > _at[^1] ? below : !below;
+                return nearOne ? SpecialFunctions.Log1p(-Math.Exp(_owner.LogTail(x, !below))) : _owner.LogTail(x, below);
+            }
             int k = Array.BinarySearch(_at, at);
             double score;
             if (k >= 0) score = _z[k];
