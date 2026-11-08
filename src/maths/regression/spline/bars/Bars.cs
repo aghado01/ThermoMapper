@@ -34,6 +34,10 @@ public sealed record BarsConfig
     /// <summary>Optional scale-mixture robustness (null = non-robust least squares).</summary>
     public IWeightResampler? Robustness { get; init; }
 
+    /// <summary>Optional variance-mean noise (<see cref="BarsNoise"/>, OQ20): skewed or quantile BARS, or a scale mixture with its latents
+    /// kept; in place of <see cref="Robustness"/>, on <see cref="WeightEvery"/>'s cadence.</summary>
+    public BarsNoise? Noise { get; init; }
+
     public int Chains { get; init; } = 4;
     public int MasterSeed { get; init; }
     public int BurnIn { get; init; } = 2000;
@@ -85,7 +89,7 @@ public static class Bars
         IBasis basis = config.Basis ?? new SplineBasis(config.Degree);
         var ensemble = new BarsEnsemble(basis, config.Model, config.Prior, config.Kernel, config.Robustness,
                                         adaptKernelTau: config.AdaptKernelTau, minColumnMass: config.MinColumnMass,
-                                        birthExploration: config.BirthExploration, birthBase: config.BirthBase);
+                                        birthExploration: config.BirthExploration, birthBase: config.BirthBase, noise: config.Noise);
         return ensemble.Run(x, y, grid,
             config.Chains, config.MasterSeed, config.BurnIn, config.MaxSamples,
             config.StartDispersion, config.WeightEvery, config.RHatTarget, config.BatchSize, config.PeakProminence,

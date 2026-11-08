@@ -32,12 +32,17 @@ public sealed class BarsResumeTests
         return (x, y);
     }
 
-    public static TheoryData<string> Setups => new() { "plain", "robust", "adaptive", "tempered", "reference-powered", "reference-linear" };
+    public static TheoryData<string> Setups => new() { "plain", "robust", "adaptive", "tempered", "reference-powered", "reference-linear",
+                                                       "noise-quantile", "noise-skewed" };
 
     private static BarsEnsemble Ensemble(string setup) => setup switch
     {
         "robust" => new BarsEnsemble(new SplineBasis(3), new WeightedNormalModel(), new PoissonPrior(5.0), new LocalBetaKernel(50.0),
                                      resampler: new StudentTWeights(4.0)),
+        "noise-quantile" => new BarsEnsemble(new SplineBasis(3), new WeightedNormalModel(), new PoissonPrior(5.0), new LocalBetaKernel(50.0),
+                                             noise: BarsNoise.Quantile(0.8)),
+        "noise-skewed" => new BarsEnsemble(new SplineBasis(3), new WeightedNormalModel(), new PoissonPrior(5.0), new LocalBetaKernel(50.0),
+                                           noise: BarsNoise.Skewed(new GigMixing(new Maths.Samplers.Blocks.GigParameters(0.7, 1.2, 0.8)), Maths.Distributions.Normal.MeanSd(0.0, 1.0))),
         "adaptive" => new BarsEnsemble(new SplineBasis(3), new WeightedNormalModel(), new PoissonPrior(5.0), new LocalBetaKernel(50.0),
                                        adaptKernelTau: 20.0),
         "tempered" => new BarsEnsemble(new SplineBasis(3), new WeightedNormalModel(), new PoissonPrior(5.0), new LocalBetaKernel(50.0),
@@ -107,6 +112,7 @@ public sealed class BarsResumeTests
                 Assert.Equal(u.Coefficients, v.Coefficients);
                 Assert.Equal(u.Sigma2, v.Sigma2);
                 Assert.Equal(u.Weights, v.Weights);
+                Assert.Equal(u.Skew, v.Skew);
                 Assert.Equal(u.Peak.ArgmaxLocation, v.Peak.ArgmaxLocation);
                 Assert.Equal(u.Peak.ArgmaxHeight, v.Peak.ArgmaxHeight);
                 Assert.Equal(u.Peak.Spans, v.Peak.Spans);

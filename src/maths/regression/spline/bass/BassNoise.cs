@@ -704,8 +704,8 @@ public sealed class BassScaleBlock : IBlock<ReversibleJumpChain<BassState>>
         }
         (double quadratic, int count) = fit.Conditional.PriorEnergy(fit.Centred);
         InverseGamma? prior = (state.Target as BassTarget ?? throw new InvalidOperationException("The chain's target is BASS's.")).Sigma2At(state.Current);
-        double shape = prior?.Shape ?? 0.0, scale = prior?.Scale ?? 0.0, b = BassCoefficientsBlock.Power(state);
-        double u = ModifiedHalfNormal.Of(b * y.Length + count + 2.0 * shape, 0.5 * (b * squares + quadratic + 2.0 * scale), b * latents.Skew * sum / c).Sample(rng);
+        double u = VarianceMeanConditionals.SampleInverseScale(y.Length, squares, sum, quadratic, count, prior, latents.Skew, c,
+                                                               BassCoefficientsBlock.Power(state), rng);
         WorkingResponse moved = _model.At(working, latents.WithSigma2(1.0 / (u * u)), weightsMoved: false);
         return BassStructureMoves.Follow(state, moved) is null;
     }
@@ -755,9 +755,7 @@ public sealed class BassNoiseShapeBlock : IBlock<ReversibleJumpChain<BassState>>
             double sigma = Math.Sqrt(latents.Sigma2 ?? throw new InvalidOperationException("A drawn skew's latents hold σ².")), c = _model.VarianceScale;
             double sumR = 0.0;
             for (int i = 0; i < y.Length; i++) sumR += y[i] - fit.Fitted[i];
-            double b = BassCoefficientsBlock.Power(state);
-            double inverse = 1.0 / (skewPrior.Sd * skewPrior.Sd), precision = b * sumV / c + inverse;
-            skew = (b * sumR / (sigma * c) + skewPrior.Mean * inverse) / precision + Normal.SampleStandard(rng) / Math.Sqrt(precision);
+            skew = VarianceMeanConditionals.SampleSkew(sumV, sumR, sigma, c, skewPrior.Mean, skewPrior.Sd, BassCoefficientsBlock.Power(state), rng);
         }
         double? gamma = latents.Gamma;
         if (_model.Noise.GammaPrior is { IsHeld: false } gammaPrior)

@@ -81,10 +81,18 @@ public sealed class StudentTMixing : IMixingLaw
         if (!(power >= 0.0 && power <= 1.0)) throw new ArgumentOutOfRangeException(nameof(power), "The power lies in [0, 1].");
         if (unitDrift != 0.0) return Skewed.SampleConditional(residual, unitVariance, unitDrift, power, rng);
         if (!double.IsFinite(residual)) throw new ArgumentOutOfRangeException(nameof(residual), "The residual must be finite.");
-        // StudentTWeights' step: the precision 1/v ~ Gamma((ν + b)/2, (ν + b·z²)/2), z² = r²/s².
+        return 1.0 / SamplePrecision(residual, unitVariance, power, rng);
+    }
+
+    /// <summary>
+    /// The precision λ = 1/v from its conditional at m = 0, Gamma((ν + b)/2, (ν + b·z²)/2) with z² = r²/s²: the draw BARS's
+    /// <c>StudentTWeights</c> takes as its weight, and v's the reciprocal of.
+    /// </summary>
+    public double SamplePrecision(double residual, double unitVariance, double power, Xoshiro256PlusPlus rng)
+    {
         double z2 = residual * residual / unitVariance;
         double half = 0.5 * DegreesOfFreedom;
-        return 1.0 / ConjugateUpdates.NormalPrecision(half, half, power, power * z2).Sample(rng);
+        return ConjugateUpdates.NormalPrecision(half, half, power, power * z2).Sample(rng);
     }
 
     /// <inheritdoc/>

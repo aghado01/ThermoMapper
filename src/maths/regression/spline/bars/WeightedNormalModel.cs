@@ -60,6 +60,46 @@ public sealed class WeightedNormalModel : IObservationModel
         Sigma2Prior = sigma2Prior ?? Sigma2Prior.ScaledToResponse();
     }
 
+    // The model under a variance-mean noise (BarsNoise): the priors read once from the data, and σ² given under a skew.
+    private WeightedNormalModel(WeightedNormalModel model, NoiseReading noise)
+    {
+        Centre = model.Centre;
+        Form = model.Form;
+        Sigma2Prior = model.Sigma2Prior;
+        _noise = noise;
+    }
+
+    // Under a noise whose working response moves (BarsNoise) the σ² prior and the centre's level are read once, from the response
+    // itself, not from each working response the chain hands the model; under a skew σ² is given, held on the chain.
+    private readonly NoiseReading? _noise;
+
+    private sealed record NoiseReading(InverseGamma? Prior, double Level, double? Sigma2);
+
+    /// <summary>
+    /// This model under a variance-mean noise (<see cref="BarsNoise"/>): the σ² prior and the centre's level read once from
+    /// <paramref name="response"/>, the data, so that the working response the noise moves each sweep reads neither, as BASS's priors
+    /// that stop reading a moving response do. Refused for a response the scaled prior finds no spread in.
+    /// </summary>
+    internal WeightedNormalModel ReadingFrom(double[] response)
+    {
+        ArgumentNullException.ThrowIfNull(response);
+        if (!Resolve(response, out InverseGamma? prior, out double? level))
+            throw new ArgumentException("The response has no spread for the σ² prior to scale to.", nameof(response));
+        return new WeightedNormalModel(this, new NoiseReading(prior, level ?? BandedGPrior.Level(response, Centre), null));
+    }
+
+    /// <summary>This noise reading at σ² = <paramref name="sigma2"/>, held on the chain under a skew: the knot step reads the marginal
+    /// given σ² and a coefficient draw is given σ².</summary>
+    internal WeightedNormalModel Given(double sigma2)
+    {
+        if (_noise is not { } noise) throw new InvalidOperationException("σ² is given under a noise's reading (ReadingFrom).");
+        if (!(sigma2 > 0.0 && double.IsFinite(sigma2))) throw new ArgumentOutOfRangeException(nameof(sigma2), "σ² must be positive and finite.");
+        return new WeightedNormalModel(this, noise with { Sigma2 = sigma2 });
+    }
+
+    /// <summary>Under a noise's reading, the σ² prior read from the data as an inverse gamma, null for Jeffreys.</summary>
+    internal InverseGamma? NoisePrior => _noise is { } noise ? noise.Prior : throw new InvalidOperationException("No noise reading.");
+
     /// <summary>Where the coefficient prior is centred.</summary>
     public GPriorCentre Centre { get; }
 
@@ -131,6 +171,7 @@ public sealed class WeightedNormalModel : IObservationModel
         if (block is null)   // rank-deficient or ill-conditioned design ⇒ outside the support
             return new ImpossibleMarginal(DesignRejection.Inadmissible);
         if (!resolved) return new ImpossibleMarginal(DesignRejection.ZeroResponse);
+        if (_noise?.Sigma2 is double given) return new GivenMarginal(block.MarginalAt(tau).LogMarginalGiven(given));
         var marginal = new NormalMarginal(block, tau, prior);
         return Form == TemperedForm.Linear ? LinearMarginal.Of(marginal.LogMarginalLikelihood(1.0), marginal.Rejection) : marginal;
     }
@@ -139,6 +180,12 @@ public sealed class WeightedNormalModel : IObservationModel
     // the centre's level, which the block's centring then reuses: one median per evaluation, as without it.
     private bool Resolve(double[] y, out InverseGamma? prior, out double? level)
     {
+        if (_noise is { } noise)
+        {
+            prior = noise.Prior;
+            level = noise.Level;
+            return true;
+        }
         level = null;
         if (!Sigma2Prior.ReadsResponse)
         {
@@ -188,23 +235,75 @@ public sealed class WeightedNormalModel : IObservationModel
     public IConditionalFit FitConditional(double[,] design, double[] y, double[]? weights)
     {
         Resolve(y, out InverseGamma? prior, out double? level);
-        return new NormalConditional(Condition(design, y, weights, level), prior, design, y, weights);
+        return new NormalConditional(Condition(design, y, weights, level), prior, design, y, weights, _noise?.Sigma2);
+    }
+
+    /// <summary>
+    /// One noise sweep's coefficient draw at a knot configuration (<see cref="BarsNoise"/>), on this noise reading: the coefficients from
+    /// their conditional given the knots and <paramref name="weights"/>, with σ² drawn with them under a pure scale mixture and given under
+    /// a skew; the fit f = Zβ; and the coefficients' prior energy per unit σ², Q = τ‖Z(β − μ₀)‖² over all K = p coefficients, which σ²'s
+    /// block reads since the g-prior's variance scales with σ². Null when the design is inadmissible.
+    /// </summary>
+    internal NoiseFit? SampleNoiseFit(double[,] design, double[] y, double[] weights, Xoshiro256PlusPlus rng)
+    {
+        ArgumentNullException.ThrowIfNull(rng);
+        if (_noise is not { } noise) throw new InvalidOperationException("A noise sweep's fit reads a noise reading (ReadingFrom).");
+        (CollapsedGPrior? block, double tau) = Fit(design, y, weights, noise.Level);
+        if (block is null) return null;
+        GPriorConditional c = block.At(tau);
+        double[] beta = c.Mean.ToArray();
+        double sigma2;
+        if (noise.Sigma2 is double given)
+        {
+            c.SampleGiven(given, rng, beta);
+            sigma2 = given;
+        }
+        else sigma2 = c.Sample(noise.Prior, rng, beta);
+        int m = design.GetLength(0), p = design.GetLength(1);
+        ReadOnlySpan<double> priorMean = block.PriorMean;
+        var fitted = new double[m];
+        double quadratic = 0.0;
+        for (int i = 0; i < m; i++)
+        {
+            double f = 0.0, d = 0.0;
+            for (int j = 0; j < p; j++)
+            {
+                f += design[i, j] * beta[j];
+                d += design[i, j] * (beta[j] - (priorMean.IsEmpty ? 0.0 : priorMean[j]));
+            }
+            fitted[i] = f;
+            quadratic += d * d;
+        }
+        return new NoiseFit(beta, sigma2, fitted, tau * quadratic, p);
+    }
+
+    /// <summary>A noise sweep's coefficient draw (<see cref="SampleNoiseFit"/>): β, σ² (drawn, or given under a skew), f = Zβ, and the
+    /// prior's energy Q per unit σ² over its K coefficients.</summary>
+    internal sealed record NoiseFit(double[] Coefficients, double Sigma2, double[] Fitted, double Quadratic, int Count);
+
+    // A knot configuration's marginal given σ² under a skew (the weighted block, untempered): β integrated, σ² held.
+    private sealed class GivenMarginal(double atOne) : ITemperedMarginal
+    {
+        public double LogMarginalLikelihood(double inverseTemperature)
+            => inverseTemperature == 1.0 ? atOne : throw new NotSupportedException("The marginal given σ² under a noise is untempered.");
     }
 
     // The three readouts of one block's conditional, or NaN throughout when the design is inadmissible (no block). σ² has
-    // a posterior under a proper prior, or under the Jeffreys prior (null) when S > 0.
-    private sealed class NormalConditional(GPriorConditional? c, InverseGamma? prior, double[,] design, double[] y, double[]? weights)
+    // a posterior under a proper prior, or under the Jeffreys prior (null) when S > 0; under a skew it is given.
+    private sealed class NormalConditional(GPriorConditional? c, InverseGamma? prior, double[,] design, double[] y, double[]? weights,
+                                           double? given = null)
         : IConditionalFit
     {
         private readonly int columns = design.GetLength(1);
 
-        private bool HasSigmaPosterior => c is not null && (prior is not null || c.S > 0.0);
+        private bool HasSigmaPosterior => c is not null && (given is not null || prior is not null || c.S > 0.0);
 
         public double[] MeanCoefficients() => c is null ? Unavailable(columns) : c.Mean.ToArray();
 
         public double[]? ConditionalVariance(double[,] readoutDesign)
         {
             ArgumentNullException.ThrowIfNull(readoutDesign);
+            if (given is double sigma2) return c is null ? ReadoutQuadratics.Unavailable(readoutDesign) : c.ConditionalVarianceGiven(sigma2, readoutDesign);
             if (!HasSigmaPosterior || c!.Rows <= 2) return ReadoutQuadratics.Unavailable(readoutDesign);
             return c.ConditionalVariance(prior, readoutDesign);
         }
@@ -214,6 +313,11 @@ public sealed class WeightedNormalModel : IObservationModel
             ArgumentNullException.ThrowIfNull(rng);
             if (c is null) return new(Unavailable(columns), double.NaN);
             double[] beta = c.Mean.ToArray();
+            if (given is double held)
+            {
+                c.SampleGiven(held, rng, beta);
+                return new(beta, held);
+            }
             if (!HasSigmaPosterior) return new(beta, double.NaN);
             double sigma2 = c.Sample(prior, rng, beta);
             return new(beta, sigma2);
@@ -225,6 +329,7 @@ public sealed class WeightedNormalModel : IObservationModel
             ArgumentNullException.ThrowIfNull(units);
             if (units.Observations != y.Length)
                 throw new ArgumentException("The partition must cover the fitted observations.", nameof(units));
+            if (given is not null) throw new NotSupportedException("Under a skew σ² is held on the chain: the leave-unit-out Student t integrates it.");
             var values = new double[units.Units];
             if (!HasSigmaPosterior) { Array.Fill(values, double.NaN); return values; }
             for (int u = 0; u < units.Units; u++) values[u] = c!.LeaveOutLogDensity(prior, design, y, weights, units.Members[u]);

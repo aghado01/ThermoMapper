@@ -59,7 +59,7 @@ public sealed record PeakDraw(double ArgmaxLocation, double ArgmaxHeight, IReadO
 ///   and <see cref="Weights"/> (<see cref="IObservationModel.PosteriorMeanCoefficients"/>), so it is not stored.</item>
 /// </list>
 /// </summary>
-public sealed record BarsDraw(KnotConfig Knots, double[] Coefficients, double Sigma2, double[]? Weights, PeakDraw Peak);
+public sealed record BarsDraw(KnotConfig Knots, double[] Coefficients, double Sigma2, double[]? Weights, PeakDraw Peak, double Skew = 0.0);
 
 /// <summary>
 /// What the tempering ladders did while sampling (burn-in excluded), averaged over chains: the round-trip and
@@ -186,6 +186,7 @@ public sealed class BarsEnsemble : IEnsembleModel<KnotConfig>
     private readonly IComplexityPrior _prior;
     private readonly IKnotKernel _kernel;
     private readonly IWeightResampler? _resampler;
+    private readonly BarsNoise? _noise;         // set ⇒ a variance-mean noise's latents, σ² and skew on each chain (OQ20)
     private readonly double? _dmgkConstant;     // null ⇒ equal birth/death/relocate weights
     private readonly double? _adaptKernelTau;    // set ⇒ each chain tunes an AdaptiveLocalBetaKernel in burn-in
     private readonly int? _temperLevels;        // set ⇒ each chain is a parallel-tempering ladder (cold = the sample)
@@ -205,6 +206,7 @@ public sealed class BarsEnsemble : IEnsembleModel<KnotConfig>
     private double[] _x = null!;
     private double[] _y = null!;
     private double[] _grid = null!;
+    private WeightedNormalModel? _noiseModel;   // the Normal model reading its priors from _y once, under the noise
     private int _weightEvery;
     private int _startDispersion;
     private double _peakProminence;
@@ -250,6 +252,8 @@ public sealed class BarsEnsemble : IEnsembleModel<KnotConfig>
     /// (<paramref name="temperReferenceRung"/>), under the Normal model with a proper σ² prior
     /// (<see cref="WeightedNormalModel.HasCompleteMarginal"/>). Each ladder then traces its rungs from the end of burn-in,
     /// at one extra marginal per rung per scan. Other runs report none, and cost nothing.</param>
+    /// <param name="noise">A variance-mean mixture's noise (<see cref="BarsNoise"/>, OQ20): skewed and quantile BARS, or a scale mixture with
+    /// its latents kept. It needs the Normal model, and runs untempered and without a resampler, on the weight block's cadence.</param>
     public BarsEnsemble(IBasis basis, IObservationModel model, IComplexityPrior prior, IKnotKernel kernel,
                         IWeightResampler? resampler = null, double? dmgkConstant = null, double? adaptKernelTau = null,
                         int? temperLevels = null, double temperHotEnd = 0.05,
@@ -257,7 +261,7 @@ public sealed class BarsEnsemble : IEnsembleModel<KnotConfig>
                         SwapSchedule temperSchedule = SwapSchedule.DeterministicEvenOdd, bool temperAdaptLadder = true,
                         double minColumnMass = SplineTarget.DefaultMinColumnMass,
                         double birthExploration = 1.0, BirthBase birthBase = BirthBase.Uniform, bool temperReferenceRung = false,
-                        bool evidence = true)
+                        bool evidence = true, BarsNoise? noise = null)
     {
         ArgumentNullException.ThrowIfNull(basis);
         ArgumentNullException.ThrowIfNull(model);
@@ -292,11 +296,20 @@ public sealed class BarsEnsemble : IEnsembleModel<KnotConfig>
         }
         else if (temperReferenceRung)
             throw new ArgumentException("A reference rung needs a tempered ladder.", nameof(temperReferenceRung));
+        if (noise is not null)
+        {
+            if (model is not WeightedNormalModel)
+                throw new ArgumentException("A noise needs the Normal model: only WeightedNormalModel conditions on weights and an offset.", nameof(noise));
+            if (resampler is not null) throw new ArgumentException("A noise is its own weight block; it takes no resampler.", nameof(noise));
+            if (temperLevels is not null || adaptKernelTau is not null)
+                throw new ArgumentException("A noise runs untempered and on a fixed kernel, as the resampler does.", nameof(noise));
+        }
         _basis = basis;
         _model = model;
         _prior = prior;
         _kernel = kernel;
         _resampler = resampler;
+        _noise = noise;
         _dmgkConstant = dmgkConstant;
         _adaptKernelTau = adaptKernelTau;
         _temperLevels = temperLevels;
@@ -381,6 +394,14 @@ public sealed class BarsEnsemble : IEnsembleModel<KnotConfig>
             Kernel = _adaptKernelTau is double t0 ? new AdaptiveLocalBetaKernel(t0) : _kernel,
         };
         run.Config = OnSupport(run.Config, rng);
+        if (_noise is { } noise)
+        {
+            // The latents at 1 and β at its start; under a skew σ² from the response's spread (BASS's start).
+            var v = new double[_y.Length];
+            Array.Fill(v, 1.0);
+            run.Noise = new NoiseState(v, noise.HasSkew ? noise.StartSigma2(_y) : double.NaN, noise.Skew);
+            run.W = NoiseWeights(v);
+        }
         if (_temperLevels is int levels)
         {
             run.Ladder = NewLadder(run, levels, seeds[1]);
@@ -399,14 +420,24 @@ public sealed class BarsEnsemble : IEnsembleModel<KnotConfig>
     /// component's type and the ensemble's own settings. The components' internal parameters (a prior's mean, a
     /// kernel's spread) are the caller's to keep the same.
     /// </summary>
-    public string Fingerprint => new RunFingerprint().Add("BARS").Add(_x).Add(_y).Add(_grid)
+    public string Fingerprint => Fingerprinted().ToString();
+
+    // The settings above, then the noise only when there is one, so that every other run's fingerprint stands.
+    private RunFingerprint Fingerprinted()
+    {
+        RunFingerprint fingerprint = Settings();
+        if (_noise is not null) fingerprint.Add("noise").Add(_noise.Fingerprint);
+        return fingerprint;
+    }
+
+    private RunFingerprint Settings() => new RunFingerprint().Add("BARS").Add(_x).Add(_y).Add(_grid)
         .Add(_weightEvery).Add(_startDispersion).Add(_peakProminence).Add(_spanDropFraction)
         .Add(_basis.GetType().FullName!).Add(_model.GetType().FullName!).Add(_prior.GetType().FullName!)
         .Add(_kernel.GetType().FullName!).Add(_resampler?.GetType().FullName ?? "")
         .Add(_dmgkConstant ?? double.NaN).Add(_adaptKernelTau ?? double.NaN).Add(_temperLevels ?? 0).Add(_temperHotEnd)
         .Add((int)_temperPath).Add((int)_temperSchedule).Add(_temperAdaptLadder ? 1 : 0).Add(_minColumnMass).Add(_birthExploration).Add((int)_birthBase)
         .Add(_temperReferenceRung ? 1 : 0).Add((_model as WeightedNormalModel)?.Form.ToString() ?? "")
-        .Add((_model as WeightedNormalModel)?.Sigma2Prior.ToString() ?? "").Add(ReportsEvidence ? 1 : 0).ToString();
+        .Add((_model as WeightedNormalModel)?.Sigma2Prior.ToString() ?? "").Add(ReportsEvidence ? 1 : 0);
 
     /// <summary>
     /// Rebuild one chain from its saved restart state (<see cref="BarsChainState"/>): the chain or ladder, every RNG
@@ -428,7 +459,12 @@ public sealed class BarsEnsemble : IEnsembleModel<KnotConfig>
             BurnRestarts = s.BurnRestarts,
             BurnRejection = s.BurnRejection is null ? null : (double[])s.BurnRejection.Clone(),
         };
-        var target = new SplineTarget(_basis, _model, _prior, _x, _y, run.W, run.Readout.Evaluations, _minColumnMass);
+        if (s.Noise is { } noise)
+        {
+            run.Noise = noise with { V = (double[])noise.V.Clone() };
+            run.W = NoiseWeights(run.Noise.V);
+        }
+        SplineTarget target = TargetOf(run);
         if (s.Ladder is LadderSnapshot<KnotConfig> ladder)
         {
             run.Ladder = ParallelTempering<KnotConfig>.Restore(_ => Moves(run.Kernel), target, ladder,
@@ -453,7 +489,8 @@ public sealed class BarsEnsemble : IEnsembleModel<KnotConfig>
     {
         BlockScanSnapshot<BarsChainRun> scan = st.Scan.Snapshot();
         return new BarsChainState(
-            st.Config, st.W is null ? null : (double[])st.W.Clone(), scan.Steps, scan.BlockAttempts, scan.BlockAccepts,
+            st.Config, st.W is null ? null : (double[])st.W.Clone(), st.Noise is { } noise ? noise with { V = (double[])noise.V.Clone() } : null,
+            scan.Steps, scan.BlockAttempts, scan.BlockAccepts,
             st.Rng.SaveState(), st.ReadoutRng.SaveState(), (scan.Rng0, scan.Rng1, scan.Rng2, scan.Rng3),
             st.Kernel is AdaptiveLocalBetaKernel adaptive ? adaptive.LogTau : null,
             st.Ladder is null ? st.RjChain.Snapshot() : null, st.Ladder?.Snapshot(),
@@ -468,7 +505,7 @@ public sealed class BarsEnsemble : IEnsembleModel<KnotConfig>
     /// burn-in. Taken after burn-in, so burn-in adaptation is never in flight.
     /// </summary>
     private sealed record BarsChainState(
-        KnotConfig Config, double[]? Weights, long ScanSteps, long[] BlockAttempts, long[] BlockAccepts,
+        KnotConfig Config, double[]? Weights, NoiseState? Noise, long ScanSteps, long[] BlockAttempts, long[] BlockAccepts,
         (ulong, ulong, ulong, ulong) StartRng, (ulong, ulong, ulong, ulong) ReadoutRng, (ulong, ulong, ulong, ulong) WeightRng,
         double? KernelLogTau, ChainSnapshot<KnotConfig>? Chain, LadderSnapshot<KnotConfig>? Ladder,
         BarsReadout Readout, long BurnScans, long BurnRoundTrips, long BurnRestarts,
@@ -499,15 +536,7 @@ public sealed class BarsEnsemble : IEnsembleModel<KnotConfig>
         if (chains < 1) throw new ArgumentOutOfRangeException(nameof(chains));
         if (samples < 1) throw new ArgumentOutOfRangeException(nameof(samples));
 
-        _x = x;
-        _knotBase = _birthBase == BirthBase.Design ? new DesignHistogramBase(x) : UniformKnotBase.Instance;
-        _y = y;
-        _grid = grid;
-        _weightEvery = weightEvery;
-        _startDispersion = startDispersion;
-        _peakProminence = peakProminence;
-        _spanDropFraction = spanDropFraction;
-        RequireAdmissibleZeroKnots();
+        SetContext(x, y, grid, weightEvery, startDispersion, peakProminence, spanDropFraction);
 
         (EnsembleRun summary, IReadOnlyList<IChainRun<KnotConfig>> chainRuns) =
             new ChainEnsemble().Run<KnotConfig>(this, chains, masterSeed, burn, samples, rHatTarget, batchSize, minEssPerChain,
@@ -623,8 +652,10 @@ public sealed class BarsEnsemble : IEnsembleModel<KnotConfig>
     /// </summary>
     /// <param name="units">The partition of the n observations; null takes each observation as its own unit.</param>
     /// <param name="content">The draw content (<see cref="PointwiseContent"/>); the retained parameters by default.</param>
+    /// <param name="quadrature">Under a noise whose marginal is an integral over v (<see cref="IMixingLaw.MarginalByQuadrature"/>, the
+    /// generalized beta prime's), whether to read it, hundreds of nodes per observation and draw; refused otherwise.</param>
     public PointwiseLogDensity PointwiseLogDensity(BarsResult result, double[] x, double[] y, UnitPartition? units = null,
-                                                   PointwiseContent content = PointwiseContent.RetainedParameters)
+                                                   PointwiseContent content = PointwiseContent.RetainedParameters, bool quadrature = false)
     {
         ArgumentNullException.ThrowIfNull(result);
         ArgumentNullException.ThrowIfNull(x);
@@ -636,6 +667,8 @@ public sealed class BarsEnsemble : IEnsembleModel<KnotConfig>
         if (content is not (PointwiseContent.RetainedParameters or PointwiseContent.CollapsedPredictive))
             throw new ArgumentOutOfRangeException(nameof(content));
         if (content == PointwiseContent.CollapsedPredictive) return CollapsedPointwise(result, x, y, partition);
+        if (_noise is { } law && law.Mixing.MarginalByQuadrature && !quadrature)
+            throw new NotSupportedException($"{law.Name}'s marginal is an integral over v per observation and draw; ask for it with quadrature: true.");
         Func<double, double, double, double> term = _model switch   // (yᵢ, ηᵢ = zᵢβ, σ²) → log density
         {
             WeightedNormalModel when _resampler is IWeightResampler resampler
@@ -660,7 +693,10 @@ public sealed class BarsEnsemble : IEnsembleModel<KnotConfig>
                 {
                     double eta = 0.0;
                     for (int j = 0; j < d.Coefficients.Length; j++) eta += z[i, j] * d.Coefficients[j];
-                    terms[i] = term(y[i], eta, d.Sigma2);
+                    // Under a noise the law's density with vᵢ integrated, at the draw's σ² and skew.
+                    terms[i] = _noise is { } noise
+                        ? noise.Mixing.MarginalLogDensity(y[i] - eta, d.Sigma2 * noise.VarianceScale, Math.Sqrt(d.Sigma2) * d.Skew)
+                        : term(y[i], eta, d.Sigma2);
                 }
                 for (int u = 0; u < partition.Units; u++)
                 {
@@ -680,6 +716,11 @@ public sealed class BarsEnsemble : IEnsembleModel<KnotConfig>
         {
             latents.Add(new LatentReport("noise variance σ²", LatentScope.Global, LatentTreatment.Conditioned));
             if (_resampler is not null) latents.Add(new LatentReport("robust weights wᵢ", LatentScope.Observation, LatentTreatment.Integrated));
+            if (_noise is { } noise)
+            {
+                latents.Add(new LatentReport("latent scales vᵢ", LatentScope.Observation, LatentTreatment.Integrated));
+                if (noise.SkewPrior is not null) latents.Add(new LatentReport("skew β", LatentScope.Global, LatentTreatment.Conditioned));
+            }
         }
         return new PointwiseLogDensity(values, partition, latents, ChainLengths.Of(result.Draws));
     }
@@ -689,9 +730,9 @@ public sealed class BarsEnsemble : IEnsembleModel<KnotConfig>
     {
         if (_model is not WeightedNormalModel)
             throw new NotSupportedException($"{_model.GetType().Name} has no closed-form collapsed predictive; use the retained parameters.");
-        if (_resampler is not null)
+        if (_resampler is not null || _noise is not null)
             throw new NotSupportedException(
-                "With robust weights the collapsed predictive would condition on each unit's own fitted weights; use the retained parameters, which integrate them.");
+                "With robust weights or a noise's latents the collapsed predictive would condition on each unit's own fitted weights; use the retained parameters, which integrate them.");
         int draws = 0;
         foreach (IReadOnlyList<BarsDraw> chain in result.Draws) draws += chain.Count;
         var values = new double[draws, partition.Units];
@@ -777,9 +818,11 @@ public sealed class BarsEnsemble : IEnsembleModel<KnotConfig>
 
     // The step scan's blocks: the knot step on every step, and the weight block on its cadence when the run resamples
     // weights. The chain's own stream drives the knot step; the scan's stream is the weight stream.
-    private IBlock<BarsChainRun>[] StepBlocks() => _resampler is null
-        ? new IBlock<BarsChainRun>[] { new KnotStepBlock() }
-        : new IBlock<BarsChainRun>[] { new KnotStepBlock(), new WeightBlock(this) };
+    private IBlock<BarsChainRun>[] StepBlocks() => _noise is not null
+        ? new IBlock<BarsChainRun>[] { new KnotStepBlock(), new NoiseBlock(this) }
+        : _resampler is null
+            ? new IBlock<BarsChainRun>[] { new KnotStepBlock() }
+            : new IBlock<BarsChainRun>[] { new KnotStepBlock(), new WeightBlock(this) };
 
     // The reversible-jump step, or the tempered ladder's scan returning its cold state, each on its own stream; accepted
     // when the cold chain's move was.
@@ -825,6 +868,81 @@ public sealed class BarsEnsemble : IEnsembleModel<KnotConfig>
         }
     }
 
+    // The noise block (OQ20), every weightEvery steps on the weight stream, GBASS's sweep after the knots: the coefficients given the
+    // knots, the weights and σ² (drawn with them under a pure scale mixture, held under a skew); each vᵢ by its law's step given its residual
+    // rᵢ = yᵢ − fᵢ; under a skew σ² by its modified half-normal, then a drawn β by its normal; then the knot chain takes the target on the
+    // new working response and weights, keeping its state and counters.
+    private sealed class NoiseBlock(BarsEnsemble owner) : IBlock<BarsChainRun>
+    {
+        public string Name => "noise";
+
+        public int Every => Math.Max(1, owner._weightEvery);
+
+        public bool Update(BarsChainRun st, Xoshiro256PlusPlus rng)
+        {
+            BarsNoise noise = owner._noise!;
+            NoiseState state = st.Noise!;
+            double[] y = owner._y;
+            double[,] z = owner._basis.Design(st.Config, owner._x);
+            if (owner.NoiseModel(st).SampleNoiseFit(z, owner.Working(st), st.W!, rng) is not { } fit) return false;
+            double c = noise.VarianceScale, sigma2 = fit.Sigma2;
+            if (!(sigma2 > 0.0)) return false;
+            double drift = noise.HasSkew ? Math.Sqrt(sigma2) * state.Skew : 0.0, unit = sigma2 * c;
+            double[] v = state.V;
+            for (int i = 0; i < v.Length; i++) v[i] = noise.Mixing.StepConditional(v[i], y[i] - fit.Fitted[i], unit, drift, 1.0, rng);
+            double skew = state.Skew;
+            if (noise.HasSkew)
+            {
+                double squares = 0.0, sum = 0.0, sumV = 0.0;
+                for (int i = 0; i < v.Length; i++)
+                {
+                    double r = y[i] - fit.Fitted[i];
+                    squares += r * r / (c * v[i]);
+                    sum += r;
+                    sumV += v[i];
+                }
+                double u = VarianceMeanConditionals.SampleInverseScale(y.Length, squares, sum, fit.Quadratic, fit.Count, owner._noiseModel!.NoisePrior,
+                                                                       skew, c, 1.0, rng);
+                sigma2 = 1.0 / (u * u);
+                if (noise.SkewPrior is { } prior)
+                    skew = VarianceMeanConditionals.SampleSkew(sumV, sum, Math.Sqrt(sigma2), c, prior.Mean, prior.Sd, 1.0, rng);
+            }
+            st.Noise = state with { Sigma2 = noise.HasSkew ? sigma2 : double.NaN, Skew = skew };
+            st.LastFit = fit;
+            st.W = owner.NoiseWeights(v);
+            st.RjChain.ReplaceTarget(owner.TargetOf(st));
+            return true;
+        }
+    }
+
+    // The weights 1/(c·vᵢ) the knot step and the coefficients read.
+    private double[] NoiseWeights(double[] v)
+    {
+        double c = _noise!.VarianceScale;
+        var w = new double[v.Length];
+        for (int i = 0; i < w.Length; i++) w[i] = 1.0 / (c * v[i]);
+        return w;
+    }
+
+    // The response the knot step and the coefficients read: y − σβ·v under a skew, y itself otherwise.
+    private double[] Working(BarsChainRun st)
+    {
+        if (st.Noise is not { } state || !_noise!.HasSkew) return _y;
+        double shift = Math.Sqrt(state.Sigma2) * state.Skew;
+        var working = new double[_y.Length];
+        for (int i = 0; i < working.Length; i++) working[i] = _y[i] - shift * state.V[i];
+        return working;
+    }
+
+    // The Normal model the chain reads: its noise reading, at the chain's σ² under a skew; the run's model without a noise.
+    private WeightedNormalModel NoiseModel(BarsChainRun st)
+        => _noise!.HasSkew ? _noiseModel!.Given(st.Noise!.Sigma2) : _noiseModel!;
+
+    // The knot step's target at the chain's weights, and under a noise at its working response and model.
+    private SplineTarget TargetOf(BarsChainRun st) => _noise is null
+        ? new SplineTarget(_basis, _model, _prior, _x, _y, st.W, st.Readout.Evaluations, _minColumnMass)
+        : new SplineTarget(_basis, NoiseModel(st), _prior, _x, Working(st), st.W, st.Readout.Evaluations, _minColumnMass);
+
     // Reduce one post-burn draw and retain its state. Readouts affine in the curve use the conditional mean: the grid
     // values into the functionals (index 0 = knot count), and the conditional variance into its sink for FitSd. The
     // draw's coefficients and σ² come from one conditional draw on the readout stream; readouts nonlinear in the curve
@@ -839,7 +957,9 @@ public sealed class BarsEnsemble : IEnsembleModel<KnotConfig>
                 $"A retained draw ({draw.Count} knots) lies off the posterior's support, so it has no conditional posterior.");
         int g = _grid.Length;
         double[,] zTrain = _basis.Design(draw, _x);
-        IConditionalFit conditional = _model.FitConditional(zTrain, _y, st.W);   // one fit for all three readouts
+        IConditionalFit conditional = _noise is null
+            ? _model.FitConditional(zTrain, _y, st.W)   // one fit for all three readouts
+            : NoiseModel(st).FitConditional(zTrain, Working(st), st.W);
         double[] mean = conditional.MeanCoefficients();
         double[,] zGrid = _basis.Design(draw, _grid);
         for (int gi = 0; gi < g; gi++)
@@ -856,7 +976,7 @@ public sealed class BarsEnsemble : IEnsembleModel<KnotConfig>
 
         // Every draw is retained, so the draw count stays every peak readout's denominator.
         ConditionalDraw c = conditional.Sample(st.ReadoutRng);
-        r.Draws.Add(new BarsDraw(draw, c.Coefficients, c.Sigma2, st.W, PeakReadout(draw, c.Coefficients)));
+        r.Draws.Add(new BarsDraw(draw, c.Coefficients, c.Sigma2, st.W, PeakReadout(draw, c.Coefficients), st.Noise?.Skew ?? 0.0));
     }
 
     // A draw's exact peak readout from its coefficients; a basis without closed-form peaks gives a NaN argmax and no
@@ -895,8 +1015,7 @@ public sealed class BarsEnsemble : IEnsembleModel<KnotConfig>
         return covered.ToArray();
     }
 
-    private ReversibleJumpChain<KnotConfig> NewChain(BarsChainRun st)
-        => new(Moves(st.Kernel), new SplineTarget(_basis, _model, _prior, _x, _y, st.W, st.Readout.Evaluations, _minColumnMass), st.Config, st.Rng);
+    private ReversibleJumpChain<KnotConfig> NewChain(BarsChainRun st) => new(Moves(st.Kernel), TargetOf(st), st.Config, st.Rng);
 
     private ParallelTempering<KnotConfig> NewLadder(BarsChainRun st, int levels, int seed)
     {
@@ -1126,6 +1245,76 @@ public sealed class BarsEnsemble : IEnsembleModel<KnotConfig>
     /// is the RJ chain's cumulative count; as an <see cref="IChainRun{KnotConfig}"/>
     /// it burns adaptively, reduces a draw to functionals, and carries the BARS readout (its retained draws).
     /// </summary>
+    /// <summary>
+    /// One chain under this ensemble's noise on stated data, started at a stated state and stepped by the run's own blocks with the noise
+    /// block on every step: the handle Geweke's successive simulator needs, which moves the response between steps
+    /// (<see cref="INoiseProbe.Respond"/>). It sets this ensemble's data, as a run does, so it is not run beside one.
+    /// </summary>
+    internal INoiseProbe Probe(double[] x, double[] y, KnotConfig knots, double[] v, double sigma2, double skew, int seed)
+    {
+        if (_noise is not { } noise) throw new InvalidOperationException("The probe runs a noise's chain.");
+        SetContext(x, y, [0.5], weightEvery: 1, startDispersion: 0, peakProminence: 0.1, spanDropFraction: 0.5);
+        var run = new BarsChainRun(this, new Xoshiro256PlusPlus(seed), knots, 1)
+        {
+            ReadoutRng = new Xoshiro256PlusPlus(seed + 1),
+            Kernel = _kernel,
+            Noise = new NoiseState((double[])v.Clone(), noise.HasSkew ? sigma2 : double.NaN, skew),
+        };
+        run.W = NoiseWeights(run.Noise.V);
+        run.SetChain(NewChain(run));
+        run.Scan = new BlockScan<BarsChainRun>(StepBlocks(), run, new Xoshiro256PlusPlus(seed + 2), r => r);
+        return new NoiseProbe(this, run);
+    }
+
+    /// <summary>
+    /// One chain of this ensemble on <paramref name="x"/> and <paramref name="y"/>, started as a run starts it and stepped by its caller on the
+    /// caller's thread: what a cost reading times, with the run's fan-out over chains kept out of the clock. It sets this ensemble's data, as
+    /// a run does, so it is not run beside one.
+    /// </summary>
+    internal IChain<KnotConfig> ChainOn(double[] x, double[] y, int weightEvery, int seed)
+    {
+        SetContext(x, y, x, weightEvery, startDispersion: 4, peakProminence: 0.1, spanDropFraction: 0.5);
+        return StartChain(seed, seed + 1).Chain;
+    }
+
+    // The data and settings a run's chains read: set at the top of Run, and by the probe and ChainOn.
+    private void SetContext(double[] x, double[] y, double[] grid, int weightEvery, int startDispersion, double peakProminence,
+                            double spanDropFraction)
+    {
+        _x = x;
+        _knotBase = _birthBase == BirthBase.Design ? new DesignHistogramBase(x) : UniformKnotBase.Instance;
+        _y = y;
+        _grid = grid;
+        _weightEvery = weightEvery;
+        _startDispersion = startDispersion;
+        _peakProminence = peakProminence;
+        _spanDropFraction = spanDropFraction;
+        _noiseModel = _noise is null ? null : ((WeightedNormalModel)_model).ReadingFrom(y);
+        RequireAdmissibleZeroKnots();
+    }
+
+    private sealed class NoiseProbe(BarsEnsemble owner, BarsChainRun run) : INoiseProbe
+    {
+        public void Step() => owner.StepOnce(run);
+
+        public void Respond(double[] y)
+        {
+            owner._y = y;
+            owner._noiseModel = ((WeightedNormalModel)owner._model).ReadingFrom(y);
+            run.RjChain.ReplaceTarget(owner.TargetOf(run));
+        }
+
+        public KnotConfig Knots => run.Config;
+        public double[] V => run.Noise!.V;
+        public double Sigma2 => owner._noise!.HasSkew ? run.Noise!.Sigma2 : run.LastFit!.Sigma2;
+        public double Skew => run.Noise!.Skew;
+        public double[] Fitted => run.LastFit!.Fitted;
+        public long BlockRefusals => run.Scan.Snapshot().BlockAttempts[1] - run.Scan.Snapshot().BlockAccepts[1];
+    }
+
+    // A chain's noise state: v, σ² under a skew (NaN under a pure scale mixture, where it is drawn with the coefficients), and β.
+    private sealed record NoiseState(double[] V, double Sigma2, double Skew);
+
     private sealed class BarsChainRun : IChain<KnotConfig>, IResumableChainRun<KnotConfig>
     {
         private readonly BarsEnsemble _owner;
@@ -1133,6 +1322,8 @@ public sealed class BarsEnsemble : IEnsembleModel<KnotConfig>
         public readonly BarsReadout Readout;              // this chain's mergeable readout statistics
         public KnotConfig Config;
         public double[]? W;
+        public NoiseState? Noise;                        // the noise's latents, σ² under a skew (NaN otherwise) and β
+        public WeightedNormalModel.NoiseFit? LastFit;    // the noise block's last coefficient draw, not state: redrawn each block
         public IKnotKernel Kernel = null!;
         public Xoshiro256PlusPlus ReadoutRng = null!;   // per-draw coefficient draws, decoupled from the chain RNG
         public BlockScan<BarsChainRun> Scan = null!;     // the step: the knot step, and the weight block on its cadence
@@ -1179,4 +1370,32 @@ public sealed class BarsEnsemble : IEnsembleModel<KnotConfig>
         public void Accumulate(in KnotConfig draw, Span<double> functionals) => _owner.AccumulateDraw(this, draw, functionals);
         public IChainState SaveState() => _owner.Save(this);
     }
+}
+
+/// <summary>A chain under a BARS noise on data a test moves between steps (<see cref="BarsEnsemble.Probe"/>).</summary>
+internal interface INoiseProbe
+{
+    /// <summary>One step: a knot move, then the noise block.</summary>
+    void Step();
+
+    /// <summary>Hands the chain a new response, its target rebuilt on it, its state kept.</summary>
+    void Respond(double[] y);
+
+    /// <summary>The knots.</summary>
+    KnotConfig Knots { get; }
+
+    /// <summary>The latents v.</summary>
+    double[] V { get; }
+
+    /// <summary>σ²: held under a skew, else the last noise block's draw with the coefficients.</summary>
+    double Sigma2 { get; }
+
+    /// <summary>β.</summary>
+    double Skew { get; }
+
+    /// <summary>The last noise block's fit f = Zβ at the data.</summary>
+    double[] Fitted { get; }
+
+    /// <summary>The noise block's refused steps.</summary>
+    long BlockRefusals { get; }
 }

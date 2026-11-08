@@ -28,17 +28,23 @@ public interface IWeightResampler
 /// <c>wᵢ | rᵢ, σ² ~ Gamma((ν+1)/2, rate (ν + rᵢ²/σ²)/2)</c>, the standard t-as-scale-mixture-of-normals Gibbs step.
 /// A true likelihood, so BIC/EBIC-over-k stays valid. <b>Bounded influence</b> — outliers are downweighted
 /// (<c>E[wᵢ] → 0</c> as the residual grows), not rejected.
+/// <para>Through the shared law (<see cref="StudentTMixing"/>, OQ20): a weight is the law's precision draw, 1/v, number for
+/// number, and the marginal is the law's t_ν(0, σ), which keeps its digits as ν grows. <see cref="BarsNoise.StudentT"/> is the
+/// same law with v kept, and with a skew beside it.</para>
 /// </summary>
 public sealed class StudentTWeights : IWeightResampler
 {
-    private readonly double _nu;
+    private readonly StudentTMixing _law;
 
     public StudentTWeights(double degreesOfFreedom = 4.0)
     {
-        if (!(degreesOfFreedom > 0.0))
-            throw new ArgumentOutOfRangeException(nameof(degreesOfFreedom), "ν must be positive.");
-        _nu = degreesOfFreedom;
+        if (!(degreesOfFreedom > 0.0 && double.IsFinite(degreesOfFreedom)))
+            throw new ArgumentOutOfRangeException(nameof(degreesOfFreedom), "ν must be positive and finite.");
+        _law = new StudentTMixing(degreesOfFreedom);
     }
+
+    /// <summary>ν.</summary>
+    public double DegreesOfFreedom => _law.DegreesOfFreedom;
 
     public double[] Resample(ReadOnlySpan<double> residuals, double sigma2, Xoshiro256PlusPlus rng)
     {
@@ -47,18 +53,12 @@ public sealed class StudentTWeights : IWeightResampler
 
         // Each weight is one normal term's precision multiplier under its Gamma(ν/2, ν/2) prior: Gamma((ν + 1)/2, (ν + z²)/2).
         var w = new double[residuals.Length];
-        for (int i = 0; i < w.Length; i++)
-        {
-            double z2 = residuals[i] * residuals[i] / sigma2;
-            w[i] = ConjugateUpdates.NormalPrecision(0.5 * _nu, 0.5 * _nu, 1.0, z2).Sample(rng);
-        }
+        for (int i = 0; i < w.Length; i++) w[i] = _law.SamplePrecision(residuals[i], sigma2, 1.0, rng);
         return w;
     }
 
-    /// <summary>The Student t_ν(0, σ) log density: Γ((ν+1)/2)/(Γ(ν/2)√(νπσ²))·(1 + r²/(νσ²))^(−(ν+1)/2).</summary>
-    public double MarginalLogDensity(double residual, double sigma2)
-        => SpecialFunctions.LogGamma(0.5 * (_nu + 1.0)) - SpecialFunctions.LogGamma(0.5 * _nu) - 0.5 * Math.Log(_nu * Math.PI * sigma2)
-           - 0.5 * (_nu + 1.0) * Math.Log(1.0 + residual * residual / (_nu * sigma2));
+    /// <summary>The Student t_ν(0, σ) log density: Γ((ν+1)/2)/(Γ(ν/2)√(νπσ²))·(1 + r²/(νσ²))^(−(ν+1)/2), the law's.</summary>
+    public double MarginalLogDensity(double residual, double sigma2) => _law.MarginalLogDensity(residual, sigma2, 0.0);
 }
 
 /// <summary>

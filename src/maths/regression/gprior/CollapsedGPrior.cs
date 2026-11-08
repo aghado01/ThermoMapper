@@ -857,16 +857,32 @@ public sealed class GPriorConditional
         ArgumentNullException.ThrowIfNull(readoutDesign);
         InverseGamma posterior = Sigma2Posterior(sigmaPrior);
         if (!(posterior.Shape > 1.0)) throw new InvalidOperationException("σ²'s posterior mean is infinite (shape ≤ 1).");
+        return VarianceAt(posterior.Mean, readoutDesign);
+    }
+
+    /// <summary>
+    /// <c>Var[f(t) | knots, σ²] = σ²·z(t)ᵀ Cov z(t)</c> at σ² = <paramref name="sigma2"/>: <see cref="ConditionalVariance"/> where σ² is held or
+    /// drawn apart rather than integrated.
+    /// </summary>
+    public double[] ConditionalVarianceGiven(double sigma2, double[,] readoutDesign)
+    {
+        ArgumentNullException.ThrowIfNull(readoutDesign);
+        if (!(sigma2 > 0.0 && double.IsFinite(sigma2))) throw new ArgumentOutOfRangeException(nameof(sigma2), "σ² must be positive and finite.");
+        return VarianceAt(sigma2, readoutDesign);
+    }
+
+    private double[] VarianceAt(double sigma2, double[,] readoutDesign)
+    {
         if (InterceptCovarianceScale is not double c0)
-            return _precision.InverseQuadraticForms(readoutDesign, posterior.Mean * CovarianceScale);
+            return _precision.InverseQuadraticForms(readoutDesign, sigma2 * CovarianceScale);
 
         int g = readoutDesign.GetLength(0), p = readoutDesign.GetLength(1);
         if (p != Columns) throw new ArgumentException("One readout column per coefficient is required.", nameof(readoutDesign));
         var centred = new double[g, p - 1];
         for (int t = 0; t < g; t++)
             for (int j = 1; j < p; j++) centred[t, j - 1] = readoutDesign[t, j];
-        double[] variance = p > 1 ? _precision.InverseQuadraticForms(centred, posterior.Mean * CovarianceScale) : new double[g];
-        for (int t = 0; t < g; t++) variance[t] += posterior.Mean * c0 / _interceptMass * readoutDesign[t, 0] * readoutDesign[t, 0];
+        double[] variance = p > 1 ? _precision.InverseQuadraticForms(centred, sigma2 * CovarianceScale) : new double[g];
+        for (int t = 0; t < g; t++) variance[t] += sigma2 * c0 / _interceptMass * readoutDesign[t, 0] * readoutDesign[t, 0];
         return variance;
     }
 }
