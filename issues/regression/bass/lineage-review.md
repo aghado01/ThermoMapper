@@ -86,14 +86,14 @@ That keeps four kinds of uncertainty apart: which parameters (θ), interpolation
 
 **GBMARS first, then KHAOS: the user's call, 2026-11-04,** with CRAN's GBASS pinned as the oracle before any of it ([the build brief](gbass-noise-brief.md)). This reverses the order first proposed here, KHAOS, E8, GBMARS, which called GBMARS the heaviest of the three by counting the weighted Gram. That was built on 2026-11-02, so what remains is a GIG sampler, Bessel K, the latent state and the noise law's readers. E8 keeps its place after KHAOS.
 The user confirmed the order on 2026-11-07: KHAOS, then E8.
-1. **GBMARS (E1, with E20).** The noise axis: a working response at a latent state, on seams built for it. The structure chain stays as it is. Slices 0–4 and the GIG's ratio-of-uniforms draw landed by 2026-11-06, and slice 5, the engine's reach, started on 2026-11-07. Slices 6 (BARS) and 7 (interweaving) can run beside KHAOS's build, since they share no files with it.
-2. **KHAOS (E19, with E4, E5, E21).** The same lineage on other axes: the basis, the proposals and the coefficient prior. It tests F-X3 with a member that is not a hinge and builds F-X4 as already decided. It is deterministic and conjugate, and its only new distribution is the Poisson-binomial. It pays for grouped-data problems through E21. GBMARS builds none of this, so it is a diff of its own, with CRAN's `khaos` as its oracle. Its method carries over, and so does the product: a polynomial-chaos basis under GBMARS's noise needs nothing more. Its [build brief](khaos-brief.md) was written on 2026-11-07, with CRAN's `khaos` 2.1.1 pinned (`fb38e44`).
+1. **GBMARS (E1, with E20).** The noise axis: a working response at a latent state, on seams built for it. The structure chain stays as it is. Slices 0–4 and the GIG's ratio-of-uniforms draw landed by 2026-11-06. Slice 5, the engine's reach (`37137f2`), and slice 6, BARS (`2b2f56c`), landed by 2026-11-08, and slice 7, interweaving, runs beside KHAOS's build.
+2. **KHAOS (E19, with E4, E5, E21).** The same lineage on other axes: the basis, the proposals and the coefficient prior. It tests F-X3 with a member that is not a hinge and builds F-X4 as already decided. It is deterministic and conjugate, and its only new distribution is the Poisson-binomial. It pays for grouped-data problems through E21. GBMARS builds none of this, so it is a diff of its own, with CRAN's `khaos` as its oracle. Its method carries over, and so does the product: a polynomial-chaos basis under GBMARS's noise needs nothing more. Its [build brief](khaos-brief.md) was written on 2026-11-07, with CRAN's `khaos` 2.1.1 pinned (`fb38e44`). Slices 0 and 1 and declared input domains (`3eb56e1`) landed by 2026-11-08. Slice 2 follows a check of whether slice 1's readout on the rescaled box is the posterior or a trap shared by both samplers.
 3. **E8.** It only consumes what is built, and it has strong internal checks. The consumer shape above gets settled here.
 
 E24 is small, sits beside all of them and can land at any point.
 
 **Beside the order.**
-- *The conformal layer (E16)* is engine-wide by the user's call of 2026-11-05, with a [brief](../conformal-layer-brief.md) of its own. Slices 0–2 landed on 2026-11-06, and its fallback signal is being chosen.
+- *The conformal layer (E16)* is engine-wide by the user's call of 2026-11-05, with a [brief](../conformal-layer-brief.md) of its own. Slices 0–2 landed on 2026-11-06, and the fallback diagnostics are reported with no trigger. Slice 3, the split form, landed on 2026-11-07. In slice 4 the predictive distribution takes the split form's CDF by default, with the full step as an opt-in score flagged where it falls (the user, 2026-11-08).
 - *E15 and E18* are the engine's routes to calibrated intervals for a surface or a quantile function, which conformal methods do not reach. They are not scheduled. They matter because GBASS's quantile and horseshoe fits undercover their surfaces (E1's reports), and because both refit, the noise laws' cost follow-ups come first.
 
 ## Reading leads
@@ -125,3 +125,29 @@ The [Perplexity notes](../perplexity-bart-etc.md) are about trees and an integra
 - **Not taken up here, and open.** A capability inventory for the regression families, narrow capability descriptors that refuse an unsupported plan before a run, a composition layer, and four separate verdicts: target correctness, computational adequacy, predictive adequacy and evidence qualification. Their order puts this after the spline families and trees at the end, as a test that the engine is basis-agnostic. That does not conflict with the order above, and this review's axes would seed the inventory. These are now E33, with the tree family's engine points in E31 and the GP's in E32 (2026-11-02). The tree family's reading list (SBART, DART, GP-BART, BCF, survival and NFT BART, XBART) stays in the notes, along with the question the note asks at BCF, of whether its decomposition is a direction for studying bias in machine learning.
 
 The [evals note](../opus-bayesian-evals.md) applies these ideas to AI evaluation as a stochastic computer experiment. It is one consumer. The engine pieces it asks for are entries here, stated by problem class. Where the two differ, this review and the register are the later reading: multi-fidelity BASS is in the lineage's orbit after all (Tucker et al.), and probit needs more than the note's "fits now".
+
+The [Kimi review](../discussion/perplexity-kimi-regression-engine-review.md.md), the user's notes, read an earlier snapshot of the engine. It was checked against the code on 2026-11-08.
+- **Done since that snapshot.**
+  - The E1 slice 5 guards it names (latents under a direct functional design, noise blocks on tempered rungs) were lifted by GBMARS's slice 5 (`37137f2`), which put every noise on ladders and SMC with the evidence.
+  - Its sequencing note (KHAOS before GBMARS, to spare the observation-model seam) came after that seam was built. The user struck it.
+- **Corrected here.**
+  - *ABMRS is multivariate in its inputs* (E3: He, Yang and Kang's free-knot tensor-product surfaces), not in its responses. The matrix-normal slab with an inverse-Wishart Σ, whose marginal is matrix-t, is sound, but it is a multi-output BASS, a model of its own.
+  - *KHAOS's modified g-prior is not a per-column ridge.* Its prior precision D_g⁻¹ΨᵀΨD_g⁻¹/g₀² is a full matrix, and it goes through `PriorPencil` as E21's prior-precision builder (KHAOS slice 0).
+  - *`sobol_khaos` reads coefficients* as the engine does. The difference slice 0 found is its denominator, Var f + s².
+  - *Between-replicate spread does catch an SMC replicate stuck apart from the others.* It misses replicates all stuck the same way, the question KHAOS's slice 1 check settles for its fixture.
+  - *τ's slice step is on ln τ* (`BassSweep.cs:614`), so a move of an order of magnitude in τ is about 2.3 widths. The width costs evaluations, not mixing.
+  - *A swap reads each rung's own value from its cached density* (`ParallelTempering.cs:655`). The values at the neighbour's b are new by necessity. A traced rung re-reads one after a rejected swap, a small cost.
+- **Taken up on 2026-11-08, each in a session of its own.**
+  - *Parallel rungs.* `ParallelTempering.Step` steps the rungs one after another, and `BassEnsemble` parallelizes across chains only, so a tempered fit uses one core per chain. Each rung has its own RNG streams, so the draws can stay bit for bit once the shared caches are made safe.
+  - *Adaptive SMC mutation.* `SmcRun.MutationSteps` is fixed (default 1). Adaptive steps per stage are measured against the fixed count at equal cost, on GBMARS's evidence fixtures and a KHAOS fit, and the measured default follows.
+- **Recorded, each with the decision it would change.**
+  - *`SamcLearning.SolveSpd`* is a private Cholesky with a fixed 10⁻¹⁴ ridge, so a Hessian going singular is regularized without being counted. Routing it through `linalg`'s factor and its status puts it in the refusal vocabulary. It goes with the next change to the flat histogram.
+  - *A powered-path pilot,* with a slope functional in place of ℓ₁, is a third route for the open decision on the flat histogram under a noise (GBMARS slice 5's follow-ups).
+  - *Counts.* E20's data augmentation is exact on the latent record GBMARS built, so no wider working response is needed. Poisson has no exact Pólya-Gamma augmentation, so E20 must state whether counts go through the negative binomial's augmentation or a Laplace step. That is where the review's Laplace point applies.
+  - *Unscheduled, nothing waiting:*
+    - SMC's stages as a pseudo-pilot for WHAM, so the flat histogram can start without a ladder;
+    - the three estimators' evidence cross-checked as a diagnostic users see (the gates already compare them at test time);
+    - `SpectralNoiseField`'s random fields as recovery surfaces from outside the model;
+    - the edge variance of high-degree Legendre terms near a declared domain's ends.
+
+    Mixed bases are already in the KHAOS brief.
