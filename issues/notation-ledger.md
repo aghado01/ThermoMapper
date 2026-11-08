@@ -11,6 +11,16 @@ Splits in the module's language (symbols, identifiers, terms), logged as session
 
 ## Entries
 
+### q and degree in KHAOS beside BASS's K, q and Degree (2026-11-07)
+
+- **Kind:** one name for several concepts, and one concept under two names.
+- **Readings:**
+  - A term's order, the variables it reads: KHAOS's q, capped at q_max (`LegendreTermSpace.MaxOrder`, `src/maths/regression/spline/bass/LegendreTermSpace.cs:66`; `docs/Maths/PolynomialChaos.md`, "The term space"), is BASS's K (`docs/Maths/BayesianRegression.md`, the order's marginal π(K)), and both are capped by `BassStructureSpec.MaxInteraction` (`src/maths/regression/spline/bass/BassConfig.cs:306`).
+  - q in BASS is the hinge power (`BassStructureSpec.Degree`, `BassConfig.cs:303`; `BassBasis.Degree`, `src/maths/regression/spline/bass/BassBasis.cs:41`; "power q" in `BayesianRegression.md`), so KHAOS's q and BASS's q name different things.
+  - Degree in KHAOS is a term's total polynomial degree d = Σαⱼ, capped at d_max (`BassTerm.LegendreDegree`, `src/maths/regression/spline/bass/BassTerm.cs:179`; `LegendreBasis.MaxDegree`, `src/maths/regression/spline/bass/LegendreBasis.cs:25`), with each factor's αⱼ (`LegendreFactor.Degree`, `BassTerm.cs:18`). BASS's `Degree` is the hinge power, which a Legendre fit refuses at anything but 1.
+- **Found:** 2026-11-07, KHAOS slice 1 (the Legendre basis under the ridge).
+- **Note:** the KHAOS paper and `khaos` write q for the order and d for the degree; slice 2 adds KHAOS's g_m and g₀ beside BASS's g-form.
+
 ### b, the rung's inverse temperature, beside the GIG's and the GBP's b (2026-11-07)
 
 - **Kind:** one name for several concepts.

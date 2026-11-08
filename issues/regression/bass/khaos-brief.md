@@ -1,6 +1,6 @@
 # KHAOS on the BASS core: E19's build (chip brief)
 
-Date: 2026-11-07. Status: slice 0 landed 2026-11-07 (`31362ad`); slice 1 waits for the user. Written at the user's request after GBASS's slices 0–4, from the KHAOS paper's TeX, the `khaos` 2.1.1 source and the engine.
+Date: 2026-11-07. Status: slice 0 landed 2026-11-07 (`31362ad`); slice 1 landed 2026-11-07 (`fa05048`, `b408bf4`, `baf69f9`); slice 2 waits for the user. Written at the user's request after GBASS's slices 0–4, from the KHAOS paper's TeX, the `khaos` 2.1.1 source and the engine.
 
 ## Why
 
@@ -157,6 +157,70 @@ Under "Reports" below, newest first, per slice: what landed by commit; the gates
 ## Reports
 
 Newest first.
+
+### Slice 1: the Legendre basis under the ridge (chip, 2026-11-07)
+
+**Landed** on `main`, nothing pushed, the commit messages without attribution lines:
+- ``fa05048``: `ShiftedLegendre` and `PoissonBinomial` in `Maths.Distributions`, with their tests. The engine's primitives also join slice 0's R comparisons.
+- ``b408bf4``: the Legendre part, KHAOS's term space and its measure, F-X4 (`IBassProposalKernel`) and KHAOS's proposal, the sweep reading its moves through the contract, and their tests, with the engine's `make_weights` and forward law against `khaos`.
+- `baf69f9`: KHAOS's raw ridge in the design, the config (`BassStructureSpec.Legendre`, `BassCoefficientPrior.RawRidge`) and its resolution, and the engine-level gates: the exact law, the chain against it, Geweke, the config's refusals, the cost row and the readouts against corrected `adaptive_khaos_ridge`.
+- This commit: `docs/Maths/PolynomialChaos.md`, pointers from `BayesianRegression.md`, and this report. At GBASS's request the same commit brings `BayesianRegression.md`'s GBMARS row to its slices 4 and 5.
+
+**The waiting.** GBASS slice 5 held `BassConfig.cs` uncommitted until `37137f2`. Until then the config's part was applied to HEAD's copy inside the chip's build snapshot only, and the working tree's `BassConfig.cs` was left alone. `BassPriorSampler.cs` needed no change: its prior draws go through `BassStructurePrior.DrawTerm`, which serves the Legendre part.
+
+**How the Legendre part entered `BassTerm`** (the brief left it to the build). `BassTerm` takes a fourth part, `LegendreFactor(Variable, Degree)`, canonical by variable, with `BassPart.Legendre` and `BassStructurePrior.PartCount` = 4. A hinge term's hash, equality and columns are unchanged: the hash adds the part only when it is nonempty, and `LegendreProductKernel` sits last among the case-side kernels and leaves the column alone for a term without the part. The contract gained one member, `IDesignKernel.ReadsVariable`, with a default, so a kernel written outside it (the tests' directional hinge) still compiles. `BassBasis.CaseDerivative` now takes the slope of the part that reads the variable. Its old rule took every differentiable part's derivative, which would have zeroed a Legendre term's through the empty hinge part.
+
+**The gates** (each number from this chip's runs; the docs page carries the table):
+
+| Gate | Reading |
+| --- | --- |
+| Primitives | ψ_α orthonormal by quadrature to degree 40 (10⁻¹²), zero at the Gauss–Legendre nodes to 64, endpoints to 60, Bonnet's identity on a 4,000-case sweep to 60 (10⁻¹²), the lanes bit for bit; against R's `ss_legendre_poly` (10⁻¹²). The Poisson-binomial against brute force over 400 sweep cases across twelve decades (10⁻¹² relative) and the binomial at 2,000 coins (10⁻⁹); against slice 0's enumeration and R's tail (10⁻¹⁴). \|𝒜\| three ways at six sizes, and at p 20, d_max 15, q_max 5 exactly |
+| The law, exactly | p 4, d_max 3, q_max 2, M ≤ 2: 466 structures. π against a dense marginal from the columns alone, 6·10⁻¹⁵ under either ridge; against `khaos_exactlaw_oracle.R`, 3·10⁻¹⁵ (raw ridge). Each move's kernel from its statement, in detailed balance and stationary to 4·10⁻¹⁴ (1,800 birth/death, 1,740 degree and 3,132 swap transitions) |
+| The chain against the law | 400,000 steps: P(M), four inclusions and the six likeliest structures, worst \|z\| 1.79 (raw ridge) and 0.71 (normalized) |
+| Geweke | 12 cases, p 4, M ≤ 3, σ² ~ IG(3, 2), τ held; 200,000 marginal-conditional draws against 300,000 successive steps: worst \|z\| 2.15 and 1.39 (raw ridge, two seeds), 1.31 (normalized) |
+| `adaptive_khaos_ridge` readouts | Corrected, on Ishigami rescaled to [0, 1] (below), degree 8, order 3, 6,000 iterations, 3,000 kept: M 6.32 against 6.13, σ² 0.959 against 1.005, the surfaces 0.049 apart (function sd 3.72), total indices within 0.002, no repeated variable |
+| Hinge BASS | The whole regression assembly on HEAD `8e42f54` (GBASS slice 5) with this slice, 2,172 of 2,172, the eight pinned hashes and every fingerprint among them. A hinge config's JSON holds neither `Legendre` nor `RawRidge` |
+
+**Parity with `khaos`.** `make_weights` agrees to 3·10⁻¹⁶ and the forward law to 7·10⁻¹⁶ at slice 0's frozen states. The engine's ratios are the corrected ones, so they are not `khaos`'s as written. Each difference is a confirmed slice 0 defect: the forward probability over redraws, the death's normal approximation, C(d, q) for C(d − 1, q − 1), `random_partition`'s law, and the swap onto a held variable.
+
+**Refusals and acceptance.**
+- *Refused:* a Legendre basis with categorical predictors, a functional response, d_max below q_max, a hinge degree other than 1, the column-mass support rule, local steps, the fixed-M family, or a raw ridge without its τ. Each is refused with its reason, at validation or at resolution.
+- *A Legendre fit's `BassModel.Proposal`* (D01's) is refused, and `Kernel` is KHAOS's.
+- *Acceptance,* exact-law fixture (raw ridge): birth 14%, death 17%, degree 40%, swap 8%. On Ishigami: birth 2.3%, death 2.0%, degree 11%, swap 0.1%.
+
+**The cost row** (`KhaosCostTests`, the thread's cycle clock, round-robin in one process, indicative, the machine loaded):
+- *A column* at n 1,000, in two runs, the second on a quieter machine: ψ₈·ψ₇ 11.9 and 8.6 µs, ψ₁₅ 10.4 and 7.3 µs, against 66 and 46 µs for the scalar per-point dividing form and 2.6 and 1.4 µs for a two-hinge product: ψ₈·ψ₇ at 4.5× and 6.2× the hinges.
+- *A sweep* at the cost report's base with d_max 15 and M 20: 37.7 and 18.9 µs under the normalized ridge, 356 and 190 µs under the raw ridge, 22.3 and 10.2 µs for the hinge fit.
+- *A sweep at p 20, d_max 15, q_max 5* (M 2 to 4): 38.2 and 16.3 µs raw, 48.5 and 20.0 µs normalized.
+
+The first column form, four lanes per point-block, a serial chain of dividing steps, read 6.4× a hinge product in an earlier window. It was rewritten step-major and division-free before landing. The raw ridge pays for a fresh pencil decomposition per candidate, the brief's accepted design for a prior apart from the Gram, which slice 2's g-prior shares.
+
+**Found here.**
+- *The posterior is not invariant to the input box.* On slice 0's Ishigami fixture, `khaos` on the raw inputs (about [0.008, 0.992]) reads M 10.2 and σ² 0.23 against the noise's 0.25. On the same data rescaled to [0, 1] exactly, which is the box the engine's range scaling reads, `khaos` and the engine alike read M about 6.2 and σ² about 0.95. Eight engine chains of 35,000 steps agree. The likely cause is Ishigami's exact symmetry about ½, which keeps its raw Legendre expansion sparse and which a shift of the centre breaks. That is unverified. The readout gate therefore compares the two on the same rescaled inputs.
+- *Two raw-ridge slips in resolution, found by the review and fixed before landing.* The held τ's halving point, which places a ladder's automatic hot end, read the raw ridge as the g-form: τ in place of τ/N, though a Legendre column carries about N observations' information as a normalized one does. The τ prior's log line named the g-form's unit. A test pins the halving point.
+- *Slow mixing on a rich surface.* On Ishigami at degree 8 and order 3, `khaos`'s corrected birth and the engine's both accept about 2% of births and almost no swaps. Each chain still matches the other and its own long run, so this is a reading, not a defect.
+
+**Decisions beyond the brief.**
+- *The Legendre part as a fourth `BassTerm` part* (above), with the derivative rule and `ReadsVariable`.
+- *KHAOS's raw ridge through the design's prior-apart pencil* (D_α = 1, δ = −z̄_w, D_β = I), not through slice 2's prior-precision builder, which does not exist yet. Slice 2's builder subsumes it.
+- *q_max is `MaxInteraction`,* a term's continuous factors, and d_max is `LegendreBasis.MaxDegree`.
+- *The swap is tallied as `VariableChange`* (the same kind of move), and the degree mutation as a new `DegreeChange`.
+- *No column cache* (the brief allowed one by size). A degree-15 column costs 4.5× to 6× a two-hinge product's, by run, about a third of a normalized-ridge sweep (the cost row).
+- *The swap's pseudo-count is a setting of its own,* `SwapPseudoCount`, where `khaos` reuses `make_weights`' α (`coin_pars[[2]]`) plus 10⁻⁹.
+- *The emulator's term projection* (`BassEmulators`) carries the Legendre part, which no Legendre fit reaches today, since those fits have no categorical predictors.
+
+**Notation crossings** went into `issues/notation-ledger.md` once GBASS committed it: KHAOS's q (a term's order) is BASS's K, BASS's q is the hinge power, and KHAOS's degree d = Σα has no BASS counterpart.
+
+**Left unbuilt, and why.**
+- *Slice 2,* waiting for the user.
+- *Declared input ranges* (the open question below).
+- *A bordered pencil for the raw ridge,* which the cost row does not ask for at these sizes.
+- *The adaptive mutation probability,* an option under D10.
+- *Moments under `MixtureMeasure` and `EmpiricalMeasure` past degree 15,* slice 4's.
+- *A gate for a Legendre basis or the raw ridge under a declared noise (E1).* The config allows both, and the core fits the noise's working response under its weights through the same design and pencil, so nothing in the noise is the basis's; no test runs the pair.
+
+**Recorded as open, with the decision each would change.**
+- *Declared input ranges.* Decision 6 reads "inputs on [0, 1] by the fit's declared ranges"; the engine scales by the training range, as BASS does, and the posterior moves with the box (above). The decision: whether a continuous predictor may declare its domain, which `BassInputTransform` would then scale by in place of the training range. If yes, a Legendre fit reads the user's coordinates, as `khaos` does, and its fingerprint takes the ranges. If no, a user who knows the domain rescales before fitting, and `PolynomialChaos.md` says so. The user leans toward a declared domain (2026-11-07).
 
 ### Slice 0 addendum: the corrected khaos samplers (chip, 2026-11-07)
 
