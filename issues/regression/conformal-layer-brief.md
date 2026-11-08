@@ -158,6 +158,7 @@ A probe settled the first before any build. On the conjugate fixture, some other
 - *Coverage at 1 − α* (exact draws, S 40, k 2 of 20, se 0.0048): plain 0.905; inflated 0.935 per position and 0.945 uniform, against 0.89. The plain set covers above the margin's readings, 0.732 carried and 0.358 uniform.
 - *A unit in a tail,* where the margin gains: the carried band reads 4.9 of 21 against the uniform 16.3 at S 40, and 3.4 against 8.1 at S 640. The plain set covers 0.950 and 0.943, above the carried readings of 0.790 and 0.843.
 - *No unit standing apart* (a symmetric Beta–Bernoulli posterior): every carried bound equals the uniform one to 10⁻⁹, and the bands are equal.
+- *Per commit,* the selected classes and the pinned tier: 136 of 136. *At the slice's end* (`scripts/test-select.ps1 -Scope Slice` on a snapshot of 477834c): the whole `Maths.Regression.Tests` assembly, 2,336 of 2,336, the eight pinned hashes among them, in 9 m 15 s. Nothing broke, so no follow-up commit was needed.
 
 **Which readings change, and by how much.** The seeds are slice 2's.
 - *Unchanged:* plain coverage, the per-position inflated set and the gap, exactly as slice 2 read them, on exact draws and on BASS.
@@ -169,7 +170,7 @@ A probe settled the first before any build. On the conjugate fixture, some other
 **What the readings show.**
 - *The per-position bounds pay most on BASS.* The uniform bound there, a median 4.2 nats against each candidate's 0.08, widens the inflated set by two thirds.
 - *The carried margin pays on exact draws, a third of the uniform band, and little on BASS.* Each unit's error over the orderings is wide there, since a unit far out degenerates the weights in its turn. Slice 2's carried reading on BASS, 72 and 52, came from bounds that did not dominate.
-- *The tail unit carries the widest bound* in 37 and 32 of 40 data sets, 10 to 12 times the median unit's. Not in all: another unit's turn can widen its own bound past it.
+- *The tail unit carries the widest bound* in 37 and 32 of 40 data sets, 10 to 12 times the median unit's. Not in all: another unit can carry a wider one.
 
 **Cost** (n 1,000, G 200, cycle clock, indicative). The units' orderings cost 0.33 to 0.45 s once per stratum at S 1,000 and 1.1 to 1.8 s at S 4,000, against 16 and 65 to 78 ms for the stratum's likelihoods. The fourth product brings the products to 70 and 261 ms per grid. On one grid the step costs 0.52 to 0.66 s and 1.7 to 2.4 s with the orderings built, which many cases share.
 
