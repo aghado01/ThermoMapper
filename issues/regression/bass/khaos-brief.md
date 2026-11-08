@@ -1,6 +1,6 @@
 # KHAOS on the BASS core: E19's build (chip brief)
 
-Date: 2026-11-07. Status: slice 0 landed 2026-11-07 (`31362ad`); slice 1 landed 2026-11-07 (`fa05048`, `b408bf4`, `baf69f9`), with declared input domains (`3eb56e1`, the user's decision of 2026-11-07); the check on slice 1's input-box finding done 2026-11-08 (real, not a trap); slice 2 landed 2026-11-08 (`f289af3`); slice 3 waits for the user. Written at the user's request after GBASS's slices 0–4, from the KHAOS paper's TeX, the `khaos` 2.1.1 source and the engine.
+Date: 2026-11-07. Status: slice 0 landed 2026-11-07 (`31362ad`); slice 1 landed 2026-11-07 (`fa05048`, `b408bf4`, `baf69f9`), with declared input domains (`3eb56e1`, the user's decision of 2026-11-07); the check on slice 1's input-box finding done 2026-11-08 (real, not a trap); slice 2 landed 2026-11-08 (`f289af3`); the rest in the user's order of 2026-11-08 ("Yes, 5 first"): slice 5, then 4, then 3, each after the coordinating session's verification of the one before; slice 5 landed 2026-11-08 (`98b0e7e`); slice 4 waits on the coordinating session's verification, then slice 3, and SMC's trap on the user's choice of remedy. Written at the user's request after GBASS's slices 0–4, from the KHAOS paper's TeX, the `khaos` 2.1.1 source and the engine.
 
 ## Why
 
@@ -157,6 +157,80 @@ Under "Reports" below, newest first, per slice: what landed by commit; the gates
 ## Reports
 
 Newest first.
+
+### Slice 5: the engine's reach (chip, 2026-11-08)
+
+At the user's order of 2026-11-08 ("Yes, 5 first"): slice 5, then 4, then 3.
+
+**Landed** on `main`, nothing pushed, the commit messages without attribution lines:
+- `98b0e7e`: the gates below. Three small lifts in the hinge tests let them run on Legendre terms:
+  - the ladder's per-rung batches (`BassTemperingTests.RungBatches`);
+  - the flat histogram's check against the enumeration (`BassFlatHistogramTests.MatchesTheEnumeration`, its node count a parameter);
+  - the pointwise refit with its prior given (`BassPointwiseTests.Refit`).
+  The term enumerations and the structure key also read Legendre terms. GBASS's per-rung Geweke takes Legendre rows (`legendre`). The SMC trap's harness (`KhaosSmcTrapQualificationTests`) has its table (`khaos-smc-trap-replicates.csv`).
+- This commit: `PolynomialChaos.md`'s section and rows, `BayesianRegression.md`'s KHAOS row, the status line and this report.
+
+**No engine code changed.** A Legendre term is a part type behind F-X4 and F-X3, so the ladder, SMC, the flat histogram, the pointwise density, the candidate density and GBASS's noise serve it through the design and the target. The slice is its gates.
+
+**The gates.** The fixture is slice 0's exact-law fixture (p 4, d_max 3, q_max 2, M ≤ 2, n 40, 466 structures) with σ² ~ IG(2, 0.5), under the raw ridge at τ held 0.1 and the modified g-prior with g₀² ~ IG(2, 80) drawn.
+
+| Gate | Reading |
+| --- | --- |
+| The law at each rung | Four ladders of 40,000 scans each, from the ladder's own replicas, against the enumeration's tempered law: the count law at every rung within 5 SE + 0.004, and E[ln τ] within 5 SE + 0.01. Raw ridge at b = 1, 0.4 and 0, and with the reference rung at 1, 0.4, 0.1 and 0. Modified g-prior at 1, 0.4 and 0, and with the reference rung at 1, 0.3, 0.05 and 0, E[ln τ] −3.5119 against −3.5095 (± 0.0015) through −3.9585 against the prior's −3.9592 |
+| SMC and the ladder, ln p(y) | Against the enumeration's ln p(y): SMC (2,000 particles, 4 replicates) −72.2965 ± 0.0144 against −72.2910 on the raw ridge, and −69.6168 ± 0.0167 against −69.5869 on the modified g-prior. The ladder (reference rung, self-sizing) −72.2579 ± 0.0359 and −69.6057 ± 0.0426. SMC under the adaptive count: −69.599 ± 0.023 on the modified g-prior. At 32 replicates of 8,000 particles, run to check a 2.75 SE gap in P(M = 0) at 8 replicates, the count law sits within 1.2 SE of the posterior with g₀² held and 0.72 SE with it drawn, and ln p(y) within 0.8 SE. The gap was the 8 replicates' error. Every count law within 5 SE + 0.01 |
+| Rungs at once | A tempered KHAOS fit with its rungs stepped at once (`RungWorkers` −1) is the fit stepped in order, hash for hash: e5b1758628567579 both |
+| The flat histogram | `MatchesTheEnumeration` under each prior: on the modified g-prior (12 nodes) the learned ln w is 0.039 from SAMC's limit, P(M) within 0.31 SE and every check within its allowance; on the raw ridge (6 nodes) 0.020, P(M = 0) at 1.87 SE. At a held τ the density of states is F's 466 point masses, which leave SAMC's limit undefined on 12 nodes |
+| The pointwise density | Both contents, on draws from 13 structures with g₀² drawn and 4 at τ held: the retained content against the Normal at the explicit uncentred design (4·10⁻¹⁶), and the collapsed content against explicit refits under KHAOS's prior written out, τI on the uncentred coefficients or τ·D_g⁻¹ΨᵀΨD_g⁻¹ with Ψ = [1, B] (1.4·10⁻¹⁴). Under g₀² drawn a structure is met at several τ, so each τ takes its own leave-out quadratics |
+| The candidate density | At the training cases it is the pointwise column, under the Gaussian and the Student t noise: 0 relative |
+| GBASS's noise on Legendre terms | GBASS's per-rung Geweke (`BassNoiseReachQualificationTests`), 400,000 marginal-conditional draws against 600,000 successive steps, on Legendre terms of degree up to 3 under the modified g-prior with g₀² ~ IG(2, 2) drawn: the Student t at b = 1 and 0.4, worst \|z\| 2.92 and 2.07; the quantile at b = 1, interwoven, 1.74; the skewed horseshoe with its move along β·v, its default, at b = 1 and ¾, 0.96 and 2.82 (mean ln v, its slow coordinate, as on hinges). No move refused |
+| Conformal coverage on a Legendre fit | The full conformal Bayes set on a Gaussian KHAOS fit (KHAOS's defaults, degree 8, order 2) under the contaminated noise of `BassCandidateTests`: 20 fits of 99 cases, 50 held-out cases each. Coverage 0.878 against the nominal 0.900 (se 0.011, 1.9 SE low); mean width 1.08; no set open at the grid's ends |
+| A Student t KHAOS fit | A t(3) KHAOS fit against a Gaussian one under 0.25·t₂ noise, n 150, the posterior mean surface against the truth at 200 held-out cases. Over 16 sets the t fit is better on all 16, mean RMS error 0.088 against 0.188. A first run of 6 sets read 5 of 6 and a paired gap of 1.3 SE, short of the 2 SE it was gated on. t₂'s tails make the gap heavy-tailed: one set reads 0.82 against 0.09. So the gate is now the sign, at least 12 of 16, on fresh seeds |
+| A quantile KHAOS fit | q = 0.8 on heteroscedastic noise (0.1 + 0.4x₁)ζ, 4 sets of 300. 0.768 of 1,200 held-out cases fall below the fitted surface (± 0.012, within 3 SE + 0.02). Its RMS distance from the true 0.8-quantile surface is 0.079, against the Gaussian mean surface's 0.289 |
+| Hinge BASS | The whole regression assembly at the slice's end, once, on HEAD `477834c` with the slice's tests: 2,361 of 2,361, the pinned hashes and every fingerprint among them. The hinge classes whose helpers were lifted, slow methods included: 310 of 310. The slow tier is rewritten from that profile; it now holds the three KHAOS reach methods above 10 s, and timing under load moved a few hinge methods across the line both ways |
+
+**SMC on KHAOS: the trap, measured. Its remedy is the user's open choice.** The harness is `KhaosSmcTrapQualificationTests`, on the adaptive-mutation measurement's fixture and seeds. Its engine arms reproduce that measurement's replicates ln Ẑ for ln Ẑ.
+
+| Arm, N 500 | Reached (σ² < 0.449) | ln Ẑ, reached | ln Ẑ, trapped | Seconds, reached and trapped |
+| --- | --- | --- | --- | --- |
+| Engine schedule, 5 sweeps | 3/32 | −316.5 ± 4.8 (−319.6 to −311.0) | −349.3 ± 3.0 | 8.4, 4.7 |
+| Engine schedule, 20 sweeps | 2/16 | −291.2, −283.1 | −349.86 ± 0.09 | 30.5, 14.6 |
+| b′ ≤ 1.25b, 5 sweeps | 11/16 | −313.4 ± 16.6 (−331.1 to −282.1) | −331.0 ± 4.0 | 10.2, 9.4 |
+| b′ ≤ 1.1b, 5 sweeps | 8/16 | −318.0 ± 5.0 (−327.7 to −310.9) | −327.6 ± 4.8 | 16.5, 15.9 |
+| Modified g-prior, engine, 5 sweeps | 16/16 | −221.1 ± 11.1 (−239.1 to −196.3) | none | 30.0 |
+
+- *The mechanism is the schedule's jump.*
+  - Below b ≈ 0.005 a term costs more than it gains, about 14 nats under this raw ridge, so the tempered law sits at near-empty structures. The population collapses there: at the stage before the jump it holds 1 to 9 distinct structures of 500 particles, at M ≈ 0.
+  - They all reweight alike, so the conditional ESS sees no spread, and the next b is 1, from b between 0.003 and 0.35.
+  - ln Ẑ is read at that step. The final stage's sweeps start growing terms (mean M 0.2 to 1.0 after it and two more stages), but the evidence is already spent.
+  - At b = 1 itself there is no trap: greedy forward selection from M = 0 climbs monotonely, and the ladder's cold chains read the long chains' M and σ².
+- *The cap reaches the basin but not the posterior.* The capped runs end at M 7 to 10, against the posterior's 10.15 and σ² 0.2245. Their ln Ẑ spreads over 49 nats while each replicate reports an error under 1. Births accept about 2% of the time, and that limits them.
+- *KHAOS's own g-prior is not trapped,* at about 9 nats a term. All 16 replicates reach σ² 0.19 to 0.21 at M 13.5 to 14.9. Its ln Ẑ still spreads over 43 nats, sd 11, each replicate reporting an error under 1.
+- *The ladder has the same transition and flags it.*
+  - Four chains, a reference rung, self-sizing, 5,000 scans after 5,000.
+  - The cold chains read M 10.13 to 10.16 and σ² 0.2246 to 0.2267.
+  - One pair in every chain rejects every swap, and there are no round trips. The chains' stepping stones read −296.2, −266.8, −246.8 and −205.6.
+  - The pooled −253.9 ± 19.0 is flagged saturated, between-to-within 28.
+- *What sees the trap.*
+  - The last step left from b < ½: 41 of 43 trapped replicates, 0 of 5 reached.
+  - `LeastMoved` under 0.1 over the last three stages: 40 of 43, and 1 of 5 reached.
+  - The mean log posterior's drift over two extra stages at b = 1: 0 of 29 at 5 sweeps.
+  - The pooled evidence's between-to-within ratio, which SMC fits already compute over their replicates: it sees the dispersed evidence the jump does not.
+- *The choice,* sent 2026-11-08 to the coordinating session for the user. Nothing is built until the user picks.
+  1. Refuse SMC on a Legendre basis. Builds nothing, and loses the g-prior's working posterior.
+  2. Flag it on the jump and on the between-to-within ratio, recommended. A small build that leaves the draws unchanged, and it covers any SMC fit.
+  3. Fix it. A step cap is cheap but measured insufficient for the evidence. A residual-informed birth through F-X4 targets the 2% acceptance; it is slice-sized and unmeasured. A reference nearer the posterior means a pilot and a new tempering path; it is larger and unmeasured.
+
+**Found here.**
+- *A noise's reference beside the zero centre fails at the fit, not at validation.* `BassNoiseReference.Moments`, the default, reads a level from the response, and `BassResolved` refuses it against the zero centre once the fit runs. KHAOS's fits take the zero centre, so under a noise they state `BassNoiseReference.None` with Jeffreys σ². What the reference should read under the zero centre, or whether validation should refuse it with the config's path, is GBASS's call. Recorded, not changed.
+- *SMC's reported evidence error under-covers on KHAOS fixtures of this size,* under either prior (above).
+
+**Decisions beyond the brief.**
+- *The noise and the modified g-prior.* The prior reads Ψ as evaluated, not the latents' weights, as `khaos`'s S₀ does. The noise's unweighted prior Gram already serves it.
+- *The test helpers were lifted, not copied.* The hinge tests keep their bodies and seeds.
+
+**Left unbuilt, and why.**
+- *The trap's remedy:* the user's choice.
+- *Slices 4 and 3,* in the user's order, each after the coordinating session's verification.
 
 ### Slice 2: the modified g-prior (chip, 2026-11-08)
 

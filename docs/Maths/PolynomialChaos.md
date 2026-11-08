@@ -17,6 +17,7 @@ KHAOS (Rumsey, Francom et al., *Bayesian Adaptive Polynomial Chaos Expansions*, 
 | The config | `BassStructureSpec.Legendre` (`LegendreBasis`), `BassCoefficientPrior.RawRidge` | 1 |
 | Declared input domains | `InputDomain` on `ContinuousPredictor`; `RangeScale` scales by it | 1 |
 | The modified g-prior, g₀² by τ's slice step | `ModifiedGForm`; `BassPriorPrecision`, the design's prior-precision builder (E21); `TauPrior.Gamma` | 2 |
+| The engine's reach | The ladder, SMC, the flat histogram, the pointwise and candidate densities and GBASS's noise laws, unchanged; gated on Legendre terms | 5 |
 
 ## The basis (E19)
 
@@ -103,7 +104,43 @@ each validity the Poisson-binomial's, by dynamic programming over the p coins in
 
 `BassStructureSpec.Legendre` is a `LegendreBasis`; null, the default, is BASS's hinges. It holds d_max (`MaxDegree`, `khaos`'s 15), s_q (`OrderPenalty`, 1), s_d (`DegreePenalty`, 0), `make_weights`' α, ε and passes (1, 2, 3), the swap's pseudo-count (1) and the mutation probability (½). q_max is `MaxInteraction`, a term's continuous factors, resolved to at most p. `Legendre` and `RawRidge` are left out of the JSON when unused, so a hinge config's form and fingerprint stand as they were. A Legendre fit's `BassModel.Proposal` (D01's) is refused, and `BassModel.Kernel` is its proposal.
 
-## What was checked (slices 1 and 2)
+## The engine's reach (slice 5)
+
+A Legendre term is a part type behind F-X3, so every sampler and reader serves it as it serves hinges, through the design and the target. Slice 5 changed no engine code; it gated each one on KHAOS's priors (the checks below):
+- the ladder, with and without its reference rung, and with its rungs stepped at once (`BassRunOptions.RungWorkers`);
+- SMC, under the fixed and the adaptive count of sweeps;
+- the flat histogram;
+- the pointwise density, both contents, and the conformal layer's candidate density;
+- GBASS's noise laws, the skewed horseshoe with its move along β·v among them.
+
+Two things to know when fitting:
+- *Under a noise the modified g-prior reads Ψ as evaluated,* not the latents' weights, as `khaos`'s S₀ does. The noise's prior Gram is the unweighted one, which the builder serves.
+- *A noise's reference and the zero centre.* KHAOS's fits take the zero centre. A noise's reference (`BassNoiseReference.Moments`, the default) reads a level from the response, and the zero centre refuses it at the fit. A KHAOS fit under a noise states `BassNoiseReference.None`, with a σ² prior that reads nothing (Jeffreys, `khaos`'s).
+
+**SMC on KHAOS: the trap, measured; its remedy is the user's open decision.** On Ishigami under the raw ridge (τ held at 10⁻⁵, degree 8, order 3, n 120, N 500; `KhaosSmcTrapQualificationTests`):
+- *The mechanism is the schedule's jump, not the kernel at b = 1.*
+  - Below b ≈ 0.005 a term costs more than it gains, so the tempered law sits at near-empty structures. The population collapses there to one to nine distinct structures of 500 particles, which all reweight alike.
+  - The conditional ESS then sees no spread, and the schedule jumps to b = 1 in one stage, from b between 0.003 and 0.35.
+  - ln Ẑ is read at that jump, about 60 nats low, with an error under 1.
+  - At b = 1 itself the posterior is reachable: greedy forward selection from M = 0 climbs monotonely, and the ladder's cold chains read the long chains' M and σ².
+- *How often.*
+  - The engine's schedule reached the posterior's basin, σ² within twice the long chains', in 3 of 32 replicates at 5 sweeps a stage, and 2 of 16 at 20.
+  - Capping each step at b′ ≤ 1.25b reached the basin in 11 of 16 at twice the time, and b′ ≤ 1.1b in 8 of 16 at 3.5 times. The capped runs still end short of the posterior (M 7 to 10 against 10.15). Their ln Ẑ spreads over 49 nats, each replicate reporting an error under 1.
+- *KHAOS's own g-prior is not trapped there.* A term costs about 9 nats against the raw ridge's 14, and 16 of 16 replicates reach σ² 0.19 to 0.21. Its ln Ẑ still spreads over 43 nats (sd 11), each replicate reporting an error under 1.
+- *The ladder has the same transition and says so.*
+  - Its cold chains read M 10.13 to 10.16 and σ² 0.225, the long chains' values.
+  - One pair in every chain rejects every swap, and there are no round trips. The four chains' stepping stones read −296 to −206.
+  - The evidence reports itself saturated, with a between-to-within error ratio of 28.
+- *What sees it.*
+  - "The last step left from b < ½": 41 of 43 trapped replicates and none of the 5 found.
+  - `LeastMoved` under 0.1 at the last three stages: 40 of 43 trapped, and 1 of 5 found.
+  - A drift in the mean log posterior over two extra stages at b = 1: none.
+- *The choice put to the user* (2026-11-08):
+  - refuse SMC on a Legendre basis;
+  - flag it, on the jump and on the pooled evidence's between-to-within ratio;
+  - or fix it, by a step cap, a residual-informed birth through F-X4, or a reference nearer the posterior.
+
+## What was checked (slices 1, 2 and 5)
 
 | Gate | Reading |
 |---|---|
@@ -121,7 +158,15 @@ each validity the Poisson-binomial's, by dynamic programming over the p coins in
 | The exact law, g₀² integrated | Each of the 466 structures' weight by Simpson's rule over ln τ on the oracle's nodes, against `khaos_exactlaw_oracle.R`: 1.6·10⁻¹⁵ in P(M) and the inclusions and 1.7·10⁻¹⁵ in g₀²'s posterior CDF at 300, 1,000 and 10⁴, on both boxes. The production chain with g₀² ~ IG(0.001, 1,000) drawn, against it over 400,000 steps: worst \|z\| 1.46 |
 | Geweke, g₀² drawn | 12 cases, p 4, M ≤ 3, σ² ~ IG(3, 2), g₀² ~ IG(2, 2) drawn by τ's step; 200,000 marginal-conditional draws against 300,000 successive steps over M, σ², ln g₀², the surface at two points, two inclusions, the degree sum and a scaled residual: worst \|z\| 2.37 and 1.52 (ζ = 1, two seeds), 2.14 (ζ = 0) |
 | `adaptive_khaos_gprior` readouts | Corrected, degree 8, order 3, R 6,000 iterations with 3,000 kept against the engine's two chains of 10,000 after 10,000. On the raw inputs with [0, 1] declared: M 14.66 against 13.87, σ² 0.201 against 0.203, g₀²'s median 3,137 against 3,256, the surfaces 0.068 apart, total indices within 0.003. On the rescaled inputs: M 20.23 against 19.08, σ² 0.221 against 0.236, the surfaces 0.074 apart, the indices within 0.003. Long runs on the declared box: eight engine chains of 40,000 read M 15.06 (sd 0.36), σ² 0.197 and g₀²'s median about 3,130; two `khaos` runs of 40,000 read M 15.06 and 15.03, σ² 0.198 and g₀²'s median 3,125 and 3,115 |
-| Hinge BASS | The whole regression assembly at the slice's end, 2,253 of 2,253, the eight pinned hashes and every fingerprint among them, and the commit's selection on the later HEAD, 1,849 of 1,849; a hinge config's JSON holds neither `Legendre`, `RawRidge` nor `ModifiedG`, and a τ prior other than the Gamma on τ writes no rate |
+| The law at each rung (slice 5) | Slice 0's exact-law fixture with σ² ~ IG(2, 0.5), under the raw ridge at τ held and the modified g-prior with g₀² ~ IG(2, 80) drawn: four ladders of 40,000 scans, with and without the reference rung, read from their own replicas against the enumeration's tempered law. The count law at every rung within 5 SE + 0.004, and E[ln τ] at every rung within 5 SE + 0.01, from b = 1 (−3.512 against −3.510) to the prior at b = 0 (−3.959 against −3.959) |
+| SMC and the ladder | ln p(y) against the enumeration's: SMC (2,000 particles, 4 replicates) −72.297 ± 0.014 against −72.291 on the raw ridge, −69.617 ± 0.017 and, under the adaptive count, −69.599 ± 0.023 against −69.587 on the modified g-prior; the ladder (reference rung, self-sizing) −72.258 ± 0.036 and −69.606 ± 0.043. At 32 replicates of 8,000 particles SMC's count law sits within 1.2 SE of the posterior with g₀² held, and within 0.72 SE with it drawn, its ln p(y) within 0.8 SE with it drawn. A tempered fit with its rungs stepped at once is the fit stepped in order, hash for hash |
+| The flat histogram | Against the enumeration (`BassFlatHistogramTests.MatchesTheEnumeration`): the learned weights 0.039 (modified g-prior, 12 nodes) and 0.020 (raw ridge, 6 nodes) from SAMC's limit, the reweighted count law, inclusions, likeliest structures and E[τ] within their allowances. At a held τ the density of states is F's 466 point masses, which leave SAMC's limit undefined on 12 nodes |
+| The pointwise and candidate densities | Both contents on draws over 13 structures with g₀² drawn and 4 at τ held: the retained content against the Normal at the explicit uncentred design (4·10⁻¹⁶); the collapsed content against explicit refits under KHAOS's prior written out, τI on the uncentred coefficients or τ·D_g⁻¹ΨᵀΨD_g⁻¹ (1.4·10⁻¹⁴), each τ its own leave-out quadratics. The candidate density at the training cases is the pointwise column under the Gaussian and Student t noise, exactly |
+| GBASS's noise on Legendre terms | GBASS's per-rung Geweke (`BassNoiseReachQualificationTests`) on Legendre terms of degree up to 3 under the modified g-prior with g₀² drawn: the Student t at b = 1 and 0.4 (worst \|z\| 2.92 and 2.07), the quantile at b = 1 interwoven (1.74), and the skewed horseshoe with its move along β·v at b = 1 and ¾ (0.96 and 2.82), no move refused |
+| Conformal coverage | The full conformal Bayes set on a Gaussian KHAOS fit under contaminated noise no model here holds, twenty fits of 99 with fifty held-out cases each: coverage 0.878 against the nominal 0.900 (se 0.011), mean width 1.08, no set open at the grid's ends |
+| A Student t and a quantile fit | A Student t(3) fit under 0.25·t₂ noise, sixteen sets of 150: its surface beats the Gaussian fit's on all sixteen, mean RMS error 0.088 against 0.188. A quantile fit at q = 0.8 on heteroscedastic noise, four sets of 300: 0.768 of 1,200 held-out cases below its surface (± 0.012), the fitted surface 0.079 from the true 0.8-quantile surface in root mean square against the Gaussian mean surface's 0.289 |
+| SMC's trap | See the section above: the engine's schedule jumps over a near-empty population on the raw-ridge Ishigami fixture, and the ladder flags the same transition (`KhaosSmcTrapQualificationTests`) |
+| Hinge BASS | The whole regression assembly at the slice's end, 2,253 of 2,253, the eight pinned hashes and every fingerprint among them, and the commit's selection on the later HEAD, 1,849 of 1,849; a hinge config's JSON holds neither `Legendre`, `RawRidge` nor `ModifiedG`, and a τ prior other than the Gamma on τ writes no rate; at slice 5's end, on HEAD `477834c` with its tests, 2,361 of 2,361, the pinned hashes among them |
 
 **The cost row** (`KhaosCostTests`, the thread's cycle clock, read round-robin in one process; indicative, the machine loaded):
 - *A column* at n = 1,000, in two runs, the second on a quieter machine: ψ₈·ψ₇ 11.9 and 8.6 µs and ψ₁₅ 10.4 and 7.3 µs, against 66 and 46 µs for the scalar per-point form that divides at each step, and 2.6 and 1.4 µs for a product of two hinges. ψ₈·ψ₇ reads 4.5× and 6.2× the hinges.
