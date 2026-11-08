@@ -135,10 +135,15 @@ Two things to know when fitting:
   - "The last step left from b < ½": 41 of 43 trapped replicates and none of the 5 found.
   - `LeastMoved` under 0.1 at the last three stages: 40 of 43 trapped, and 1 of 5 found.
   - A drift in the mean log posterior over two extra stages at b = 1: none.
-- *The choice put to the user* (2026-11-08):
-  - refuse SMC on a Legendre basis;
-  - flag it, on the jump and on the pooled evidence's between-to-within ratio;
-  - or fix it, by a step cap, a residual-informed birth through F-X4, or a reference nearer the posterior.
+- *Decided 2026-11-08: flag it.* The coordinating session made the call, the user unsure and leaving it to that session; the user can reverse it.
+  - BASS's SMC fit now flags a replicate whose last step jumped over a collapsed population, and replicates whose ln Ẑ disagree beyond their own errors ([Bayesian regression](./BayesianRegression.md#bass-smc), "The flags"). Neither changes a draw.
+  - On this fixture, as production fits:
+    - *Raw ridge, 32 replicates:* 24 of the 30 trapped replicates jumped, and neither of the 2 that reached the posterior did. The other six read as disagreement (between-to-within 30), and every group of four was flagged.
+    - *The g-prior, 16 replicates:* all reached the posterior's σ², none jumped, and they disagreed at 9.2 times their errors.
+- *Recorded, not built,* each waiting on its own decision ([the brief](../../issues/regression/bass/khaos-brief.md#reports)):
+  - a cap on the step: measured above, it reaches the basin but not the evidence;
+  - a birth proposed from the data's residual through F-X4, aimed at the 2% birth acceptance;
+  - a reference nearer the posterior, a pilot run and a tempering path from it.
 
 ## What was checked (slices 1, 2 and 5)
 
@@ -165,7 +170,7 @@ Two things to know when fitting:
 | GBASS's noise on Legendre terms | GBASS's per-rung Geweke (`BassNoiseReachQualificationTests`) on Legendre terms of degree up to 3 under the modified g-prior with g₀² drawn: the Student t at b = 1 and 0.4 (worst \|z\| 2.92 and 2.07), the quantile at b = 1 interwoven (1.74), and the skewed horseshoe with its move along β·v at b = 1 and ¾ (0.96 and 2.82), no move refused |
 | Conformal coverage | The full conformal Bayes set on a Gaussian KHAOS fit under contaminated noise no model here holds, twenty fits of 99 with fifty held-out cases each: coverage 0.878 against the nominal 0.900 (se 0.011), mean width 1.08, no set open at the grid's ends |
 | A Student t and a quantile fit | A Student t(3) fit under 0.25·t₂ noise, sixteen sets of 150: its surface beats the Gaussian fit's on all sixteen, mean RMS error 0.088 against 0.188. A quantile fit at q = 0.8 on heteroscedastic noise, four sets of 300: 0.768 of 1,200 held-out cases below its surface (± 0.012), the fitted surface 0.079 from the true 0.8-quantile surface in root mean square against the Gaussian mean surface's 0.289 |
-| SMC's trap | See the section above: the engine's schedule jumps over a near-empty population on the raw-ridge Ishigami fixture, and the ladder flags the same transition (`KhaosSmcTrapQualificationTests`) |
+| SMC's trap | See the section above: the engine's schedule jumps over a near-empty population on the raw-ridge Ishigami fixture, and the ladder flags the same transition (`KhaosSmcTrapQualificationTests`). SMC's flags, as production fits there: 24 of 30 trapped replicates jumped and no replicate that reached the posterior did; between-to-within 30 (raw ridge) and 9.2 (g-prior); every group of four flagged |
 | Hinge BASS | The whole regression assembly at the slice's end, 2,253 of 2,253, the eight pinned hashes and every fingerprint among them, and the commit's selection on the later HEAD, 1,849 of 1,849; a hinge config's JSON holds neither `Legendre`, `RawRidge` nor `ModifiedG`, and a τ prior other than the Gamma on τ writes no rate; at slice 5's end, on HEAD `477834c` with its tests, 2,361 of 2,361, the pinned hashes among them |
 
 **The cost row** (`KhaosCostTests`, the thread's cycle clock, read round-robin in one process; indicative, the machine loaded):

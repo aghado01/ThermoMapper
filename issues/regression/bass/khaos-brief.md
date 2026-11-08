@@ -1,6 +1,6 @@
 # KHAOS on the BASS core: E19's build (chip brief)
 
-Date: 2026-11-07. Status: slice 0 landed 2026-11-07 (`31362ad`); slice 1 landed 2026-11-07 (`fa05048`, `b408bf4`, `baf69f9`), with declared input domains (`3eb56e1`, the user's decision of 2026-11-07); the check on slice 1's input-box finding done 2026-11-08 (real, not a trap); slice 2 landed 2026-11-08 (`f289af3`); the rest in the user's order of 2026-11-08 ("Yes, 5 first"): slice 5, then 4, then 3, each after the coordinating session's verification of the one before; slice 5 landed 2026-11-08 (`98b0e7e`); slice 4 waits on the coordinating session's verification, then slice 3, and SMC's trap on the user's choice of remedy. Written at the user's request after GBASS's slices 0–4, from the KHAOS paper's TeX, the `khaos` 2.1.1 source and the engine.
+Date: 2026-11-07. Status: slice 0 landed 2026-11-07 (`31362ad`); slice 1 landed 2026-11-07 (`fa05048`, `b408bf4`, `baf69f9`), with declared input domains (`3eb56e1`, the user's decision of 2026-11-07); the check on slice 1's input-box finding done 2026-11-08 (real, not a trap); slice 2 landed 2026-11-08 (`f289af3`); the rest in the user's order of 2026-11-08 ("Yes, 5 first"): slice 5, then 4, then 3, each after the coordinating session's verification of the one before; slice 5 landed 2026-11-08 (`98b0e7e`); slice 4 waits on the coordinating session's verification, then slice 3, and SMC's trap is flagged (`42739ac`, the coordinating session's call of 2026-11-08), its remedies recorded, not built. Written at the user's request after GBASS's slices 0–4, from the KHAOS paper's TeX, the `khaos` 2.1.1 source and the engine.
 
 ## Why
 
@@ -157,6 +157,46 @@ Under "Reports" below, newest first, per slice: what landed by commit; the gates
 ## Reports
 
 Newest first.
+
+### Slice 5 addendum: SMC's flags (chip, 2026-11-08)
+
+**The decision.** Flag SMC, option 2 of the choice the trap's measurement put. The coordinating session made the call on 2026-11-08: the user was unsure and left it to that session, and can still reverse it. Nothing else of the choice is built (below).
+
+**Landed** on `main`, nothing pushed: `42739ac`, the flags with their gates and the trap harness's flag gate; and this commit, the docs and this report.
+
+**What is built.** Two flags on BASS's SMC fit generally, read from what the run already holds. They change no draw, weight or normalizer.
+- *A jump over a collapse* (`BassSmcReplicate.JumpedOverACollapse`, counted in `BassSmcReadout.JumpedReplicates`). The last step to b = 1 left from b below ½ (`JumpBelow`), over a population of at most 5% of N distinct structures (`CollapsedShare`).
+  - The run counts the population's distinct structures once, before the step that reaches b = 1, and a checkpoint carries the count. A fit resumed after that step still reads the flag.
+  - The flag is null short of b = 1, and where the count was not taken.
+- *Disagreeing replicates* (`BassSmcReadout.Overdispersed`, mirrored in `BassEvidence.Overdispersed`). The replicates' ln Ẑ between-to-within ratio is above 3 (`BassEvidence.OverdispersionThreshold`), pooled as the evidence pools them.
+  - The evidence's error is then the replicates' spread already, by the pooling rule's larger error. The flag says the genealogy errors are not to be read.
+  - It is null with one replicate, or where a genealogy error is NaN (a resampling scheme other than multinomial). The readout then says so in words rather than reading clear.
+- *In words* (`BassSmcReadout.Flags`): one line per jumped replicate, one for the disagreement, or one saying it could not be read. A summary or adapter prints them; presentation stays values only.
+- *The thresholds were fixed before any healthy fit was read,* from the trap's measurement.
+  - Trapped replicates jumped from b 0.003 to 0.35 over 1 to 9 structures of 500. Those that reached the posterior left from b 0.98 and up.
+  - If each genealogy error is right, the ratio squared is about χ²_{R−1}/(R − 1). That passes 9 with probability 0.27% at R = 2, and below 10⁻⁵ at R = 4.
+
+**The gates.**
+
+| Gate | Reading |
+| --- | --- |
+| Draws unchanged | A new pinned SMC baseline (`BassBitIdentityTests.Smc_KeepsTheBaseline`) hashes the draws, the weights, each replicate's ln Ẑ and genealogy error, and its stages' b and sweeps. Its values were read on `fc39acc` before the flags were built (hinge `3440c6398ce3c0d5`, KHAOS `a51939ff36591784`), and they hold with the flags |
+| The trap | Production fits on the trap fixture, N 500 at 5 sweeps a stage (`KhaosSmcTrapQualificationTests.Flags_OnTheTrap_AndNoneOnHealthyFits`). On the raw ridge, 32 replicates: 2 reached the posterior and neither jumped. 24 of the 30 trapped replicates jumped over a collapse; the other six grew part of the structure (ln Ẑ up to −334.8) and left from b 0.99 and up. The disagreement reads those six: the whole fit's ratio is 30.0, and all 8 groups of four are flagged one way or the other. On the modified g-prior, 16 replicates: all 16 reached σ² within twice the chains' and none jumped. Their ln Ẑ disagree at 9.2 times their errors, and all 4 groups of four are flagged |
+| Healthy fits | No flag fires. GBASS's t(5) and skewed GH evidence fixtures at the adaptive-mutation measurement's size (32 replicates of 500): ratios 0.96 and 0.85, no jump, no group of four flagged; at their evidence gate's size (4 of 2,000): 1.41 and 0.97. The SMC fits against R's enumeration (six normalizers and two posteriors): 0.23 to 1.20. KHAOS's exact-law fixture, three fits: 0.38 to 1.44. `BassSmcTests`' fit: 0.19. Every last step left from b 0.948 and up. The collapse share alone does not separate: these small spaces held 2.1% to 8.8% of N distinct before their last step, against the trapped runs' 0.2% to 1.8%, so the jump carries the separation in every reading. A small space whose data barely inform could leave from b < ½ over so few structures and read as jumped. No reading here did, so the threshold was not moved |
+| The rule's edges | Constructed replicates (`BassSmcTests`): from b exactly ½, no jump; 25 of 500 structures is collapsed, 26 is not; short of b = 1, or uncounted, null. Two replicates 60 nats apart against errors 0.1 and 0.8 read 74.4 times; two trapped alike read neither ratio nor flag, only the jumps; a NaN genealogy error leaves the ratio unread. A one-replicate fit reads null in both places and says so in words. The count survives every resume, a complete fit's resume included |
+| Hinge BASS | The whole regression assembly on HEAD `fc39acc` with the flags, once: 2,366 of 2,366, the pinned hashes and the new SMC baseline among them. The SMC parity fits against R: 12 of 12 |
+
+**What the flags see beyond KHAOS.** On Friedman's band (stage 8's qualification) the replicates' ln Ẑ spread 6.5 to 8.4 nats against genealogy errors of at most 0.83. The disagreement flag reads that, as it should.
+
+**What they cannot see.** A wrong region that every replicate reaches alike, by a schedule that never jumps. Its replicates agree, and no step leaves a collapse. Only a reference outside the run reads it: another sampler, or an enumeration where one exists.
+
+**Recorded, not built.** Each would change what an SMC fit draws, and each waits on its own decision.
+
+| Remedy | What the measurement showed | What it would cost |
+| --- | --- | --- |
+| A cap on the step, b′ ≤ r·b | It reaches the basin but not the evidence. At r = 1.25, 11 of 16 replicates reach σ² within twice the chains', against 3 of 32 uncapped, at twice the time. At r = 1.1, 8 of 16, at 3.5 times. They end at M 7 to 10 against the posterior's 10.15, and their ln Ẑ spreads over 49 nats with errors under 1 | An `SmcSpec` field and one bound in the schedule's step, opt-in. Its draws would differ from the uncapped fit's wherever it binds |
+| A birth proposed from the data's residual, through F-X4 | Unmeasured. Births accept about 2% on the trap fixture, which limits the capped runs and MCMC's climb from empty alike | A new `IBassProposalKernel` member that weights each term of 𝒜 by its fit to the current residual, with exact forward and reverse probabilities: O(\|𝒜\|·n) per birth to score 𝒜, or a score kept and updated per accepted move. Its gates are the exact law by enumeration and Geweke, then this measurement again. Slice-sized |
+| A reference nearer the posterior | Unmeasured | A pilot MCMC run, and a reference over structures with an exact density and full support (the pilot's structures mixed with the prior). A tempering path from it to the posterior in the SMC core and BASS's target, with ln Z = ln Z_ref + the ratio. Larger than the birth |
 
 ### Slice 5: the engine's reach (chip, 2026-11-08)
 

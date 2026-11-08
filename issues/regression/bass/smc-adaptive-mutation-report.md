@@ -162,6 +162,11 @@ N 500 throughout; 32 replicates on GBASS, 16 on KHAOS. The KHAOS chains read M 1
   - *Decision:* whether KHAOS's SMC fit and its evidence are refused, flagged (say on `LeastMoved` near 0), or given a
     start or kernel that can find the structure: a reference nearer the posterior, or a birth that proposes from the
     data's residual. KHAOS slice 2 should know before its SMC path is relied on.
+  - **Decided 2026-11-08: flagged.** The coordinating session's call, the user unsure; reversible. KHAOS slice 5 measured
+    the mechanism: a near-empty population reweights alike, so the schedule jumps to b = 1 and ln Ẑ is read there.
+    `LeastMoved` did not separate it: it read under 0.1 on reached replicates too. BASS's SMC fit now flags a jump over a
+    collapsed population and replicates whose ln Ẑ disagree beyond their errors. The remedies are recorded, not built
+    ([the KHAOS brief](khaos-brief.md#reports)).
 - **A count that sees continuous coordinates.** The moved fraction cannot see GBASS's skew–latent ridge. The
   decorrelation of ℓ across a stage's sweeps can (the `Samplers.md` section's alternative).
   - *Decision:* whether an adaptive count can help GBASS's skewed horseshoe, where the ridge fails Geweke at b = ½.
