@@ -48,6 +48,8 @@ public static class Bass
         BassRunOptions options = run ?? new BassRunOptions();
         if (options.MaxDegreeOfParallelism is 0 or < -1)
             throw new ArgumentOutOfRangeException(nameof(run), "MaxDegreeOfParallelism is −1, no bound, or at least 1.");
+        if (options.RungWorkers is 0 or < -1)
+            throw new ArgumentOutOfRangeException(nameof(run), "RungWorkers is −1, what the chains leave, or at least 1.");
         if (options.ProgressInterval < 1) throw new ArgumentOutOfRangeException(nameof(run), "ProgressInterval must be at least 1.");
         BassModel model = BassModel.Create(config, data);
         BassSampling sampling = config.Sampling;

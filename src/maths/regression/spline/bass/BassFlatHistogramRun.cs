@@ -94,19 +94,22 @@ internal static class BassFlatHistogramFit
     /// The tempering pilot of <paramref name="model"/> under <paramref name="spec"/> from <paramref name="seed"/>: each ladder on
     /// the linear form from an exact draw of the prior on F, burned, frozen and traced, read by
     /// <see cref="TemperingPilot.FromLadders"/> and pooled by b (<see cref="Pooled"/>); with the ladders' readout over their
-    /// traced scans. The ladders run in parallel within the run's bound; nothing depends on it.
+    /// traced scans. The ladders run in parallel within the run's bound, and their rungs as
+    /// <see cref="BassRunOptions.RungWorkers"/> asks within what the ladders leave of it; nothing depends on either.
     /// </summary>
     internal static (TemperingPilot Pilot, BassTemperingReadout Ladders) Pilot(BassModel model, BassFlatHistogramPilot spec, int seed,
                                                                             BassRunOptions options, BassSweepCount sweeps)
     {
         BassModel linear = BassModel.Create(model.Config, model.Data, TemperedForm.Linear);
         int[] seeds = SeedTree.Derive(seed, spec.Chains);
+        int rungWorkers = options.RungWorkersFor(spec.Chains);
         var ladders = new BassLadder[spec.Chains];
         Parallel.For(0, spec.Chains, new ParallelOptions { MaxDegreeOfParallelism = options.MaxDegreeOfParallelism, CancellationToken = options.Cancellation }, c =>
         {
             int[] streams = SeedTree.Derive(seeds[c], 2);   // the start's draws, the ladder's
             BassState start = new BassPriorSampler(linear).DrawState(new Xoshiro256PlusPlus(streams[0])).State;
             var ladder = new BassLadder(linear, spec.Tempering, start.Terms, start.LogTau, streams[1], start.StartLogRate);
+            ladder.Tempering.MaxDegreeOfParallelism = rungWorkers;
             void Scan()
             {
                 options.Cancellation.ThrowIfCancellationRequested();

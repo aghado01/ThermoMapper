@@ -21,6 +21,9 @@ namespace Maths.Regression.Spline.Bass;
 /// ladder's own seed, of which an untempered chain uses the first three and a ladder the first and the last. Its readout
 /// seed drives composition, so the trajectory depends neither on how often draws are retained nor on how many attempts
 /// the start took.</item>
+/// <item><b>Parallelism.</b> The chains run within the run's bound, and each ladder's rungs step at once as
+/// <see cref="BassRunOptions.RungWorkers"/> asks, within what the chains leave of it
+/// (<see cref="ParallelTempering{TState}.MaxDegreeOfParallelism"/>); the draws depend on neither.</item>
 /// <item><b>Lengths.</b> Burn-in runs <see cref="BassSampling.BurnIn"/> sweeps, a ladder's scan counting as one; each
 /// retained draw follows <see cref="BassSampling.Thin"/> more. An adaptive ladder re-spaces its rungs after rounds of 1,
 /// 2, 4, … sweeps while the burn-in lasts (Syed et al.'s Algorithm 4, as BARS's ladders do) and runs the rest on the last
@@ -45,6 +48,7 @@ internal sealed class BassEnsemble : IEnsembleModel<BassState>
     private readonly IReadOnlyList<BassMonitoredPoint> _points;
     private readonly BassPointInputs _pointInputs;
     private readonly TemperingSpec? _tempering;
+    private readonly int _rungWorkers;   // each ladder's rungs at once, within what the chains leave of the run's bound
     private long _sweeps;
 
     /// <summary>The client for <paramref name="model"/>'s run: <paramref name="plannedSweeps"/> over every chain, ending
@@ -57,6 +61,7 @@ internal sealed class BassEnsemble : IEnsembleModel<BassState>
         _plannedSweeps = plannedSweeps;
         _plannedDraws = plannedDraws;
         _tempering = model.Config.Sampling.Tempering;
+        _rungWorkers = options.RungWorkersFor(model.Config.Sampling.Chains);
         _pointInputs = new BassPointInputs(model);
         _points = _pointInputs.Points;
     }
@@ -113,7 +118,11 @@ internal sealed class BassEnsemble : IEnsembleModel<BassState>
         BassState start = sampler.DrawState(new Xoshiro256PlusPlus(seeds[0])).State;
         BassChain? chain = null;
         BassLadder? ladder = null;
-        if (_tempering is { } spec) ladder = new BassLadder(_model, spec, start.Terms, start.LogTau, seeds[3], start.StartLogRate);
+        if (_tempering is { } spec)
+        {
+            ladder = new BassLadder(_model, spec, start.Terms, start.LogTau, seeds[3], start.StartLogRate);
+            ladder.Tempering.MaxDegreeOfParallelism = _rungWorkers;
+        }
         else chain = new BassChain(_model, start.Terms, start.LogTau, new Xoshiro256PlusPlus(seeds[1]), new Xoshiro256PlusPlus(seeds[2]), logRate: start.StartLogRate);
         return new BassChainRun(this, chain, ladder, new Xoshiro256PlusPlus(readoutSeed), new BassTermTable(), new DrawStore<BassDraw>(),
                                 new BassStart(start.Terms, _model.Target.HeldTau ?? start.Tau, sampler.Attempts));
@@ -127,6 +136,7 @@ internal sealed class BassEnsemble : IEnsembleModel<BassState>
             throw new ArgumentException("The chain ran " + (_tempering is null ? "tempered" : "untempered") + ".", nameof(state));
         BassChain? chain = s.Chain is { } c ? BassChain.Restore(_model, c) : null;
         BassLadder? ladder = s.Ladder is { } l ? BassLadder.Restore(_model, _tempering!, l) : null;
+        if (ladder is not null) ladder.Tempering.MaxDegreeOfParallelism = _rungWorkers;
         (ulong c0, ulong c1, ulong c2, ulong c3) = s.Composition;
         var terms = new BassTermTable();
         foreach (BassTerm term in s.Terms) terms.Intern(term);

@@ -33,6 +33,10 @@ namespace Maths.Regression.Spline.Bass;
 /// <item><b>Streams.</b> One seed fans out, through the shared ladder's <see cref="SeedTree"/>, into each replica's move
 /// stream, the swap stream, the reference rung's stream, each replica's τ stream and the growth stream a resize's new
 /// replicas draw theirs from.</item>
+/// <item><b>Rungs at once.</b> The shared ladder steps its replicas <see cref="ParallelTempering{TState}.MaxDegreeOfParallelism"/>
+/// at a time. Each replica's moves, design, streams and blocks are its own, and what replicas share (the model, the start
+/// state, the noise's blocks, and the columns, spectra and pencils a hand-over passes) is read-only, so the draws are those
+/// of the replicas in order; the hand-over runs after every replica has stepped.</item>
 /// </list>
 /// Step, adapt and resize it through its own <see cref="Step"/>, <see cref="Adapt"/> and <see cref="Resize"/>: the shared
 /// ladder's, called directly, would skip the hand-over and the freeze. The model is shared read-only. Not thread-safe: one
