@@ -204,6 +204,10 @@ public sealed record BassResolved
                 ? "s², the response's mean square about the centre level, which the scaled σ² prior reads"
                 : "s², the reference's, frozen apart from the working response"));
         if (rate is not null) log.Add(new("Sigma2Rate", rate.ToString(), "the hierarchical prior's rate, its mean a·s²; the state carries it"));
+        if (config.Noise is { SkewDrawn: true, SkewRescale: null } noise)
+            log.Add(new("Noise.SkewRescale", noise.RescalesSkew ? "on" : "off", noise.SkewRescaleByDefault
+                ? "the skewed horseshoe's default (2026-11-08): the sweep without the move along β·v fails Geweke's test at b = 1, the move passes"
+                : "opt-in: on by default under the skewed horseshoe alone (2026-11-08)"));
         double coefficientConstant = reference?.CoefficientConstant ?? 1.0;
         if (coefficientConstant != 1.0) log.Add(new("CoefficientConstant", Text(coefficientConstant), "the reference's: the coefficient prior's covariance is σ²κ(τG)⁻¹"));
 

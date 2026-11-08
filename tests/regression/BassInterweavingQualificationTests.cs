@@ -42,7 +42,8 @@ public sealed class BassInterweavingQualificationTests(ITestOutputHelper output)
             ("t(4)", BassNoise.StudentT(4)),
             ("AL(0.9)", BassNoise.AsymmetricLaplace(0.9)),
             ("skewed GH", BassNoise.GeneralizedHyperbolic(new GigParameters(0.7, 1.2, 0.8), new BassNoisePrior(0.0, 1.0))),
-            ("skewed horseshoe", BassNoise.Horseshoe(new BassNoisePrior(0.0, 0.5))),
+            // Slice 7's reading, the sweep without the move along β·v, which the skewed horseshoe runs by default since.
+            ("skewed horseshoe", BassNoise.Horseshoe(new BassNoisePrior(0.0, 0.5)) with { SkewRescale = false }),
         };
         output.WriteLine($"Seed {masterSeed}. Work: the fit's thread cycles on one thread (MaxDegreeOfParallelism 1), indicative under load; 4 chains × 8,000 draws after 2,000, at most 6 additive terms.");
         foreach ((string name, BassNoise noise) in noises)

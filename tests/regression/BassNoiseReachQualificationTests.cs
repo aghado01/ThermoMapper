@@ -38,14 +38,11 @@ public sealed class BassNoiseReachQualificationTests(ITestOutputHelper output)
 
     private static BassData GewekeData(double[] y) => new([new ContinuousPredictor("x", GewekeX)], new ScalarResponse(y));
 
-    // A form ending "+rescale" turns the skew's rescaling move on (BassSkewRescaleBlock).
+    // A form ending "+rescale" runs the skew's rescaling move (BassSkewRescaleBlock); a plain form declares it off, whatever the law's default,
+    // so slice 5's and slice 7's readings, the sweep without it, stand.
     private static string Base(string form) => form.Split('+')[0];
 
-    private static BassNoise GewekeNoise(string form)
-    {
-        BassNoise noise = Law(Base(form));
-        return form == Base(form) ? noise : noise with { SkewRescale = true };
-    }
+    private static BassNoise GewekeNoise(string form) => Law(Base(form)) with { SkewRescale = form != Base(form) };
 
     private static BassNoise Law(string form) => form switch
     {

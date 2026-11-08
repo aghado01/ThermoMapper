@@ -225,17 +225,30 @@ public sealed record BassNoise
 
     /// <summary>
     /// Whether the latent slot adds the skew's rescaling move (<see cref="BassSkewRescaleBlock"/>): a Metropolis move of β and every vᵢ along
-    /// the ridge β·vᵢ holds, β → β/κ and v → κ·v, the weights refitted once. Off by default; left out of the serialized form when off.
-    /// It needs a drawn skew, which it moves.
+    /// the ridge β·vᵢ holds, β → β/κ and v → κ·v, the weights refitted once. Null takes the noise's default
+    /// (<see cref="SkewRescaleByDefault"/>), on under the skewed horseshoe alone; true or false declares it. Left out of the serialized form
+    /// when null, so a config that declares nothing serializes and fingerprints as it did. True needs a drawn skew, which it moves.
     /// </summary>
-    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingDefault)]
-    public bool SkewRescale
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public bool? SkewRescale
     {
         get;
-        init => field = value && !SkewDrawn
+        init => field = value == true && !SkewDrawn
             ? throw new ArgumentException("The skew's rescaling moves β, so it needs a drawn skew.", nameof(SkewRescale))
             : value;
     }
+
+    /// <summary>
+    /// The move's default: on under the skewed horseshoe, v ~ GBP(1, ½, ½) with β drawn, off under every other law (the user's decision,
+    /// 2026-11-08). There the sweep without it fails Geweke's test at b = 1 and the move passes; under the generalized hyperbolic, the
+    /// Normal-Wald and the skewed t the sweep passes without it, so its 1.2 to 1.6 times a run's time buys nothing.
+    /// </summary>
+    [JsonIgnore]
+    public bool SkewRescaleByDefault => Kind == BassNoiseKind.GeneralizedBetaPrime && BetaPrimePrior == GbpParameters.Horseshoe && SkewDrawn;
+
+    /// <summary>Whether the sweep runs the move: <see cref="SkewRescale"/> where declared, the noise's default where not.</summary>
+    [JsonIgnore]
+    public bool RescalesSkew => SkewRescale ?? SkewRescaleByDefault;
 
     /// <summary>The asymmetric Laplace's q; null for a kind that takes none.</summary>
     [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
@@ -408,7 +421,7 @@ public sealed class VarianceMeanMixture : IBassObservationModel, IBassNoiseLaw
         Skewed = noise.Skewed;
         _held = sigma2?.IsHeld == true ? sigma2.Value : null;
         _coefficients = [new BassCoefficientsBlock()];
-        _latent = noise.SkewRescale ? [new BassLatentScaleBlock(this), new BassSkewRescaleBlock(this)] : [new BassLatentScaleBlock(this)];
+        _latent = noise.RescalesSkew ? [new BassLatentScaleBlock(this), new BassSkewRescaleBlock(this)] : [new BassLatentScaleBlock(this)];
         var scale = new List<IBlock<ReversibleJumpChain<BassState>>>();
         if (Skewed && _held is null) scale.Add(new BassScaleBlock(this));
         if (noise.SkewDrawn || noise.GammaPrior is { IsHeld: false }) scale.Add(new BassNoiseShapeBlock(this));

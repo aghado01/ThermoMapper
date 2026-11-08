@@ -56,7 +56,8 @@ public sealed class BassGeneralizedBetaPrimeTests(ITestOutputHelper output)
         Assert.NotNull(model.Target.Sigma2Rate);
         var start = new BassPriorSampler(model).DrawState(new Xoshiro256PlusPlus(1)).State;
         var chain = new BassChain(model, start.Terms, start.LogTau, new Xoshiro256PlusPlus(2), new Xoshiro256PlusPlus(3));
-        string[] blocks = skewDrawn ? ["moves", "tau", "coefficients", "latent scales", "scale", "noise shape", "sigma2 rate"]
+        // The skewed horseshoe runs the move along β·v by default (2026-11-08).
+        string[] blocks = skewDrawn ? ["moves", "tau", "coefficients", "latent scales", "skew rescale", "scale", "noise shape", "sigma2 rate"]
                                     : ["moves", "tau", "coefficients", "latent scales", "sigma2 rate"];
         Assert.Equal(blocks, chain.Scan.BlockStats().Select(s => s.Key));
         double[] previous = chain.Current.Fit.Working!.Latents!.ValueArray;

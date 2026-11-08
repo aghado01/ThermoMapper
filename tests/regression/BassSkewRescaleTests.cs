@@ -21,8 +21,9 @@ namespace Maths.Regression.Tests;
 /// <item><b>Its statement on a frozen state:</b> from one state every move stays on the orbit (β₀·e⁻ᵗ, eᵗ·v₀), so its stationary law there is
 /// the joint along the orbit with the map's Jacobian, ∝ π(Tₜ(x₀))·e^((N−1)t), read on a grid by the engine's own target; the move's chain
 /// meets its moments. Its acceptance from x to x′ and back cancel.</item>
-/// <item><b>The switch:</b> it needs a drawn skew and stays out of the serialized form when off.</item>
-/// <item><b>The run:</b> a tempered fit with it resumes bit for bit.</item>
+/// <item><b>The switch:</b> null takes the noise's default, on under the skewed horseshoe alone (the user's decision, 2026-11-08), logged with
+/// its reason; true or false declares it; true needs a drawn skew. It stays out of the serialized form when null.</item>
+/// <item><b>The run:</b> a tempered fit under the default resumes bit for bit.</item>
 /// </list>
 /// The joint law with the whole sweep, the measurement and the cost are behind <c>BASS_QUALIFICATION</c>.
 /// </summary>
@@ -38,22 +39,88 @@ public sealed class BassSkewRescaleTests(ITestOutputHelper output)
     };
 
     [Fact]
-    public void TheSwitch_NeedsADrawnSkew_AndIsSerializedOnlyWhenOn()
+    public void TheSwitch_IsSerializedOnlyWhenDeclared_AndTrueNeedsADrawnSkew()
     {
-        BassConfig plain = Config(SkewedHorseshoe), moving = Config(SkewedHorseshoe with { SkewRescale = true });
+        BassConfig plain = Config(SkewedHorseshoe), on = Config(SkewedHorseshoe with { SkewRescale = true }), off = Config(SkewedHorseshoe with { SkewRescale = false });
+        // A config that declares nothing serializes, and so fingerprints, as it did before the default.
         Assert.DoesNotContain("SkewRescale", plain.ToJson());
-        Assert.Contains("\"SkewRescale\":true", moving.ToJson());
-        Assert.Equal(moving, BassConfig.FromJson(moving.ToJson()));
+        Assert.Contains("\"SkewRescale\":true", on.ToJson());
+        Assert.Contains("\"SkewRescale\":false", off.ToJson());
+        foreach (BassConfig config in new[] { plain, on, off }) Assert.Equal(config, BassConfig.FromJson(config.ToJson()));
+        Assert.Null(BassConfig.FromJson(plain.ToJson()).Noise!.SkewRescale);
         BassData data = BassQuantileTests.Data();
-        Assert.NotEqual(Bass.Fingerprint(plain, data), Bass.Fingerprint(moving, data));
+        Assert.Equal(3, new[] { plain, on, off }.Select(config => Bass.Fingerprint(config, data)).Distinct().Count());
         Assert.Throws<ArgumentException>(() => BassNoise.StudentT(4) with { SkewRescale = true });
         Assert.Throws<ArgumentException>(() => BassNoise.AsymmetricLaplace(0.9) with { SkewRescale = true });
         Assert.Throws<ArgumentException>(() => BassNoise.Horseshoe(BassNoisePrior.Held(0.5)) with { SkewRescale = true });
 
-        BassFit fit = Bass.Fit(moving, data);
+        // The default runs the move.
+        BassFit fit = Bass.Fit(plain, data);
         MoveStat move = fit.Diagnostics.Chains[0].Blocks!.Single(k => k.Key == "skew rescale");
         output.WriteLine($"skew rescale: {move.Accepted} of {move.Attempts} accepted");
         Assert.True(move.Attempts > 0 && move.Accepted > 0);
+    }
+
+    // Every law with its skew drawn, held or absent.
+    private static BassNoise Law(string name) => name switch
+    {
+        "skewed horseshoe" => SkewedHorseshoe,
+        "horseshoe" => BassNoise.Horseshoe(),
+        "horseshoe, skew held" => BassNoise.Horseshoe(BassNoisePrior.Held(0.5)),
+        "skewed Strawderman-Berger" => BassNoise.StrawdermanBerger(new BassNoisePrior(0.0, 0.5)),
+        "skewed GH" => SkewedGh,
+        "skewed Normal-Wald" => BassNoise.NormalWald(skew: new BassNoisePrior(0.0, 1.0)),
+        "skewed t" => BassNoise.SkewedT(4, new BassNoisePrior(0.0, 1.0)),
+        "t" => BassNoise.StudentT(4),
+        _ => BassNoise.AsymmetricLaplace(0.9),
+    };
+
+    [Theory]
+    [InlineData("skewed horseshoe", true)]
+    [InlineData("horseshoe", false)]
+    [InlineData("horseshoe, skew held", false)]
+    [InlineData("skewed Strawderman-Berger", false)]
+    [InlineData("skewed GH", false)]
+    [InlineData("skewed Normal-Wald", false)]
+    [InlineData("skewed t", false)]
+    [InlineData("t", false)]
+    [InlineData("asymmetric Laplace", false)]
+    public void TheDefault_IsOnUnderTheSkewedHorseshoeAlone_LoggedWithItsReason(string law, bool expected)
+    {
+        BassNoise noise = Law(law);
+        BassData data = BassQuantileTests.Data();
+        bool Runs(BassModel model) => BassSweepSlots.Blocks(model).Any(block => block.Name == "skew rescale");
+        BassAutoPick? Pick(BassModel model) => model.Resolved.AutoPicks.SingleOrDefault(pick => pick.Setting == "Noise.SkewRescale");
+
+        Assert.Null(noise.SkewRescale);
+        Assert.Equal(expected, noise.SkewRescaleByDefault);
+        Assert.Equal(expected, noise.RescalesSkew);
+        BassModel resolved = BassModel.Create(Config(noise), data);
+        Assert.Equal(expected, Runs(resolved));
+        // Where the move can run and the config leaves it to the default, the fit's log says what it took and why.
+        BassAutoPick? logged = Pick(resolved);
+        if (noise.SkewDrawn)
+        {
+            Assert.NotNull(logged);
+            Assert.Equal(expected ? "on" : "off", logged.Value);
+            output.WriteLine($"{law}: {logged.Setting} {logged.Value}, {logged.Reason}");
+        }
+        else Assert.Null(logged);
+
+        // A declaration overrides the default either way and is no auto-pick; true needs a drawn skew, false is always taken.
+        foreach (bool declared in new[] { true, false })
+        {
+            if (declared && !noise.SkewDrawn)
+            {
+                Assert.Throws<ArgumentException>(() => noise with { SkewRescale = true });
+                continue;
+            }
+            BassNoise overridden = noise with { SkewRescale = declared };
+            Assert.Equal(declared, overridden.RescalesSkew);
+            BassModel model = BassModel.Create(Config(overridden), data);
+            Assert.Equal(declared, Runs(model));
+            Assert.Null(Pick(model));
+        }
     }
 
     public static IEnumerable<object[]> Laws() => [["horseshoe", 1.0], ["gh", 1.0], ["horseshoe", 0.5], ["gh", 0.5]];
@@ -142,11 +209,13 @@ public sealed class BassSkewRescaleTests(ITestOutputHelper output)
         Assert.Equal(0.0, forward.LogAcceptance + back.LogAcceptance, 8);
     }
 
+    // A checkpoint is the run's live restart state, never written out, so it resumes under the build and config that took it: the default
+    // resolves from the config, which the fingerprint holds, as it did when the checkpoint was taken.
     [Fact]
-    public void ATemperedFitWithTheMove_ResumesBitForBit()
+    public void ATemperedFitUnderTheDefault_ResumesBitForBit()
     {
         BassData data = BassQuantileTests.Data();
-        BassConfig whole = Config(SkewedHorseshoe with { SkewRescale = true }) with
+        BassConfig whole = Config(SkewedHorseshoe) with
         {
             Sampling = new BassSampling { Chains = 2, MasterSeed = 31, BurnIn = 100, Samples = 120, Thin = 2,
                                           Tempering = new TemperingSpec { Levels = 4, HotEnd = 0.1, ReferenceRung = true }, ReportEvidence = true },
@@ -156,6 +225,7 @@ public sealed class BassSkewRescaleTests(ITestOutputHelper output)
         BassFit first = Bass.Fit(half, data, new BassRunOptions { Checkpoint = true });
         BassFit resumed = Bass.Resume(first.Checkpoint!, half, data);
         BassRunTests.AssertSameFit(full, resumed);
+        Assert.Contains(resumed.Resolved.AutoPicks, pick => pick is { Setting: "Noise.SkewRescale", Value: "on" });
         for (int c = 0; c < full.Draws.Count; c++)
             for (int d = 0; d < full.Draws[c].Count; d++)
             {
