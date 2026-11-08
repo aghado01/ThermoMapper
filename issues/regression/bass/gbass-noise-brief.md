@@ -157,6 +157,30 @@ Under "Reports" below, newest first, per slice: what landed by commit; the gates
 
 Newest first.
 
+### The move along β·v, the skewed horseshoe's default (chip, 2026-11-08)
+
+**Landed** in `bf21578` (the switch, its log and the tests) and the commit that carries this report (the page, `BayesianRegression.md`'s GBMARS row, the ledger's anchors). The user approved the move as the default under the skewed horseshoe only ("Default there", 2026-11-08, through the main session); it stays opt-in under every other skewed law. The user's reasons: under the skewed horseshoe the sweep without it fails Geweke's test at b = 1 (4.13 at four times the size) and the move passes (1.43), and doing the job outweighs a run's 1.2 to 1.6 times; under the generalized hyperbolic, the Normal-Wald and the skewed t the sweep passes without it, so the cost buys nothing. b = ½ stays this noise's limit on hot rungs. This replaces the previous report's "stays opt-in" for the skewed horseshoe.
+
+| Piece | Where |
+|---|---|
+| The switch | `BassNoise.SkewRescale`, now `bool?`: null takes the noise's default, true or false declares it, true under a held skew refused; null left out of the serialized form |
+| The default | `BassNoise.SkewRescaleByDefault`, 1.99(1, ½, ½) with β drawn; `RescalesSkew` resolves the two, and the sweep reads it |
+| The log | `BassResolved.AutoPicks` gains `Noise.SkewRescale`, on or off with its reason, wherever a drawn skew leaves it to the default |
+
+**What changes, and what does not.**
+- *Serialized forms and fingerprints:* a config written before serializes and fingerprints as it did, since null is left out and true is written as before. A skewed-horseshoe config that declares nothing now runs the move, so its draws change under the same fingerprint. Declaring `false` keeps the sweep without it, under a fingerprint of its own.
+- *Resume: neither a refusal nor a restore of the old setting, as nothing can reach either.* A BASS checkpoint is the run's live restart state: `EnsembleCheckpoint` holds `BassRun`'s private chain state, live objects, with no serializer, and nothing outside `src/maths` runs BASS. So no checkpoint taken before this change reaches a build with it. Within a build the default resolves from the config, which the fingerprint holds, so a resume runs the sweep its checkpoint ran; the test resumes a tempered fit under the default bit for bit. A checkpoint ever written out would carry the resolved setting.
+- *Pinned hashes:* none moved. The bit-identity pins are Gaussian BASS's, and nothing was re-baselined.
+- *Harnesses whose readings are the sweep without the move* declare it off, so those readings stand: the reach Geweke's plain forms (slices 5 and 7) and interweaving's measurement (slice 7). The generalized beta prime's sweep test lists the move among the skewed horseshoe's blocks.
+- *The generalized beta prime's Geweke gate* under the skewed horseshoe (seed 20261106) now runs the default sweep: worst |z| 1.99.
+
+**Gates.**
+- *Its unit tests:* the default resolves on under the skewed horseshoe and off under eight other laws: the horseshoe symmetric and with its skew held, and the skewed Strawderman–Berger, generalized hyperbolic, Normal-Wald and t, the t and the asymmetric Laplace. A declaration overrides it either way, true needs a drawn skew, and the log holds the pick exactly where a drawn skew leaves it to the default. The switch's three forms serialize apart and fingerprint apart. A tempered fit under the default resumes bit for bit with the move running.
+- *Per commit,* the selected classes and the pinned tier from a snapshot: 1,627 of 1,627.
+- *At the slice's end,* the whole assembly: 2,329 of 2,329.
+
+**Follow-ups, with the decision each would change.** None new.
+
 ### The move along β·v, corrected: the coefficients drawn after an accepted move (chip, 2026-11-08)
 
 **Landed** in `1a8459c` (the move, its tests and the gates) and the commit that carries this report (the page's section, the ledger's anchors). The main session's review of `3be066e` found that after an accepted move the blocks that follow read coefficients drawn before it. It asked for a fix, choosing between two exact forms by mixing per second, then a rerun of the skewed horseshoe's Geweke rows and the effective sizes, and a correction of the page and this report. The previous report's readings with the move come from the version with the defect; these replace them. [The page's section](../../../docs/Maths/VarianceMeanMixtures.md#the-skews-rescaling-a-move-along-βv-slices-5s-and-7s-follow-up) holds the forms, the tables and the decisions.
