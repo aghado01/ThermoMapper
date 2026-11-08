@@ -36,7 +36,7 @@ Extensions beyond the port's completion contract, collected from the [full port 
 | Tree ensembles, with BCF's multiplier (E31) | Chipman, George and McCulloch 2010; Hahn, Murray and Carvalho 2020; [the notes](../perplexity-bart-etc.md) | Samplers: `BlockScan`, `IRjMove`, the target's separable case. A leaf contract beside `IObservationModel`. Readouts: declared smoothness | Candidate |
 | Additive models with a GP component (E32) | [The notes](../perplexity-bart-etc.md) | BGP: `y` per fit, σ² from outside with s² free, a declared mean. Fitting: the marginal given σ² | Candidate |
 | Regression-family integration (E33) | [The notes](../perplexity-bart-etc.md) | Every family: an inventory, declared capabilities, four verdicts | Candidate |
-| Several outputs on one basis, with Σ integrated (E34) | Brown, Vannucci and Fearn 1998; Huang and Wand 2013; [the lineage review](lineage-review.md) | Fitting: the collapsed core with a K × K quadratic form, the latent record by row. Samplers: nothing new | Candidate; requested 2026-11-08 |
+| Several outputs on one basis, with Σ integrated (E34) | Brown, Vannucci and Fearn 1998; Huang and Wand 2013; [the lineage review](lineage-review.md) | Fitting: the collapsed core with a K × K quadratic form, the latent record by row. Samplers: nothing new | After E8 (2026-11-08) |
 | Direct-functional BASS for families of SPC sweeps | Derivations review §7, item 9 | The completed port | Application |
 
 ## Upgrades to existing code
@@ -433,7 +433,7 @@ The user asked for this on 2026-11-08, after the Kimi review raised it under ABM
     - the marginal against an integral over Σ: by quadrature at K = 2, by Monte Carlo at K = 3;
     - the law by enumeration on small structure spaces, and Geweke;
     - recovery of a known Σ and of surfaces from outside the model.
-- **Not scheduled.** Its place in the order is the user's call.
+- **Ordered after E8** by the user on 2026-11-08 ([the build order](lineage-review.md#build-order)).
 
 ## Multi-fidelity emulation through the offset
 
