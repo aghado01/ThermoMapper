@@ -7,7 +7,7 @@ namespace Maths.Regression.Spline.Bass.Presentation;
 
 /// <summary>
 /// The data's shape as a fit holds it (R's <c>print</c>; P12, P13): the cases and output locations, each predictor's
-/// training range or levels (<see cref="RangeScale"/>, <see cref="TrainingLevels"/>), and a direct functional fit's output
+/// training range, with its declared domain, or levels (<see cref="RangeScale"/>, <see cref="TrainingLevels"/>), and a direct functional fit's output
 /// variables with their ranges; none for a scalar or basis fit.
 /// </summary>
 public sealed record BassDataShape(int Cases, int Locations, IReadOnlyList<PredictorScale> Predictors, IReadOnlyList<RangeScale> OutputVariables)

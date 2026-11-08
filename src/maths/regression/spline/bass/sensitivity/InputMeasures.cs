@@ -16,17 +16,18 @@ public abstract record InputMeasure
     private protected InputMeasure() { }
 }
 
-/// <summary>U(<paramref name="Lower"/>, <paramref name="Upper"/>), each end the training range's when omitted (R's default).</summary>
+/// <summary>U(<paramref name="Lower"/>, <paramref name="Upper"/>), each end the input box's when omitted: the declared domain's,
+/// else the training range's (R's default).</summary>
 public sealed record UniformMeasure(double? Lower = null, double? Upper = null) : InputMeasure;
 
 /// <summary>
 /// A finite mixture of truncated normal and Student t components on [<see cref="Lower"/>, <see cref="Upper"/>], each end the
-/// training range's when omitted. <see cref="Weighting"/> says what the weights are: by default the weights before
+/// input box's when omitted. <see cref="Weighting"/> says what the weights are: by default the weights before
 /// truncation, the whole mixture renormalized on the interval (R's convention), or the components' shares on it.
 /// </summary>
 public sealed record MixtureMeasure(IReadOnlyList<MixtureComponent> Components) : InputMeasure
 {
-    /// <summary>The truncation's lower end; the training minimum when null.</summary>
+    /// <summary>The truncation's lower end; the box's when null.</summary>
     public double? Lower { get; init; }
 
     /// <summary>The truncation's upper end; the training maximum when null.</summary>
@@ -84,10 +85,12 @@ public sealed record CategoricalMeasure(IReadOnlyDictionary<string, double>? Pro
 /// <param name="Measure">The measure's interval moments.</param>
 /// <param name="Lower">The support's lower end.</param>
 /// <param name="Upper">The support's upper end.</param>
-public sealed record ContinuousMeasure(IIntervalMoments Measure, double Lower, double Upper)
+/// <param name="TrainingLower">The training range's lower end in these units: 0, or above it under a declared domain.</param>
+/// <param name="TrainingUpper">The training range's upper end in these units: 1, or below it under a declared domain.</param>
+public sealed record ContinuousMeasure(IIntervalMoments Measure, double Lower, double Upper, double TrainingLower = 0.0, double TrainingUpper = 1.0)
 {
-    /// <summary>Whether the support reaches past the training range [0, 1], where the hinges extrapolate.</summary>
-    public bool Extrapolates => Lower < 0.0 || Upper > 1.0;
+    /// <summary>Whether the support reaches past the training range, where the hinges extrapolate.</summary>
+    public bool Extrapolates => Lower < TrainingLower || Upper > TrainingUpper;
 }
 
 /// <summary>
@@ -150,7 +153,7 @@ public sealed class ProductMeasure
     /// The product of <paramref name="measures"/> over the predictors and <paramref name="outputMeasures"/> over the
     /// <paramref name="integratedOutputs"/> (none when null), each keyed by name and declared in the variable's own units,
     /// carried into the units of <paramref name="transform"/>, which <paramref name="inputs"/> were prepared with. A variable
-    /// left out takes the uniform measure on its training range, or the uniform level probabilities. A name that is not a
+    /// left out takes the uniform measure on its box (its declared domain, else its training range), or the uniform level probabilities. A name that is not a
     /// variable's, a measure on an output variable not integrated, or a measure of the wrong kind, is refused.
     /// </summary>
     public static ProductMeasure Resolve(BassInputTransform transform, BassInputs inputs,
@@ -217,11 +220,13 @@ public sealed class ProductMeasure
         if (unknown.Length > 0) throw new ArgumentException($"No {kind} is named {string.Join(", ", unknown.Select(n => $"'{n}'"))}.", parameter);
     }
 
-    // The declared measure in transformed units: (v − min)/(max − min), scales divided by the range.
+    // The declared measure in transformed units: (v − min)/(max − min), scales divided by the range; the training range's ends in
+    // them too, 0 and 1 exactly unless a domain is declared.
     private static ContinuousMeasure ResolveContinuous(string name, InputMeasure declared, RangeScale scale, ReadOnlySpan<double> scaledTraining)
     {
         double range = scale.Max - scale.Min;
         double At(double raw) => (raw - scale.Min) / range;
+        double trainingLower = At(scale.TrainingMin), trainingUpper = At(scale.TrainingMax);
         switch (declared)
         {
             case UniformMeasure u:
@@ -229,7 +234,7 @@ public sealed class ProductMeasure
                 double lo = u.Lower is { } l ? At(l) : 0.0, hi = u.Upper is { } h ? At(h) : 1.0;
                 if (!double.IsFinite(lo) || !double.IsFinite(hi) || !(hi > lo))
                     throw new ArgumentException($"The uniform measure of '{name}' needs finite ends, lower below upper.");
-                return new ContinuousMeasure(Uniform.On(lo, hi), lo, hi);
+                return new ContinuousMeasure(Uniform.On(lo, hi), lo, hi, trainingLower, trainingUpper);
             }
             case MixtureMeasure m:
             {
@@ -243,10 +248,10 @@ public sealed class ProductMeasure
                     if (m.Weighting == MixtureWeighting.BeforeTruncation)
                     {
                         IContinuousDistribution[] parts = [.. m.Components.Select(c => Component(c, scale.Min, range))];
-                        return new ContinuousMeasure(Truncated.Of(Mixture.Of(parts, weights), lo, hi), lo, hi);
+                        return new ContinuousMeasure(Truncated.Of(Mixture.Of(parts, weights), lo, hi), lo, hi, trainingLower, trainingUpper);
                     }
                     IContinuousDistribution[] truncated = [.. m.Components.Select(c => TruncatedComponent(c, scale.Min, range, lo, hi))];
-                    return new ContinuousMeasure(Mixture.Of(truncated, weights), lo, hi);
+                    return new ContinuousMeasure(Mixture.Of(truncated, weights), lo, hi, trainingLower, trainingUpper);
                 }
                 catch (ArgumentException e)
                 {
@@ -256,7 +261,7 @@ public sealed class ProductMeasure
             case EmpiricalMeasure:
             {
                 Empirical empirical = Empirical.Of(scaledTraining);
-                return new ContinuousMeasure(empirical, empirical.Lower, empirical.Upper);
+                return new ContinuousMeasure(empirical, empirical.Lower, empirical.Upper, trainingLower, trainingUpper);
             }
             default:
                 throw new ArgumentException($"'{name}' is continuous; its measure is uniform, a mixture or empirical, not {declared?.GetType().Name ?? "null"}.");

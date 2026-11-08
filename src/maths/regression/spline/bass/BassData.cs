@@ -61,15 +61,17 @@ public abstract record BassPredictor
 }
 
 /// <summary>
-/// A continuous predictor, or an output variable of a <see cref="FunctionalResponse"/>. Refused: no values, a
-/// non-finite value, and a constant column, which has no knot (D01's knots are its distinct values).
+/// A continuous predictor, or an output variable of a <see cref="FunctionalResponse"/>, with its domain when declared
+/// (<see cref="InputDomain"/>). Refused: no values, a non-finite value, a constant column, which has no knot (D01's knots are
+/// its distinct values), and a value outside the declared domain.
 /// </summary>
 public sealed record ContinuousPredictor : BassPredictor
 {
     private readonly double[] _values;
 
-    /// <summary>The column <paramref name="values"/>, copied.</summary>
-    public ContinuousPredictor(string name, double[] values) : base(name)
+    /// <summary>The column <paramref name="values"/>, copied, and its declared <paramref name="domain"/>: null, the default,
+    /// scales the column by its training range.</summary>
+    public ContinuousPredictor(string name, double[] values, InputDomain? domain = null) : base(name)
     {
         ArgumentNullException.ThrowIfNull(values);
         if (values.Length == 0) throw new ArgumentException($"Predictor '{name}' has no values.", nameof(values));
@@ -82,13 +84,49 @@ public sealed record ContinuousPredictor : BassPredictor
             max = Math.Max(max, v);
         }
         if (!(max > min)) throw new ArgumentException($"Predictor '{name}' is constant, so it has no knot.", nameof(values));
+        if (domain is not null && !(domain.Contains(min) && domain.Contains(max)))
+            throw new ArgumentException($"Predictor '{name}' takes values from {min:R} to {max:R}, outside its declared domain {domain}.", nameof(values));
+        Domain = domain;
     }
 
     /// <summary>The values, in case order.</summary>
     public ReadOnlyMemory<double> Values => _values;
 
+    /// <summary>The declared domain the fit scales the column by, or null for its training range.</summary>
+    public InputDomain? Domain { get; }
+
     /// <inheritdoc/>
     public override int Length => _values.Length;
+}
+
+/// <summary>
+/// A continuous input's declared domain [<see cref="Lower"/>, <see cref="Upper"/>]: the box a fit scales it by onto [0, 1], in
+/// place of its training range (<see cref="RangeScale"/>). A fit then reads the input in the box the user knows, not the one the
+/// sample spans: a Legendre basis is orthonormal on it, and a sensitivity measure left undeclared is uniform over it (E19's sixth
+/// decision). Refused: an end that is not finite, and a lower end not below the upper.
+/// </summary>
+public sealed record InputDomain
+{
+    /// <summary>The domain [<paramref name="lower"/>, <paramref name="upper"/>].</summary>
+    public InputDomain(double lower, double upper)
+    {
+        if (!double.IsFinite(lower) || !double.IsFinite(upper) || !(upper > lower))
+            throw new ArgumentException($"A domain needs finite ends, the lower below the upper; [{lower:R}, {upper:R}] is not one.", nameof(upper));
+        Lower = lower;
+        Upper = upper;
+    }
+
+    /// <summary>The lower end.</summary>
+    public double Lower { get; }
+
+    /// <summary>The upper end.</summary>
+    public double Upper { get; }
+
+    /// <summary>Whether <paramref name="x"/> lies in the domain, ends included.</summary>
+    public bool Contains(double x) => x >= Lower && x <= Upper;
+
+    /// <inheritdoc/>
+    public override string ToString() => $"[{Lower:R}, {Upper:R}]";
 }
 
 /// <summary>

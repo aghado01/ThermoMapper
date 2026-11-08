@@ -6,12 +6,13 @@ namespace Maths.Regression.Spline.Bass;
 /// <summary>
 /// The input transform, fitted once from the training data and kept in the fit, so prediction reads inputs exactly as
 /// fitting did. Continuous predictors and output variables take R's range scaling to [0, 1], stored as each column's
-/// (min, max); knots are the scaled distinct values (D01). A categorical predictor keeps its training levels, by name:
-/// the declared levels some case takes, in the declared order.
-/// <para>At prediction a continuous value outside the training range scales past [0, 1], where the hinges extrapolate
-/// linearly, and is flagged per case (<see cref="RangeScale.Contains"/>). A level outside the training levels has no
-/// index (<see cref="TrainingLevels.IndexOf"/>); the prediction call says whether it is refused, the default, or placed
-/// outside every subset.</para>
+/// (min, max): its declared domain's ends when it declares one (<see cref="InputDomain"/>), else its training range's; knots
+/// are the scaled distinct values (D01). A categorical predictor keeps its training levels, by name: the declared levels some
+/// case takes, in the declared order.
+/// <para>At prediction a continuous value outside the training range lies past the last knot, where the hinges extrapolate
+/// linearly, and is flagged per case (<see cref="RangeScale.Contains"/>); without a declared domain it scales past [0, 1].
+/// A level outside the training levels has no index (<see cref="TrainingLevels.IndexOf"/>); the prediction call says
+/// whether it is refused, the default, or placed outside every subset.</para>
 /// </summary>
 public sealed record BassInputTransform
 {
@@ -55,16 +56,25 @@ public abstract record PredictorScale
     public string Name { get; }
 }
 
-/// <summary>R's range scaling, <c>(x − min)/(max − min)</c>: the training range onto [0, 1], ends exact.</summary>
+/// <summary>
+/// R's range scaling, <c>(x − min)/(max − min)</c>: the input's box onto [0, 1], ends exact. The box is the declared domain
+/// when there is one (<see cref="InputDomain"/>), else the training range, which the scale keeps either way for its flags.
+/// </summary>
 public sealed record RangeScale : PredictorScale
 {
-    /// <summary>The range [<paramref name="min"/>, <paramref name="max"/>], with min below max.</summary>
-    public RangeScale(string name, double min, double max) : base(name)
+    /// <summary>The training range [<paramref name="min"/>, <paramref name="max"/>], with min below max, and the declared
+    /// <paramref name="domain"/> that holds it, or null to scale by the range itself.</summary>
+    public RangeScale(string name, double min, double max, InputDomain? domain = null) : base(name)
     {
         if (!double.IsFinite(min) || !double.IsFinite(max) || !(max > min))
             throw new ArgumentException($"The range of '{name}' must be finite with min below max.", nameof(max));
-        Min = min;
-        Max = max;
+        if (domain is not null && !(domain.Contains(min) && domain.Contains(max)))
+            throw new ArgumentException($"The training range of '{name}' leaves its declared domain {domain}.", nameof(domain));
+        TrainingMin = min;
+        TrainingMax = max;
+        Domain = domain;
+        Min = domain?.Lower ?? min;
+        Max = domain?.Upper ?? max;
     }
 
     internal static RangeScale Of(ContinuousPredictor column)
@@ -75,20 +85,29 @@ public sealed record RangeScale : PredictorScale
             min = Math.Min(min, v);
             max = Math.Max(max, v);
         }
-        return new RangeScale(column.Name, min, max);
+        return new RangeScale(column.Name, min, max, column.Domain);
     }
 
-    /// <summary>The training minimum.</summary>
+    /// <summary>The box's lower end, which scales to 0: the declared domain's, or the training minimum.</summary>
     public double Min { get; }
 
-    /// <summary>The training maximum.</summary>
+    /// <summary>The box's upper end, which scales to 1: the declared domain's, or the training maximum.</summary>
     public double Max { get; }
+
+    /// <summary>The training minimum.</summary>
+    public double TrainingMin { get; }
+
+    /// <summary>The training maximum.</summary>
+    public double TrainingMax { get; }
+
+    /// <summary>The declared domain the box is, or null when the box is the training range.</summary>
+    public InputDomain? Domain { get; }
 
     /// <summary>The scaled value: 0 at the minimum and 1 at the maximum, exactly, and linear beyond them.</summary>
     public double Scale(double x) => (x - Min) / (Max - Min);
 
     /// <summary>Whether <paramref name="x"/> lies in the training range, where no extrapolation is needed.</summary>
-    public bool Contains(double x) => x >= Min && x <= Max;
+    public bool Contains(double x) => x >= TrainingMin && x <= TrainingMax;
 }
 
 /// <summary>A categorical predictor's training levels: the declared levels some training case takes.</summary>

@@ -18,15 +18,15 @@ namespace Maths.Oracle.Tests;
 /// h₂ = 40/n, σ² Jeffreys), the engine's posterior over the 466 structures, from its target, against
 /// <c>khaos_exactlaw_oracle.R</c>'s, computed in R from <c>khaos</c>'s own <c>make_basis</c> and the ridge's closed form: P(M) and each
 /// term's inclusion.</item>
-/// <item><b>The readouts.</b> On Ishigami's function with one inert input (slice 0's readout fixture, its inputs rescaled to [0, 1]
-/// exactly, the box the engine's range scaling reads, so both read the same values), the engine's fit against
+/// <item><b>The readouts.</b> On Ishigami's function with one inert input (slice 0's readout fixture), the engine's fit against
 /// <c>adaptive_khaos_ridge</c> with slice 0's corrections (<c>corrected=1</c>): M, σ², the surface on a grid and the total Sobol
-/// indices. Two chains are not one, so the comparison is of posterior summaries within Monte Carlo reach, each difference stated.
-/// The rescaling moves the posterior itself: on the raw inputs, in [0.008, 0.992] or so, khaos reads M 10.2 and σ² 0.23; on these,
-/// khaos and the engine alike read M about 6.2 and σ² about 0.95 against the noise's 0.25, eight engine chains of 35,000 steps
-/// agreeing. A sparse Legendre posterior is not invariant to an affine map of the inputs (likely Ishigami's exact symmetry about ½,
-/// which keeps its raw expansion sparse); the slice 1 report carries it.</item>
+/// indices. Two chains are not one, so the comparison is of posterior summaries within Monte Carlo reach, each difference stated.</item>
 /// </list>
+/// Each runs twice: on the raw inputs, in (0, 1), with the domain [0, 1] declared (<see cref="InputDomain"/>), so the engine reads
+/// the values <c>khaos</c> reads; and on the inputs rescaled to [0, 1] exactly, the box the engine's range scaling reads without a
+/// domain. The two are different posteriors: on Ishigami's raw inputs khaos reads M about 10.2 and σ² about 0.23 against the noise's
+/// 0.25, and on the rescaled ones about 6.2 and 0.95. A sparse Legendre posterior is not invariant to an affine map of the inputs
+/// (likely Ishigami's exact symmetry about ½, which keeps its raw expansion sparse).
 /// </summary>
 public sealed class KhaosEngineFitParityTests(ITestOutputHelper output)
 {
@@ -42,9 +42,14 @@ public sealed class KhaosEngineFitParityTests(ITestOutputHelper output)
         return copy;
     }
 
-    private static BassData ToData(double[][] rows, int inputs)
-        => new([.. Enumerable.Range(0, inputs).Select(j => new ContinuousPredictor($"x{j}", [.. rows.Select(r => r[j])]))],
+    // The rows as data, each input declaring `domain` (null: none).
+    private static BassData ToData(double[][] rows, int inputs, InputDomain? domain = null)
+        => new([.. Enumerable.Range(0, inputs).Select(j => new ContinuousPredictor($"x{j}", [.. rows.Select(r => r[j])], domain))],
                new ScalarResponse([.. rows.Select(r => r[inputs])]));
+
+    // Raw rows with [0, 1] declared, or the rows rescaled onto it.
+    private static (double[][] Rows, InputDomain? Domain) Case(double[][] raw, int inputs, bool declared)
+        => declared ? (raw, new InputDomain(0.0, 1.0)) : (Rescaled(raw, inputs), null);
 
     private static BassConfig Config(int maxDegree, int maxOrder, double tau2, int n, int? maxBasis, BassSampling sampling) => new()
     {
@@ -56,7 +61,7 @@ public sealed class KhaosEngineFitParityTests(ITestOutputHelper output)
         Sampling = sampling,
     };
 
-    // Slice 0's exact-law fixture (n = 40, its seed), rescaled.
+    // Slice 0's exact-law fixture (n = 40, its seed), its inputs in (0, 1).
     private static double[][] LawRows()
     {
         var rng = new Xoshiro256PlusPlus(20261109);
@@ -66,16 +71,18 @@ public sealed class KhaosEngineFitParityTests(ITestOutputHelper output)
             double y = 0.5 * ShiftedLegendre.Value(1, x[0]) + 0.35 * ShiftedLegendre.Value(1, x[1]) * ShiftedLegendre.Value(1, x[2]) + Normal.SampleStandard(rng);
             return x.Append(y).ToArray();
         })];
-        return Rescaled(rows, 4);
+        return rows;
     }
 
-    [Fact]
-    public void ExactLaw_IsTheRReferencesUnderTheRawRidge()
+    [Theory]
+    [InlineData(true)]
+    [InlineData(false)]
+    public void ExactLaw_IsTheRReferencesUnderTheRawRidge(bool declared)
     {
         if (!ROracle.IsAvailable) return;
-        double[][] rows = LawRows();
+        (double[][] rows, InputDomain? domain) = Case(LawRows(), 4, declared);
         if (GbassOracle.Run("khaos_exactlaw_oracle.R", rows, "ridge", "corrected", "200", "3") is not { } r) return;
-        BassModel model = BassModel.Create(Config(3, 2, 10.0, rows.Length, 2, new BassSampling { Chains = 1, BurnIn = 0, Samples = 1 }), ToData(rows, 4));
+        BassModel model = BassModel.Create(Config(3, 2, 10.0, rows.Length, 2, new BassSampling { Chains = 1, BurnIn = 0, Samples = 1 }), ToData(rows, 4, domain));
         List<BassTerm> terms = [.. model.Prior.Legendre!.Terms()];
         double logTau = Math.Log(model.Target.HeldTau!.Value);
         var sets = new List<BassTerm[]> { Array.Empty<BassTerm>() };
@@ -110,17 +117,19 @@ public sealed class KhaosEngineFitParityTests(ITestOutputHelper output)
             double engine = Enumerable.Range(0, sets.Count).Where(k => sets[k].Contains(term)).Sum(k => post[k]);
             worst = Math.Max(worst, Math.Abs(engine - rInclusion[i]));
         }
-        output.WriteLine($"raw ridge on 466 structures: P(M = 0, 1, 2) engine {string.Join(" / ", eM.Select(v => v.ToString("F6")))}, R {string.Join(" / ", rM.Select(v => v.ToString("F6")))}; " +
+        output.WriteLine($"{(declared ? "raw inputs, [0, 1] declared" : "inputs rescaled")}; raw ridge on 466 structures: P(M = 0, 1, 2) engine {string.Join(" / ", eM.Select(v => v.ToString("F6")))}, R {string.Join(" / ", rM.Select(v => v.ToString("F6")))}; " +
                          $"worst |Δ| over P(M) and the 30 inclusions {worst:E2}");
         Assert.True(worst < 1e-10, $"the engine's exact law differs from R's by {worst:E2}");
     }
 
-    [Fact]
-    public void Readouts_MeetTheCorrectedRidge_OnIshigami()
+    [Theory]
+    [InlineData(true)]
+    [InlineData(false)]
+    public void Readouts_MeetTheCorrectedRidge_OnIshigami(bool declared)
     {
         if (!ROracle.IsAvailable) return;
         const int inputs = KhaosReadoutParityTests.Inputs, n = KhaosReadoutParityTests.Observations;
-        double[][] rows = Rescaled(KhaosReadoutParityTests.Data(n, 20261107), inputs);
+        (double[][] rows, InputDomain? domain) = Case(KhaosReadoutParityTests.Data(n, 20261107), inputs, declared);
         double[][] grid = KhaosReadoutParityTests.Grid();
         string gridFile = GbassOracle.WriteCsv(grid);
         JsonElement? reference;
@@ -128,8 +137,10 @@ public sealed class KhaosEngineFitParityTests(ITestOutputHelper output)
         finally { System.IO.File.Delete(gridFile); }
         if (reference is not { } r) return;
 
-        BassData data = ToData(rows, inputs);
-        var sampling = new BassSampling { Chains = 2, MasterSeed = 11, BurnIn = 3000, Samples = 3000, ReportEvidence = false };
+        BassData data = ToData(rows, inputs, domain);
+        // Births are rare here (about 2% accepted on the raw inputs), so a chain started at M = 0 needs its 10,000 steps to grow: at 3,000
+        // the raw inputs' chains still sat at M 9.8 against the law's 10.1 (eight engine chains of 30,000 and two khaos runs agree on it).
+        var sampling = new BassSampling { Chains = 2, MasterSeed = 11, BurnIn = 10000, Samples = 10000, ReportEvidence = false };
         var clock = System.Diagnostics.Stopwatch.StartNew();
         BassFit fit = Bass.Fit(Config(8, 3, 1e5, n, null, sampling), data);
         double seconds = clock.Elapsed.TotalSeconds;
@@ -148,7 +159,7 @@ public sealed class KhaosEngineFitParityTests(ITestOutputHelper output)
         double sobolGap = engineT.Zip(rT, (x, y) => Math.Abs(x - y)).Max();
         int repeated = draws.Sum(d => d.Structure.TermIds.Count(id => fit.Terms[id].Legendre.Select(f => f.Variable).Distinct().Count() != fit.Terms[id].Legendre.Count));
 
-        output.WriteLine($"engine {seconds:F1} s, R {r.GetProperty("seconds").GetDouble():F1} s; M {engineM:F2} against {rM:F2}; σ² {engineS2:G4} against {rS2:G4} (noise 0.25)");
+        output.WriteLine($"{(declared ? "raw inputs, [0, 1] declared" : "inputs rescaled to [0, 1]")}: engine {seconds:F1} s, R {r.GetProperty("seconds").GetDouble():F1} s; M {engineM:F2} against {rM:F2}; σ² {engineS2:G4} against {rS2:G4} (noise 0.25)");
         output.WriteLine($"the surface on 16 points: engine against R's mean, root mean square {surfaceGap:F3}; engine against the function {truthGap:F3} (its sd 3.72)");
         output.WriteLine($"total indices over Var f: engine {string.Join(", ", engineT.Select((t, j) => $"x{j + 1} {t:F3}"))}; R {string.Join(", ", rT.Select((t, j) => $"x{j + 1} {t:F3}"))}; worst |Δ| {sobolGap:F3}");
         output.WriteLine($"kept terms repeating a variable: {repeated}; moves {string.Join(", ", fit.Diagnostics.MoveKinds.Entries.Where(e => e.Attempts > 0).Select(e => $"{e.Kind} {e.Accepted}/{e.Attempts}"))}");

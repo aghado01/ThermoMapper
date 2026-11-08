@@ -112,7 +112,8 @@ public static class Bass
     /// The run's fingerprint, which a checkpoint must match to resume: FNV-1a (<see cref="RunFingerprint"/>) over the
     /// config's canonical JSON (<see cref="BassConfig.ToJson"/>) and the data's exact bits, predictors in order with
     /// their kinds and names, then the response and its output variables. The config is all values, so the
-    /// fingerprint covers every setting, not only the components' types.
+    /// fingerprint covers every setting, not only the components' types. A declared domain (<see cref="InputDomain"/>)
+    /// follows its column's values, and only when declared, so data that declare none keep their fingerprint.
     /// </summary>
     public static string Fingerprint(BassConfig config, BassData data)
     {
@@ -124,6 +125,7 @@ public static class Bass
             {
                 case ContinuousPredictor c:
                     f.Add("continuous").Add(c.Name).Add(c.Values.Span);
+                    if (c.Domain is { } domain) f.Add("domain").Add(domain.Lower).Add(domain.Upper);
                     break;
                 case CategoricalPredictor k:
                     f.Add("categorical").Add(k.Name).Add(k.Levels.Count);
@@ -136,7 +138,11 @@ public static class Bass
         if (response is FunctionalResponse functional)
         {
             f.Add(functional.OutputVariables.Count);
-            foreach (ContinuousPredictor v in functional.OutputVariables) f.Add(v.Name).Add(v.Values.Span);
+            foreach (ContinuousPredictor v in functional.OutputVariables)
+            {
+                f.Add(v.Name).Add(v.Values.Span);
+                if (v.Domain is { } domain) f.Add("domain").Add(domain.Lower).Add(domain.Upper);
+            }
         }
         return f.ToString();
     }

@@ -47,10 +47,10 @@ public enum DecompositionStatus
 public sealed record SensitivitySpec
 {
     /// <summary>The predictors' measures by name, in their own units; a predictor left out takes the uniform measure on its
-    /// training range, or uniform level probabilities.</summary>
+    /// box (its declared domain, else its training range), or uniform level probabilities.</summary>
     public IReadOnlyDictionary<string, InputMeasure>? Measures { get; init; }
 
-    /// <summary>The integrated output variables' measures by name; uniform over the training range when left out,
+    /// <summary>The integrated output variables' measures by name; uniform over the box when left out,
     /// <see cref="EmpiricalMeasure"/> for the training output grid.</summary>
     public IReadOnlyDictionary<string, InputMeasure>? OutputMeasures { get; init; }
 

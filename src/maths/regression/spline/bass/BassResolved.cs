@@ -141,6 +141,11 @@ public sealed record BassResolved
         int cases = response.Cases, locations = response.Locations, n = response.Observations;
         bool functional = response is FunctionalResponse;
         log.Add(new("Observations", Text(n), functional ? $"N = n_x · n_r = {cases} · {locations}" : "N = n_x, a scalar response"));
+        IEnumerable<ContinuousPredictor> columns = data.Predictors.OfType<ContinuousPredictor>();
+        if (response is FunctionalResponse withOutputs) columns = columns.Concat(withOutputs.OutputVariables);
+        foreach (ContinuousPredictor c in columns)
+            if (c.Domain is { } domain)
+                log.Add(new($"Domain[{c.Name}]", domain.ToString(), "declared: the input scales by it onto [0, 1] in place of its training range"));
 
         // The response the intercept convention can fit, its level and its mean square about it.
         WorkingResponse fitted = working ?? new WorkingResponse(response);
@@ -229,7 +234,9 @@ public sealed record BassResolved
                 throw new ArgumentException($"Structure.Legendre.MaxDegree is {legendre.MaxDegree}, below q_max = {maxInteraction}, so the top orders would hold no term.", "config");
             maxCategorical = maxFunctional = 0;
             var space = new LegendreTermSpace(continuous, legendre.MaxDegree, maxInteraction);
-            log.Add(new("Legendre", $"q_max {maxInteraction}, d_max {legendre.MaxDegree}", $"KHAOS's term space over {continuous} predictors, |𝒜| = {Text(space.Size)}"));
+            log.Add(new("Legendre", $"q_max {maxInteraction}, d_max {legendre.MaxDegree}", $"KHAOS's term space over {continuous} predictors, |𝒜| = {Text(space.Size)}"
+                + (data.Predictors.OfType<ContinuousPredictor>().Any(c => c.Domain is null)
+                    ? "; a predictor without a declared domain takes its training range as the box the basis is orthonormal on, which moves with the sample" : "")));
         }
 
         int bound = n - 1;   // the intercept counts toward the dimension bound

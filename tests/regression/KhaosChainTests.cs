@@ -292,6 +292,50 @@ public sealed class KhaosChainTests(ITestOutputHelper output)
         Assert.True(worst < 1e-11, $"worst |Δπ| {worst:E2}");
     }
 
+    // The fixture's inputs drawn into [0.05, 0.95] with [0, 1] declared: the engine's π is the dense marginal's on ψ at the raw values,
+    // where the training range would stretch them back onto [0, 1] and read another law.
+    [Fact]
+    public void Pi_ReadsTheDeclaredDomain()
+    {
+        BassData unit = Data();
+        BassData Shrunk(InputDomain? domain)
+            => new([.. unit.Predictors.Cast<ContinuousPredictor>().Select(c => new ContinuousPredictor(c.Name, [.. c.Values.ToArray().Select(x => 0.05 + 0.9 * x)], domain))],
+                   unit.Response);
+        BassData data = Shrunk(new InputDomain(0.0, 1.0));
+        BassModel model = BassModel.Create(Config(raw: true), data);
+        Space space = Enumerate(model);
+        double[] y = [.. ((ScalarResponse)data.Response).Values];
+        int n = y.Length;
+        double tau = model.Target.HeldTau!.Value;
+        double[][] x = [.. data.Predictors.Cast<ContinuousPredictor>().Select(c => c.Values.ToArray())];
+        var dense = new double[space.States.Count];
+        for (int k = 0; k < dense.Length; k++)
+        {
+            BassTerm[] terms = space.States[k].Terms;
+            var columns = new List<double[]> { Enumerable.Repeat(1.0, n).ToArray() };
+            foreach (BassTerm t in terms)
+                columns.Add([.. Enumerable.Range(0, n).Select(i => t.Legendre.Aggregate(1.0, (acc, f) => acc * ShiftedLegendre.Value(f.Degree, x[f.Variable][i])))]);
+            dense[k] = model.Prior.LogCollectionWeight(terms.Length) + terms.Sum(model.Prior.LogPrior) + DenseLogMarginal([.. columns], y, 1.0 / tau, 0.0, 0.0);
+        }
+        double[] engine = space.Posterior();
+        double top = dense.Max();
+        double[] expected = [.. dense.Select(v => Math.Exp(v - top))];
+        double total = expected.Sum();
+        double worst = 0.0;
+        for (int k = 0; k < engine.Length; k++) worst = Math.Max(worst, Math.Abs(engine[k] - expected[k] / total));
+
+        // Undeclared, the same values are stretched onto [0, 1], and the law moves.
+        Space stretched = Enumerate(BassModel.Create(Config(raw: true), Shrunk(null)));
+        double[] other = stretched.Posterior();
+        double moved = 0.0;
+        for (int k = 0; k < engine.Length; k++)
+            if (stretched.Find(space.States[k].Terms) is int at and >= 0) moved = Math.Max(moved, Math.Abs(engine[k] - other[at]));
+        output.WriteLine($"inputs in [0.05, 0.95], [0, 1] declared: π against the dense marginal on the raw values, worst |Δ| {worst:E2}; " +
+                         $"the training range's law differs by up to {moved:F4}");
+        Assert.True(worst < 1e-11, $"worst |Δπ| {worst:E2}");
+        Assert.True(moved > 1e-3, $"the domain moved the law by only {moved:E2}");
+    }
+
     // Batch means' standard error of `values`' mean over `batches` batches.
     internal static double BatchError(IReadOnlyList<double> values, int batches)
     {
