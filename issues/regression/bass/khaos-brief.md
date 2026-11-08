@@ -1,6 +1,6 @@
 # KHAOS on the BASS core: E19's build (chip brief)
 
-Date: 2026-11-07. Status: slice 0 landed 2026-11-07 (`31362ad`); slice 1 landed 2026-11-07 (`fa05048`, `b408bf4`, `baf69f9`), with declared input domains (`3eb56e1`, the user's decision of 2026-11-07); the check on slice 1's input-box finding, then slice 2, under way (the user's go-ahead of 2026-11-08). Written at the user's request after GBASS's slices 0–4, from the KHAOS paper's TeX, the `khaos` 2.1.1 source and the engine.
+Date: 2026-11-07. Status: slice 0 landed 2026-11-07 (`31362ad`); slice 1 landed 2026-11-07 (`fa05048`, `b408bf4`, `baf69f9`), with declared input domains (`3eb56e1`, the user's decision of 2026-11-07); the check on slice 1's input-box finding done 2026-11-08 (real, not a trap); slice 2 under way (the user's go-ahead of 2026-11-08). Written at the user's request after GBASS's slices 0–4, from the KHAOS paper's TeX, the `khaos` 2.1.1 source and the engine.
 
 ## Why
 
@@ -157,6 +157,40 @@ Under "Reports" below, newest first, per slice: what landed by commit; the gates
 ## Reports
 
 Newest first.
+
+### Slice 1 addendum: the input box's effect is the posterior's, not a trap (chip, 2026-11-08)
+
+**The question.** The user's go-ahead of 2026-11-08 ("Check, then slice 2") asked whether the readout fixture's chains hold the posterior or a trap both samplers share. On the inputs rescaled to [0, 1] both read M about 6.2 and σ² about 0.95, against M about 10.1 and σ² about 0.23 on the raw inputs. Both accept about 2% of births, so agreement alone could not tell.
+
+**Landed** on `main`, nothing pushed: this commit, with `KhaosRichStartTests` behind `BASS_QUALIFICATION`.
+
+**The method.** On slice 0's Ishigami readout fixture under the raw ridge (degree 8, order 3, khaos's τ² = 10⁵, σ² Jeffreys), in two boxes: the raw inputs with [0, 1] declared, and the inputs rescaled to [0, 1] exactly with no domain.
+- The collapsed log posterior, the log marginal plus the structure prior with λ integrated, is scored for three states: greedy forward selection from M = 0; its best-improvement descent by deaths, swaps and births; and, in the rescaled box, the raw structure's image under the affine map. The image is the closure of the raw structure's multi-indices, and it spans the raw columns exactly.
+- Four chains run from each start, 10,000 steps after 10,000, traced in log π, M and E[σ² | S].
+
+**The reading: real.**
+
+| Box | State | M | log π | E[σ² \| S] |
+| --- | --- | --- | --- | --- |
+| Raw, [0, 1] declared | Greedy and its descent | 10 | −214.27 | 0.232 |
+| | Chains from M = 0 and from the descent | 10.14 | −214.27 (median) | 0.2275 |
+| Rescaled | Greedy and its descent | 6 | −252.11 | 0.958 |
+| | The raw structure's image | 27 | −385.05 | 0.156 |
+| | The image's descent | 6, the same structure | −252.11 | 0.958 |
+| | Chains from M = 0 and from it | 6.42 and 6.37 | −252.11 (median) | 0.902 and 0.908 |
+
+- *The rich state fits better and scores far lower.* The image beats the mode by about 109 nats of likelihood (E[σ²] 0.16 against 0.96 at n = 120), yet sits 133 nats below it. Each term costs about 14 nats under the raw ridge, ln|𝒜| ≈ 6 and ½ ln(nτ²) ≈ 8, not the 9 the go-ahead estimated.
+- *Every route lands on the mode.* The image's descent returns to the sparse mode, and chains from either start agree to 0.05 in M.
+- *The cause is Ishigami's parity about ½.* The raw structure is parity-pure: odd degrees in x₀ (sin z₁), even in x₁ (sin² z₂) and in x₂ (z₃⁴). A box centred on ½ keeps that parity, since ψ_α(½ + c(x − ½)) spans only the ψ_β with β ≤ α of α's parity, and a shifted box breaks it. Two declared boxes of one width, 1.04, separate the two:
+
+| Declared box | Chains from M = 0 | E[σ²] |
+| --- | --- | --- |
+| Centred on ½, [−0.02, 1.02] | M 10.16, log π −212.55 | 0.227 |
+| Shifted by 0.01, [−0.03, 1.01] | M 7.69, log π −246.7 | 0.646 |
+
+**What it changes.** The readout gate stands as a posterior reference in both boxes, and slice 2's readouts take the same fixtures. A Legendre fit's box is part of its model: on a function with a symmetry about the box's centre, a box that is off-centre by 1% of its width costs the expansion its sparsity. That is the case for declaring the domain.
+
+**Found on the way.** Greedy forward selection is the weaker search on these surfaces. On the centred box it stops at M 7 and log π −221.59, below the chains' −212.55. The check's states are the descent's local optima, and the check reads them only beside the chains.
 
 ### Slice 1 addendum: declared input domains (chip, 2026-11-07)
 
