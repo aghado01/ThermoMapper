@@ -181,9 +181,11 @@ Wang 2020; computes the closed form instead of Monte Carlo"*).
   `projects/` split (`Maths.LinAlg.Tests`, …). The parallel fact runner
   (`src/test-harness`, invoked per [AGENTS.md](AGENTS.md)) drops per-suite
   manifests and a `summary.json` under `artifacts/test-runs/`.
-- **Targeted runs.** A routine run tests what a change can reach. `scripts/test-select.ps1` selects a test project's
-  classes by change (`Maths.Regression.Tests` by default) and runs them through `dotnet test` in Release, at
-  below-normal priority, xUnit capped at 6 threads, build servers off, into the `-ArtifactsRoot` you give it:
+- **Targeted runs.** A routine run tests what a change can reach.
+  `scripts/test-select.ps1` selects a test project's classes by change
+  (`Maths.Regression.Tests` by default) and runs them through `dotnet test` in
+  Release, at below-normal priority, xUnit capped at 6 threads, build servers
+  off, into the `-ArtifactsRoot` you give it:
 
   | When | What runs | Command |
   |---|---|---|
@@ -192,19 +194,28 @@ Wang 2020; computes the closed form instead of Monte Carlo"*).
   | A slice's end | The whole assembly, once | `scripts/test-select.ps1 -Scope Slice -ArtifactsRoot <root>` |
   | Qualification gates | As each slice states | `BASS_QUALIFICATION=1` on `dotnet test --filter` with the slice's classes |
 
-  - *The selection* follows names. A changed file reaches every file in the project's compile closure that names
-    one of its top-level types, to the fixed point, and a test class is selected when its file is reached; a csproj
-    or `Directory.Build` file in the closure selects every class. Give your own paths with `-Changed` (commas from
-    bash): in a shared checkout the default, the working tree against `HEAD`, takes in other sessions' uncommitted
-    work as well. `-ListOnly -Explain` prints the classes and the chain of names that reached each.
-  - *The pinned tier* is every test whose assertion holds a stored expectation from an earlier commit: a hash, a
-    fingerprint, a bit pattern, a verbatim copy of an old form. Each carries `[Trait("Tier", "Pinned")]`, and a new
-    pin takes it too. A bit-for-bit comparison between two runs of today's code (a resume, an offset, one draw by two
-    paths) is a property the selection covers, and stays unmarked. The commit run's pinned tier is also the net for
-    what a name graph cannot see, such as a type reached by reflection.
-  - *The slow tier* is `slow-tests.txt` beside the test project: each method whose cases summed to at least 10 s in
-    a profile of the whole assembly. `-WriteSlowList <trx>` writes it from a profile's trx, and a new profile
-    rewrites it. Its tests run at a slice's end, and on an edit with `-IncludeSlow`.
+  - *The selection* follows names. A changed file reaches every file in the
+    project's compile closure that names one of its top-level types, to the
+    fixed point, and a test class is selected when its file is reached; a
+    csproj or `Directory.Build` file in the closure selects every class. Give
+    your own paths with `-Changed` (commas from bash): in a shared checkout the
+    default, the working tree against `HEAD`, takes in other sessions'
+    uncommitted work as well. Building from a snapshot (`git archive HEAD` plus
+    your files), point `-SourceRoot` at it. `-ListOnly -Explain` prints the
+    classes and the chain of names that reached each.
+  - *The pinned tier* is every test whose assertion holds a stored
+    expectation from an earlier commit: a hash, a fingerprint, a bit pattern, a
+    verbatim copy of an old form. Each carries `[Trait("Tier", "Pinned")]`, and
+    a new pin takes it too. A bit-for-bit comparison between two runs of
+    today's code (a resume, an offset, one draw by two paths) is a property the
+    selection covers, and stays unmarked. The commit run's pinned tier is also
+    the net for what a name graph cannot see, such as a type reached by
+    reflection.
+  - *The slow tier* is `slow-tests.txt` beside the test project: each method
+    whose cases summed to at least 10 s in a profile of the whole assembly.
+    `-WriteSlowList <trx>` writes it from a profile's trx, and a new profile
+    rewrites it. Its tests run at a slice's end, and on an edit with
+    `-IncludeSlow`.
 - **RNG hygiene.** Derive seed streams structurally (`SeedTree` /
   `SplitMix64`), never by ad-hoc arithmetic (`seed + k·block`, `seed ^ C`) —
   arithmetic derivation aliases streams. Prefer pinned generators
