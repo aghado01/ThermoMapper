@@ -2,6 +2,7 @@ using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Text.Json;
+using Maths.Distributions;
 using Maths.Rng;
 using Xunit;
 using Xunit.Abstractions;
@@ -179,6 +180,9 @@ public sealed class KhaosDefectParityTests(ITestOutputHelper output)
                 double[] w = GbassOracle.Numbers(q.GetProperty("weights"));
                 double[] pmf = KhaosOracle.PoissonBinomial(w);
                 double exact = pmf.Skip(order + 1).Sum(), normal = q.GetProperty("normal_over").GetDouble();
+                // The engine's Poisson-binomial (slice 1), its recursion against the enumeration and against R's.
+                Assert.Equal(exact, PoissonBinomial.Probability(w, order + 1, w.Length), 14);
+                Assert.Equal(q.GetProperty("exact_over").GetDouble(), 1.0 - PoissonBinomial.Cdf(w, order), 13);
                 Assert.Equal(exact, q.GetProperty("exact_over").GetDouble(), 13);
                 Assert.Equal(pmf[0], q.GetProperty("zero").GetDouble(), 13);
                 worst = Math.Max(worst, Math.Abs(normal / exact - 1));

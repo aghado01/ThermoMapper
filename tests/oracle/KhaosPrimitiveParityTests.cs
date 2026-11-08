@@ -54,6 +54,17 @@ public sealed class KhaosPrimitiveParityTests(ITestOutputHelper output)
                     worst = Math.Max(worst, Math.Abs(values[j][i] - KhaosOracle.Psi(j, x[i])) / Math.Sqrt(2 * j + 1));
             Assert.True(worst < 1e-12, $"ss_legendre_poly against the recurrence to degree {jmax}: {worst:G3}");
 
+            // The engine's ψ (slice 1), its values and its lanes, against R's.
+            double engineWorst = 0;
+            for (int j = 0; j <= jmax; j++)
+            {
+                double[] column = [.. Enumerable.Repeat(1.0, x.Length)];
+                ShiftedLegendre.Multiply(j, x, column);
+                for (int i = 0; i < x.Length; i++)
+                    engineWorst = Math.Max(engineWorst, Math.Max(Math.Abs(values[j][i] - ShiftedLegendre.Value(j, x[i])), Math.Abs(values[j][i] - column[i])) / Math.Sqrt(2 * j + 1));
+            }
+            Assert.True(engineWorst < 1e-12, $"the engine's ShiftedLegendre against ss_legendre_poly to degree {jmax}: {engineWorst:G3}");
+
             // The engine's rule mapped to [0, 1] is R's (Golub–Welsch there, Newton here), and the recurrence is orthonormal under it.
             GaussLegendre rule = GaussLegendre.Of(jmax + 1);
             double[] nodes = GbassOracle.Numbers(c.GetProperty("nodes"));
