@@ -1,6 +1,6 @@
 # Conformal prediction
 
-> The conformal layer (E16): prediction sets whose coverage holds in finite samples under exchangeability, whatever the model, from an engine's retained draws and pointwise densities with no refit. The layer owns the guarantee and the score owns the width, so the layer is built once, engine-free, and each engine contributes densities. Built: the full step (Fong and Holmes's conformal Bayes) over a training density and a candidate density; BASS's candidate density for every noise law; CB-3's reading of the scores' Monte Carlo error, with the margin, the inflated rule and two diagnostics; and the split form, with density, CQR and residual scores. The predictive distribution and the other engines' candidate seams follow.
+> The conformal layer (E16): prediction sets whose coverage holds in finite samples under exchangeability, whatever the model, from an engine's retained draws and pointwise densities with no refit. The layer owns the guarantee and the score owns the width, so the layer is built once, engine-free, and each engine contributes densities. Built: the full step (Fong and Holmes's conformal Bayes) over a training density and a candidate density; BASS's candidate density for every noise law; CB-3's reading of the scores' Monte Carlo error, with the margin, the inflated rule and two diagnostics; and the split form, with density, CQR and residual scores. The predictive distribution's natural score, the in-sample predictive CDF, was read and not adopted: it is not monotone in y where the draws' predictives at x separate (slice 4). The seams carry each draw's log CDF for whichever score the user chooses. The other engines' candidate seams follow.
 
 ## Overview
 
@@ -26,6 +26,8 @@ Where things are:
 **The training density** (`PointwiseLogDensity`): log p(y_unit | θ_s) for each retained draw s and each training unit, with the unit partition and its stratum map, how each latent was treated (`LatentReport`), the chain lengths, and draw weights for a weighted population.
 
 **The candidate density** (`CandidateLogDensity`): log p(y | x_t, θ_s) for the same draws in the same rows, at each test case t and each value y of t's grid. The columns run case by case, each case's grid ascending; each case carries a stratum. Its latents, chain lengths and weights must be the training density's. A value outside a draw's support takes −∞. An engine joins the layer by producing it; the layer knows no engine.
+
+**Each draw's log CDF** (`LogCdf` on both, slice 4): ln F(y | x, θ_s) in the density's layout, the latents treated alike, for a score that orders one value, so the training units must be one observation each. The log keeps both tails: with ℓ = ln F, F = e^ℓ, and 1 − F = −expm1(ℓ) to full relative precision near 1, where a probability rounds to 1. Null where the engine gave none.
 
 ## The full step (Fong and Holmes 2021)
 
@@ -144,7 +146,7 @@ The chains are AR(1) about the exact posterior, two chains of 500, so they mix m
 **Three scores,** each higher conforming better:
 - *The predictive density* (`SplitConformal.Density`). The score is ln p̂(y | x) = ln Σ_s W_s p(y | x, θ_s), read through the candidate seam: the calibration cases each on a grid of one value, its response, and the test cases on their grids. The arithmetic is the full step's predictive, bit for bit, so equal columns tie. The set is π on the grid, a union of intervals, reported as a `ConformalSet` under `ConformalForm.Split`. It is the predictive's highest-density region, its level set by the calibration rather than by the model.
 - *CQR's* (`SplitConformal.Quantiles`; Romano, Patterson and Candès 2019). The score is min(y − q_lo(x), q_hi(x) − y), Lean's `cqrScore` and the negative of their max(q_lo − y, y − q_hi). Its set is the interval [q_lo − Q, q_hi + Q], where Q is the negated threshold, the k-th largest calibration max(q_lo − y, y − q_hi) (`cqr_ordConnected`). It is empty when the test case's band q_hi − q_lo is less than −2Q. That needs Q < 0, which happens when most calibration units fall well inside their bands, or quantiles that cross by more than 2Q. Any fit's quantiles serve: a quantile fit's surface (quantile BASS) or a predictive's quantiles (`BassPrediction.Quantile`).
-- *The standardized residual* (`SplitConformal.Residuals`). The score is −|y − μ(x)|/ρ(x), and its set is μ ± Qρ, where Q is the k-th largest calibration |y − μ|/ρ. The scale is Lei et al.'s ρ, since σᵢ on this page are the full step's scores. With no scale it is the absolute residual. Lei et al.'s locally weighted form is this score with ρ a fitted spread. BASS's `ObservationMean` with the predictive's interquartile range, `Quantile(0.75) − Quantile(0.25)`, serves every noise law, since no law reports its variance.
+- *The standardized residual* (`SplitConformal.Residuals`). The score is −|y − μ(x)|/ρ(x), and its set is μ ± Qρ, where Q is the k-th largest calibration |y − μ|/ρ. The scale is Lei et al.'s ρ, since σᵢ on this page are the full step's scores. With no scale it is the absolute residual. Lei et al.'s locally weighted form is this score with ρ a fitted spread. BASS's `ObservationMean` with the predictive's interquartile range, `Quantile(0.75) − Quantile(0.25)`, serves every noise law: a law's variance (`IBassNoiseLaw.Variance`) is infinite for t at ν ≤ 2, and prediction reports no predictive variance per case.
 
 **Closed forms where the set is an interval.** CQR's and the residual's sets are intervals with ends in closed form, so they need no grid. Their ends are exact to rounding, and each case costs one addition after the calibration's sort. The density's set is not an interval in general, so it is read on a grid.
 
@@ -156,6 +158,47 @@ The chains are AR(1) about the exact posterior, two chains of 500, so they mix m
 - CQR's asymmetric form, a threshold per tail at α/2 each, which Romano, Patterson and Candès also give. It would cover each tail separately, at more width.
 - Cross-conformal and the jackknife+ (Barber, Candès, Ramdas and Tibshirani, 2021). They use every unit in both roles at 1 − 2α, at the cost of K fits or n.
 - The tournament correction, recorded in E16, which keeps all the data at 1 − 2α for any sampler, at n leave-one-out chains.
+
+## The predictive distribution (slice 4): the reading
+
+**What was read.** Vovk et al.'s conformal predictive distribution reads π(y) as a CDF in y (Vovk, Shen, Manokhin and Xie 2019). That needs a score monotone in y: the candidate's score rising with y, and each unit's falling as the candidate rises. The full step's natural score is the in-sample predictive CDF. A unit scores F̃ᵢ = Σ_s w̃_s(y) F(y_i | x_i, θ_s), and the candidate F̃_c = Σ_s w̃_s(y) F(y | x_t, θ_s), under the add-one-in weights w̃_s(y) ∝ W_s p(y | x_t, θ_s). (F̃, since α on this page is the miscoverage level.) The brief made adopting it conditional on its staying monotone, so slice 4 read that first.
+
+**Why it can fall.** The candidate's score has slope dF̃_c/dy = Σ_s w̃_s p(y | θ_s) + Cov_w̃(∂_y ln p(y | θ), F(y | θ)). The first term is the reweighted density, positive. The second is negative where the draws differ in location: a draw centred higher gains weight as y rises, and has the lower CDF at y. It outruns the first once the draws' predictives at x separate. Two equal draws N(±a, 1) give φ(a) − a(Φ(a) − ½) at their midpoint, negative past a ≈ 0.877, so locations 1.75σ apart already make the score fall. A unit's score moves with the candidate's too, by the covariance of its own CDF with the candidate's log-density slope. It falls where the posterior ties the unit's surface to the candidate's, and rises where it opposes them.
+
+**What it reads.** Each reading sweeps the candidate along a grid, step 0.05 on the conjugate model and 0.01 on BASS, and compares the scores on the tail that holds their digits. The conjugate model is slice 0's, under the truth it does not share (n 19, m 20). BASS is slice 1's contaminated data (n 99, m 100), with five fits of ten test cases per row.
+
+| Draws | Cases | The candidate's score falls | π's counts fall | Units whose score rises with the candidate |
+|---|---|---|---|---|
+| Conjugate, the exact posterior at S 50, 400 and 4,000 | 100 each | none | none | 961 of 1,900 |
+| Conjugate, a chain stopped early (40 Metropolis steps from β = 5) | 100 | none | none | 961 of 1,900 |
+| Conjugate, two chains stuck apart (the exact draws shifted by ∓1 in turn) | 100 | on 44 cases, by up to 0.034 a step, from F̃ 0.52 | on 53 cases, by up to 4 of 20 | 961 of 1,900 |
+| BASS, a healthy Gaussian fit | 50 | none | none | 4,816 of 4,950 |
+| BASS, a Student t fit | 50 | none | on 1 case, once, by 1 of 100 | 4,950 of 4,950 |
+| BASS, a wrong fit (it never sees x₀) | 50 | none | none | 4,412 of 4,950 |
+| BASS, a chain stopped early (one chain, no burn-in, 20 draws) | 50 | on 3 cases, by up to 0.0046 a step, from F̃ 0.66 | on 4 cases, by up to 3 of 100 | 4,888 of 4,950 |
+
+**What it means.**
+- *Not adopted.* The score is monotone where the draws sit in one mode, and falls where their predictives at x separate: two chains in different places, or a chain stopped early that still holds its first structures. Those are the cases the layer's guarantee without the sampler is for, so the brief's condition fails, and the slice stops at the reading.
+- *Vovk's second condition fails almost everywhere.* Half the conjugate model's units and 89 to 100% of BASS's rise with the candidate. Yet π stayed monotone on draws in one mode, because those units rise more slowly than the candidate. Monotonicity there is a reading, not a theorem.
+- *Its PIT would still be valid.* A conformal p-value needs no monotone score: π at the true y, ties broken at random, is uniform under exchangeability whatever the score. What a falling score loses is the CDF, and with it the quantiles, CRPS and a distribution to report.
+- *A probability rounds the upper tail.* Held as F, a score within 10⁻¹⁶ of 1 rounds to 1, so units rising toward it tie with the candidate. π's counts fell there on 4 to 54 of the 100 conjugate cases in a first reading. Held as ln F and compared tail by tail, those falls vanish, which is why the seams carry the log.
+
+**The alternatives,** for the user's choice:
+1. *The split form's predictive distribution*, Vovk et al.'s split conformal predictive system (Vovk, Petej, Nouretdinov, Manokhin and Gammerman 2020). The score is the training fit's own predictive CDF, F̂(y | x) = Σ_s W_s F(y | x, θ_s). The calibration scores do not move with the candidate, and the candidate's is a CDF in y, so both of Vovk's conditions hold by construction, and CB-2 makes it valid for any fit. It recalibrates the fit's predictive by its calibration PITs. It costs slice 3's split, plus one CDF read per draw and grid value per case, with no product over the units. This is the recommendation.
+2. *The full step's score with a per-case check.* It reads π as a CDF where its counts rise on the grid and flags the cases where they fall; its PIT is valid regardless. It costs a product per grid like the density score's. It fails where the sampler is in doubt, the case the full step's guarantee does not cover anyway.
+3. *A monotone envelope* of the full step's π, its running maximum. It is always a CDF, but its PIT is no longer uniform, since it moves mass up in one tail. Not recommended.
+4. *Cross-conformal predictive distributions* (Vovk, Nouretdinov, Manokhin and Gammerman 2018) average K split distributions, so every unit serves. Their validity is approximate, at K fits.
+
+**Built for whichever is chosen: the log CDF seams.** `PointwiseLogDensity.LogCdf` and `CandidateLogDensity.LogCdf` carry each draw's ln F beside its ln p. BASS fills them on `cdf: true` (`BassFit.PointwiseLogDensity`, `BassFit.CandidateLogDensity`) from the law at the draw, `IBassNoiseLaw.At`, or N(f, σ²).
+- *The tails.* The CDF is a closed form for the t and the asymmetric Laplace. For the Normal-Wald, the skewed t and the generalized hyperbolic it is one table of tails per draw, held to its 10⁻⁵ relative. Above each draw's median the seam reads ln F as ln(1 − S) from the law's survival. The mixtures' tables end at their 10⁻¹² tails, and beyond the upper one their `LogCdf` integrates the lower side, losing 1 − F's digits and reading up to 3·10⁻¹⁵ above 0. No noise law changed.
+
+**Checks** (`ConformalDistributionTests`, `BassConformalDistributionTests`; the full readings with `BASS_QUALIFICATION=1`).
+- *Units and candidates read one distribution* (CB-4). At the training cases the units' log CDF equals the candidates', bit for bit, under all six laws (120 draws by 80 units each).
+- *Each draw's CDF is its density's integral.* At a new case, the rise of F over a grid of step 0.0005 matches Simpson's rule on the same draw's density, for one chain's 20 draws. The largest gaps are 1.5·10⁻¹⁴ (Gaussian), 2.2·10⁻¹³ (t), 7.2·10⁻⁷ (asymmetric Laplace, across its kink), 2.3·10⁻⁷ (Normal-Wald), 2.7·10⁻⁷ (generalized hyperbolic) and 3.2·10⁻⁶ (skewed t, its table).
+- *The upper tail.* From 0.5 to 32 scales above the median, −expm1(ln F) gives back the law's survival to 10⁻¹² relative, ln F at or below 0, for the five laws.
+- *Refusals:* a unit of two observations, the collapsed content, a matrix not of the density's shape, a value above 0 or NaN, and a weighted fit's units.
+- *The reading's own pieces:* the tail comparison holds the digits a probability loses near 1, and the two-draw slope matches its closed form to 10⁻⁶ on both sides of a ≈ 0.877.
+- *The quick reading* asserts the table's split on 20 conjugate cases a kind: the exact posterior and the chain stopped early never fall, two chains apart do.
 
 ## Numerics
 
@@ -359,8 +402,8 @@ Run on `ConformalMarginTests`, and with `BASS_QUALIFICATION=1` on `BassConformal
 
 | Area | Types and members |
 |---|---|
-| The seams | `PointwiseLogDensity` (training); `CandidateLogDensity(values, grids, latents, stratumOf, chainLengths)` with `Weights`, `Offset(t)`, `Cases`, `Draws` |
-| BASS's candidate density | `BassFit.CandidateLogDensity(data, cases, grids, strata, unseenLevels)`; `BassPointwise.Latents` (internal, shared) |
+| The seams | `PointwiseLogDensity` (training); `CandidateLogDensity(values, grids, latents, stratumOf, chainLengths)` with `Weights`, `Offset(t)`, `Cases`, `Draws`; `LogCdf` on both, each draw's ln F |
+| BASS's candidate density | `BassFit.CandidateLogDensity(data, cases, grids, strata, unseenLevels, quadrature, cdf)`; `BassFit.PointwiseLogDensity(..., cdf)`; `BassCandidates.UnitLogCdf`, `BassCandidates.LogCdf` and `BassPointwise.Latents` (internal, shared) |
 | The full step | `ConformalBayes.FullStep(training, candidates, ConformalOptions { Alpha, ErrorLevel, Inflate, FallbackShare (opt-in, null by default), MarginBounds })` → `ConformalPrediction(Sets, Alpha)`; `ConformalBayes.Scores(training, candidates, column)` → `ConformalScores(Units, Scores, Candidate, EffectiveSampleSize)` |
 | A case's set | `ConformalSet`: `Stratum`, `Units` (m), `Level` (k), `Coverage`, `WholeSpace`, `Grid`, `PValues`, `Below`, `Tied`, `CandidateScores`, `EffectiveSampleSizes`, `Accepts(g)`, `Intervals` (`GridInterval(Lower, Upper)`), `Resolution`, `OpenBelow`, `OpenAbove`, `Width` |
 | CB-3's reading | `ConformalSet.Gap`, `SplitHalfMass`, `SplitHalfDisagreements`, `AcceptsPlain(g)`, `AcceptsInflated(g)`; `ConformalSet.Margin` → `ConformalMargin` (`Multiple`, `CandidateErrors`, `UniformErrors`, `Fragile`, `InflatedRanks`, `ParetoK`, `ParetoKThreshold`, `Bounds`, `Count`, `Untrusted(k)`); `ConformalSet.Inflated`, `ErrorLevel`, `CoverageUnderError`, `FallBack`; `MarginBounds` (`Uniform`, `Carried`); `ConformalScores.Errors`, `CandidateError` |
@@ -371,7 +414,7 @@ Run on `ConformalMarginTests`, and with `BASS_QUALIFICATION=1` on `BassConformal
 
 - A margin with bounds sure over every ordering, which needs each unit's error under every other unit's weights.
 - CQR's asymmetric form, cross-conformal and the jackknife+ (above).
-- The conformal predictive distribution, with PIT and CRPS, and random tie-breaking with it (slice 4).
+- The conformal predictive distribution, with PIT and CRPS, and random tie-breaking with it. Its natural score, the in-sample predictive CDF, is not monotone in y (slice 4's reading), so the score waits for the user's choice among the alternatives above.
 - The candidate seams of BARS, BAPS, the hierarchical P-spline, BGP and the changepoint posterior (slice 5), and BASS's for a direct functional fit's curves (E17).
 - CB-4's latent-posterior reading, and Hoff's leave-one-out score.
 - Refining a set's boundaries between grid values.

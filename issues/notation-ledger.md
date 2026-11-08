@@ -11,6 +11,26 @@ Splits in the module's language (symbols, identifiers, terms), logged as session
 
 ## Entries
 
+### α, the miscoverage level, beside Vovk's conformity scores α, and the in-sample predictive CDF F̃ (2026-11-07)
+
+- **Kind:** one name for several concepts, and a symbol taken to keep them apart.
+- **Readings:**
+  - α, the miscoverage level, with k = ⌊α·m⌋ (`ConformalOptions.Alpha`, `src/maths/regression/conformal/ConformalBayes.cs:20`; `docs/Maths/ConformalPrediction.md` throughout).
+  - α_i, a unit's conformity score in Vovk et al.'s conformal predictive distributions, whose level is ε.
+  - F̃ᵢ and F̃_c, the in-sample predictive CDF as a score, Σ_s w̃_s F(y | x, θ_s) (`ConformalPrediction.md`, "The predictive distribution (slice 4): the reading"; `tests/regression/ConformalDistributionTests.cs`), taken so it reads as neither α. The page's density scores stay σᵢ.
+- **Found:** 2026-11-07, the conformal layer's slice 4 (the predictive distribution's reading).
+- **Note:** if the split form's predictive distribution is built, its score F̂(y | x), the training fit's predictive CDF, takes the hat; Vovk's Q(y, τ) would meet the page's Q (next entry).
+
+### σ, the noise's scale, beside the conformity scores σᵢ, and the residual's scale ρ (2026-11-07)
+
+- **Kind:** one name for several concepts, and a third symbol taken to keep them apart.
+- **Readings:**
+  - σ, σ², the noise's scale and variance across the regression pages and code (`BassDraw.Sigma2`; `docs/Maths/BayesianRegression.md`).
+  - σᵢ and σ_c, the full step's conformity scores, Fong and Holmes's symbol (`docs/Maths/ConformalPrediction.md`, "The scores").
+  - ρ(x), the standardized residual's scale in the split form, −|y − μ(x)|/ρ(x) (`ResidualReadings.Scale`, `src/maths/regression/conformal/SplitConformal.cs:132`; `ConformalPrediction.md`, "The split form (CB-2)"), taken so it reads as neither σ.
+- **Found:** 2026-11-07, the conformal layer's slice 3 (the split form).
+- **Note:** Lei et al. (2018) write ρ̂ for the locally weighted form's spread, so ρ is the source's own; the page's Q, the split form's threshold on |y − μ|/ρ and CQR's, is not Vovk's Q(y, τ) for the predictive distribution.
+
 ### q and degree in KHAOS beside BASS's K, q and Degree (2026-11-07)
 
 - **Kind:** one name for several concepts, and one concept under two names.

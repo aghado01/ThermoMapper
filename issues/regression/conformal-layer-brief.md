@@ -1,6 +1,6 @@
 # The conformal layer: E16's build (chip brief)
 
-Date: 2026-11-06. Status: slices 0, 1 and 2 built 2026-11-06, the fallback signal read from the inflated set on 2026-11-07 at the user's call, with a split-half comparator measured beside it; on 2026-11-07 both became diagnostics on every set, with no trigger, at the user's decision; slice 3, the split form, built 2026-11-07 at the user's go-ahead (reports below); slice 4 waits for the user. Written at the user's request from [E16](bass/extensions-brief.md#conformal-bayes-the-consumer) and the [conformal Lean contract](../../lean/Protolemmata/Conformal/conformal-lemmas.md).
+Date: 2026-11-06. Status: slices 0, 1 and 2 built 2026-11-06, the fallback signal read from the inflated set on 2026-11-07 at the user's call, with a split-half comparator measured beside it; on 2026-11-07 both became diagnostics on every set, with no trigger, at the user's decision; slice 3, the split form, built 2026-11-07 at the user's go-ahead (reports below); slice 4 read on 2026-11-07: the in-sample predictive CDF is not monotone in y where the draws' predictives separate, so it was not adopted, the log CDF seams landed, and the predictive distribution's score waits for the user's choice. Written at the user's request from [E16](bass/extensions-brief.md#conformal-bayes-the-consumer) and the [conformal Lean contract](../../lean/Protolemmata/Conformal/conformal-lemmas.md).
 
 ## Why
 
@@ -117,6 +117,49 @@ Under "Reports" below, newest first, per slice: what landed by commit; the gates
 
 Newest first.
 
+### 2026-11-07 — Slice 4, the predictive distribution: the reading, and the score not adopted
+
+Started at the user's go-ahead of 2026-11-07 ("Yes, start both", relayed by the main session). The row reads the in-sample predictive CDF's monotonicity first and adopts it as the score only if it holds. It does not hold in general, so the slice stops at the reading, as the go-ahead asked, and the score waits for the user's choice.
+
+**The reading.** The full numbers are on [the page](../../docs/Maths/ConformalPrediction.md#the-predictive-distribution-slice-4-the-reading). The score is F̃(y) = Σ_s w̃_s(y) F(y | x, θ_s) under the add-one-in weights, swept along a grid and compared on the tail that holds its digits.
+- *It holds where the draws sit in one mode.* That covers the conjugate model's exact posterior at S 50, 400 and 4,000 and a chain stopped early there, and BASS's healthy, Student t and wrong fits. The t fit's π fell once, by 1 of 100.
+- *It falls where the draws' predictives at x separate.* With two conjugate chains stuck apart, the score falls on 44 of 100 cases and π by up to 4 of 20. With BASS's chain stopped early (one chain, no burn-in, 20 draws), it falls on 3 of 50 cases and π by up to 3 of 100.
+- *Why.* The slope is the reweighted density plus Cov_w̃(∂_y ln p, F), which is negative where draws differ in location. Two equal draws N(±a, 1) give φ(a) − a(Φ(a) − ½) at their midpoint, which falls once they stand 1.75σ apart (a ≈ 0.877).
+- *Vovk's second condition fails almost everywhere.* Half the conjugate units and 89 to 100% of BASS's rise with the candidate. Where π stays monotone it is a reading, not a theorem.
+- *What a falling score loses.* Its PIT would still be uniform, since a conformal p-value needs no monotone score. What it loses is the CDF: quantiles, CRPS and a distribution to report.
+
+**The alternatives,** recorded on the page for the user's choice:
+1. *The split form's predictive distribution* (Vovk, Petej, Nouretdinov, Manokhin and Gammerman 2020). Its score is the training fit's predictive CDF F̂(y | x). Both conditions hold by construction, CB-2 makes it valid for any fit, and it needs no product over the units. This is the recommendation: slice 3's split and these seams are all it needs.
+2. *The full step's score with a per-case check.* It is a CDF where π rises and flagged where it falls. It fails where the sampler is in doubt.
+3. *A monotone envelope.* Its PIT is not uniform; not recommended.
+4. *Cross-conformal predictive distributions.* Approximate validity, at K fits.
+
+**Landed** on `main`, nothing pushed (the commits are in the log beside this report):
+- *The log CDF seams.* `PointwiseLogDensity.LogCdf` (draws × units, each unit one observation) and `CandidateLogDensity.LogCdf` carry each draw's ln F beside its ln p. A probability rounds F to 1 in the upper tail. Held that way in a first reading, the units rising toward the candidate tied with it, and π fell spuriously on 4 to 54 of 100 conjugate cases. The log keeps 1 − F, and those falls vanish.
+- *BASS fills them on `cdf: true`* (`BassFit.PointwiseLogDensity`, `BassFit.CandidateLogDensity`; `BassCandidates.UnitLogCdf`), from the law at the draw (`IBassNoiseLaw.At`) or N(f, σ²). Above each draw's median it reads ln(1 − S) from the law's survival (`BassCandidates.LogCdf`). No noise law changed.
+- *The reading as tests,* the quick form ungated and the full form with `BASS_QUALIFICATION=1`, and the page's section.
+- *Outside the listed files:* `BassFit.cs`, the seam's two entry points that slice 1 added. Its diff was clean before the edit.
+
+**Gates.**
+- *Units and candidates read one distribution* (CB-4). At the training cases the units' log CDF equals the candidates', bit for bit, under all six laws.
+- *Each draw's CDF is its density's integral* by Simpson's rule, step 0.0005. The largest gaps are 1.5·10⁻¹⁴ (Gaussian), 2.2·10⁻¹³ (t), 7.2·10⁻⁷ (asymmetric Laplace, at its kink), and 2.3·10⁻⁷ to 3.2·10⁻⁶ for the tabled laws.
+- *The upper tail* holds the law's survival to 10⁻¹², out to 32 scales.
+- *The refusals.* A unit of two observations, the collapsed content, a bad shape, a value above 0 or NaN, and a weighted fit's units are refused.
+- *The reading's pieces:* the tail comparison, and the two-draw slope against its closed form.
+- *Nothing upstream moves.* All 235 neighbouring tests pass: the conformal layer, the pointwise and candidate seams, PSIS-LOO and the predictive checks. No sampler or pointwise matrix changed, so no pinned hash can move.
+- *Not run.* PIT on held-out data and the cost row wait for an adopted score. The seam's own cost is the law's CDF read beside its density read: a closed form for the Gaussian, t and asymmetric Laplace, and for the tabled laws one table built per draw.
+
+**Found and handed on, not fixed here.** The Normal-Wald's, skewed t's and generalized hyperbolic's `LogCdf` comes from `NormalVarianceMeanMixture`, whose tail table ends at the 10⁻¹² tails. Beyond the upper end (`TailTable.Read`, past `_at[^1]`), it integrates the lower side, so it loses 1 − F's digits and can read above 0: +2.9·10⁻¹⁵ for the generalized hyperbolic at 32 scales, and above 0 too on a Normal-Wald fit's skewed draws. Reading that end as ln(1 − S) from the upper integral would keep them. The file belongs to the noise laws' chip. The seam reads the survival above the median, so it does not wait on the fix.
+
+**Found in review and fixed.**
+- Slice 3's report and the page said no noise law reports its variance. `IBassNoiseLaw.Variance` exists, but it is infinite for t at ν ≤ 2, and prediction gives none per case. Both lines are corrected, and the IQR stays the spread that serves every law.
+- The page wrote the CDF scores as α, which on that page is the miscoverage level. They are F̃ now.
+- The tabled laws' integral tolerance was tightened from 2·10⁻⁴ to their tables' 2·10⁻⁵.
+
+**Notation:** the ledger now holds slice 3's ρ(x) beside σ and σᵢ, and slice 4's F̃ beside α and Vovk's α.
+
+**Follow-ups:** the score for the predictive distribution, the user's choice among the alternatives above. The mixtures' far upper tail is for the noise laws' chip.
+
 ### 2026-11-07 — Slice 3, the split form
 
 Built at the user's go-ahead of 2026-11-07 ("Slice 1 + conformal 3", relayed by the main session).
@@ -131,7 +174,7 @@ Built at the user's go-ahead of 2026-11-07 ("Slice 1 + conformal 3", relayed by 
   - a `ConformalSet` with no margin reads its inflated rule as its plain one, and its coverage under error as its coverage;
   - `ConformalPrediction` carries its `Form`;
   - `PredictiveChecks.Rows` reads a weights list, so the candidate density's weights take the same rows.
-- *No engine code changed.* BASS joins through the seam it already has (slice 1), with `BassPrediction.Quantile` for CQR and `ObservationMean` with the predictive's interquartile range for the residual. No noise law reports its variance, so the IQR is the spread that serves every law.
+- *No engine code changed.* BASS joins through the seam it already has (slice 1), with `BassPrediction.Quantile` for CQR and `ObservationMean` with the predictive's interquartile range for the residual. A law's variance is infinite for t at ν ≤ 2 and prediction reports none per case, so the IQR is the spread that serves every law (corrected in slice 4's review: this line first said no law reports its variance).
 - *The page* gains a split form section with its choices and what is not built, its checks and cost, and the API rows.
 
 **Gates** (`SplitConformalTests`; `BassSplitConformalTests` and the cost row with `BASS_QUALIFICATION=1`). The full numbers are on [the page](../../docs/Maths/ConformalPrediction.md#checks-and-cost-slice-3).
