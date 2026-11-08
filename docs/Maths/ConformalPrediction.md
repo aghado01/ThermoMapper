@@ -1,6 +1,6 @@
 # Conformal prediction
 
-> The conformal layer (E16): prediction sets whose coverage holds in finite samples under exchangeability, whatever the model, from an engine's retained draws and pointwise densities with no refit. The layer owns the guarantee and the score owns the width, so the layer is built once, engine-free, and each engine contributes densities. Built: the full step (Fong and Holmes's conformal Bayes) over a training density and a candidate density; BASS's candidate density for every noise law; and CB-3's reading of the scores' Monte Carlo error, with the margin, the inflated rule and the fallback signal. The split form, the predictive distribution and the other engines' candidate seams follow.
+> The conformal layer (E16): prediction sets whose coverage holds in finite samples under exchangeability, whatever the model, from an engine's retained draws and pointwise densities with no refit. The layer owns the guarantee and the score owns the width, so the layer is built once, engine-free, and each engine contributes densities. Built: the full step (Fong and Holmes's conformal Bayes) over a training density and a candidate density; BASS's candidate density for every noise law; CB-3's reading of the scores' Monte Carlo error, with the margin, the inflated rule and two diagnostics; and the split form, with density, CQR and residual scores. The predictive distribution and the other engines' candidate seams follow.
 
 ## Overview
 
@@ -9,7 +9,9 @@ Conformal prediction ranks a candidate observation among the data by a conformit
 What it serves, by problem class:
 - prediction sets for a new observation that hold whether or not the noise model is right;
 - coverage within strata, for partially exchangeable data (Mondrian conformal prediction, Vovk; grouped conformal Bayes, Fong and Holmes);
-- later, a calibrated predictive distribution at each x, and a guarantee that does not lean on the sampler (the split form).
+- a guarantee that does not lean on the sampler: the split form, valid for any fit, a chain stopped early or a wrong model included;
+- intervals whose width follows the noise, from any fit's quantiles (CQR) or centre and scale;
+- later, a calibrated predictive distribution at each x.
 
 It does not reach a curve's or a parameter's own intervals: those stay with [calibrated intervals and resampling](../../issues/regression/bass/extensions-brief.md#calibrated-intervals-for-loss-based-posteriors).
 
@@ -130,6 +132,30 @@ The chains are AR(1) about the exact posterior, two chains of 500, so they mix m
 - *The layer's signal discriminates only for the slowest chains,* and fires rarely there. At small S its trust trigger fires where the plain set holds: at S 40, 59% of cases, covering 0.912. The gap alone above 0.5 behaves as the signal does on the chains and almost never fires on exact draws.
 - *On the BASS fits neither discriminates,* because the plain set loses nothing there. The split-half mass is large anyway (median 0.033 Gaussian, 0.014 t) and fires on 74% and 61% of cases at 0.1α. 0.1α is a starting point, not a calibrated share.
 - *At slice 1's degenerate Gaussian weights* (ESS 1.5 to 48), all eight true values are misses, outlying truths the plain set refuses. The layer's signal fires at six of their grids, the split-half at seven, with masses 0 to 0.125.
+
+## The split form (CB-2)
+
+**What it is.** The data split in two. A fit is made on the training split, and held-out calibration units are scored by it. For a test case in stratum h with n_h calibration units, m = n_h + 1 and k = ⌊α·m⌋. A candidate y is accepted when its score reaches the k-th smallest calibration score: the full step's rule, ties counted for the candidate (`SplitCalibration`). The set covers at least 1 − k/m, and exactly 1 − k/m with distinct scores (`split_coverage`).
+
+**What it buys: a guarantee that does not lean on the sampler.** The fit may be any function of the training split, its sampler's seeds and its whole chain included (`split_coverage` holds for every `fit`; `splitScore_equivariant`). A chain stopped early, a wrong model and draws that never mixed all cover; they only widen the set. The draws' Monte Carlo error is part of the fit, so it costs no coverage. A split set carries no margin, no ESS and no diagnostics, and its `CoverageUnderError` is its `Coverage`. The hypothesis is that the calibration and test units are exchangeable given the training split, which exchangeability of every unit gives (`exchangeable_given_training`). The layer cannot check that the fit never saw the calibration units; the caller's split must hold it.
+
+**What it costs: the calibration units.** The fit does not see them, so its scores are weaker and its sets wider, and the level steps in 1/m of the calibration's m, not the data's. So the full step suits good draws and scarce data, and the split form suits a guarantee that must not lean on the sampler (E16's reading). Neither replaces the other, and nothing switches between them on its own (the user's decision of 2026-11-07).
+
+**Three scores,** each higher conforming better:
+- *The predictive density* (`SplitConformal.Density`). The score is ln p̂(y | x) = ln Σ_s W_s p(y | x, θ_s), read through the candidate seam: the calibration cases each on a grid of one value, its response, and the test cases on their grids. The arithmetic is the full step's predictive, bit for bit, so equal columns tie. The set is π on the grid, a union of intervals, reported as a `ConformalSet` under `ConformalForm.Split`. It is the predictive's highest-density region, its level set by the calibration rather than by the model.
+- *CQR's* (`SplitConformal.Quantiles`; Romano, Patterson and Candès 2019). The score is min(y − q_lo(x), q_hi(x) − y), Lean's `cqrScore` and the negative of their max(q_lo − y, y − q_hi). Its set is the interval [q_lo − Q, q_hi + Q], where Q is the negated threshold, the k-th largest calibration max(q_lo − y, y − q_hi) (`cqr_ordConnected`). It is empty when the test case's band q_hi − q_lo is less than −2Q. That needs Q < 0, which happens when most calibration units fall well inside their bands, or quantiles that cross by more than 2Q. Any fit's quantiles serve: a quantile fit's surface (quantile BASS) or a predictive's quantiles (`BassPrediction.Quantile`).
+- *The standardized residual* (`SplitConformal.Residuals`). The score is −|y − μ(x)|/ρ(x), and its set is μ ± Qρ, where Q is the k-th largest calibration |y − μ|/ρ. The scale is Lei et al.'s ρ, since σᵢ on this page are the full step's scores. With no scale it is the absolute residual. Lei et al.'s locally weighted form is this score with ρ a fitted spread. BASS's `ObservationMean` with the predictive's interquartile range, `Quantile(0.75) − Quantile(0.25)`, serves every noise law, since no law reports its variance.
+
+**Closed forms where the set is an interval.** CQR's and the residual's sets are intervals with ends in closed form, so they need no grid. Their ends are exact to rounding, and each case costs one addition after the calibration's sort. The density's set is not an interval in general, so it is read on a grid.
+
+**Strata** (Mondrian; `coverage_stratum`). Each test case is ranked among its stratum's calibration units. Below m = ⌈1/α⌉ the set is the whole line, and a stratum with no calibration unit has m = 1.
+
+**One function of the unit.** For the density, the calibration's and the test cases' candidate densities must hold the same draws, chain lengths, weights and latent report, or the layer refuses them. It also refuses a calibration unit read on a grid of more than one value.
+
+**Not built,** with what each would change:
+- CQR's asymmetric form, a threshold per tail at α/2 each, which Romano, Patterson and Candès also give. It would cover each tail separately, at more width.
+- Cross-conformal and the jackknife+ (Barber, Candès, Ramdas and Tibshirani, 2021). They use every unit in both roles at 1 − 2α, at the cost of K fits or n.
+- The tournament correction, recorded in E16, which keeps all the data at 1 − 2α for any sampler, at n leave-one-out chains.
 
 ## Numerics
 
@@ -289,6 +315,46 @@ Run on `ConformalMarginTests`, and with `BASS_QUALIFICATION=1` on `BassConformal
 - *Most of it is still the margin:* the two error products, the bands, k̂ and each candidate's r_eff.
 - *The gap needs only the per-position errors,* the two error products and r_eff, not the bands or k̂. So the margin's always-on question, slice 2's, would leave the gap's cost and remove the bands' and k̂'s, 60 to 160 ms per grid in these rows.
 
+## Checks and cost (slice 3)
+
+**Checks** (`SplitConformalTests`; `BassSplitConformalTests` and the cost row with `BASS_QUALIFICATION=1`).
+- *The rule against the count* (`card_rankLe_le`): 2,000 seeded calibrations with tied and infinite scores, strata of one and strata with none. Every probe agrees.
+- *CB-2 by exact enumeration* (`split_coverage`, `exchangeable_given_training`). There are 200 laws, each with three training outcomes, units on five values, m from 2 to 5, and a random fit, wrong ones among them. Coverage is at least 1 − k/m in every law, and exactly 1 − k/m for injective fits on distinct values (`coverage_orderings_eq`).
+- *The density score* equals a reference in logs to 10⁻¹², and the full step's predictive bit for bit. This held over 300 sweeps of weighted draws, chains, terms near −800 and +600, −∞ columns and strata. A test column copied from a calibration unit ties with it.
+- *CQR's set is an interval* (`cqr_ordConnected`), and so is the residual's. The sweep covered 1,500 trials (7,980 sets, 550 of them empty) with crossing quantiles, tied responses and scales from 10⁻¹⁵⁰ to 10¹⁵⁰. On a grid through and past each set, the rank rule read by the count runs unbroken, and it agrees with the closed form except within rounding of an end.
+- *Coverage for any fit on the conjugate model,* under the slice 0 truth the model does not share. There are 30 training units and 19 calibration units (m 20, k 2, nominal 0.900), and 2,000 replications of 20 test cases. The se, 0.0021, comes from coverage's Beta law given the calibration. Each cell is coverage (mean width), the density's width read on 600 sets per fit, none reaching the grid's ends:
+
+| Fit | Its own 90% interval | Density | CQR | Residual |
+|---|---|---|---|---|
+| The exact posterior | 0.791 | 0.900 (5.36) | 0.900 (5.31) | 0.900 (5.30) |
+| A wrong fit | 0.237 | 0.899 (6.43) | 0.898 (6.51) | 0.896 (12.39) |
+| A chain stopped early | 0.243 | 0.899 (17.62) | 0.900 (17.64) | 0.899 (17.54) |
+
+  - *The wrong fit* flips the slope's sign under an overconfident noise sd of 0.25, crosses CQR's quantiles, and shapes the residual's scale against the noise. *The chain stopped early* is forty Metropolis steps from β = 5.
+  - Both cover, while their own intervals cover about a quarter of cases. Wrongness costs width, not coverage, and the misshaped scale costs the most.
+- *Coverage for any BASS fit* on slice 1's contaminated data. There are 99 training units and 199 calibration units (m 200, k 20), and 30 fits of 100 test cases each, se 0.0067. Each cell is coverage (mean width):
+
+| Fit | Its own 90% interval | Density | CQR | Residual |
+|---|---|---|---|---|
+| A chain stopped early (one chain, no burn-in, 20 retained draws) | 0.951 (2.50) | 0.908 (1.87) | 0.912 (2.02) | 0.911 (1.92) |
+| A wrong fit (it never sees x₀) | 0.946 (2.81) | 0.909 (2.50) | 0.909 (2.50) | 0.910 (2.50) |
+| A healthy fit | 0.925 (1.60) | 0.907 (1.21) | 0.909 (1.34) | 0.909 (1.26) |
+| Quantile BASS at 0.05 and 0.95, CQR on their surfaces | 0.853 (1.27) | | 0.906 (1.48) | |
+
+  - Every reading lies within two se of 0.900, and all sit above it together: the four facts share their 30 data sets, so one calibration draw moves them alike.
+  - CQR corrects the quantile pair's undercoverage at 17% more width. One of its 3,000 intervals is empty.
+  - No density set split into two intervals or reached the grid's ends.
+
+**Cost** at n 1,000 calibration units and G 200, on the cycle clock, best of five. Indicative, on a loaded machine:
+
+| S | Calibration, once per stratum | Per grid | Per candidate | The step on one grid | CQR, calibration and 200 intervals | The residual's |
+|---|---|---|---|---|---|---|
+| 1,000 | 12.0 ms | 2.1 ms | 10.6 µs | 14.5 ms | 0.70 ms | 0.65 ms |
+| 4,000 | 48.9 ms | 7.3 ms | 36.5 µs | 54.4 ms | 0.33 ms | 0.40 ms |
+
+- *The density score costs one predictive per candidate.* It needs no product over the units and no margin, against the full step's 644 to 700 ms per grid at S 4,000.
+- *On BASS the readings cost more than the fits.* Each Gaussian fact at S 1,000 reads four predictive quantiles (`BassPrediction.Quantile`) at 299 cases, and took 812 to 860 s for 30 replications. The chain stopped early, at S 20, took 17 s. The quantile pair took 27 s for 60 fits, since its readings are surface means.
+
 ## API at a glance
 
 | Area | Types and members |
@@ -298,12 +364,13 @@ Run on `ConformalMarginTests`, and with `BASS_QUALIFICATION=1` on `BassConformal
 | The full step | `ConformalBayes.FullStep(training, candidates, ConformalOptions { Alpha, ErrorLevel, Inflate, FallbackShare (opt-in, null by default), MarginBounds })` → `ConformalPrediction(Sets, Alpha)`; `ConformalBayes.Scores(training, candidates, column)` → `ConformalScores(Units, Scores, Candidate, EffectiveSampleSize)` |
 | A case's set | `ConformalSet`: `Stratum`, `Units` (m), `Level` (k), `Coverage`, `WholeSpace`, `Grid`, `PValues`, `Below`, `Tied`, `CandidateScores`, `EffectiveSampleSizes`, `Accepts(g)`, `Intervals` (`GridInterval(Lower, Upper)`), `Resolution`, `OpenBelow`, `OpenAbove`, `Width` |
 | CB-3's reading | `ConformalSet.Gap`, `SplitHalfMass`, `SplitHalfDisagreements`, `AcceptsPlain(g)`, `AcceptsInflated(g)`; `ConformalSet.Margin` → `ConformalMargin` (`Multiple`, `CandidateErrors`, `UniformErrors`, `Fragile`, `InflatedRanks`, `ParetoK`, `ParetoKThreshold`, `Bounds`, `Count`, `Untrusted(k)`); `ConformalSet.Inflated`, `ErrorLevel`, `CoverageUnderError`, `FallBack`; `MarginBounds` (`Uniform`, `Carried`); `ConformalScores.Errors`, `CandidateError` |
+| The split form | `SplitConformal.Density(calibration, candidates, alpha)` → `ConformalPrediction(Sets, Alpha, Form)`; `SplitConformal.Quantiles(QuantileReadings(Lower, Upper, StratumOf), response, test, alpha)` and `SplitConformal.Residuals(ResidualReadings(Center, Scale, StratumOf), response, test, alpha)` → `ConformalIntervals(Intervals, Alpha, Calibration)`; `ConformalInterval`: `Units`, `Level`, `Threshold`, `Lower`, `Upper`, `WholeSpace`, `Coverage`, `Empty`, `Width`, `Contains(y)`; `SplitConformal.Calibrate(scores, stratumOf, alpha)` → `SplitCalibration`: `Units(h)`, `Level(h)`, `Threshold(h)`, `Rank(h, s)`, `PValue(h, s)`, `Accepts(h, s)`; `ConformalForm` (`Full`, `Split`) |
 | The product | `DenseProduct.Multiply`, `Pack`, `FusedDot`; `PackedColumns` |
 
 ## Not built yet
 
 - A margin with bounds sure over every ordering, which needs each unit's error under every other unit's weights.
-- The split form, with density, CQR and residual scores (slice 3).
+- CQR's asymmetric form, cross-conformal and the jackknife+ (above).
 - The conformal predictive distribution, with PIT and CRPS, and random tie-breaking with it (slice 4).
 - The candidate seams of BARS, BAPS, the hierarchical P-spline, BGP and the changepoint posterior (slice 5), and BASS's for a direct functional fit's curves (E17).
 - CB-4's latent-posterior reading, and Hoff's leave-one-out score.

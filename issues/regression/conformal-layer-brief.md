@@ -1,6 +1,6 @@
 # The conformal layer: E16's build (chip brief)
 
-Date: 2026-11-06. Status: slices 0, 1 and 2 built 2026-11-06, the fallback signal read from the inflated set on 2026-11-07 at the user's call, with a split-half comparator measured beside it; on 2026-11-07 both became diagnostics on every set, with no trigger, at the user's decision (reports below); slice 3 waits for the user. Written at the user's request from [E16](bass/extensions-brief.md#conformal-bayes-the-consumer) and the [conformal Lean contract](../../lean/Protolemmata/Conformal/conformal-lemmas.md).
+Date: 2026-11-06. Status: slices 0, 1 and 2 built 2026-11-06, the fallback signal read from the inflated set on 2026-11-07 at the user's call, with a split-half comparator measured beside it; on 2026-11-07 both became diagnostics on every set, with no trigger, at the user's decision; slice 3, the split form, built 2026-11-07 at the user's go-ahead (reports below); slice 4 waits for the user. Written at the user's request from [E16](bass/extensions-brief.md#conformal-bayes-the-consumer) and the [conformal Lean contract](../../lean/Protolemmata/Conformal/conformal-lemmas.md).
 
 ## Why
 
@@ -116,6 +116,47 @@ Under "Reports" below, newest first, per slice: what landed by commit; the gates
 ## Reports
 
 Newest first.
+
+### 2026-11-07 — Slice 3, the split form
+
+Built at the user's go-ahead of 2026-11-07 ("Slice 1 + conformal 3", relayed by the main session).
+
+**Landed** on `main`, nothing pushed (the commits are in the log beside this report):
+- *`SplitConformal`,* engine-free, gives CB-2 (`split_coverage`) for any fit. There are three scores, each ranked within the test case's stratum among the calibration units by the full step's rule, ties counted for the candidate:
+  - *the predictive density* (`Density`), ln Σ W_s p(y | x, θ_s), read through the candidate seam at each calibration case's response. Its arithmetic is the full step's predictive, bit for bit. Its sets are `ConformalSet`s on the grid under `ConformalForm.Split`, with no margin, ESS or diagnostics;
+  - *CQR's* (`Quantiles`), min(y − q_lo, q_hi − y), Lean's `cqrScore`, whose interval [q_lo − Q, q_hi + Q] comes in closed form;
+  - *the standardized residual's* (`Residuals`), −|y − μ|/ρ, whose interval is μ ± Qρ.
+- *`SplitCalibration`* serves any score with per-stratum thresholds, ranks, π and the accept rule.
+- *Upgrades:*
+  - a `ConformalSet` with no margin reads its inflated rule as its plain one, and its coverage under error as its coverage;
+  - `ConformalPrediction` carries its `Form`;
+  - `PredictiveChecks.Rows` reads a weights list, so the candidate density's weights take the same rows.
+- *No engine code changed.* BASS joins through the seam it already has (slice 1), with `BassPrediction.Quantile` for CQR and `ObservationMean` with the predictive's interquartile range for the residual. No noise law reports its variance, so the IQR is the spread that serves every law.
+- *The page* gains a split form section with its choices and what is not built, its checks and cost, and the API rows.
+
+**Gates** (`SplitConformalTests`; `BassSplitConformalTests` and the cost row with `BASS_QUALIFICATION=1`). The full numbers are on [the page](../../docs/Maths/ConformalPrediction.md#checks-and-cost-slice-3).
+- *The rule against the count* (`card_rankLe_le`): 2,000 seeded calibrations with ties, infinite scores and empty strata, every probe agreeing.
+- *CB-2 by exact enumeration* (`split_coverage`, `exchangeable_given_training`, `coverage_orderings_eq`) over 200 laws with random fits, wrong ones among them. Coverage is at least 1 − k/m in every law, and exactly 1 − k/m for injective fits on distinct values.
+- *The density score* matches a reference in logs to 10⁻¹² and the full step's predictive bit for bit. A copied column ties.
+- *CQR's set is an interval* (`cqr_ordConnected`), and so is the residual's. Over 7,980 sets, 550 of them empty, the rank rule runs unbroken and agrees with the closed form except within rounding of an end.
+- *Coverage for any fit.* On the conjugate model (m 20, nominal 0.900, se 0.0021), the exact posterior, a wrong fit and a chain stopped early cover 0.896 to 0.900 under all three scores. The two bad fits' own intervals cover 0.24. On BASS (m 200, se 0.0067), a chain stopped early, a fit that never sees x₀, and a healthy fit cover 0.907 to 0.912. The four BASS facts share their data, so their readings move together. CQR on a quantile pair covers 0.906 where its own intervals cover 0.853.
+- *Nothing upstream moves:* 100 of 100 neighbouring tests pass, PSIS-LOO, the pointwise density and slices 0 to 2 among them. No engine file changed, so no pinned hash can move.
+
+**Cost** (cycle clock, indicative, loaded machine), per grid of 200 at n 1,000 calibration units:
+- the density score costs 2.1 ms at S 1,000 and 7.3 ms at S 4,000, against the full step's 644 to 700 ms, plus the calibration's predictive once per stratum (12 and 49 ms);
+- CQR's and the residual's calibration with 200 intervals each cost under 1 ms.
+- *A cost finding, not a defect.* On BASS the readings cost more than the fits. Each Gaussian fact at S 1,000 read four predictive quantiles at 299 cases and took 812 to 860 s for 30 replications. The quantile pair, read from surface means, took 27 s for 60 fits. If the split form on BASS runs routinely at large S, `PredictiveMixture.Quantile`'s speed sets its cost. Nothing waits on it now.
+
+**Found in review and fixed.**
+- The coverage test's width grid was too narrow: 7 of 1,800 density sets reached its ends, so their widths were read short. It now spans [−50, 50], none reach it, and the chain stopped early reads 17.62 where it read 15.36.
+- Two `ConformalSet` parameter docs described only the full step; they now give the split form's readings.
+- E16's slice 2 line still said the fallback signal fires; it now records the decision of 2026-11-07.
+
+**Notation:** the residual's scale is ρ(x), Lei et al.'s symbol, since σᵢ on the page are the full step's scores. This is for `issues/notation-ledger.md` once the GBASS chip commits it.
+
+**Not built,** recorded on the page with what each would change: CQR's asymmetric form, cross-conformal and the jackknife+, and the tournament correction (E16).
+
+**Follow-ups:** none with a decision waiting. Slice 4, the predictive distribution, waits for the user.
 
 ### 2026-11-07 — The fallback diagnostics on every set, with no trigger
 
