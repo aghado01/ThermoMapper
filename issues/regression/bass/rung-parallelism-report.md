@@ -4,7 +4,7 @@ Taken up from the lineage review's *parallel rungs* item ([lineage-review.md](li
 
 ## What landed
 
-On `main`, nothing pushed: `454f2ef` the count-law table; `4776ff5` the ladder's option and its sampler tests; `efd32a1` BASS's run option, its wiring, tests and docs; this report after them.
+On `main`, nothing pushed: `454f2ef` the count-law table; `4776ff5` the ladder's option and its sampler tests; `efd32a1` BASS's run option, its wiring, tests and docs; this report after them (`0d72a37`); then `451cd49` the fit's paragraph in `BayesianRegression.md`, and `81cf586` SMC's split through `Split` (regression commit scope 1,615 of 1,615).
 
 - **The ladder's option.** `ParallelTempering.MaxDegreeOfParallelism`, 1 by default: in order, on the caller's thread.
   - Above 1, the scan's rung steps (moves, blocks, or the reference rung's exact draw) fan out through `Parallel.For`. The swaps, the round-trip bookkeeping and the traces run after every rung has stepped, as before.
@@ -17,7 +17,7 @@ On `main`, nothing pushed: `454f2ef` the count-law table; `4776ff5` the ladder's
 - **The count-law table precomputed.** `BassStructurePrior.LogCollectionWeight` read a 1,024-entry table filled on first read (NaN until then), shared by every chain and rung of a fit. It is now filled when the prior is made, by the same expression, so nothing writes to it after.
 - **Docs.** `docs/Maths/Samplers.md` (tempering: rungs at once; the API row; the configuration table) and `BassLadder`'s, `BassEnsemble`'s and the pilot's docstrings.
 
-`BassSmcRun` keeps its own inline split (the same arithmetic). The adaptive-mutation session was working beside that file, so the call to `Split` there is left to its next change.
+`BassSmcRun` kept its own inline split (the same arithmetic) while the adaptive-mutation session worked beside that file; it calls `Split` since `81cf586`.
 
 ## The audit: what a rung's step reaches
 
@@ -105,9 +105,7 @@ The 48-rung stress run read the same way: 3.0 s in order against 3.6 s at once (
 - **BARS's rungs at once.**
   - Needs per-rung evaluation tallies (one per replica, merged at the readout, or an atomic add), and a bound on `BarsEnsemble.Run` to split.
   - Its rung steps are shorter still (a 1-D spline's design and factor), so the same free-core reading decides whether to wire it at all.
-- **`BassSmcRun` through `Split`.** One call in place of its two inline lines, the same numbers, for whichever session next edits that file.
 - **The fan-out's grain.** One `Parallel.For` per scan, waiting on its last rung.
   - If the free-core reading shows the wait dominating at BASS's step lengths, steps could be grouped to fewer, longer tasks.
   - The ladder could also step in order below a rung count set in the config.
   - Neither may be chosen from measured load or timing at run time.
-- **`BayesianRegression.md`'s fit paragraph** names `RungWorkers` beside the bound once the KHAOS session's pending edit to that file lands; it was left out so the two sessions' hunks would not ride each other's commits.
