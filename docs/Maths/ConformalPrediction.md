@@ -252,18 +252,18 @@ The chains are AR(1) about the exact posterior, two chains of 500, so they mix m
 - *Agreement with slice 3's sets.* The equi-tailed set is slice 3's split rule in each tail at α/2 on the CDF score, at every one of 61,127 grid values in the bulk. On a fit that is right (data from the model, m 2,000), its ends, the density set's and CQR's all meet the fit's own central 90% interval. The mean gaps run 0.001 to 0.020 over 100 cases, each within four of its standard errors and a grid step (0.02).
 - *CRPS against a quadrature reference.* The exact step distribution, read at 16 times the grid's resolution, gives the reference. The grid's CRPS lies within 1.3·10⁻³ of it at m 20 and 4.6·10⁻⁴ at m 200 (means 4.9·10⁻⁴ and 1.3·10⁻⁴), against the bound h(1 + 1/(3m)) = 0.010.
 
-**The measured default.** Both forms run on the same data. The split form fits the training split and calibrates on the rest; the full step fits all of it. On the conjugate model that is 30 + 19 units against 49, 500 replications of 10 test cases. On BASS it is 99 + 199 against 298, 20 fits of 100 test cases. Width and CRPS are read where both give a distribution, on 200 grid cases a fit; cost is the layer's per case, the seams built before the clock.
+**The measured default.** Both forms run on the same data. The split form fits the training split and calibrates on the rest; the full step fits all of it. On the conjugate model that is 30 + 19 units against 49, 500 replications of 10 test cases. On BASS it is 99 + 199 against 298, 20 fits of 100 test cases. Width and CRPS are read where both give a distribution, on 200 grid cases a fit. Cost is the layer's per case, the seams built before the clock, on the wall clock in one pass, so indicative. It was read again on slice 4's final code: the first reading ran before the review's cost fix and overstated both forms, the split form's most. Every other reading came out the same to its last digit.
 
 | Fit | The full step flags | 90% width, split / full | CRPS, split / full | The full step's PIT, every case / unflagged, KS | Cost per case, split / full |
 |---|---|---|---|---|---|
-| Conjugate, the exact posterior | 0% | 6.22 / 5.97 | 0.902 / 0.814 | 0.019 / 0.019 | 4.7 / 12.1 ms |
-| Conjugate, a wrong fit | 1.6% | 7.46 / 7.99 | 1.262 / 1.178 | 0.021 / 0.018, a bin 4.1 se out | 7.4 / 13.4 ms |
-| Conjugate, a chain stopped early | 0% | 18.15 / 18.51 | 3.225 / 3.029 | 0.011 / 0.011 | 0.9 / 2.5 ms |
-| Conjugate, two chains stuck apart | 66% | 4.65 / 5.35 (66 cases) | 0.688 / 0.649 | 0.171 / 0.028 | 5.2 / 14.0 ms |
-| BASS, a healthy fit | 0.1% | 1.322 / 1.335 | 0.2044 / 0.1993 | 0.022 / 0.022 | 80 / 308 ms |
-| BASS, the Student t fit | 0.1% | 1.303 / 1.317 | 0.1956 / 0.1884 | 0.018 / 0.018 | 91 / 355 ms |
-| BASS, a wrong fit (it never sees x₀) | 0% | 2.478 / 2.448 | 0.4770 / 0.4632 | 0.018 / 0.018 | 65 / 233 ms |
-| BASS, a chain stopped early (one chain, no burn-in, 20 draws) | 8.5% | 2.030 / 2.161 (179 cases) | 0.3448 / 0.3439 | 0.031 / 0.036, a bin 3.8 se out | 1.0 / 4.7 ms |
+| Conjugate, the exact posterior | 0% | 6.22 / 5.97 | 0.902 / 0.814 | 0.019 / 0.019 | 1.4 / 4.8 ms |
+| Conjugate, a wrong fit | 1.6% | 7.46 / 7.99 | 1.262 / 1.178 | 0.021 / 0.018, a bin 4.1 se out | 1.9 / 5.2 ms |
+| Conjugate, a chain stopped early | 0% | 18.15 / 18.51 | 3.225 / 3.029 | 0.011 / 0.011 | 0.3 / 1.1 ms |
+| Conjugate, two chains stuck apart | 66% | 4.65 / 5.35 (66 cases) | 0.688 / 0.649 | 0.171 / 0.028 | 1.3 / 4.7 ms |
+| BASS, a healthy fit | 0.1% | 1.322 / 1.335 | 0.2044 / 0.1993 | 0.022 / 0.022 | 12 / 72 ms |
+| BASS, the Student t fit | 0.1% | 1.303 / 1.317 | 0.1956 / 0.1884 | 0.018 / 0.018 | 19 / 97 ms |
+| BASS, a wrong fit (it never sees x₀) | 0% | 2.478 / 2.448 | 0.4770 / 0.4632 | 0.018 / 0.018 | 20 / 118 ms |
+| BASS, a chain stopped early (one chain, no burn-in, 20 draws) | 8.5% | 2.030 / 2.161 (179 cases) | 0.3448 / 0.3439 | 0.031 / 0.036, a bin 3.8 se out | 0.6 / 4.4 ms |
 
 The conjugate costs are per grid of 401, and BASS's per grid of 901 at S 1,000.
 
@@ -272,15 +272,15 @@ The conjugate costs are per grid of 401, and BASS's per grid of 901 at S 1,000.
 - *The full step needs draws that are a posterior.* The two chains stuck apart are not one, and its PIT breaks over every case (KS 0.17). Two thirds of those cases are flagged, so the flag marks where it fails. The conjugate wrong fit is not a posterior either, and its PIT is off by a bin at 4.1 se. The conjugate chain stopped early is a narrow cluster: the add-one-in weights barely move it, so every unit is read alike and its PIT holds. BASS's chain stopped early is no posterior either: 8.5% of its cases are flagged, and the full step's PIT sits a bin 3.8 se out over every case. BASS's wrong fit is a posterior that mixed, of a model that never sees x₀, and the full step holds there (KS 0.018): the model may be wrong, but the draws must be its posterior.
 - *So the default stays the split form,* as decided. The reading gives no reason to move it: the full step's gain is a few percent where it is valid, and where its premise fails the flag often catches it, though not always.
 
-**Cost** at n 1,000 units and G 200, on the cycle clock, best of five; indicative, on a machine loaded at about twice slice 3's reading (the density score's row read again in the same run).
+**Cost** at n 1,000 units and G 200, on the cycle clock, best of five; indicative. Every row was read in one run on slice 4's final code, with the density score's and the density full step's beside it. The density score reads as it did in slice 3 (2.1 and 6.7 ms against 2.1 and 7.3), so the machine was about as loaded as then.
 
 | S | The split form: calibration PITs, once per stratum | The split form: per grid | Slice 3's density score: per grid | The full step's opt-in: per grid |
 |---|---|---|---|---|
-| 1,000 | 51 ms | 7.0 ms | 4.4 ms | 161 ms |
-| 4,000 | 214 ms | 29.7 ms | 21.4 ms | 728 ms |
+| 1,000 | 18 ms | 2.3 ms | 2.1 ms | 52 ms |
+| 4,000 | 70 ms | 9.1 ms | 6.7 ms | 219 ms |
 
-- *The split form reads two tails,* one exp a value and a log above the median, about 1.6 times the density score's work, and needs no product.
-- *The full step's opt-in costs two products a batch,* a third to a half of the density full step's (334 to 412 ms at S 1,000 in the same run), which reads three products and the margin.
+- *The split form reads two tails,* one exp a value and a log above the median, at 1.1 to 1.4 times the density score's cost in the same run, and needs no product.
+- *The full step's opt-in costs two products a batch,* about a third of the density full step's (152 to 194 ms at S 1,000 and 538 to 599 ms at S 4,000 in the same run), which reads three products and the margin.
 
 ## Numerics
 

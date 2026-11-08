@@ -85,6 +85,7 @@ One commit per concern; tests with the code they test; each slice ends with its 
 | 3. The split form | CB-2 for any engine with a candidate seam: density, CQR and residual scores | Slice 1 | Coverage for any fit, a deliberately wrong one and a chain stopped early included; CQR's set an interval |
 | 4. The predictive distribution | π(y) as a CDF under a score monotone in y, PIT and CRPS | Slice 0; each draw's CDF at the candidate (`IBassNoiseLaw.At`) | The in-sample predictive CDF is the natural score; whether it stays monotone in y under the add-one-in weights is read first, and the score is adopted only if it does. PIT uniform on held-out data |
 | 5. The other engines | BARS's, BAPS's, the hierarchical P-spline's, BGP's and the changepoint posterior's candidate seams | Slice 1's shape | Each one's candidate density equal to its pointwise column at training cases; coverage on one fit each |
+| 6. Conformal test martingales | Exchangeability checked online, as [E35](bass/extensions-brief.md#conformal-test-martingales-exchangeability-checked-online-e35) sets out: each new score ranked against every earlier one with the randomized tie, a betting function, and an alarm with its guarantee. Ordered by the user on 2026-11-08 to follow slice 5 | Slice 3's fixed-fit scores; slice 4's log CDF and its rank code | E35's, set when its brief is written |
 
 ## Gates common to every slice
 
@@ -155,15 +156,16 @@ Built at the user's decisions of 2026-11-08, relayed by the main session: "Split
 - *Where the draws are a posterior that mixed,* the full step is sharper by more where data are scarce. Its CRPS is 10% lower at n 49 on the conjugate model, and 2.5 to 3.7% lower at n 298 on BASS, at the split form's width. It flags 0 to 0.1% of cases there.
 - *Where they are not,* it breaks: two chains stuck apart flag 66% of cases.
 - *The default stays the split form, as decided.* The page writes down the regime to opt in: draws a posterior that mixed, and data too scarce to spare a calibration split.
-- *Cost.* The layer's own cost per case is 4.7 against 12.1 ms on the conjugate exact posterior at a grid of 401, and 80 against 308 ms on the healthy BASS fit at a grid of 901 and S 1,000. The split form's data cost is 19 of 49 units and 199 of 298.
+- *Cost.* The layer's own cost per case is 1.4 against 4.8 ms on the conjugate exact posterior at a grid of 401, and 12 against 72 ms on the healthy BASS fit at a grid of 901 and S 1,000, read on the final code (below). The split form's data cost is 19 of 49 units and 199 of 298.
 
-**Cost row** (cycle clock, indicative; the machine loaded at about twice slice 3's reading, the density row read again in the same run). Per grid of 200 at n 1,000:
-- *the split form:* 7.0 ms at S 1,000 and 29.7 ms at S 4,000, after its calibration PITs once per stratum (51 and 214 ms), against the density score's 4.4 and 21.4 ms;
-- *the full step's opt-in:* 161 and 728 ms, against the density full step's 334 to 412 ms at S 1,000.
+**Cost row** (cycle clock, indicative), every row in one run on the final code. The density score, read in the same run, reads as in slice 3, so the machine was about as loaded as then. Per grid of 200 at n 1,000:
+- *the split form:* 2.3 ms at S 1,000 and 9.1 ms at S 4,000, after its calibration PITs once per stratum (18 and 70 ms), against the density score's 2.1 and 6.7 ms;
+- *the full step's opt-in:* 52 and 219 ms, against the density full step's 152 to 194 and 538 to 599 ms.
 
 **Found in review and fixed.**
 - *The split form ran ten times the density score's cost.* It read 1 − F by expm1 below the median, where 1 − F ≥ ½ loses nothing, and walked the matrices down their columns. It now takes one exp a value and a log only above the median, and walks rows in the matrices' order with each column's sums unchanged. The per-grid cost went from about 20 ms to 7.0 ms at S 1,000.
-  - The BASS gates and the measured default ran on the build before this change. The change moves the upper sums by an ulp where ℓ ≤ −ln 2 and keeps every sum's order, so it cannot move their readings beyond rounding. The healthy BASS fit, rerun on the final build, reads the same to the last printed digit.
+  - The BASS gates and the measured default first ran on the build before this change, after the tie fix below. The change moves the upper sums by an ulp where ℓ ≤ −ln 2 and keeps every sum's order, so it could not move their readings beyond rounding. It did move their cost per case, read on the wall clock.
+  - All five runs were read again on slice 4's final code (b48158b), at the user's go-ahead later on 2026-11-08. Every reading came out the same to its last printed digit. The cost per case fell for both forms, the split form's most: the healthy BASS fit reads 12 against 72 ms, where it read 80 against 308. Part of the fall is a lighter load on the machine. The page and this report carry the new costs, and the cost row was read again with them, after the full step's setup was tiled.
 - *The full step's own score was summed in another order than the products,* so a copied column did not tie with its unit. It now sums by fused multiply-adds in draw order, and the sweep's 296 near-ties became exact ones.
 - *The flag test asserted that a flagged case's own score falls.* π can fall while it rises, when a unit's score overtakes it: 20 of the 287 flagged cases do. `Fall` and `ScoreFall` are now read apart.
 - *Three ungated tests ran for one to two minutes.* They were shrunk to 13 to 49 s, each keeping its gate.
