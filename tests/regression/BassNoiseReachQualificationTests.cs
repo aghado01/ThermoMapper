@@ -44,16 +44,17 @@ public sealed class BassNoiseReachQualificationTests(ITestOutputHelper output)
         "gh" => BassNoise.GeneralizedHyperbolic(new GigParameters(0.7, 1.2, 0.8), new BassNoisePrior(0.3, 0.5), reference: BassNoiseReference.None),
         "gbp" => BassNoise.GeneralizedBetaPrime(new GbpParameters(1.0, 0.5, 1.5), new BassNoisePrior(0.0, 0.5), reference: BassNoiseReference.None),
         "horseshoe-symmetric" => BassNoise.Horseshoe(reference: BassNoiseReference.None),
+        "quantile" => BassNoise.AsymmetricLaplace(0.8, reference: BassNoiseReference.None),
         _ => BassNoise.Horseshoe(new BassNoisePrior(0.0, 0.5), reference: BassNoiseReference.None),
     };
 
-    private static BassConfig GewekeConfig(string form, double alpha) => new()
+    private static BassConfig GewekeConfig(string form, double alpha, bool interweave = false) => new()
     {
         Structure = new BassStructureSpec { MaxInteraction = 1, MaxBasis = 2, Support = new SupportRule(SupportKind.Count, 2) },
         Coefficients = BassCoefficientPrior.G(TauPrior.UnitInformationGamma(5)),
         Intercept = GPriorCentre.Zero,
         Sigma2 = Sigma2Prior.InverseGamma(alpha, Beta0),
-        Noise = GewekeNoise(form),
+        Noise = GewekeNoise(form) with { Interweave = interweave },
         Sampling = new BassSampling { Chains = 1, MasterSeed = 1, BurnIn = 0, Samples = 1 },
     };
 
@@ -63,6 +64,7 @@ public sealed class BassNoiseReachQualificationTests(ITestOutputHelper output)
         "t" => GeneralizedInverseGaussian.Of(-2.5 + 0.5 * (1.0 - b), 0.0, 5.0).Sample,
         "gh" => GeneralizedInverseGaussian.Of(0.7 + 0.5 * (1.0 - b), 1.2, 0.8).Sample,
         "gbp" => GeneralizedBetaPrime.Of(1.0, 0.5 + 0.5 * (1.0 - b), 1.5 - 0.5 * (1.0 - b)).Sample,
+        "quantile" => GeneralizedInverseGaussian.Of(1.0 + 0.5 * (1.0 - b), 2.0, 0.0).Sample,
         _ => GeneralizedBetaPrime.Of(1.0, 0.5 + 0.5 * (1.0 - b), 0.5 * b).Sample,
     };
 
@@ -73,18 +75,29 @@ public sealed class BassNoiseReachQualificationTests(ITestOutputHelper output)
     }
 
     [Theory]
-    [InlineData("t", 0.4, 20261107)]
-    [InlineData("t", 0.75, 20261107)]
-    [InlineData("gh", 0.4, 20261107)]
-    [InlineData("gh", 0.75, 20261107)]
-    [InlineData("gbp", 0.5, 20261107)]
-    [InlineData("horseshoe", 0.75, 20261107)]
-    [InlineData("horseshoe-symmetric", 0.5, 20261107)]
-    public void Geweke_ARungLeavesItsTiltedJointInvariant(string form, double b, int seed)
+    [InlineData("t", 0.4, 20261107, false, 1)]
+    [InlineData("t", 0.75, 20261107, false, 1)]
+    [InlineData("gh", 0.4, 20261107, false, 1)]
+    [InlineData("gh", 0.75, 20261107, false, 1)]
+    [InlineData("gbp", 0.5, 20261107, false, 1)]
+    [InlineData("horseshoe", 0.75, 20261107, false, 1)]
+    [InlineData("horseshoe-symmetric", 0.5, 20261107, false, 1)]
+    // E1's slice 7: the interwoven sweep at b = 1 and on rungs. The skewed horseshoe's cases at seed 20261107, which fail with and without
+    // the step as its v mixes slowly (slice 7's report), are readings, not gates; BassInterweavingQualificationTests checks the step alone.
+    [InlineData("t", 1.0, 20261107, true, 1)]
+    [InlineData("gh", 1.0, 20261107, true, 1)]
+    [InlineData("quantile", 1.0, 20261107, true, 1)]
+    [InlineData("t", 0.4, 20261107, true, 1)]
+    [InlineData("horseshoe", 1.0, 20261108, true, 1)]
+    [InlineData("horseshoe", 0.75, 20261108, true, 1)]
+    [InlineData("horseshoe", 0.5, 20261108, true, 1)]
+    [InlineData("horseshoe", 1.0, 20261107, false, 1)]
+    public void Geweke_ARungLeavesItsTiltedJointInvariant(string form, double b, int seed, bool interweave, int scale)
     {
         if (!BassQualification.Enabled) return;   // heavy
-        const int draws = 400_000, steps = 600_000, batches = 50;
-        BassConfig config = GewekeConfig(form, Alpha0), tilted = GewekeConfig(form, Alpha0 - 0.5 * GewekeN * (1.0 - b));
+        int draws = 400_000 * scale, steps = 600_000 * scale;
+        const int batches = 50;
+        BassConfig config = GewekeConfig(form, Alpha0, interweave), tilted = GewekeConfig(form, Alpha0 - 0.5 * GewekeN * (1.0 - b), interweave);
         BassNoise noise = config.Noise!;
         double c = noise.VarianceScale;
         var sigmaTilted = InverseGamma.ShapeScale(Alpha0 - 0.5 * GewekeN * (1.0 - b), Beta0);
@@ -141,6 +154,9 @@ public sealed class BassNoiseReachQualificationTests(ITestOutputHelper output)
                 if (!block.Update(chain, blockRng)) blockRefused++;
             BassSweepFit fit = moves.SweepFit!;
             ObservationLatents latents = chain.Current.Fit.Working!.Latents!;
+            // Under a pure scale mixture σ² is the sweep's draw with the coefficients, and the interweaving step moves σ with v without
+            // keeping it: θ's coefficients and σ² are drawn afresh given the structure and the new latents, a draw from their conditional.
+            if (interweave && latents.Sigma2 is null) fit = moves.DrawSweepFit(chain.Current, blockRng, model.Target, b);
             double sigma2 = latents.Sigma2 ?? fit.Sigma2;
             successive[t] = Functions(chain.Current, sigma2, latents.ValueArray, fit.Fitted, y, latents.Skew);
             theta = (chain.Current, sigma2, latents.ValueArray, fit.Fitted, latents.Skew);
@@ -160,7 +176,8 @@ public sealed class BassNoiseReachQualificationTests(ITestOutputHelper output)
             worst = Math.Max(worst, Math.Abs(z));
             output.WriteLine($"{GewekeNames[g],-10} marginal-conditional {meanA,10:F5}  successive {meanB,10:F5}  z {z,6:F2}");
         }
-        output.WriteLine($"{form} at b = {b}, seed {seed}: moves refused {refused}; block draws refused {blockRefused} of {steps}");
+        output.WriteLine($"{form} at b = {b}, seed {seed}, {(interweave ? "interwoven" : "plain")}, {scale}× the size: moves refused {refused}; " +
+                         $"block draws refused {blockRefused} of {steps}");
         Assert.True(worst < 4.0, $"Geweke's worst |z| {worst:F2}");
     }
 

@@ -137,6 +137,8 @@ public sealed record BassConfig
 
         if (Noise is { } noise)
         {
+            if (noise.Interweave && Sigma2.IsHeld)
+                throw Bad("Noise.Interweave", "moves σ with v under the z parameterization, which a held σ² does not move");
             // The noise's blocks temper the likelihood given its latents, so a, σ², β and each vᵢ keep their conditionals at every b: the
             // likelihood path in the integrated form. The linear form and the powered path temper the marginal over a and σ², which couples
             // every latent, and the flat histogram's π_w and WHAM read that marginal's rung laws, prior·e^{b·ℓ₁}.

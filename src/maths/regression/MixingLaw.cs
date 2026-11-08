@@ -18,6 +18,10 @@ public interface IMixingLaw
     /// <summary>v from its prior: the conditional at b = 0.</summary>
     double SamplePrior(Xoshiro256PlusPlus rng);
 
+    /// <summary>ln p(v), v's prior log density at <paramref name="v"/> &gt; 0: what a step that moves v with the noise's scale reads, z = σ·v
+    /// held (the z parameterization, E1's slice 7).</summary>
+    double LogPrior(double v);
+
     /// <summary>
     /// v's next value from <paramref name="current"/> under its conditional given <paramref name="residual"/> r, the likelihood
     /// N(r | m·v, s²·v) raised to <paramref name="power"/> b, with s² = <paramref name="unitVariance"/> and m = <paramref name="unitDrift"/>:
@@ -68,6 +72,13 @@ public sealed class StudentTMixing : IMixingLaw
 
     /// <inheritdoc/>
     public double SamplePrior(Xoshiro256PlusPlus rng) => SampleConditional(0.0, 1.0, 0.0, 0.0, rng);
+
+    /// <summary>ln IG(v; ν/2, ν/2) = (ν/2)·ln(ν/2) − ln Γ(ν/2) − (ν/2 + 1)·ln v − ν/(2v).</summary>
+    public double LogPrior(double v)
+    {
+        double half = 0.5 * DegreesOfFreedom;
+        return half * Math.Log(half) - SpecialFunctions.LogGamma(half) - (half + 1.0) * Math.Log(v) - half / v;
+    }
 
     /// <inheritdoc/>
     public double StepConditional(double current, double residual, double unitVariance, double unitDrift, double power, Xoshiro256PlusPlus rng)
@@ -155,6 +166,9 @@ public sealed class ExponentialMixing : IMixingLaw
     /// <inheritdoc/>
     public double SamplePrior(Xoshiro256PlusPlus rng) => SampleConditional(0.0, 1.0, 0.0, 0.0, rng);
 
+    /// <summary>ln Exp(v; 1) = −v.</summary>
+    public double LogPrior(double v) => -v;
+
     /// <inheritdoc/>
     public double StepConditional(double current, double residual, double unitVariance, double unitDrift, double power, Xoshiro256PlusPlus rng)
         => SampleConditional(residual, unitVariance, unitDrift, power, rng);
@@ -197,11 +211,13 @@ public sealed class ExponentialMixing : IMixingLaw
 public sealed class GigMixing : IMixingLaw
 {
     private readonly double _logNormalizer;
+    private readonly GeneralizedInverseGaussian _law;
 
     /// <summary>GIG mixing on the prior <paramref name="prior"/>, a proper GIG.</summary>
     public GigMixing(GigParameters prior)
     {
         GeneralizedInverseGaussian law = prior.ToDistribution();
+        _law = law;
         Prior = prior;
         _logNormalizer = GeneralizedInverseGaussian.LogNormalizer(prior.P, prior.A, prior.B);
         Mean = law.Mean;
@@ -221,6 +237,9 @@ public sealed class GigMixing : IMixingLaw
 
     /// <inheritdoc/>
     public double SamplePrior(Xoshiro256PlusPlus rng) => SampleConditional(0.0, 1.0, 0.0, 0.0, rng);
+
+    /// <summary>The GIG's log density, its kernel less the normalizer this law holds, so a read costs no Bessel K.</summary>
+    public double LogPrior(double v) => _law.LogKernel(v) - _logNormalizer;
 
     /// <inheritdoc/>
     public double StepConditional(double current, double residual, double unitVariance, double unitDrift, double power, Xoshiro256PlusPlus rng)
@@ -305,6 +324,9 @@ public sealed class GbpMixing : IMixingLaw
 
     /// <inheritdoc/>
     public double SamplePrior(Xoshiro256PlusPlus rng) => _law.Sample(rng);
+
+    /// <summary>The GBP's log density.</summary>
+    public double LogPrior(double v) => _law.LogPdf(v);
 
     /// <summary>One slice step on u = ln v from <paramref name="current"/>, positive and finite (<see cref="IMixingLaw.StepConditional"/>).</summary>
     public double StepConditional(double current, double residual, double unitVariance, double unitDrift, double power, Xoshiro256PlusPlus rng)

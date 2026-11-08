@@ -215,6 +215,14 @@ public sealed record BassNoise
     /// <summary>What the priors read of the response.</summary>
     public BassNoiseReference Reference { get; }
 
+    /// <summary>
+    /// Whether the sweep interweaves the noise's scale (E1's slice 7; <see cref="BassInterweavingBlock"/>): after the noise's blocks, σ is drawn
+    /// again under the z parameterization, zᵢ = σ·vᵢ held, so σ and v move together and the offset σβ·v stands. Off by default, so a fit's
+    /// draws stand as they were; left out of the serialized form when off. Refused with a held σ², which has no scale to move.
+    /// </summary>
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingDefault)]
+    public bool Interweave { get; init; }
+
     /// <summary>The asymmetric Laplace's q; null for a kind that takes none.</summary>
     [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
     public double? Quantile { get; }
@@ -390,6 +398,7 @@ public sealed class VarianceMeanMixture : IBassObservationModel, IBassNoiseLaw
         var scale = new List<IBlock<ReversibleJumpChain<BassState>>>();
         if (Skewed && _held is null) scale.Add(new BassScaleBlock(this));
         if (noise.SkewDrawn || noise.GammaPrior is { IsHeld: false }) scale.Add(new BassNoiseShapeBlock(this));
+        if (noise.Interweave && _held is null) scale.Add(new BassInterweavingBlock(this));
         _scale = [.. scale];
     }
 
@@ -766,6 +775,83 @@ public sealed class BassNoiseShapeBlock : IBlock<ReversibleJumpChain<BassState>>
         }
         WorkingResponse moved = _model.At(working, latents.WithShape(skew, gamma), weightsMoved: false);
         return BassStructureMoves.Follow(state, moved) is null;
+    }
+}
+
+/// <summary>
+/// The interweaving step (E1's slice 7; the ancillarity-sufficiency interweaving of Yu and Meng 2011, on the noise's scale): σ drawn again
+/// under the z parameterization, zᵢ = σ·vᵢ held, in which εᵢ = β·zᵢ + √(c·σ·zᵢ)·ξᵢ (the user's derivation, E1, 2026-10-26). v is the scale's
+/// ancillary augmentation, its prior free of σ, and z the other, so a sweep that draws σ under each moves it along both.
+/// <para>With u = σ, rᵢ = yᵢ − fᵢ at this sweep's coefficients and A = Σᵢ (rᵢ − β·zᵢ)²/(c·zᵢ), u's conditional given z multiplies the
+/// likelihood at power b, u^(−bN/2)·exp(−b·A/(2u)), v's prior at zᵢ/u with its Jacobian, Πᵢ p_v(zᵢ/u)/u, σ²'s prior IG(α₀, β₀) carried to u,
+/// and the coefficients' prior, whose variance scales with σ² (the equivariant prior), u^(−K)·exp(−Q/(2u²)). In t = ln u that is
+/// −(bN/2 + N + 2α₀ + K)·t − (bA/2)·e^(−t) − (β₀ + Q/2)·e^(−2t) + Σᵢ ln p_v(zᵢ·e^(−t)): log-concave under GIG mixing, and drawn here by one
+/// slice step for every law. A prior on u in the GIG family with the coefficients' variance scaling as u, or not at all, would make it a GIG
+/// (the derivation's exact route); BASS's priors are equivariant, so the slice step is the route here.</para>
+/// <para>Then vᵢ = zᵢ/u: the offset σβ·v = β·z stands and the weights 1/(c·vᵢ) move. Under a skew σ² goes on the record; under a pure scale
+/// mixture σ² is the sweep's draw with the coefficients, so only v moves. A move that puts the structure outside F is refused and the chain
+/// keeps its state, as the latent block's is.</para>
+/// </summary>
+public sealed class BassInterweavingBlock : IBlock<ReversibleJumpChain<BassState>>
+{
+    // The slice's width in ln σ and its stepping-out limit: σ's conditional given z is a fraction of a unit wide in ln σ.
+    private const double Width = 1.0;
+    private const int MaxSteps = 32;
+    private readonly VarianceMeanMixture _model;
+
+    internal BassInterweavingBlock(VarianceMeanMixture model)
+    {
+        ArgumentNullException.ThrowIfNull(model);
+        _model = model;
+    }
+
+    /// <inheritdoc/>
+    public string Name => "interweaving";
+
+    /// <inheritdoc/>
+    public bool Update(ReversibleJumpChain<BassState> state, Xoshiro256PlusPlus rng)
+    {
+        ArgumentNullException.ThrowIfNull(state);
+        ArgumentNullException.ThrowIfNull(rng);
+        BassStructureMoves moves = BassStructureMoves.Of(state);
+        BassSweepFit fit = moves.SweepFit is { } drawn && ReferenceEquals(drawn.Structure, state.Current.TermArray)
+            ? drawn
+            : throw new InvalidOperationException("The interweaving step reads this sweep's coefficients: the coefficients' block runs first, at the current structure.");
+        WorkingResponse working = moves.DesignAt(state.Current).Working;
+        ObservationLatents latents = working.Latents ?? throw new InvalidOperationException("The working response holds no latents.");
+        ReadOnlySpan<double> y = working.Response.Values, v = latents.Values;
+        int n = y.Length;
+        double sigma = Math.Sqrt(latents.Sigma2 ?? fit.Sigma2), c = _model.VarianceScale, beta = latents.Skew, b = BassCoefficientsBlock.Power(state);
+        var z = new double[n];
+        double a = 0.0;
+        for (int i = 0; i < n; i++)
+        {
+            z[i] = sigma * v[i];
+            double e = y[i] - fit.Fitted[i] - beta * z[i];
+            a += e * e / (c * z[i]);
+        }
+        (double quadratic, int count) = fit.Conditional.PriorEnergy(fit.Centred);
+        InverseGamma? prior = (state.Target as BassTarget ?? throw new InvalidOperationException("The chain's target is BASS's.")).Sigma2At(state.Current);
+        double shape = prior?.Shape ?? 0.0, scale = prior?.Scale ?? 0.0;
+        var density = new ScaleGivenZ(z, _model.MixingAt(latents), -(0.5 * b * n + n + 2.0 * shape + count), 0.5 * b * a, scale + 0.5 * quadratic);
+        double t = Math.Log(sigma), logTarget = density.At(t);
+        SliceSampler.Step(ref t, ref logTarget, Width, MaxSteps, density, rng);
+        double u = Math.Exp(t);
+        var moved = new double[n];
+        for (int i = 0; i < n; i++) moved[i] = z[i] / u;
+        var next = new ObservationLatents(moved, beta, latents.Sigma2 is null ? null : u * u, latents.Gamma);
+        return BassStructureMoves.Follow(state, _model.At(working, next)) is null;
+    }
+
+    // σ's conditional given z in t = ln σ, up to a constant: slope·t − h·e^(−t) − q·e^(−2t) + Σᵢ ln p_v(zᵢ·e^(−t)).
+    private readonly struct ScaleGivenZ(double[] z, IMixingLaw mixing, double slope, double h, double q) : IScalarLogDensity
+    {
+        public double At(double t)
+        {
+            double inverse = Math.Exp(-t), sum = 0.0;
+            foreach (double zi in z) sum += mixing.LogPrior(zi * inverse);
+            return slope * t - h * inverse - q * inverse * inverse + sum;
+        }
     }
 }
 

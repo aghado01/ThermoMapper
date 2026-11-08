@@ -36,6 +36,26 @@ public sealed class BassNoiseReachTests(ITestOutputHelper output)
     private static string Refused(BassConfig config) => Assert.Throws<ArgumentException>(config.Validate).Message;
 
     [Fact]
+    public void Interweaving_IsOptIn_SerializedOnlyWhenOn_AndRefusedWithAHeldSigma2()
+    {
+        // E1's slice 7: the switch stays out of the serialized form when off, so every existing fit's fingerprint stands.
+        BassConfig plain = Config(Skewed), woven = Config(Skewed with { Interweave = true });
+        Assert.DoesNotContain("Interweave", plain.ToJson());
+        Assert.Contains("\"Interweave\":true", woven.ToJson());
+        Assert.Equal(woven, BassConfig.FromJson(woven.ToJson()));
+        BassData data = BassQuantileTests.Data();
+        Assert.NotEqual(Bass.Fingerprint(plain, data), Bass.Fingerprint(woven, data));
+        Assert.Contains("Noise.Interweave", Assert.Throws<ArgumentException>(() => (woven with { Sigma2 = Sigma2Prior.Held(0.3) }).Validate()).Message);
+
+        // The block runs last in the scale slot, and moves σ and v: a woven chain's draws are not the plain chain's.
+        BassFit a = Bass.Fit(plain, data), b = Bass.Fit(woven, data);
+        MoveStat woveBlock = b.Diagnostics.Chains[0].Blocks!.Single(k => k.Key == "interweaving");
+        output.WriteLine($"interweaving: {woveBlock.Accepted} of {woveBlock.Attempts} accepted");
+        Assert.True(woveBlock.Attempts > 0 && woveBlock.Accepted > woveBlock.Attempts / 2);
+        Assert.NotEqual(a.Draws[0][^1].Latents!.Sigma2, b.Draws[0][^1].Latents!.Sigma2);
+    }
+
+    [Fact]
     public void Config_TakesLaddersAndSmc_InTheIntegratedForm()
     {
         BassConfig t = Config(BassNoise.StudentT(4));
@@ -101,6 +121,10 @@ public sealed class BassNoiseReachTests(ITestOutputHelper output)
         [BassNoise.StudentT(4)],
         [Skewed],
         [BassNoise.Horseshoe(new BassNoisePrior(0.0, 0.5))],
+        // The interweaving step at b = 0 moves σ with v under their prior (E1's slice 7).
+        [BassNoise.StudentT(4) with { Interweave = true }],
+        [Skewed with { Interweave = true }],
+        [BassNoise.Horseshoe(new BassNoisePrior(0.0, 0.5)) with { Interweave = true }],
     ];
 
     [Theory]
@@ -175,12 +199,14 @@ public sealed class BassNoiseReachTests(ITestOutputHelper output)
         Assert.True(Math.Abs(s2 - s2Reference) <= 0.25, $"ln σ² {s2:F3} against {s2Reference:F3}");
     }
 
-    [Fact]
-    public void ATemperedNoiseFit_ResumesBitForBit()
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public void ATemperedNoiseFit_ResumesBitForBit(bool interweave)
     {
-        // Every rung's state carries its latents on its working response, through swaps and the checkpoint.
+        // Every rung's state carries its latents on its working response, through swaps and the checkpoint; with the interweaving step too.
         BassData data = BassQuantileTests.Data();
-        BassConfig whole = Config(Skewed) with
+        BassConfig whole = Config(Skewed with { Interweave = interweave }) with
         {
             Sampling = new BassSampling { Chains = 2, MasterSeed = 29, BurnIn = 100, Samples = 120, Thin = 2,
                                           Tempering = new TemperingSpec { Levels = 4, HotEnd = 0.1, ReferenceRung = true }, ReportEvidence = true },
