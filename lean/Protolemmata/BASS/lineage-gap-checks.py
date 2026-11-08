@@ -168,6 +168,57 @@ for alpha in [(5, 1), (3, 3)]:
     q, d = sum(a > 0 for a in alpha), sum(alpha)
     print("SG-4", alpha, "KHAOS's 1+q(d+q-2) =", 1 + q * (d + q - 2), " sum a(a+1) =", sum(a * (a + 1) for a in alpha))
 
+# SG-4(b): the sum over a tensor basis, under the product uniform measure on [0, 1]^d.
+# f = sum_alpha a_alpha prod_v psi_{alpha_v}(x_v). Per variable,
+# E[x_v(1-x_v)(d_v f)^2] = sum_alpha a_alpha^2 alpha_v(alpha_v+1); summed over v, sum_alpha a^2 sum_v
+# alpha_v(alpha_v+1). total(v) = E[(f - E_v f)^2], with E_v integrating out x_v, is
+# sum_{alpha_v >= 1} a_alpha^2 <= half the per-variable sum, equal when every alpha_v <= 1.
+def tensor_check(d, support, a, nq=12):
+    nodes1, wts1 = leg.leggauss(nq)
+    x1, w1 = (nodes1 + 1) / 2, wts1 / 2
+    grids = np.meshgrid(*([x1] * d), indexing="ij")
+    W = np.ones([nq] * d)
+    for v in range(d):
+        shape = [1] * d
+        shape[v] = nq
+        W = W * w1.reshape(shape)
+    f = sum(c * np.prod([psi(al[v], grids[v]) for v in range(d)], axis=0) for al, c in zip(support, a))
+    rows = []
+    for v in range(d):
+        df = sum(c * dpsi(al[v], grids[v]) * np.prod([psi(al[u], grids[u]) for u in range(d) if u != v], axis=0)
+                 for al, c in zip(support, a))
+        weighted = np.sum(W * grids[v] * (1 - grids[v]) * df**2)
+        Evf = np.sum(f * w1.reshape([nq if u == v else 1 for u in range(d)]), axis=v, keepdims=True)
+        total = np.sum(W * (f - Evf) ** 2)
+        rows.append((weighted, sum(c**2 * al[v] * (al[v] + 1) for al, c in zip(support, a)),
+                     total, sum(c**2 for al, c in zip(support, a) if al[v] >= 1)))
+    return rows
+
+
+worst = [0.0, 0.0, 0.0]
+for trial in range(300):
+    d = int(rng.integers(1, 4))
+    deg = int(rng.integers(1, 4))
+    allidx = list(itertools.product(range(deg + 1), repeat=d))
+    k = int(rng.integers(1, len(allidx) + 1))
+    support = [allidx[i] for i in rng.choice(len(allidx), size=k, replace=False)]
+    a = rng.normal(size=k)
+    rows = tensor_check(d, support, a)
+    total_sum = sum(r[0] for r in rows)
+    worst[0] = max(worst[0], abs(total_sum - sum(c**2 * sum(al_v * (al_v + 1) for al_v in al)
+                                                   for al, c in zip(support, a))))
+    for weighted, coef, total, tcoef in rows:
+        worst[1] = max(worst[1], abs(weighted - coef), abs(total - tcoef))
+        worst[2] = max(worst[2], total - weighted / 2)
+print(f"SG-4(b) tensor, 300 seeded draws (d <= 3, degree <= 3 per variable, random sparse supports): "
+      f"sum over v against sum a^2 sum a_v(a_v+1), worst {worst[0]:.1e}; per variable, both identities, "
+      f"worst {worst[1]:.1e}; total(v) - half the weighted form, largest {worst[2]:.1e} (rounding: the bound holds, "
+      f"with equality at degree 1)")
+assert worst[0] < 1e-9 and worst[1] < 1e-9 and worst[2] < 1e-12
+sharp = tensor_check(3, [(1, 0, 1), (0, 1, 1), (1, 1, 0), (0, 0, 0)], rng.normal(size=4))
+print("SG-4(b) degree <= 1 in every variable: total(v) against half the weighted form:",
+      [f"{t:.6f} = {w / 2:.6f}" for w, _, t, _ in sharp])
+
 # SG-5: E[C]'s top direction against the mean projector's
 a_dir = np.array([1.0, 0.0])
 b_dir = np.array([np.cos(1.2), np.sin(1.2)])

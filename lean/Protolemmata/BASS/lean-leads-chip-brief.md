@@ -89,7 +89,61 @@ Append a report below, newest first, under "Reports". Update each protolemma's s
 - corrections made to the register, and any that change what a gap claims;
 - what stopped you, if anything did.
 
+## The 2026-11-08 queue: SG-4(b), SC-5's inverse-gamma form, CW-1
+
+Three open items this chip left. The user asked for them on 2026-11-08, relayed by the BASS extensions session, to be taken in this order with a report after each. The method is this chip's: numeric checks first in `lineage-gap-checks.py`, standard axioms only, the module and barrel builds green, meta-CI passing, and D:'s free space watched.
+1. **SG-4(b), the sum over a tensor basis.**
+   - The statement: Σ_v E[x_v(1−x_v)(∂_v f)²] = Σ_α a_α²·Σ_v α_v(α_v+1) under the product uniform law, with total(v) ≤ ½·E[x_v(1−x_v)(∂_v f)²], sharp at degree 1.
+   - It backs KHAOS slice 4's readouts from coefficients and the generator-eigenvalue prior.
+   - Record what Roustant et al. already state.
+2. **SC-5's proper IG(c, c·s²) form** of `collapsedLogMarginal_superset_ge`.
+   - Its counterpart under D03's Jeffreys form is `jeffreys_superset_ge`.
+   - Check which σ² prior is BASS's default, and whether the path profile and G1 readings need a caveat.
+3. **CW-1, the small lemma** (`contraction-walk.md`).
+   - The statement: with ‖f − f*‖ₙ ≤ σ₀ε/6 and |σ − σ₀| ≤ σ₀ε/6, (f, σ) lies in the KL ball of radius ε, through UV-1's per-observation bounds.
+   - Only CW-1. Not the walk's other contraction items.
+
 ## Reports
+
+### 2026-11-08: SG-4(b)'s tensor form proved
+
+**Proved,** in `lean/Enthymemata/BassIntegrals.lean` (now 44 declarations, PROOF-CLOSED; `#print axioms` on the eight new results shows `propext`, `Classical.choice` and `Quot.sound` only).
+- `integral_jacobi_tensorPartial`: per variable.
+- `sum_integral_jacobi_tensorPartial`: summed over variables.
+- `tensorTotal_eq`: the total numerator from the coefficients.
+- `tensorTotal_le` and `tensorTotal_eq_half`: the bound and its sharpness.
+- Beside them: `hasDerivAt_tensorExpansion` (`tensorPartial` is ∂_v f), `integral_tensor_sq` (Parseval on the tensor basis), `tensorCondMean_eq` (E_v f keeps the terms constant in x_v), and `integral_cube_prod` (Fubini on products).
+
+**What changed in the statement.**
+- Nothing.
+- The coefficients are on the unnormalized P_n, as in the one-variable lemmas: a_α² N_α, with N_α = Π_v ⟨P_{α_v}, P_{α_v}⟩, is the squared orthonormal coefficient. So the statements read as the protolemma's.
+- total(v) is defined as E[(f − E_v f)²], with E_v integrating out x_v, and proved equal to Σ_{α_v≥1} a_α² N_α. So the bound is about the Sobol total numerator itself, not a coefficient formula standing in for it.
+
+**Checks first** (`lineage-gap-checks.py`, SG-4(b) tensor):
+- 300 seeded sparse expansions, with d ≤ 3 and degree ≤ 3 per variable;
+- both identities agree to 6e-13;
+- the bound holds in every draw, equal at degree 1.
+
+**Theirs and ours** (read on 2026-11-08):
+- *Theirs: Roustant et al. 1906.09883v1.* They state the total index as a sum of squared coefficients with ℓ_v ≥ 1, and the per-variable derivative rewriting. The weighted form is given only as "adapted accordingly".
+- *Theirs: Lamboni et al. 2013,* as cited in 1612.03689v1. The unweighted DGSM bound S^T ≤ C·ν/D.
+- *Ours:*
+  - the summed identity as the tensor generator's eigenvalue Σ_v α_v(α_v+1);
+  - the weighted constant ½ on the Jacobi basis, with sharpness;
+  - the formal proofs.
+
+**What it fixes for KHAOS slice 4.** Under the product uniform law on [0, 1]^d and KHAOS's shifted Legendre basis, with b_α the orthonormal coefficients:
+- each total numerator is Σ_{α_v≥1} b_α²;
+- each weighted derivative measure is Σ_α b_α² α_v(α_v+1);
+- their sum over v is Σ_α b_α² Σ_v α_v(α_v+1).
+
+All of them are exact from the coefficients, with no quadrature, and total(v) ≤ ½ of the weighted measure. The readouts hold for that law and basis only. An input law other than the product uniform needs its own basis.
+
+**Gates.**
+- `lake build Enthymemata.BassIntegrals`: clean, no warnings.
+- `lake build Enthymemata`: green.
+- `scripts/meta-ci.ps1 -NoBuild`: PASS.
+- D: had 40 GB free, and nothing was fetched.
 
 ### 2026-11-01: Parts 1 and 2 done, nothing false, three first-draft claims corrected
 

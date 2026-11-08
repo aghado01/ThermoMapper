@@ -2,7 +2,7 @@
 
 Grounds the variance decomposition ([BassMoments](../../../docs/Maths/BayesianRegression.md)), active-subspace analysis (E8) and KHAOS's coefficient prior (E5) in one frame: Hoeffding components are the eigenfunctions of resampling dynamics. These are the statements behind gaps G3, G4 and G5 of the [lineage-gaps register](../../../issues/regression/bass/lineage-gaps-register.md).
 
-**Status (2026-11-01).** SG-1, SG-2(a), SG-3, SG-4(a) and SG-5 proved in `lean/Enthymemata/BassSensitivity.lean`; SG-3's measure form and SG-4(b)'s one-variable identities in `BassIntegrals.lean`. No apologies in either. [`lineage-gap-checks.py`](lineage-gap-checks.py) still holds the numeric checks, on the labels below. Remaining: SG-4(b)'s sum over a tensor basis, which is the same identity per variable by Fubini. SG-2(b) stays an empirical check by triage.
+**Status (2026-11-01).** SG-1, SG-2(a), SG-3, SG-4(a) and SG-5 proved in `lean/Enthymemata/BassSensitivity.lean`; SG-3's measure form and SG-4(b)'s one-variable identities in `BassIntegrals.lean`. No apologies in either. SG-4(b)'s tensor form was added to `BassIntegrals.lean` on 2026-11-08 (below, under SG-4). [`lineage-gap-checks.py`](lineage-gap-checks.py) still holds the numeric checks, on the labels below. SG-2(b) stays an empirical check by triage.
 
 **Statements that changed.**
 - SG-1 is proved over `CommutingMeans`, a commuting family of idempotents self-adjoint for a nonnegative symmetric form, then instantiated by `productMeans`. Its equality clause reads V_u = 0 for |u| ≥ 2 (`efron_stein_form_eq_iff`). On a finite product under full support that is "f is additive" literally (`efron_stein_eq_iff_additive`). Full support is needed for that reading: where μ has zeros, V_u = 0 only makes P_u f vanish almost everywhere.
@@ -135,6 +135,27 @@ theorem mixture_product_integral {ι κ : Type*} [Fintype ι] [DecidableEq ι] [
 Σ_v E[x_v(1−x_v)(∂_v f)²] = Σ_α a_α²·Σ_v α_v(α_v+1),
 
 and for each variable total(v) ≤ ½·E[x_v(1−x_v)(∂_v f)²], with ½ sharp at degree 1. Both come straight from the coefficients.
+
+**Proved (2026-11-08)** in `BassIntegrals.lean`, for the tensor form under the product uniform law on [0, 1]^d. The coefficients a_α are on P_n there; with N_α = Π_v ⟨P_{α_v}, P_{α_v}⟩ (`tensorNorm`), a_α² N_α is the squared orthonormal coefficient, so these read as stated above.
+- `hasDerivAt_tensorExpansion`: `tensorPartial`, each term's vth factor differentiated, is ∂_v f.
+- `integral_jacobi_tensorPartial`: E[x_v(1−x_v)(∂_v f)²] = Σ_α a_α² α_v(α_v+1) N_α.
+  - *Fubini on products:* `integral_cube_prod`.
+  - *Orthogonality:* off the diagonal, either J or ⟨·,·⟩ vanishes at a coordinate where α and β differ.
+- `sum_integral_jacobi_tensorPartial`: the sum over v, Σ_α a_α² (Σ_v α_v(α_v+1)) N_α.
+- `tensorTotal_eq`: total(v) = E[(f − E_v f)²], with E_v integrating out x_v (`tensorCondMean`), is Σ_{α_v ≥ 1} a_α² N_α (`integral_tensor_sq`, Parseval on the tensor basis).
+- `tensorTotal_le` and `tensorTotal_eq_half`: the bound, and its equality when every term has degree at most 1 in x_v.
+
+total(v) here is the unnormalized total, not divided by Var f. The checks (SG-4(b) tensor) agree to 6e-13 on 300 seeded sparse expansions with d ≤ 3 and degree ≤ 3.
+
+**What is theirs and what is ours.**
+- *Theirs: Roustant et al. 1906.09883v1, Proposition "Poincaré-based lower bounds"* (`DO_expansions`).
+  - They state D_v^tot = Σ_{ℓ_v ≥ 1}⟨h, e_ℓ⟩², which is `tensorTotal_eq` on an orthonormal basis.
+  - They state the per-variable derivative rewriting with 1/λ² in the unweighted inner product. Its weighted form ⟨h′, e′_n⟩_w = λ_n⟨h, e_n⟩ is given, with "Proposition … can be adapted accordingly", and not written out.
+- *Theirs: the DGSM upper bound S^T ≤ C(μ)·ν/D,* unweighted, from Lamboni et al. 2013, as cited in Roustant, Barthe and Iooss 1612.03689v1. The weighted version is attributed to Song et al., which is unread.
+- *Ours:*
+  - the summed identity read as the tensor generator's eigenvalue Σ_v α_v(α_v+1), which is what the prior g_m below uses;
+  - the weighted constant ½ on the shifted Legendre (Jacobi) basis, with sharpness at degree 1;
+  - the finite formal proofs.
 
 **The prior this suggests.** KHAOS's g_m = (1 + q(d+q−2))^(−ζ/2) sees only the order q and total degree d. α = (5,1) and (3,3) both give 13; the generator's eigenvalues give 32 and 24. An option beside it:
 
