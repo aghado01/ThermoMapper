@@ -346,7 +346,7 @@ Unnormalized log posterior: the log marginal plus the log structure prior, τ's 
 
 *What M4 shows.*
 - *The chains do not hold modes of comparable posterior.* On Friedman and the functional fit, three of four chains sit 12–42 nats below the best chain's median. They sit in structures that differ in which interactions carry the surface, and never reach the best chain's level over 2,000 draws. On the mixed fit, three chains share one mode and one sits 22 nats below.
-- *These are local modes, not one diffuse mode.* Together with M2's deaths (every term load-bearing), leaving such a mode means replacing a load-bearing term with its substitute at once. Single births and deaths each pay tens of nats on the way.
+- *These are local modes, not one diffuse mode.* Together with M2's deaths (every term load-bearing), leaving such a mode means replacing a load-bearing term with its substitute at once. A single death pays tens to hundreds of nats on the way (M2's median on Friedman, −234). A single birth pays only its Occam cost, near −½ ln N (M2: −2.6 to −3.8 nats, about −5 with the prior and proposal parts), so births are not what holds a chain in a mode. This line first said births and deaths each pay tens of nats; it was corrected on 2026-11-08 from the lean-leads walk ([SC-4](../../../lean/Protolemmata/BASS/structure-chain-lemmas.md)).
 - *Strength:* strong for the gaps, which are decades of nats on 2,000 draws per chain.
 - *A caveat:* this compares the densities of the states held, not the modes' masses. A mode's mass also scales with its volume (its knots' freedom), which this does not measure. A 24-nat gap would need about e²⁴ times the volume to close.
 

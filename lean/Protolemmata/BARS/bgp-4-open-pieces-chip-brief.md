@@ -1,6 +1,6 @@
 # BGP-4 open pieces (UV-1c, UV-4a, UV-6) — chip brief
 
-Date: 2026-10-24. Status: open, for a separate thread. Written at the user's request from the main regression thread.
+Date: 2026-10-24. Status: done 2026-10-25. UV-1c and UV-4a are proved; UV-6 is composed with no `sorry` over its cited axioms (GvdV07, and GvdV 2017 for the fixed constant); UV-5's tests were proved in the follow-up. The reports are below. Written at the user's request from the main regression thread.
 
 ## Context
 
