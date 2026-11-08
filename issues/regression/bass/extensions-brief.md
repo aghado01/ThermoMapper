@@ -20,6 +20,7 @@ Extensions beyond the port's completion contract, collected from the [full port 
 | Calibrated intervals for loss-based posteriors | Bissiri, Holmes and Walker 2016, §3.4; Holmes and Walker 2017; Lyddon, Holmes and Walker 2019; Syring and Martin 2019 | BARS: `GibbsLossModel`. Any engine that weights a likelihood or a loss | Candidate |
 | Conformal Bayes, the consumer | Fong and Holmes 2021, arXiv 2106.06137; Vovk, Shen, Manokhin and Xie 2019 | The pointwise seam (OQ17, built): retained draws, the n × S matrix, the unit and stratum maps | Building ([the layer's brief](../conformal-layer-brief.md)) |
 | Conformal bands for whole curves | Lei, Rinaldo and Wasserman 2015; Diquigiovanni, Fontana and Vantini, arXiv 2106.01792 | The unit map's whole-curve unit; each draw's pointwise predictive sd | Candidate |
+| Conformal test martingales (E35) | Vovk, Nouretdinov and Gammerman 2003; Fedorova et al. 2012; Volkhonskiy et al. 2017; Vovk et al. 2021; Vovk, *Statistical Science* 2021 | The candidate seam; the split form's fixed fit; slice 4's log CDF | Candidate; sources gathered 2026-11-08 |
 | Posteriors for readouts by resampling units | Huggins and Miller 2023; Fong, Holmes and Walker 2023 | Retained draws with their readouts (BARS's peaks); replicate units | Candidate |
 | Polynomial-chaos terms (E19) | Rumsey, Francom et al., arXiv 2510.25036 | Fitting: the design-kernel and proposal-kernel contracts. E4, E5 | Candidate |
 | Data-augmented observation models (E20) | Albert and Chib 1993; Polson, Scott and Windle 2013; Lawrence et al. 2008 | Fitting: the offset seam, the latent slot, a weighted Gram, σ² held. Distributions: a truncated draw (built) | Candidate |
@@ -339,6 +340,42 @@ Simultaneous prediction bands for a new unit's whole curve: a new simulator run'
 - **Here.** The nonconformity score is the curve's largest scaled residual, the maximum over locations of |y − f̂| over the posterior's pointwise predictive sd, so the band widens where the posterior is uncertain. The unit map already takes a whole curve as one unit, and conformal Bayes's add-one-in step applies to it.
 - **Why it matters for BASS.** Andros et al. 2024 found R BASS's 95% intervals covering 0.59 on held-out runs. D07's leave-one-out truncation residuals improve the intervals; conformal bands would guarantee their coverage for a new run, under exchangeable runs.
 - **Needs** exchangeable whole-curve units: the runs of a simulator design, or replicate SPC sweeps over one temperature grid.
+
+## Conformal test martingales: exchangeability checked online (E35)
+
+The user gathered the sources on 2026-11-08: `gauntlet/conformal-bayes` (1204.3251, 1706.03415, 2102.10439) and `PDFs/Bayesian` (`Vovk2003.pdf`, `Vovk_StatSci2021.pdf`). Every guarantee of the conformal layer rests on exchangeability. This entry tests that assumption as the data arrive, with a false-alarm rate fixed in advance and no stopping rule. It serves drift, change-points, and deciding when a fit should be refit. E18's martingale posteriors share the word only; they are a different object.
+- **The p-values.** A conformity score A is fixed by data before the stream (inductive: a fit and its training set proper). Each new observation gets its smoothed rank among every score so far: p_n = (|{i ≤ n : α_i < α_n}| + θ_n·|{i ≤ n : α_i = α_n}|)/n, with θ_n uniform. Under exchangeability, p₁, p₂, … are i.i.d. uniform (Vovk, Nouretdinov and Gammerman 2003, Theorem 1; Vovk et al. 2021, Proposition 1).
+  - *Ranked against the growing sequence, not a fixed calibration set.* The split form's p-values for many test points share one calibration set, so they are dependent. The martingale needs each new score ranked among all earlier ones, calibration and test alike.
+  - *The tie rule is the randomized one,* where the conformal layer's sets use CB-1's.
+  - *The full form,* each score recomputed with the newest observation in the posterior, is valid by the same theorem, at the cost of the add-one-in weights over the stream.
+- **The martingale.** S_n = Π f_i(p_i), where each betting function integrates to 1 on [0, 1] and is chosen from earlier p-values only. The members:
+  - *power,* f(p) = εp^(ε−1), and its simple mixture over ε (2003);
+  - *plug-in,* f estimated from the earlier p-values by a kernel density, asymptotically at least as good as any power martingale (Fedorova, Gammerman, Nouretdinov and Vovk 2012);
+  - *Simple Jumper,* f(p) = 1 + ε(p − ½), with ε ∈ {−1, 0, 1} switching as a Markov chain at rate J = 0.01 (Vovk, Petej, Nouretdinov, Ahlberg, Carlsson and Gammerman 2021).
+- **The alarms, each with its guarantee under exchangeability.**
+  - *Ville's procedure* raises an alarm when S_n ≥ c, with P(any alarm) ≤ 1/c. It weakens as S_n decays before a change.
+  - *CUSUM* (the maximum over i < n of S_n/S_i reaching c) and *Shiryaev–Roberts* (their sum reaching c) keep the mean time to a false alarm at least c. Shiryaev–Roberts, repeated, keeps the long-run frequency of false alarms at most 1/c (Vovk 2021, Propositions 4.2 and 4.4).
+  - Against classical CUSUM and Shiryaev–Roberts that know the distributions, inductive conformal martingales reach comparable delays at the same false-alarm level (Volkhonskiy, Burnaev, Nouretdinov, Gammerman and Vovk 2017).
+  - S_N's final value is an e-value: its expectation under the null is 1.
+- **What the engine already has.**
+  - The candidate seam gives any engine's predictive density at a new observation.
+  - The split form (slice 3) gives a fixed fit's scores.
+  - Slice 4's log CDF gives a score built from the PIT.
+
+  The brief chooses the score (the predictive density, the residual over ρ, or the PIT's distance from ½), the betting function, and the alarm with its c.
+- **Readouts.**
+  - S_n's path, the alarm time and the procedure that raised it;
+  - each step's ln f(p_n), which shows the observations that moved the martingale;
+  - the e-value;
+  - the alarm's guarantee, in its procedure's terms (the probability of any false alarm, or the mean time to one).
+- **Where it does not apply.**
+  - *Adaptive designs.* Runs chosen adaptively (E30) are not exchangeable by design, so a martingale over them tests the design. Weighted conformal under covariate shift comes first there.
+  - *Known structure.* A stream with a trend or a season needs a score that removes it, or the test flags the structure.
+- **Lean.** This entry fits the profile CB-1 to CB-4 had: the guarantee is the product, and its hypotheses are easy to break silently (the randomized tie, ranking against every earlier score, a betting function that integrates to 1 and reads only the past). Two statements would join `ConformalValidity.lean`:
+  - the smoothed p-values are i.i.d. uniform under exchangeability, a finite argument;
+  - Ville's inequality for the product, from Mathlib's martingale library (Doob's maximal inequality, with its limit over the horizon).
+- **Cost.** Per arrival: one score (S predictive densities for a Bayesian fit), and one rank among n earlier scores, O(log n) with an ordered structure.
+- **Not scheduled.** Its place in the order is the user's call. It would sit in the conformal layer as a slice after slice 5.
 
 ## Posteriors for readouts by resampling units
 
