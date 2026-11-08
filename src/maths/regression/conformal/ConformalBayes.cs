@@ -43,12 +43,17 @@ public sealed record ConformalOptions
     /// </summary>
     public double? FallbackShare { get; init; }
 
-    /// <summary>The bounds the margin's band reads (<see cref="Conformal.MarginBounds"/>): each unit's carried one by default.</summary>
-    public MarginBounds MarginBounds { get; init; } = MarginBounds.Carried;
+    /// <summary>
+    /// The margin, opt-in (the user's decision of 2026-11-08, "Make it opt-in"): null, the default, reads no band and pays none of
+    /// its per-stratum orderings; <see cref="MarginBounds.Carried"/> or <see cref="MarginBounds.Uniform"/> reads it under those
+    /// bounds (<see cref="ConformalMargin.Computed"/>). The inflated rule, its gap and k̂ are read either way.
+    /// </summary>
+    public MarginBounds? MarginBounds { get; init; }
 }
 
 /// <summary>
-/// The bounds the margin reads. <c>coverage_close</c> needs bounds carried by the units, each holding in every ordering: a unit's
+/// The bounds the margin reads, when it is asked for (<see cref="ConformalOptions.MarginBounds"/>, opt-in). <c>coverage_close</c>
+/// needs bounds carried by the units, each holding in every ordering: a unit's
 /// largest error over the orderings, whichever unit is the candidate. The layer reads the orderings its draws can represent, the
 /// held one and, for each unit of the stratum, the draws reweighted by that unit's density as the candidate's, so both readings
 /// are indicative. The uniform bound is the largest carried one, so its band holds the carried band
@@ -97,12 +102,12 @@ public readonly record struct GridInterval(double Lower, double Upper);
 /// (<see cref="InflationBounds.Uniform"/>).</item>
 /// <item><see cref="CandidateCarriedErrors"/>: the candidate's carried bound, the largest of its own and its bounds under each
 /// training unit's weights; with <see cref="UnitCarriedErrors"/>, the bounds the margin carries with the units
-/// (<c>coverage_close</c>).</item>
+/// (<c>coverage_close</c>). Null when the margin was not asked for.</item>
 /// <item><see cref="CarriedUniformErrors"/>: the largest carried bound, the margin's uniform bound
-/// (<see cref="MarginBounds.Uniform"/>).</item>
+/// (<see cref="MarginBounds.Uniform"/>). Null when the margin was not asked for.</item>
 /// <item><see cref="Fragile"/>: the estimated band's count (<c>card_fragile_le_estimated</c>) under each unit's carried bound or
 /// the uniform one (<see cref="Bounds"/>), the units that estimates within their bounds could refuse; −1 outside every
-/// draw's support.</item>
+/// draw's support. Null when the margin was not asked for (<see cref="Computed"/>).</item>
 /// <item><see cref="InflatedRanks"/>: the units whose estimate, lowered by its bound, is at most the candidate's raised by its
 /// own, the candidate counted, under per-position or uniform bounds (<see cref="Inflation"/>); the inflated rule accepts y_g
 /// when it exceeds k.</item>
@@ -113,26 +118,35 @@ public readonly record struct GridInterval(double Lower, double Upper);
 /// <param name="Multiple">z: each bound is z Monte Carlo standard errors.</param>
 /// <param name="CandidateErrors">The candidate's bound at each grid value; NaN outside every draw's support.</param>
 /// <param name="UniformErrors">The largest per-position bound at each grid value; NaN outside every draw's support.</param>
-/// <param name="CandidateCarriedErrors">The candidate's carried bound at each grid value; NaN outside every draw's support.</param>
-/// <param name="CarriedUniformErrors">The largest carried bound at each grid value; NaN outside every draw's support.</param>
+/// <param name="CandidateCarriedErrors">The candidate's carried bound at each grid value; NaN outside every draw's support; null
+/// without the margin.</param>
+/// <param name="CarriedUniformErrors">The largest carried bound at each grid value; NaN outside every draw's support; null without
+/// the margin.</param>
 /// <param name="UnitCarriedErrors">Each training unit's largest bound under the weights of the stratum's units as the candidate,
 /// its own turn included, in the stratum's unit order; its carried bound at y_g is the larger of this and its held bound
-/// there.</param>
-/// <param name="Fragile">The estimated band's count at each grid value.</param>
+/// there. Null without the margin.</param>
+/// <param name="Fragile">The estimated band's count at each grid value; null without the margin.</param>
 /// <param name="InflatedRanks">The inflated rule's rank at each grid value.</param>
 /// <param name="ParetoK">k̂ of the add-one-in weights where the inflated rule accepts.</param>
 /// <param name="ParetoKThreshold">PSIS's threshold at the draws' count.</param>
-/// <param name="Bounds">The bounds <see cref="Fragile"/> was read with.</param>
+/// <param name="Bounds">The bounds <see cref="Fragile"/> was read with; null when the margin was not asked for.</param>
 /// <param name="Inflation">The bounds <see cref="InflatedRanks"/> were read with.</param>
-public sealed record ConformalMargin(double Multiple, double[] CandidateErrors, double[] UniformErrors, double[] CandidateCarriedErrors,
-                                     double[] CarriedUniformErrors, double[] UnitCarriedErrors, int[] Fragile, int[] InflatedRanks,
-                                     double[] ParetoK, double ParetoKThreshold, MarginBounds Bounds, InflationBounds Inflation)
+public sealed record ConformalMargin(double Multiple, double[] CandidateErrors, double[] UniformErrors, double[]? CandidateCarriedErrors,
+                                     double[]? CarriedUniformErrors, double[]? UnitCarriedErrors, int[]? Fragile, int[] InflatedRanks,
+                                     double[] ParetoK, double ParetoKThreshold, MarginBounds? Bounds, InflationBounds Inflation)
 {
-    /// <summary>m̂: the largest band over the grid's values inside some draw's support, since any of them may be the truth.</summary>
-    public int Count
+    /// <summary>Whether the margin was computed (<see cref="ConformalOptions.MarginBounds"/>, opt-in). Without it the band, its
+    /// count and the carried bounds are null and the plain set's <see cref="ConformalSet.CoverageUnderError"/> is NaN: not read,
+    /// rather than read as zero or as clear. The inflated rule's readings are here either way.</summary>
+    public bool Computed => Bounds is not null;
+
+    /// <summary>m̂: the largest band over the grid's values inside some draw's support, since any of them may be the truth; null
+    /// when the margin was not computed.</summary>
+    public int? Count
     {
         get
         {
+            if (Fragile is null) return null;
             int most = 0;
             foreach (int f in Fragile) most = Math.Max(most, f);
             return most;
@@ -174,7 +188,8 @@ public sealed record ConformalMargin(double Multiple, double[] CandidateErrors, 
 /// ln p(y_g | the training split); −∞ outside every draw's support.</param>
 /// <param name="EffectiveSampleSizes">Kish's ESS of the add-one-in weights at y_g, 1/Σ w̃²; 0 outside every draw's
 /// support; null in the split form.</param>
-/// <param name="Margin">CB-3's reading; null for the whole space and in the split form.</param>
+/// <param name="Margin">CB-3's reading: the inflated rule's always, the margin's band when asked for; null for the whole space and in
+/// the split form.</param>
 /// <param name="Inflated">Whether the set is the inflated rule's.</param>
 /// <param name="ErrorLevel">ν, which the bounds' coverage gives up.</param>
 /// <param name="FallBack">The opt-in fallback rule's reading (<see cref="ConformalOptions.FallbackShare"/>): whether the scores'
@@ -198,12 +213,13 @@ public sealed record ConformalSet(int Case, int Stratum, int Units, int Level, d
 
     /// <summary>
     /// The coverage the set keeps under its scores' Monte Carlo error, indicative since the bounds are not sure ones:
-    /// 1 − (k + m̂)/m − ν for the plain rule (<c>coverage_close</c> with <c>card_fragile_le_estimated</c>), 1 − k/m − ν for the
-    /// inflated one (<c>coverage_inflated</c>). 1 for the whole space; 1 − k/m with no margin, the split form's, whose guarantee
-    /// holds for any fit (<c>split_coverage</c>).
+    /// 1 − (k + m̂)/m − ν for the plain rule (<c>coverage_close</c> with <c>card_fragile_le_estimated</c>), NaN when the margin was
+    /// not asked for (<see cref="ConformalMargin.Computed"/>); 1 − k/m − ν for the inflated one (<c>coverage_inflated</c>). 1 for
+    /// the whole space; 1 − k/m with no margin reading at all, the split form's, whose guarantee holds for any fit
+    /// (<c>split_coverage</c>).
     /// </summary>
     public double CoverageUnderError => WholeSpace ? 1.0 : Margin is null ? Coverage
-        : Inflated ? Coverage - ErrorLevel : 1.0 - (double)(Level + Margin.Count) / Units - ErrorLevel;
+        : Inflated ? Coverage - ErrorLevel : Margin.Count is int count ? 1.0 - (double)(Level + count) / Units - ErrorLevel : double.NaN;
 
     /// <summary>Whether grid value <paramref name="g"/> is in the set: the inflated rule's under <see cref="Inflated"/>, the plain
     /// rule's otherwise.</summary>
@@ -321,8 +337,8 @@ public sealed record ConformalScores(int[] Units, double[] Scores, double Candid
 /// ψ_s = w̃_s(p_s/p̂ − 1) (<see cref="PredictiveChecks"/>' influence), over the relative efficiency of the candidate's density
 /// along the chains, the add-one-in ratio's; two more products, P·W̃² and P²·W̃², give it for every unit. Its log-scale error
 /// times z is the bound (<see cref="ConformalOptions.ErrorLevel"/>). From the bounds: the inflated rule on each position's
-/// bound, the margin on the bounds the units carry over the orderings the draws represent, and the fallback signal
-/// (<see cref="ConformalMargin"/>).</item>
+/// bound and the fallback signal, always, and, opt-in, the margin on the bounds the units carry over the orderings the draws
+/// represent (<see cref="ConformalMargin"/>).</item>
 /// <item><b>Refused</b> (CB-4): leave-unit-out terms (<see cref="PointwiseLogDensity.LeavesUnitsOut"/>, the collapsed
 /// predictive), whose rest excludes the candidate; a latent of one observation's term conditioned on or mixed, which reads
 /// the data units at their retained latents and the candidate otherwise and undercovers (<c>mixed_counterexample</c>); a
@@ -380,7 +396,7 @@ public static class ConformalBayes
                 continue;
             }
             var scorer = new StratumScorer(training.Values, rows, logWeights, members, training.ChainLengths, k, Multiple(nu, m),
-                                           orderings: true, options.MarginBounds, options.InflationBounds);
+                                           options.MarginBounds, options.InflationBounds);
             (StratumScorer A, StratumScorer B)? halves = Halves(training.Values, rows, logWeights, members, training.ChainLengths, k);
             foreach (int t in cases)
             {
@@ -398,9 +414,11 @@ public static class ConformalBayes
                 (double splitMass, int disagreements) = SplitHalf(candidates.Grids[t], r, ra, rb, k);
                 var p = new double[g];
                 for (int j = 0; j < g; j++) p[j] = (r.Below[j] + r.Tied[j] + 1) / (double)m;
-                var margin = new ConformalMargin(scorer.Multiple, r.CandidateErrors, r.UniformErrors, r.CandidateCarried, r.CarriedUniform,
-                                                 scorer.UnitCarriedErrors, r.Fragile, r.InflatedRanks, r.ParetoK,
-                                                 PredictiveChecks.ParetoKThreshold(Math.Max(2, rows.Length)), options.MarginBounds, options.InflationBounds);
+                bool band = options.MarginBounds is not null;
+                var margin = new ConformalMargin(scorer.Multiple, r.CandidateErrors, r.UniformErrors, band ? r.CandidateCarried : null,
+                                                 band ? r.CarriedUniform : null, band ? scorer.UnitCarriedErrors : null, band ? r.Fragile : null,
+                                                 r.InflatedRanks, r.ParetoK, PredictiveChecks.ParetoKThreshold(Math.Max(2, rows.Length)),
+                                                 options.MarginBounds, options.InflationBounds);
                 var set = new ConformalSet(t, h, m, k, candidates.Grids[t], p, r.Below, r.Tied, r.Own, r.Ess, margin, options.Inflate, nu,
                                            SplitHalfMass: splitMass, SplitHalfDisagreements: disagreements);
                 sets[t] = options.FallbackShare is double asked ? set with { FallBack = set.Gap > asked || margin.Untrusted(k) > 0 } : set;
@@ -710,9 +728,10 @@ public static class ConformalBayes
     /// One stratum's training units against batches of candidates. It holds each unit's likelihoods over the draws of positive
     /// weight scaled by their largest, P_is = p(z_i | θ_s)/max_s, and their squares, row by row, the products' left operands,
     /// and for each batch the candidates' normalized add-one-in weights and their squares draw by draw, the right ones. With the
-    /// orderings, it reads each unit's error under every unit's weights once, and each candidate's under them per batch, for the
-    /// carried bounds. In the plain mode, which scores a half of the draws for the split-half reading, it takes the scores and
-    /// their ranks alone: no squares, errors, bands or k̂. Not thread-safe: one per stratum and call.
+    /// margin asked for, it reads each unit's error under every unit's weights once, and each candidate's under them per batch, for
+    /// the carried bounds; without it, none of that. In the plain mode, which scores a half of the draws for the split-half
+    /// reading, it takes the scores and their ranks alone: no squares, errors, bands or k̂. Not thread-safe: one per stratum and
+    /// call.
     /// </summary>
     internal sealed class StratumScorer
     {
@@ -723,15 +742,14 @@ public static class ConformalBayes
         private readonly double[] _left, _leftSquared, _top;   // P and P², units × draws; each unit's largest log term
         private readonly int _s, _level;
         private readonly bool _plain;
-        private readonly MarginBounds _margin;
+        private readonly MarginBounds? _margin;
         private readonly InflationBounds _inflation;
         private double[] _weights = [], _weightsSquared = [], _likelihoods = [], _logNorm = [], _candidateTop = [], _squareSums = [],
                          _ownFirst = [], _ownSecond = [], _product = [], _first = [], _second = [], _cross = [], _column = [];
         private PackedColumns? _right, _rightSquared, _rightWeighted;
 
         public StratumScorer(double[,] ll, int[] rows, double[]? logWeights, int[] members, IReadOnlyList<int>? chains, int level, double multiple,
-                             bool orderings = false, MarginBounds margin = MarginBounds.Carried, InflationBounds inflation = InflationBounds.PerPosition,
-                             bool plain = false)
+                             MarginBounds? margin = null, InflationBounds inflation = InflationBounds.PerPosition, bool plain = false)
         {
             _plain = plain;
             _margin = margin;
@@ -776,7 +794,7 @@ public static class ConformalBayes
                             if (!plain) _leftSquared[(long)i * s + d] = p * p;
                         }
                     }
-            if (orderings && !plain) Orderings();
+            if (margin is not null && !plain) Orderings();
         }
 
         // Per unit i of the stratum, as the candidate: its weights' total τᵢ = Σ_s W_s·P_is and Σ_s W_s²·P_is², the relative
@@ -785,7 +803,7 @@ public static class ConformalBayes
         private double[] _bounds = [];
 
         /// <summary>Each training unit's largest bound under the stratum's units' weights, z times its largest standard error there,
-        /// shared by the stratum's cases; empty without the orderings.</summary>
+        /// shared by the stratum's cases; empty without the margin.</summary>
         public double[] UnitCarriedErrors { get; private set; } = [];
 
         // The orderings in which a training unit i is the candidate, read from the held draws reweighted by its density,
@@ -936,12 +954,13 @@ public static class ConformalBayes
         private double[,]? _batch;   // the last weighed batch's candidates and first column, for the plain mode's log path
         private int _batchFirst;
 
-        /// <summary>Each candidate's below and tied counts, inflated rank, the held ordering's uniform bound, its carried bound and the
-        /// largest carried bound, the estimated band and, where the inflated rule accepts, its weights' k̂, from the products, against
-        /// its own score and bounds.</summary>
+        /// <summary>Each candidate's below and tied counts, inflated rank, the held ordering's uniform bound and, where the inflated
+        /// rule accepts, its weights' k̂, from the products, against its own score and bounds; with the margin, its carried bound, the
+        /// largest carried bound and the estimated band.</summary>
         public void Count(double[,] candidates, int first, int count, Reading into)
         {
             int n = _members.Length, at = into.Start;
+            bool band = _unitWorst is not null;   // the margin asked for: its orderings were read
             Span<int> below = into.Below.AsSpan(at, count), tied = into.Tied.AsSpan(at, count), inflated = into.InflatedRanks.AsSpan(at, count);
             Span<double> own = into.Own.AsSpan(at, count), ownError = into.CandidateErrors.AsSpan(at, count), uniform = into.UniformErrors.AsSpan(at, count);
             Span<double> carried = into.CandidateCarried.AsSpan(at, count), carriedUniform = into.CarriedUniform.AsSpan(at, count);
@@ -951,15 +970,15 @@ public static class ConformalBayes
             {
                 inflated[b] = 1;   // the candidate itself
                 uniform[b] = ownError[b];
-                carried[b] = ownError[b];
+                if (band) carried[b] = ownError[b];
             }
             for (int i = 0; i < n; i++)
             {
                 Span<double> row = _product.AsSpan(i * count, count);
                 Span<double> a1 = _first.AsSpan(i * count, count);
                 ReadOnlySpan<double> a2 = _second.AsSpan(i * count, count);
-                ReadOnlySpan<double> cross = _unitWorst is null ? default : _cross.AsSpan(i * count, count);
-                double top = _top[i], orderings = _unitWorst is null ? 0.0 : Multiple * _unitWorst[i];
+                ReadOnlySpan<double> cross = band ? _cross.AsSpan(i * count, count) : default;
+                double top = _top[i], orderings = band ? Multiple * _unitWorst![i] : 0.0;
                 for (int b = 0; b < count; b++)
                 {
                     double candidate = own[b];
@@ -979,7 +998,7 @@ public static class ConformalBayes
                     // rule still holds every unit the plain rule counts.
                     double error = double.IsNaN(relative) ? double.PositiveInfinity
                                  : Multiple * PredictiveChecks.LogScaleError(Math.Max(0.0, relative), into.Efficiency[at + b]);
-                    if (_unitWorst is not null)
+                    if (band)
                     {
                         // The candidate in the ordering where unit i is the candidate: under v_s = W_s·P_is/τᵢ its relative variance
                         // is F₂/R₁² − 2X/(τᵢR₁) + Σ_s v_s², from this batch's R₁ = Σ_s P_is·w̃_s, F₂ = Σ_s P_is²·w̃_s² and
@@ -997,7 +1016,7 @@ public static class ConformalBayes
                     else if (score == candidate) tied[b]++;
                     if (score - error <= candidate + ownError[b]) inflated[b]++;
                     if (error > uniform[b]) uniform[b] = error;
-                    a1[b] = Math.Max(error, orderings);   // the unit's carried bound, in the spent sum's place
+                    if (band) a1[b] = Math.Max(error, orderings);   // the unit's carried bound, in the spent sum's place
                     row[b] = score;
                 }
             }
@@ -1006,19 +1025,22 @@ public static class ConformalBayes
             {
                 if (double.IsNegativeInfinity(own[b]))
                 {
-                    into.Fragile[at + b] = -1;
                     into.ParetoK[at + b] = double.NaN;
-                    carriedUniform[b] = double.NaN;
+                    if (band)
+                    {
+                        into.Fragile[at + b] = -1;
+                        carriedUniform[b] = double.NaN;
+                    }
                     continue;
                 }
-                double largest = carried[b];
+                double largest = band ? carried[b] : double.NaN;
                 for (int i = 0; i < n; i++)
                 {
                     scores[i] = _product[i * count + b];
-                    largest = Math.Max(largest, _first[i * count + b]);
+                    if (band) largest = Math.Max(largest, _first[i * count + b]);
                 }
                 scores[n] = own[b];
-                carriedUniform[b] = largest;
+                if (band) carriedUniform[b] = largest;
                 if (_inflation == InflationBounds.Uniform)
                 {
                     // One bound for every position, the held ordering's largest.
@@ -1028,8 +1050,8 @@ public static class ConformalBayes
                         if (scores[i] - bound <= own[b] + bound) rank++;
                     inflated[b] = rank;
                 }
-                if (_margin == MarginBounds.Uniform) into.Fragile[at + b] = EstimatedBand(scores, largest, _level);   // sorts the scores
-                else
+                if (band && _margin == MarginBounds.Uniform) into.Fragile[at + b] = EstimatedBand(scores, largest, _level);   // sorts the scores
+                else if (band)
                 {
                     Span<double> bounds = _bounds.Length >= n + 1 ? _bounds.AsSpan(0, n + 1) : (_bounds = new double[n + 1]).AsSpan();
                     for (int i = 0; i < n; i++) bounds[i] = _first[i * count + b];

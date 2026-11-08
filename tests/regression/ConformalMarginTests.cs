@@ -146,7 +146,7 @@ public sealed class ConformalMarginTests(ITestOutputHelper output)
                 for (int c = 0; c < g; c++) lc[d, c] = c == 0 ? ll[d, 0] : far ? -1e4 + 900 * rng.NextDouble() : -6 * rng.NextDouble() * (1 + c);
             var training = new PointwiseLogDensity(ll, UnitPartition.EachObservation(n), theta) { ChainLengths = chains, Weights = weights };
             var candidates = new CandidateLogDensity(lc, [[.. Enumerable.Range(0, g).Select(c => (double)c)]], theta, chainLengths: chains) { Weights = weights };
-            var options = new ConformalOptions { Alpha = 0.3 };
+            var options = new ConformalOptions { Alpha = 0.3, MarginBounds = MarginBounds.Carried };
             ConformalSet set = ConformalBayes.FullStep(training, candidates, options).Sets[0];
             if (set.WholeSpace) continue;
             ConformalSet uniformSet = ConformalBayes.FullStep(training, candidates,
@@ -175,7 +175,7 @@ public sealed class ConformalMarginTests(ITestOutputHelper output)
                 for (int j = 0; j < n; j++) unitWorst[j] = Math.Max(unitWorst[j], z * Unbounded(turn.Errors[j]));
                 for (int c = 0; c < g; c++) candidateWorst[c] = Math.Max(candidateWorst[c], z * Unbounded(turn.Errors[n + c]));
             }
-            for (int j = 0; j < n; j++) AssertClose(unitWorst[j], margin.UnitCarriedErrors[j], $"unit {j}'s bound over the orderings");
+            for (int j = 0; j < n; j++) AssertClose(unitWorst[j], margin.UnitCarriedErrors![j], $"unit {j}'s bound over the orderings");
             for (int c = 0; c < g; c++)
             {
                 ConformalScores scores = ConformalBayes.Scores(training, candidates, c);
@@ -204,20 +204,20 @@ public sealed class ConformalMarginTests(ITestOutputHelper output)
                 Assert.True(margin.InflatedRanks[c] <= uniformMargin.InflatedRanks[c], "no per-position set is wider than the uniform rule's");
                 // The carried bounds: each unit's the larger of its held bound and its largest over the orderings, the candidate's
                 // the larger of its own and its largest under the units' weights; the uniform bound the largest of them.
-                AssertClose(Math.Max(held[n], candidateWorst[c]), margin.CandidateCarriedErrors[c], "the candidate's carried bound");
-                double[] carried = [.. held[..n].Select((x, j) => Math.Max(x, margin.UnitCarriedErrors[j])), margin.CandidateCarriedErrors[c]];
-                Assert.Equal(carried.Max(), margin.CarriedUniformErrors[c]);
-                Assert.Equal(Count(n + 1, u => FragileEstimated(set.Level, all, carried, u)), margin.Fragile[c]);
-                Assert.Equal(ConformalBayes.EstimatedBand(all.ToArray(), carried.Max(), set.Level), uniformMargin.Fragile[c]);
-                Assert.Equal(Count(n + 1, u => FragileEstimated(set.Level, all, [.. Enumerable.Repeat(carried.Max(), n + 1)], u)), uniformMargin.Fragile[c]);
-                Assert.True(margin.Fragile[c] <= uniformMargin.Fragile[c], "fragileEstimated_mono");
+                AssertClose(Math.Max(held[n], candidateWorst[c]), margin.CandidateCarriedErrors![c], "the candidate's carried bound");
+                double[] carried = [.. held[..n].Select((x, j) => Math.Max(x, margin.UnitCarriedErrors![j])), margin.CandidateCarriedErrors![c]];
+                Assert.Equal(carried.Max(), margin.CarriedUniformErrors![c]);
+                Assert.Equal(Count(n + 1, u => FragileEstimated(set.Level, all, carried, u)), margin.Fragile![c]);
+                Assert.Equal(ConformalBayes.EstimatedBand(all.ToArray(), carried.Max(), set.Level), uniformMargin.Fragile![c]);
+                Assert.Equal(Count(n + 1, u => FragileEstimated(set.Level, all, [.. Enumerable.Repeat(carried.Max(), n + 1)], u)), uniformMargin.Fragile![c]);
+                Assert.True(margin.Fragile![c] <= uniformMargin.Fragile![c], "fragileEstimated_mono");
                 Assert.Equal(set.Accepts(c), set.Below![c] + set.Tied![c] + 1 > set.Level);
                 checkedCandidates++;
                 worstError = Math.Max(worstError, Math.Abs(candidateError - scores.CandidateError));
                 if (far) worstPath++;
             }
-            Assert.Equal(set.Margin!.Count, set.Margin.Fragile.Max());
-            Assert.Equal(1.0 - (double)(set.Level + set.Margin.Count) / set.Units - 0.01, set.CoverageUnderError, 12);
+            Assert.Equal(set.Margin!.Fragile!.Max(), set.Margin.Count!.Value);
+            Assert.Equal(1.0 - (double)(set.Level + set.Margin.Count!.Value) / set.Units - 0.01, set.CoverageUnderError, 12);
         }
         output.WriteLine($"{checkedCandidates} candidates checked, {worstPath} in far ranges; the largest error gap {worstError:E2}");
         Assert.True(checkedCandidates > 200);
@@ -324,6 +324,8 @@ public sealed class ConformalMarginTests(ITestOutputHelper output)
             {
                 ConformalSet set = ConformalBayes.FullStep(t, c, new ConformalOptions { FallbackShare = share }).Sets[0];
                 Assert.Equal(set.Gap > share || set.Margin!.Untrusted(set.Level) > 0, set.FallBack);
+                // The rule reads the gap and k̂, not the margin's band: asking for the margin moves nothing it reads.
+                Assert.Equal(set.FallBack, ConformalBayes.FullStep(t, c, new ConformalOptions { FallbackShare = share, MarginBounds = MarginBounds.Carried }).Sets[0].FallBack);
             }
         Assert.Throws<ArgumentOutOfRangeException>(() => ConformalBayes.FullStep(training, candidates, new ConformalOptions { ErrorLevel = 0.0 }));
         Assert.Throws<ArgumentOutOfRangeException>(() => ConformalBayes.FullStep(training, candidates, new ConformalOptions { FallbackShare = -1 }));
@@ -391,11 +393,91 @@ public sealed class ConformalMarginTests(ITestOutputHelper output)
         // One draw: the estimate is exact, every error 0, and the band empty, since no score sits at the threshold.
         LatentReport[] theta = [new("θ", LatentScope.Global, LatentTreatment.Conditioned)];
         var exact = new PointwiseLogDensity(new double[,] { { -1, -2, -3, -4, -5, -6, -7, -8, -9, -10 } }, UnitPartition.EachObservation(10), theta);
-        ConformalSet sure = ConformalBayes.FullStep(exact, new CandidateLogDensity(new double[,] { { -2.5 } }, [[0.0]], theta)).Sets[0];
+        ConformalSet sure = ConformalBayes.FullStep(exact, new CandidateLogDensity(new double[,] { { -2.5 } }, [[0.0]], theta),
+                                                    new ConformalOptions { MarginBounds = MarginBounds.Carried }).Sets[0];
         Assert.Equal(0.0, sure.Margin!.CandidateErrors[0]);
         Assert.Equal(0.0, sure.Margin.UniformErrors[0]);
         Assert.Equal(0, sure.Margin.Count);
         Assert.Equal(0.0, sure.Gap);
+    }
+
+    // ---- the margin, opt-in -----------------------------------------------------------------------------------------------------
+
+    [Fact]
+    public void TheMargin_IsOptIn_AndEveryOtherReadingStandsWithoutIt()
+    {
+        // The user's decision of 2026-11-08, "Make it opt-in". By default the margin is not computed, and says so: no band, no count,
+        // no carried bounds, and the plain set's coverage under error NaN, not a number read as clear. Asked for, under either bound,
+        // it adds those and moves nothing else: every other reading, the inflated rule's, the gap, k̂, the split-half diagnostic and
+        // the fallback signal included, is the same bit for bit, over seeded fixtures with weights, chains, far ranges and a
+        // candidate outside every draw's support.
+        var rng = new Xoshiro256PlusPlus(2026_1111);
+        LatentReport[] theta = [new("θ", LatentScope.Global, LatentTreatment.Conditioned)];
+        int compared = 0;
+        for (int trial = 0; trial < 60; trial++)
+        {
+            bool far = trial % 4 == 3;
+            int s = 4 + rng.NextInt(200), n = 3 + rng.NextInt(25), g = 2 + rng.NextInt(12);
+            var ll = new double[s, n];
+            for (int d = 0; d < s; d++)
+                for (int i = 0; i < n; i++) ll[d, i] = far ? -1e4 + 900 * rng.NextDouble() * (i % 2) - 30 * rng.NextDouble() : -6 * rng.NextDouble();
+            double[]? weights = trial % 3 == 1 ? [.. Enumerable.Range(0, s).Select(d => d % 7 == 0 ? 0.0 : Math.Exp(-5 * rng.NextDouble()))] : null;
+            int[]? chains = weights is null && trial % 3 == 2 ? [s / 2, s - s / 2] : null;
+            var lc = new double[s, g];
+            for (int d = 0; d < s; d++)
+                for (int c = 0; c < g; c++)
+                    lc[d, c] = c == g - 1 && trial % 5 == 0 ? double.NegativeInfinity : c == 0 ? ll[d, 0] : far ? -1e4 + 900 * rng.NextDouble() : -6 * rng.NextDouble() * (1 + c);
+            var training = new PointwiseLogDensity(ll, UnitPartition.EachObservation(n), theta) { ChainLengths = chains, Weights = weights };
+            var candidates = new CandidateLogDensity(lc, [[.. Enumerable.Range(0, g).Select(c => (double)c)]], theta, chainLengths: chains) { Weights = weights };
+            foreach (InflationBounds inflation in new[] { InflationBounds.PerPosition, InflationBounds.Uniform })
+            {
+                var asked = new ConformalOptions { Alpha = 0.3, FallbackShare = 0.25, InflationBounds = inflation };
+                ConformalSet off = ConformalBayes.FullStep(training, candidates, asked).Sets[0];
+                if (off.WholeSpace) continue;
+                ConformalMargin none = off.Margin!;
+                Assert.False(none.Computed);
+                Assert.Null(none.Bounds);
+                Assert.Null(none.Fragile);
+                Assert.Null(none.Count);
+                Assert.Null(none.CandidateCarriedErrors);
+                Assert.Null(none.CarriedUniformErrors);
+                Assert.Null(none.UnitCarriedErrors);
+                Assert.True(double.IsNaN(off.CoverageUnderError), "not read, rather than read as clear");
+                Assert.Equal(off.Coverage - off.ErrorLevel, (off with { Inflated = true }).CoverageUnderError);
+                foreach (MarginBounds bounds in new[] { MarginBounds.Carried, MarginBounds.Uniform })
+                {
+                    ConformalSet on = ConformalBayes.FullStep(training, candidates, asked with { MarginBounds = bounds }).Sets[0];
+                    ConformalMargin margin = on.Margin!;
+                    Assert.True(margin.Computed);
+                    Assert.Equal(bounds, margin.Bounds);
+                    Assert.NotNull(margin.Fragile);
+                    Assert.Equal(margin.Fragile!.Max(), margin.Count);
+                    Assert.False(double.IsNaN(on.CoverageUnderError));
+                    Assert.Equal((off.Level, off.Units), (on.Level, on.Units));
+                    Assert.Equal(off.PValues, on.PValues);
+                    Assert.Equal(off.Below, on.Below);
+                    Assert.Equal(off.Tied, on.Tied);
+                    Assert.Equal(off.CandidateScores, on.CandidateScores);
+                    Assert.Equal(off.EffectiveSampleSizes, on.EffectiveSampleSizes);
+                    Assert.Equal(none.Multiple, margin.Multiple);
+                    Assert.Equal(none.CandidateErrors, margin.CandidateErrors);
+                    Assert.Equal(none.UniformErrors, margin.UniformErrors);
+                    Assert.Equal(none.InflatedRanks, margin.InflatedRanks);
+                    Assert.Equal(none.ParetoK, margin.ParetoK);
+                    Assert.Equal((none.ParetoKThreshold, none.Inflation), (margin.ParetoKThreshold, margin.Inflation));
+                    Assert.Equal(off.Gap, on.Gap);
+                    Assert.Equal(off.SplitHalfMass, on.SplitHalfMass);
+                    Assert.Equal(off.SplitHalfDisagreements, on.SplitHalfDisagreements);
+                    Assert.Equal(off.FallBack, on.FallBack);
+                    Assert.Equal(off.Width, on.Width);
+                    Assert.Equal((off with { Inflated = true }).Width, (on with { Inflated = true }).Width);
+                    Assert.Equal((off with { Inflated = true }).CoverageUnderError, (on with { Inflated = true }).CoverageUnderError);
+                    compared++;
+                }
+            }
+        }
+        output.WriteLine($"{compared} sets compared with the margin and without it, every other reading the same");
+        Assert.True(compared > 150);
     }
 
     // ---- inflated coverage on exact draws ---------------------------------------------------------------------------------------
@@ -431,22 +513,25 @@ public sealed class ConformalMarginTests(ITestOutputHelper output)
             for (int d = 0; d < s; d++)
                 for (int g = 0; g < at.Length; g++) lc[d, g] = ConformalBayesTests.LogNormal(at[g], beta[d] * xt);
             var candidates = new CandidateLogDensity(lc, [at], theta);
-            ConformalSet set = ConformalBayes.FullStep(training, candidates).Sets[0];
+            ConformalSet set = ConformalBayes.FullStep(training, candidates, new ConformalOptions { MarginBounds = MarginBounds.Carried }).Sets[0];
             ConformalSet same = ConformalBayes.FullStep(training, candidates, uniform).Sets[0];
+            ConformalSet off = ConformalBayes.FullStep(training, candidates).Sets[0];
+            Assert.False(off.Margin!.Computed);
             ConformalSet wide = set with { Inflated = true }, wider = same with { Inflated = true };
             for (int g = 0; g < at.Length; g++)
             {
                 Assert.Equal(set.AcceptsPlain(g), same.AcceptsPlain(g));
+                Assert.Equal((set.AcceptsPlain(g), set.AcceptsInflated(g)), (off.AcceptsPlain(g), off.AcceptsInflated(g)));
                 if (wide.Accepts(g)) Assert.True(wider.Accepts(g), "no per-position set is wider than the uniform rule's");
-                if (set.Margin!.Fragile[g] >= 0) Assert.True(set.Margin.Fragile[g] <= same.Margin!.Fragile[g], "fragileEstimated_mono");
+                if (set.Margin!.Fragile![g] >= 0) Assert.True(set.Margin.Fragile[g] <= same.Margin!.Fragile![g], "fragileEstimated_mono");
             }
             if (r < widths)
             {
                 plainWidth += set.Width;
                 inflatedWidth += wide.Width;
                 uniformWidth += wider.Width;
-                marginSum += set.Margin!.Count;
-                uniformSum += same.Margin!.Count;
+                marginSum += set.Margin!.Count!.Value;
+                uniformSum += same.Margin!.Count!.Value;
                 if (set.FallBack) fallBacks++;
                 if (set.Margin.Untrusted(set.Level) > 0) untrustedSets++;
                 continue;

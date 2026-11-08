@@ -59,15 +59,20 @@ public sealed class ConformalCostTests(ITestOutputHelper output)
 
         ConformalBayes.StratumScorer scorer = null!;
         int level = (int)Math.Floor(0.1 * (n + 1));
-        double training1 = Best(() => scorer = new ConformalBayes.StratumScorer(ll, rows, null, members, lengths, level, 3.5));
-        // With the orderings, as the full step builds it: each unit's error under every unit's weights, three n × S × n products.
-        double orderings = Best(() => scorer = new ConformalBayes.StratumScorer(ll, rows, null, members, lengths, level, 3.5, orderings: true));
+        // The default step reads no margin; asked for, the margin adds each unit's error under every unit's weights, three n × S × n
+        // products once per stratum, a fourth product per grid and the bands.
         var reading = new ConformalBayes.Reading(Grid);
+        double training1 = Best(() => scorer = new ConformalBayes.StratumScorer(ll, rows, null, members, lengths, level, 3.5));
         double weigh = Best(() => scorer.Weigh(lc, 0, Grid, reading));
         double product = Best(() => scorer.Multiply(Grid));
         // Count overwrites the score product with the scores, so each timed call reads a fresh product.
         double count = Best(() => { scorer.Multiply(Grid); scorer.Count(lc, 0, Grid, reading); }) - product;
         double step = Best(() => ConformalBayes.FullStep(training, candidates, new ConformalOptions { Alpha = 0.1 }));
+        double orderings = Best(() => scorer = new ConformalBayes.StratumScorer(ll, rows, null, members, lengths, level, 3.5, MarginBounds.Carried));
+        scorer.Weigh(lc, 0, Grid, reading);
+        double marginProduct = Best(() => scorer.Multiply(Grid));
+        double marginCount = Best(() => { scorer.Multiply(Grid); scorer.Count(lc, 0, Grid, reading); }) - marginProduct;
+        double marginStep = Best(() => ConformalBayes.FullStep(training, candidates, new ConformalOptions { Alpha = 0.1, MarginBounds = MarginBounds.Carried }));
         // The split-half diagnostic: two plain-mode scorers on the halves' rows, their likelihoods built once, then a grid each.
         int[] halfA, halfB;
         if (lengths is null) { halfA = [.. rows.Where(d => d % 2 == 0)]; halfB = [.. rows.Where(d => d % 2 == 1)]; }
@@ -103,9 +108,10 @@ public sealed class ConformalCostTests(ITestOutputHelper output)
         double gflops = 2.0 * n * s * Grid / (kernel * 1e-3) / 1e9;
         string clock = BassCost.Cycles ? "cycles" : "wall";
         output.WriteLine($"n {n}, S {s}, {(chains == 1 ? "independent draws" : "two chains")}, G {Grid} ({clock} clock, indicative, best of {Repeats}):");
-        output.WriteLine($"  training side (once per stratum): {training1:F2} ms, with the units' orderings {orderings:F2} ms, the halves' {halvesTraining:F2} ms");
+        output.WriteLine($"  training side (once per stratum): {training1:F2} ms, with the margin's orderings {orderings:F2} ms, the halves' {halvesTraining:F2} ms");
         output.WriteLine($"  the split-half diagnostic per grid: {halves:F2} ms; the plain step's own parts, the weights, the score product and the ranks, are slice 0's row");
-        output.WriteLine($"  per grid: weights {weigh:F2} ms, the four products {product:F2} ms, ranks {count:F2} ms; the full step {step:F2} ms");
+        output.WriteLine($"  per grid: weights {weigh:F2} ms, the three products {product:F2} ms, ranks {count:F2} ms; the full step {step:F2} ms");
+        output.WriteLine($"  with the margin: the four products {marginProduct:F2} ms, ranks and bands {marginCount:F2} ms; the full step {marginStep:F2} ms");
         output.WriteLine($"  per candidate: weights {1e3 * weigh / Grid:F1} µs, products {1e3 * product / Grid:F1} µs, ranks {1e3 * count / Grid:F1} µs");
         output.WriteLine($"  the product alone {kernel:F2} ms ({gflops:F1} GFLOP/s), the scalar loop {scalar:F2} ms: {scalar / kernel:F1}× faster");
     }

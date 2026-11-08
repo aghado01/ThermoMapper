@@ -23,6 +23,8 @@ public sealed class BassConformalMarginTests(ITestOutputHelper output)
 
     private static readonly ConformalOptions UniformBounds = new() { MarginBounds = MarginBounds.Uniform, InflationBounds = InflationBounds.Uniform };
 
+    private static readonly ConformalOptions Carried = new() { MarginBounds = MarginBounds.Carried };
+
     [Theory]
     [InlineData("gaussian")]
     [InlineData("t")]
@@ -50,13 +52,13 @@ public sealed class BassConformalMarginTests(ITestOutputHelper output)
             double[][] grids = [.. yt.Select(v => new[] { v }), .. Enumerable.Range(0, widths).Select(_ => grid)];
             PointwiseLogDensity pointwise = fit.PointwiseLogDensity(data);
             CandidateLogDensity candidates = fit.CandidateLogDensity(data, cases, grids);
-            ConformalPrediction p = ConformalBayes.FullStep(pointwise, candidates);
+            ConformalPrediction p = ConformalBayes.FullStep(pointwise, candidates, Carried);
             ConformalPrediction pu = ConformalBayes.FullStep(pointwise, candidates, UniformBounds);
             for (int t = 0; t < tests; t++)
             {
                 ConformalSet set = p.Sets[t];
                 ConformalMargin m = set.Margin!;
-                at.Add(new Candidate(set.EffectiveSampleSizes![0], m.CandidateErrors[0], m.CarriedUniformErrors[0], m.Fragile[0], pu.Sets[t].Margin!.Fragile[0],
+                at.Add(new Candidate(set.EffectiveSampleSizes![0], m.CandidateErrors[0], m.CarriedUniformErrors![0], m.Fragile![0], pu.Sets[t].Margin!.Fragile![0],
                                      m.ParetoK[0], set.PValues![0], set.AcceptsPlain(0), set.AcceptsInflated(0), pu.Sets[t].AcceptsInflated(0), set.FallBack));
             }
             for (int t = 0; t < widths; t++)
@@ -65,12 +67,12 @@ public sealed class BassConformalMarginTests(ITestOutputHelper output)
                 plainWidth += wide.Width;
                 inflatedWidth += (wide with { Inflated = true }).Width;
                 uniformWidth += (same with { Inflated = true }).Width;
-                gridMargin += wide.Margin!.Count;
+                gridMargin += wide.Margin!.Count!.Value;
                 gridUnder += wide.CoverageUnderError;
                 if (wide.FallBack) gridFallBacks++;
                 if (wide.Margin.Untrusted(wide.Level) > 0) untrustedGrids++;
                 gaps.Add(wide.Gap);
-                uniformMargin += same.Margin!.Count;
+                uniformMargin += same.Margin!.Count!.Value;
                 uniformUnder += same.CoverageUnderError;
             }
         }
@@ -148,7 +150,7 @@ public sealed class BassConformalMarginTests(ITestOutputHelper output)
                     for (int g = 0; g < at.Length; g++) lc[d, g] = ConformalBayesTests.LogNormal(at[g], beta[d] * xt);
                 var training = new PointwiseLogDensity(ll, UnitPartition.EachObservation(n), theta);
                 var candidates = new CandidateLogDensity(lc, [at], theta);
-                ConformalSet set = ConformalBayes.FullStep(training, candidates).Sets[0];
+                ConformalSet set = ConformalBayes.FullStep(training, candidates, Carried).Sets[0];
                 ConformalSet same = ConformalBayes.FullStep(training, candidates, UniformBounds).Sets[0];
                 if (r >= sets)
                 {
@@ -158,8 +160,8 @@ public sealed class BassConformalMarginTests(ITestOutputHelper output)
                     if (set.AcceptsInflated(0) && !set.AcceptsPlain(0)) resting++;
                     continue;
                 }
-                margin += set.Margin!.Count;
-                uniform += same.Margin!.Count;
+                margin += set.Margin!.Count!.Value;
+                uniform += same.Margin!.Count!.Value;
                 plain += set.Width;
                 inflated += (set with { Inflated = true }).Width;
                 inflatedUniform += (same with { Inflated = true }).Width;

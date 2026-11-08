@@ -22,6 +22,8 @@ public sealed class ConformalPerUnitBoundsTests(ITestOutputHelper output)
 
     private static readonly ConformalOptions UniformBounds = new() { MarginBounds = MarginBounds.Uniform, InflationBounds = InflationBounds.Uniform };
 
+    private static readonly ConformalOptions Carried = new() { MarginBounds = MarginBounds.Carried };
+
     // The conjugate fixture of slice 0: n units of y = βx + noise the model does not share, exact posterior draws of β, and, with a
     // tail, the last unit at x 3.5 with a residual of `tail` beyond the slope 0.7, so its density varies far more over the draws
     // than any other unit's.
@@ -65,19 +67,20 @@ public sealed class ConformalPerUnitBoundsTests(ITestOutputHelper output)
             (PointwiseLogDensity training, double[] beta) = Fixture(n, s, 6.0, rng);
             double xt = 4 * rng.NextDouble() - 2, yt = ConformalBayesTests.Truth(xt, 0.5, rng);
             CandidateLogDensity candidates = Candidates(beta, xt, r < sets ? grid : [yt]);
-            ConformalSet set = ConformalBayes.FullStep(training, candidates).Sets[0];
+            ConformalSet set = ConformalBayes.FullStep(training, candidates, Carried).Sets[0];
             ConformalSet same = ConformalBayes.FullStep(training, candidates, UniformBounds).Sets[0];
             ConformalMargin m = set.Margin!;
-            for (int g = 0; g < m.Fragile.Length; g++)
-                if (m.Fragile[g] >= 0) Assert.True(m.Fragile[g] <= same.Margin!.Fragile[g], "fragileEstimated_mono");
+            for (int g = 0; g < m.Fragile!.Length; g++)
+                if (m.Fragile[g] >= 0) Assert.True(m.Fragile[g] <= same.Margin!.Fragile![g], "fragileEstimated_mono");
             if (r < sets)
             {
-                carried += m.Count;
-                uniform += same.Margin!.Count;
-                double median = m.UnitCarriedErrors.Order().ElementAt(n / 2);
-                tailShare += m.UnitCarriedErrors[n - 1] / median;
-                spread += m.UnitCarriedErrors.Max() / median;
-                if (m.UnitCarriedErrors[n - 1] == m.UnitCarriedErrors.Max()) tailWidest++;
+                carried += m.Count!.Value;
+                uniform += same.Margin!.Count!.Value;
+                double[] units = m.UnitCarriedErrors!;
+                double median = units.Order().ElementAt(n / 2);
+                tailShare += units[n - 1] / median;
+                spread += units.Max() / median;
+                if (units[n - 1] == units.Max()) tailWidest++;
                 continue;
             }
             if (set.AcceptsPlain(0)) covered++;
@@ -118,18 +121,18 @@ public sealed class ConformalPerUnitBoundsTests(ITestOutputHelper output)
         var candidates = new CandidateLogDensity(lc, [[0.0, 1.0]], Theta);
         foreach (double alpha in new[] { 0.1, 0.3, 0.5 })
         {
-            ConformalSet set = ConformalBayes.FullStep(training, candidates, new ConformalOptions { Alpha = alpha }).Sets[0];
+            ConformalSet set = ConformalBayes.FullStep(training, candidates, Carried with { Alpha = alpha }).Sets[0];
             ConformalSet same = ConformalBayes.FullStep(training, candidates, UniformBounds with { Alpha = alpha }).Sets[0];
             ConformalMargin m = set.Margin!;
             for (int g = 0; g < 2; g++)
             {
-                double top = m.CarriedUniformErrors[g];
-                foreach (double bound in m.UnitCarriedErrors.Append(m.CandidateCarriedErrors[g]))
+                double top = m.CarriedUniformErrors![g];
+                foreach (double bound in m.UnitCarriedErrors!.Append(m.CandidateCarriedErrors![g]))
                     Assert.True(Math.Abs(bound - top) <= 1e-9 * top, $"a carried bound {bound:R} against the uniform {top:R}");
-                Assert.Equal(same.Margin!.Fragile[g], m.Fragile[g]);
+                Assert.Equal(same.Margin!.Fragile![g], m.Fragile![g]);
             }
-            output.WriteLine($"α {alpha}: k {set.Level}, the uniform bound {m.CarriedUniformErrors[0]:F4} and {m.CarriedUniformErrors[1]:F4}, "
-                             + $"bands {m.Fragile[0]} and {m.Fragile[1]}, carried and uniform alike");
+            output.WriteLine($"α {alpha}: k {set.Level}, the uniform bound {m.CarriedUniformErrors![0]:F4} and {m.CarriedUniformErrors[1]:F4}, "
+                             + $"bands {m.Fragile![0]} and {m.Fragile[1]}, carried and uniform alike");
         }
     }
 
@@ -157,7 +160,7 @@ public sealed class ConformalPerUnitBoundsTests(ITestOutputHelper output)
             (PointwiseLogDensity training, double[] beta) = Fixture(n, s, tail, rng);
             double xt = 4 * rng.NextDouble() - 2;
             CandidateLogDensity candidates = Candidates(beta, xt, grid);
-            ConformalSet set = ConformalBayes.FullStep(training, candidates).Sets[0];
+            ConformalSet set = ConformalBayes.FullStep(training, candidates, Carried).Sets[0];
             ConformalSet same = ConformalBayes.FullStep(training, candidates, UniformBounds).Sets[0];
             double z = set.Margin!.Multiple;
             var aug = new double[s, n + grid.Length];
@@ -198,8 +201,8 @@ public sealed class ConformalPerUnitBoundsTests(ITestOutputHelper output)
             }
             Assert.Equal(mAll, set.Margin.Count);
             sliceTwo += mTwo;
-            layer += set.Margin.Count;
-            uniform += same.Margin!.Count;
+            layer += set.Margin.Count!.Value;
+            uniform += same.Margin!.Count!.Value;
         }
         double[] q = [.. ratios.Order()];
         output.WriteLine($"S {s}, tail {tail}: some ordering's error exceeds slice 2's carried bound at {shortfalls} of {pairs} (unit, grid value) pairs, "
