@@ -149,7 +149,7 @@ Built at the user's decision of 2026-11-08, "Make it opt-in", relayed by the mai
 - *Both states,* over 60 seeded fixtures with weights, chains, far ranges and a candidate outside every draw's support, under both inflation bounds: 240 sets read without the margin and with it under each bound. Without it, the not-computed readout holds. With it, the margin is read. Every other reading is the same bit for bit: p-values, counts, scores, ESS, errors, inflated ranks, k̂, the gap, the split-half mass, the fallback signal and the widths.
 - *The margin's readings, asked for,* are the per-unit bounds' report's, every printed line the same to its last digit as at 3fc80f9: on exact draws m̂ 5.04 and 2.57 carried at S 40 and 2,560, on BASS 97 and 96, the tail fixture 4.92 against 16.32, and the coverage test's readings 0.732 and 0.358.
 - *Cost* (n 1,000, G 200, one grid, on a busier machine): the default step 170 to 193 ms at S 1,000 and 579 to 864 ms at S 4,000, against 728 to 803 and 1,550 to 3,222 ms with the margin.
-- *Per commit,* the selected classes and the pinned tier: 673 of 673. *At the slice's end:* below.
+- *Per commit,* the selected classes and the pinned tier: 673 of 673. *At the slice's end* (`scripts/test-select.ps1 -Scope Slice` on a snapshot of adb8344): the whole `Maths.Regression.Tests` assembly, 2,367 of 2,367, the eight pinned hashes among them, in 10 m 31 s. Nothing broke, so no follow-up commit was needed.
 
 **Closed:** the per-unit bounds' follow-up, whether the margin stays always-on. **Open, no decision waiting:** a carried bound that leaves out the orderings whose weights degenerate, recorded in the per-unit bounds' report.
 
