@@ -26,6 +26,7 @@ public sealed class BassModel
         Admission = admission;
         Prior = prior;
         Proposal = proposal;
+        Kernel = proposal;
         Target = target;
     }
 
@@ -86,6 +87,9 @@ public sealed class BassModel
 
     /// <summary>D01's proposals.</summary>
     public BassTermProposal Proposal { get; }
+
+    /// <summary>The proposal kernel the structure moves draw from (F-X4): D01's over hinges.</summary>
+    public IBassProposalKernel Kernel { get; }
 
     /// <summary>The collapsed target (D03, D05).</summary>
     public BassTarget Target { get; }

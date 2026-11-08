@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.Runtime.CompilerServices;
 using System.Runtime.InteropServices;
 using System.Runtime.Intrinsics;
+using Maths.Distributions;
 using Maths.Regression.Spline.Bass.Sensitivity;
 
 namespace Maths.Regression.Spline.Bass;
@@ -23,8 +24,9 @@ namespace Maths.Regression.Spline.Bass;
 /// structure by one rule: a term is κ·Πᵥ φᵥ(xᵥ).</item>
 /// </list>
 /// A variable belongs to one part of a term, so a derivative takes the differentiable part's derivative and the other
-/// parts' values (the product rule has one nonzero term). Today's members are the continuous hinge product, the
-/// categorical subsets and the functional hinge product (<see cref="DesignKernels"/>).
+/// parts' values (the product rule has one nonzero term), and the part that reads it says so (<see cref="ReadsVariable"/>).
+/// Today's members are the continuous hinge product, the categorical subsets, the functional hinge product and the Legendre
+/// product of a polynomial-chaos fit (E19; <see cref="DesignKernels"/>).
 /// <para>Later members join without changing the contract. A tensor-product B-spline part (ABMRS) is a case-side
 /// kernel whose <see cref="Multiply"/> writes the product of one-variable B-splines, whose derivative differentiates one
 /// factor, and whose factors are one-variable piecewise polynomials, which <see cref="PiecewisePolynomial"/> integrates
@@ -44,6 +46,11 @@ public interface IDesignKernel<in TPoints>
 
     /// <summary>Refuses a part whose indices fall outside the inputs.</summary>
     void Validate(BassTerm term);
+
+    /// <summary>Whether <paramref name="term"/>'s part of this type reads continuous variable <paramref name="variable"/> of this
+    /// side, so that the term's partial derivative in it is this part's derivative times the other parts' values. The default
+    /// is a differentiable part's <see cref="Reads"/>, for a part that reads every variable it is handed.</summary>
+    bool ReadsVariable(BassTerm term, int variable) => Differentiable && Reads(term);
 
     /// <summary>Multiplies <paramref name="column"/>, one entry per row of <paramref name="at"/>, by the part's values; a term
     /// without the part leaves it as it is.</summary>
@@ -120,6 +127,55 @@ public sealed record HingeDesignFactor(int Variable, int Sign, int Knot, double 
         error = Math.Max(ec, ev);
         return (cross, covariance);
     }
+}
+
+/// <summary>
+/// A standardized shifted Legendre polynomial ψ_α as a factor (E19): one piece over the line, whose expansion about any centre
+/// <see cref="ShiftedLegendre.Coefficients"/> writes, so <see cref="PiecewisePolynomial"/> takes its moments under any measure
+/// as it does a hinge's. Under the uniform measure on [0, 1] its mean is 0 for α ≥ 1 and its pairs are orthonormal; the
+/// expansion's coefficients grow with α, so a moment past degree 15 or so loses digits to cancellation.
+/// </summary>
+public sealed record LegendreDesignFactor(int Variable, int Degree) : DesignFactor(Variable)
+{
+    /// <inheritdoc/>
+    public override double Value(double x) => ShiftedLegendre.Value(Degree, x);
+
+    /// <inheritdoc/>
+    public override double Derivative(double x) => ShiftedLegendre.Derivative(Degree, x);
+
+    /// <inheritdoc/>
+    public override double Mean(ProductMeasure measure, out double error)
+    {
+        ContinuousMeasure m = measure.Continuous(Variable)!;
+        (double mean, error) = Product(Degree, 0, 0.0, 0.0).Expectation(m.Measure, m.Lower, m.Upper);
+        return mean;
+    }
+
+    /// <inheritdoc/>
+    public override (double Cross, double Covariance) Pair(DesignFactor other, double meanThis, double meanOther,
+                                                           ProductMeasure measure, out double error)
+    {
+        if (other is not LegendreDesignFactor b || b.Variable != Variable) throw new ArgumentException("A Legendre factor pairs with a Legendre factor on its variable.", nameof(other));
+        ContinuousMeasure m = measure.Continuous(Variable)!;
+        (double cross, double ec) = Product(Degree, b.Degree, 0.0, 0.0).Expectation(m.Measure, m.Lower, m.Upper);
+        (double covariance, double ev) = Product(Degree, b.Degree, meanThis, meanOther).Expectation(m.Measure, m.Lower, m.Upper);
+        error = Math.Max(ec, ev);
+        return (cross, covariance);
+    }
+
+    // (ψ_a − m_a)(ψ_b − m_b) as one piece, b = 0 standing for the constant 1 with no offset: a single factor's mean.
+    private static PiecewisePolynomial Product(int a, int b, double offsetA, double offsetB)
+        => new([], a + b, (piece, centre, coefficients) =>
+        {
+            Span<double> ca = stackalloc double[a + 1], cb = stackalloc double[b + 1];
+            ShiftedLegendre.Coefficients(a, centre, ca);
+            ShiftedLegendre.Coefficients(b, centre, cb);
+            ca[0] -= offsetA;
+            cb[0] -= offsetB;
+            for (int i = 0; i <= a; i++)
+                for (int j = 0; j <= b; j++) coefficients[i + j] += ca[i] * cb[j];
+            return true;
+        });
 }
 
 /// <summary>The indicator 1(z ∈ D) of a categorical subset as a factor, on a level index.</summary>

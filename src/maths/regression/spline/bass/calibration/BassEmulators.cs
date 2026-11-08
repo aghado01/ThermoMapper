@@ -439,8 +439,8 @@ internal sealed class ThetaSurface
             else kept.Add(factor);
         }
         BassTerm? rest = onTheta.Count == 0 ? term
-                       : term.Continuous.Count + kept.Count + term.Functional.Count == 0 ? null
-                       : new BassTerm(term.Continuous, kept, term.Functional);
+                       : term.Continuous.Count + kept.Count + term.Functional.Count + term.Legendre.Count == 0 ? null
+                       : new BassTerm(term.Continuous, kept, term.Functional, term.Legendre);
         double[]? h = null;
         if (_outputs is { } outputs)
         {

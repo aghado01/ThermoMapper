@@ -68,8 +68,9 @@ public sealed class BassBasis
     /// <summary>
     /// The partial derivative of the term's case-side factor in continuous predictor <paramref name="variable"/> (by its
     /// position among the continuous predictors) at each case of <paramref name="at"/>, into <paramref name="column"/>: the
-    /// differentiable part's derivative times the other parts' values, zero for a term that does not hold the variable. At a
-    /// hinge's knot the derivative is the mean of its one-sided limits (<see cref="IDesignKernel{TPoints}"/>).
+    /// derivative of the part that reads the variable (<see cref="IDesignKernel{TPoints}.ReadsVariable"/>) times the other
+    /// parts' values, zero for a term that does not hold the variable. At a hinge's knot the derivative is the mean of its
+    /// one-sided limits (<see cref="IDesignKernel{TPoints}"/>).
     /// </summary>
     public void CaseDerivative(BassTerm term, int variable, CaseInputs at, Span<double> column)
     {
@@ -78,9 +79,17 @@ public sealed class BassBasis
         if (column.Length != at.Cases) throw new ArgumentException("The column needs one value per case.", nameof(column));
         if ((uint)variable >= (uint)at.ContinuousCount) throw new ArgumentOutOfRangeException(nameof(variable), "No such continuous variable.");
         column.Fill(1.0);
+        bool read = false;
         foreach (IDesignKernel<CaseInputs> kernel in Kernels.Case)
-            if (kernel.Differentiable) kernel.MultiplyDerivative(term, variable, at, column);
+        {
+            if (kernel.ReadsVariable(term, variable))
+            {
+                kernel.MultiplyDerivative(term, variable, at, column);
+                read = true;
+            }
             else kernel.Multiply(term, at, column);
+        }
+        if (!read) column.Clear();
     }
 
     /// <summary>The term's output-side factor at each location of <paramref name="at"/>, into <paramref name="column"/>.</summary>

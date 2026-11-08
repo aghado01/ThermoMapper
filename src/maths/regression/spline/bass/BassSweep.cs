@@ -20,9 +20,10 @@ namespace Maths.Regression.Spline.Bass;
 /// between), or the prior-cancelling schedule b_M = C·min(1, p(M+1)/p(M)), d_M = C·min(1, p(M−1)/p(M)), the rest change,
 /// so b_M p(M) = d_{M+1} p(M+1) and the count prior cancels from births and deaths. The chain owns the selection ratio,
 /// so these are the moves' weights.</item>
-/// <item><b>The proposals.</b> A birth draws its term from D01's proposal (an empty draw is no move); a death and a change
-/// pick a term uniformly. Each candidate carries its fit from the design, or the design's refusal, which the target
-/// scores off the support, and its within-move ratio from <see cref="BassTermProposal"/>.</item>
+/// <item><b>The proposals.</b> A birth draws its term from the fit's proposal kernel (F-X4, <see cref="IBassProposalKernel"/>:
+/// D01's over hinges, KHAOS's over a Legendre term space; an empty draw is no move); a death and a change pick a term uniformly.
+/// Each candidate carries its fit from the design, or the design's refusal, which the target scores off the support, and its
+/// within-move ratio from the kernel.</item>
 /// <item><b>F-M2's options.</b> With <see cref="BassSampling.LocalSteps"/> a change steps its factor locally with
 /// probability ρ. With <see cref="BassSampling.FactorMoves"/> the prune, the grow and the variable change join the palette
 /// at fixed M, sharing the change's slot by <see cref="BassResolved.FactorShares"/>, so the births' and deaths' weights
@@ -482,13 +483,13 @@ public sealed class BassStructureMoves
         public Proposal<BassState>? Propose(BassState current, Xoshiro256PlusPlus rng)
         {
             owner.Sync(current);
-            if (owner._model.Proposal.DrawBirth(rng, owner._counts) is not { } term)
+            if (owner._model.Kernel.DrawBirth(rng, owner._counts) is not { } term)
             {
                 owner.EmptyBirths++;
                 owner._candidate = null;
                 return null;
             }
-            double logRatio = owner._model.Proposal.LogBirthRatio(term, owner._counts);
+            double logRatio = owner._model.Kernel.LogBirthRatio(term, owner._counts);
             DesignProposal proposal = owner._design.ProposeBirth(term);
             BassTerm[] terms = [.. current.TermArray, term];
             return new Proposal<BassState>(owner.Candidate(current, terms, proposal, BassMoveKind.Birth, term, null), logRatio, 0.0);
@@ -507,7 +508,7 @@ public sealed class BassStructureMoves
             if (current.Count == 0) return null;
             int index = BassDraws.Below(rng, current.Count);
             BassTerm term = current.TermArray[index];
-            double logRatio = owner._model.Proposal.LogDeathRatio(term, owner._counts);
+            double logRatio = owner._model.Kernel.LogDeathRatio(term, owner._counts);
             DesignProposal proposal = owner._design.ProposeDeath(index);
             BassTerm[] terms = [.. current.TermArray[..index], .. current.TermArray[(index + 1)..]];
             return new Proposal<BassState>(owner.Candidate(current, terms, proposal, BassMoveKind.Death, null, term), logRatio, 0.0);
@@ -526,7 +527,7 @@ public sealed class BassStructureMoves
             if (current.Count == 0) return null;
             int index = BassDraws.Below(rng, current.Count);
             BassTerm old = current.TermArray[index];
-            return owner.Replace(current, index, owner._model.Proposal.ProposeChange(rng, old));
+            return owner.Replace(current, index, owner._model.Kernel.ProposeChange(rng, old, owner._counts));
         }
     }
 

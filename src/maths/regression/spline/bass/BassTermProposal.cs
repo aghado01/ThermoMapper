@@ -27,9 +27,10 @@ namespace Maths.Regression.Spline.Bass;
 /// Each move reports its within-move log ratio, ln q(reverse)/q(forward), which a reversible-jump chain adds to its
 /// target ratio (the target holding the structure prior) and its move-selection ratio. A birth's and a death's carry the
 /// 1/M of the death's pick; with the prior's ratio they make D02's count factor (M + h₁)/((M + 1)(h₂ + 1)). Immutable,
-/// with no scratch state, so one serves every chain of a fit.
+/// with no scratch state, so one serves every chain of a fit. It is the hinge member of F-X4's contract
+/// (<see cref="IBassProposalKernel"/>), its draws unchanged.
 /// </summary>
-public sealed class BassTermProposal
+public sealed class BassTermProposal : IBassProposalKernel
 {
     private const int StackLimit = 256;
 
@@ -118,6 +119,9 @@ public sealed class BassTermProposal
     /// </summary>
     public double LogDeathRatio(BassTerm dying, BassTermCounts counts)
         => LogBirth(dying, counts, 1) + Math.Log(counts.Terms);
+
+    /// <summary>D01's change (<see cref="ProposeChange(Xoshiro256PlusPlus, BassTerm)"/>), which reads no counts.</summary>
+    BassTermMove IBassProposalKernel.ProposeChange(Xoshiro256PlusPlus rng, BassTerm term, BassTermCounts counts) => ProposeChange(rng, term);
 
     /// <summary>A birth's term, or null for the empty draw (the intercept, a failed birth).</summary>
     public BassTerm? DrawBirth(Xoshiro256PlusPlus rng, BassTermCounts counts)
@@ -580,8 +584,12 @@ public enum BassMoveKind
     /// <summary>A factor grown into a term's part (the fixed-M family).</summary>
     Grow,
 
-    /// <summary>A factor's variable exchanged for one its part does not use (the fixed-M family).</summary>
+    /// <summary>A factor's variable exchanged for one its part does not use: the fixed-M family's, or KHAOS's variable swap on a
+    /// Legendre term, its degree kept.</summary>
     VariableChange,
+
+    /// <summary>A Legendre term's degree redrawn with a new composition over its variables (KHAOS's degree mutation, E4).</summary>
+    DegreeChange,
 }
 
 /// <summary>
@@ -615,6 +623,20 @@ internal static class BassDraws
             while (low < threshold) high = Math.BigMul(rng.NextUInt64(), bound, out low);
         }
         return (int)high;
+    }
+
+    /// <summary>A uniform index in [0, count) for a 64-bit count, by the same multiply-shift with rejection.</summary>
+    public static long Below(Xoshiro256PlusPlus rng, long count)
+    {
+        if (count <= 0) throw new ArgumentOutOfRangeException(nameof(count));
+        ulong bound = (ulong)count;
+        ulong high = Math.BigMul(rng.NextUInt64(), bound, out ulong low);
+        if (low < bound)
+        {
+            ulong threshold = unchecked(0UL - bound) % bound;
+            while (low < threshold) high = Math.BigMul(rng.NextUInt64(), bound, out low);
+        }
+        return (long)high;
     }
 
     /// <summary>A sign, +1 or −1 with probability ½ each, from the word's top bit.</summary>

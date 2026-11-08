@@ -17,6 +17,9 @@ public enum BassPart
 
     /// <summary>Hinges on the output variables of a direct functional response.</summary>
     Functional,
+
+    /// <summary>Standardized shifted Legendre factors on the continuous predictors: a polynomial-chaos fit's one part (E19).</summary>
+    Legendre,
 }
 
 /// <summary>
@@ -29,12 +32,18 @@ public enum BassPart
 /// uniform over its variable's distinct values; each categorical subset by the declared measure, R's (its size uniform
 /// on {1, …, n − 1}, then uniform among the subsets of that size) or the paper's (uniform over the 2ⁿ − 2 proper
 /// subsets). One part and K ≤ K_max make this Francom et al.'s c_K/K_max.</para>
+/// <para>A polynomial-chaos fit (E19) has the Legendre part alone, whose term measure is uniform over KHAOS's term space
+/// 𝒜_{p, d_max, q_max} (<see cref="LegendreTermSpace"/>): π(term) = 1/|𝒜| for every term, so the orders are weighted by the
+/// terms each holds, not uniformly. The count prior is the same.</para>
 /// <para><see cref="LogPrior"/> scores the term measure and <see cref="DrawTerm"/> draws from it. Immutable, so one
 /// serves every chain of a fit.</para>
 /// </summary>
 public sealed class BassStructurePrior
 {
-    private readonly Part?[] _parts = new Part?[3];
+    /// <summary>The parts a term can have, <see cref="BassPart"/>'s members.</summary>
+    public const int PartCount = 4;
+
+    private readonly Part?[] _parts = new Part?[PartCount];
 
     /// <summary>
     /// The prior on <paramref name="inputs"/>' predictors and output variables, with each part's interaction cap (0
@@ -70,6 +79,21 @@ public sealed class BassStructurePrior
         _parts[(int)BassPart.Functional] = Part.Hinges(BassPart.Functional, outputKnots, maxFunctionalInteraction, minimum, nameof(maxFunctionalInteraction));
     }
 
+    /// <summary>
+    /// A polynomial-chaos fit's prior (E19): the Legendre part alone, its term measure uniform over <paramref name="space"/>, with
+    /// the count prior <paramref name="count"/>. Bases that mix term types are an option the contract allows, not built.
+    /// </summary>
+    public BassStructurePrior(LegendreTermSpace space, BassCountPrior count)
+    {
+        ArgumentNullException.ThrowIfNull(space);
+        ArgumentNullException.ThrowIfNull(count);
+        if (!(count.Shape > 0.0 && double.IsFinite(count.Shape))) throw new ArgumentOutOfRangeException(nameof(count), "h₁ must be positive and finite.");
+        if (!(count.Rate > 0.0 && double.IsFinite(count.Rate))) throw new ArgumentOutOfRangeException(nameof(count), "h₂ must be positive and finite.");
+        Count = count;
+        Subsets = CategoricalSubsetMeasure.SizeUniform;
+        _parts[(int)BassPart.Legendre] = Part.Legendre(space);
+    }
+
     /// <summary>The prior <paramref name="config"/> sets, with the caps <paramref name="resolved"/> holds.</summary>
     public static BassStructurePrior From(BassConfig config, BassResolved resolved, BassInputs inputs)
     {
@@ -97,6 +121,9 @@ public sealed class BassStructurePrior
     /// <summary><paramref name="part"/>'s variables, 0 where the fit lacks it.</summary>
     public int Variables(BassPart part) => _parts[(int)part]?.Sizes.Length ?? 0;
 
+    /// <summary>The Legendre term space of a polynomial-chaos fit; null for a hinge fit.</summary>
+    public LegendreTermSpace? Legendre => _parts[(int)BassPart.Legendre]?.Space;
+
     internal Part? this[BassPart part] => _parts[(int)part];
 
     /// <summary>ln π(term), the term measure's log probability.</summary>
@@ -107,6 +134,11 @@ public sealed class BassStructurePrior
         foreach (Part? p in _parts)
         {
             if (p is null) continue;
+            if (p.Space is { } space)
+            {
+                lp -= space.LogSize;
+                continue;
+            }
             int k = Order(term, p.Kind);
             lp += p.LogOrder;
             if (k == 0) continue;
@@ -125,6 +157,7 @@ public sealed class BassStructurePrior
     public BassTerm? DrawTerm(Xoshiro256PlusPlus rng)
     {
         ArgumentNullException.ThrowIfNull(rng);
+        if (Legendre is { } space) return space.Draw(rng);
         Span<int> orders = stackalloc int[3];
         bool empty = true;
         for (int index = 0; index < 3; index++)
@@ -208,6 +241,12 @@ public sealed class BassStructurePrior
     public void Validate(BassTerm term)
     {
         ArgumentNullException.ThrowIfNull(term);
+        if (Legendre is { } space)
+        {
+            space.Validate(term);
+            return;
+        }
+        if (term.Legendre.Count > 0) throw new ArgumentException("The fit has no Legendre part.", nameof(term));
         for (int index = 0; index < 3; index++)
         {
             var kind = (BassPart)index;
@@ -242,6 +281,7 @@ public sealed class BassStructurePrior
     {
         BassPart.Continuous => term.Continuous.Count,
         BassPart.Categorical => term.Categorical.Count,
+        BassPart.Legendre => term.Legendre.Count,
         _ => term.Functional.Count,
     };
 
@@ -252,6 +292,7 @@ public sealed class BassStructurePrior
     {
         BassPart.Continuous => "continuous",
         BassPart.Categorical => "categorical",
+        BassPart.Legendre => "Legendre",
         _ => "functional",
     };
 
@@ -293,6 +334,13 @@ public sealed class BassStructurePrior
 
         /// <summary>A subset's log probability by variable and size.</summary>
         public double[][]? LogSubset { get; private init; }
+
+        /// <summary>The Legendre part's term space, whose uniform measure is the part's; null for the others.</summary>
+        public LegendreTermSpace? Space { get; private init; }
+
+        /// <summary>The Legendre part over <paramref name="space"/>: its variables, its order cap q_max, its smallest order 1.</summary>
+        public static Part Legendre(LegendreTermSpace space)
+            => new(BassPart.Legendre, new int[space.Variables], space.MaxOrder, 1) { Space = space };
 
         public static Part? Hinges(BassPart kind, int[] knots, int cap, int minimum, string capName)
         {
@@ -382,15 +430,15 @@ public sealed class BassStructurePrior
 /// </summary>
 public sealed class BassTermCounts
 {
-    private readonly int[][] _orders = new int[3][];
-    private readonly int[][] _appearances = new int[3][];
+    private readonly int[][] _orders = new int[BassStructurePrior.PartCount][];
+    private readonly int[][] _appearances = new int[BassStructurePrior.PartCount][];
 
     /// <summary>The empty structure's counts under <paramref name="prior"/>.</summary>
     public BassTermCounts(BassStructurePrior prior)
     {
         ArgumentNullException.ThrowIfNull(prior);
         Prior = prior;
-        for (int p = 0; p < 3; p++)
+        for (int p = 0; p < BassStructurePrior.PartCount; p++)
         {
             _orders[p] = new int[prior.Cap((BassPart)p) + 1];
             _appearances[p] = new int[prior.Variables((BassPart)p)];
@@ -401,7 +449,7 @@ public sealed class BassTermCounts
     {
         Prior = source.Prior;
         Terms = source.Terms;
-        for (int p = 0; p < 3; p++)
+        for (int p = 0; p < BassStructurePrior.PartCount; p++)
         {
             _orders[p] = (int[])source._orders[p].Clone();
             _appearances[p] = (int[])source._appearances[p].Clone();
@@ -446,7 +494,7 @@ public sealed class BassTermCounts
 
     private bool Holds(BassTerm term)
     {
-        for (int p = 0; p < 3; p++)
+        for (int p = 0; p < BassStructurePrior.PartCount; p++)
         {
             var part = (BassPart)p;
             if (!Prior.Has(part)) continue;
@@ -459,7 +507,7 @@ public sealed class BassTermCounts
 
     private void Shift(BassTerm term, int by)
     {
-        for (int p = 0; p < 3; p++)
+        for (int p = 0; p < BassStructurePrior.PartCount; p++)
         {
             var part = (BassPart)p;
             if (!Prior.Has(part)) continue;
@@ -472,6 +520,8 @@ public sealed class BassTermCounts
     {
         if (part == BassPart.Categorical)
             foreach (CategoricalFactor c in term.Categorical) yield return c.Variable;
+        else if (part == BassPart.Legendre)
+            foreach (LegendreFactor f in term.Legendre) yield return f.Variable;
         else
             foreach (HingeFactor h in BassStructurePrior.Hinges(term, part)) yield return h.Variable;
     }

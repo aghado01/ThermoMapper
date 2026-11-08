@@ -448,15 +448,15 @@ public readonly record struct BassOrderSupport(BassPart Part, int Order, long At
 /// </summary>
 public sealed class BassSupportTally : IMergeable<BassSupportTally>
 {
-    private readonly long[][] _attempts = new long[3][];
-    private readonly long[][] _refused = new long[3][];
-    private readonly int[] _minimum = new int[3];   // each part's smallest order
+    private readonly long[][] _attempts = new long[BassStructurePrior.PartCount][];
+    private readonly long[][] _refused = new long[BassStructurePrior.PartCount][];
+    private readonly int[] _minimum = new int[BassStructurePrior.PartCount];   // each part's smallest order
 
     /// <summary>An empty tally over <paramref name="prior"/>'s parts and orders.</summary>
     public BassSupportTally(BassStructurePrior prior)
     {
         ArgumentNullException.ThrowIfNull(prior);
-        for (int p = 0; p < 3; p++)
+        for (int p = 0; p < BassStructurePrior.PartCount; p++)
         {
             int orders = prior.Has((BassPart)p) ? prior.Cap((BassPart)p) + 1 : 0;
             _attempts[p] = new long[orders];
@@ -467,7 +467,7 @@ public sealed class BassSupportTally : IMergeable<BassSupportTally>
 
     private BassSupportTally(BassSupportTally source)
     {
-        for (int p = 0; p < 3; p++)
+        for (int p = 0; p < BassStructurePrior.PartCount; p++)
         {
             _attempts[p] = (long[])source._attempts[p].Clone();
             _refused[p] = (long[])source._refused[p].Clone();
@@ -479,7 +479,7 @@ public sealed class BassSupportTally : IMergeable<BassSupportTally>
     public void Add(BassTerm term, bool refused)
     {
         ArgumentNullException.ThrowIfNull(term);
-        for (int p = 0; p < 3; p++)
+        for (int p = 0; p < BassStructurePrior.PartCount; p++)
         {
             if (_attempts[p].Length == 0) continue;
             int order = BassStructurePrior.Order(term, (BassPart)p);
@@ -500,7 +500,7 @@ public sealed class BassSupportTally : IMergeable<BassSupportTally>
         get
         {
             var entries = new List<BassOrderSupport>();
-            for (int p = 0; p < 3; p++)
+            for (int p = 0; p < BassStructurePrior.PartCount; p++)
                 for (int k = _minimum[p]; k < _attempts[p].Length; k++) entries.Add(new BassOrderSupport((BassPart)p, k, _attempts[p][k], _refused[p][k]));
             return entries;
         }
@@ -510,7 +510,7 @@ public sealed class BassSupportTally : IMergeable<BassSupportTally>
     public void MergeFrom(BassSupportTally other)
     {
         ArgumentNullException.ThrowIfNull(other);
-        for (int p = 0; p < 3; p++)
+        for (int p = 0; p < BassStructurePrior.PartCount; p++)
         {
             if (other._attempts[p].Length != _attempts[p].Length || other._minimum[p] != _minimum[p])
                 throw new ArgumentException("The tallies count different orders.", nameof(other));
@@ -528,7 +528,7 @@ public sealed class BassSupportTally : IMergeable<BassSupportTally>
     /// <summary>Zeroes every count.</summary>
     public void Clear()
     {
-        for (int p = 0; p < 3; p++)
+        for (int p = 0; p < BassStructurePrior.PartCount; p++)
         {
             Array.Clear(_attempts[p]);
             Array.Clear(_refused[p]);

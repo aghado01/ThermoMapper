@@ -11,6 +11,13 @@ namespace Maths.Regression.Spline.Bass;
 public readonly record struct HingeFactor(int Variable, int Sign, int Knot);
 
 /// <summary>
+/// One Legendre factor of a term, ψ_α(x) = √(2α + 1)·P_α(2x − 1) on a continuous predictor's scaled value (E19): the variable
+/// and its degree α ≥ 1. A term's Legendre part is a multi-index over its variables; its order q is the factors' count and its
+/// degree d the sum of their α.
+/// </summary>
+public readonly record struct LegendreFactor(int Variable, int Degree);
+
+/// <summary>
 /// One categorical factor of a term, the indicator 1(z ∈ D): a categorical predictor and a proper, nonempty subset D
 /// of its training levels, held as sorted level indices, so a factor of any number of levels is one value.
 /// </summary>
@@ -82,7 +89,8 @@ public sealed class CategoricalFactor : IEquatable<CategoricalFactor>
 
 /// <summary>
 /// A BASS term (D01): a continuous part of hinge factors, a categorical part of subset indicators and, for a direct
-/// functional response, a functional part of hinge factors over the output variables. Each part holds distinct
+/// functional response, a functional part of hinge factors over the output variables; or, in a polynomial-chaos fit (E19), a
+/// Legendre part of standardized shifted Legendre factors over the continuous predictors. Each part holds distinct
 /// variables, and a term holds at least one factor; a part may be empty, which leaves it the constant 1.
 /// <para>A term is held in canonical form, each part sorted by variable, so it does not depend on the order its
 /// factors were drawn in, and terms compare by value. That makes a model's collection of terms a set of distinct values,
@@ -93,14 +101,16 @@ public sealed class BassTerm : IEquatable<BassTerm>
 {
     private readonly HingeFactor[] _continuous, _functional;
     private readonly CategoricalFactor[] _categorical;
+    private readonly LegendreFactor[] _legendre;
     private readonly int _hash;
 
     /// <summary>The term with these factors, in any order.</summary>
     public BassTerm(IEnumerable<HingeFactor>? continuous = null, IEnumerable<CategoricalFactor>? categorical = null,
-                    IEnumerable<HingeFactor>? functional = null)
+                    IEnumerable<HingeFactor>? functional = null, IEnumerable<LegendreFactor>? legendre = null)
     {
         _continuous = Hinges(continuous, "continuous");
         _functional = Hinges(functional, "functional");
+        _legendre = Legendres(legendre);
         _categorical = categorical?.ToArray() ?? [];
         foreach (CategoricalFactor? f in _categorical)
             if (f is null) throw new ArgumentException("A categorical factor is null.", nameof(categorical));
@@ -108,7 +118,7 @@ public sealed class BassTerm : IEquatable<BassTerm>
         for (int k = 1; k < _categorical.Length; k++)
             if (_categorical[k].Variable == _categorical[k - 1].Variable)
                 throw new ArgumentException($"Categorical variable {_categorical[k].Variable} appears twice in one term.", nameof(categorical));
-        if (_continuous.Length + _categorical.Length + _functional.Length == 0)
+        if (_continuous.Length + _categorical.Length + _functional.Length + _legendre.Length == 0)
             throw new ArgumentException("A term needs a factor; the intercept is not a term.");
 
         var hash = new HashCode();
@@ -117,7 +127,26 @@ public sealed class BassTerm : IEquatable<BassTerm>
         foreach (CategoricalFactor c in _categorical) hash.Add(c);
         hash.Add(-2);
         foreach (HingeFactor h in _functional) hash.Add(h);
+        if (_legendre.Length > 0)   // a hinge term's hash stays as it was
+        {
+            hash.Add(-3);
+            foreach (LegendreFactor f in _legendre) hash.Add(f);
+        }
         _hash = hash.ToHashCode();
+    }
+
+    private static LegendreFactor[] Legendres(IEnumerable<LegendreFactor>? factors)
+    {
+        LegendreFactor[] f = factors?.ToArray() ?? [];
+        Array.Sort(f, (a, b) => a.Variable.CompareTo(b.Variable));
+        for (int k = 0; k < f.Length; k++)
+        {
+            if (f[k].Variable < 0) throw new ArgumentOutOfRangeException("legendre", "Variables are indices, not negative.");
+            if (f[k].Degree < 1) throw new ArgumentOutOfRangeException("legendre", "A Legendre factor's degree is a positive integer; degree 0 is the constant.");
+            if (k > 0 && f[k].Variable == f[k - 1].Variable)
+                throw new ArgumentException($"The Legendre variable {f[k].Variable} appears twice in one term.", "legendre");
+        }
+        return f;
     }
 
     private static HingeFactor[] Hinges(IEnumerable<HingeFactor>? factors, string part)
@@ -143,11 +172,26 @@ public sealed class BassTerm : IEquatable<BassTerm>
     /// <summary>The functional part, by output variable.</summary>
     public IReadOnlyList<HingeFactor> Functional => _functional;
 
+    /// <summary>The Legendre part, by continuous variable: its count is the term's order q.</summary>
+    public IReadOnlyList<LegendreFactor> Legendre => _legendre;
+
+    /// <summary>The Legendre part's degree d, the sum of its factors' α; 0 for a term without one.</summary>
+    public int LegendreDegree
+    {
+        get
+        {
+            int d = 0;
+            foreach (LegendreFactor f in _legendre) d += f.Degree;
+            return d;
+        }
+    }
+
     /// <inheritdoc/>
     public bool Equals(BassTerm? other)
         => other is not null && (ReferenceEquals(this, other)
             || (_hash == other._hash && _continuous.AsSpan().SequenceEqual(other._continuous)
-                && _functional.AsSpan().SequenceEqual(other._functional) && _categorical.SequenceEqual(other._categorical)));
+                && _functional.AsSpan().SequenceEqual(other._functional) && _legendre.AsSpan().SequenceEqual(other._legendre)
+                && _categorical.SequenceEqual(other._categorical)));
 
     /// <inheritdoc/>
     public override bool Equals(object? obj) => Equals(obj as BassTerm);
@@ -162,6 +206,7 @@ public sealed class BassTerm : IEquatable<BassTerm>
         parts.AddRange(_continuous.Select(h => $"x{h.Variable}{(h.Sign > 0 ? '+' : '−')}k{h.Knot}"));
         parts.AddRange(_categorical.Select(c => c.ToString()));
         parts.AddRange(_functional.Select(h => $"t{h.Variable}{(h.Sign > 0 ? '+' : '−')}k{h.Knot}"));
+        parts.AddRange(_legendre.Select(f => $"ψ{f.Degree}(x{f.Variable})"));
         return string.Join(" · ", parts);
     }
 }

@@ -1,14 +1,16 @@
 using System;
 using System.Collections.Generic;
+using Maths.Distributions;
 using Maths.Regression.Spline.Bass.Sensitivity;
 
 namespace Maths.Regression.Spline.Bass;
 
 /// <summary>
 /// BASS's term types behind the design-kernel contract (<see cref="IDesignKernel{TPoints}"/>), bound to a fit's inputs
-/// and hinge degree: on the case side the continuous hinge product and the categorical subsets, on the output side the
-/// functional hinge product. <see cref="BassBasis"/> composes a term's column from them in this order, and
-/// <see cref="BassMoments"/> its factors.
+/// and hinge degree: on the case side the continuous hinge product, the categorical subsets and the Legendre product (E19), on
+/// the output side the functional hinge product. <see cref="BassBasis"/> composes a term's column from them in this order, and
+/// <see cref="BassMoments"/> its factors. A term without a part leaves the column as it is, so a hinge term's column is the
+/// same bits with the Legendre kernel present.
 /// </summary>
 public sealed class DesignKernels
 {
@@ -17,7 +19,7 @@ public sealed class DesignKernels
     {
         ArgumentNullException.ThrowIfNull(inputs);
         if (degree < 1) throw new ArgumentOutOfRangeException(nameof(degree), "The degree is a positive integer.");
-        Case = [new ContinuousHingeKernel(inputs, degree), new CategoricalSubsetKernel(inputs)];
+        Case = [new ContinuousHingeKernel(inputs, degree), new CategoricalSubsetKernel(inputs), new LegendreProductKernel(inputs)];
         Output = [new FunctionalHingeKernel(inputs, degree)];
     }
 
@@ -51,6 +53,13 @@ internal abstract class HingeProductKernel<TPoints> : IDesignKernel<TPoints>
     public bool Reads(BassTerm term) => Part(term).Count > 0;
 
     public bool Differentiable => true;
+
+    public bool ReadsVariable(BassTerm term, int variable)
+    {
+        foreach (HingeFactor f in Part(term))
+            if (f.Variable == variable) return true;
+        return false;
+    }
 
     public abstract void Validate(BassTerm term);
 
@@ -192,6 +201,64 @@ internal sealed class FunctionalHingeKernel(BassInputs inputs, int degree) : Hin
                 throw new ArgumentException($"Term {term} does not index these inputs.", nameof(term));
             int variable = measure.OfOutput(h.Variable);
             if (variable >= 0) factors.Add(new HingeDesignFactor(variable, h.Sign, h.Knot, Inputs.FunctionalKnots(h.Variable)[h.Knot], Degree));
+        }
+        return factors;
+    }
+}
+
+// The Legendre product Πⱼ ψ_{αⱼ}(xⱼ) over the continuous predictors' scaled values, on the case side (E19): no normalizer, the
+// ψ being orthonormal under the uniform measure already. Each factor's values come in lanes (ShiftedLegendre.Multiply), the
+// same bits as the scalar recurrence; a derivative takes the one factor's slope and the others' values.
+internal sealed class LegendreProductKernel(BassInputs inputs) : IDesignKernel<CaseInputs>
+{
+    public bool Reads(BassTerm term) => term.Legendre.Count > 0;
+
+    public bool Differentiable => true;
+
+    public bool ReadsVariable(BassTerm term, int variable)
+    {
+        foreach (LegendreFactor f in term.Legendre)
+            if (f.Variable == variable) return true;
+        return false;
+    }
+
+    public void Validate(BassTerm term)
+    {
+        foreach (LegendreFactor f in term.Legendre)
+            if (f.Variable >= inputs.Cases.ContinuousCount) throw new ArgumentException($"Continuous variable {f.Variable} does not exist.", nameof(term));
+    }
+
+    public void Multiply(BassTerm term, CaseInputs at, Span<double> column)
+    {
+        foreach (LegendreFactor f in term.Legendre) ShiftedLegendre.Multiply(f.Degree, at.Continuous(f.Variable), column);
+    }
+
+    public void MultiplyDerivative(BassTerm term, int variable, CaseInputs at, Span<double> column)
+    {
+        if (variable < 0) throw new ArgumentOutOfRangeException(nameof(variable));
+        if (!ReadsVariable(term, variable))
+        {
+            column.Clear();
+            return;
+        }
+        foreach (LegendreFactor f in term.Legendre)
+        {
+            ReadOnlySpan<double> x = at.Continuous(f.Variable);
+            if (f.Variable == variable)
+                for (int i = 0; i < column.Length; i++) column[i] *= ShiftedLegendre.Derivative(f.Degree, x[i]);
+            else ShiftedLegendre.Multiply(f.Degree, x, column);
+        }
+    }
+
+    public double Scale(BassTerm term) => 1.0;
+
+    public IReadOnlyList<DesignFactor> Factors(BassTerm term, ProductMeasure measure)
+    {
+        var factors = new List<DesignFactor>(term.Legendre.Count);
+        foreach (LegendreFactor f in term.Legendre)
+        {
+            if (f.Variable >= inputs.Cases.ContinuousCount) throw new ArgumentException($"Term {term} does not index these inputs.", nameof(term));
+            factors.Add(new LegendreDesignFactor(measure.OfContinuous(f.Variable), f.Degree));
         }
         return factors;
     }
