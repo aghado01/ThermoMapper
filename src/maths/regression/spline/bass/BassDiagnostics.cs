@@ -226,6 +226,11 @@ public sealed record BassSmcReplicate(
 {
     /// <summary>The stages taken after the initial draw.</summary>
     public int StageCount => Stages.Count - 1;
+
+    /// <summary>The stages side by side (<see cref="SmcStageReadout"/>): each one's sweeps per particle, the structure move's
+    /// acceptance over them, the fraction of particles whose structure changed, and the ESS over N, so a replicate whose
+    /// particles stop moving shows where (<see cref="SmcStageReadout.LeastMoved"/>).</summary>
+    public SmcStageReadout StageReadout => SmcStageReadout.Of(Stages);
 }
 
 /// <summary>

@@ -458,6 +458,34 @@ public sealed class BassSmcTests
     }
 
     [Fact]
+    public void StageReadout_ShowsEachReplicatesSweepsAcceptanceAndEss()
+    {
+        BassFit fit = Bass.Fit(SmcConfig(), BassSweepTests.Data(large: true));
+        long moves = 0, sweeps = 0;
+        foreach (BassSmcReplicate x in fit.Diagnostics.Smc!.Replicates)
+        {
+            SmcStageReadout r = x.StageReadout;
+            Assert.Equal(x.Stages.Count, r.Steps.Length);
+            Assert.Equal((0, 1.0), (r.Steps[0], r.EssFraction[0]));
+            Assert.Equal((long)Small.MutationSteps * x.StageCount, r.Moves);
+            for (int s = 1; s < r.Steps.Length; s++)
+            {
+                Assert.Equal(x.Stages[s].AcceptanceRate, r.AcceptanceRate[s]);
+                Assert.Equal(x.Stages[s].EffectiveSampleSize / Small.Particles, r.EssFraction[s]);
+                // A particle whose structure changed accepted at least one of its sweeps' moves, and the accepted moves cover those particles.
+                Assert.InRange(r.MovedFraction[s], r.AcceptanceRate[s] - 1e-12, Math.Min(1.0, Small.MutationSteps * r.AcceptanceRate[s]) + 1e-12);
+            }
+            (int least, double fraction) = r.LeastMoved;
+            Assert.InRange(least, 1, x.StageCount);
+            _out.WriteLine($"replicate {x.Seed}: {x.StageCount} stages; least moved {fraction:F3} at stage {least} (b {r.InverseTemperature[least]:F4})");
+            moves += r.Moves * Small.Particles;
+            sweeps += x.Account.Sweeps;
+        }
+        // The kernels' sweeps are the readout's moves over the particles of nonzero weight.
+        Assert.InRange(sweeps, 1, moves);
+    }
+
+    [Fact]
     public void Kernel_RefusesAnotherModelsStage()
     {
         BassModel model = Model(), other = Model();
