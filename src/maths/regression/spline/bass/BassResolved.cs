@@ -265,6 +265,10 @@ public sealed record BassResolved
         BassCoefficientPrior coefficients = config.Coefficients;
         if (coefficients.Form is RawRidgeForm && functional)
             throw new ArgumentException("KHAOS's raw ridge reads a scalar response's columns as evaluated; a direct functional response's are centred by construction.", "config");
+        if (coefficients.Form is ModifiedGForm && s.Legendre is null)
+            throw new ArgumentException("KHAOS's modified g-prior reads each term's order and degree, a Legendre term's; declare Structure.Legendre.", "config");
+        if (coefficients.Form is ModifiedGForm && fitted.WeightArray is not null && !fitted.PriorStandsApart)
+            throw new ArgumentException("KHAOS's modified g-prior reads the unweighted or a frozen prior Gram; the weighted one, which moves with W, is not built for it.", "config");
         // One observation's information under the prior's own columns: N, or Σwᵢ for a prior on rows the weights count.
         ResolvedTauPrior scale = coefficients.Scale.For(coefficients.UnitObservations(fitted.PriorStandsApart ? n : weights.Count));
         string unit = coefficients.Form switch { RidgeForm => "1, the normalized ridge's", RawRidgeForm => "1, the raw ridge's", _ => "1/N, the g-form's" };
@@ -275,6 +279,9 @@ public sealed record BassResolved
                 break;
             case TauPriorKind.HyperG or TauPriorKind.HyperGOverN:
                 log.Add(new("TauPrior", scale.ToString(), $"τ₀ = {unit}" + (scale.IsProper ? "" : "; improper, a ≤ 2")));
+                break;
+            case TauPriorKind.Gamma:
+                log.Add(new("TauPrior", coefficients.Scale.ToString(), "on τ itself, whatever τ₀: g₀² = 1/τ ~ IG(a, b), KHAOS's"));
                 break;
             case TauPriorKind.Held when coefficients.Scale.Tau is null:
                 log.Add(new("HeldTau", Text(scale.HeldTau!.Value), $"unit information, τ₀ = {unit}"));

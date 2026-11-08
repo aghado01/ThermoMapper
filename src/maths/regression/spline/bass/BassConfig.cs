@@ -124,7 +124,7 @@ public sealed record BassConfig
         if (!(count.Rate > 0.0 && double.IsFinite(count.Rate))) throw Bad("Count.Rate", "must be positive and finite");
 
         BassCoefficientPrior coefficients = Coefficients ?? throw Bad("Coefficients", "is missing");
-        if (coefficients.Form is not (GForm or RidgeForm or RawRidgeForm)) throw Bad("Coefficients.Form", coefficients.Form is null ? "is missing" : "is not a known form");
+        if (coefficients.Form is not (GForm or RidgeForm or RawRidgeForm or ModifiedGForm)) throw Bad("Coefficients.Form", coefficients.Form is null ? "is missing" : "is not a known form");
         TauPrior scale = coefficients.Scale ?? throw Bad("Coefficients.Scale", "is missing");
         if (coefficients.Form is RidgeForm or RawRidgeForm && scale is { IsHeld: true, Tau: null })
             throw Bad("Coefficients.Scale.Tau", "must be declared under the ridge, whose held scale is part of the model (D03)");
@@ -414,6 +414,10 @@ public sealed record BassCoefficientPrior(CoefficientForm Form, TauPrior Scale)
     /// <summary>KHAOS's raw ridge with τ's prior <paramref name="scale"/>, a held one with its τ declared: <c>khaos</c>'s τ² is 1/τ.</summary>
     public static BassCoefficientPrior RawRidge(TauPrior scale) => new(new RawRidgeForm(), scale);
 
+    /// <summary>KHAOS's modified g-prior with complexity exponent <paramref name="zeta"/> (<see cref="ModifiedGForm"/>) and τ's prior
+    /// <paramref name="scale"/>, where τ = 1/g₀²: <c>khaos</c>'s g₀² ~ IG(a, b) is <see cref="TauPrior.Gamma"/>(a, b).</summary>
+    public static BassCoefficientPrior ModifiedG(TauPrior scale, double zeta = 1.0) => new(new ModifiedGForm(zeta), scale);
+
     /// <summary>τ₀ = 1/n₀'s n₀ for <paramref name="observations"/> observations: N for the g-form, 1 for either ridge.</summary>
     public double UnitObservations(double observations) => Form is RidgeForm or RawRidgeForm ? 1.0 : observations;
 }
@@ -423,6 +427,7 @@ public sealed record BassCoefficientPrior(CoefficientForm Form, TauPrior Scale)
 [JsonDerivedType(typeof(GForm), "G")]
 [JsonDerivedType(typeof(RidgeForm), "Ridge")]
 [JsonDerivedType(typeof(RawRidgeForm), "RawRidge")]
+[JsonDerivedType(typeof(ModifiedGForm), "ModifiedG")]
 public abstract record CoefficientForm
 {
     private protected CoefficientForm() { }

@@ -954,14 +954,16 @@ public abstract class RidgeColumns
 
     private protected abstract RidgeTerms Evaluate(double tau, double b);
 
-    // The terms over a decomposed pencil's eigenvalues and energies.
+    // The terms over a decomposed pencil's eigenvalues and energies. ln(1 + bλ/τ) overflows where τ is subnormal against bλ (a vague
+    // prior on τ, KHAOS's g₀² ~ IG(0.001, 1,000), draws such τ about half the time), though the density there is finite; there it is
+    // ln bλ − ln τ, which τ ≪ bλ makes exact to rounding, and a finite ratio keeps its own form, so every other evaluation stands.
     private protected static RidgeTerms SpectralTerms(double[] lambda, double[] q, double tau, double b)
     {
         double logDet = 0.0, shrink = 0.0, logDetSlope = 0.0, shrinkSlope = 0.0;
         for (int j = 0; j < lambda.Length; j++)
         {
-            double bl = b * lambda[j], h = tau / (bl + tau);
-            logDet -= LogFunctions.Log1p(bl / tau);
+            double bl = b * lambda[j], h = tau / (bl + tau), ratio = bl / tau;
+            logDet -= double.IsPositiveInfinity(ratio) ? Math.Log(bl) - Math.Log(tau) : LogFunctions.Log1p(ratio);
             shrink += q[j] * h;
             logDetSlope -= lambda[j] / (bl + tau);
             shrinkSlope += q[j] * h * h;

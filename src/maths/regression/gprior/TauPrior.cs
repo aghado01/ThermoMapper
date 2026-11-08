@@ -19,6 +19,9 @@ public enum TauPriorKind
 
     /// <summary>τ held at a declared value, or at τ₀.</summary>
     Held,
+
+    /// <summary>τ ~ Gamma(a, rate b), stated on τ itself, not on τ₀: KHAOS's g₀² ~ IG(a, b) with g₀² = 1/τ.</summary>
+    Gamma,
 }
 
 /// <summary>
@@ -35,6 +38,8 @@ public enum TauPriorKind
 /// <item><see cref="HyperGOverN"/>: the same law on g/n₀ = τ₀/τ, Liang et al.'s hyper-g/n under the g-form. Under the ridge,
 /// where τ₀ = 1, it coincides with <see cref="HyperG"/>.</item>
 /// <item><see cref="Held"/>: τ held at <see cref="Tau"/>, or at τ₀ when null: under the g-form unit information, 1/N.</item>
+/// <item><see cref="Gamma"/>: τ ~ Gamma(a, rate b) on τ itself, whatever the form's τ₀: KHAOS's g₀² ~ IG(a, b) for its
+/// modified g-prior, whose prior precision is scaled by τ = 1/g₀² (<c>khaos</c>'s defaults a = 0.001, b = 1,000).</item>
 /// </list>
 /// The hyper-g members are proper for a &gt; 2 only. Between 1 and 2 they are improper, their density stated up to a
 /// constant: the posterior stays proper wherever every structure keeps a column inside the coefficient prior (the
@@ -47,16 +52,25 @@ public enum TauPriorKind
 public sealed record TauPrior
 {
     /// <summary>
-    /// The prior of kind <paramref name="kind"/>: the Gamma takes a positive, finite shape; a hyper-g member its a, finite
-    /// and above 1; the held value a positive, finite τ, or none for τ₀.
+    /// The prior of kind <paramref name="kind"/>: the unit-information Gamma takes a positive, finite shape, and the Gamma on τ
+    /// a positive, finite shape and <paramref name="rate"/>; a hyper-g member its a, finite and above 1; the held value a
+    /// positive, finite τ, or none for τ₀. Only the Gamma on τ takes a rate.
     /// </summary>
-    public TauPrior(TauPriorKind kind, double? shape = null, double? tau = null)
+    public TauPrior(TauPriorKind kind, double? shape = null, double? tau = null, double? rate = null)
     {
+        if (rate is not null && kind != TauPriorKind.Gamma) throw new ArgumentException($"{kind} takes no rate.", nameof(rate));
         switch (kind)
         {
             case TauPriorKind.UnitInformationGamma:
                 if (shape is not (> 0.0 and < double.PositiveInfinity))
                     throw new ArgumentOutOfRangeException(nameof(shape), "The Gamma's shape must be positive and finite.");
+                if (tau is not null) throw new ArgumentException("The Gamma holds no τ.", nameof(tau));
+                break;
+            case TauPriorKind.Gamma:
+                if (shape is not (> 0.0 and < double.PositiveInfinity))
+                    throw new ArgumentOutOfRangeException(nameof(shape), "The Gamma's shape must be positive and finite.");
+                if (rate is not (> 0.0 and < double.PositiveInfinity))
+                    throw new ArgumentOutOfRangeException(nameof(rate), "The Gamma's rate must be positive and finite.");
                 if (tau is not null) throw new ArgumentException("The Gamma holds no τ.", nameof(tau));
                 break;
             case TauPriorKind.HyperG or TauPriorKind.HyperGOverN:
@@ -76,6 +90,7 @@ public sealed record TauPrior
         Kind = kind;
         Shape = shape;
         Tau = tau;
+        Rate = rate;
     }
 
     /// <summary>τ ~ Gamma(<paramref name="shape"/>, rate a/τ₀); ½, Zellner–Siow, by default.</summary>
@@ -86,6 +101,10 @@ public sealed record TauPrior
 
     /// <summary>Hyper-g/n with <paramref name="a"/>: hyper-g's law on τ₀/τ.</summary>
     public static TauPrior HyperGOverN(double a) => new(TauPriorKind.HyperGOverN, a);
+
+    /// <summary>τ ~ Gamma(<paramref name="shape"/>, rate <paramref name="rate"/>) on τ itself: g₀² = 1/τ ~ IG(shape, rate),
+    /// KHAOS's prior on its g₀².</summary>
+    public static TauPrior Gamma(double shape, double rate) => new(TauPriorKind.Gamma, shape, rate: rate);
 
     /// <summary>τ held at <paramref name="tau"/>; null holds it at τ₀.</summary>
     public static TauPrior Held(double? tau = null) => new(TauPriorKind.Held, tau: tau);
@@ -98,6 +117,11 @@ public sealed record TauPrior
 
     /// <summary>The held τ; null for τ₀, or for a sampled τ.</summary>
     public double? Tau { get; }
+
+    /// <summary>The Gamma on τ's rate; null for every other kind, and then left out of the serialized form, so a config that
+    /// declares another kind keeps its form and fingerprint.</summary>
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public double? Rate { get; }
 
     /// <summary>Whether τ is held, so the state has no τ coordinate; read from the kind, so not serialized.</summary>
     [JsonIgnore]
@@ -118,6 +142,7 @@ public sealed record TauPrior
     public override string ToString() => Kind switch
     {
         TauPriorKind.Held => Tau is { } t ? FormattableString.Invariant($"Held({t:R})") : "Held(τ₀)",
+        TauPriorKind.Gamma => FormattableString.Invariant($"Gamma({Shape:R}, rate {Rate:R})"),
         _ => FormattableString.Invariant($"{Kind}({Shape:R})"),
     };
 }
@@ -141,9 +166,9 @@ public sealed record ResolvedTauPrior
         UnitObservations = unitObservations;
         switch (declared.Kind)
         {
-            case TauPriorKind.UnitInformationGamma:
+            case TauPriorKind.UnitInformationGamma or TauPriorKind.Gamma:
                 double a = declared.Shape!.Value;
-                Gamma = Distributions.Gamma.ShapeRate(a, a * unitObservations);
+                Gamma = Distributions.Gamma.ShapeRate(a, declared.Rate ?? a * unitObservations);
                 _logConstant = a * Math.Log(Gamma.Value.Rate) - SpecialFunctions.LogGamma(a);
                 break;
             case TauPriorKind.HyperG or TauPriorKind.HyperGOverN:
@@ -166,7 +191,7 @@ public sealed record ResolvedTauPrior
     /// <summary>τ₀ = 1/n₀, the form's unit-information precision.</summary>
     public double UnitInformation => 1.0 / UnitObservations;
 
-    /// <summary>Gamma(a, rate a·n₀) for the unit-information Gamma; null otherwise.</summary>
+    /// <summary>Gamma(a, rate a·n₀) for the unit-information Gamma, Gamma(a, rate b) for the Gamma on τ; null otherwise.</summary>
     public Gamma? Gamma { get; }
 
     /// <summary>The held τ, declared or τ₀; null when τ is sampled.</summary>
@@ -231,7 +256,8 @@ public sealed record ResolvedTauPrior
     }
 
     /// <summary>The spelling a manifest or a log reads: the declared prior with its n₀.</summary>
-    public override string ToString() => FormattableString.Invariant($"{Declared} on τ₀ = 1/{UnitObservations:R}");
+    public override string ToString()
+        => Declared.Kind == TauPriorKind.Gamma ? $"{Declared}, on τ itself" : FormattableString.Invariant($"{Declared} on τ₀ = 1/{UnitObservations:R}");
 
     private static double Softplus(double x) => LogFunctions.Softplus(x);
 
@@ -241,11 +267,15 @@ public sealed record ResolvedTauPrior
 /// <summary>The log-domain functions the g-prior blocks read, accurate in their tails.</summary>
 internal static class LogFunctions
 {
-    /// <summary>ln(1 + x), accurate for small x (Goldberg's correction).</summary>
+    /// <summary>ln(1 + x), accurate for small x (Goldberg's correction). Above about 2.5·10³⁰⁵ the correction's product ln(u)·x
+    /// overflows; there 1 + x is x to the doubles and ln u is the answer, while every smaller x keeps the correction's operations.</summary>
     public static double Log1p(double x)
     {
         double u = 1.0 + x;
-        return u == 1.0 ? x : double.IsPositiveInfinity(u) ? u : Math.Log(u) * x / (u - 1.0);
+        if (u == 1.0) return x;
+        if (double.IsPositiveInfinity(u)) return u;
+        double product = Math.Log(u) * x;
+        return double.IsPositiveInfinity(product) ? Math.Log(u) : product / (u - 1.0);
     }
 
     /// <summary>ln(1 + eˣ), without overflow and accurate in both tails.</summary>

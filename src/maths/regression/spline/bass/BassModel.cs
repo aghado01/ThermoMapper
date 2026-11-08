@@ -117,5 +117,5 @@ public sealed class BassModel
 
     /// <summary>A new intercept-only design over the data, one per chain, on <paramref name="working"/>; null is the model's.</summary>
     public BassDesign NewDesign(WorkingResponse? working = null)
-        => new(Basis, Data, Admission, Config.Coefficients.Form is RidgeForm, working ?? Working, Config.Intercept, Config.Coefficients.Form is RawRidgeForm);
+        => new(Basis, Data, Admission, Config.Coefficients.Form is RidgeForm, working ?? Working, Config.Intercept, BassPriorPrecision.Of(Config.Coefficients.Form));
 }

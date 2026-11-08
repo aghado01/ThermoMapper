@@ -80,15 +80,19 @@ public sealed class KhaosCostTests(ITestOutputHelper output)
         // The sweeps, each chain burned, then read round-robin.
         var names = new List<string>();
         var chains = new List<BassChain>();
-        foreach ((string name, int p, int order, bool raw) in new[] { ("base, raw ridge", BassCost.BaseP, BassCost.BaseOrder, true), ("base, normalized ridge", BassCost.BaseP, BassCost.BaseOrder, false),
-                                                                       ("p 20, q_max 5, raw ridge", 20, 5, true), ("p 20, q_max 5, normalized ridge", 20, 5, false) })
+        BassCoefficientPrior raw = BassCoefficientPrior.RawRidge(TauPrior.Held(1e-5)), normalized = BassCoefficientPrior.Ridge(TauPrior.UnitInformationGamma());
+        var modified = new BassCoefficientPrior(new ModifiedGForm(1.0), TauPrior.Gamma(0.001, 1000));   // khaos's g-prior, g₀² drawn
+        foreach ((string name, int p, int order, BassCoefficientPrior coefficients) in new[] {
+                     ("base, raw ridge", BassCost.BaseP, BassCost.BaseOrder, raw), ("base, normalized ridge", BassCost.BaseP, BassCost.BaseOrder, normalized),
+                     ("base, modified g-prior", BassCost.BaseP, BassCost.BaseOrder, modified),
+                     ("p 20, q_max 5, raw ridge", 20, 5, raw), ("p 20, q_max 5, normalized ridge", 20, 5, normalized), ("p 20, q_max 5, modified g-prior", 20, 5, modified) })
         {
             BassData d = BassCost.Rich(BassCost.BaseN, p);
             var config = new BassConfig
             {
                 Structure = new BassStructureSpec { MaxInteraction = order, MaxBasis = BassCost.BaseCap, Legendre = new LegendreBasis { MaxDegree = 15 } },
-                Coefficients = raw ? BassCoefficientPrior.RawRidge(TauPrior.Held(1e-5)) : BassCoefficientPrior.Ridge(TauPrior.UnitInformationGamma()),
-                Intercept = raw ? GPriorCentre.Zero : GPriorCentre.Mean,
+                Coefficients = coefficients,
+                Intercept = coefficients.Form is RidgeForm ? GPriorCentre.Mean : GPriorCentre.Zero,
                 Sampling = new BassSampling { Chains = 1, MasterSeed = 3 },
             };
             names.Add(name);
