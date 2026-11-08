@@ -53,9 +53,10 @@ public sealed class BassSkewRescaleQualificationTests(ITestOutputHelper output)
         foreach ((string name, BassNoise noise) in Noises)
         {
             var perSecond = new double[2][];
+            string[] forms = ["plain", "with the move"];
             for (int w = 0; w < 2; w++)
             {
-                bool move = w == 1;
+                bool move = w > 0;
                 BassConfig config = BassStudentTTests.Config(noise with { SkewRescale = move }) with
                 {
                     Structure = new BassStructureSpec { MaxInteraction = 1, MaxBasis = 6 },
@@ -78,11 +79,12 @@ public sealed class BassSkewRescaleQualificationTests(ITestOutputHelper output)
                 }
                 MoveStat[] block = [.. fit.Diagnostics.Chains.SelectMany(c => c.Blocks!).Where(k => k.Key == "skew rescale")];
                 long accepted = block.Sum(k => k.Accepted), attempts = block.Sum(k => k.Attempts);
-                output.WriteLine($"{name}, {(move ? "with the move" : "plain")}: {seconds:F1} s ({wall.Elapsed.TotalSeconds:F1} s wall)" +
+                output.WriteLine($"{name}, {forms[w]}: {seconds:F1} s ({wall.Elapsed.TotalSeconds:F1} s wall)" +
                                  (attempts == 0 ? "" : $", the move accepted {accepted} of {attempts}") + $"; {string.Join("; ", cells)}");
             }
-            output.WriteLine($"{name}: bulk ESS per second, with the move over plain: " +
-                             string.Join(", ", Names.Select((label, g) => $"{label} {perSecond[1][g] / perSecond[0][g]:F2}")));
+            for (int w = 1; w < 2; w++)
+                output.WriteLine($"{name}: bulk ESS per second, {forms[w]} over plain: " +
+                                 string.Join(", ", Names.Select((label, g) => $"{label} {perSecond[w][g] / perSecond[0][g]:F2}")));
         }
     }
 

@@ -39,7 +39,7 @@ public sealed class BassNoiseReachQualificationTests(ITestOutputHelper output)
     private static BassData GewekeData(double[] y) => new([new ContinuousPredictor("x", GewekeX)], new ScalarResponse(y));
 
     // A form ending "+rescale" turns the skew's rescaling move on (BassSkewRescaleBlock).
-    private static string Base(string form) => form.EndsWith("+rescale", StringComparison.Ordinal) ? form[..^"+rescale".Length] : form;
+    private static string Base(string form) => form.Split('+')[0];
 
     private static BassNoise GewekeNoise(string form)
     {
@@ -105,16 +105,20 @@ public sealed class BassNoiseReachQualificationTests(ITestOutputHelper output)
     [InlineData("horseshoe", 0.75, 20261108, true, 1)]
     [InlineData("horseshoe", 0.5, 20261108, true, 1)]
     [InlineData("horseshoe", 1.0, 20261107, false, 1)]
-    // The skew's rescaling move under every skewed family, at b = 1 and on a rung. The skewed horseshoe's other readings with the move, which
-    // fail with and without it as its v mixes slowly (the move's report), are readings, not gates.
+    // The skew's rescaling move under every skewed family, at b = 1 and on a rung, and the skewed horseshoe at b = 1 and ¾ on two seeds and at
+    // four times the size. Its readings at b = ½, which fail with and without the move as its v mixes slowly (the move's report), are
+    // readings, not gates.
     [InlineData("gh+rescale", 1.0, 20261107, false, 1)]
     [InlineData("nw+rescale", 1.0, 20261107, false, 1)]
     [InlineData("skewed-t+rescale", 1.0, 20261107, false, 1)]
     [InlineData("gh+rescale", 0.5, 20261107, false, 1)]
     [InlineData("nw+rescale", 0.5, 20261107, false, 1)]
     [InlineData("horseshoe+rescale", 1.0, 20261107, false, 1)]
+    [InlineData("horseshoe+rescale", 1.0, 20261107, false, 4)]
     [InlineData("horseshoe+rescale", 1.0, 20261108, false, 1)]
-    [InlineData("horseshoe+rescale", 0.5, 20261108, false, 1)]
+    [InlineData("horseshoe+rescale", 0.75, 20261107, false, 1)]
+    [InlineData("horseshoe+rescale", 0.75, 20261107, false, 4)]
+    [InlineData("horseshoe+rescale", 0.75, 20261108, false, 1)]
     public void Geweke_ARungLeavesItsTiltedJointInvariant(string form, double b, int seed, bool interweave, int scale)
     {
         if (!BassQualification.Enabled) return;   // heavy

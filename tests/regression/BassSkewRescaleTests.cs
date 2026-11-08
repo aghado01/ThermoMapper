@@ -80,14 +80,14 @@ public sealed class BassSkewRescaleTests(ITestOutputHelper output)
         double h = x0.Scale, beta0 = x0.Skew, sd = noise.SkewPrior!.Sd, m = noise.SkewPrior.Mean, current = chain.CurrentLogDensity;
         int n = x0.V.Length;
 
-        // The orbit's law, ln p(t) = ln π(Tₜ(x₀)) + (N − 1)·t, π the target with v's and β's priors, on a grid.
+        // The orbit's law, ln p(t) = ln π(Tₜ(x₀)) + (N − 1)·t, π the target with the coefficients integrated and v's and β's priors, on a grid.
         double LogOrbit(double t)
         {
             double[] v = [.. x0.V.Select(vi => vi * Math.Exp(t))];
             double skew = beta0 * Math.Exp(-t);
             BassState candidate = moves.ProposeFollow(chain.Current, mixture.At(x0.Working, new ObservationLatents(v, skew, x0.Sigma2, x0.Latents.Gamma)));
-            double target = chain.Temperature.LogDensity(chain.Target.Evaluate(candidate)) - current;
-            return target + v.Sum(x0.Mixing.LogPrior) - x0.V.Sum(x0.Mixing.LogPrior) - (skew - m) * (skew - m) / (2.0 * sd * sd) + (n - 1) * t;
+            double likelihood = chain.Temperature.LogDensity(chain.Target.Evaluate(candidate)) - current;
+            return likelihood + v.Sum(x0.Mixing.LogPrior) - x0.V.Sum(x0.Mixing.LogPrior) - (skew - m) * (skew - m) / (2.0 * sd * sd) + (n - 1) * t;
         }
         const int points = 801;
         double width = 10.0 * h;
@@ -111,7 +111,12 @@ public sealed class BassSkewRescaleTests(ITestOutputHelper output)
         int accepted = 0;
         for (int k = 0; k < steps; k++)
         {
-            if (block.Update(chain, rng)) accepted++;
+            if (block.Update(chain, rng))
+            {
+                accepted++;
+                // An accepted move draws the coefficients afresh at the new state, for the blocks after it.
+                Assert.Same(chain.Current, moves.SweepFit!.State);
+            }
             ts[k] = Math.Log(beta0 / chain.Current.Fit.Working!.Latents!.Skew);
         }
         double Z(Func<double, double> g, double expected)
