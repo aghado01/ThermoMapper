@@ -94,7 +94,7 @@ The user confirmed the order on 2026-11-07: KHAOS, then E8.
 E24 is small, sits beside all of them and can land at any point.
 
 **Beside the order.**
-- *The conformal layer (E16)* is engine-wide by the user's call of 2026-11-05, with a [brief](../conformal-layer-brief.md) of its own. Slices 0–2 landed on 2026-11-06, and the fallback diagnostics are reported with no trigger. Slice 3, the split form, landed on 2026-11-07. In slice 4 the predictive distribution takes the split form's CDF by default, with the full step as an opt-in score flagged where it falls (the user, 2026-11-08).
+- *The conformal layer (E16)* is engine-wide by the user's call of 2026-11-05, with a [brief](../conformal-layer-brief.md) of its own. Slices 0–2 landed on 2026-11-06, and the fallback diagnostics are reported with no trigger. Slice 3, the split form, landed on 2026-11-07. In slice 4 the predictive distribution takes the split form's CDF by default, with the full step as an opt-in score flagged where it falls (the user, 2026-11-08). After slice 5, the layer takes E35, [conformal test martingales](extensions-brief.md#conformal-test-martingales-exchangeability-checked-online-e35), by the user's call of 2026-11-08.
 - *E15 and E18* are the engine's routes to calibrated intervals for a surface or a quantile function, which conformal methods do not reach. They are not scheduled. They matter because GBASS's quantile and horseshoe fits undercover their surfaces (E1's reports), and because both refit, the noise laws' cost follow-ups come first.
 
 ## Reading leads

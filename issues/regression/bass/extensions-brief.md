@@ -20,7 +20,7 @@ Extensions beyond the port's completion contract, collected from the [full port 
 | Calibrated intervals for loss-based posteriors | Bissiri, Holmes and Walker 2016, §3.4; Holmes and Walker 2017; Lyddon, Holmes and Walker 2019; Syring and Martin 2019 | BARS: `GibbsLossModel`. Any engine that weights a likelihood or a loss | Candidate |
 | Conformal Bayes, the consumer | Fong and Holmes 2021, arXiv 2106.06137; Vovk, Shen, Manokhin and Xie 2019 | The pointwise seam (OQ17, built): retained draws, the n × S matrix, the unit and stratum maps | Building ([the layer's brief](../conformal-layer-brief.md)) |
 | Conformal bands for whole curves | Lei, Rinaldo and Wasserman 2015; Diquigiovanni, Fontana and Vantini, arXiv 2106.01792 | The unit map's whole-curve unit; each draw's pointwise predictive sd | Candidate |
-| Conformal test martingales (E35) | Vovk, Nouretdinov and Gammerman 2003; Fedorova et al. 2012; Volkhonskiy et al. 2017; Vovk et al. 2021; Vovk, *Statistical Science* 2021 | The candidate seam; the split form's fixed fit; slice 4's log CDF | Candidate; sources gathered 2026-11-08 |
+| Conformal test martingales (E35) | Vovk, Nouretdinov and Gammerman 2003; Fedorova et al. 2012; Volkhonskiy et al. 2017; Vovk et al. 2021; Vovk, *Statistical Science* 2021 | The candidate seam; the split form's fixed fit; slice 4's log CDF | After the conformal layer's slice 5 (2026-11-08) |
 | Posteriors for readouts by resampling units | Huggins and Miller 2023; Fong, Holmes and Walker 2023 | Retained draws with their readouts (BARS's peaks); replicate units | Candidate |
 | Polynomial-chaos terms (E19) | Rumsey, Francom et al., arXiv 2510.25036 | Fitting: the design-kernel and proposal-kernel contracts. E4, E5 | Candidate |
 | Data-augmented observation models (E20) | Albert and Chib 1993; Polson, Scott and Windle 2013; Lawrence et al. 2008 | Fitting: the offset seam, the latent slot, a weighted Gram, σ² held. Distributions: a truncated draw (built) | Candidate |
@@ -375,7 +375,7 @@ The user gathered the sources on 2026-11-08: `gauntlet/conformal-bayes` (1204.32
   - the smoothed p-values are i.i.d. uniform under exchangeability, a finite argument;
   - Ville's inequality for the product, from Mathlib's martingale library (Doob's maximal inequality, with its limit over the horizon).
 - **Cost.** Per arrival: one score (S predictive densities for a Bayesian fit), and one rank among n earlier scores, O(log n) with an ordered structure.
-- **Not scheduled.** Its place in the order is the user's call. It would sit in the conformal layer as a slice after slice 5.
+- **Ordered after the conformal layer's slice 5** by the user on 2026-11-08, as that layer's next slice ([the layer's brief](../conformal-layer-brief.md)).
 
 ## Posteriors for readouts by resampling units
 
