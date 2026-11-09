@@ -119,7 +119,7 @@ internal sealed class DesignOutputs
     /// <summary>The residuals r_k.</summary>
     public IReadOnlyList<double[]> Residuals => _residuals;
 
-    /// <summary>Takes the accepted move's cross products: term <paramref name="index"/>'s removed for a death or a change, and
+    /// <summary>Takes the accepted move's cross products: term <paramref name="removed"/>'s for a death or a change, and
     /// <paramref name="added"/> last for a birth or a change.</summary>
     public void Accept(int removed, double[]? added)
     {

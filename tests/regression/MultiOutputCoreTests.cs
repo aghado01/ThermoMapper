@@ -327,6 +327,8 @@ public sealed class MultiOutputCoreTests(ITestOutputHelper output)
         Refused(new BassConfig { Sampling = new BassSampling { Tempering = new TemperingSpec() } });
         Refused(new BassConfig { Sampling = new BassSampling { Smc = new SmcSpec() } });
         Refused(new BassConfig { Coefficients = new BassCoefficientPrior(new RidgeForm(), TauPrior.UnitInformationGamma()) });
+        Refused(new BassConfig { Coefficients = new BassCoefficientPrior(new RawRidgeForm(), TauPrior.UnitInformationGamma()) });
+        Refused(new BassConfig { Coefficients = new BassCoefficientPrior(new ModifiedGForm(1.0), TauPrior.Gamma(0.001, 1000)) });
         Refused(new BassConfig { Sigma2 = Sigma2Prior.Jeffreys });
         Refused(new BassConfig { Sigma2 = Sigma2Prior.InverseGamma(1.0, 1.0) });
         Refused(new BassConfig { Sigma2 = Sigma2Prior.HalfCauchy() });
