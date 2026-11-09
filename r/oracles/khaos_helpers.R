@@ -87,33 +87,8 @@ khaos_coin_pars <- eval(formals(kns$adaptive_khaos_ridge)$coin_pars)
 
 # ---- khaos's samplers with slice 0's corrections ---------------------------------------------------------------------------------
 # Each patch replaces one expression of the pinned body, matched by identical(), and states how many times it must match, so a
-# change in the pinned source stops the oracle rather than leaving a patch unapplied.
-replace_lang <- function(e, from, to) {
-  count <- 0
-  rec <- function(x) {
-    if (identical(x, from)) { count <<- count + 1; return(to) }
-    if (is.call(x)) {
-      parts <- as.list(x)
-      for (k in seq_along(parts)) if (!identical(parts[[k]], quote(expr = ))) parts[k] <- list(rec(parts[[k]]))
-      return(as.call(parts))
-    }
-    x
-  }
-  out <- rec(e)
-  list(expr = out, count = count)
-}
-patch_body <- function(fn, patches, env) {
-  b <- body(fn)
-  for (p in patches) {
-    r <- replace_lang(b, p$from, p$to)
-    if (r$count != p$n) stop("patch ", paste(deparse(p$from), collapse = " "), " matched ", r$count, " times, not ", p$n)
-    b <- r$expr
-  }
-  body(fn) <- b
-  environment(fn) <- env
-  fn
-}
-patch <- function(from, to, n = 1) list(from = from, to = to, n = n)
+# change in the pinned source stops the oracle rather than leaving a patch unapplied: `patch`, `patch_body` and `replace_lang` in
+# _common.R, sourced above.
 
 # The helpers the corrected bodies call, in an environment whose parent is the namespace.
 corrected_env <- function() {

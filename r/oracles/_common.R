@@ -51,7 +51,7 @@ source_assignment <- function(fn, name, n = 1) {
 
 # A pinned function with corrections patched in. Each patch replaces one expression of the pinned body, matched by identical(), and
 # states how many times it must match, so a change in the pinned source stops the oracle rather than leaving a patch unapplied.
-# (khaos_helpers.R carries the same three definitions, from before they were shared here.)
+# The KHAOS and E8 oracles both read these.
 replace_lang <- function(e, from, to) {
   count <- 0
   rec <- function(x) {
