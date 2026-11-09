@@ -472,11 +472,20 @@ The user asked for this on 2026-11-08, after the Kimi review raised it under ABM
 - **What each piece becomes.**
   - *Centring.* A level-centred intercept per output, with n − 1 degrees of freedom in the IW posterior.
   - *GBMARS's noise.* A per-row scale vᵢ shared across the outputs gives the multivariate t and the multivariate generalized hyperbolic, with a skew vector γ ∈ ℝᴷ. Given the latents, the rows are weighted by 1/vᵢ and offset by γvᵢ, so the matrix-normal form and the latent record carry over. A scale shared across a case's outputs is also E22's source of tail dependence.
+    - *What GBASS's build carries over (2026-11-08).* The move along β·v becomes a move along γ·vᵢ, (γ, v) → (γ/κ, κ·v), on the marginal with A and Σ integrated. As GBASS's fix (`1a8459c`) found, that makes it a partially collapsed step: after an accepted move, A and Σ are drawn afresh before any block reads them, and the proposal reads the state alone. The skewed horseshoe's default (`bf21578`) and its recorded mixing limit on hot rungs carry over with it, and so does interweaving.
+  - *Random intercepts (E21, built in KHAOS slice 3, `0a2168c`).* The block whitens the rows by V = I + s²ZZᵀ. With one s shared across the outputs, the whitening acts on Y's rows alone and the matrix-normal form carries over. An s per output gives each column its own V, which breaks it. A shared s is the first form; the block's log-Jacobian then enters once per output, K times the one-output term.
+  - *Samplers.* The structure chain is BASS's, so the ladder (with `RungWorkers`), SMC with its two flags and the flat histogram need no change. Each gates the K-output law by enumeration, as GBASS's slice 5 gated its noise.
   - *Tempering and evidence.* The tilted likelihood keeps the collapse, as slice 5's σ² did: p(Y | A, Σ)^b is N(BA, Σ/b) times |Σ|^(n(1 − b)/2). That shifts the IW's degrees of freedom, and small b brings the same properness condition the σ² prior meets.
   - *Readouts.* The matrix-t predictive gives joint bands, the cross-output correlation of predictions, the probability that every output meets its specification, and Sobol indices per output and for any declared combination.
 - **Where it sits.**
   - *E22 builds on it.* Given E22's latents z, a free Σ is this entry's collapse. A correlation matrix R, which binary and ordinal outcomes need, is drawn by parameter expansion around the same inverse-Wishart.
   - *The PCA mode (D07)* fits each component apart, assuming the component scores are independent. Taking the scores as K outputs here reads their residual correlation.
+    - *It also removes the frame.* By the equivariance check below, a joint fit with shared inclusion depends only on the scores' span. Separate fits identify the PCA frame only up to signed permutation, and they are why the frame matters at all (the [Grassmann discussion](../discussion/grassmann-stiefel-subspaces-brief.md#report), 2026-11-08). Fitting the retained scores here trades per-component sparsity for a basis whose choice of axes no longer enters.
+  - *A response envelope, for small K* (Cook, Li and Chiaromonte 2010; Khare, Pal and Su 2017, both cited from memory). It splits Y into the part the predictors drive and the part they don't.
+    - *Given the envelope's basis Γ,* the collapse seems to hold: ΓᵀY is a u-output fit of this entry and Γ₀ᵀY is noise alone.
+    - *Γ is a point on Gr(u, K)* and needs a step of its own, so the envelope is an option beside the plain fit, not its form.
+    - *It is not for functional outputs.* On PCA scores it reduces only within the retained span, so it cannot recover a mode PCA dropped. There the predictor-aware output basis is E[J W_x Jᵀ]'s top eigenvectors, from a direct-mode pilot fit's gradient readout (`BassFit.Gradient`).
+  - *Co-active subspaces across the outputs.* Each output's gradient readout gives C_kl = E[∇f_k ∇f_lᵀ], E8's co-active pairs, read from one fit with shared inclusion.
   - *Ordered outputs,* such as a functional response on a grid, stay with the direct and PCA modes and E12's output-side inner product. A free K × K Σ is for small or unordered K.
 - **Choices for its brief.**
   - *Σ's prior.* The IW keeps the collapse. Huang and Wand's (2013) scale-mixture form gives marginally uniform correlations, but it is only conditionally conjugate, so its scales would take a slice step as τ does.
@@ -492,7 +501,7 @@ The user asked for this on 2026-11-08, after the Kimi review raised it under ABM
     - *properness under tempering:* a rung whose degrees of freedom fall to ν₀ − n(1 − b) ≤ K − 1 is refused, and the evidence path's hot end is placed above it.
 
   These need no Lean. The marginal is a textbook integral that the tests pin numerically, and the structure chain is BASS's. The nearby place where a precise statement pays is E22's parameter expansion for R, whose validity rests on the expansion prior's invariance.
-- **Ordered after E8** by the user on 2026-11-08 ([the build order](lineage-review.md#build-order)).
+- **Ordered after E8** by the user on 2026-11-08 ([the build order](lineage-review.md#build-order)). Updated on 2026-11-08 with what GBASS, KHAOS slice 3 and the Grassmann discussion changed. Its build brief is written when E8's last slice lands.
 
 ## Multi-fidelity emulation through the offset
 
