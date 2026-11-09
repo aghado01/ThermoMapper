@@ -21,10 +21,89 @@ public sealed class IrlsScaleTests
     private static readonly double[] Spreads = Enumerable.Range(-12, 19).Select(k => Math.Pow(10, k)).ToArray();
 
     /// <summary>
+    /// A seeded sweep over dimension, n, equal and unequal weights and an occasional far outlier, centred at the
+    /// origin and at 100·s from it. The median (warm-started at the medoid, as the callers do, and at the weighted
+    /// mean), the mean and <see cref="EuclideanMedian"/> (warm-started at the mean, as GMM does) keep a relative
+    /// accuracy that does not depend on s, and no s costs the median more iterations than s = 1. Most draws converge in
+    /// 10 to 70 iterations; one (d = 3, n = 5) has a data point that barely fails the optimality condition
+    /// (‖G‖/w = 1.07), so Weiszfeld contracts at about 0.93 and reaches MaxIterations at every s alike, within the
+    /// accuracy. Some draws have a data point for their median, which the optimality check returns.
+    /// </summary>
+    [Fact]
+    public void FlatMedianAndMean_AreScaleEquivariant_FromSpread1e12To1e6()
+    {
+        var rng = new Random(20261108);
+        for (int draw = 0; draw < 12; draw++)
+        {
+            FlatProblem problem = FlatProblem.Draw(rng);
+            int[] reference = CheckFlat(problem, new double[problem.D], 1.0, roundingUlps: 0, $"draw {draw}, scale 1");
+            foreach (bool covariant in new[] { false, true })
+                foreach (double s in Spreads)
+                {
+                    double[] c = covariant ? Scaled(problem.Direction, 100.0 * s) : new double[problem.D];
+                    CheckFlat(problem, c, s, roundingUlps: 0, $"draw {draw}, centre {(covariant ? "100s" : "0")}, s {s:G3}", reference);
+                }
+        }
+    }
+
+    /// <summary>
+    /// Seven collinear points in R³ with unequal weights: the median is the weighted 1-D median, a data point. From the
+    /// mean and from the leftmost point the solver returns that point exactly, at every spread, in a few iterations.
+    /// </summary>
+    [Fact]
+    public void CollinearMedian_IsTheDataPoint_ReturnedByTheOptimalityCheck()
+    {
+        double[] t = [-3, -1, 0, 0.5, 2.5, 4, 7];
+        double[] w = [1.0, 0.5, 2.0, 1.5, 0.7, 1.2, 0.9];
+        const int medianIndex = 3;   // cumulative weight reaches half the total (3.9) at t = 0.5
+        double[] direction = [1.0 / 3, 2.0 / 3, -2.0 / 3];
+        var euclid = new EuclideanVectorManifold(3);
+        foreach (double s in Spreads)
+        {
+            double[] c = [3 * s, -s, 2 * s];
+            double[][] x = t.Select(ti => c.Select((cj, j) => cj + s * ti * direction[j]).ToArray()).ToArray();
+            foreach (double[] warm in new[] { WeightedMean(x, w), x[0] })
+            {
+                var counter = new Counter();
+                double[] median = (double[])warm.Clone();
+                GeometricMedian.Compute(new Counting<EuclideanVectorManifold>(euclid, counter), x, w, median);
+                Assert.Equal(x[medianIndex], median);
+                Assert.True(counter.Steps < 30, $"s {s:G3}: {counter.Steps} iterations");
+            }
+        }
+    }
+
+    /// <summary>
+    /// A point given twice with weight 1 each, and two more points: the duplicated point holds half the weight and is
+    /// the median, though each copy alone fails the optimality condition (‖G‖ = √2 > 1). The check sums the weight
+    /// sitting on the point, so the solver returns it, from the mean and from the medoid, at every spread.
+    /// </summary>
+    [Fact]
+    public void DuplicatedMedian_HoldingHalfTheWeight_IsReturned()
+    {
+        var euclid = new EuclideanVectorManifold(2);
+        double[] w = [1.0, 1.0, 1.0, 1.0];
+        foreach (double s in Spreads)
+        {
+            double[] a = [5 * s, -2 * s];
+            double[][] x = [a, (double[])a.Clone(), [a[0] + s, a[1]], [a[0], a[1] + s]];
+            foreach (double[] warm in new[] { WeightedMean(x, w), x[GeometricMedian.MedoidIndex(euclid, x)] })
+            {
+                var counter = new Counter();
+                double[] median = (double[])warm.Clone();
+                GeometricMedian.Compute(new Counting<EuclideanVectorManifold>(euclid, counter), x, w, median);
+                Assert.Equal(a, median);
+                Assert.True(counter.Steps < 30, $"s {s:G3}: {counter.Steps} iterations");
+            }
+        }
+    }
+
+    /// <summary>
     /// A seeded sweep over dimension, n, equal and unequal weights and an occasional far outlier, centred 10 from the
-    /// origin at every s and warm-started at the medoid as the callers do. The data are then representable only to
+    /// origin at every s and warm-started at the medoid and at the mean. The data are then representable only to
     /// about ε·‖c‖: the median, the mean and <see cref="EuclideanMedian"/> (warm-started at the mean, as GMM does) stay
-    /// within a fixed number of those ulps of the truth for the represented data, and no median runs to MaxIterations.
+    /// within a fixed number of those ulps of the truth for the represented data, and no s costs the median more
+    /// iterations than s = 1 at the origin.
     /// </summary>
     [Fact]
     public void FlatMedianAndMean_FarFromTheOrigin_AreLimitedOnlyByTheCentresRounding()
@@ -33,9 +112,10 @@ public sealed class IrlsScaleTests
         for (int draw = 0; draw < 6; draw++)
         {
             FlatProblem problem = FlatProblem.Draw(rng);
+            int[] reference = CheckFlat(problem, new double[problem.D], 1.0, roundingUlps: 0, $"draw {draw}, scale 1");
             double[] c = Scaled(problem.Direction, 10.0);
             foreach (double s in Spreads)
-                CheckFlat(problem, c, s, roundingUlps: 1000, $"draw {draw}, centre 10, s {s:G3}");
+                CheckFlat(problem, c, s, roundingUlps: 1000, $"draw {draw}, centre 10, s {s:G3}", reference);
         }
     }
 
@@ -53,6 +133,29 @@ public sealed class IrlsScaleTests
         var rng = new Random(seed);
         if (r == 0) CheckCurved(new SphericalManifold(n), n, 1, sphere: true, rng);
         else CheckCurved(new GrassmannManifold(n, r), n, r, sphere: false, rng);
+    }
+
+    /// <summary>
+    /// Frames on the cut locus: xz meets the three xy-like frames at a principal angle of exactly π/2, where the
+    /// Grassmann Log map drops that direction and returns a vector short of the distance (here zero). Read as the
+    /// distance, xz's radius is π/2, not 0: it is not coincident with xy, and the optimality check does not certify
+    /// xz. xy, which holds half the weight with its rotated copy, is the median and is returned exactly from the
+    /// medoid. (From xz itself every Log is zero and the iteration cannot leave it, which is why callers warm-start
+    /// at the medoid.)
+    /// </summary>
+    [Fact]
+    public void GrassmannMedian_WithFramesOnTheCutLocus_ReadsTheirRadiusAsTheDistance()
+    {
+        double[] xz = [1, 0, 0, 0, 0, 1];          // 3×2, column-major
+        double[] xy = [1, 0, 0, 0, 1, 0];
+        double[] xyRotated = [0, 1, 0, -1, 0, 0];
+        double[] xyTilted = [Math.Cos(0.04), 0, Math.Sin(0.04), 0, 1, 0];
+        double[][] frames = [xz, xy, xyRotated, xyTilted];
+        var grass = new GrassmannManifold(3, 2);
+
+        double[] median = (double[])frames[GeometricMedian.MedoidIndex(grass, frames)].Clone();
+        GeometricMedian.Compute(grass, frames, [1.0, 1.0, 1.0, 1.0], median);
+        Assert.Equal(xy, median);
     }
 
     /// <summary>
@@ -81,7 +184,9 @@ public sealed class IrlsScaleTests
     /// <summary>
     /// <see cref="IrlsScale.Data"/> reads the constants in the data's units and reproduces the solver as it was before
     /// the spread unit (afc814d) bit for bit: a Euclidean median, a Grassmann median and mean, and
-    /// <see cref="EuclideanMedian"/> with its scatter.
+    /// <see cref="EuclideanMedian"/> with its scatter. One more Grassmann median, of seven frames, has a data point for
+    /// its median: frame 0, where ‖G‖ ≈ 0.90 ≤ 1. The optimality check at the nearest data point returns it exactly;
+    /// before that check the solver stopped about 2e-4 from it.
     /// </summary>
     [Fact]
     [Trait("Tier", "Pinned")]
@@ -123,14 +228,23 @@ public sealed class IrlsScaleTests
 
         double[] gMedian = (double[])init.Clone();
         GeometricMedian.Compute(new GrassmannManifold(5, 2), frames, gw, gMedian, data);
+        Assert.Equal(frames[0], gMedian);
+
+        double[][] inner = frames.Skip(1).ToArray();
+        double[] innerInit = new double[10];
+        foreach (double[] f in inner) for (int i = 0; i < 10; i++) innerInit[i] += f[i] / inner.Length;
+        MatrixOps.Orthonormalize(innerInit, 5, 2);
+        double[] innerMedian = (double[])innerInit.Clone();
+        GeometricMedian.Compute(
+            new GrassmannManifold(5, 2), inner, Enumerable.Repeat(1.0, inner.Length).ToArray(), innerMedian, data);
         Assert.Equal(
             new[]
             {
-                0.9999999772287292, 2.6123219160401057E-05, 0.00010966421803994649, -4.216689096171608E-05,
-                -0.0001762266467619848, -2.6094562911371732E-05, 0.9999999120481814, 0.00026854019792198436,
-                9.108648728956332E-05, 0.00030791576352311054,
+                0.999982658280556, 4.4339780776558875E-05, 0.0008525784818853006, -0.0003014630579408993,
+                -0.005819226932661999, -1.938797079838948E-06, 0.9999190836164834, 0.009274686438366184,
+                0.0015753814001971938, 0.008562977328425259,
             },
-            gMedian);
+            innerMedian);
 
         double[] gMean = (double[])init.Clone();
         GeometricMean.Compute(new GrassmannManifold(5, 2), frames, gw, gMean, data);
@@ -159,8 +273,9 @@ public sealed class IrlsScaleTests
     // ── Flat checks ──────────────────────────────────────────────────────────
 
     // Allowances are in the u-units of the truth: 1e-6 of the data's spread for the medians, 1e-12 for the mean, plus
-    // roundingUlps·ε·‖c‖/s for a centre far from the origin.
-    private static void CheckFlat(FlatProblem problem, double[] c, double s, int roundingUlps, string label)
+    // roundingUlps·ε·‖c‖/s for a centre far from the origin. Returns the medians' iteration counts (medoid and mean
+    // warm starts); with stepBound, each is at most its bound plus 2.
+    private static int[] CheckFlat(FlatProblem problem, double[] c, double s, int roundingUlps, string label, int[]? stepBound = null)
     {
         int d = problem.D, n = problem.U.Length;
         double[][] x = problem.U.Select(u => u.Select((v, j) => c[j] + s * v).ToArray()).ToArray();
@@ -174,12 +289,19 @@ public sealed class IrlsScaleTests
         var euclid = new EuclideanVectorManifold(d);
         double[] warm = x[GeometricMedian.MedoidIndex(euclid, x)];
 
-        var counter = new Counter();
-        double[] median = (double[])warm.Clone();
-        GeometricMedian.Compute(new Counting<EuclideanVectorManifold>(euclid, counter), x, problem.W, median);
-        Assert.True(counter.Steps < MaxIterations, $"{label}: median ran to MaxIterations");
-        double medianError = Gap(median, c, s, medianTruth);
-        Assert.True(medianError <= 1e-6 * spread + rounding, $"{label}: median error {medianError:G3} (spread {spread:G3})");
+        double[][] starts = [warm, WeightedMean(x, problem.W)];
+        var steps = new int[starts.Length];
+        for (int k = 0; k < starts.Length; k++)
+        {
+            var counter = new Counter();
+            double[] median = (double[])starts[k].Clone();
+            GeometricMedian.Compute(new Counting<EuclideanVectorManifold>(euclid, counter), x, problem.W, median);
+            steps[k] = counter.Steps;
+            if (stepBound is not null)
+                Assert.True(steps[k] <= stepBound[k] + 2, $"{label}: {steps[k]} iterations against {stepBound[k]} at scale 1");
+            double medianError = Gap(median, c, s, medianTruth);
+            Assert.True(medianError <= 1e-6 * spread + rounding, $"{label}: median error {medianError:G3} (spread {spread:G3})");
+        }
 
         double[] mean = (double[])warm.Clone();
         GeometricMean.Compute(euclid, x, problem.W, mean);
@@ -190,6 +312,7 @@ public sealed class IrlsScaleTests
         EuclideanMedian.Compute(x, Enumerable.Range(0, n).ToArray(), problem.W, ambient);
         double ambientError = Gap(ambient, c, s, medianTruth);
         Assert.True(ambientError <= 1e-6 * spread + rounding, $"{label}: EuclideanMedian error {ambientError:G3}");
+        return steps;
     }
 
     private sealed record FlatProblem(int D, double[][] U, double[] W, double[] Direction)
@@ -283,26 +406,32 @@ public sealed class IrlsScaleTests
 
     // ── Truth from outside the solver ────────────────────────────────────────
 
-    // Plain weighted Weiszfeld at scale 1, from the weighted mean, to machine precision; it stops on a data point.
+    // Plain weighted Weiszfeld at scale 1, from the weighted mean, until the step is below 1e-15 of the data's spread
+    // about that mean. On landing on data points it stops if the weight there outweighs the pull of the rest (‖G‖),
+    // and otherwise steps with those points weighted 0.
     private static double[] WeightedWeiszfeld(double[][] x, double[] w)
     {
         int d = x[0].Length;
         double[] m = WeightedMean(x, w);
+        double stop = 1e-15 * MedianDistance(x, m);
+        var num = new double[d];   // Σ wᵢ(xᵢ − m)/rᵢ: the step's numerator and the pull G of the points off m
         for (int it = 0; it < 100_000; it++)
         {
-            var num = new double[d];
-            double den = 0;
-            bool onPoint = false;
+            Array.Clear(num);
+            double den = 0, weightOn = 0;
             for (int i = 0; i < x.Length; i++)
             {
-                double r = Norm(Subtract(x[i], m));
-                if (r < 1e-300) { onPoint = true; continue; }
+                double r = 0;
+                for (int j = 0; j < d; j++) { double e = x[i][j] - m[j]; r += e * e; }
+                r = Math.Sqrt(r);
+                if (r < 1e-300) { weightOn += w[i]; continue; }
                 for (int j = 0; j < d; j++) num[j] += w[i] * (x[i][j] - m[j]) / r;
                 den += w[i] / r;
             }
+            if (weightOn > 0 && Norm(num) <= weightOn) break;
             double shift = 0;
             for (int j = 0; j < d; j++) { double step = num[j] / den; shift += step * step; m[j] += step; }
-            if (Math.Sqrt(shift) < 1e-17 || (onPoint && Math.Sqrt(shift) < 1e-15)) break;
+            if (Math.Sqrt(shift) < stop) break;
         }
         return m;
     }

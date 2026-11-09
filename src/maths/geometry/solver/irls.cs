@@ -30,6 +30,12 @@ namespace Maths.Geometry.Solver
         /// </summary>
         internal const double RoundingFloor = 4 * 2.220446049250313e-16;
 
+        // A Log map more than this fraction short of a distance above CutLocusFloor was cut at the cut locus.
+        private const double CutLocusGap = 1e-3;
+
+        // Distances below this are within the arccos noise of zero (about 2e-8), so a Log short of them is not cut.
+        private const double CutLocusFloor = 1e-6;
+
         /// <summary>
         /// Hot-path IRLS solver. <paramref name="destination"/> is mutated in place;
         /// supply a warm-start initial value before calling.
@@ -85,6 +91,7 @@ namespace Maths.Geometry.Solver
             double[] nextArr = ArrayPool<double>.Shared.Rent(dim);
             // Spread keeps the iteration's n log vectors: they give the radii and the step.
             double[]? logsArr = spread ? ArrayPool<double>.Shared.Rent(n * dim) : null;
+            bool[] testedArr = ArrayPool<bool>.Shared.Rent(n);
 
             try
             {
@@ -96,6 +103,8 @@ namespace Maths.Geometry.Solver
                 Span<double> logV = logArr.AsSpan(0, dim);
                 Span<double> next = nextArr.AsSpan(0, dim);
                 Span<double> logs = spread ? logsArr.AsSpan(0, n * dim) : default;
+                Span<bool> tested = testedArr.AsSpan(0, n);
+                tested.Clear();
 
                 ReadOnlySpan<double> current = destination;
                 double totalWeight = spread ? TensorPrimitives.Sum(weights.Slice(0, n)) : 1.0;
@@ -104,14 +113,14 @@ namespace Maths.Geometry.Solver
                 {
                     // ── Step 1: radii, the unit λ, IRLS weights ───────────────
                     // Spread reads each radius as ‖Log_p xᵢ‖, which resolves small spreads that an
-                    // arccos-based Distance cannot; Data keeps Distance.
+                    // arccos-based Distance cannot, except at the cut locus (see Radius); Data keeps Distance.
                     if (spread)
                     {
                         for (int i = 0; i < n; i++)
                         {
                             Span<double> li = logs.Slice(i * dim, dim);
                             manifold.LogMap(current, data[i], li);
-                            radii[i] = manifold.Norm(current, li);
+                            radii[i] = Radius(manifold, current, data[i], li, out _);
                         }
                     }
                     else
@@ -130,17 +139,17 @@ namespace Maths.Geometry.Solver
                     double coincidence = opts.Epsilon * unit;
 
                     double minDist = double.MaxValue;
-                    int coincidentIdx = -1;
+                    int nearest = -1;
+                    double irlsSum = 0, nearestWeight = 0;   // nearestWeight: IRLS weight at radius minDist
 
                     for (int i = 0; i < n; i++)
                     {
                         double r = radii[i];
-                        if (r < minDist) { minDist = r; }
+                        if (r < minDist) { minDist = r; nearest = i; nearestWeight = 0; }
 
                         if (r <= coincidence)
                         {
                             wirls[i] = 0.0;
-                            coincidentIdx = i;
                             continue;
                         }
 
@@ -150,23 +159,30 @@ namespace Maths.Geometry.Solver
                                      : r;
 
                         wirls[i] = weights[i] * TLoss.Weight(rUsed);
+                        irlsSum += wirls[i];
+                        if (r == minDist) nearestWeight += wirls[i];
                     }
 
-                    // ── Step 1.5: optimality check at exact coincidence ───────
+                    // ── Step 1.5: optimality check at the nearest data point ──
+                    // Weiszfeld reaches a median that is a data point only in the limit, and the Hybrid switch
+                    // throws it off again. Once the nearest point x_m coincides with the iterate or holds, with
+                    // whatever ties its radius (its duplicates), at least half the IRLS weight, test it directly;
+                    // each point is tested once.
                     if (TLoss.IsSingularAtZero
-                        && coincidentIdx >= 0
+                        && nearest >= 0
+                        && !tested[nearest]
                         && opts.SingularityPolicy == SingularityPolicy.OptimalityCheck
-                        && opts.HybridMode != HybridMode.SubgradientOnly)
+                        && opts.HybridMode != HybridMode.SubgradientOnly
+                        && (minDist <= coincidence || 2.0 * nearestWeight >= irlsSum))
                     {
-                        if (CheckOptimality<TManifold>(
-                                manifold, data, wirls, current, coincidentIdx,
-                                weights[coincidentIdx], tangSum, logV))
+                        if (VertexIsOptimal<TManifold>(
+                                manifold, data, weights, nearest, coincidence, tested, tangSum, logV))
                         {
-                            // destination already holds the median; capture weights and exit.
-                            if (!finalIrlsWeights.IsEmpty) wirls.CopyTo(finalIrlsWeights);
-                            return;
+                            // The median is that data point: return it, with weights recomputed there.
+                            data[nearest].AsSpan(0, dim).CopyTo(destination);
+                            break;
                         }
-                        // Not optimal: coincident weight stays 0, iteration drifts away.
+                        // Not optimal: coincident weights stay 0, and the iteration drifts away.
                     }
 
                     // ── Step 2: update step (left in tangSum, except the Data-unit flat average) ──
@@ -231,7 +247,7 @@ namespace Maths.Geometry.Solver
                         if (spread)
                         {
                             manifold.LogMap(converged, data[i], logV);
-                            radii[i] = manifold.Norm(converged, logV);
+                            radii[i] = Radius(manifold, converged, data[i], logV, out _);
                         }
                         else
                         {
@@ -263,7 +279,29 @@ namespace Maths.Geometry.Solver
                 ArrayPool<double>.Shared.Return(logArr);
                 ArrayPool<double>.Shared.Return(nextArr);
                 if (logsArr is not null) ArrayPool<double>.Shared.Return(logsArr);
+                ArrayPool<bool>.Shared.Return(testedArr);
             }
+        }
+
+        // The radius of x from p under Spread: ‖Log_p x‖, which holds at small distances where an arccos-based
+        // Distance loses digits (relative error about ε/2θ²). The sphere's and Grassmann's Log maps drop the
+        // direction of an angle at the cut locus (an antipode, a principal angle of π/2), leaving a vector short of
+        // the distance, even zero. There (cut: a Log more than CutLocusGap short of a distance above CutLocusFloor)
+        // the radius is the Distance, and the shortened Log stays the direction. Flat manifolds have no cut locus.
+        private static double Radius<TManifold>(
+            TManifold manifold,
+            ReadOnlySpan<double> p,
+            ReadOnlySpan<double> x,
+            ReadOnlySpan<double> log,
+            out bool cut)
+            where TManifold : struct, IRiemannianManifold
+        {
+            double r = manifold.Norm(p, log);
+            cut = false;
+            if (TManifold.IsFlat) return r;
+            double d = manifold.Distance(p, x);
+            cut = d > CutLocusFloor && r < (1.0 - CutLocusGap) * d;
+            return cut ? d : r;
         }
 
         /// <summary>
@@ -478,29 +516,42 @@ namespace Maths.Geometry.Solver
             }
         }
 
-        // ── Optimality check at exact coincidence ─────────────────────────────
-        // Tests: ||Σ_{j≠i} wirls[j] · log_p(x_j)|| ≤ w_coincident.
-        // wirls[j] already encodes weights[j]/r_j so log_p(x_j) is unnormalized here.
-        private static bool CheckOptimality<TManifold>(
+        // ── Optimality check at a data point ─────────────────────────────────
+        // The L¹ condition at x_m (Kuhn 1973; Vardi and Zhang 2000): x_m is a median iff
+        // ‖Σ_{d(x_m,x_j) > ε} w_j Log_{x_m} x_j / ‖Log_{x_m} x_j‖‖ ≤ Σ_{d(x_m,x_j) ≤ ε} w_j, the weight sitting on x_m,
+        // duplicates included. A point on x_m's cut locus has no single direction; each distance is 1-Lipschitz, so
+        // such a point enters at its full weight, ‖G‖ + Σ_cut w_j ≤ the weight on x_m, which still certifies a local
+        // minimum. Marks x_m and its duplicates as tested.
+        private static bool VertexIsOptimal<TManifold>(
             TManifold manifold,
             ReadOnlySpan<double[]> data,
-            ReadOnlySpan<double> wirls,
-            ReadOnlySpan<double> pCurrent,
-            int coincidentIdx,
-            double wCoincident,
+            ReadOnlySpan<double> weights,
+            int m,
+            double coincidence,
+            Span<bool> tested,
             Span<double> gradBuf,
             Span<double> logBuf)
             where TManifold : struct, IRiemannianManifold
         {
+            ReadOnlySpan<double> xm = data[m];
             gradBuf.Clear();
+            double weightOn = 0, cutWeight = 0;
             for (int j = 0; j < data.Length; j++)
             {
-                if (j == coincidentIdx || wirls[j] == 0) continue;
-                manifold.LogMap(pCurrent, data[j], logBuf);
-                manifold.AddScaled(gradBuf, logBuf, wirls[j]);
+                double w = weights[j];
+                manifold.LogMap(xm, data[j], logBuf);
+                double r = Radius(manifold, xm, data[j], logBuf, out bool cut);
+                if (j == m || r <= coincidence)
+                {
+                    weightOn += w;
+                    tested[j] = true;
+                    continue;
+                }
+                if (w == 0) continue;
+                if (cut) { cutWeight += w; continue; }
+                manifold.AddScaled(gradBuf, logBuf, w / r);
             }
-            double gradNorm = manifold.Norm(pCurrent, gradBuf);
-            return gradNorm <= wCoincident;
+            return manifold.Norm(xm, gradBuf) + cutWeight <= weightOn;
         }
 
         // ── Convergence test ──────────────────────────────────────────────────

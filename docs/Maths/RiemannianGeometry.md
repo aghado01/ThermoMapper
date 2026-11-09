@@ -127,8 +127,8 @@ flowchart TD
   B -->|yes, flat| C[weighted average — done]
   B -->|yes, curved| D["Karcher flow: p ← Exp_p(Σw Log_p x / Σw) until shift < τλ"]
   B -->|no, L1| E["radii r_i (‖Log_p x_i‖ under Spread, d(p,x_i) under Data); λ; ω_i = 0 if r_i ≤ ελ (coincident) else w_i/r_i; minDist includes coincident points"]
-  E --> F{"coincidence and policy = OptimalityCheck?"}
-  F -->|check passes| G[return p — p is the optimal data point]
+  E --> F{"policy = OptimalityCheck, and the nearest data point x_m untested and coincident or holding half the IRLS weight?"}
+  F -->|check at x_m passes| G[return x_m — the median is that data point]
   F -->|fails / not run| H{"SubgradientOnly, or Hybrid and minDist < θλ?"}
   H -->|yes| I["subgradient step: p ← Exp_p(η_k Σ w_i Log_p x_i / r_i), skipping coincident points"]
   H -->|no| J["Weiszfeld step: p ← Exp_p(Σ ω_i Log_p x_i / Σ ω_i)"]
@@ -140,7 +140,8 @@ flowchart TD
 
 **How each step works.**
 
-- **Optimality check.** This is the Weiszfeld / Vardi–Zhang condition at a coincident data point c: $\big\|\sum_{j\ne c}\omega_j\mathrm{Log}_px_j\big\|\le w_c$. If it holds, p is optimal and the solver returns.
+- **Optimality check.** The L1 condition at a data point (Kuhn 1973; Vardi and Zhang 2000): $x_m$ is a median iff $\big\|\sum_{j:\,d_j>\varepsilon\lambda}w_j\,\mathrm{Log}_{x_m}x_j/d_j\big\|\le\sum_{j:\,d_j\le\varepsilon\lambda}w_j$, with $d_j=\|\mathrm{Log}_{x_m}x_j\|$ and the right side the weight sitting on $x_m$, duplicates included. The solver tests the nearest data point $x_m$ once it coincides with the iterate or holds at least half the IRLS weight, counting the points at the same radius (its duplicates), and each point at most once. If the condition holds, it returns $x_m$.
+  - **Why the nearest point and not only exact coincidence.** Weiszfeld reaches a median that is a data point only in the limit, linearly with ratio $\|G\|/w_m$, and once it comes within θλ the `Hybrid` switch takes a subgradient step that throws it off again. Testing only at exact coincidence, as the solver did before, left such a median (a collinear configuration, a duplicated point, a point deep inside low-dimensional data) to run to `MaxIterations` from any warm start but the point itself, and stop up to 6e-4 of the spread off, in either unit. The check used the weight of one coincident point, not of all of them, so a duplicated median failed it.
 - **Coincident points always trigger the subgradient step under `Hybrid`.** A coincident point counts toward `minDist`, which is then at most ελ. That is below θλ whenever ε < θ, as in `Default` (1e-10 < 1e-4). `WeiszfeldOnly` never takes a subgradient step; `SubgradientOnly` takes only subgradient steps and skips the optimality check. So whenever the optimality check does not return, the next step is a subgradient step.
 - **The subgradient step.** Under `Spread` it is $\eta_0\sigma/\sqrt{k+1}$ times the weighted mean $\sum_iw_i\,\mathrm{Log}_px_i/r_i\,/\sum_iw_i$ of the unit directions, over the points outside the coincidence radius ελ, where k is the global iteration count. Under `Data` it keeps its old form: the skip radius is a fixed $10^{-12}$, not ε (a point with $10^{-12}\le r\le\varepsilon$ is excluded from the Weiszfeld weights but receives weight $w/r$ in the subgradient direction), and the step, $\eta_0/\sqrt{k+1}$ times the sum, is normalized neither by $\sum w$ nor by the data scale.
 - **Convergence.** `Absolute` stops when shift < τλ. `RelativeToNorm` stops when shift < τ(λ + ‖p‖₂), using the ambient norm; under `Data` that is τ(1 + ‖p‖₂). Under `Spread` the shift is the norm of the tangent step, and the solver also stops when the step moves the iterate by at most $4\varepsilon_{\text{mach}}\|p\|_2$ in ambient coordinates. Under `Data` the shift is $d(p_k,p_{k+1})$.
@@ -150,10 +151,10 @@ flowchart TD
 | Exit | Final weights |
 |---|---|
 | L1, normal exit | recomputed at the returned point |
-| L1, optimality-check exit | that iteration's weights, with $\omega_c=0$ |
+| L1, optimality-check exit | recomputed at the returned data point, 0 on the points sitting on it |
 | L2 | the outer weights |
 
-**Cost per L1 iteration.** Under `Spread`: n Log maps and n norms (the log vectors are kept, n·D doubles, and reused by the step), one sort of n radii, and one Exp. Under `Data`: n distances, n Log maps and one Exp; subgradient steps add n norms. When the optimality check runs, up to $2n-1$ more Log maps.
+**Cost per L1 iteration.** Under `Spread`: n Log maps and n norms (the log vectors are kept, n·D doubles, and reused by the step), n distances on a curved manifold (for the cut locus), one sort of n radii, and one Exp. Under `Data`: n distances, n Log maps and one Exp; subgradient steps add n norms. An optimality check costs n Log maps, n norms and, on a curved manifold, n distances at $x_m$, at most once per data point.
 
 #### The unit of the constants (`IrlsOptions.Scale`)
 
@@ -175,7 +176,7 @@ The four distance-valued constants, `Tolerance` τ, `Epsilon` ε, `SubgradientTh
 
 **What else `Spread` changes, and why.**
 
-- **Radii from the Log map.** The Weiszfeld weights must resolve τσ. On the sphere and the Grassmannian `Distance` is an arccos, with relative error about $\varepsilon_{\text{mach}}/2\theta^2$ (5e-7 at θ = 1e-5), which stalls the median below a spread of 1e-4; $\|\mathrm{Log}_px\|$ holds to about 1e-10 down to 1e-7.
+- **Radii from the Log map.** The Weiszfeld weights must resolve τσ. On the sphere and the Grassmannian `Distance` is an arccos, with relative error about $\varepsilon_{\text{mach}}/2\theta^2$ (5e-7 at θ = 1e-5), which stalls the median below a spread of 1e-4; $\|\mathrm{Log}_px\|$ holds to about 1e-10 down to 1e-7. At the cut locus the Log map drops the direction of the angle at π/2 (Grassmann) or π (sphere) and comes out short of the distance, even zero, which would read an outlier frame as coincident with the iterate. So on curved manifolds the solver also takes `Distance`, and where the Log is more than 0.1% short of a distance above 1e-6 (the arccos noise of zero is about 2e-8) the radius is the distance and the shortened Log stays the direction, as under `Data`. In the optimality check such a point has no single direction and enters at its full weight: $\|G\|+\sum_{\text{cut}}w_j\le$ the weight on $x_m$, which certifies a local minimum since each distance is 1-Lipschitz.
 - **The shift and the stall stop.** The shift is the norm of the tangent step. The sphere's and the Grassmannian's Exp maps drop tangent steps below 1e-12 (an absolute guard), and an iterate far from the origin cannot move by less than its own ulps; in both cases the step stays above τσ while the iterate stops moving, so the solver stops when the step moves it by at most $4\varepsilon_{\text{mach}}\|p\|_2$.
 - **Flat steps through the tangent round trip.** $p+\sum_i\omega_i(x_i-p)/\sum_i\omega_i$ instead of $\sum_i\omega_ix_i/\sum_i\omega_i$, so a centre far from the origin costs only the rounding of p, where the direct form carries n roundings of the centre. The flat mean takes the same form from the warm start.
 - **The subgradient step divided by Σw**, so it is invariant to the weights' scale as well as the data's.

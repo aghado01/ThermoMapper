@@ -51,7 +51,8 @@ namespace Maths.Geometry.Solver
         /// <summary>
         /// λ = σ, the spread: the weighted median distance from the current iterate to the data, recomputed each
         /// iteration (their weighted mean when half the weight sits on the iterate), so the median and mean are
-        /// equivariant under rescaling the data. The radii are read from the Log map, the shift is the norm of the
+        /// equivariant under rescaling the data. The radii are read from the Log map (from Distance at the cut locus,
+        /// where the Log map comes out short), the shift is the norm of the
         /// tangent step, flat steps accumulate the differences xᵢ − p, the subgradient step is also divided by Σw, and
         /// the solver stops as well when a step no longer moves the iterate.
         /// </summary>
