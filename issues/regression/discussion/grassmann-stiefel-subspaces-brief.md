@@ -53,6 +53,26 @@ Work through where subspace geometry earns its place in the regression engine: p
 
 ## Report
 
+### 2026-11-08, settled by the user: where each item went
+
+The user, on 2026-11-08: "ill take as recommended. irls session is already working on the stable angle routine. lets add missing items to briefs and message the corresponding threads as necessary. ill go with per-draw k per your recommendation". The briefs took them in `c5859ad`.
+
+- **A correction to the recommendation.** It placed the output side in E8's slice 3, "before it starts". Slice 3 had already landed (`84fe230`) without it, and E8's brief was closed, so the items form E8's slice 5.
+- **Per-draw k (synthesis item 1):** slice 5, opt-in by a declared rule with no default. Without a rule the readout is unchanged.
+- **The angle routine (item 2):** LinAlg's `PrincipalAngles`, which the IRLS scale session is building (uncommitted when this was written). It returns the angles only.
+  - The cross-rank projection distance and its split into a rank term and a containment defect go in `Maths.Regression.Subspaces` in slice 5, computed from the angles.
+  - `SubspacePosterior.PrincipalAngles` delegates to it in slice 5, so the two sessions edit different files.
+- **The output side (item 3):** slice 5 has G, the matrix Poincaré check and basis adequacy.
+- **The predictor-aware basis (item 4):** recorded in E37 as what follows a positive. It is an experiment, not a default.
+- **The truncation-residual check (item 5):** E37, a candidate and not ordered.
+- **Rotate-and-refit's frame:** E8's "Not in this brief" now says the frame needs no Stiefel code.
+- **New in slice 5, derived while writing it, to be checked before relying on it: a rank summary.**
+  - Over projections of every rank, Σ_s w_s ‖P − P_s‖²_F = tr P + E[k_s] − 2 tr(P P̄).
+  - For P = UUᵀ that is Σ_i (1 − 2 u_iᵀ P̄ u_i). By Ky Fan, the best P of each rank takes P̄'s top eigenvectors, and the best rank keeps those with eigenvalue above ½.
+  - On coordinate subspaces, P̄'s diagonal holds the inclusion probabilities, and the rule is the median probability model (Barbieri and Berger 2004, cited from memory).
+  - It reads per-draw k's posterior as one subspace without choosing k. Slice 5 reports it beside the mean rank and does not use it as a default.
+- **Still open here:** E36's direction prior, whether BPPR's directions repel each other (det(ΘᵀΘ)^γ) or stay independent.
+
 ### 2026-11-08, the IRLS chip's outcome, and what it adds to the angle-primitive question
 
 The [IRLS chip](../../geometry/irls-scale-brief.md#report) landed `61a7fac` and `e70afaf`.
@@ -143,7 +163,7 @@ Read: arXiv 2210.09181v1 (`gauntlet/bayesian/2210.09181v1`, main text §2.3 to �
 - **The multivariate mode is D07's separate-fit setting, without the truncation residual.** `bppr_pca` fits each principal component independently, with `prop_var` = 0.99 by default, and the paper drops the truncation error r_i "under the assumption that D⁻ is large enough". D07's leave-one-case-out residuals already go further.
 - **E8 on a BPPR fit.** A ridge is not separable, so C runs on E8's sampled route. C = Σ_{m,l} θ_m θ_lᵀ E[g_m′ g_l′] lies in span{θ_m}, of rank at most M. Comparing draws' directions directly would meet label switching across ridges as well as a varying M, so E8's subspace summaries are the natural readout of a BPPR posterior.
 
-### 2026-11-08, synthesis: what is worth doing (proposed, not yet settled by the user)
+### 2026-11-08, synthesis: what is worth doing (settled by the user on 2026-11-08; where each item went is in "settled by the user" above)
 
 E8's build brief (`e31d7dd`) has already taken the orientation's corrections: the declared input metric (its decision 2), both posterior summaries with P̄'s eigenvalues read as mean squared cosines (4), the SVD of the gradient matrix and shared points (5), and `StiefelManifold` set aside. E34's entry took the removal of the frame and the envelope's scope (`6e5e53e`). What remains, in order of worth:
 
