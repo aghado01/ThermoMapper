@@ -235,6 +235,20 @@ Ridge functions g_m(θ_mᵀx) whose directions θ_m are learned during fitting: 
   - *As written, the normalizer is missing.* The births' and deaths' ratios leave out c_M = E[det(ΘᵀΘ)] under the uniform base. Since c_M ≤ 1 falls with M (Hadamard), the effective prior on M is the stated one times c_M, a penalty the count prior does not state.
   - *Options:* the paper's independent directions; the determinant with c_M included in the count law; a tempered determinant det(ΘᵀΘ)^γ. BASS answers the same problem with a hard angle gate on columns. On a sphere a soft repulsion avoids cutting holes in the support.
   - *Trade-off:* fewer near-duplicate ridges and less multicollinearity, which is the adaptation's claim and is unmeasured; against penalizing a true direction represented as a combination of two, which its own example shows the sampler doing.
+  - *What the determinant does, read from the code* (the [Grassmann discussion](../discussion/grassmann-stiefel-subspaces-brief.md#report), `9d66d77`):
+    - The birth's term is sin² of the new direction's angle to the existing directions' span, and a birth at zero is refused.
+    - So at most r directions can share an r-dimensional subspace, which makes M ≤ p, and θ and −θ cannot both appear.
+    - Generic configurations are taxed, not only near-duplicates. For dense uniform directions c_M = p!/((p − M)! p^M), 0.30 at p = 10, M = 5.
+    - A power γ softens none of this, since 0^γ = 0.
+  - *The measure* is the README's "Joint Generalized Cosine Similarity" (Chen and Huang, arXiv 2505.03532, read), sin Θ = √det G / Π‖f_i‖. Its classical name is the polar sine (cited from memory).
+    - The paper notes that it is symmetric under a vector's sign, and removes the symmetry by keeping features positive.
+    - It is greatest for dependent vectors.
+    - It is a contrastive-learning loss there, never a prior, so the paper has no normalizer to offer.
+  - *Settled by the user (2026-11-08)* on the discussion's reading: "i'd probably opt to keep for the many inputs regime with c_M stated".
+    - The default is the paper's independent directions.
+    - D06's admission gate applies to the ridge columns. It is the same sine, measured on the columns over the data, so it admits ±θ pairs, several t₀ along one direction, and more than r directions in an r-plane.
+    - E21's ridge blocks handle collinearity on the coefficient side.
+    - The determinant stays a labelled option for the regime of many inputs and few sparse ridges, gcbeck's own, with c_M stated: tabulated by Monte Carlo for sparse directions, in the closed form above for dense ones, and its tilt on M reported.
 - *Knots on reshaped quantile levels.* In place of a sampled t₀, each ridge's quantile levels are pushed toward the extremes or the median by a tanh with a per-ridge parameter ν before the projection's data quantiles are taken (`knots.h`, `sigmoidize`), so locality comes from where the knots crowd. This is a change to the knot prior, a choice beside the paper's t₀.
 - *Online updates.* New rows enter through rank updates of the Cholesky factors, with knots tracked by streaming quantiles (`bppr.h` `update`, `knots.h`). For an MCMC posterior that means continuing the chain on the augmented data. The engine's principled route to the same end is SMC along a data-addition path (Chopin's IBIS, cited from memory) on its SMC core, which carries its flags and evidence.
 - *Not to carry over:* the enforced adaptation of the prior's signal weights. A prior adapted from the chain's history makes the target depend on that history. An adaptive proposal with diminishing adaptation stays valid, and that is the form to take if any.
@@ -244,9 +258,10 @@ Ridge functions g_m(θ_mᵀx) whose directions θ_m are learned during fitting: 
 - The collapsed law given frozen directions, against the dense marginal.
 - Recovery of known single-index and sum-of-ridges functions from outside the model, read through E8.
 - The direction prior's normalizer by Monte Carlo, against any closed form used.
+- D06's admission on ridge columns, admitting ±θ pairs and one direction at several t₀, and refusing a near-duplicate ridge.
 - `BayesPPR` as a pinned oracle on CRAN, if it is there, checked when the brief is written.
 
-**Order:** not ordered. After E8 by the lineage's sequence; it waits for the user, and for the Grassmann discussion's view of directions.
+**Order:** not ordered. After E8 by the lineage's sequence; it waits for the user. The Grassmann discussion's view of directions is settled above (2026-11-08).
 
 ## Cross-engine evidence
 

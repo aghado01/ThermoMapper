@@ -53,7 +53,9 @@ Work through where subspace geometry earns its place in the regression engine: p
 
 ## Report
 
-### 2026-11-08, E36's direction prior: repel the columns, not the directions (proposed, open for the user)
+### 2026-11-08, E36's direction prior: repel the columns, not the directions (settled by the user on 2026-11-08)
+
+**Settled.** The user, on 2026-11-08: "i'd probably opt to keep for the many inputs regime with c_M stated". E36's entry takes the proposal below: independent directions by default, D06's gate on the ridge columns and E21 for the coefficients, with the determinant as a labelled option for many inputs and few sparse ridges, c_M stated.
 
 Read for it: gcbeck's `zellner.h` (the birth's prior term and the `_projesky` factor's doc), `projection.h` (`cos`), its README; BPPR's `main.tex` (the count prior, the Friedman fit); `BassDesign.cs`'s admission doc (D06); `docs/Maths/BayesianRegression.md` on the support F and the count prior.
 
@@ -72,7 +74,10 @@ Read for it: gcbeck's `zellner.h` (the birth's prior term and the `_projesky` fa
 - **If a soft repulsion is still wanted,** for mixing or for reading ridges one by one: a local, sign-aware kernel, K(θ, θ′) = exp(κ(θᵀθ′ − 1)) in a determinant or pairwise. It is positive definite for any M and repels only nearby directions of the same sign, with c_M(κ) tabulated by Monte Carlo or its tilt reported. It is still blind to t₀, which is why the column gate dominates it.
 - **The belief projection pursuit holds is attraction.** Directions concentrated in a low-dimensional span would be θ_m = W φ_m with W on Gr(k, p): a Bayesian multi-index model, the joint form of rotate-and-refit. That is where Grassmann geometry would enter BPPR's sampler. It is a different model from BPPR's coordinate sparsity (A ≤ 3), and E8 already reads the span from independent directions. It is worth building only if pooling across ridges matters, at small n with large p.
 - **Proposed for E36:** the paper's independent directions, D06's gate on the ridge columns, and E21 for the coefficients. The determinant stays a labelled option for the many-signals regime, with c_M stated. Removing it from E36's options is the user's question.
-- **Not read:** the README's source for its measure, "Joint Generalized Cosine Similarity" (arXiv 2505.03532).
+- **The README's source, read once the user added it** (Chen and Huang, arXiv 2505.03532, in `gauntlet/staging`).
+  - It defines the "Gram hypervolume angle" by sin Θ = √det G / Π‖f_i‖, the normalized Gram volume, whose classical name is the polar sine (cited from memory). So gcbeck's prior is sin²Θ of the unit directions.
+  - Its own list of properties confirms the reading above. Θ is 0 for linearly dependent vectors, and it is π/2 for orthogonal ones only when n ≤ D. It is symmetric under a vector's sign, which the paper removes by keeping its features positive, a remedy a direction on the sphere cannot take.
+  - It is a contrastive-learning loss for aligning several modalities. It is never used as a prior, so it has no normalizer, and it changes nothing above.
 
 ### 2026-11-08, settled by the user: where each item went
 
