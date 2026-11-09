@@ -202,7 +202,7 @@ public sealed class MultiOutputCoreTests(ITestOutputHelper output)
     }
 
     // The design's terms' columns as evaluated, centred over the cases: X_c, which the reference reads.
-    private static double[,] Columns(BassModel model, BassDesign design)
+    internal static double[,] Columns(BassModel model, BassDesign design)
     {
         int n = model.Data.Response.Cases, m = design.Count;
         var xc = new double[n, m];
