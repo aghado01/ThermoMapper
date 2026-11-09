@@ -6,7 +6,9 @@
 .DESCRIPTION
     Selection. The changed files come from git (the working tree and untracked files against -Base, or the changes one
     -Commit made) or from -Changed. The graph covers the test project's compile closure: the Compile items of its
-    csproj, of every project it references, transitively, and of the Directory.Build files above them. A file is
+    csproj, of every project it references, transitively, and of the Directory.Build files above them, with each SDK
+    project's default items (every .cs file under its folder, outside bin, obj and hidden folders) unless
+    EnableDefaultCompileItems or EnableDefaultItems turns them off. A file is
     affected when it changed or when it names a top-level type, a delegate or an extension method declared in an
     affected file; comments and strings are not read, and a name read as a member (after a dot, or called) is not a
     type's unless its dotted chain starts at a namespace of the closure. The selected classes are the test classes
@@ -127,6 +129,44 @@ function Test-InCompilePatterns([string] $full) {
     return $false
 }
 
+# The last value an MSBuild file gives a boolean property: $true, $false, or $null where it sets none.
+function Get-BooleanProperty([xml] $xml, [string] $name) {
+    $node = @($xml.SelectNodes("//PropertyGroup/$name")) | Select-Object -Last 1
+    if (-not $node) { return $null }
+    return -not ($node.InnerText.Trim() -ieq 'false')
+}
+
+# An SDK project compiles every .cs file under its folder unless EnableDefaultCompileItems or EnableDefaultItems is
+# false, in the project or else in the nearest Directory.Build.props above it, which MSBuild reads first.
+function Test-DefaultCompileItems([string] $path, [xml] $xml) {
+    if (-not $xml.Project.Sdk) { return $false }
+    $sources = @($xml)
+    $d = Split-Path $path
+    while ($d -and $d.StartsWith($SourceRoot, [StringComparison]::OrdinalIgnoreCase)) {
+        $props = Join-Path $d 'Directory.Build.props'
+        if (Test-Path -LiteralPath $props) { $sources += [xml](Get-Content -LiteralPath $props -Raw); break }
+        $d = Split-Path $d
+    }
+    foreach ($source in $sources) {
+        if ((Get-BooleanProperty $source 'EnableDefaultItems') -eq $false) { return $false }
+        $compile = Get-BooleanProperty $source 'EnableDefaultCompileItems'
+        if ($null -ne $compile) { return $compile }
+    }
+    return $true
+}
+
+# The SDK's default compile items: **/*.cs under the project's folder, less bin, obj and hidden folders, as its
+# default excludes leave them out.
+function Get-DefaultCompileItems([string] $dir) {
+    $compilePatterns.Add(@{ Dir = (Get-FullPath $dir); Recurse = $true; Leaf = '*.cs' })
+    foreach ($f in (Get-ChildItem -LiteralPath $dir -Recurse -File -Filter '*.cs')) {
+        $relative = [IO.Path]::GetRelativePath($dir, $f.FullName)
+        $folders = @(Split-Path $relative) -split '[\\/]' | Where-Object { $_ }
+        if ($folders | Where-Object { $_ -ieq 'bin' -or $_ -ieq 'obj' -or $_.StartsWith('.') }) { continue }
+        $f.FullName
+    }
+}
+
 function Read-ProjectFile([string] $path, [hashtable] $closure) {
     $dir = Split-Path $path
     [xml] $xml = Get-Content -LiteralPath $path -Raw
@@ -134,13 +174,16 @@ function Read-ProjectFile([string] $path, [hashtable] $closure) {
     foreach ($c in $xml.SelectNodes('//Compile[@Remove]')) {
         foreach ($part in $c.Remove.Split(';')) { Expand-Compile $part.Replace('$(MSBuildThisFileDirectory)', "$dir\") $dir | ForEach-Object { [void]$removes.Add($_) } }
     }
+    $includes = [Collections.Generic.List[string]]::new()
+    if ($path.EndsWith('.csproj', [StringComparison]::OrdinalIgnoreCase) -and (Test-DefaultCompileItems $path $xml)) {
+        foreach ($f in (Get-DefaultCompileItems $dir)) { $includes.Add($f) }
+    }
     foreach ($c in $xml.SelectNodes('//Compile[@Include]')) {
         foreach ($part in $c.Include.Split(';')) {
-            foreach ($f in (Expand-Compile $part.Replace('$(MSBuildThisFileDirectory)', "$dir\") $dir -Record)) {
-                if (-not $removes.Contains($f)) { [void]$closure.Files.Add($f) }
-            }
+            foreach ($f in (Expand-Compile $part.Replace('$(MSBuildThisFileDirectory)', "$dir\") $dir -Record)) { $includes.Add($f) }
         }
     }
+    foreach ($f in $includes) { if (-not $removes.Contains($f)) { [void]$closure.Files.Add($f) } }
     return $xml
 }
 
@@ -241,8 +284,13 @@ $filter = switch ($Scope) {
         $parts = @()
         if (-not $all) { $parts += "($classPart)" }
         if (-not $IncludeSlow -and $noSlow) { $parts += "($noSlow)" }
-        $routine = if ($selected.Count -gt 0) { $parts -join '&' } else { '' }
-        if ($Scope -eq 'Commit') { if ($routine) { "($routine)|(Tier=Pinned)" } else { 'Tier=Pinned' } } else { $routine }
+        # $null selects no test; '' selects every test, which is the routine filter when every class is selected and no
+        # slow method is left out.
+        $routine = if ($selected.Count -gt 0) { $parts -join '&' } else { $null }
+        if ($Scope -eq 'Commit') {
+            if ($null -eq $routine) { 'Tier=Pinned' } elseif ($routine -eq '') { '' } else { "($routine)|(Tier=Pinned)" }
+        }
+        else { $routine }
     }
 }
 
