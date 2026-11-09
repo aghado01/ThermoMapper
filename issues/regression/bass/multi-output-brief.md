@@ -94,3 +94,46 @@ One commit per concern; tests with the code they test; each slice ends with its 
 Under "Reports" below, newest first, per slice: what landed by commit; the gates' numbers; decisions taken beyond this brief; what was left unbuilt and why; follow-ups with the decision each would change.
 
 ## Reports
+
+### Slice 0: the references (chip, 2026-11-08)
+
+**Landed:** `d5b5dc6`, test-side as E8's slice 0 put its references; no engine code.
+- `tests/regression/MatrixTReferences.cs`. `MatrixTReference` is the collapsed marginal by dense algebra. A integrated against MN(A₀, Λ₀⁻¹, Σ) leaves ν = nb − f (f = 1 under the flat intercept), the K × K form R = b(Y − XĀ)ᵀ(Y − XĀ) + (Ā − A₀)ᵀΛ₀(Ā − A₀), a sum of semidefinite terms, and (K/2)(ln|Λ₀| − ln|P|). Σ against IW(ν₀, Ψ₀) then gives ln p_b(Y) through Γ_K, and Σ | Y ~ IW(ν₀ + ν, Ψ₀ + R). Proper and improper priors; exactly 0 at b = 0 under a proper prior; the matrix-t density in the data's n × n row scale at b = 1.
+- The routes it is checked by: `DenseVecReference` (vec(Y) as one Gaussian, the Kronecker products entry by entry, the flat intercept by Helmert rotation), `ReferenceInverseWishart` (density, Bartlett draws), `SigmaQuadrature` (K = 2), `ReferenceSigmaPrior.ScaledToResponse` (decision 2).
+- `MatrixTReferenceTests.cs`: 21 tests, 6 s.
+
+**Gates:**
+
+| Gate | Result |
+| --- | --- |
+| A's integral against the dense vec form, K = p = 2, Σ with unequal variances and a correlation, b 1 and 0.4, intercept inside and flat | 3·10⁻¹⁶ relative. Λ₀⁻¹ ⊗ Σ in Σ ⊗ Λ₀⁻¹'s slot misses by 0.27 to 4.0 nats |
+| The same over a seeded sweep: K ≤ 4, p ≤ 4, n ≤ 9, b to 10⁻⁶, units 10^±6 | 250 moderate cases 1.9·10⁻¹². 250 far cases (cond Σ to 10⁸, Λ₀ over eight decades) within 1.3·10⁻¹⁴·κ̂, κ̂ to 7·10¹² being the dense Cholesky's conditioning |
+| The matrix-t density, untempered, 200 cases | 1.7·10⁻¹² |
+| Σ's integral against quadrature at K = 2: informative prior, b = ½, decision 2 under level centring, flat intercept | 1.4·10⁻¹³ nats; a coarser grid within 8·10⁻¹⁴; faces 44 nats below the peak. E[Σ] against (Ψ₀ + R)/(ν₀ + ν − 3) to about 10⁻¹³ |
+| The inverse Wishart's normalization by the same rule, ν 4.5 and 11 | ln ∫ = −2.9·10⁻¹³ and −1.1·10⁻¹³ |
+| Monte Carlo over Bartlett draws from the prior, K = 3, 3·10⁵ draws | z 0.63 (b = 1, se 0.008) and −1.44 (b = ½, se 0.004) |
+| K = 1 against the scalar block under decision 2's IW(2c, 2c·s²) = IG(c, c·s²): g-form, normalized ridge, pencil; level centring, zero centre, flat; Jeffreys; τ 10⁻⁶ to 10⁴; units 10^±6; b to 0 | 574 compared, 4.1·10⁻¹⁴; 26 refused by both, none by one alone |
+| Equivariance under decision 2: Y → YL with scales 10^±3, mixing and a sign | every structure shifts by −(nb − f) ln\|det L\|, M = 1 and 3, to 7·10⁻¹⁴ relative |
+
+Whole regression assembly on `15eb151` and the slice: 2,573 of 2,573.
+
+**Found, for the main session (decisions 1 to 3):**
+1. *Level centring's count is nb, not b(n − 1).* Scalar BASS's level centring keeps the intercept inside the g-prior, centred on ȳ, k = M + 1 ([BayesianRegression.md](../../../docs/Maths/BayesianRegression.md), "Why level centring"). Integrating it spends no observation, so Σ | Y ~ IW(ν₀ + nb, Ψ₀ + R), and slice 1's gate (K = 1 equal to scalar BASS) holds only with nb.
+   - n − 1 is the flat intercept's count at b = 1, and nb − 1 is its tempered count.
+   - b(n − 1) would be a third path, the restricted likelihood (Y projected off 1) tempered. It is neither BASS's integrated form nor equal to scalar BASS at K = 1.
+   - *Proposed wording:* decision 1, "level-centred per output, inside the prior as scalar BASS's is, so ν = nb"; decision 3, "ν₀ + nb − f > K − 1".
+2. *Under the flat intercept, decision 3's "only under an improper ν₀" does not hold.* There ν₀ + nb − 1 > K − 1 fails at nb ≤ K − ν₀ under a proper prior too: at nb ≤ 1 − 2c under decision 2's ν₀. b = 0 diverges, as scalar BASS's flat pole does. Level centring and the zero centre keep decision 3 as written. The reference refuses where the condition fails.
+3. *Decision 2's S_Y.* For K = 1 to be the scalar default exactly, S_Y takes divisor n and is read about the centre levels, as the scalar s² is (`BassResolved`). Those are ȳ under level centring and the flat intercept, and 0 under the zero centre, where it is the second moment.
+4. *Where the entry's first condition came from.* Integrating Σ against the tilted prior IW(ν₀ + n(b − 1)), the matrix-t's own form below b = 1, needs that prior proper. Integrating the tempered likelihood directly needs only ν₀ + nb − f > K − 1. This confirms decision 3's correction.
+
+**Decisions beyond the brief:**
+- *References test-side, no engine code.* The alternative was an engine inverse Wishart and the K × K marginal now, gated against the dense forms. Test-side keeps slice 1's engine block gated against routes that share none of its code.
+- *Vec order:* vec stacks A's columns, one per output, so Cov(vec A) = Σ ⊗ Λ₀⁻¹. Slice 1's draws of A | Σ follow it.
+- *The quadrature in Bartlett coordinates of Σ⁻¹, with a second pass on the first pass's moments.* A box over the Cholesky factor of Σ missed the tails: its off-diagonal coordinate spreads as e^(ln L₁₁). The Jacobian is gated by the normalization.
+- *Monte Carlo through the collapse at each draw.* The dense form checks the first 100 draws to 10⁻¹¹; at 3·10⁵ draws it cost more than the test's budget. Nothing of Γ₃ enters the draws' side.
+
+**Unbuilt:** the reading of Brown, Vannucci and Fearn (1998) and Huang and Wand (2013), not on disk; asked of the main session on 2026-11-08. Nothing here depends on them. The matrix-t is cited from Dickey (1967) and Gupta and Nagar (2000), from memory, and derived in the reference's comments.
+
+**Follow-ups:**
+- *Items 1 to 3:* slice 1 builds level centring with ν = nb, S_Y about the centre levels with divisor n, and decision 3's condition with f, unless the main session or the user decides otherwise. Another choice changes the count, and with it the K = 1 gate.
+- *Brown, Vannucci and Fearn, once supplied:* their marginal against this reference. If their intercept convention differs, the difference goes in docs/Maths with this one; otherwise nothing changes.
