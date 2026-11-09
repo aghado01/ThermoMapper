@@ -84,6 +84,10 @@ Links open each session in the app.
   - `DiagramMetricsTransportParityTests` timing out in R.
 - **KHAOS's SMC evidence** stays unreliable on the trap fixture under every remedy measured. The flags report it.
 
+## LinAlg work queued after the handoff (2026-11-09)
+
+The [eigensolver brief](../linalg/eigensolver-performance-brief.md) goes to the next available LinAlg owner, independently of E21, E34 and conformal slice 8. First fix the capped LOBPCG residual and EigenFast's no-rotation sweeps. Then qualify a production Ritz solver on actual block sizes and measure reuse of `AX` separately. Reserve the shared machine's quiet window for timing comparisons. The E8 tolerance question above remains a separate decision.
+
 ## Recorded follow-ups, no decision waiting
 
 Each brief's report lists its own, with the decision each would change:
