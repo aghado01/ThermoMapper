@@ -67,7 +67,7 @@ Then C = Σ_{m,n} b_m b_n·E[∇B_m ∇B_nᵀ] for a draw's coefficients b, the 
   - the projection mean, the top-k eigenvectors of P̄ = Σ w_s W_s W_sᵀ, each draw counted once, with P̄'s eigenvalues as mean squared cosines and its eigenvectors in order;
   - each draw's eigenvalues, gap λ_k − λ_{k+1} and principal angles to the mean subspace;
   - the principal angles between E[C]'s top-k eigenspace and the mean subspace, which say how far apart the two summaries sit.
-  Outlying draws show in their angles; nothing is down-weighted. Angles are arccos of a thin SVD's cosines, good to about 1.5·10⁻⁸ rad (decision 5).
+  Outlying draws show in their angles; nothing is down-weighted. Slice 2 took the angles as arccos of a thin SVD's cosines, good to about 1.5·10⁻⁸ rad (decision 5); from slice 5 they come from LinAlg's stable routine, good to about √(p·k)·ε (below).
 - **The checks** (`PoincareCheck`, decision 6), per draw and continuous input:
   - *Poincaré:* total(v) against ((b − a)²/π²)·C_vv for an input under a uniform law on [a, b], with the totals from the moment route under the same law and draws;
   - *SG-4(b):* on a Legendre fit under the product uniform law on the boxes, total(v) against ½·E[x_v(1 − x_v)(∂_v f)²] from the coefficients;
