@@ -31,16 +31,19 @@ These are the main session's, taken in commissioning. Each goes on the page with
 
 1. **The model.** Y (n × K) = 1μᵀ + BA + E, with each row of E ~ N(0, Σ).
    - *The priors:* A | Σ, τ ~ MN(0, S₀(τ), Σ) through the prior-precision builder, and Σ ~ IW(ν₀, Ψ₀). Inclusion is shared across outputs.
-   - *The collapse:* with A and Σ integrated, the structure step reads a K × K quadratic form and its log-determinant, and the marginal is matrix-t. The intercept is level-centred per output, with n − 1 degrees of freedom.
+   - *The collapse:* with A and Σ integrated, the structure step reads a K × K quadratic form and its log-determinant, and the marginal is matrix-t. The intercept is level-centred per output, inside the prior as scalar BASS's is, so Σ's posterior counts n observations, nb at rung b; the flat intercept's counts n − 1, nb − 1 at rung b. *Corrected 2026-11-08* from "n − 1 degrees of freedom" by slice 0's reading: the K = 1 reduction to scalar BASS and Brown, Vannucci and Fearn's eq. (20) both count n.
 2. **Σ's default prior: D03's `ScaledToResponse`, carried to K outputs.**
-   - *The form:* ν₀ = K − 1 + 2c and Ψ₀ = 2c·S_Y, with c = 10⁻³ and S_Y the outputs' sample covariance about their means, stated as an empirical prior.
+   - *The form:* ν₀ = K − 1 + 2c and Ψ₀ = 2c·S_Y, with c = 10⁻³, stated as an empirical prior. S_Y is scalar BASS's s² carried to K outputs: the outputs' mean squares and cross-products about the intercept's centre levels, with its divisor n. Those levels are ȳ under level centring and the flat intercept, and 0 under the zero centre. *Corrected 2026-11-08* from "sample covariance about their means" by slice 0.
    - *At K = 1* it is IG(c, c·s²), the scalar default exactly. That reduction is a gate.
    - *Units:* because S_Y → LᵀS_YL when Y → YL, the structure posterior is invariant to any invertible rescaling or mixing of the outputs. This settles the entry's output-units choice.
-   - *Options:* a declared Ψ₀ in the outputs' units, and standardized outputs (scale-invariant only).
+   - *Its correlations:* under a diagonal S_Y each prior correlation has density ∝ (1 − ρ²)^(c − 1), Huang and Wand's Property 3 at their ν = 2c, so at c = 10⁻³ nearly all its mass sits at ±1. The data overrule it at moderate n/K. It stays the default provisionally, for the reduction and the invariance; slice 3 measures it at small n/K.
+   - *Options:* a declared Ψ₀ in the outputs' units; standardized outputs (scale-invariant only); and Huang and Wand's prior at ν = 2.
+     - *Huang and Wand's:* Σ | a ∼ IW(ν + K − 1, 2ν diag(1/a)) with a_k ∼ IG(½, 1/A_k²), A_k each output's root mean square about its level. It is the engine's hierarchical σ² prior carried to K rates, each moved by a slice step as τ is, and the collapse holds given them. It gives uniform correlations, and it is equivariant under rescaling and permuting the outputs, not under mixing them.
+     - *When:* slice 2, since its rates are state coordinates that every sampler and resume carry, as the scalar rate is (added 2026-11-08 by the main session; the slice the chip's choice).
    - *Refused:* an S_Y that is singular or nearly so, with the reason. Collinear outputs need fewer outputs.
-3. **Properness under tempering, correcting the entry.** At rung b the tempered target integrates p(Y | A, Σ)^b against the priors (D05's integrated form), so Σ's conditional is IW(ν₀ + b·ν_data, Ψ₀ + b·R), with ν_data = n − 1 under level centring.
-   - *When it is proper:* whenever ν₀ + b·ν_data > K − 1. Under a proper prior (ν₀ > K − 1) that holds at every b ≥ 0, including the reference rung.
-   - *What changes from the entry:* it asked the tilted prior alone to be proper (ν₀ − n(1 − b) > K − 1), which is stricter than needed. Refuse only a rung, or a reference rung, where the condition above fails, which happens only under an improper ν₀.
+3. **Properness under tempering, correcting the entry.** At rung b the tempered target integrates p(Y | A, Σ)^b against the priors (D05's integrated form), so Σ's conditional is IW(ν₀ + ν_b, Ψ₀ + R_b). Here ν_b = nb under level centring and the zero centre, and nb − 1 under the flat intercept (*corrected 2026-11-08* by slice 0 from "b·ν_data with ν_data = n − 1").
+   - *When it is proper:* whenever ν₀ + ν_b > K − 1. Under a proper prior (ν₀ > K − 1) with the intercept inside the prior, that holds at every b ≥ 0, including the reference rung. Under the flat intercept it fails at nb ≤ K − ν₀ under a proper prior too (nb ≤ 1 − 2c under decision 2), and b = 0 diverges, as scalar BASS's flat pole does.
+   - *What changes from the entry:* it asked the tilted prior alone to be proper (ν₀ − n(1 − b) > K − 1), which is stricter than needed. Refuse only a rung, or a reference rung, where the condition above fails: under an improper ν₀, or at the flat intercept's hottest rungs.
 4. **Shared inclusion only.** Inclusion per output needs an indicator per (term, output) and loses the matrix-t.
 5. **Missing outputs are refused** at first, with the reason.
 6. **GBASS's noise by row.** A per-row scale vᵢ is shared across a case's outputs, with a skew vector γ ∈ ℝᴷ, giving the multivariate t and the multivariate generalized hyperbolic.
@@ -57,8 +60,8 @@ One commit per concern; tests with the code they test; each slice ends with its 
 | --- | --- | --- |
 | 0. References | The matrix-t marginal in closed form; the sources read once supplied | Against the dense vec form with an asymmetric Σ at K = 2, so Σ ⊗ S₀ and S₀ ⊗ Σ cannot pass for each other under the code's vec order; against quadrature over Σ at K = 2 and Monte Carlo at K = 3; at K = 1 against the scalar marginal under decision 2's reduction |
 | 1. The core | A multi-output response; Σ's prior (decision 2) and its validation; the collapse in the structure step and τ's step through `PriorPencil`; per draw Σ | Y and A | Σ; level-centred intercepts | K = 1 equal to scalar BASS to rounding, with scalar BASS's pinned hashes unmoved; the law by enumeration on small structure spaces; Geweke; equivariance Y → YL; recovery of a known Σ and of surfaces from outside the model |
-| 2. Samplers and evidence | The ladder under decision 3, SMC with its flags, the flat histogram, resume | Each rung's law and the evidence against the enumeration; resume bit for bit; a refusal only where decision 3's condition fails |
-| 3. Readouts | The matrix-t predictive; joint bands; the predictions' cross-output correlation; P(every output in its specification); E[Σ] and its correlation matrix; Sobol per output and for declared linear combinations; co-active pairs across outputs through E8 | Against Monte Carlo over the draws; the joint probability against counting; Sobol per output against single-output fits on the same structure |
+| 2. Samplers and evidence | The ladder under decision 3, SMC with its flags, the flat histogram, resume; Huang and Wand's prior (decision 2's option), its K rates through the sweep and every sampler | Each rung's law and the evidence against the enumeration; resume bit for bit; a refusal only where decision 3's condition fails; Huang and Wand's prior by enumeration with its rates integrated, and Geweke |
+| 3. Readouts | The matrix-t predictive; joint bands; the predictions' cross-output correlation; P(every output in its specification); E[Σ] and its correlation matrix; Sobol per output and for declared linear combinations; co-active pairs across outputs through E8 | Against Monte Carlo over the draws; the joint probability against counting; Sobol per output against single-output fits on the same structure. *Decision 2's measurement:* the coverage of the correlations and of the joint predictive at n/K from 3 to 30, decision 2 against Huang and Wand at ν = 2. If decision 2 undercovers where Huang and Wand does not, the default goes to the user with the numbers; otherwise decision 2 stands |
 | 4. Noise and random intercepts | Decisions 6 and 7 | Geweke under each noise and with the block; the γ·v move on a frozen state against its orbit's law; recovery from outside the model |
 | 5. The PCA mode's joint option | Decision 8 | Against separate component fits on data whose scores are independent; the equivariance gate on the scores |
 
@@ -73,7 +76,7 @@ One commit per concern; tests with the code they test; each slice ends with its 
 ## Not in this brief
 
 - **E22's coupled outcomes** and its parameter expansion for a correlation matrix.
-- **Huang and Wand's prior** on Σ; inclusion per output; missing outputs as latents.
+- **Inclusion per output;** missing outputs as latents.
 - **The response envelope** (E34's entry), and an output basis from E[J W_x Jᵀ].
 - **Conformal prediction for several outputs.** The candidate seam refuses a multi-output fit, with its reason.
 
