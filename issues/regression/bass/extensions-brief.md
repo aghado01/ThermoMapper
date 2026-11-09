@@ -368,7 +368,8 @@ Not taken:
 - *Slice 6, E35's conformal test martingales, building since 2026-11-08:*
   - *6·0* (4dd1dfb): BGP's seam at its run's test points reads each draw's kept variance. It is bit for bit the refit path's, at 3.5 ms per grid against 16 s per call.
   - *6a* (415c08c): the smoothed p-values of a stream (M-1). Each new score is ranked among every score so far with a fresh randomized tie, O(log n) per arrival. M-1's finite core holds by enumeration, ties included, and the p-values are uniform on exchangeable streams. Each premise, broken, fails as the Lean's checks predict.
-  - The bets, the capital and the alarms follow ([the report](../conformal-layer-brief.md)).
+  - *6b* (206eca9): the bets and the capital (M-2): power, the power mixture, Simple Jumper and the plug-in. Each is placed before its p-value is seen and integrates to at most 1. E S₂₀ = 1 holds end to end, and a bet that peeks, or integrates above 1, breaks Ville's bound.
+  - The alarms follow ([the report](../conformal-layer-brief.md)).
 
 The seam was built first. OQ17 (2026-10-23, built 2026-10-24; BASS's terms in S9) gives:
 - every draw's state, retained;
