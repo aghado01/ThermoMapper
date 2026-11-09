@@ -115,6 +115,7 @@ flowchart LR
 | BASS (stage 6) | `BassFit.Sensitivity(data, SensitivitySpec)` → `SobolAnalysis` (`CoordinateVariables`) of `SobolDecomposition` (`MainIndex`, `TotalIndex`, `MeanMainIndices`, `MeanTotalIndices`, `OtherVariance`, `OtherIndex`, `MeanOtherIndex`, `Status`); `BassFit.Effects(data, spec, EffectSpec)` → `EffectAnalysis` (`CoordinateVariables`); `BassBasisFit.Sensitivity(spec)` → `BasisSobolAnalysis` (`AtLocation`, `PerLocation`, `Integrated`, `ComponentCovariance`, `ComponentMainCovariance`, `ComponentTotalCovariance`, `ComponentMeans`); measures `UniformMeasure`, `MixtureMeasure` (`NormalComponent`, `StudentComponent`, `MixtureWeighting`), `EmpiricalMeasure`, `CategoricalMeasure`; `FunctionalForm`; `BassMoments.On(inputs, degree, measure)` (`Mean`, `Cross`, `Pair` → `TermPairMoments`); `PiecewisePolynomial`; a Legendre fit's `BassSensitivity.FromCoefficients(fit, data)` → `PolynomialChaosSensitivity` (`Sobol`, `Jacobi`), under the uniform law alone |
 | BASS (stage 9) | `BassFit.Traces()`, `TrainingFit(data, probabilities)`, `Metadata()`, `Summary(probabilities)`, `SensitivitySummary(data, spec, probabilities)`; the same on `BassBasisFit`, with `Effects(spec, effects)` → `BasisEffectAnalysis`; records `BassTraces`, `BassChainTrace`, `BassTrainingFit`, `BassMetadata`, `BassBasisMetadata`, `BassSummary`, `BassBasisSummary`, `BassPosteriorSummary`, `PosteriorSummary`, `SobolSummary`, `SobolAnalysisSummary`, `BasisSobolSummary` |
 | BASS (F-M2 Phase 1) | `BassSampling.LocalSteps` (`LocalSteps`, `Window(n)`), `BassSampling.FactorMoves` (`FactorMoves`), `TemperingSpec.Split` (`SplitRule`); `BassResolved` (`StepWindows`, `FactorShares`, `SplitThreshold`); `BassTermProposal` (`ProposeChange`, `ProposePrune`, `ProposeGrow`, `ProposeVariableChange`, `Window`) → `BassTermMove`, `BassMoveKind`; `BassStructureMoves.Kinds`, `BassDiagnostics.MoveKinds` (`BassMoveTally`, `BassKindCount`); `TemperingLadder.Split` |
+| BASS (E4, the residual birth) | `BirthMixture.Residual` (`ResidualBirth`); F-X4's `BassBirthContext` and the kernels' context overloads; `BassStructureMoves.InverseTemperature` |
 | BASS (E4, the history birth) | `BassSampling.Births` (`BirthMixture`, `HistoryBirth`); `BassInclusionHistory` (`Learn`, `Record`, `Freeze`, `SetFromPopulation`, `Frequencies`, `Reading`); `BassStructureMoves.History`, `BassSmcKernel.History`; `BassChainAccount.Inclusion` (`BassInclusionReading`) |
 | Verdicts (D10, N14) | `BassSampling.StoppingScope` (`BassStoppingScope`), `BassResolved.StoppingGroups`; `BassDiagnostics` (`LogPosterior`, `Verdict`, `ModeSeparation` → `BassModeSeparation`, `PredictiveGroup`, `LevelGroup`, `StructuralGroup`); `BarsResult.Verdict`, `BgpResult.Verdict`, `BapsResult.Verdict`, `HierarchicalResult.Verdict` |
 | BASS calibration (stage 7) | `ICalibrationEmulator`, `BassBasisEmulator`, `BassFitEmulator`, `EmulatorNoise` (`ComponentNoise`, `IndependentNoise`); `ContinuousParameter`, `CategoricalParameter`, `ParameterLayout`; `GaussianMeasurement`, `VarianceGroup`, `InverseGammaVariance`, `HalfCauchyDeviation`, `MeasurementModel`; `FunctionalFormulation` (`TruncationTerm`, `FunctionalDiscrepancy`), `MultivariateFormulation`, `CalibrationCovariance` (`Create`, `Factor`) → `CovarianceFactor`; `CalibrationModel` (`Target`, `Physical`, `Delta`), `CalibrationTarget`, `CalibrationState`; `CalibrationSampler.Run` → `ConditionalRun` of `CalibrationDraw`; `NestedCalibrationSampler.Run` → `NestedCalibration` (`Runs`, `NotConverged`, `Pooled`); `CalibrationConfig` (`ToJson`, `FromJson`, `Validate`) |
@@ -1039,6 +1040,85 @@ $$q(t\mid S)=(1-\omega_H)\,q_{\text{base}}(t\mid S)+\omega_H\,q_H(t\mid S).$$
 - Nott and Kohn's best linear predictor, the inclusion of u predicted from the current γ₋ᵤ by the history's covariance;
 - adaptation that continues past burn-in, under their condition (5);
 - history weights in the swaps and variable changes.
+
+### BASS: the residual birth (E4)
+
+Built 2026-11-09 by the proposal-kernels brief's slice 2 ([the brief](../../issues/regression/bass/proposal-kernels-brief.md)), a component of [the birth mixture](#bass-the-birth-mixture-and-the-history-birth-e4) for hinge and Legendre terms alike. It changes no default: a fit opts in with `BirthMixture { Residual = new ResidualBirth(share) }`, beside the history birth or alone.
+
+$$q(t\mid S)=(1-\omega_H-\omega_R)\,q_{\text{base}}+\omega_H\,q_H+\omega_R\,q_R .$$
+
+**The component** (`BassResidualBirth`).
+- *The residual.* r(S) is the raw response's least-squares residual on [1, B_S], the structure's raw columns in a canonical order. It is a function of the terms alone: a birth's forward probability and the reverse of the death that undoes it read the same number.
+  - A tiny ridge, 10⁻¹² of the Gram's largest diagonal, keeps a collinear structure's solve defined.
+  - An exact fit's residual is rounding: at or below 10⁻²⁴ of the response's own spread it weighs every candidate alike.
+- *The parent* p is drawn uniformly over P(S): the intercept, and the structure's terms that can take one more continuous factor. That means a hinge within the continuous cap, or a Legendre factor within q_max and d_max.
+- *The new factor* f is drawn ∝ exp(½·b·Δℓ(f)), with Δℓ(f) = −(n/2)·ln(1 − ΔQ(f)/‖r‖²), the single column's profile-likelihood gain.
+  - ΔQ(f) = (c̃ᵀr)²/‖c̃‖², c̃ the centred column B_p ∘ φ_f. A hinge's scale cancels, so its shape alone, (s(x − t))₊^q, is scored.
+  - The exponent ½ is the locally balanced √ weighting (Zanella 2020). b is the move's inverse temperature: a ladder sets each rung's every scan, and SMC each stage's. At b near 0 the component is near uniform over candidates, as the flat tempered law is.
+  - *Hinge candidates:* every variable p leaves, both signs, every knot of the prior's set. They are scored at once per variable by cumulative sums of B·r·xʲ, B·xʲ and B²·xʲ along its sort order, any degree by binomial expansion.
+  - *Legendre candidates:* every variable p leaves, every degree within d_max − d_p.
+  - Categorical and functional factors are the base birth's to propose.
+- *The forward probability, exactly:* q_R(t | S) = Σ_{p ∈ sub(t) ∩ P(S)} (1/|P(S)|)·w_p(t ∖ p)/W_p. Here sub(t) are the terms that t less one continuous factor leaves, the intercept for a one-factor term.
+- *The death's reverse* reads the reduced structure's residual through F-X4's birth context (`BassBirthContext`: the structure a birth starts from and b), which the moves build only for the mixture. The hinge and Legendre kernels take the context's default, the counts alone, so their draws are unchanged.
+- *Caches,* all pure, so they change no draw:
+  - per instance, the residual by structure and each ln W_p and ln q_R by structure, parent or term, and b, with the last full table kept for draws;
+  - per model and shared, the raw columns.
+
+**The reach.**
+
+| Path | Under the residual birth | Gate or reason |
+|---|---|---|
+| A chain | Runs | The chain's law against the enumeration; Geweke |
+| The ladder | Runs, each rung at its own b | Each rung's law against the enumeration, hinge and Legendre |
+| SMC | Runs, each stage at its b | ln p(y) against the enumeration under the raw ridge and the modified g-prior, flags clear |
+| The flat histogram | Runs at b = 1 | Against the enumeration |
+| Resume | Bit for bit | A chain, a ladder, both components together, and SMC across stages |
+| GBASS's noise, the random-intercept block | Runs | The score reads the raw response's residual. That is an approximate score under weights or whitening, with exact probabilities |
+| A direct functional response; several outputs (E34) | Refused at `BassModel.Create` | The residual is a matrix, and no score here reads one |
+| Data with no continuous predictor | Refused at `BassModel.Create` | There is no continuous factor to add |
+
+**Checks** (`ResidualBirthTests`).
+- *Primitives.* Every candidate's score from the cumulative-sum pass against its dense column, over twelve structures per fixture at b 1 and 0.3: a worst relative gap of 1.9·10⁻¹¹. The fixtures cover ties at knots, hinge degrees 1–3, inputs shifted by 10⁶, columns that vanish on the cases, Legendre and categorical fits.
+  - The residual against modified Gram–Schmidt to 2.6·10⁻¹² of ‖r‖, the same bit for bit in any term order.
+  - An exact fit weighs every candidate alike.
+- *The kernel's own law,* at b 1 and 0.4. Σ_t q_R(t | S) = 1 and the mixture's Σ_t q with its empty draw = 1, to 10⁻¹⁴. ln q_R against the statement written out (dense columns, the statement's parents) to 1.1·10⁻¹¹. 100,000 draws against q_R by χ², z from −1.83 to 0.93.
+- *Detailed balance, exactly,* against the enumerated law. The births' forward probabilities come from the statement and the ratios from the production mixture. The worst gap is 1.3·10⁻¹¹ in logs over eight cases: hinge at b 1 and 0.4, with the history birth beside it, categorical, three inputs at order 2, quadratic hinges, and Legendre with and without the history birth. A death that reads the full structure's residual fails it.
+- *The chain's law,* 300,000 sweeps against the enumeration: worst |z| 1.80 (hinge) and 1.30 (Legendre).
+- *Geweke,* with proper priors at ω_R = ½, the redrawn response moving the residual every step: worst |z| 0.56 (hinge) and 2.05 (Legendre).
+- *The reach:* the ladder's rung laws, SMC's ln p(y) (−72.2983 ± 0.0126 against −72.2910 under the raw ridge, −69.5983 ± 0.0143 against −69.5869 under the modified g-prior), the flat histogram, and resume, as in the table.
+
+**The measurements** (pre-registered in the brief; ω_R = ¼, the exponent ½, tiered compilation off).
+
+*Mixing per second* ([`proposal-kernels-residual.csv`](../../issues/regression/bass/proposal-kernels-residual.csv)): four seeds of four chains, 5,000 + 5,000 sweeps, the residual birth over the fit's own.
+
+| Fixture | ESS per sweep, residual over base | ESS per CPU second | CPU per fit | Births accepted |
+| --- | --- | --- | --- | --- |
+| Friedman, p 10 | 0.47–1.57, none beyond the spread | 0.03–0.07 | 0.62 → 11.9 s | 1.86% → 1.74% |
+| Friedman, p 50 | 0.08–2.25, none beyond the spread | 0.00–0.02 | 0.60 → 52.7 s | 2.08% → 1.36% |
+| Ishigami, the raw ridge | 1.83–2.23 for M, σ² and the fitted values (z 1.9–2.4); ln π 1.34 | 1.86–2.36 (z 2.0–2.5); ln π 1.24 | 1.64 → 1.71 s | 1.25% → 1.38% |
+| Ishigami, the modified g-prior | 0.77–2.49; f₁ 2.49 (z 2.2), f₂ 1.55 (z 2.9) | 0.63–2.07; M 0.63 (z −2.0) | 3.61 → 4.46 s | 13.8% → 14.5% |
+
+- On Ishigami under the raw ridge the residual chains also agree: R̂ of M at most 1.015, against up to 1.37 for the base.
+- On Friedman the residual birth leaves per-sweep mixing where it was, as the local-move mixing brief's reframe expects at a mode. Its cost is the scoring: O(n·p) per parent, with a logarithm and an exponential for every knot.
+- *The cost row,* on the cycle clock, indicative. A warm birth's kernel work is 9.3 µs against 3.6 on Ishigami, and 0.97 ms against 0.83 µs at the cost report's hinge base (n 1,000, M 20). A warm death's ratio, once its probability is cached, is 3.1 against 2.1 µs and 5.4 against 0.3 µs.
+
+*The SMC trap* ([`proposal-kernels-trap.csv`](../../issues/regression/bass/proposal-kernels-trap.csv)): the raw-ridge Ishigami fixture, N 500 at 5 sweeps a stage, 16 replicates each, against slice 5's table ([its addendum](../../issues/regression/bass/khaos-brief.md#slice-5-addendum-smcs-flags-chip-2026-11-08)).
+- *The engine's schedule:* 0 of 16 reach the posterior. Each still jumps over the collapse from b below 0.03, where the residual weights are nearly flat.
+- *The 1.25 cap:* 16 of 16 reach it, at M 10.09–10.18 and σ² 0.222–0.227 against the long chains' 10.15 and 0.2245. The cap alone reached 11 of 16. Births accept 8.4%, against about 2%.
+- *The evidence still spreads:* ln Ẑ −287.0 ± 6.4 over 21 nats, against per-replicate errors of 0.4–0.8, so the disagreement flag reads it.
+
+*MCMC's climb from empty* on the same fixture, at b = 1, eight seeds each: to the long chain's band, the 5% quantile of its ln π, in a median 356 sweeps (139–615) against 4,384 (2,241–7,557). That is 12 times fewer.
+
+**The decisions they change,** each the user's:
+- *On KHAOS under the raw ridge,* the residual birth is reported as a candidate for that class: ESS per CPU second about 2× on five of six functionals at the same cost, and the climb from empty 12× shorter. No default is proposed from one fixture.
+- *For SMC's trap,* the pair of the 1.25 cap and the residual birth reaches the posterior in every replicate, and the evidence stays dispersed. The remedy table's third row, a reference nearer the posterior, is what the evidence would need.
+- *On hinge fits* it stays opt-in: no per-sweep gain on Friedman, at 19–88× the CPU.
+
+**Not built** (each recorded with its decision in the brief):
+- a cheaper hinge score (a knot grid, or a residual updated rather than refitted), which matters only where a hinge problem gains per sweep;
+- residual-informed knots in the change moves;
+- a sharpness other than ½;
+- a functional or several-output residual.
 
 ### BASS: the run
 
@@ -2510,7 +2590,7 @@ The draws give what the marginals cannot: which breaks occur together, per-draw 
 | `CalibrationConfig` Smc | null: C3's nested sampler | `CutSmcSpec`: `Particles` 1,000, `TargetConditionalEss` 0.99, `MutationSteps` 5, `ResampleBelow` 0.5, multinomial, `OuterDraws` as C3's, `Order` Tour, `MaxStagesPerLeg` 1,000 (stage 8; provisional) |
 | `BassSampling` Moves | `EqualOverAvailable` | D01's schedule; `PriorCancelling(C = 0.4)`, C ∈ (0, ½], the option |
 | `BassSampling` LocalSteps | null: off | `LocalSteps(Probability = 0.5, WindowFraction = 0.02)`: local knot steps and level toggles inside a change (F-M2; the pass made it no default, 2026-10-29) |
-| `BassSampling` Births | null: the fit's own birth | `BirthMixture { History = HistoryBirth(Share = 0.25, Floor = 0.01, Refresh = 100) }`: E4's history birth beside the fit's own ([the section](#bass-the-birth-mixture-and-the-history-birth-e4)); no default without its measurement and the user's decision |
+| `BassSampling` Births | null: the fit's own birth | `BirthMixture { History = HistoryBirth(Share = 0.25, Floor = 0.01, Refresh = 100), Residual = ResidualBirth(Share = 0.25) }`, either or both: E4's history birth ([its section](#bass-the-birth-mixture-and-the-history-birth-e4)) and residual birth ([its section](#bass-the-residual-birth-e4)) beside the fit's own; no default without its measurement and the user's decision |
 | `BassSampling` FactorMoves | null: off | `FactorMoves(Change = 1, PruneOrGrow = 1, VariableChange = 1)`: the fixed-M family in the change's slot, by these shares (F-M2; the pass made it no default, 2026-10-29) |
 | `BassSampling` MonitoredPoints | null: up to three cases at the quartiles, a direct response's at its middle location | The fitted values R̂ and ESS monitor; declared points are checked against the data (decided 2026-10-28) |
 | `BassSampling` FlatHistogram | null: MCMC | `BassFlatHistogramSpec`: the engine's `FlatHistogramSpec` (`Run`), the WHAM pilot (`Pilot`: the linear form with the reference rung, self-sizing, 4 ladders; `BurnIn` and `TracedScans` required) and `MaxIterations`; an iteration is `Thin` sweeps (N17 Phase 2) |
@@ -2627,7 +2707,7 @@ Every source is checked, papers and their code included (the user's decision, 20
 |---|---|
 | Spline core | `spline/KnotConfig.cs`, `IBasis.cs`, `SplineBasis.cs`, `BSpline.cs`, `BandedDesign.cs` |
 | BARS | `spline/bars/Bars.cs`, `BarsEnsemble.cs`, `SplineTarget.cs`, `KnotMoves.cs`, `KnotKernels.cs`, `AdaptiveLocalBetaKernel.cs`, `DmgkSchedule.cs`, `ComplexityPriors.cs`, `WeightedNormalModel.cs`, `PoissonModel.cs`, `WhittleModel.cs`, `GibbsLossModel.cs`, `WeightResampling.cs`, `StepBasis.cs`, `SplineExtrema.cs`, `IObservationModel.cs`, `IConditionalFit.cs`, `IKnotKernel.cs` |
-| BASS | `spline/bass/Bass.cs` (the fit, resume and the fingerprint), `BassRun.cs`, `BassRunOptions.cs`, `BassFit.cs`, `BassDiagnostics.cs`, `BassPriorSampler.cs`, `BassLadder.cs`, `BassEvidence.cs`, `BassPointwise.cs`, `BassResidualDependence.cs`, `BassConfig.cs`, `BassData.cs`, `BassResolved.cs`, `BassInputTransform.cs`, `BassInputs.cs`, `BassTerm.cs`, `BassBasis.cs`, `DesignKernel.cs`, `DesignKernels.cs`, `BassObservationModel.cs`, `BassNoise.cs` (E1's noise and its blocks; [its page](./VarianceMeanMixtures.md)), `BassRandomIntercepts.cs` (E21's random-effect intercepts), `BassStructurePrior.cs`, `BassTermProposal.cs`, `BassBirthMixture.cs` (E4's birth mixture and history birth), `BassDesign.cs`, `BassTarget.cs`, `BassModel.cs`, `BassState.cs`, `BassSweep.cs`; stage 5: `spline/bass/output/` (`BassDecomposition.cs`, `BassComponents.cs`) and `spline/bass/posterior/` (`BassPrediction.cs`, `BassPredictionInputs.cs`, `BassSurface.cs`, `BassGradient.cs`, `PredictiveMixture.cs`, `BassJointDraws.cs`, `BassBasisPrediction.cs`, `BassBasisDensity.cs`); stage 6: `spline/bass/sensitivity/` (`BassSensitivity.cs`, `BassBasisSensitivity.cs`, `BassBasisEffects.cs`, `SobolDecomposition.cs`, `PolynomialChaosSensitivity.cs`, `EffectFunctions.cs`, `BassMoments.cs`, `PiecewisePolynomial.cs`, `InputMeasures.cs`); stage 9: `spline/bass/presentation/` (`BassSummary.cs`, `BassTraces.cs`, `BassTrainingFit.cs`, `PosteriorSummary.cs`, `SobolSummary.cs`); stage 7: `spline/bass/calibration/` (`BassEmulators.cs`, `CalibrationBlocks.cs`, `CalibrationConfig.cs`, `CalibrationCovariance.cs`, `CalibrationEmulator.cs`, `CalibrationModel.cs`, `CalibrationParameter.cs`, `CalibrationSampler.cs`, `MeasurementModel.cs`, `NestedCalibration.cs`); stage 8: `spline/bass/BassSmc.cs`, `BassSmcRun.cs`, and `calibration/CalibrationBridge.cs`, `CutSmcKernel.cs`, `CutSmcOrdering.cs`, `CutSmc.cs`; N17: `spline/bass/BassMulticanonical.cs`, `BassFlatHistogramRun.cs` |
+| BASS | `spline/bass/Bass.cs` (the fit, resume and the fingerprint), `BassRun.cs`, `BassRunOptions.cs`, `BassFit.cs`, `BassDiagnostics.cs`, `BassPriorSampler.cs`, `BassLadder.cs`, `BassEvidence.cs`, `BassPointwise.cs`, `BassResidualDependence.cs`, `BassConfig.cs`, `BassData.cs`, `BassResolved.cs`, `BassInputTransform.cs`, `BassInputs.cs`, `BassTerm.cs`, `BassBasis.cs`, `DesignKernel.cs`, `DesignKernels.cs`, `BassObservationModel.cs`, `BassNoise.cs` (E1's noise and its blocks; [its page](./VarianceMeanMixtures.md)), `BassRandomIntercepts.cs` (E21's random-effect intercepts), `BassStructurePrior.cs`, `BassTermProposal.cs`, `BassBirthMixture.cs` (E4's birth mixture and history birth), `BassResidualBirth.cs` (E4's residual birth), `BassDesign.cs`, `BassTarget.cs`, `BassModel.cs`, `BassState.cs`, `BassSweep.cs`; stage 5: `spline/bass/output/` (`BassDecomposition.cs`, `BassComponents.cs`) and `spline/bass/posterior/` (`BassPrediction.cs`, `BassPredictionInputs.cs`, `BassSurface.cs`, `BassGradient.cs`, `PredictiveMixture.cs`, `BassJointDraws.cs`, `BassBasisPrediction.cs`, `BassBasisDensity.cs`); stage 6: `spline/bass/sensitivity/` (`BassSensitivity.cs`, `BassBasisSensitivity.cs`, `BassBasisEffects.cs`, `SobolDecomposition.cs`, `PolynomialChaosSensitivity.cs`, `EffectFunctions.cs`, `BassMoments.cs`, `PiecewisePolynomial.cs`, `InputMeasures.cs`); stage 9: `spline/bass/presentation/` (`BassSummary.cs`, `BassTraces.cs`, `BassTrainingFit.cs`, `PosteriorSummary.cs`, `SobolSummary.cs`); stage 7: `spline/bass/calibration/` (`BassEmulators.cs`, `CalibrationBlocks.cs`, `CalibrationConfig.cs`, `CalibrationCovariance.cs`, `CalibrationEmulator.cs`, `CalibrationModel.cs`, `CalibrationParameter.cs`, `CalibrationSampler.cs`, `MeasurementModel.cs`, `NestedCalibration.cs`); stage 8: `spline/bass/BassSmc.cs`, `BassSmcRun.cs`, and `calibration/CalibrationBridge.cs`, `CutSmcKernel.cs`, `CutSmcOrdering.cs`, `CutSmc.cs`; N17: `spline/bass/BassMulticanonical.cs`, `BassFlatHistogramRun.cs` |
 | BASS's shared pieces | `gprior/PriorPencil.cs` (`PriorPencil`, `CollapsedPencilPrior`), `gprior/CollapsedGPrior.cs` (`GPriorWeights`, `FromCentredLeastSquares`, `CentredMarginalAt`, `CentredPencilMarginalAt`, `GPriorMarginal.LogMarginalSlope`, `LogMarginalGiven`, `LogMarginalGivenSlope`, `GPriorConditional.SampleGiven`, `LeaveOutLogDensityGiven`, `CentredRidgeMarginalAt`, `RidgeSpectrum`, `CollapsedRidgePrior`), `gprior/Sigma2Prior.cs`, `gprior/TauPrior.cs`; under `src/maths/`: `distributions/Wallenius.cs`, `distributions/SpecialFunctions.cs` (`Digamma`), `linalg/BorderedCholesky.cs`, `linalg/DenseEigen.cs` (the ridge's spectrum), `linalg/KhatriRao.cs`, `linalg/InnerProduct.cs`, `linalg/WideBandCholesky.cs`, `linalg/PairwiseSum.cs`, `linalg/ThinSvd.cs`, `linalg/DiagonalPlusLowRank.cs`, `samplers/rjmcmc/ReversibleJumpChain.cs`, `samplers/rjmcmc/ParallelTempering.cs` (the per-replica blocks, for S8), `samplers/blocks/BlockScan.cs`, `samplers/blocks/SliceSampler.cs`, `samplers/blocks/ConjugateUpdates.cs`, `samplers/blocks/GigParameters.cs`; for stage 6, `distributions/IIntervalMoments.cs` with `Uniform.cs`, `Mixture.cs`, `Empirical.cs`, `GaussLegendre.cs` and the interval moments of `Normal`, `StudentT` and `Truncated<T>` |
 | BAPS | `spline/baps/DifferencePenalty.cs`, `IBandPenalty.cs`, `PenalizedSpline.cs`, `Baps.cs`, `HierarchicalPSpline.cs`, `TensorProductDesign.cs`, `TensorPenalty.cs`, `PenaltySpectrum.cs`, `ComponentSmoothing.cs`, `SmoothingVariancePriors.cs`, `AnisotropicTensorSpline.cs`; `NelderMead.cs` (the REML optimum's search) |
 | BGP | `bgp/GpKernel.cs`, `GpTransform.cs`, `GpRegression.cs`, `EmpiricalBayesBandwidthPrior.cs`, `BgpSampler.cs` |

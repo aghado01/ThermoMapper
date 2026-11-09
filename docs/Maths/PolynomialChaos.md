@@ -22,6 +22,7 @@ KHAOS (Rumsey, Francom et al., *Bayesian Adaptive Polynomial Chaos Expansions*, 
 | The engine's reach | The ladder, SMC, the flat histogram, the pointwise and candidate densities and GBASS's noise laws, unchanged; gated on Legendre terms | 5 |
 | Random-effect intercepts (E21) | `BassRandomIntercept`, `RandomInterceptBlock`: a capability of the core, gated on a hinge fit and a Legendre fit ([BayesianRegression](./BayesianRegression.md#bass-random-effect-intercepts-e21)) | 3 |
 | The history birth (E4) | `BirthMixture`, `HistoryBirth`, `BassBirthMixture`: an engine kernel, gated on hinge and Legendre fits and measured on Ishigami under both priors ([BayesianRegression](./BayesianRegression.md#bass-the-birth-mixture-and-the-history-birth-e4)) | the proposal-kernels brief's 1 |
+| The residual birth (E4) | `ResidualBirth`, `BassResidualBirth`: an engine kernel, gated on hinge and Legendre fits; on Ishigami under the raw ridge about 2× ESS per second and a 12× shorter climb from empty, and with the 1.25 cap SMC's trap reached in every replicate ([BayesianRegression](./BayesianRegression.md#bass-the-residual-birth-e4)) | the proposal-kernels brief's 2 |
 
 ## The basis (E19)
 

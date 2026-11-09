@@ -11,6 +11,15 @@ Splits in the module's language (symbols, identifiers, terms), logged as session
 
 ## Entries
 
+### r(S), the residual birth's residual, beside the design's r; Δℓ beside ℓ₁; ω_R beside ω (2026-11-09)
+
+- **Kind:** one name for several concepts.
+- **Readings:**
+  - r(S), the residual birth's least-squares residual of the raw response on [1, B_S] (`BassResidualBirth.Residual`; `docs/Maths/BayesianRegression.md`, "BASS: the residual birth (E4)"), beside r, the design's residual ỹ − Z_cβ̂ on the working response (`BassDesign.Residual`; the port-fitting brief's shared state). They agree for an unweighted, unwhitened fit under OLS, not in general.
+  - Δℓ(f), a candidate column's profile-likelihood gain −(n/2)·ln(1 − ΔQ/‖r‖²), beside ℓ₁, the collapsed log likelihood at b = 1 (the flat histogram's and SMC's sections).
+  - ω_R, the residual birth's share, beside ω_H (the 2026-11-08 entry) and the local steps' ω.
+- **Found:** 2026-11-09, the proposal-kernels brief's slice 2.
+
 ### E34's K, F, R, S_Y and ν beside the module's; Dawid's δ and Huang and Wand's ν in the sources (2026-11-09)
 
 - **Kind:** one name for several concepts.

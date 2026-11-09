@@ -26,13 +26,14 @@ namespace Maths.Regression.Spline.Bass;
 /// An exact fit's residual is rounding: at or below 10⁻²⁴ of the response's own spread it weighs every candidate alike. Categorical and
 /// functional factors are the base birth's to propose. A scalar response only: a direct functional response's or several outputs'
 /// residual is a matrix, refused (<see cref="Refusal"/>).
-/// <para>Its caches are pure, so they change no draw: the residual by structure and each parent's ln W_p by structure, parent and b,
-/// with the last full table for draws, per instance; the raw columns per model, shared. A probability then needs one variable's pass.
+/// <para>Its caches are pure, so they change no draw: the residual by structure, each parent's ln W_p by structure, parent and b, and
+/// each ln q_R(t | S) by S, t and b, with the last full table for draws, per instance; the raw columns per model, shared. A
+/// probability first met needs one variable's pass per parent.
 /// One instance serves one chain or particle, not several at once.</para>
 /// </summary>
 internal sealed class BassResidualBirth
 {
-    private const int ResidualCacheLimit = 8, TotalCacheLimit = 4096, ColumnCacheLimit = 4096;
+    private const int ResidualCacheLimit = 32, TotalCacheLimit = 4096, ProbabilityCacheLimit = 4096, ColumnCacheLimit = 4096;
 
     // The model's tables, built once and shared by every chain and particle of it.
     private static readonly ConditionalWeakTable<BassModel, Tables> Built = [];
@@ -49,6 +50,7 @@ internal sealed class BassResidualBirth
     private readonly int _slots;
     private readonly Dictionary<StructureKey, double[]> _residuals = [];
     private readonly Dictionary<(StructureKey, BassTerm?, double), double> _totals = [];   // ln W_p by structure, parent and b
+    private readonly Dictionary<(StructureKey, BassTerm, double), double> _probabilities = [];   // ln q_R(t | S) by S, t and b
     private readonly ConcurrentDictionary<BassTerm, double[]> _columns;                     // the model's, shared
     private (StructureKey Key, BassTerm? Parent, double B, double[] LogWeights)? _last;     // the last full table, for draws
     private double[] _scratch = [];
@@ -548,10 +550,19 @@ internal sealed class BassResidualBirth
     {
         ArgumentNullException.ThrowIfNull(term);
         ArgumentNullException.ThrowIfNull(at);
+        var key = new StructureKey(at.Terms);
+        if (_probabilities.TryGetValue((key, term, at.InverseTemperature), out double known)) return known;
+        double value = Compute(term, at, key);
+        if (_probabilities.Count >= ProbabilityCacheLimit) _probabilities.Clear();
+        _probabilities[(key, term, at.InverseTemperature)] = value;
+        return value;
+    }
+
+    private double Compute(BassTerm term, BassBirthContext at, StructureKey key)
+    {
         List<BassTerm?> parents = Parents(at.Terms);
         if (parents.Count == 0) return double.NegativeInfinity;
         var held = new HashSet<BassTerm>(at.Terms);
-        var key = new StructureKey(at.Terms);
         double logP = -Math.Log(parents.Count);
         double top = double.NegativeInfinity;
         Span<double> parts = stackalloc double[Math.Max(1, MainOrder(term))];

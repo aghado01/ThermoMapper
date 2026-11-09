@@ -1,6 +1,6 @@
 # Proposal kernels: E4's history-based and residual-informed births
 
-Date: 2026-11-08. Status: slice 1, the history birth, landed (`b1df14e`) at the user's word, opt-in, and its measurement makes no default candidate; waiting for the coordinating session's verification, then slice 2, the residual birth.
+Date: 2026-11-08. Status: slice 2, the residual birth, landed (`599115d`, `ff2ec0d`) at the user's word; its measurements send the pair of SMC's 1.25 cap and the residual birth to the user as the trap's remedy, and report it a candidate for KHAOS under the raw ridge; waiting for the coordinating session's verification. Slice 1 landed (`b1df14e`), opt-in.
 
 ## Why
 
@@ -186,6 +186,85 @@ Under "Reports" below, newest first, per slice:
 - what was left unbuilt, and why.
 
 ## Reports
+
+### Slice 2: the residual birth (chip, 2026-11-09)
+
+At the user's word ("Start slice 2"), on the plan as written, the E34 chip told before each shared file was touched.
+
+**Landed** on `main`, nothing pushed:
+- `599115d`: F-X4's birth context and the moves' inverse temperature.
+  - `BassBirthContext` holds the structure a birth starts from and b.
+  - The context overloads of `DrawBirth`, `LogBirthRatio` and `LogDeathRatio` default to the counts-only members, so the hinge and Legendre kernels are unchanged.
+  - `BassStructureMoves.InverseTemperature` is set by a ladder for each rung every scan, and by SMC for each stage.
+  - Draws unchanged: the Commit scope, 1,796 of 1,796.
+- `ff2ec0d`: the residual birth and its gates.
+  - `ResidualBirth` on `BirthMixture`, validated with the history birth's share, and left out of the serialized form when null.
+  - `BassResidualBirth`; `BassBirthMixture` with both components (a history-only mixture draws as slice 1's did).
+  - `KernelOf`, and the refusals at `BassModel.Create`.
+  - `ResidualBirthTests`; the measurement harness's arms, the climb from empty and the cost row; the trap harness's `residual` part.
+- This commit:
+  - the residual birth's pure probability cache and its wider residual cache (draws identical, below);
+  - `BayesianRegression.md`'s section, its API, config and source-map rows, and `PolynomialChaos.md`'s row;
+  - the notation ledger's entry;
+  - the tables `proposal-kernels-residual.csv` and `proposal-kernels-trap.csv`;
+  - the status line and this report. The slow tier was not rewritten from this profile; the next slice's end can rewrite it.
+
+**What is built** ([the section](../../../docs/Maths/BayesianRegression.md#bass-the-residual-birth-e4)), for hinge and Legendre terms alike.
+- *The residual:* r(S), the raw response's least-squares residual on [1, B_S] in a canonical order, a function of the terms alone.
+- *The draw:* a parent uniformly over P(S), the intercept and the terms that can take one more continuous factor. Then the new factor ∝ exp(½·b·Δℓ), Δℓ = −(n/2)·ln(1 − ΔQ/‖r‖²).
+  - Hinge knots are scored at once by cumulative sums along each variable's sort order, at any degree.
+  - Legendre degrees within d_max − d_p.
+- *The forward probability:* exact, summed over t's sub-terms in P(S).
+- *A death's reverse:* the reduced structure's residual, through the context.
+
+**The gates.**
+
+| Gate | Reading |
+| --- | --- |
+| Scores and the residual | Every candidate's score against its dense column: worst 1.9·10⁻¹¹ relative over twelve structures of each of seven fixtures (ties at knots, hinge degrees 1–3, inputs shifted by 10⁶, vanishing columns, Legendre, categorical), at b 1 and 0.3. The residual against modified Gram–Schmidt to 2.6·10⁻¹² of ‖r‖, and the same bit for bit in any term order. P(S) is the statement's. An exact fit weighs every candidate alike |
+| The kernel's own law | Σ_t q_R = 1, and the mixture's Σ_t q with its empty draw = 1, to 10⁻¹⁴, at b 1 and 0.4, on structures of F of four fixtures. ln q_R against the statement written out (dense residual, dense columns, its parents) to 1.1·10⁻¹¹. 100,000 draws by χ²: z −1.83, −0.65, −0.59 and 0.93 |
+| Detailed balance, exactly | Worst gap 1.3·10⁻¹¹ in logs over eight cases: hinge at b 1 and 0.4 and with the history birth, categorical, three inputs, quadratic hinges, Legendre with and without the history birth. A death reading the full structure's residual fails it |
+| The chain's law | 300,000 sweeps against the enumeration: worst \|z\| 1.80 (hinge, 2,263 structures) and 1.30 (Legendre, 466) |
+| Geweke | ω_R = ½, the redrawn response moving the residual every step: worst \|z\| 0.56 (hinge) and 2.05 (Legendre) |
+| The ladder | Each rung's count law and E[ln τ] against the enumeration's tempered law, each rung at its own b, hinge and Legendre (reference rung included) |
+| SMC | ln p(y) −72.2983 ± 0.0126 against −72.2910 (raw ridge) and −69.5983 ± 0.0143 against −69.5869 (modified g-prior), each stage at its b, flags clear |
+| The flat histogram | Against the enumeration (learned ln w within 0.016 of SAMC's limit) |
+| Resume | Bit for bit for a chain, a ladder, both components together, and SMC across stages |
+| Refusals | A direct functional response and data without a continuous predictor, at `BassModel.Create`; a component with no share left; the mixture's probability without its context |
+| Hinge BASS untouched | The Commit scope with the pinned tier at each code commit: 1,796 of 1,796 (`599115d`) and 1,832 of 1,832 (`ff2ec0d`). The whole regression assembly once at the slice's end, on `ff2ec0d` with the cache fix: 2,735 of 2,735, the eight pinned hashes and the SMC baseline among them |
+
+**The measurements,** pre-registered (ω_R = ¼, the exponent ½), tiered compilation off. The page's section holds the tables.
+- *Mixing per second* ([`proposal-kernels-residual.csv`](proposal-kernels-residual.csv)).
+  - *Ishigami, the raw ridge:* ESS per CPU second 1.86–2.36× on M, σ² and the three fitted values (z 2.0–2.5), and the log posterior 1.24× (z 0.6). The cost is the same: 1.71 against 1.64 CPU s a fit. The residual chains agree (R̂ of M at most 1.015, against up to 1.37).
+  - *Ishigami, the modified g-prior:* 0.63–2.07×, with M lower (z −2.0) and two fitted values higher, within the spread. The cost is +24%.
+  - *Friedman, p 10 and p 50:* per-sweep ESS within the spread (0.47–1.57 and 0.08–2.25). The CPU per fit is 19× and 88×, the scoring's O(n·p) per parent with a logarithm and an exponential per knot.
+- *The cost row,* on the cycle clock. A warm birth's kernel work is 9.3 against 3.6 µs on Ishigami, and 0.97 ms against 0.83 µs at the cost report's hinge base. A warm death's ratio, its probability cached, is 3.1 against 2.1 µs and 5.4 against 0.3 µs.
+- *The SMC trap* ([`proposal-kernels-trap.csv`](proposal-kernels-trap.csv)), N 500 at 5 sweeps, 16 replicates each.
+  - Under the engine's schedule: 0 of 16 reach the posterior, every one jumping over the collapse from b below 0.03, where the residual weights are nearly flat.
+  - With the 1.25 cap: 16 of 16 reach it, against the cap alone's 11 of 16 in slice 5. They end at M 10.09–10.18 and σ² 0.222–0.227, against the long chains' 10.15 and 0.2245, with births accepting 8.4%.
+  - Their ln Ẑ still spreads over 21 nats, −287.0 ± 6.4, against per-replicate errors of 0.4–0.8.
+- *MCMC's climb from empty* on the trap fixture: a median 356 sweeps (139–615) against 4,384 (2,241–7,557), 12× fewer.
+
+**The decisions they change,** each the user's, as the brief pre-registered them.
+- *For KHAOS under the raw ridge,* the residual birth is reported as a candidate for that class: about 2× ESS per second at the same cost, and a 12× shorter climb. No default is proposed from one fixture.
+- *For SMC's trap:* the birth reaches the posterior only with the cap, so **the pair of the 1.25 cap and the residual birth goes to the user** as the trap's remedy beside the flags. The pair settles the posterior's reach, not the evidence: the remedy table's third row, a reference nearer the posterior, is what the evidence would need.
+- *For hinge fits* it stays opt-in. Friedman shows no per-sweep gain, as the local-move mixing brief's reframe expects at a mode, at 19–88× the CPU.
+
+**Found here.**
+- *The residual cache thrashed.* The first measurement ran with a cache of eight residuals, fewer than a state's reductions (M + 1), and recomputed each death's probability. A probability cache and a cache of 32 cut Friedman p 10's fit from 15.2 to 11.9 CPU s. Every draw stayed the same: the two runs' 216 rows agree in every ESS, R̂ and births count. The measurement reported is the second.
+- *The first law test drew structures outside F,* where the statement's Gram–Schmidt divides by a vanishing column. The test now draws from F, as the score test did. Detailed balance, which runs over F, passed throughout.
+
+**Decisions beyond the brief.**
+- *r(S) is the raw response's least-squares residual, not the design's.* The brief named `BassDesign.Residual`. That residual moves with τ, the weights and the whitening, and its value depends on the factor's history. The least-squares residual in a canonical order is a function of the terms alone, so a birth's forward probability and the reverse of the death undoing it read the same number. The price is a fit of O(nM²) per new structure, cached.
+- *F-X4's change is overloads with defaults,* not new signatures, so neither existing kernel changed. The plumbing was committed on its own, `599115d`, to free `BassSweep.cs` for the E34 chip.
+- *Memory under SMC.* Every particle owns its moves, so the caches keep only totals, probabilities and one full table per instance. The raw columns are shared per model.
+- *An exact fit* (‖r‖² at most 10⁻²⁴ of the response's spread) weighs every candidate alike, rather than scoring rounding.
+- *Data without a continuous predictor* are refused beside the functional and several-output responses.
+
+**Left unbuilt, and why.**
+- *A cheaper hinge score:* a knot grid, or a residual updated rather than refitted. It matters only where a hinge problem gains per sweep, which Friedman does not.
+- *Residual-informed knots in the change moves,* a sharpness other than ½, and a functional or several-output residual: none has a consumer waiting on it.
+- *A reference nearer the posterior for SMC,* the remedy table's third row: it is what the trap's evidence needs, and it is larger than this brief.
 
 ### Slice 1: the birth mixture and the history birth (chip, 2026-11-08)
 
