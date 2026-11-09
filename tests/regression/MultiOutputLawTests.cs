@@ -5,6 +5,7 @@ using Maths.Distributions;
 using Maths.Regression.GPrior;
 using Maths.Regression.Spline.Bass;
 using Maths.Rng;
+using Maths.Samplers.Ensemble;
 using Xunit;
 using Xunit.Abstractions;
 
@@ -15,8 +16,9 @@ namespace Maths.Regression.Tests;
 /// <list type="bullet">
 /// <item><b>The law by enumeration:</b> on a small F (M ≤ 2, one-way hinges) at K = 2 and 3, a chain's count law, E[ln τ] and its six
 /// likeliest structures against each structure's posterior with τ integrated by the trapezoid.</item>
+/// <item><b>τ at fixed structures:</b> the conditional on ln τ against dense matrix-t quadrature, including responses with large means.</item>
 /// <item><b>Geweke's joint test</b> (qualification): priors that read no response, the zero centre and a declared IW(ν₀, Ψ₀), τ sampled;
-/// the prior's draws of (structure, τ, Σ, A) and Y against the successive chain of one sweep and one composition per step.</item>
+/// independent prior draws against independently started paths of one sweep and one composition per step.</item>
 /// <item><b>Recovery:</b> a fit of three outputs from surfaces outside the model with a known, correlated Σ.</item>
 /// <item><b>The cost row</b> (qualification, indicative): a sweep at K = 1, 2, 5 and 10 against scalar BASS.</item>
 /// </list>
@@ -130,6 +132,9 @@ public sealed class MultiOutputLawTests(ITestOutputHelper output)
 
     private const int GewekeN = 12;
     private static readonly double[,] GewekePsi = { { 1.2, -0.4 }, { -0.4, 0.8 } };
+    private static double[,] GewekeResponse() => new double[,] {
+        { 0.3, -1.0 }, { 1.1, 0.4 }, { -0.2, 0.9 }, { 0.5, 0.1 }, { 1.4, -0.6 }, { 0.0, 0.2 },
+        { -0.9, 1.3 }, { 0.6, -0.3 }, { 0.2, 0.7 }, { -1.2, 0.0 }, { 0.8, 0.5 }, { -0.4, -0.8 } };
 
     private static BassConfig GewekeConfig => new()
     {
@@ -145,13 +150,92 @@ public sealed class MultiOutputLawTests(ITestOutputHelper output)
         return new BassData([new ContinuousPredictor("x0", x0), new ContinuousPredictor("x1", x1)], new MultiOutputResponse(y, ["a", "b"]));
     }
 
-    private static readonly string[] GewekeNames = ["M", "ln tau", "ln S11", "ln S22", "atanh rho", "atan f0(0)", "atan f1(6)", "x0 in"];
+    [Theory]
+    [InlineData(false, 0)]
+    [InlineData(true, 0)]
+    [InlineData(false, 400)]
+    [InlineData(true, 400)]
+    public void FixedStructure_TauBlockMatchesMatrixTQuadrature(bool withTerms, int offset)
+    {
+        double[,] y = GewekeResponse();
+        for (int i = 0; i < GewekeN; i++) { y[i, 0] += offset; y[i, 1] -= 0.5 * offset; }
+        var model = BassModel.Create(GewekeConfig, GewekeData(y));
+        BassTerm[] terms = withTerms ? [new([new HingeFactor(0, 1, 2)]),
+            new([new HingeFactor(0, 1, 1), new HingeFactor(1, 1, 1)])] : [];
+        var chain = new BassChain(model, terms, -25.0, new Xoshiro256PlusPlus(22), new Xoshiro256PlusPlus(23));
+        var xc = MultiOutputCoreTests.Columns(model, chain.Structure.DesignAt(chain.Current));
+        var iw = new ReferenceSigmaPrior(6, GewekePsi);
+
+        double Reference(double u)
+        {
+            double tau = Math.Exp(u);
+            var collapse = MatrixTReference.Collapse(MultiOutputCase.GForm(y, xc, GPriorCentre.Zero, tau, 1.0));
+            // Gamma(1/2, rate n/2) including the log-coordinate Jacobian, up to a constant.
+            return MatrixTReference.LogMarginal(collapse, iw) + 0.5 * (u - GewekeN * tau);
+        }
+        double Engine(double u)
+        {
+            var e = model.Target.Evaluate(chain.Current.WithLogTau(u));
+            Assert.False(e.OffSupport);
+            return e.LogPrior + e.LogMarginal;
+        }
+        double constant = Engine(0) - Reference(0), worst = 0;
+        for (int j = 0; j <= 100; j++)
+        {
+            double u = -0.25 * j;
+            worst = Math.Max(worst, Math.Abs(Engine(u) - Reference(u) - constant));
+        }
+        output.WriteLine($"M={terms.Length}, offset={offset}, 101 points in [−25, 0]: max log-density error {worst:G3}");
+        Assert.True(worst < 1e-8, $"log-density error {worst:G4}");
+
+        double cut = offset == 0 ? -4.0 : -14.0;
+        (double Mean, double Below) Integrate(double lo, double hi, double width)
+        {
+            // Split at the indicator's discontinuity. The shift only rescales the weights.
+            double shift = Reference(cut), total = 0, first = 0, below = 0;
+            foreach (var (u, w) in BassTargetTests.Nodes(lo, cut, width).Concat(BassTargetTests.Nodes(cut, hi, width)))
+            {
+                double mass = w * Math.Exp(Reference(u) - shift);
+                total += mass;
+                first += u * mass;
+                if (u < cut) below += mass;
+            }
+            return (first / total, below / total);
+        }
+        var exact = Integrate(-50, 6, 0.5);
+        var refined = Integrate(-60, 8, 0.25);
+        Assert.InRange(Math.Abs(exact.Mean - refined.Mean), 0, 1e-9);
+        Assert.InRange(Math.Abs(exact.Below - refined.Below), 0, 1e-9);
+
+        var block = new BassTauBlock();
+        var stream = new Xoshiro256PlusPlus(20261123);
+        for (int i = 0; i < 500; i++) block.Update(chain.Moves, stream);
+        var samples = new double[60_000];
+        for (int i = 0; i < samples.Length; i++)
+        {
+            block.Update(chain.Moves, stream);
+            samples[i] = chain.Current.LogTau;
+        }
+        void Check(string name, double[] series, double expected)
+        {
+            double mean = series.Average(), se = KhaosChainTests.BatchError(series, 50);
+            double z = (mean - expected) / se;
+            output.WriteLine($"{name}: block {mean:G7}, quadrature {expected:G7}, SE {se:G3}, z {z:F2}");
+            Assert.True(Math.Abs(z) < 4.0, $"{name}: z {z:F2}");
+        }
+        Check("E[ln τ]", samples, exact.Mean);
+        Check($"P(ln τ < {cut})", [.. samples.Select(u => u < cut ? 1.0 : 0.0)], exact.Below);
+    }
+
+    // n·τ has the law of Z², Z standard normal. Its lower 1% cut is independent of the gamma sampler.
+    private static readonly double TailCut = 2 * Math.Log(Normal.StandardQuantile(0.505)) - Math.Log(GewekeN);
+    private static readonly string[] GewekeNames = ["M", "ln tau", "ln S11", "ln S22", "atanh rho", "atan f0(0)", "atan f1(6)", "x0 in", "tau < q01"];
 
     private static double[] Functions(BassState state, double[,] sigma, double[,] f)
     {
         double rho = sigma[1, 0] / Math.Sqrt(sigma[0, 0] * sigma[1, 1]);
         return [state.Count, state.LogTau, Math.Log(sigma[0, 0]), Math.Log(sigma[1, 1]), Math.Atanh(rho), Math.Atan(f[0, 0]), Math.Atan(f[GewekeN / 2, 1]),
-                state.Terms.Any(t => t.Continuous.Any(h => h.Variable == 0)) ? 1.0 : 0.0];
+                state.Terms.Any(t => t.Continuous.Any(h => h.Variable == 0)) ? 1.0 : 0.0, state.LogTau < TailCut ? 1.0 : 0.0];
     }
 
     // f = 1αᵀ + X_cβ_c at the design's structure, from the centred coefficients (α first, then the terms in the design's order).
@@ -187,13 +271,14 @@ public sealed class MultiOutputLawTests(ITestOutputHelper output)
     [Theory]
     [InlineData(20261122)]
     [InlineData(20261123)]
+    [InlineData(20261124)]
+    [InlineData(20261125)]
     public void Geweke_TheSweepAndTheDrawLeaveTheJointInvariant(int seed)
     {
         if (!BassQualification.Enabled) return;   // heavy
-        const int draws = 100_000, steps = 150_000, batches = 50;
+        const int draws = 400_000, paths = 12_000, stepsPerPath = 50;
         var rng = new Xoshiro256PlusPlus(seed);
-        BassModel prior = BassModel.Create(GewekeConfig, GewekeData(new double[,] { { 0.3, -1.0 }, { 1.1, 0.4 }, { -0.2, 0.9 }, { 0.5, 0.1 }, { 1.4, -0.6 }, { 0.0, 0.2 },
-                                                                                    { -0.9, 1.3 }, { 0.6, -0.3 }, { 0.2, 0.7 }, { -1.2, 0.0 }, { 0.8, 0.5 }, { -0.4, -0.8 } }));
+        BassModel prior = BassModel.Create(GewekeConfig, GewekeData(GewekeResponse()));
         var sampler = new BassPriorSampler(prior);
         InverseWishart sigmaPrior = prior.Resolved.Outputs!.Prior;
 
@@ -225,36 +310,60 @@ public sealed class MultiOutputLawTests(ITestOutputHelper output)
             centred[0, 1] = s0 * (l21 * u0 + l22 * u1);
             return (state, sigma, Fitted(prior, d, centred));
         }
-        var marginal = new double[draws][];
+        var marginal = new RunningMoments[GewekeNames.Length];
         for (int t = 0; t < draws; t++)
         {
             (BassState s, double[,] sigma, double[,] f) = Draw();
-            marginal[t] = Functions(s, sigma, f);
+            double[] values = Functions(s, sigma, f);
+            for (int g = 0; g < values.Length; g++) marginal[g].Add(values[g]);
         }
+        // Check the independent simulator itself against the analytic scale prior.
+        double exactLogTau = SpecialFunctions.Digamma(0.5) - Math.Log(GewekeN / 2.0);
+        double meanZ = (marginal[1].Mean - exactLogTau) / Math.Sqrt(marginal[1].Variance / draws);
+        double tailZ = (marginal[^1].Mean - 0.01) / Math.Sqrt(0.01 * 0.99 / draws);
+        output.WriteLine($"Independent simulator vs Gamma(½, {GewekeN / 2}): mean ln τ z {meanZ:F2}, lower 1% z {tailZ:F2}");
+        Assert.True(Math.Abs(meanZ) < 4.0 && Math.Abs(tailZ) < 4.0, $"prior reference: z {meanZ:F2}, {tailZ:F2}");
 
-        (BassState S, double[,] Sigma, double[,] F) theta = Draw();
-        var successive = new double[steps][];
-        for (int t = 0; t < steps; t++)
+        // Start each path independently from the joint prior. The unit of replication for the SE
+        // is the entire path: rare large fitted levels can outlast batches of a single realization.
+        var successive = new RunningMoments[GewekeNames.Length];
+        int tailStarts = 0, tailEndsFromTail = 0;
+        for (int path = 0; path < paths; path++)
         {
-            double[,] y = Observe(theta.F, theta.Sigma, rng);
-            BassModel model = BassModel.Create(GewekeConfig, GewekeData(y));
-            var chain = new BassChain(model, theta.S.Terms, theta.S.LogTau, new Xoshiro256PlusPlus(rng.NextInt(int.MaxValue)), new Xoshiro256PlusPlus(rng.NextInt(int.MaxValue)));
-            BassState state = chain.Step();
-            BassDesign d = chain.Structure.DesignAt(state);
-            (double[,] sigma, double[,] centred) = BassOutputDraws.Sample(model.Target, d, state.Fit, Math.Exp(state.LogTau), rng);
-            theta = (state, sigma, Fitted(model, d, centred));
-            successive[t] = Functions(state, sigma, theta.F);
+            var theta = Draw();
+            bool startedInTail = theta.S.LogTau < TailCut;
+            var sums = new double[GewekeNames.Length];
+            for (int t = 0; t < stepsPerPath; t++)
+            {
+                double[,] y = Observe(theta.F, theta.Sigma, rng);
+                BassModel model = BassModel.Create(GewekeConfig, GewekeData(y));
+                var chain = new BassChain(model, theta.S.Terms, theta.S.LogTau, new Xoshiro256PlusPlus(rng.NextInt(int.MaxValue)), new Xoshiro256PlusPlus(rng.NextInt(int.MaxValue)));
+                BassState state = chain.Step();
+                BassDesign d = chain.Structure.DesignAt(state);
+                (double[,] sigma, double[,] centred) = BassOutputDraws.Sample(model.Target, d, state.Fit, Math.Exp(state.LogTau), rng);
+                theta = (state, sigma, Fitted(model, d, centred));
+                double[] values = Functions(state, sigma, theta.F);
+                for (int g = 0; g < values.Length; g++) sums[g] += values[g];
+            }
+            for (int g = 0; g < sums.Length; g++) successive[g].Add(sums[g] / stepsPerPath);
+            if (startedInTail)
+            {
+                tailStarts++;
+                if (theta.S.LogTau < TailCut) tailEndsFromTail++;
+            }
         }
+        output.WriteLine($"{draws} independent draws; {paths} paths × {stepsPerPath} sweeps. " +
+                         $"Of {tailStarts} starts below ln τ={TailCut:F4} (prior 1%), {tailEndsFromTail} ended below it.");
 
         double worst = 0.0;
         for (int g = 0; g < GewekeNames.Length; g++)
         {
-            double[] a = [.. marginal.Select(r => r[g])], b = [.. successive.Select(r => r[g])];
-            double meanA = a.Average(), varA = a.Sum(x => (x - meanA) * (x - meanA)) / (a.Length - 1);
-            double meanB = b.Average(), se = Math.Sqrt(varA / a.Length + Math.Pow(KhaosChainTests.BatchError(b, batches), 2));
-            double z = (meanA - meanB) / se;
+            var a = marginal[g];
+            var b = successive[g];
+            double se = Math.Sqrt(a.Variance / a.Count + b.Variance / b.Count);
+            double z = (a.Mean - b.Mean) / se;
             worst = Math.Max(worst, Math.Abs(z));
-            output.WriteLine($"{GewekeNames[g],-11} marginal-conditional {meanA,10:F5}  successive {meanB,10:F5}  z {z,6:F2}");
+            output.WriteLine($"{GewekeNames[g],-11} marginal-conditional {a.Mean,10:F5}  successive {b.Mean,10:F5}  SE {se:G3}  z {z,6:F2}");
         }
         output.WriteLine($"seed {seed}: worst |z| {worst:F2}");
         Assert.True(worst < 4.0, $"Geweke's worst |z| {worst:F2}");
