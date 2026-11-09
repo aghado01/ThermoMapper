@@ -59,7 +59,9 @@ internal sealed record MatrixTCollapse(double[,] R, double LogDeterminantTerm, d
 /// (K/2)(ln|Λ₀| − ln|P|). The flat intercept centres Y and X, spends one observation and adds −(K/2) ln(nb). Then
 /// Σ | Y ~ IW(ν₀ + ν, Ψ₀ + R), proper where ν₀ + ν &gt; K − 1, and
 /// ln p_b(Y) = −(νK/2) ln π + LogDeterminantTerm + (ν₀/2) ln|Ψ₀| − ln Γ_K(ν₀/2) + ln Γ_K((ν₀ + ν)/2) − ((ν₀ + ν)/2) ln|Ψ₀ + R|.
-/// At K = 1 it is the scalar collapsed g-prior's marginal under IG(ν₀/2, Ψ₀/2).
+/// At K = 1 it is the scalar collapsed g-prior's marginal under IG(ν₀/2, Ψ₀/2). Untempered, it is Brown, Vannucci and Fearn's
+/// (1998) eqs. (19)–(21), whose Σ ∼ IW(δ; Q) is in Dawid's shape, δ = ν₀ − K + 1, and whose vague intercept α ∼ N(α₀, hΣ), h → ∞,
+/// counts n observations as level centring does.
 /// </summary>
 internal static class MatrixTReference
 {
@@ -175,8 +177,9 @@ internal static class MatrixTReference
         => (prior.Nu + collapse.Count, prior.Scale is { } psi ? ReferenceAlgebra.Sum(psi, collapse.R) : (double[,])collapse.R.Clone());
 
     /// <summary>
-    /// The matrix-t density of Y (n × K) that Y | Σ ~ MN(M, V, Σ) and Σ ~ IW(ν₀, Ψ) give, stated in the inverse Wishart's ν₀ (the
-    /// matrix-t of Dickey 1967 and Gupta and Nagar 2000, ch. 4, both cited from memory; derived here by the integral):
+    /// The matrix-t density of Y (n × K) that Y | Σ ~ MN(M, V, Σ) and Σ ~ IW(ν₀, Ψ) give, stated in the inverse Wishart's ν₀: the
+    /// matrix-t as Brown, Vannucci and Fearn (1998, §2) define it, this mixture in Dawid's notation. The density is derived here by
+    /// the integral; its textbook forms, Dickey 1967 and Gupta and Nagar 2000, ch. 4, are cited from memory:
     /// ln Γ_K((ν₀ + n)/2) − ln Γ_K(ν₀/2) − (nK/2) ln π − (K/2) ln|V| + (ν₀/2) ln|Ψ| − ((ν₀ + n)/2) ln|Ψ + (Y − M)ᵀV⁻¹(Y − M)|.
     /// E34's untempered marginal with the intercept inside the prior is the case M = XA₀, V = I + XΛ₀⁻¹Xᵀ, which reads n × n
     /// matrices where the collapse reads p × p and K × K ones.
@@ -322,9 +325,9 @@ internal static class ReferenceInverseWishart
             bartlett[i, i] = Math.Sqrt(2.0 * Gamma.SampleStandard(rng, 0.5 * (nu - i)));
             for (int j = 0; j < i; j++) bartlett[i, j] = Normal.SampleStandard(rng);
         }
-        double[,] la = ReferenceAlgebra.Multiply(root, bartlett);
-        double[,] wishart = ReferenceAlgebra.Multiply(la, ReferenceAlgebra.Transpose(la));
-        double[,] sigma = ReferenceAlgebra.Inverse(wishart);
+        // Σ = W⁻¹ = NᵀN with N = (RA)⁻¹, triangular: a tiny χ² pivot (small ν) leaves W singular in doubles, but not RA.
+        double[,] inverse = ReferenceAlgebra.LowerInverse(ReferenceAlgebra.Multiply(root, bartlett));
+        double[,] sigma = ReferenceAlgebra.Multiply(ReferenceAlgebra.Transpose(inverse), inverse);
         ReferenceAlgebra.Symmetrize(sigma);
         return sigma;
     }
@@ -523,6 +526,24 @@ internal static class ReferenceAlgebra
         double trace = 0.0;
         for (int i = 0; i < x.GetLength(0); i++) trace += x[i, i];
         return trace;
+    }
+
+    /// <summary>L⁻¹ for a lower triangular L with a nonzero diagonal, by forward substitution.</summary>
+    public static double[,] LowerInverse(double[,] l)
+    {
+        int n = l.GetLength(0);
+        var t = new double[n, n];
+        for (int i = 0; i < n; i++)
+        {
+            t[i, i] = 1.0 / l[i, i];
+            for (int j = 0; j < i; j++)
+            {
+                double sum = 0.0;
+                for (int k = j; k < i; k++) sum -= l[i, k] * t[k, j];
+                t[i, j] = sum / l[i, i];
+            }
+        }
+        return t;
     }
 
     public static double[,] Inverse(double[,] a)
