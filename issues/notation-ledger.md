@@ -11,6 +11,15 @@ Splits in the module's language (symbols, identifiers, terms), logged as session
 
 ## Entries
 
+### G for the reconstruction's map and for the output side; k for a fixed and a per-draw rank (2026-11-08)
+
+- **Kind:** one name for several concepts.
+- **Readings:**
+  - G = diag(y_s)K, a basis fit's reconstruction map, in slice 3's text (`docs/Maths/ActiveSubspaces.md`, "Functional outputs and co-active pairs"; `BassActiveSubspaces.ReconstructionMap`, the XML on `OutputMetric` and `BassMoments.GradientCross`).
+  - G = E[J W_x Jᵀ], the output side, in the Grassmann discussion, E8's brief (slice 5) and the page's slice-5 section (`OutputPosterior`); slice 5 writes the map out as diag(y_s)K.
+  - k, the readout's fixed dimension (`ActiveSubspaceSpec.Dimension`), beside k_s, a draw's own rank by a rule, and k*, the rank summary's (`RankPosterior.SummaryRank`); the projection distance's k in the discussion is whichever subspace a draw is compared with.
+- **Found:** 2026-11-08, E8's slice 5.
+
 ### Whitening's map L = Σ^{1/2} beside 2307.11241's Σ^{−1/2} and its L for mixture components; "Whitened" and "Standardized" (2026-11-08)
 
 - **Kind:** one concept under several names, and one name for several concepts.

@@ -1,6 +1,6 @@
 # Active subspaces
 
-> E8 on the BASS core: the matrix C = E_ρ[∇f ∇fᵀ] of a fitted surface under an input law ρ, per posterior draw, and its top eigenvectors, the directions along which the surface changes most on average. This page grows slice by slice with [the build brief](../../issues/regression/bass/active-subspace-brief.md). Slices 1 to 4 have landed: the moment service's derivative moments and C per draw on the exact route; the readout with both routes, the declared metric, the posterior's two summaries and the consistency checks; functional outputs under a declared output metric, and co-active pairs; then dependent inputs, a law given as a joint sample, with whitening by its full covariance.
+> E8 on the BASS core: the matrix C = E_ρ[∇f ∇fᵀ] of a fitted surface under an input law ρ, per posterior draw, and its top eigenvectors, the directions along which the surface changes most on average. This page grows slice by slice with [the build brief](../../issues/regression/bass/active-subspace-brief.md). Slices 1 to 5 have landed: the moment service's derivative moments and C per draw on the exact route; the readout with both routes, the declared metric, the posterior's two summaries and the consistency checks; functional outputs under a declared output metric, and co-active pairs; dependent inputs, a law given as a joint sample, with whitening by its full covariance; then the Grassmann discussion's settled items: per-draw ranks, the output side, the matrix Poincaré check, basis adequacy and stable angles.
 
 ## Overview
 
@@ -22,6 +22,11 @@ C finds linear combinations of the inputs along which f moves, which Sobol indic
 | Dependent inputs: a joint sample as the law, the sampled route at its points | `JointSample`, `ActiveSubspaceSpec.Sample`, `CoActiveSpec.Sample` | 4 |
 | Whitening by a law's full covariance, the symmetric root; standardizing, its diagonal | `InputMetric.Whitened`, `InputMetric.Standardized`, `Maths.Regression.Subspaces.Whitening` | 4 |
 | A basis fit's sampled route, product law or sample | `BassBasisFit.ActiveSubspace`, `CoActiveSubspace` | 4 |
+| Per-draw k by a declared rule, mixed-rank P̄, the rank summary | `RankRule`, `ActiveSubspaceSpec.Rank`, `Maths.Regression.Subspaces.RankPosterior` | 5 |
+| The output side G = E[J W_x Jᵀ] | `ActiveSubspaceSpec.OutputPatterns`, `Maths.Regression.Subspaces.OutputPosterior` | 5 |
+| The matrix Poincaré check | `ActiveSubspaceAnalysis.MatrixPoincare`, `Maths.Regression.Subspaces.MatrixPoincare` | 5 |
+| Basis adequacy beside a direct fit | `BassBasisFit.Adequacy`, `Maths.Regression.Subspaces.BasisAdequacy` | 5 |
+| Principal angles through LinAlg's stable routine | `SubspacePosterior.PrincipalAngles` → `Maths.LinAlg.PrincipalAngles.Between` | 5 |
 
 ## C on the exact route (slice 1)
 
@@ -179,6 +184,60 @@ The fit-agnostic primitive `Whitening` (`Moments`, `SymmetricRoot`) refuses a co
 - *`Measure` and `Poincare` nullable* in the analyses, null under a sample. *Alternative:* NaN-filled checks, which would read as checks that ran.
 - *Unit-scale eigendecompositions in E8's code,* not a change to `DenseEigen`, whose other consumers would move.
 
+## The Grassmann discussion's settled items (slice 5)
+
+The user settled the [Grassmann discussion](../../issues/regression/discussion/grassmann-stiefel-subspaces-brief.md)'s open items on 2026-11-08, and they form this slice.
+
+**Per-draw k, opt-in.** `ActiveSubspaceSpec.Rank` takes a declared `RankRule`, with no default. Without one, the fixed-k readout is what it was, bit for bit, apart from the angles' new routine.
+- *The rules.* A trace share: the smallest k whose leading eigenvalues carry the share of tr C_s. A gap: the k up to k_max with the largest (λ_k − λ_{k+1})/λ₁, with λ_{p+1} = 0 and k = p allowed. A gap against λ_k itself, or on a log scale, would read any trailing zero eigenvalue (an input no term holds) as the largest gap. Against λ₁ it favours the first gap when the spectrum decays geometrically: on two ridges with λ₂ = 0.37λ₁ it reads rank 1, where the trace share at 0.95 reads 2. A draw whose C is zero has k_s = 0.
+- *The posterior over ranks* (`RankPosterior`): each k_s and their weighted distribution; P̄ = Σ w_s P_s over mixed ranks, whose trace is E[k_s] and whose ordered eigenvectors are the flag mean for mixed dimensions (Draper et al. 2014, cited from memory).
+- *The rank summary.* Over projections of every rank, Σ_s w_s‖P − P_s‖²_F = tr P + E[k_s] − 2 tr(P P̄), which for P = UUᵀ is E[k_s] + Σ_i (1 − 2u_iᵀP̄u_i). It is least at P̄'s eigenvectors whose eigenvalue exceeds ½ (Ky Fan); on coordinate subspaces that is the median probability model (Barbieri and Berger 2004, cited from memory). It is reported beside the mean rank, not used as a default k.
+- *Each draw's distance to the summary,* d² = ½‖P_s − P*‖²_F = |k_s − k*|/2 + Σ sin²θ_i over the min(k_s, k*) principal angles (Ye and Lim 2016, cited from memory), with the rank term and the containment defect reported apart.
+
+**The output side.** `ActiveSubspaceSpec.OutputPatterns` (0 by default) reads G = E[J W_x Jᵀ] for a direct or basis fit: the m × m matrix of the output patterns that move with the inputs, which this page's Why names.
+- W_x = LLᵀ is the input metric, and the output metric enters by its symmetric root S, so the patterns stay over the locations: G_W = S·G·S, and tr G_W = tr C under the same metrics.
+- *Exact route:* G = S·H·K·Hᵀ·S with K_ab = Σ_ij (W_x)_ij E[∂ᵢB_a ∂ⱼB_b] (`BassMoments.GradientGram`). *Sampled route:* each point's S·J·L·√w side by side, m × Np. A basis fit's J is diag(y_s)K·J_w.
+- G is never formed. Each draw's spectrum and leading patterns come from its factor's thin SVD, and E[G]'s from the thin SVD of the draws' compressed factors side by side (`OutputPosterior`). A pattern's sign is set so that its largest entry is positive.
+
+**The matrix Poincaré check** (`ActiveSubspaceAnalysis.MatrixPoincare`). Under a product law, Efron–Stein and each input's Poincaré inequality give Cov_ρ(f) ≼ E[J D Jᵀ], with D the inputs' constants, (b − a)²/π² for a uniform input.
+- Per draw it reads the largest generalized eigenvalue of the covariance against the bound, both under the output metric's root, from the moment route: Cov = H·Σ_B·Hᵀ with Σ_B the terms' covariances (`CovarianceGram`), and the bound H·K_D·Hᵀ.
+- At most 1 holds; above 1 + 10⁻⁹ is a violation. It is read when every input is continuous with a uniform law. It is null under a categorical input, a law that is not uniform, or a joint sample, which has no such bound. It is decision 6's check in matrix form, and it makes "low gradient energy, low variance" exact per draw.
+
+**Basis adequacy** (`BassBasisFit.Adequacy`). Beside a direct-mode fit of the same cases, it reads the share of the direct fit's G outside the basis's span, tr((I − P)G)/tr G with the span diag(y_s)K under S, and the containment defect of G's leading patterns in that span, per draw and for E[G]. A basis fit's own G lies in its span by construction, so the direct fit answers D07's question: did the truncation drop structure that moves with the inputs? E37 asks it from the truncation residuals instead.
+
+**The angles.** `SubspacePosterior.PrincipalAngles` delegates to LinAlg's `PrincipalAngles.Between`, which pairs the cosines of aᵀb with the sines of the residual through atan2. Small angles keep their accuracy, about √(p·k)·ε, where slice 2's arccos resolved about 1.5·10⁻⁸. It reads bases of different ranks, as the mixed-rank distances need. Regression keeps no copy of it.
+
+### What was checked (slice 5)
+
+| Gate | Result |
+|---|---|
+| Without a rule: the fixed-k readout with and without ranks and output patterns asked, both routes | bit for bit, every draw's C, eigenvalues, basis and angles, E[C], P̄ and their eigensystems |
+| The rules on chosen spectra, trailing zeros and k = p included; refusals | as stated |
+| Sums of r ridges recover r: BASS fits of one ridge on [0, 1]³ and two on [0, 1]⁴ (an inert input), N = 900, the trace share at 0.95 | summary rank 1 and 2, every draw at r; at 0.99 one more (each fit puts a few percent of its gradient energy off the span); the gap rule reads the two ridges as 1 |
+| tr P̄ against E[k_s]; the rank summary's loss against Σ w‖P* − P_s‖² computed directly; rank term plus containment against ½‖P_s − P*‖²; the summary against random projections of every rank and P̄'s leading k, a seeded sweep of 150 posteriors | 1.8·10⁻¹⁵; 1.2·10⁻¹⁴; 7.6·10⁻¹⁵; never beaten |
+| tr G = tr C under the same metrics: direct and basis fits, box, raw and whitened, W_y = I and full, both routes, 96 draws | 5.5·10⁻¹⁴ |
+| G against quadrature of the Jacobian: a basis fit's reconstructed J by each component's gradient readout, a direct fit's by its own; E[G]'s spectrum | 7.0·10⁻¹⁵ |
+| The matrix check on (cos πx₁, cos πx₂), the extremal case; D halved; a mixed field; covariance outside the bound's range | 1 to 10⁻¹⁵; 2; 0.94; ∞ |
+| The matrix check on fitted draws: a scalar fit, a direct functional fit under a full W_y, a basis fit, 280 draws | no violation, worst 0.867; null under a categorical input, a normal law and a sample |
+| Adequacy on chosen factors: inside the span; F = [2e₁, 0.7e₄] against span(e₁, e₂); a non-orthonormal basis of the span | 0; b²/(a² + b²) to 10⁻¹⁵, the leading pattern contained, the second's defect 1; the same |
+| Adequacy on fits: curves a(x)φ₁ + b(x)φ₂ + noise, a direct fit beside PCA bases of rank 1 and 2, against the truth's share for each fitted basis's own span | 0.2251 against 0.2251 (span(φ₁) itself: 0.2296); 0.0011 against 0.0001 |
+| The angles against slice 2's arccos on 300 random pairs of mixed ranks, above 10⁻⁶ rad; rotations by 10⁻¹² to 10⁻⁶ rad | within 0.11 of arccos's own error; 2·10⁻¹⁶ relative, where arccos returns 0 below 10⁻⁸ |
+
+**Cost** (`ActiveSubspaceCostTests.SettledItemsCostRow`, thread cycles, indicative), per draw at 3,000 draws:
+- a scalar fit's exact readout with the matrix check, 8.8 µs; per-draw ranks add 0.3 µs;
+- a functional fit's exact readout, 25 µs, and 43 µs with two output patterns;
+- the sampled output side's own cost, 2.9 ms at 4,096 points, the thin SVD of the m × Np stacked Jacobians;
+- basis adequacy, 0.16 ms per direct draw at 12 locations.
+
+The matrix check runs by default where it applies, so the default functional and basis readouts cost about twice slice 4's.
+
+**Slice 5's choices,** beyond the brief:
+- *The gap rule against λ₁.* *Alternatives:* against λ_k, or on a log scale, which read a trailing zero eigenvalue as the largest gap.
+- *G's output metric by its symmetric root,* so patterns stay over the locations. *Alternative:* slice 3's eigen-root, whose rows are W_y's eigenvectors.
+- *Output patterns opt-in,* the count given. *Alternative:* always computed, which costs every functional readout a thin SVD per draw.
+- *The matrix check computed whenever it applies,* as slice 2's checks are. *Alternative:* opt-in.
+- *The checks read from the moment route even on the sampled route,* as slice 2's do, so they carry no Monte Carlo error.
+
 ## The decisions (the brief's, taken in commissioning)
 
 1. **Two routes, one readout, chosen per query.** The exact route serves a product law over separable terms (built in slice 1). The sampled route averages the gradient readout over the law's points otherwise: dependent inputs, non-separable kernels, or a check. The readout says which route ran (built in slice 2); a joint sample takes the sampled route (built in slice 4). *Alternatives:* sampled always, which is simple but never exact; exact only, which excludes dependent inputs and non-separable kernels.
@@ -190,4 +249,4 @@ The fit-agnostic primitive `Whitening` (`Moments`, `SymmetricRoot`) refuses a co
 
 ## Notation
 
-This page takes the module's symbols: B a term, κ its scale, φ a factor and φ′ its derivative, b a draw's coefficients, q a hinge's degree; from slice 3, H a draw's coefficients at the output locations, W_y the output metric, a_f and a_g output functionals; from slice 4, Σ_ρ the law's covariance in box units and L = Σ_ρ^{1/2} whitening's map, x = μ + Lu. The paper writes h_{im} for a factor, γ_m for a coefficient and I₁, I₂, I₃ for the factor integrals. The code calls the factor integrals of derivatives "slope" moments (`SlopeMean`, `SlopePair`) beside the pointwise `Derivative`. C is E[∇f∇fᵀ] throughout, which the code names `GradientOuterProduct`, and `BassGradient` is the pointwise readout. These crossings are in [the notation ledger](../../issues/notation-ledger.md).
+This page takes the module's symbols: B a term, κ its scale, φ a factor and φ′ its derivative, b a draw's coefficients, q a hinge's degree; from slice 3, H a draw's coefficients at the output locations, W_y the output metric, a_f and a_g output functionals; from slice 4, Σ_ρ the law's covariance in box units and L = Σ_ρ^{1/2} whitening's map, x = μ + Lu; from slice 5, k_s a draw's own rank, k* the rank summary's, G = E[J W_x Jᵀ] the output side and S the output metric's symmetric root. Slice 3 wrote G for the reconstruction's map, which slice 5 writes out as diag(y_s)K. The paper writes h_{im} for a factor, γ_m for a coefficient and I₁, I₂, I₃ for the factor integrals. The code calls the factor integrals of derivatives "slope" moments (`SlopeMean`, `SlopePair`) beside the pointwise `Derivative`. C is E[∇f∇fᵀ] throughout, which the code names `GradientOuterProduct`, and `BassGradient` is the pointwise readout. These crossings are in [the notation ledger](../../issues/notation-ledger.md).

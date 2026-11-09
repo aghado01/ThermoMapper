@@ -1,6 +1,6 @@
 # Active subspaces on the BASS core: E8's build (chip brief)
 
-Date: 2026-11-08. Status: slices 0–4 complete; slice 5, the Grassmann discussion's items the user settled, commissioned 2026-11-08 ("ill take as recommended"). Commissioned by the user on 2026-11-08 ("kick off e8"), after KHAOS's last slice; slices 0–4 landed and were verified by the coordinating session on 2026-11-08: slice 0 (`15fb495`, `9e3028d`, `aa62879`), slice 1 (`95294f8`, `9dfcc6d`, `1385b86`), slice 2 (`8c7db77`, `3cdc2e8`), slice 3 (`84fe230`, `1049055`) and slice 4 (`20aeb06`, `bc72014`). Rotate-and-refit, E36 (BPPR) and the reports' open follow-ups wait for the user. Written by the main session from [E8's entry](extensions-brief.md#active-subspace-analysis), [gap G3](lineage-gaps-register.md#g3-sobol-indices-and-active-subspaces-have-different-standing), [the lineage review's separability question](lineage-review.md#separability-is-what-the-closed-forms-rest-on), the [Astra notes](../discussion/astra-grassman-stiefel-pca-extensions.md), and the [Grassmann discussion](../discussion/grassmann-stiefel-subspaces-brief.md)'s report so far. Reports go under "Reports" below, newest first.
+Date: 2026-11-08. Status: slices 0–4 complete; slice 5, the Grassmann discussion's items the user settled, commissioned 2026-11-08 ("ill take as recommended"), landed (`def59f3`) and waits for its verification. Commissioned by the user on 2026-11-08 ("kick off e8"), after KHAOS's last slice; slices 0–4 landed and were verified by the coordinating session on 2026-11-08: slice 0 (`15fb495`, `9e3028d`, `aa62879`), slice 1 (`95294f8`, `9dfcc6d`, `1385b86`), slice 2 (`8c7db77`, `3cdc2e8`), slice 3 (`84fe230`, `1049055`) and slice 4 (`20aeb06`, `bc72014`). Rotate-and-refit, E36 (BPPR) and the reports' open follow-ups wait for the user. Written by the main session from [E8's entry](extensions-brief.md#active-subspace-analysis), [gap G3](lineage-gaps-register.md#g3-sobol-indices-and-active-subspaces-have-different-standing), [the lineage review's separability question](lineage-review.md#separability-is-what-the-closed-forms-rest-on), the [Astra notes](../discussion/astra-grassman-stiefel-pca-extensions.md), and the [Grassmann discussion](../discussion/grassmann-stiefel-subspaces-brief.md)'s report so far. Reports go under "Reports" below, newest first.
 
 ## Why
 
@@ -118,6 +118,67 @@ The user settled the [discussion](../discussion/grassmann-stiefel-subspaces-brie
 Under "Reports" below, newest first, per slice: what landed by commit; the gates' numbers; decisions taken beyond this brief; what was left unbuilt and why; follow-ups with the decision each would change.
 
 ## Reports
+
+### Slice 5: the Grassmann discussion's settled items (2026-11-08)
+
+**Landed** on `main`, nothing pushed:
+- `def59f3`, per-draw ranks, the output side, the matrix Poincaré check, basis adequacy, the angles through LinAlg, the gates and the cost row.
+- The docs commit carrying this report: the active-subspace page's slice-5 section and the notation ledger's entry.
+
+The slice was commissioned by the Grassmann discussion's session (`c5859ad`), from the user's settlement of 2026-11-08 ("ill take as recommended … ill go with per-draw k per your recommendation"). The derivations are that brief's synthesis and its "settled by the user" entry (`07c60ec`). LinAlg's `PrincipalAngles` landed in `0b4ed4e` before the slice reached the delegation step, so nothing waited.
+
+**What was built:**
+- **Per-draw k:** `ActiveSubspaceSpec.Rank` takes a `RankRule` (trace share, or the gap against λ₁ up to k_max), with no default. It reads `ActiveSubspaceAnalysis.Ranks`, a `RankPosterior` with:
+  - each k_s and their distribution;
+  - P̄ over mixed ranks, with tr P̄ = E[k_s];
+  - the rank summary (P̄'s eigenvalues above ½) and its loss, with `Loss` for any basis;
+  - each draw's rank term and containment defect.
+  `DrawSubspace` now keeps all its eigenvectors (`Vectors`) for the ranks to read.
+- **The output side:** `ActiveSubspaceSpec.OutputPatterns` reads G = E[J W_x Jᵀ] for direct and basis fits under the output metric's symmetric root, on both routes, as an `OutputPosterior`. The exact route reads it through `BassMoments.GradientGram`; the sampled route through stacked Jacobians. Neither forms G.
+- **The matrix Poincaré check:** `ActiveSubspaceAnalysis.MatrixPoincare`, from the moment route (`BassMoments.CovarianceGram`, `GradientGram` under D), whenever every input is continuous and uniform. The fit-agnostic primitive is `MatrixPoincare.Ratio`.
+- **Basis adequacy:** `BassBasisFit.Adequacy(direct, data, spec)`, which needs the same predictors and locations. The fit-agnostic primitive is `BasisAdequacy.Of`.
+- **The angles:** `SubspacePosterior.PrincipalAngles` delegates to `Maths.LinAlg.PrincipalAngles.Between` and accepts bases of different ranks; an empty basis gives no angles.
+
+**Gates:**
+
+| Gate | Result |
+| --- | --- |
+| The brief's: without a rule, the fixed-k readout bit for bit as before, apart from the angles. With and without ranks and patterns asked, both routes | every draw's C, eigenvalues, basis and angles, E[C], P̄ and their eigensystems identical |
+| The rules on chosen spectra (trailing zeros, k = p, negative rounding); refusals | as stated |
+| The brief's: sums of r ridges recover r. BASS fits of a ridge on [0, 1]³ and two on [0, 1]⁴, N = 900, trace share 0.95 | summary rank 1 and 2, every draw at r; at 0.99, one more; the gap rule, 1 for both |
+| The brief's: tr P̄ against the weighted mean of k_s; the rank summary unbeaten by random projections of every rank. A seeded sweep of 150 posteriors, with the summary's loss and each draw's distance against direct Frobenius norms | 1.8·10⁻¹⁵; never beaten (margin ≥ 0); 1.2·10⁻¹⁴ and 7.6·10⁻¹⁵ |
+| The brief's: tr G = tr C under the same metrics at W_y = I. Here every metric, W_y = I and full, both routes, direct and basis fits, 96 draws | 5.5·10⁻¹⁴ |
+| The brief's: a basis fit's G against the direct computation on its reconstructed outputs; a direct fit's against its own readout's; E[G]'s spectrum | 7.0·10⁻¹⁵; a basis fit's G of rank at most K |
+| The brief's: the matrix check with equality on cos(πx), failing a deliberately mis-scaled D | (cos πx₁, cos πx₂): 1 to 10⁻¹⁵; D halved: 2; a mixed field 0.94; mass outside the bound's range: ∞ |
+| The matrix check on 280 fitted draws (scalar, direct under a full W_y, basis); absent where it does not apply | no violation, worst 0.867; null under a categorical input, a normal law, a sample |
+| The brief's: adequacy zero inside the span, the known share outside. Chosen factors | 0; b²/(a² + b²) to 10⁻¹⁵; containment 0 and 1 as constructed |
+| Adequacy on fits: a(x)φ₁ + b(x)φ₂ + noise, a direct fit beside PCA bases of rank 1 and 2, against the truth's share for each basis's own span | 0.2251 against 0.2251 (span(φ₁) itself 0.2296); 0.0011 against 0.0001 |
+| The brief's: slice 2's angles within arccos's error of the new ones above 10⁻⁶ rad. 300 random pairs of mixed ranks; rotations by 10⁻¹² to 10⁻⁶ rad | within 0.11 of arccos's own error bound; the small angles to 2·10⁻¹⁶ relative, where arccos returns 0 below 10⁻⁸ |
+| Slices 0 to 4's E8 classes, rerun | unchanged |
+| Fitting untouched | whole regression assembly 2,565 of 2,565 on `15eb151` plus the slice; the E8 oracle classes 10/10 |
+
+**The cost row** (thread cycles, indicative), per draw at 3,000 draws:
+- a scalar fit's exact readout with the matrix check, 8.8 µs, and per-draw ranks add 0.3 µs;
+- a functional fit's exact readout, 25 µs, and 43 µs with two output patterns;
+- the sampled output side's own cost, 2.9 ms at 4,096 points;
+- basis adequacy, 0.16 ms per direct draw at 12 locations.
+
+The matrix check runs by default where it applies, so the default functional and basis readouts cost about twice slice 4's (basis C 86 µs against 43).
+
+**Decisions beyond the brief,** each with its alternatives:
+1. *The gap rule measures each gap against λ₁, over k from 1 to min(k_max, p), with λ_{p+1} = 0.* The first form tried, (λ_k − λ_{k+1})/λ_k, read a trailing zero eigenvalue (an input no term holds) as a gap of 1. It took rank 3 on two ridges over four inputs, and any ratio or log-scale gap shares that failure. Against λ₁ the rule favours the first gap under a geometrically decaying spectrum: two ridges with λ₂ = 0.37λ₁ read as rank 1. *Alternatives:* a log-ratio gap with a floor, which then needs a floor; only the trace share, which needs a share.
+2. *The ridge gate reads the trace share at 0.95.* At 0.99 each fit's off-span gradient energy (a few percent, as slice 2's recovery found) adds a rank. Both are printed.
+3. *A draw whose C is zero has k_s = 0,* the empty subspace, its distance its rank term.
+4. *G's output metric enters by its symmetric root,* so patterns stay over the locations. *Alternative:* slice 3's eigen-root rows. The trace equals tr C either way.
+5. *Output patterns are opt-in by count; the matrix check runs whenever it applies,* as slice 2's checks do. Both checks read the moment route on either route, so they carry no Monte Carlo error.
+6. *The matrix check applies only when every input is continuous and uniform.* A categorical input's variance has no gradient bound, and a Poincaré constant for other laws is not built. *Alternative:* known constants for log-concave laws (a truncated normal's is at most σ², cited from memory), a follow-up if wanted.
+7. *Adequacy takes its pattern count from `OutputPatterns`,* 1 when 0, and needs the same predictors and the same number of locations.
+
+**Left unbuilt:** Poincaré constants beyond the uniform law; patterns at locations beyond the training ones (slice 3's follow-up, still the user's).
+
+**Follow-ups:**
+- *Poincaré constants for log-concave laws* would extend the matrix check to truncated normals. If wanted, D takes σ² per such input. If not, the check stays with uniform laws.
+- *The default readout's cost* doubled for functional and basis fits with the matrix check. If that matters at scale, an opt-out flag joins the spec; if not, it stays on.
 
 ### Slice 4: dependent inputs (2026-11-08)
 
