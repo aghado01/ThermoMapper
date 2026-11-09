@@ -161,7 +161,7 @@ flowchart TD
 The four distance-valued constants, `Tolerance` τ, `Epsilon` ε, `SubgradientThreshold` θ and `Eta0` η₀, are read in a unit λ:
 
 - **`Spread`** (the default, and the enum's zero value): λ = σ, the weighted lower median of the radii from the current iterate to the data, over the points of positive weight, recomputed each iteration. When half the weight or more sits on the iterate, σ is their weighted mean radius instead; when all of it does, the iterate is returned.
-- **`Data`**: λ = 1, the constants in the data's units. This is the solver as it was before the spread unit, reproduced bit for bit (pinned in `IrlsScaleTests`).
+- **`Data`**: λ = 1, the constants in the data's units. This is the solver as it was before the spread unit, reproduced bit for bit (pinned in `IrlsScaleTests`) except where the median is a data point: the optimality check at the nearest data point applies in both units.
 
 **Why.** With λ = 1, the median of a cluster whose spread is below θ = 1e-4 takes a subgradient step of size up to η₀ = 1 at every iteration, runs to `MaxIterations` and lands about 5% of the spread off, on every manifold ([the Grassmann discussion's probe](../../issues/regression/discussion/grassmann-stiefel-subspaces-brief.md#report)). Under `Spread` every comparison the solver makes is between two quantities in the same unit, so the median and mean of c + s·u are c + s·(the estimate for u) to a relative accuracy that does not depend on s.
 
