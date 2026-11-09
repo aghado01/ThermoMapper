@@ -169,6 +169,40 @@ Under "Reports" below, newest first, per slice: what landed by commit; the gates
 
 Newest first.
 
+### 2026-11-08 — Slice 6c, the alarms (E35's Ville, CUSUM and Shiryaev–Roberts); E35 built
+
+Built after the main session verified 6b. With it E35 is built as planned: the p-values (6a), the bets and capital (6b), and the alarms.
+
+**Landed** on `main`, nothing pushed (the docs, E16's and E35's lines are in the log beside this report):
+- `befb449` the following, with `MartingaleAlarmTests`:
+  - `AlarmProcedure`, `MartingaleAlarm` and `AlarmGuarantee`;
+  - the martingale's alarms, with the procedures fired at each step.
+- The subsection on `ConformalPrediction.md`, with which procedure to read.
+
+**The gates, as enforced.**
+- *The alarms read only the past:* each statistic is a recursion on the capital so far.
+- *Ville's guarantee is stated as proved,* CUSUM's and Shiryaev–Roberts's as posed, in each alarm's `Guarantee`.
+- *Each alarm restarts after it fires,* so its guarantee is per run.
+- *Refused:* a threshold at or below 1, an undefined procedure, and a bet whose log is NaN or +∞.
+
+**Gates** (numbers on the page).
+- *Each statistic against its definition from the path,* within 10⁻⁹, restarts included.
+- *Ville's false alarms at most 1/c* over 10,000 streams, for five bets and two c: 0.021 to 0.077 at c 10, and 0.184 at c 4.
+- *CUSUM and Shiryaev–Roberts* meet their posed bounds in every reading. Shiryaev–Roberts with Simple Jumper sits near its bound: a mean time of 21.7 at c 20.
+- *Delays after a change,* per bet and procedure. Simple Jumper detects a 1-sd shift in the mean, or the sd raised to 1.6, in 98 to 99% of streams under Ville's alarm (median 110 to 119), and CUSUM in 97 to 98% (75 to 81).
+- *A fitted engine's scores:* a BARS fit and a BASS fit, whose noise rose from 0.2 to 0.5. Ville's false alarms are 0.02 and 0.01 at c 20, within 1/20. The change is detected in 98 and 99% of streams, median delay 36 and 38.
+- *Cost:* 46 ns per arrival for the three alarms' recursions. The arrival, rank included, costs 1.5 to 4.3 µs with the load.
+- *Per commit,* the selected classes and the pinned tier: 77 of 77. *At the slice's end,* the whole assembly at befb449: 2,635 of 2,635.
+
+**Defects found:** none. The cost row's first form timed the bare martingale after the alarmed one and read a 1.9 µs difference. A probe with the order swapped put the alarms at 0.12 µs and the rest down to load, so the row now times the alarms' recursions alone.
+
+**Decided in building it.**
+- *Every procedure restarts after an alarm.* That is Vovk's repeated form for CUSUM and Shiryaev–Roberts, and for Ville's a fresh test of the stream since.
+- *A monitor takes several alarms on one capital.*
+- *Shiryaev–Roberts's threshold is documented as a mean run length.* Over 500 arrivals at c 100 it alarms falsely in every stream with Simple Jumper, as its guarantee allows.
+
+**Not built, from E35's plan:** the full form and one monitor per stratum, each with the decision it would change, recorded in the plan.
+
 ### 2026-11-08 — Slice 6b, the bets and the capital (E35's M-2)
 
 Built after the main session verified 6·0 and 6a.

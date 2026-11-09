@@ -725,6 +725,57 @@ Every guarantee on this page rests on exchangeability. A conformal test martinga
   The fixed bets decay under the null before the change, by E[ln f] < 0 per step, and Ville's alarm cannot reach past that loss. CUSUM and Shiryaev–Roberts read past it (slice 6c). The adaptive bets lose little before the change.
 - *Cost per arrival,* with its rank, over 100,000 arrivals, on the cycle clock, indicative and under load: Simple Jumper 1.8 µs, power 2.1 µs, the mixture 2.5 µs, the plug-in 3.3 µs.
 
+### The alarms (slice 6c)
+
+**Three procedures read the capital** (`MartingaleAlarm`, `AlarmProcedure`; Vovk, *Statistical Science* 2021), each with a threshold c > 1. Each statistic reads only the capital so far, is held in logs, and restarts after each alarm, so each alarm tests the stream since the last. Each carries its guarantee in its own terms (`AlarmGuarantee`), stating whether it is proved.
+
+| Procedure | Statistic | Its guarantee under exchangeability |
+|---|---|---|
+| Ville's | Sₙ/S_τ since the last alarm τ | The probability of any false alarm in a run is at most 1/c, over any horizon. Proved (`ville`) |
+| CUSUM | max over τ ≤ i < n of Sₙ/Sᵢ, by Page's recursion γₙ = fₙ·max(γₙ₋₁, 1) | The mean time to a false alarm is at least c, and, repeated, the long-run frequency of false alarms at most 1/c. Posed, not proved |
+| Shiryaev–Roberts | the sum of Sₙ/Sᵢ over the same i, by Rₙ = fₙ·(Rₙ₋₁ + 1) | CUSUM's, posed, not proved. CUSUM alarms no more often |
+
+**Which to read, from the checks below.**
+- *Ville's* bounds the probability of any false alarm, at any horizon. A bet whose capital decays under the null, as the fixed bets' does, cannot recover from that loss, so pair it with an adaptive bet.
+- *CUSUM* reads past a capital lost before a change, so it detects sooner, but its guarantee is about time: the mean time to a false alarm.
+- *Shiryaev–Roberts's c is a mean run length, not a probability.* Over a horizon several times c it alarms falsely almost surely: at c = 100, in every one of 300 streams of 500 exchangeable arrivals with Simple Jumper. Set its c well above the horizon watched.
+- *A capital lost to a zero bet* stays lost for Ville's alarm. CUSUM and Shiryaev–Roberts read past it from the next step.
+
+**Checks** (`MartingaleAlarmTests`; the delays, a fitted engine's scores and the cost with `BASS_QUALIFICATION=1`).
+- *Each statistic is its definition read from the path,* within 10⁻⁹, at c of 10⁶, 3 and 1.2, so with many restarts.
+- *Ville's false alarms* over 10,000 streams of 300 uniform p-values, the share of streams that alarm:
+
+| Bet | c | Share | 1/c |
+|---|---|---|---|
+| Simple Jumper | 10 | 0.069 | 0.1 |
+| Simple Jumper | 4 | 0.184 | 0.25 |
+| Power, ε 0.5 | 10 | 0.050 | 0.1 |
+| The mixture | 10 | 0.021 | 0.1 |
+| The plug-in | 10 | 0.077 | 0.1 |
+
+- *CUSUM and Shiryaev–Roberts, posed and measured,* by the mean time to the first false alarm over 1,000 runs and the alarms per arrival over 200,000:
+  - CUSUM at c 20: 1,667 and 0.00018 with Simple Jumper; 241 and 0.0044 with power 0.5.
+  - Shiryaev–Roberts at c 20: 21.7 and 0.047 with Simple Jumper; 39.3 and 0.025 with power 0.5. With the mixture at c 50: 255 and 0.0042.
+  - Every reading meets its posed bound. Shiryaev–Roberts with Simple Jumper sits close to it, as Rₙ − n being a martingale suggests.
+- *The delay to an alarm after a change,* c = 100, 300 streams, a fixed N(0, 1) density score. There are 500 exchangeable arrivals, then 1,000 with the mean shifted by 1 or the sd raised to 1.6. Each cell reads false alarms before the change / the share detected / the median delay:
+
+| Bet | Change | Ville's | CUSUM | Shiryaev–Roberts |
+|---|---|---|---|---|
+| Simple Jumper | mean | 0.007 / 0.99 / 119 | 0.020 / 0.98 / 81 | 1.00 false |
+| Simple Jumper | noise | 0.017 / 0.98 / 110 | 0.030 / 0.97 / 75 | 1.00 false |
+| Plug-in | mean | 0 / 1.00 / 318 | 0.030 / 0.97 / 174 | 1.00 false |
+| Plug-in | noise | 0.013 / 0.98 / 237 | 0.023 / 0.98 / 139 | 1.00 false |
+| Power, ε 0.5 | mean | 0.013 / 0 / none | 0.35 / 0.65 / 21 | 0.92 false |
+| Power, ε 0.5 | noise | 0.013 / 0 / none | 0.34 / 0.66 / 13 | 0.90 false |
+| The mixture | mean | 0 / 0 / none | 0.19 / 0.80 / 40 | 0.63 false |
+| The mixture | noise | 0 / 0 / none | 0.15 / 0.85 / 16 | 0.63 false |
+
+- *A fitted engine's scores.* A fit on 200 points of sin(2πx) + x/2 with noise 0.2 scored 100 streams of 600 units by its predictive density. The noise rose to 0.5 at unit 300. With Simple Jumper at c 20:
+  - BARS: Ville's alarm falsely in 0.02, detects in 0.98 with median delay 36; CUSUM 0.05, 0.95 and 26.
+  - BASS: Ville's 0.01, 0.99 and 38; CUSUM 0.04, 0.96 and 27.
+  - Shiryaev–Roberts alarms falsely in every stream at that c.
+- *Cost.* An arrival with its rank, Simple Jumper and the three alarms costs 1.8 µs on the cycle clock, between 1.5 and 4.3 µs with the machine's load. The three alarms' recursions alone cost 46 ns.
+
 ## API at a glance
 
 | Area | Types and members |
@@ -737,7 +788,7 @@ Every guarantee on this page rests on exchangeability. A conformal test martinga
 | CB-3's reading | `ConformalSet.Gap`, `SplitHalfMass`, `SplitHalfDisagreements`, `AcceptsPlain(g)`, `AcceptsInflated(g)`; `ConformalSet.Margin` → `ConformalMargin` (`Multiple`, `CandidateErrors`, `UniformErrors`, `CandidateCarriedErrors`, `CarriedUniformErrors`, `UnitCarriedErrors`, `Fragile`, `InflatedRanks`, `ParetoK`, `ParetoKThreshold`, `Bounds`, `Inflation`, `Computed`, `Count`, `Untrusted(k)`); `ConformalSet.Inflated`, `ErrorLevel`, `CoverageUnderError`, `FallBack`; `MarginBounds` (`Uniform`, `Carried`); `InflationBounds` (`PerPosition`, the default, `Uniform`); `ConformalScores.Errors`, `CandidateError` |
 | The split form | `SplitConformal.Density(calibration, candidates, alpha)` → `ConformalPrediction(Sets, Alpha, Form)`; `SplitConformal.Quantiles(QuantileReadings(Lower, Upper, StratumOf), response, test, alpha)` and `SplitConformal.Residuals(ResidualReadings(Center, Scale, StratumOf), response, test, alpha)` → `ConformalIntervals(Intervals, Alpha, Calibration)`; `ConformalInterval`: `Units`, `Level`, `Threshold`, `Lower`, `Upper`, `WholeSpace`, `Coverage`, `Empty`, `Width`, `Contains(y)`; `SplitConformal.Calibrate(scores, stratumOf, alpha)` → `SplitCalibration`: `Units(h)`, `Level(h)`, `Threshold(h)`, `Rank(h, s)`, `PValue(h, s)`, `Accepts(h, s)`; `ConformalForm` (`Full`, `Split`) |
 | The predictive distribution | `SplitConformal.Distribution(calibration, candidates)` (the default) and `ConformalBayes.Distribution(training, candidates)` (the opt-in) → `ConformalDistributions(Distributions, Form)` with `Flagged`; `ConformalDistribution`: `Units`, `Grid`, `Below`, `Tied`, `Form`, `Fall`, `ScoreFall`, `Monotone`, `Lower(g)`, `Upper(g)`, `At(g, τ)`, `Mid(g)`, `Level(α)`, `Coverage(α)`, `WholeSpace(α)`, `Accepts(g, α)`, `Intervals(α)`, `Width(α)`, `OpenBelow(α)`, `OpenAbove(α)`, `Quantile(p)`, `Crps(y)` |
-| Conformal test martingales (E35) | `ConformalTestMartingale(bet, seed)`: `Add(score)` → `MartingaleStep(PValue, LogBet, LogCapital)`, `LogCapital`, `EValue`, `LogPath`, `Count`; `IBettingFunction` (`LogBet(p)`, `Observe(p)`, `IntegratesToOne`): `PowerBet(ε)`, `PowerMixtureBet`, `SimpleJumperBet(jump)`, `PlugInBet(warmUp, bins, floor)` with `Bandwidth`; `BettingCapital(bet)`: `Add(p)` → `CapitalStep(Count, P, LogBet, LogCapital)`; `SmoothedPValues(seed)`: `Add(score)` → `SmoothedPValue(Count, Score, Below, Tied, Theta, P)`, `AddRange`, `Count`; `StreamScores.Density(units)`, `Residuals(readings, response)`, `Centrality(units)`; `OrderStatisticTree<T>` (internal): `Add(key)` → (Below, Tied) before it, `Rank(key)`, `Count`, `Distinct`, `Height` |
+| Conformal test martingales (E35) | `ConformalTestMartingale(bet, seed, alarms)`: `Add(score)` → `MartingaleStep(PValue, LogBet, LogCapital, Fired)`, `LogCapital`, `EValue`, `LogPath`, `Alarms`, `Count`; `MartingaleAlarm(procedure, threshold)`: `Step(logBet)`, `LogStatistic`, `AlarmTimes`, `Guarantee` → `AlarmGuarantee(Statement, Proved)`; `AlarmProcedure` (`Ville`, `Cusum`, `ShiryaevRoberts`); `IBettingFunction` (`LogBet(p)`, `Observe(p)`, `IntegratesToOne`): `PowerBet(ε)`, `PowerMixtureBet`, `SimpleJumperBet(jump)`, `PlugInBet(warmUp, bins, floor)` with `Bandwidth`; `BettingCapital(bet)`: `Add(p)` → `CapitalStep(Count, P, LogBet, LogCapital)`; `SmoothedPValues(seed)`: `Add(score)` → `SmoothedPValue(Count, Score, Below, Tied, Theta, P)`, `AddRange`, `Count`; `StreamScores.Density(units)`, `Residuals(readings, response)`, `Centrality(units)`; `OrderStatisticTree<T>` (internal): `Add(key)` → (Below, Tied) before it, `Rank(key)`, `Count`, `Distinct`, `Height` |
 | The product | `DenseProduct.Multiply`, `Pack`, `FusedDot`; `PackedColumns` |
 
 ## Not built yet
@@ -748,7 +799,7 @@ Every guarantee on this page rests on exchangeability. A conformal test martinga
 - BASS's candidate seam for a direct functional fit's curves, and a whole new curve for the hierarchical P-spline (E17).
 - A BGP content with f drawn at the training and candidate inputs per retained state, which the full step would take (slice 5's follow-up).
 - The changepoint posterior's seam, which no candidate exchangeable with its units admits (slice 5).
-- The conformal test martingale's alarms and their readouts (E35, slice 6c).
+- The conformal test martingale's full form, every score recomputed at every arrival, and one monitor per stratum (E35, recorded in the brief's slice 6 plan).
 - CB-4's latent-posterior reading, and Hoff's leave-one-out score.
 - Refining a set's boundaries between grid values.
 
