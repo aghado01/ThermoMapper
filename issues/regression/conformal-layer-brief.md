@@ -1,6 +1,6 @@
 # The conformal layer: E16's build (chip brief)
 
-Date: 2026-11-06. Status: slices 0, 1 and 2 built 2026-11-06, the fallback signal read from the inflated set on 2026-11-07 at the user's call, with a split-half comparator measured beside it; on 2026-11-07 both became diagnostics on every set, with no trigger, at the user's decision; slice 3, the split form, built 2026-11-07 at the user's go-ahead (reports below); slice 4 read on 2026-11-07 (the in-sample predictive CDF is not monotone in y where the draws' predictives separate) and built on 2026-11-08 at the user's decision: the split form's predictive distribution by default, the full step's as an opt-in with its flag; CB-3's per-unit bounds built on 2026-11-08 at the user's order, a slice between 4 and 5, and the margin made opt-in the same day at the user's decision; the next wave approved by the user on 2026-11-08 ("Yes, start it", relayed by the main session): slice 5, the other engines' candidate seams, built the same day (report below) and verified by the main session; E35 as slice 6, its plan below, built the same day (6·0 to 6c). On 2026-11-08 the user asked for E16 to be completed after E35 (relayed by the main session): its plan, slices 7 onward, is below. E35 was verified by the main session on 2026-11-09. Slice 7 holds for the user's three calls the plan names, relayed through the main session. Written at the user's request from [E16](bass/extensions-brief.md#conformal-bayes-the-consumer) and the [conformal Lean contract](../../lean/Protolemmata/Conformal/conformal-lemmas.md).
+Date: 2026-11-06. Status: slices 0, 1 and 2 built 2026-11-06, the fallback signal read from the inflated set on 2026-11-07 at the user's call, with a split-half comparator measured beside it; on 2026-11-07 both became diagnostics on every set, with no trigger, at the user's decision; slice 3, the split form, built 2026-11-07 at the user's go-ahead (reports below); slice 4 read on 2026-11-07 (the in-sample predictive CDF is not monotone in y where the draws' predictives separate) and built on 2026-11-08 at the user's decision: the split form's predictive distribution by default, the full step's as an opt-in with its flag; CB-3's per-unit bounds built on 2026-11-08 at the user's order, a slice between 4 and 5, and the margin made opt-in the same day at the user's decision; the next wave approved by the user on 2026-11-08 ("Yes, start it", relayed by the main session): slice 5, the other engines' candidate seams, built the same day (report below) and verified by the main session; E35 as slice 6, its plan below, built the same day (6·0 to 6c). On 2026-11-08 the user asked for E16 to be completed after E35 (relayed by the main session): its plan, slices 7 onward, is below. E35 was verified by the main session on 2026-11-09. Slice 7 landed in e3071cf after those three calls. Slice 8 landed in 331f9e7 and awaits coordinating review. Written at the user's request from [E16](bass/extensions-brief.md#conformal-bayes-the-consumer) and the [conformal Lean contract](../../lean/Protolemmata/Conformal/conformal-lemmas.md).
 
 ## Why
 
@@ -211,6 +211,65 @@ Under "Reports" below, newest first, per slice: what landed by commit; the gates
 ## Reports
 
 Newest first.
+
+### Slice 8 — Grid-free split quantiles and refined set boundaries
+
+Built on `main` on 2026-11-09 in `331f9e7`. `SplitConformal.CalibrateDistribution` sorts each stratum's calibration PITs once. The grid API and the new grid-free API use the same weighted two-tail scores. At a fixed test input the layer accepts the fit's inverse CDF or brackets a root through its candidate seam. Every probe checks the split form, the draw metadata, latent treatment, stratum and requested response. The statistical choices and API are on [the conformal page](../../docs/Maths/ConformalPrediction.md).
+
+For m units including the candidate, the equi-tailed set inverts the k-th and (m − k)-th PITs, with k = ⌊αm/2⌋. It covers the whole line at k = 0. Quantiles invert the mean-over-τ rank used by the grid. When the test CDF is flat at a calibration PIT, the tied rank decides which end of the plateau to return. Numerical set ends round outward by at most the requested absolute tolerance. `ConformalSet.RefineBoundaries` returns an accepted and a rejected witness in each grid cell whose endpoint decisions differ.
+
+**Numerical and statistical gates**
+
+- On a weighted mixture with a zero-weight draw and three strata, the largest difference across the closed quantiles and set ends was 0.00190685 against a public grid of step 0.002. The BASS predictive inverse agreed with the root of its fitted mixture CDF to 10⁻⁸. BAPS, Gaussian BARS, the hierarchical P-spline and both BGP scale models put the median crossing between the public grid ranks on either side. The split-only restrictions are exercised alongside those reads.
+- On a disconnected density set, each of the split plain, full plain and full inflated rules bracketed all four analytic crossings. The widest bracket was 7.451 × 10⁻⁹ at a requested 10⁻⁸. Each accepted witness exceeded the level and each rejected witness was at or below it under a fresh singleton evaluation of the applicable rule.
+- On 500 independent training and calibration samples from skewed, heteroscedastic truth, 3,602 of 4,000 held-out responses fell inside the nominal 90% interval (90.05%, mean width 5.9698). The randomized PIT had KS distance 0.0159. The ten bins induced by the closed deciles held 9.20% to 11.00% each, with a per-bin SE of 0.55 percentage points accounting for shared calibration. The ungated controls also cover duplicate PITs, upper-tail ranks beyond ordinary CDF precision, unseen strata, a saturated PIT, plateaus and a tolerance below floating-point spacing.
+
+**Cost on the commit.** Indicative calibrated thread-cycle times in Release, best of five. The median and two 90% ends share one calibration of n = 1,000. The test input has a standard Gaussian predictive with a known native inverse. Both paths include candidate-seam construction. Calibration time is listed separately.
+
+| Draws | Calibrate PITs | Grid, G = 200 | Fitted inverse, 7 probes | CDF roots, 89 probes |
+|---:|---:|---:|---:|---:|
+| 1,000 | 18.46 ms | 53.40 ms | 1.14 ms | 21.72 ms |
+| 4,000 | 73.06 ms | 233.43 ms | 5.74 ms | 91.66 ms |
+
+For the split density rule at n = 39, S = 40 and tolerance 0.001, a 17-point grid plus 18 singleton probes cost 1.16 ms. An 8,001-point grid at spacing 0.001 cost 95.14 ms. The qualification receipt also includes the full step's cost breakdown at both draw budgets for independent draws and two chains, the split density cost rows and both distribution cost rows.
+
+**Limits of the readings.** Refinement locates a crossing in each observed transition cell. Equal endpoint decisions can conceal further components, and an accepted grid edge gives no bound outside the grid. The cost of a root includes all calls to the supplying engine. BGP can refit away from its retained test inputs, and a split density callback using the public grid method rereads calibration on each probe.
+
+**Verification on `331f9e7`.** All runs used Release. The code commit includes E34's committed `ac9726b` in its ancestry. The TRX counters for each run show zero failures and zero skipped.
+
+| Check | Passed | Qualification | Receipt |
+|---|---:|---|---|
+| Edit selection, 44 classes selected | 754/754 | Off | [Edit TRX](../../artifacts/chip-e16-s8/results/edit-331f9e7.trx) |
+| Commit selection with the pinned tier | 764/764 | Off | [Commit TRX](../../artifacts/chip-e16-s8/results/commit-331f9e7.trx) |
+| Slice qualification filter | 34/34 | On, cycle clock | [Qualification TRX](../../artifacts/chip-e16-s8/results/qualification-331f9e7.trx) |
+| Whole regression assembly | 2,755/2,755 | Off | [Slice TRX](../../artifacts/chip-e16-s8/results/slice-331f9e7.trx) |
+
+Twelve gated cases executed their measurement bodies in the qualification run and printed readings in the TRX. They were `HeldOutPitAndClosedDeciles_AreUniformOnSkewedTruth` (1), `ExactEndsCostRow` (2), `RefinedBoundariesCostRow` (1), `CostRow` (4), `SplitCostRow` (2) and `DistributionCostRow` (2). The off runs count successful early returns for those gates. The whole-assembly TRX also records exact agreement with all 1,968 public split grid ranks and 3,122 full grid ranks in the existing seeded reference sweeps.
+
+**Commands for the committed snapshot.** These use the repository's PowerShell selector. The source came from `git archive 331f9e7`, extracted with `--exclude=r`. All seven changed source and test blobs matched the commit. The run used below-normal priority and `MSBUILDDISABLENODEREUSE=1`. On the initial development snapshot, a build with multiple MSBuild workers exited before tests started. Building explicitly with one worker and testing that DLL supplied the recorded runs.
+
+```powershell
+$root = Join-Path (Get-Location) 'artifacts/chip-e16-s8'
+$src = Join-Path $root 'snap-331f9e7'
+$build = Join-Path $root 'head-build'
+$results = Join-Path $root 'results'
+$project = Join-Path $src 'tests/Maths.Regression.Tests/Maths.Regression.Tests.csproj'
+(Get-Process -Id $PID).PriorityClass = 'BelowNormal'
+$env:MSBUILDDISABLENODEREUSE = '1'
+$env:DOTNET_PROCESSOR_COUNT = '2'
+$env:BASS_QUALIFICATION = '0'
+$env:BASS_COST_CLOCK = 'cycles'
+dotnet build $project -c Release "-p:ArtifactsRoot=$build/" --disable-build-servers -m:1
+$selection = @{ SourceRoot = $src; Commit = '331f9e7'; ArtifactsRoot = $build; NoBuild = $true }
+./scripts/test-select.ps1 @selection -Scope Edit -Threads 2
+./scripts/test-select.ps1 @selection -Scope Commit -Threads 2
+$env:BASS_QUALIFICATION = '1'
+$filter = 'FullyQualifiedName~ConformalExactEndsTests|FullyQualifiedName~ConformalCostTests|FullyQualifiedName~EngineCandidateTests.Baps_AtTrainingCases|FullyQualifiedName~EngineCandidateTests.Bars_AtTrainingCases|FullyQualifiedName~EngineCandidateTests.Hierarchical_AtTrainingCases|FullyQualifiedName~EngineCandidateTests.Bgp_TheSplitForm'
+dotnet test $project -c Release "-p:ArtifactsRoot=$build/" --no-build --disable-build-servers -m:1 --settings "$results/qualification.runsettings" --filter $filter --logger 'trx;LogFileName=qualification-331f9e7.trx' --results-directory $results
+$env:BASS_QUALIFICATION = '0'
+$env:DOTNET_PROCESSOR_COUNT = '3'
+./scripts/test-select.ps1 @selection -Scope Slice -Threads 3
+```
 
 ### 2026-11-09 — Slice 7, the seams completed: each names the forms it serves
 

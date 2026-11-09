@@ -69,7 +69,7 @@ Each choice below is decided; its alternatives and what they would change are re
 **Sets on a grid in y.** The layer evaluates π at the stated grid and reports the accepted values.
 - *A union of intervals.* π need not be monotone in y, so a set can split, as a bimodal predictive's does. `Intervals` gives the maximal runs of accepted grid values.
 - *Its resolution.* Each boundary is known to within the grid's largest gap (`Resolution`). `OpenBelow` and `OpenAbove` flag a set that reaches the grid's end and may continue past it. `Width` reads each accepted value as its cell, within one gap per boundary.
-- *Not the default:* refining the boundaries between grid values. It is an option for later, at the cost of more candidates where the set changes.
+- *Optional refinement.* `RefineBoundaries` bisects each pair of adjacent grid values with opposite decisions. The caller evaluates the same case, fit and options at each new response. Each result gives an accepted and a rejected response within the requested absolute tolerance, in grid order. This works for disconnected sets and for the full step's inflated rule. An accepted grid edge remains open. A component wholly inside a cell with equal endpoint decisions can escape detection.
 
 **A candidate outside every draw's support** scores −∞: its add-one-in posterior does not exist. It takes π = 1/m, the limit of a vanishing density, and ESS 0. It is refused whenever k ≥ 1.
 
@@ -251,8 +251,14 @@ The chains are AR(1) about the exact posterior, two chains of 500, so they mix m
 **Choices,** with what each changes:
 - *Both tails held* (the seams' log CDF): a probability would round F to 1 in the upper tail and make units tie with the candidate there.
 - *The equi-tailed set* is the distribution's own. The highest-density set stays slice 3's density score.
-- *Quantiles and set ends to the grid's step.* The split form's ends have a closed form, F̂⁻¹(· | x) at the calibration PITs' k-th and (n + 1 − k)-th order statistics. It would need the engine's quantile function, so it is not built: it would remove the step's error at two quantile solves per stratum and level.
+- *Quantiles and set ends.* Grid quantiles and intervals use the grid's step. Slice 8 also inverts the ordered PITs directly at a fixed test input.
 - *The tails cut at the grid's ends* for the CRPS. Q itself never reaches 0 or 1 (Q⁺ ≥ 1/m, Q⁻ ≤ n/m), so its CRPS over the whole line diverges, and a grid that holds the mass gives the integral that matters.
+
+**Grid-free split quantiles and equi-tailed ends (slice 8).** `SplitConformal.CalibrateDistribution(calibration)` sorts the held-out PITs once per stratum. Its `OnGrid(candidates)` supplies the grid readouts above. Its `AtCase(candidateAt, testCase, predictiveQuantile, tolerance)` takes a function that returns the engine's candidate seam at a requested response. The selected case has a singleton grid. Each evaluation must serve the split form and match the calibration's draws, chains, weights and latent treatment.
+
+- Write u₍ⱼ₎ for the j-th calibration PIT in a stratum, with m including the test case. For k = ⌊αm/2⌋ > 0 the set contains exactly the responses with u₍ₖ₎ ≤ F̂(y | x) ≤ u₍ₘ₋ₖ₎. For an increasing continuous predictive the ends are the two fitted quantiles at those PITs. `Interval(α)` encloses both crossings to absolute response tolerance. At k = 0 it gives the whole line.
+- `Quantile(p)` inverts the same mean-over-τ convention as the grid. Take the least j for which (j + ½)/m ≥ p. Interior ranks invert u₍ⱼ₎. The outer ranks give −∞ at p ≤ ½/m and +∞ at p > (m − ½)/m. On a plateau of the fitted CDF, the mean rank at equality determines which end of that plateau the quantile takes. `At(y, τ)` gives the randomized PIT directly.
+- Supply the fitted predictive's inverse when available, for example `p => prediction.Quantile(p)[t, 0]` on a scalar BASS prediction. The seam checks its crossing by both tails. With no inverse, or when the PIT rounds to an endpoint on the ordinary probability scale, the layer brackets the crossing using the seam's CDF alone. The default absolute response tolerance is 10⁻⁸. A requested precision below the local spacing of doubles can leave no representable bracket of that width and raises an error.
 
 **Checks** (`ConformalPredictiveDistributionTests`; `BassConformalDistributionTests`, the measured default and the cost row with `BASS_QUALIFICATION=1`).
 - *The counts against references* in seeded sweeps, with weighted draws, zero weights, chains, strata with no calibration unit, both tails far out and copied columns. The split form's counts equal the reference at all 1,968 grid values. The full step's equal it at all 3,122, and a quarter of its columns are copied from a unit and tie with it exactly.
@@ -794,19 +800,20 @@ Every guarantee on this page rests on exchangeability. A conformal test martinga
 | The split form | `SplitConformal.Density(calibration, candidates, alpha)` → `ConformalPrediction(Sets, Alpha, Form)`; `SplitConformal.Quantiles(QuantileReadings(Lower, Upper, StratumOf), response, test, alpha)` and `SplitConformal.Residuals(ResidualReadings(Center, Scale, StratumOf), response, test, alpha)` → `ConformalIntervals(Intervals, Alpha, Calibration)`; `ConformalInterval`: `Units`, `Level`, `Threshold`, `Lower`, `Upper`, `WholeSpace`, `Coverage`, `Empty`, `Width`, `Contains(y)`; `SplitConformal.Calibrate(scores, stratumOf, alpha)` → `SplitCalibration`: `Units(h)`, `Level(h)`, `Threshold(h)`, `Rank(h, s)`, `PValue(h, s)`, `Accepts(h, s)`; `ConformalForm` (`Full`, `Split`) |
 | The predictive distribution | `SplitConformal.Distribution(calibration, candidates)` (the default) and `ConformalBayes.Distribution(training, candidates)` (the opt-in) → `ConformalDistributions(Distributions, Form)` with `Flagged`; `ConformalDistribution`: `Units`, `Grid`, `Below`, `Tied`, `Form`, `Fall`, `ScoreFall`, `Monotone`, `Lower(g)`, `Upper(g)`, `At(g, τ)`, `Mid(g)`, `Level(α)`, `Coverage(α)`, `WholeSpace(α)`, `Accepts(g, α)`, `Intervals(α)`, `Width(α)`, `OpenBelow(α)`, `OpenAbove(α)`, `Quantile(p)`, `Crps(y)` |
 | Conformal test martingales (E35) | `ConformalTestMartingale(bet, seed, alarms)`: `Add(score)` → `MartingaleStep(PValue, LogBet, LogCapital, Fired)`, `LogCapital`, `EValue`, `LogPath`, `Alarms`, `Count`; `MartingaleAlarm(procedure, threshold)`: `Step(logBet)`, `LogStatistic`, `AlarmTimes`, `Guarantee` → `AlarmGuarantee(Statement, Proved)`; `AlarmProcedure` (`Ville`, `Cusum`, `ShiryaevRoberts`); `IBettingFunction` (`LogBet(p)`, `Observe(p)`, `IntegratesToOne`): `PowerBet(ε)`, `PowerMixtureBet`, `SimpleJumperBet(jump)`, `PlugInBet(warmUp, bins, floor)` with `Bandwidth`; `BettingCapital(bet)`: `Add(p)` → `CapitalStep(Count, P, LogBet, LogCapital)`; `SmoothedPValues(seed)`: `Add(score)` → `SmoothedPValue(Count, Score, Below, Tied, Theta, P)`, `AddRange`, `Count`; `StreamScores.Density(units)`, `Residuals(readings, response)`, `Centrality(units)`; `OrderStatisticTree<T>` (internal): `Add(key)` → (Below, Tied) before it, `Rank(key)`, `Count`, `Distinct`, `Height` |
+| Grid-free split readouts | `SplitConformal.CalibrateDistribution(calibration)` → `SplitPitCalibration`; `AtCase(candidateAt, testCase, predictiveQuantile, tolerance)` → `SplitPredictiveDistribution` with `Stratum`, `Units`, `At(y, τ)`, `Quantile(p)`, `Interval(α)` |
+| Grid boundary refinement | `ConformalSet.RefineBoundaries(at, tolerance)` → ordered `ConformalBoundary(Accepted, Rejected)` witnesses |
 | The product | `DenseProduct.Multiply`, `Pack`, `FusedDot`; `PackedColumns` |
 
 ## Not built yet
 
 - A margin whose bounds read each ordering's own posterior, rather than the held draws reweighted, which needs a run per ordering.
 - CQR's asymmetric form, cross-conformal and the jackknife+ (above).
-- The split form's set ends and quantiles in closed form, F̂⁻¹(· | x) at the calibration PITs' order statistics, which needs each engine's quantile function; and cross-conformal predictive distributions (slice 4's alternatives).
+- Cross-conformal predictive distributions (slice 4's alternatives).
 - BASS's candidate seam for a direct functional fit's curves, and a whole new curve for the hierarchical P-spline (E17).
 - Candidates for a weighted BASS fit, which wait for such a fit to be reachable (slice 7's finding). `Bass.Fit` takes no observation model, and its models are the unweighted Gaussian and the noise laws, which read their own densities.
 - A BGP content with f drawn at the training and candidate inputs per retained state, which the full step would take (slice 5's follow-up).
 - The changepoint posterior's seam, which no candidate exchangeable with its units admits (slice 5).
 - The conformal test martingale's full form, every score recomputed at every arrival, and one monitor per stratum (E35, recorded in the brief's slice 6 plan).
 - CB-4's latent-posterior reading, and Hoff's leave-one-out score.
-- Refining a set's boundaries between grid values.
 
 **See also:** [BayesianRegression](./BayesianRegression.md) (the pointwise seam) · [VarianceMeanMixtures](./VarianceMeanMixtures.md) (the noise laws whose latents are integrated) · [LinearAlgebra](./LinearAlgebra.md) (the product)
