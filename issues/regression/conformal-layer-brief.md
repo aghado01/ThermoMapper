@@ -82,6 +82,11 @@ It does not reach a curve's or a parameter's own intervals: those stay with E15'
 4. **CB-3's ε from the add-one-in estimate's Monte Carlo error,** through `PredictiveChecks`' influence machinery, reported as indicative: it is not a sure bound, and the Lean chip leaves ε's probabilistic form open. The margin |M| is always reported (opt-in since 2026-11-08), inflation by 2ε is an option, and a wide margin is the signal to use the split form. ε's form is the decision the Lean follow-up would change.
 5. **Weighted draws work as they are.** An SMC population's or the flat histogram's draw weights multiply the add-one-in weights.
 
+**Decided by the user on 2026-11-09, for E16's completion plan (slices 7 to 18), relayed by the main session:**
+6. **Slice 7's flag: the full step refuses the hierarchical P-spline's seam** ("ok"). This removes an input the full step accepted, and the removal is approved. That path never gave valid coverage, because a design shared by every replicate breaks the full step's exchangeability. The split form keeps taking the seam.
+7. **Lean first** for the slices that bring new guarantees (9, 10, 12 to 16, 18). Each guarantee is stated, checked numerically and proved in `ConformalValidity.lean`, by the conformal-Lean chip, before its C#, as CB-1 to CB-4 and E35's M-1 and M-2 were.
+8. **The order** ("ok"): slices 7 to 12 now, in order. Slices 13 to 18 are held as a queue that the user orders by need.
+
 ## The slices
 
 One commit per concern; tests with the code they test; each slice ends with its gates and a fresh-eyes review before the next starts.
