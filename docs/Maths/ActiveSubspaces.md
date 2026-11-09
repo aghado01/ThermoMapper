@@ -1,6 +1,6 @@
 # Active subspaces
 
-> E8 on the BASS core: the matrix C = E_ρ[∇f ∇fᵀ] of a fitted surface under an input law ρ, per posterior draw, and its top eigenvectors, the directions along which the surface changes most on average. This page grows slice by slice with [the build brief](../../issues/regression/bass/active-subspace-brief.md). Slices 1 to 3 have landed: the moment service's derivative moments and C per draw on the exact route; the readout with both routes, the declared metric, the posterior's two summaries and the consistency checks; then functional outputs under a declared output metric, and co-active pairs.
+> E8 on the BASS core: the matrix C = E_ρ[∇f ∇fᵀ] of a fitted surface under an input law ρ, per posterior draw, and its top eigenvectors, the directions along which the surface changes most on average. This page grows slice by slice with [the build brief](../../issues/regression/bass/active-subspace-brief.md). Slices 1 to 4 have landed: the moment service's derivative moments and C per draw on the exact route; the readout with both routes, the declared metric, the posterior's two summaries and the consistency checks; functional outputs under a declared output metric, and co-active pairs; then dependent inputs, a law given as a joint sample, with whitening by its full covariance.
 
 ## Overview
 
@@ -19,6 +19,9 @@ C finds linear combinations of the inputs along which f moves, which Sobol indic
 | Functional outputs: C = E[JᵀW_yJ] under a declared W_y, for direct and basis fits | `OutputMetric`, `ActiveSubspaceSpec.OutputMetric`, `BassBasisFit.ActiveSubspace` | 3 |
 | Co-active pairs C_fg = E[∇f∇gᵀ] and their posterior | `BassFit.CoActiveSubspace`, `BassBasisFit.CoActiveSubspace`, `CoActiveSpec`, `Maths.Regression.Subspaces.CoActivePosterior` | 3 |
 | A pair of term lists' cross moments, Σ w_mn E[∇B_m∇B_nᵀ] | `BassMoments.GradientCross` | 3 |
+| Dependent inputs: a joint sample as the law, the sampled route at its points | `JointSample`, `ActiveSubspaceSpec.Sample`, `CoActiveSpec.Sample` | 4 |
+| Whitening by a law's full covariance, the symmetric root; standardizing, its diagonal | `InputMetric.Whitened`, `InputMetric.Standardized`, `Maths.Regression.Subspaces.Whitening` | 4 |
+| A basis fit's sampled route, product law or sample | `BassBasisFit.ActiveSubspace`, `CoActiveSubspace` | 4 |
 
 ## C on the exact route (slice 1)
 
@@ -126,10 +129,60 @@ The recovery gate's first rank-two case, a polynomial of two linear forms, had a
 - *The co-active posterior is E[C_f], E[C_g], E[C_fg] and V's eigensystem,* with each pair's concordance. *Not built:* a projection mean of the pairs' co-active subspaces, decision 4's second summary; V's eigenvalues are signed, so its top-q would need the magnitude order to be stable across pairs.
 - *Not built:* a basis fit paired with another fit, and output locations beyond the training ones for a direct fit. Both fit the terms-and-H form, so each is a new H.
 
+## Dependent inputs (slice 4)
+
+**A joint sample is the law.** `ActiveSubspaceSpec.Sample` (and `CoActiveSpec.Sample`) takes a `JointSample`: points in the inputs' own units, one column per predictor, categorical ones included, with optional weights, normalized. The law is the sample's own, as a calibration's posterior draws or an SMC run's weighted particles give it. The readout runs the sampled route at those points, every draw sharing them. Under a sample:
+- the exact route, which needs a product law, is refused; so are `Measures` beside it; `Points` and `Seed` are not read;
+- the points must lie in the boxes (the declared domains, or the training ranges), which is where a product law's readout integrates too; beyond them the fit extrapolates;
+- the analysis has no product measure and no consistency check (`Measure` and `Poincare` are null): Poincaré's bound is a marginal's.
+
+C is Σ_r w_r J_rᵀW_yJ_r over the points, and each entry's standard error comes from Σw²(v − m)²/(1 − Σw²), which with equal weights is the sample variance over N, slices 2 and 3's formula.
+
+**Whitening.** `InputMetric.Whitened` is L = Σ_ρ^{1/2}, the symmetric root of the law's covariance in box units, so C_u = LᵀCL is the generalized problem C v = λ Σ_ρ⁻¹ v (decision 2).
+- Under a product law Σ_ρ is diagonal and L = diag(σ): slice 2's readout, unchanged.
+- Under a joint sample Σ_ρ is the sample's weighted covariance, the sample read as its own law (no N − 1), and L mixes the inputs.
+- `InputMetric.Standardized` names the diagonal form, L = diag(σ) under either law. It keeps the input axes and is not affine-equivariant under a sample.
+
+The fit-agnostic primitive `Whitening` (`Moments`, `SymmetricRoot`) refuses a covariance whose smallest eigenvalue is below 10⁻¹² of its largest: a degenerate law has no whitened coordinates.
+
+**Equivariance.** Under any invertible affine map z = Ax + c of the inputs and their law, the whitened eigenvalues are invariant, and the whitened frames differ by the orthogonal Q = L_x⁻¹A⁻¹L_z. A whitened direction v is the input functional L⁻ᵀv, and those map to the same functions. The box and raw metrics' spectra move.
+
+**Where the metric matters.** An exactly rank-k C's top-k subspace is the same set of input functionals in every invertible metric: LᵀCL has range LᵀG for G the span of the gradients, and L⁻ᵀ maps it back to G. A metric decides only among the directions a C of rank above k leaves.
+- 2307.11241's triangle law (§4.1.1) has C near rank one, λ₁ carrying 99.96% of tr C. Its box and whitened leading functionals agree to 2·10⁻⁴ rad.
+- On a band law with correlation 0.91, f = 16(x₁ − x₂)² + (x₁ + x₂)² changes fastest across the band, so the box metric leads with x₁ − x₂. The law barely moves that way, so whitening, which weighs each direction by how far the law moves along it, leads with x₁ + x₂. The two are perpendicular, and the readout reports both.
+
+**A basis fit's sampled route,** product law or sample: per joint draw, each component's gradient readout at the shared points. With J = G·J_w, JᵀW_yJ = J_wᵀ(GᵀW_yG)J_w, so the output metric's root is taken in component space, at most K rows. Two outputs read a_fᵀJ = (Gᵀa_f)ᵀJ_w.
+
+**Eigendecompositions at unit scale.** `DenseEigen`'s Jacobi sweeps stop rotating once every off-diagonal is below an absolute 10⁻¹², so for a matrix of small entries they leave off-diagonals as large as its smallest eigenvalues. E8 now decomposes every symmetric matrix divided by its largest entry, with a 10⁻¹⁴ threshold (`ScaledEigen`): each draw's C, P̄, V, W_y's root and whitening's root. The equivariance sweep found it, with QᵀQ − I at 3.8·10⁻³ at small scales, and the root primitive, with R² against Σ at 1.1·10⁻⁶. After the change they read 1.8·10⁻¹¹ and 6.8·10⁻¹⁵. LinAlg itself is unchanged; its other consumers are a follow-up.
+
+### What was checked (slice 4)
+
+| Gate | Result |
+|---|---|
+| Against a product law the exact route already gives: a joint sample drawn from it (a truncated normal, a uniform, uniform levels), on a scalar fit with a categorical input, 16,384 points | every entry of 12 draws' C within 2.45 standard errors |
+| The same for a direct functional fit under a full W_y; a basis fit on its new sampled route, by the law's points and by a sample; two scalar fits' pairs; a basis fit's two outputs by the law's points and by a sample | within 1.73; 0.30 and 1.14; 1.81; 1.86 and 1.54 standard errors; no violation on the basis fit's checks |
+| Whitening under a weighted triangle-law sample: the map against the covariance's root by Denman–Beavers iteration; each draw's C against L̂ᵀC_boxL̂, and standardizing against diag(σ̂); integer weights against repeated points | 9.6·10⁻¹⁵; 1.6·10⁻¹⁴; 1.1·10⁻¹⁴ |
+| The whitened spectrum in the inputs' own units: on boxes [−3, 5] and [10, 12] under a correlated sample, against L_rawᵀC_rawL_raw | 4.9·10⁻¹⁵; the box and raw leading eigenvalues differ by up to 303% |
+| Affine equivariance, a seeded sweep of 200: p to 5, 50 to 400 points (weighted in half), reference gradient fields, random maps with scales 10⁻³ to 10³ | whitened eigenvalues 4.3·10⁻¹³; QᵀQ − I 1.8·10⁻¹¹; C_u′ against QᵀC_uQ 6.2·10⁻¹⁴; the box spectrum moves by up to 1.7·10⁸ |
+| The primitives: the root of random covariances with condition numbers to 10⁸ and scales 10⁻⁶ to 10⁶; weighted moments against repeated points; the refusals | R² against Σ 6.8·10⁻¹⁵, exactly symmetric; 6.3·10⁻¹⁸ |
+| 2307.11241's triangle law: the paper's C_ρ₂ = [[1710, 741], [741, 322]]/540 against quadrature of the triangle; a BASS fit on 500 Latin hypercube points of the square, read under 20,000 points of the law | the closed form to 10⁻¹⁴; E[C] within 0.38% (box) and 0.36% (whitened, against L̂ᵀC_ρ₂L̂); leading direction 3·10⁻⁴ rad from the truth's, the two metrics' 1.7·10⁻⁴ rad apart |
+| The band law, \|x₁ − x₂\| < 0.2, f = 16(x₁ − x₂)² + (x₁ + x₂)²: truths by quadrature of the band; the readouts under 20,000 points | the truths lead with x₁ − x₂ (box) and x₁ + x₂ (whitened); the readouts 0.036 and 0.051 rad from them, 1.48 rad apart |
+| The refusals: a sample beside Measures, the exact route, points outside the boxes, bad weights, a missing column, whitening a degenerate sample, standardizing a constant input | each refused; the box metric reads the degenerate sample |
+
+**Cost** (`ActiveSubspaceCostTests.JointSampleCostRow`, thread cycles, indicative): under a joint sample, 0.53 ms per draw at 4,096 points and 1.8 ms at 16,384, whitened alike; the basis fit's sampled route, 0.92 ms per joint draw at 4,096 points; whitening itself at 16,384 points, 0.23 ms for 2 inputs and 2.4 ms for 10.
+
+**Slice 4's choices,** beyond the brief:
+- *The symmetric root* for whitening. *Alternatives:* a Cholesky factor, which depends on the inputs' order; the eigenvector rotation (PCA whitening), which loses the input axes. All give the same eigenvalues.
+- *The sample as its own law,* its covariance divided by the weights' sum. *Alternative:* N − 1, the unbiased estimate of a population's, which the sample is not here.
+- *Points outside the boxes refused.* *Alternatives:* extrapolating with a count reported; truncating silently, which changes the law.
+- *`Standardized` added;* `Whitened` keeps its name and, under a product law, its values.
+- *`Measure` and `Poincare` nullable* in the analyses, null under a sample. *Alternative:* NaN-filled checks, which would read as checks that ran.
+- *Unit-scale eigendecompositions in E8's code,* not a change to `DenseEigen`, whose other consumers would move.
+
 ## The decisions (the brief's, taken in commissioning)
 
-1. **Two routes, one readout, chosen per query.** The exact route serves a product law over separable terms (built in slice 1). The sampled route averages the gradient readout over the law's points otherwise: dependent inputs, non-separable kernels, or a check. The readout says which route ran (built in slice 2). *Alternatives:* sampled always, which is simple but never exact; exact only, which excludes dependent inputs and non-separable kernels.
-2. **The input metric is declared.** By default the box scaling, as above. *Options:* the inputs' own units, or whitening by the law's covariance, which is affine-equivariant and natural under a dependent law. Under a product uniform law, box scaling and whitening agree up to a constant.
+1. **Two routes, one readout, chosen per query.** The exact route serves a product law over separable terms (built in slice 1). The sampled route averages the gradient readout over the law's points otherwise: dependent inputs, non-separable kernels, or a check. The readout says which route ran (built in slice 2); a joint sample takes the sampled route (built in slice 4). *Alternatives:* sampled always, which is simple but never exact; exact only, which excludes dependent inputs and non-separable kernels.
+2. **The input metric is declared.** By default the box scaling, as above. *Options:* the inputs' own units, or whitening by the law's covariance, which is affine-equivariant and natural under a dependent law. Under a product uniform law, box scaling and whitening agree up to a constant. Built in slice 2 for product laws; whitening by a joint sample's full covariance, and `Standardized` for the diagonal form, in slice 4.
 3. **Categorical inputs take no part in C,** as above.
 4. **Two posterior summaries, reported apart:** E[C] with its eigendecomposition, and the subspaces' projection mean P̄ = Σ w_s W_s W_sᵀ, whose eigenvalues are mean squared cosines (G3, SG-5). Built in slice 2. *Alternatives:* the Karcher mean or the geometric median of the subspaces (Geometry's IRLS), at most labelled options; a robust median is not the default, since an outlying draw is posterior mass.
 5. **Numerics:** each draw's subspace from the thin SVD of its gradient matrix on the sampled route; the draws share the law's points. Built in slice 2.
@@ -137,4 +190,4 @@ The recovery gate's first rank-two case, a polynomial of two linear forms, had a
 
 ## Notation
 
-This page takes the module's symbols: B a term, κ its scale, φ a factor and φ′ its derivative, b a draw's coefficients, q a hinge's degree; from slice 3, H a draw's coefficients at the output locations, W_y the output metric, a_f and a_g output functionals. The paper writes h_{im} for a factor, γ_m for a coefficient and I₁, I₂, I₃ for the factor integrals. The code calls the factor integrals of derivatives "slope" moments (`SlopeMean`, `SlopePair`) beside the pointwise `Derivative`. C is E[∇f∇fᵀ] throughout, which the code names `GradientOuterProduct`, and `BassGradient` is the pointwise readout. These crossings are in [the notation ledger](../../issues/notation-ledger.md).
+This page takes the module's symbols: B a term, κ its scale, φ a factor and φ′ its derivative, b a draw's coefficients, q a hinge's degree; from slice 3, H a draw's coefficients at the output locations, W_y the output metric, a_f and a_g output functionals; from slice 4, Σ_ρ the law's covariance in box units and L = Σ_ρ^{1/2} whitening's map, x = μ + Lu. The paper writes h_{im} for a factor, γ_m for a coefficient and I₁, I₂, I₃ for the factor integrals. The code calls the factor integrals of derivatives "slope" moments (`SlopeMean`, `SlopePair`) beside the pointwise `Derivative`. C is E[∇f∇fᵀ] throughout, which the code names `GradientOuterProduct`, and `BassGradient` is the pointwise readout. These crossings are in [the notation ledger](../../issues/notation-ledger.md).

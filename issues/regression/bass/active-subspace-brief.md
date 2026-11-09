@@ -98,6 +98,62 @@ Under "Reports" below, newest first, per slice: what landed by commit; the gates
 
 ## Reports
 
+### Slice 4: dependent inputs (2026-11-08)
+
+**Landed** on `main`, nothing pushed:
+- `20aeb06`, the joint-sample law, whitening by its full covariance, the basis fits' sampled route, the unit-scale eigendecompositions, the gates and the cost row.
+- The docs commit carrying this report: the active-subspace page's slice-4 section, decisions 1 and 2 marked built, and the notation ledger's entry.
+
+2307.11241 was read again for its dependent laws. §3.3.2 whitens a multivariate normal and refits the emulator on z. §3.3.3 approximates a dependent law by a mixture of products, as in §4.1.1's triangle with L uniform boxes and the supplement's normal mixture fitted to calibration draws. It has no joint-sample route. The triangle is this slice's dependent gate, with its C reached here from a fit and a sample.
+
+**What was built:**
+- **`JointSample`** (points as prediction cases, optional weights) on **`ActiveSubspaceSpec.Sample`** and **`CoActiveSpec.Sample`**. Under one:
+  - `Auto` takes the sampled route at the sample's points, every draw sharing them; the exact route is refused, and so are `Measures` beside a sample;
+  - points must lie in the boxes; weights are normalized, with at least two positive;
+  - the analyses' `Measure` and `Poincare` are null, and `Points` is the sample's size;
+  - scalar, direct functional and basis fits all take it, and so do the three co-active overloads.
+- **Weighted standard errors:** Σw²(v − m)²/(1 − Σw²) per entry, slices 2 and 3's formula at equal weights. They are streamed, so no draw holds N matrices.
+- **`InputMetric.Whitened`** is L = Σ_ρ^{1/2} by the symmetric root. Under a product law that is diag(σ), unchanged; under a sample it is the full covariance. **`InputMetric.Standardized`** names the diagonal form under either law. `Map` is a full L; congruences take its diagonal entries alone when it is diagonal, in slice 2's product order, so the exact route's C keeps its bits under a product law (the eigensystems move by the rescaling below).
+- **`Maths.Regression.Subspaces.Whitening`**, fit-agnostic: `Moments` (weighted mean and covariance, two passes, the sample as its own law) and `SymmetricRoot` (refused below a 10⁻¹² eigenvalue ratio).
+- **A basis fit's sampled route,** deferred from slice 3. It reads each component's gradient readout at the shared points, with the output metric's root taken in component space, GᵀW_yG, for C and for two outputs.
+- **`ScaledEigen`:** every E8 eigendecomposition (each draw's C, P̄, V, W_y's root, whitening's root) now runs at unit scale with a 10⁻¹⁴ threshold. `DenseEigen` stops rotating below an absolute 10⁻¹², which left the root of a small-entry covariance 1.1·10⁻⁶ from squaring back. The equivariance sweep found it at 3.8·10⁻³ in QᵀQ − I; after the change, 6.8·10⁻¹⁵ and 1.8·10⁻¹¹.
+- Slice 3's two refusal tests no longer assert that a basis fit's sampled route is refused.
+
+**Gates:**
+
+| Gate | Result |
+| --- | --- |
+| The brief's: against a product law the route already gives exactly. A joint sample drawn from it (truncated normal, uniform, uniform levels) on a scalar fit with a categorical input, 16,384 points, against the exact route | every entry of 12 draws within 2.45 standard errors |
+| The same for a direct functional fit under a full W_y; a basis fit on its sampled route by the law's points and by a sample; two scalar fits' pairs; a basis fit's two outputs both ways | within 1.73; 0.30 and 1.14; 1.81; 1.86 and 1.54 standard errors; the basis checks without a violation |
+| The brief's: equivariance under affine input maps with whitening. A seeded sweep of 200 (p to 5, 50 to 400 points, weighted in half; reference gradient fields; random maps, scales 10⁻³ to 10³) | whitened eigenvalues 4.3·10⁻¹³; QᵀQ − I 1.8·10⁻¹¹; C_u′ against QᵀC_uQ 6.2·10⁻¹⁴; the box spectrum moves by up to 1.7·10⁸ |
+| Whitening in the readout: the map against Denman–Beavers' root of the weighted sample covariance; each draw's C against L̂ᵀC_boxL̂; standardizing against diag(σ̂); weights against repeats | 9.6·10⁻¹⁵; 1.6·10⁻¹⁴; 1.1·10⁻¹⁴ |
+| The whitened spectrum in the inputs' own units (boxes [−3, 5] and [10, 12], a correlated sample) against L_rawᵀC_rawL_raw | 4.9·10⁻¹⁵; box and raw differ by up to 303% |
+| The primitives: roots of covariances to condition 10⁸ and scales 10⁻⁶ to 10⁶; weighted moments against repeats; refusals | 6.8·10⁻¹⁵, exactly symmetric; 6.3·10⁻¹⁸ |
+| The brief's: a dependent example where the box metric and whitening differ, both reported. The band \\|x₁ − x₂\\| < 0.2, correlation 0.91, f = 16(x₁ − x₂)² + (x₁ + x₂)²: truths by quadrature; a BASS fit on 500 Latin hypercube points read under 20,000 points of the law | box leads with x₁ − x₂, whitened with x₁ + x₂; the readouts 0.036 and 0.051 rad from their truths, 1.48 rad apart |
+| 2307.11241's triangle law: its C_ρ₂ against quadrature; a BASS fit read under 20,000 points | closed form to 10⁻¹⁴; E[C] within 0.38% (box) and 0.36% (whitened); leading direction 3·10⁻⁴ rad from the truth's; the two metrics' leading functionals 1.7·10⁻⁴ rad apart, C being near rank one |
+| The refusals: a sample beside Measures, the exact route, points outside the boxes, bad weights, a missing column, whitening a degenerate sample, standardizing a constant input | each refused; the box metric reads the degenerate sample |
+| Slices 1 to 3's E8 classes, rerun (the readout restructured, the eigendecompositions rescaled) | unchanged at their tolerances |
+| Fitting untouched | whole regression assembly 2,530 of 2,531 on `e82e8b5` plus the slice, the GBP test skipped as at `e82e8b5`; the E8 oracle classes 10/10 |
+
+**The cost row** (thread cycles, indicative): under a joint sample, 0.53 ms per draw at 4,096 points and 1.8 ms at 16,384, whitened alike. The basis fit's sampled route takes 0.92 ms per joint draw at 4,096 points, and whitening at 16,384 points 0.23 ms for 2 inputs and 2.4 ms for 10. Slice 2's sampled readout read 0.68 ms in the same run.
+
+**A finding on where the metric matters.** An exactly rank-k C's top-k subspace is the same set of input functionals in every invertible metric: LᵀCL has range LᵀG, and L⁻ᵀ maps it back to G. A metric decides only among the directions a C of higher rank leaves. So the paper's triangle, near rank one, cannot separate the metrics, and the band law, of full rank, separates them by 90°. The page records it.
+
+**Decisions beyond the brief,** each with its alternatives:
+1. *The symmetric root* for whitening. *Alternatives:* a Cholesky factor, which depends on the inputs' order; PCA whitening, which loses the input axes. All three give the same eigenvalues.
+2. *The sample is its own law,* its covariance divided by the weights' sum. *Alternative:* N − 1, a population estimate, which the sample is not here.
+3. *Points outside the boxes are refused,* the region a product law's readout covers. *Alternatives:* extrapolating with a count reported; truncating silently, which changes the law.
+4. *`Standardized` is added; `Whitened` keeps its name,* with its product-law values unchanged and the full covariance under a sample. *Alternative:* renaming the diagonal form and moving `Whitened`'s meaning, which would change slice 2's readout.
+5. *`Measure` and `Poincare` are nullable* in the analyses, null under a sample. *Alternative:* NaN-filled checks, which would read as checks that ran.
+6. *A joint sample may carry categorical columns,* a dependent law over the levels too; C still takes no part in them.
+7. *Unit-scale eigendecompositions in E8's code* rather than a change to `DenseEigen`, whose other consumers would move.
+
+**Left unbuilt:** an exact route under a dependent law, by G4's joint mixture of products or 2307.11241's whitening transform with a refit (not in this brief); the slice-3 follow-ups the user holds.
+
+**Follow-ups:**
+- *`DenseEigen`'s absolute threshold.* It reads 10⁻¹² against the matrix's entries, not their scale, so any consumer that decomposes a small-entry matrix gets eigenvectors good only to that threshold over the eigengap. E8 works around it. If LinAlg adopts a relative criterion (Demmel and Veselić's, |a_pq| ≤ tol·√|a_pp a_qq|, cited from memory), `ScaledEigen` retires and every consumer gains; the decision is LinAlg's owner's, with a bit-for-bit check of what moves. If not, E8 keeps its wrapper and the hazard stays for others.
+- *Rotate-and-refit, BPPR and a directional hinge* wait for the user after this slice, per the brief.
+
 ### Slice 3: functional outputs and co-active pairs (2026-11-08)
 
 **Landed** on `main`, nothing pushed:

@@ -11,6 +11,15 @@ Splits in the module's language (symbols, identifiers, terms), logged as session
 
 ## Entries
 
+### Whitening's map L = Σ^{1/2} beside 2307.11241's Σ^{−1/2} and its L for mixture components; "Whitened" and "Standardized" (2026-11-08)
+
+- **Kind:** one concept under several names, and one name for several concepts.
+- **Readings:**
+  - The module's L maps metric to box coordinates, x = μ + Lu, so whitening takes L = Σ_ρ^{1/2} and C_u = LᵀCL (`ActiveSubspaceAnalysis.Map`, `Whitening.SymmetricRoot`; `docs/Maths/ActiveSubspaces.md`, "Dependent inputs"). 2307.11241 §3.3.2 maps the other way, z = Σ^{−1/2}(x − μ) with A = Σ^{−1/2}, and writes C_x = (Σ^{−1/2})ᵀC_zΣ^{−1/2}.
+  - L also counts mixture components in 2307.11241 (§3.3.3, §4.1.1's L uniform boxes) and in its supplement (L = 478 boxes).
+  - `InputMetric.Whitened` scaled each input by its sd in slice 2, which is whitening only because every law then was a product. From slice 4 it is L = Σ_ρ^{1/2} under any law, the same values under a product law. `InputMetric.Standardized` names the diagonal form.
+- **Found:** 2026-11-08, E8's slice 4.
+
 ### W for an output metric and for eigenvectors; the co-active matrices' indices; the output functionals (2026-11-08)
 
 - **Kind:** one name for several concepts, and one concept under several names.
