@@ -95,6 +95,23 @@ public sealed record ActiveSubspaceSpec
     /// <summary>The output patterns to read (slice 5): for a functional fit, G = E[J W_x Jᵀ]'s leading patterns per draw and for E[G],
     /// in the input metric W_x = LLᵀ and the output metric's symmetric root. 0, the default, reads none; refused for a scalar fit.</summary>
     public int OutputPatterns { get; init; }
+
+    /// <summary>Whether to read the matrix Poincaré check (slice 5) where it applies. Off by default: it about doubles the exact
+    /// readout's cost per draw on scalar, functional and basis fits alike (the slice-5 cost row), so it is read when asked.</summary>
+    public bool MatrixPoincare { get; init; }
+}
+
+/// <summary>Whether the matrix Poincaré check was read (E8, slice 5).</summary>
+public enum MatrixPoincareStatus
+{
+    /// <summary>Read: <see cref="ActiveSubspaceAnalysis.MatrixPoincare"/> holds it.</summary>
+    Computed,
+
+    /// <summary>Not asked: <see cref="ActiveSubspaceSpec.MatrixPoincare"/> is off, its default.</summary>
+    NotAsked,
+
+    /// <summary>Asked, but the law is not a product of uniform laws over continuous inputs alone, which the bound needs.</summary>
+    NotApplicable,
 }
 
 /// <summary>
@@ -222,9 +239,11 @@ public sealed record PoincareCheck(double[,] Total, double[,] Bound, double[,] R
 /// <param name="DrawIndex">Each draw's index among the fit's pooled draws.</param>
 /// <param name="Ranks">Each draw at its own rank by the spec's rule (slice 5); null without a rule.</param>
 /// <param name="Outputs">G = E[J W_x Jᵀ]'s patterns (slice 5); null unless asked of a functional fit.</param>
-/// <param name="MatrixPoincare">The matrix Poincaré check (slice 5); null unless the law is a product of uniform laws over continuous
-/// inputs alone.</param>
+/// <param name="MatrixPoincare">The matrix Poincaré check (slice 5); null unless asked and the law is a product of uniform laws over
+/// continuous inputs alone.</param>
+/// <param name="MatrixPoincareStatus">Whether the matrix check was read, not asked, or not applicable.</param>
 public sealed record ActiveSubspaceAnalysis(
     IReadOnlyList<string> Inputs, IReadOnlyList<string> Excluded, ActiveSubspaceRoute Route, InputMetric Metric, double[,] Map,
     ProductMeasure? Measure, int Points, SubspacePosterior Posterior, double[][,]? MonteCarloError, PoincareCheck? Poincare,
-    IReadOnlyList<int> DrawIndex, RankPosterior? Ranks = null, OutputPosterior? Outputs = null, MatrixPoincareCheck? MatrixPoincare = null);
+    IReadOnlyList<int> DrawIndex, RankPosterior? Ranks = null, OutputPosterior? Outputs = null, MatrixPoincareCheck? MatrixPoincare = null,
+    MatrixPoincareStatus MatrixPoincareStatus = MatrixPoincareStatus.NotApplicable);

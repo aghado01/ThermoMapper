@@ -24,8 +24,8 @@ namespace Maths.Regression.Tests;
 /// <item>slice 4: a scalar fit's readout under a joint sample of 4,096 and 16,384 points, box and whitened; the basis fit's sampled
 /// route per joint draw; and whitening itself, <see cref="Maths.Regression.Subspaces.Whitening"/>'s moments and root, at 16,384 points
 /// of 2 and 10 inputs.</item>
-/// <item>slice 5, per draw at 3,000 draws: the exact readout on a scalar fit whose law the matrix check reads, beside it with per-draw
-/// ranks; a functional fit's output side on both routes; and basis adequacy per draw of the direct fit.</item>
+/// <item>slice 5, per draw at 3,000 draws: the exact readout with and without the matrix check on a scalar, a functional and a basis
+/// fit; with per-draw ranks; a functional fit's output side on both routes; and basis adequacy per draw of the direct fit.</item>
 /// </list>
 /// Indicative: the best of five on a shared machine.
 /// </summary>
@@ -123,13 +123,19 @@ public sealed class ActiveSubspaceCostTests(ITestOutputHelper output)
         (BassFit f, _) = CoActiveFixture.Fits();
         int[] many = [.. Enumerable.Range(0, 3000).Select(d => d % f.Draws.Sum(c => c.Count))];
         var spec = new ActiveSubspaceSpec { Draws = many };
-        double plain = Best(() => f.ActiveSubspace(df, spec), many.Length);
-        double ranked = Best(() => f.ActiveSubspace(df, spec with { Rank = Maths.Regression.Subspaces.RankRule.TraceShare(0.95) }), many.Length);
+        double scalarOff = Best(() => f.ActiveSubspace(df, spec), many.Length);
+        double plain = Best(() => f.ActiveSubspace(df, spec with { MatrixPoincare = true }), many.Length);
+        double ranked = Best(() => f.ActiveSubspace(df, spec with { Rank = Maths.Regression.Subspaces.RankRule.TraceShare(0.95) }), many.Length) - scalarOff;
         BassData functional = SensitivityFixture.Functional();
         BassFit fit = SensitivityFixture.FitFunctional();
         int[] fdraws = [.. Enumerable.Range(0, 3000).Select(d => d % fit.Draws.Sum(c => c.Count))];
         var fspec = new ActiveSubspaceSpec { Draws = fdraws };
         double without = Best(() => fit.ActiveSubspace(functional, fspec), fdraws.Length);
+        double functionalOn = Best(() => fit.ActiveSubspace(functional, fspec with { MatrixPoincare = true }), fdraws.Length);
+        BassBasisFit basisFit = BassOutputComponentsTests.FitOf();
+        int[] joint = [.. Enumerable.Range(0, 3000).Select(d => d % basisFit.JointDraws.Count)];
+        double basisOff = Best(() => basisFit.ActiveSubspace(new ActiveSubspaceSpec { Draws = joint }), joint.Length);
+        double basisOn = Best(() => basisFit.ActiveSubspace(new ActiveSubspaceSpec { Draws = joint, MatrixPoincare = true }), joint.Length);
         double exactG = Best(() => fit.ActiveSubspace(functional, fspec with { OutputPatterns = 2 }), fdraws.Length);
         int[] some = fdraws[..256];
         double sampledG = Best(() => fit.ActiveSubspace(functional, fspec with { Draws = some, OutputPatterns = 2, Route = ActiveSubspaceRoute.Sampled }), some.Length)
@@ -138,8 +144,9 @@ public sealed class ActiveSubspaceCostTests(ITestOutputHelper output)
         BassBasisFit basis = BassComponents.Fit(BassDecomposition.FromPca(y, new BassPcaSpec { Rank = 1 }), predictors, BassOutputComponentsTests.Config());
         int[] adraws = [.. Enumerable.Range(0, 600).Select(d => d % direct.Draws.Sum(c => c.Count))];
         double adequacy = Best(() => basis.Adequacy(direct, ad, new ActiveSubspaceSpec { Draws = adraws }), adraws.Length);
-        output.WriteLine($"clock: {(BassCost.Cycles ? "thread cycles" : "wall")}; per draw at 3,000 draws: a scalar fit's exact readout with the matrix check " +
-                         $"{plain:F1} µs, with per-draw ranks too {ranked:F1} µs; a functional fit's exact readout {without:F1} µs, with two output patterns " +
+        output.WriteLine($"clock: {(BassCost.Cycles ? "thread cycles" : "wall")}; per draw at 3,000 draws, the exact readout with the matrix check and " +
+                         $"without: scalar {plain:F1} and {scalarOff:F1} µs, functional {functionalOn:F1} and {without:F1} µs, basis {basisOn:F1} and {basisOff:F1} µs; " +
+                         $"per-draw ranks add {ranked:F1} µs to the scalar; a functional fit's exact readout {without:F1} µs, with two output patterns " +
                          $"{exactG:F1} µs; the sampled output side's own cost at 4,096 points {sampledG:F0} µs; basis adequacy per direct draw (12 locations) {adequacy:F1} µs");
     }
 

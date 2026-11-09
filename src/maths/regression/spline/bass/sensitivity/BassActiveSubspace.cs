@@ -123,17 +123,16 @@ internal static class BassActiveSubspaces
         }
         var posterior = SubspacePosterior.Of(draws, weights);
         PoincareCheck? poincare = null;
-        MatrixPoincareCheck? matrix = null;
         if (forms is not null)
         {
             double[,]? jacobi = !functional && LegendreOnBoxes(fit.Terms, pooled, frame, selected) ? Jacobi(fit, data, frame, selected) : null;
             poincare = Poincare(frame, moments!, forms, cMetric, error, jacobi);
-            matrix = MatrixCheck(frame, moments!, forms, hs!, Root(w));
         }
+        (MatrixPoincareCheck? matrix, MatrixPoincareStatus status) = MatrixCheckIf(spec.MatrixPoincare, frame, moments, forms, hs, w);
         var analysis = new ActiveSubspaceAnalysis(Array.AsReadOnly(frame.Names), Array.AsReadOnly(frame.Excluded), frame.Route, spec.Metric, frame.Map,
                                                   frame.Measure, PointCount(frame, spec.Points), posterior, error, poincare, Array.AsReadOnly(selected),
                                                   spec.Rank is null ? null : RankPosterior.Of(draws, weights, spec.Rank),
-                                                  factors is null ? null : OutputPosterior.Of(factors, weights, patterns), matrix);
+                                                  factors is null ? null : OutputPosterior.Of(factors, weights, patterns), matrix, status);
         return (analysis, factors);
     }
 
@@ -196,11 +195,11 @@ internal static class BassActiveSubspaces
         double[] weights = [.. selected.Select(_ => 1.0)];
         var posterior = SubspacePosterior.Of(draws, weights);
         PoincareCheck? poincare = forms is null ? null : Poincare(frame, moments!, forms, cMetric, error, null);
-        MatrixPoincareCheck? matrix = forms is null ? null : MatrixCheck(frame, moments!, forms, hs!, Root(w));
+        (MatrixPoincareCheck? matrix, MatrixPoincareStatus status) = MatrixCheckIf(spec.MatrixPoincare, frame, moments, forms, hs, w);
         return new ActiveSubspaceAnalysis(Array.AsReadOnly(frame.Names), Array.AsReadOnly(frame.Excluded), frame.Route, spec.Metric, frame.Map,
                                           frame.Measure, PointCount(frame, spec.Points), posterior, error, poincare, Array.AsReadOnly(selected),
                                           spec.Rank is null ? null : RankPosterior.Of(draws, weights, spec.Rank),
-                                          factors is null ? null : OutputPosterior.Of(factors, weights, spec.OutputPatterns), matrix);
+                                          factors is null ? null : OutputPosterior.Of(factors, weights, spec.OutputPatterns), matrix, status);
     }
 
     // Basis adequacy (slice 5): the direct fit's G against the basis's span, both under the spec's output metric.
@@ -304,6 +303,17 @@ internal static class BassActiveSubspaces
             for (int a = 0; a < t; a++) fk[a, c] = root * e.Eigenvectors[kept[c]][a];
         }
         return Multiply(s, Multiply(h, fk));
+    }
+
+    // The matrix check when asked and applicable (a product law, which gives the moment route's forms, of uniform laws over continuous
+    // inputs alone); otherwise its status says why it was not read.
+    private static (MatrixPoincareCheck? Check, MatrixPoincareStatus Status) MatrixCheckIf(bool asked, Frame frame, BassMoments? moments,
+                                                                                          (BassTerm[] Terms, double[,] M)[]? forms, double[][,]? hs, double[,] w)
+    {
+        if (!asked) return (null, MatrixPoincareStatus.NotAsked);
+        if (forms is null) return (null, MatrixPoincareStatus.NotApplicable);
+        MatrixPoincareCheck? check = MatrixCheck(frame, moments!, forms, hs!, Root(w));
+        return (check, check is null ? MatrixPoincareStatus.NotApplicable : MatrixPoincareStatus.Computed);
     }
 
     // The matrix Poincaré check per draw under a product law of uniform laws over continuous inputs alone: Cov(Rf) = (RH)Σ_B(RH)ᵀ against

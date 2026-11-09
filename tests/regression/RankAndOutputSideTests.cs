@@ -367,28 +367,48 @@ public sealed class RankAndOutputSideTests(ITestOutputHelper output)
     }
 
     /// <summary>
-    /// On fitted draws under the uniform law: no violation for a scalar fit, a direct functional fit under a full W_y and a basis fit;
-    /// absent for a fit with a categorical input, under a non-uniform law and under a joint sample.
+    /// On fitted draws under the uniform law, asked: no violation for a scalar fit, a direct functional fit under a full W_y and a basis
+    /// fit. By default it is not asked, and nothing is read. Asked where it does not apply (a categorical input, a non-uniform law, a joint
+    /// sample), it is not applicable.
     /// </summary>
     [Fact]
     public void MatrixPoincare_HoldsOnFittedDraws()
     {
         (BassData df, _) = CoActiveFixture.Data();
         (BassFit f, _) = CoActiveFixture.Fits();
-        ActiveSubspaceAnalysis scalar = f.ActiveSubspace(df);
+        ActiveSubspaceAnalysis scalar = f.ActiveSubspace(df, new ActiveSubspaceSpec { MatrixPoincare = true });
         BassData data = SensitivityFixture.Functional();
         BassFit fit = SensitivityFixture.FitFunctional();
-        ActiveSubspaceAnalysis direct = fit.ActiveSubspace(data, new ActiveSubspaceSpec { OutputMetric = new OutputMetric(FunctionalActiveSubspaceTests.RandomMetric(data.Response.Locations, 13)) });
-        ActiveSubspaceAnalysis basis = BassOutputComponentsTests.FitOf().ActiveSubspace();
+        var fullW = new OutputMetric(FunctionalActiveSubspaceTests.RandomMetric(data.Response.Locations, 13));
+        ActiveSubspaceAnalysis direct = fit.ActiveSubspace(data, new ActiveSubspaceSpec { OutputMetric = fullW, MatrixPoincare = true });
+        BassBasisFit basisFit = BassOutputComponentsTests.FitOf();
+        ActiveSubspaceAnalysis basis = basisFit.ActiveSubspace(new ActiveSubspaceSpec { MatrixPoincare = true });
         double worst = new[] { scalar, direct, basis }.SelectMany(a => a.MatrixPoincare!.Ratios).Max();
         output.WriteLine($"worst ratio {worst:F4} over {scalar.MatrixPoincare!.Ratios.Count + direct.MatrixPoincare!.Ratios.Count + basis.MatrixPoincare!.Ratios.Count} draws");
         Assert.Equal(0, scalar.MatrixPoincare.Violations + direct.MatrixPoincare.Violations + basis.MatrixPoincare.Violations);
-        Assert.Null(SensitivityFixture.FitScalar(1).ActiveSubspace(SensitivityFixture.Scalar()).MatrixPoincare);
-        Assert.Null(f.ActiveSubspace(df, new ActiveSubspaceSpec { Measures = new Dictionary<string, InputMeasure> { ["x0"] = new MixtureMeasure([new NormalComponent(1.0, 0.5, 0.2)]) } }).MatrixPoincare);
+        Assert.All(new[] { scalar, direct, basis }, a => Assert.Equal(MatrixPoincareStatus.Computed, a.MatrixPoincareStatus));
+
+        // Off by default, as it about doubles the readout: not asked, and nothing read.
+        foreach (ActiveSubspaceAnalysis off in new[] { fit.ActiveSubspace(data, new ActiveSubspaceSpec { OutputMetric = fullW }), basisFit.ActiveSubspace(), f.ActiveSubspace(df) })
+        {
+            Assert.Null(off.MatrixPoincare);
+            Assert.Equal(MatrixPoincareStatus.NotAsked, off.MatrixPoincareStatus);
+        }
+
+        // Asked where the bound does not apply.
         var rng = new Xoshiro256PlusPlus(3);
         double[] u = [.. Enumerable.Range(0, 500).Select(_ => rng.NextDouble())], v = [.. Enumerable.Range(0, 500).Select(_ => rng.NextDouble())];
         var sample = new JointSample(new PredictionCases([new ContinuousColumn("x0", u), new ContinuousColumn("x1", v)]));
-        Assert.Null(f.ActiveSubspace(df, new ActiveSubspaceSpec { Sample = sample }).MatrixPoincare);
+        foreach (ActiveSubspaceAnalysis na in new[]
+        {
+            SensitivityFixture.FitScalar(1).ActiveSubspace(SensitivityFixture.Scalar(), new ActiveSubspaceSpec { MatrixPoincare = true }),
+            f.ActiveSubspace(df, new ActiveSubspaceSpec { MatrixPoincare = true, Measures = new Dictionary<string, InputMeasure> { ["x0"] = new MixtureMeasure([new NormalComponent(1.0, 0.5, 0.2)]) } }),
+            f.ActiveSubspace(df, new ActiveSubspaceSpec { MatrixPoincare = true, Sample = sample }),
+        })
+        {
+            Assert.Null(na.MatrixPoincare);
+            Assert.Equal(MatrixPoincareStatus.NotApplicable, na.MatrixPoincareStatus);
+        }
     }
 
     // ── Basis adequacy ───────────────────────────────────────────────────────────────────────────────────────────────
