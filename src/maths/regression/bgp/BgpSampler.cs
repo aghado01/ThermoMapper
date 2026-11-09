@@ -38,8 +38,11 @@ public enum BgpProposal
 ///   <item>For an unknown scale, the state is (t, η, s²). s² is drawn exactly given (t, η) for each draw, so each draw
 ///   has its own variance array.</item>
 /// </list>
+/// <see cref="FitVariance"/> is the same variance in units of the signal variance, before s² scales it: the fit's own, shared by
+/// draws with one fit, which the candidate density reads at the run's test points instead of refitting. It is null where the
+/// draw was made elsewhere.
 /// </summary>
-public sealed record BgpDraw(double Bandwidth, GpFit Fit, double[] ConditionalVariance, double SignalVariance)
+public sealed record BgpDraw(double Bandwidth, GpFit Fit, double[] ConditionalVariance, double SignalVariance, double[]? FitVariance = null)
 {
     /// <summary>The noise-to-signal ratio η = σ²/s² (σ² itself for a known σ²).</summary>
     public double NoiseRatio => Fit.NoiseRatio;
@@ -70,6 +73,8 @@ public sealed record BgpDraw(double Bandwidth, GpFit Fit, double[] ConditionalVa
 /// <param name="NoiseRatioConvergence">For an unknown scale, the noise ratio η's rank-normalized diagnostics (it is
 /// monitored beside t and gates an early stop); null for a known σ².</param>
 /// <param name="Verdict">The run's convergence verdict (D10) on its one group, "all": t, and η for an unknown scale.</param>
+/// <remarks><see cref="TestInputs"/> holds the run's test points in the original units, where each draw kept its fit's variance
+/// (<see cref="BgpDraw.FitVariance"/>); null for a result made elsewhere.</remarks>
 public sealed record BgpResult(
     double[] PosteriorMean,
     double[] PosteriorSd,
@@ -81,6 +86,9 @@ public sealed record BgpResult(
     ConvergenceDiagnostic? NoiseRatioConvergence,
     ConvergenceVerdict Verdict)
 {
+    /// <summary>The run's test points in the original units, where each draw kept its fit's variance; null for a result made elsewhere.</summary>
+    public double[,]? TestInputs { get; init; }
+
     /// <summary>The noise variance σ²'s posterior median and 95% interval (a point for a known σ²).</summary>
     public PosteriorInterval NoiseVarianceInterval => Interval(d => d.NoiseVariance);
 
@@ -306,7 +314,10 @@ public sealed partial class BgpSampler : IEnsembleModel<double>
                              summary.AcceptanceRate, chains * summary.SamplesUsed,
                              summary.Monitored[0], summary.ChainSeeds,
                              _gp.Transform.InputScale, bandwidthDraws, summary.Checkpoint,
-                             _unknownScale ? summary.Monitored[1] : null, summary.Verdict);
+                             _unknownScale ? summary.Monitored[1] : null, summary.Verdict)
+        {
+            TestInputs = (double[,])xTest.Clone(),
+        };
     }
 
     /// <summary>
@@ -567,14 +578,14 @@ public sealed partial class BgpSampler : IEnsembleModel<double>
             }
             if (!_o._unknownScale)
             {
-                Draws.Add(new BgpDraw(draw, fit, _variance, 1.0));
+                Draws.Add(new BgpDraw(draw, fit, _variance, 1.0, _variance));
                 return;
             }
             functionals[1] = fit.NoiseRatio;
             double s2 = ConjugateUpdates.NormalVariance(0.0, 0.0, _o._gp.Count - 1, fit.Quadratic).Sample(_readout);   // IG((n − 1)/2, Q/2)
             var variance = new double[_variance.Length];
             for (int i = 0; i < variance.Length; i++) variance[i] = s2 * _variance[i];
-            Draws.Add(new BgpDraw(draw, fit, variance, s2));
+            Draws.Add(new BgpDraw(draw, fit, variance, s2, _variance));
         }
     }
 }

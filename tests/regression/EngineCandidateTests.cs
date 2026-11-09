@@ -435,6 +435,37 @@ public sealed class EngineCandidateTests(ITestOutputHelper output)
             () => ConformalBayes.FullStep(sampler.PointwiseLogDensity(r), sampler.CandidateLogDensity(r, x, Singletons(y)))).Message);
     }
 
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public void Bgp_AtTheRunsTestPoints_ItReadsTheKeptVariance_BitForBit(bool unknownScale)
+    {
+        (double[,] x, double[] y) = GpData(40, seed: 8);
+        GpRegression gp = Gp(x, y, unknownScale);
+        var sampler = new BgpSampler(gp, new EmpiricalBayesBandwidthPrior(gp));
+        BgpResult r = sampler.Run(new double[,] { { 0.21 }, { 0.64 }, { 0.9 }, { 0.05 } }, draws: 150, burn: 100, seed: 4, chains: 2);
+        Assert.Equal(4, r.TestInputs!.GetLength(0));
+        double[] grid = [.. Enumerable.Range(0, 41).Select(g => 1.0 + 0.1 * g)];
+        var cases = new double[,] { { 0.9 }, { 0.21 }, { 0.9 } };   // a subset of the test points, reordered, one twice
+        double[][] grids = [grid, [3.1], grid];
+        CandidateLogDensity kept = sampler.CandidateLogDensity(r, cases, grids, cdf: true);
+        CandidateLogDensity refit = sampler.CandidateLogDensity(r with { TestInputs = null }, cases, grids, cdf: true);
+        int mismatched = 0;
+        for (int s = 0; s < kept.Draws; s++)
+            for (int c = 0; c < kept.Values.GetLength(1); c++)
+                if (!kept.Values[s, c].Equals(refit.Values[s, c]) || !kept.LogCdf![s, c].Equals(refit.LogCdf![s, c])) mismatched++;
+        Assert.Equal(0, mismatched);
+
+        // It reads the kept variance: doubling it moves the density.
+        BgpResult doubled = r with
+        {
+            BandwidthDraws = [.. r.BandwidthDraws.Select(chain => (IReadOnlyList<BgpDraw>)[.. chain.Select(d => d with { FitVariance = [.. d.FitVariance!.Select(v => 2.0 * v)] })])],
+        };
+        Assert.NotEqual(kept.Values[0, 0], sampler.CandidateLogDensity(doubled, cases, grids).Values[0, 0]);
+        // A case off the test points refits.
+        Assert.Equal(refit.Values[0, 0], sampler.CandidateLogDensity(r, new double[,] { { 0.9 }, { 0.5 } }, [grid, grid]).Values[0, 0]);
+    }
+
     // ---- Held-out coverage, one fit each, from truth outside every model ----
 
     // f(x) = sin(2πx) + x/2, with noise 0.2ζ plus, one time in seven, 0.8·Exp(1): a skewed contamination no model here shares.
@@ -644,14 +675,19 @@ public sealed class EngineCandidateTests(ITestOutputHelper output)
             }
             default:
             {
+                // The run's test points are the calibration's and the cases', so the seam reads each draw's kept variance; the refit
+                // path, which every other input takes, is timed once beside it.
                 double[] x = Uniforms(n, rng, sorted: false);
                 double[] y = [.. x.Select(v => Truth(v, rng))];
                 GpRegression gp = GpRegression.WithUnknownScale(Column(x), y, new SquaredExponentialKernel());
                 var sampler = new BgpSampler(gp, new EmpiricalBayesBandwidthPrior(gp));
-                BgpResult r = sampler.Run(Column(x), draws: 500, burn: 200, seed: 1, chains: 2);
                 double[] xc = Uniforms(99, rng, sorted: false);
+                BgpResult r = sampler.Run(Column([.. xc, .. xt]), draws: 500, burn: 200, seed: 1, chains: 2);
                 CandidateLogDensity calibration = sampler.CandidateLogDensity(r, Column(xc), Singletons(xc.Select(v => Truth(v, rng))));
                 double[,] cases = Column(xt);
+                long r0 = BassCost.Tick();
+                sampler.CandidateLogDensity(r with { TestInputs = null }, cases, [grid, grid]);
+                output.WriteLine($"bgp, the refit path: {(BassCost.Tick() - r0) / BassCost.TicksPerSecond:F2} s per call");
                 seam = () => sampler.CandidateLogDensity(r, cases, [grid, grid]);
                 step = c => SplitConformal.Density(calibration, c);
                 break;

@@ -312,8 +312,15 @@ public sealed class GpRegression
     internal void PredictiveInFrame(GpFit fit, double[,] mappedTest, IReadOnlyList<double[]> grids, double[] values, double[]? logCdfs)
     {
         if (fit.Alpha.Length != _n) throw new ArgumentException("The fit is not of this GP's data.", nameof(fit));
+        Predictive(fit, mappedTest, ConditionalVarianceInFrame(Refit(fit), mappedTest), grids, values, logCdfs);
+    }
+
+    /// <summary>As <see cref="PredictiveInFrame"/>, with f's variance at the cases given, in units of the signal variance as
+    /// <see cref="ConditionalVarianceInFrame"/> gives it: what a run kept for its test points.</summary>
+    internal void Predictive(GpFit fit, double[,] mappedTest, double[] variance, IReadOnlyList<double[]> grids, double[] values, double[]? logCdfs)
+    {
+        if (fit.Alpha.Length != _n) throw new ArgumentException("The fit is not of this GP's data.", nameof(fit));
         double[] mean = PredictMeanInFrame(fit, mappedTest);
-        double[] variance = ConditionalVarianceInFrame(Refit(fit), mappedTest);
         double halfAll = 0.5 * _n, logRatio = SpecialFunctions.LogGamma(halfAll) - SpecialFunctions.LogGamma(0.5 * (_n - 1));
         int at = 0;
         for (int t = 0; t < grids.Count; t++)
