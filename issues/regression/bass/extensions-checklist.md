@@ -41,6 +41,7 @@ Companion to [extensions-brief.md](extensions-brief.md). An item is ticked when 
 - [ ] **E33** Regression-family integration.
 - [ ] **E34** Several outputs on one basis, with Σ integrated (multi-output BASS). Requested by the user, 2026-11-08.
 - [ ] **E35** Conformal test martingales: exchangeability checked online. Sources gathered by the user, 2026-11-08; after the conformal layer's slice 5.
+- [ ] **E36** Projection-pursuit ridges on the BASS core (BPPR), with `gcbeck/bppr`'s ideas weighed. Recorded 2026-11-08; after E8, not ordered.
 
 ## Reports
 

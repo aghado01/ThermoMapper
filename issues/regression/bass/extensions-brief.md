@@ -11,7 +11,8 @@ Extensions beyond the port's completion contract, collected from the [full port 
 | KHAOS's modified g-prior | Rumsey, Francom et al., arXiv 2510.25036 | Fitting: the coefficient-prior set | Candidate |
 | Basis-estimation uncertainty | Sartini et al., arXiv 2412.11340 | Outputs: the basis contract's uncertainty slot | Candidate |
 | Moments for piecewise polynomials | Derivations review §7, item 7 | Outputs: the moment service | Candidate |
-| Active-subspace analysis | arXiv 2307.11241, via the PCA-extensions discussion | Outputs: term derivatives | Candidate |
+| Active-subspace analysis | arXiv 2307.11241, via the PCA-extensions discussion | Outputs: term derivatives | Building ([brief](active-subspace-brief.md), 2026-11-08) |
+| Projection-pursuit ridges on the BASS core (BPPR, E36) | Collins, Francom and Rumsey, arXiv 2210.09181; `BayesPPR`; `github.com/gcbeck/bppr` | Fitting: a ridge term type through F-X3; a direction prior. Outputs: E8's sampled route | Candidate, after E8 |
 | Cross-engine evidence | Derivations review §7, item 8; Gneiting and Raftery 2007 for held-out scores; Liang et al. 2008 and Farhi et al. 2013 for Bayes factors under the improper options | D03's proper defaults and D05's ladder evidence; D03's evidence rule. Outputs: D07's joint draws | Candidate |
 | The free-energy curve over the ladder | Farhi et al. 2013; Watanabe 2013; Bissiri, Holmes and Walker 2016 | D05's ladder with the reference rung, its rungs' draws kept; the integrated form's per-draw slope | Candidate |
 | Elastic emulation of misaligned functional outputs | Francom, Tucker, Huerta, Shuler and Ries, arXiv 2305.08834 | Outputs: a representation with a declared reconstruction map. Calibration: D09's likelihood over both parts | Candidate |
@@ -193,8 +194,44 @@ This entry is larger than its first form.
 - **Functional outputs, a reading here.** For a basis fit, f(x, t) = Σ φ_k(t) f_k(x), so the vector-valued active subspace of Zahm et al. (arXiv 1801.07922, unread) is Σ_kl ⟨φ_k, φ_l⟩_Q C_kl. So functional active subspaces are co-active blocks contracted with the output Gram, and F-X6's declared Q is the output norm their result depends on.
 - **A consistency check per draw.** The diagonal of C is the derivative-based sensitivity measure, and a Poincaré inequality bounds each input's total Sobol variance by (b − a)²/π² times that entry, for a uniform input on [a, b]. That ties value moments to derivative moments. It is a consistency check, not ground truth.
 - **Across engines.** Wycoff, Binois and Wild (arXiv 1907.11572, unread) give closed-form C for Gaussian processes, so one consumer covers BGP.
-- **The sequence the lineage implies.** A posterior active subspace, then rotating the inputs and refitting, then BPPR (arXiv 2210.09181, unread), which learns directions during fitting. F-X3's test already implements a directional hinge, and Zhang et al. 2003 is the frequentist precursor.
+- **The sequence the lineage implies.** A posterior active subspace, then rotating the inputs and refitting, then BPPR ([E36](#projection-pursuit-ridges-on-the-bass-core-bppr-e36)), which learns directions during fitting. F-X3's test already implements a directional hinge, and Zhang et al. 2003 is the frequentist precursor.
 - **Dependent inputs.** The first consumer that cannot assume a product measure, so the [lineage review's open question](lineage-review.md#separability-is-what-the-closed-forms-rest-on) is settled here, and [E25](#sensitivity-under-dependent-inputs) follows it.
+- **Building:** commissioned 2026-11-08 ([build brief](active-subspace-brief.md)).
+
+## Projection-pursuit ridges on the BASS core (BPPR, E36)
+
+Ridge functions g_m(θ_mᵀx) whose directions θ_m are learned during fitting: the lineage's third basis, after hinges and Legendre polynomials (Collins, Francom and Rumsey, arXiv 2210.09181, on disk in `gauntlet/bayesian/2210.09181v1`; R's `BayesPPR` 0.2.0, its manual in `PDFs/Bayesian/BayesPPR.pdf`). It serves responses that depend on a few linear combinations of many inputs, where BASS's axis-aligned terms need many interactions to bend along a diagonal. Recorded 2026-11-08 at the user's request, with the insights of an independent adaptation the user found.
+
+**The paper's model** (read by the [Grassmann discussion](../discussion/grassmann-stiefel-subspaces-brief.md#report), `b2ca155`):
+- **One-sided ridges.** Each ridge is βᵀb(xᵀθ | t), a modified natural spline whose first basis function is (u − t₀)₊, so the ridge is zero below t₀. The prior puts t₀ inside the data's projections with probability p₀ = 2/3, which makes a ridge local. θ and −θ place the ridge at opposite ends of the projection, so a direction's sign carries information and its prior is uniform on the whole sphere.
+- **Sparse directions, no frame.** Each θ_m has at most A = min(3, p) nonzero coordinates, its variables drawn as BMARS draws them, and a uniform prior on that coordinate subsphere. No orthogonality is imposed; M moves by reversible jump.
+- **The sampler.** A change step proposes the active coordinates from a power spherical law centred on the current direction (κ = 1000 in the paper).
+- **The input metric.** The paper standardizes the inputs, so the direction prior depends on the metric, as E8's subspace does (its decision 2).
+- **The multivariate mode** fits principal components apart and drops the truncation error; D07's leave-one-case-out residuals already go further.
+
+**On the engine.**
+- *A fourth term type* through F-X3's design-kernel contract: a direction on a coordinate subsphere and a one-dimensional spline on the projection. It is not separable, so the moment service's closed forms do not reach it and E8 reads it by its sampled route.
+- *What carries over:* the structure chain and its reversible jump, the collapsed coefficients given the directions (Zellner–Siow or the g-form), tempering and SMC with its flags, GBASS's noises, the conformal layer, and the gradient readout.
+- *E8 is its natural readout.* C = Σ_{m,l} θ_mθ_lᵀE[g_m′g_l′] lies in span{θ_m}. Comparing draws' directions directly meets label switching across ridges as well as a varying M, and E8's subspace summaries avoid both.
+
+**An independent adaptation: `github.com/gcbeck/bppr`** (C++20, GPL-3.0). It was found by the user on 2026-11-08 and is read-only cloned at `D:\aghado01\packages\bayesian-related\bppr-gcbeck` (`1b0d47a`). Its README and the source below were read; its claims count as a paper's would, with no code to run as an oracle, and only its ideas can come here, under its license.
+- *Narrower than the paper:* continuous inputs only, Zellner–Siow coefficients only, no sampled t₀.
+- *A repulsive direction prior.* `ZellnerSiow::propose` adds 2 ln(det L′/det L) to the prior's log ratio in births, deaths and changes, with L the Cholesky factor of the directions' Gram ΘᵀΘ (`zellner.h`, the "anti-similarity" term). So the prior on directions is ∝ det(ΘᵀΘ), the squared volume they span: a determinantal repulsion with a linear kernel, the established terms being determinantal point process priors and repulsive priors (Petralia, Rao and Dunson 2012, cited from memory). Directions on disjoint coordinates do not repel.
+  - *As written, the normalizer is missing.* The births' and deaths' ratios leave out c_M = E[det(ΘᵀΘ)] under the uniform base. Since c_M ≤ 1 falls with M (Hadamard), the effective prior on M is the stated one times c_M, a penalty the count prior does not state.
+  - *Options:* the paper's independent directions; the determinant with c_M included in the count law; a tempered determinant det(ΘᵀΘ)^γ. BASS answers the same problem with a hard angle gate on columns. On a sphere a soft repulsion avoids cutting holes in the support.
+  - *Trade-off:* fewer near-duplicate ridges and less multicollinearity, which is the adaptation's claim and is unmeasured; against penalizing a true direction represented as a combination of two, which its own example shows the sampler doing.
+- *Knots on reshaped quantile levels.* In place of a sampled t₀, each ridge's quantile levels are pushed toward the extremes or the median by a tanh with a per-ridge parameter ν before the projection's data quantiles are taken (`knots.h`, `sigmoidize`), so locality comes from where the knots crowd. This is a change to the knot prior, a choice beside the paper's t₀.
+- *Online updates.* New rows enter through rank updates of the Cholesky factors, with knots tracked by streaming quantiles (`bppr.h` `update`, `knots.h`). For an MCMC posterior that means continuing the chain on the augmented data. The engine's principled route to the same end is SMC along a data-addition path (Chopin's IBIS, cited from memory) on its SMC core, which carries its flags and evidence.
+- *Not to carry over:* the enforced adaptation of the prior's signal weights. A prior adapted from the chain's history makes the target depend on that history. An adaptive proposal with diminishing adaptation stays valid, and that is the form to take if any.
+
+**Checks for its brief.**
+- Geweke's test, since directions are continuous.
+- The collapsed law given frozen directions, against the dense marginal.
+- Recovery of known single-index and sum-of-ridges functions from outside the model, read through E8.
+- The direction prior's normalizer by Monte Carlo, against any closed form used.
+- `BayesPPR` as a pinned oracle on CRAN, if it is there, checked when the brief is written.
+
+**Order:** not ordered. After E8 by the lineage's sequence; it waits for the user, and for the Grassmann discussion's view of directions.
 
 ## Cross-engine evidence
 
