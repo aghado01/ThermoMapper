@@ -11,7 +11,7 @@ Extensions beyond the port's completion contract, collected from the [full port 
 | KHAOS's modified g-prior | Rumsey, Francom et al., arXiv 2510.25036 | Fitting: the coefficient-prior set | Candidate |
 | Basis-estimation uncertainty | Sartini et al., arXiv 2412.11340 | Outputs: the basis contract's uncertainty slot | Candidate |
 | Moments for piecewise polynomials | Derivations review §7, item 7 | Outputs: the moment service | Candidate |
-| Active-subspace analysis | arXiv 2307.11241, via the PCA-extensions discussion | Outputs: term derivatives | Building ([brief](active-subspace-brief.md), 2026-11-08) |
+| Active-subspace analysis | arXiv 2307.11241, via the PCA-extensions discussion | Outputs: term derivatives | Built ([brief](active-subspace-brief.md), slices 0–4, 2026-11-08) |
 | Projection-pursuit ridges on the BASS core (BPPR, E36) | Collins, Francom and Rumsey, arXiv 2210.09181; `BayesPPR`; `github.com/gcbeck/bppr` | Fitting: a ridge term type through F-X3; a direction prior. Outputs: E8's sampled route | Candidate, after E8 |
 | Cross-engine evidence | Derivations review §7, item 8; Gneiting and Raftery 2007 for held-out scores; Liang et al. 2008 and Farhi et al. 2013 for Bayes factors under the improper options | D03's proper defaults and D05's ladder evidence; D03's evidence rule. Outputs: D07's joint draws | Candidate |
 | The free-energy curve over the ladder | Farhi et al. 2013; Watanabe 2013; Bissiri, Holmes and Walker 2016 | D05's ladder with the reference rung, its rungs' draws kept; the integrated form's per-draw slope | Candidate |
