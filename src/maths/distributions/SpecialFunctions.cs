@@ -40,6 +40,19 @@ public static partial class SpecialFunctions
     }
 
     /// <summary>
+    /// The log of the multivariate gamma function, <c>ln Γ_k(a) = k(k − 1)/4 · ln π + Σⱼ ln Γ(a − j/2)</c> over j = 0 … k − 1, for
+    /// <c>a &gt; (k − 1)/2</c>: the inverse Wishart's normalizer. Γ₁ is Γ.
+    /// </summary>
+    public static double LogMultivariateGamma(int k, double a)
+    {
+        if (k < 1) throw new ArgumentOutOfRangeException(nameof(k), "The dimension is at least 1.");
+        if (!(a > 0.5 * (k - 1))) throw new ArgumentOutOfRangeException(nameof(a), "Γ_k(a) needs a > (k − 1)/2.");
+        double sum = 0.25 * k * (k - 1) * Math.Log(Math.PI);
+        for (int j = 0; j < k; j++) sum += LogGamma(a - 0.5 * j);
+        return sum;
+    }
+
+    /// <summary>
     /// The digamma function ψ(x) = d ln Γ(x)/dx. For x &gt; 0 it climbs by ψ(x) = ψ(x + 1) − 1/x to x ≥ 15, where the
     /// asymptotic series ln x − 1/(2x) − Σ B₂ₖ/(2k x²ᵏ), to k = 5, is within 2·10⁻¹⁶ of ψ, so ψ keeps about 10⁻¹⁵ absolute
     /// accuracy, the recurrence's rounding. Below zero it reflects, ψ(x) = ψ(1 − x) − π/tan(πx). NaN at the poles 0, −1,

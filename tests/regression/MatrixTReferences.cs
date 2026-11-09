@@ -1,5 +1,6 @@
 using System;
 using Maths.Distributions;
+using Maths.Regression.GPrior;
 using Maths.Rng;
 
 namespace Maths.Regression.Tests;
@@ -19,6 +20,42 @@ internal sealed record MultiOutputCase(double[,] Y, double[,] X, double[,] Prior
     public int Outputs => Y.GetLength(1);
 
     public int Columns => X.GetLength(1);
+
+    /// <summary>
+    /// BASS's g-form on centred columns X_c (D03) carried to K outputs: the intercept inside the prior with Gram entry n, centred on ȳ
+    /// (level centring), on <paramref name="levels"/> (a frozen level) or at 0 (the zero centre), or flat; Λ₀ = τ·blockdiag(n, X_cᵀX_c).
+    /// </summary>
+    public static MultiOutputCase GForm(double[,] y, double[,] xc, GPriorCentre centre, double tau, double b, double[]? levels = null)
+    {
+        int n = y.GetLength(0), k = y.GetLength(1), m = xc.GetLength(1);
+        double[,] gram = ReferenceAlgebra.Multiply(ReferenceAlgebra.Transpose(xc), xc);
+        if (centre == GPriorCentre.Flat)
+        {
+            var flat = new double[m, m];
+            for (int i = 0; i < m; i++)
+                for (int j = 0; j < m; j++) flat[i, j] = tau * gram[i, j];
+            return new MultiOutputCase(y, xc, flat, null, b, true);
+        }
+        var x = new double[n, m + 1];
+        var lambda = new double[m + 1, m + 1];
+        lambda[0, 0] = tau * n;
+        for (int i = 0; i < n; i++)
+        {
+            x[i, 0] = 1.0;
+            for (int j = 0; j < m; j++) x[i, j + 1] = xc[i, j];
+        }
+        for (int i = 0; i < m; i++)
+            for (int j = 0; j < m; j++) lambda[i + 1, j + 1] = tau * gram[i, j];
+        if (centre == GPriorCentre.Zero) return new MultiOutputCase(y, x, lambda, null, b);
+        var a0 = new double[m + 1, k];
+        for (int l = 0; l < k; l++)
+        {
+            double mean = 0.0;
+            for (int i = 0; i < n; i++) mean += y[i, l];
+            a0[0, l] = levels?[l] ?? mean / n;
+        }
+        return new MultiOutputCase(y, x, lambda, a0, b);
+    }
 }
 
 /// <summary>Σ's prior: IW(ν, Ψ), or with <see cref="Scale"/> null the improper |Σ|^(−(ν + K + 1)/2), Jeffreys' at ν = 0.</summary>
