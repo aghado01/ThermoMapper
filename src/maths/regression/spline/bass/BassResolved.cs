@@ -189,6 +189,8 @@ public sealed record BassResolved
         }
         else
         {
+            if (config.OutputCovariance is not null)
+                throw new ArgumentException("OutputCovariance is Σ's prior for several outputs (E34); a single response reads Sigma2.", "config");
             bool constant = true, zero = y[0] == 0.0;
             for (int i = 1; i < y.Length && constant; i++) constant = y[i] == y[0];
             mean = fitted.ResponseMean;
@@ -298,7 +300,9 @@ public sealed record BassResolved
             ? Threshold(rule.MinimumFunctional, locations, "Structure.Support.MinimumFunctional", "SupportMinimumFunctional", "n_r", log)
             : null;
 
-        IReadOnlyList<BassMonitoredPoint> points = ResolvePoints(config.Sampling.MonitoredPoints, cases, functional ? locations : null, log);
+        IReadOnlyList<BassMonitoredPoint> points = response is MultiOutputResponse multiple
+            ? ResolveOutputPoints(config.Sampling.MonitoredPoints, cases, multiple, log)
+            : ResolvePoints(config.Sampling.MonitoredPoints, cases, functional ? locations : null, log);
 
         BassCoefficientPrior coefficients = config.Coefficients;
         if (coefficients.Form is RawRidgeForm && functional)
@@ -424,9 +428,12 @@ public sealed record BassResolved
         if (config.Coefficients.Form is not GForm)
             throw new ArgumentException("Several outputs take the g-form in E34's slice 1; the normalized ridge and KHAOS's priors, which carry K cross products "
                                         + "through their spectra and pencils, arrive later.", "config");
-        if (config.Sigma2.Kind != Sigma2PriorKind.ScaledToResponse)
-            throw new ArgumentException($"Several outputs carry Sigma2's ScaledToResponse(c) to Σ's prior (E34's decision 2), and Sigma2 is {config.Sigma2}; a declared "
-                                        + "or standardized Ψ₀ arrives with its config field, Huang and Wand's prior in slice 2.", "config");
+        // Σ's prior: the declared one, or Sigma2's ScaledToResponse(c) carried to K outputs.
+        OutputCovariancePrior chosen = config.OutputCovariance
+            ?? (config.Sigma2.Kind == Sigma2PriorKind.ScaledToResponse
+                ? OutputCovariancePrior.ScaledToResponse(config.Sigma2.Shape!.Value)
+                : throw new ArgumentException($"Several outputs carry Sigma2's ScaledToResponse(c) to Σ's prior (E34's decision 2), and Sigma2 is {config.Sigma2}; "
+                                              + "declare OutputCovariance (decision 2's, standardized or a declared IW); Huang and Wand's prior arrives in slice 2.", "config"));
 
         ReadOnlySpan<double> means = fitted.OutputMeans;
         var levels = new double[k];
@@ -441,8 +448,8 @@ public sealed record BassResolved
                 for (int i = 0; i < n; i++) products[i] = (values[i * k + a] - levels[a]) * (values[i * k + d] - levels[d]);
                 squares[a, d] = squares[d, a] = PairwiseSum.Of(products) / n;
             }
-        // Refused: an output with no spread about its level, and outputs whose S_Y is singular or nearly so (decision 2), read on the
-        // correlation scale: a Cholesky pivot 1 − R² of an output on the ones before it under 1e-10.
+        // Refused: an output with no spread about its level, and under decision 2's form, whose Ψ₀ is S_Y's, outputs whose S_Y is singular or
+        // nearly so, read on the correlation scale: a Cholesky pivot 1 − R² of an output on the ones before it under 1e-10.
         var unit = new double[k, k];
         for (int a = 0; a < k; a++)
         {
@@ -453,7 +460,7 @@ public sealed record BassResolved
             for (int d = 0; d <= a; d++) unit[a, d] = unit[d, a] = squares[a, d] / (Math.Sqrt(squares[a, a]) * Math.Sqrt(squares[d, d]));
         }
         var root = new double[k, k];
-        for (int a = 0; a < k; a++)
+        for (int a = 0; a < k && chosen.Kind == OutputCovariancePriorKind.ScaledToResponse; a++)
             for (int d = 0; d <= a; d++)
             {
                 double sum = unit[a, d];
@@ -465,11 +472,9 @@ public sealed record BassResolved
                 root[a, a] = Math.Sqrt(sum);
             }
 
-        double c = config.Sigma2.Shape!.Value;
-        var psi = new double[k, k];
-        for (int a = 0; a < k; a++)
-            for (int d = 0; d < k; d++) psi[a, d] = 2.0 * c * squares[a, d];
-        InverseWishart prior = InverseWishart.Of(k - 1 + 2.0 * c, psi);
+        InverseWishart prior = chosen.For(squares);
+        if (config.OutputCovariance is not null && config.Sigma2 != Sigma2Prior.ScaledToResponse(1e-3))
+            log.Add(new("Sigma2", "not read", $"OutputCovariance declares Σ's prior, {chosen}, in Sigma2's place"));
         log.Add(new("Outputs", $"K = {k} ({string.Join(", ", response.Names.Select(name => $"'{name}'"))})",
                     "one basis and one Σ for every output, Σ integrated out (E34); the intercept and its convention per output"));
         log.Add(new("CentreLevels", string.Join(", ", levels.Select(Text)), config.Intercept switch
@@ -478,9 +483,13 @@ public sealed record BassResolved
             GPriorCentre.Flat => "the outputs' means, the flat intercept's estimates",
             _ => "the outputs' means, level centring",
         }));
-        log.Add(new("SigmaPrior", $"IW({Text(prior.DegreesOfFreedom)}, 2c·S_Y), c = {Text(c)}",
-                    "E34's decision 2, Sigma2's ScaledToResponse(c) carried to K outputs: ν₀ = K − 1 + 2c, S_Y the outputs' mean squares and cross-products "
-                    + "about their levels; at K = 1 IG(c, c·s²)"));
+        log.Add(new("SigmaPrior", $"{chosen}: IW({Text(prior.DegreesOfFreedom)}, Ψ₀)", chosen.Kind switch
+        {
+            OutputCovariancePriorKind.ScaledToResponse => (config.OutputCovariance is null ? "Sigma2's ScaledToResponse(c) carried to K outputs, " : "")
+                + "E34's decision 2: ν₀ = K − 1 + 2c, Ψ₀ = 2c·S_Y, S_Y the outputs' mean squares and cross-products about their levels; at K = 1 IG(c, c·s²)",
+            OutputCovariancePriorKind.Standardized => "ν₀ = K − 1 + 2c, Ψ₀ = 2c·diag S_Y: invariant to rescaling the outputs, not to mixing them",
+            _ => "declared in the outputs' own units",
+        }));
         return new BassResolvedOutputs(response.Names, [.. means], levels, squares, prior);
     }
 
@@ -544,6 +553,31 @@ public sealed record BassResolved
         }
         if (points.Distinct().Count() != points.Length)
             throw new ArgumentException("Sampling.MonitoredPoints names one point twice once the middle location fills a missing one.", "config");
+        return points;
+    }
+
+    // Several outputs' monitored points (E34): each case, the defaults' or a declared one's, at every output, unless a declared point names
+    // its output in its location.
+    private static IReadOnlyList<BassMonitoredPoint> ResolveOutputPoints(IReadOnlyList<BassMonitoredPoint>? declared, int cases, MultiOutputResponse response,
+                                                                         List<BassAutoPick> log)
+    {
+        int k = response.Outputs;
+        IReadOnlyList<BassMonitoredPoint> chosen = declared ?? BassDiagnostics.DefaultPoints(cases, null);
+        var points = new List<BassMonitoredPoint>();
+        foreach (BassMonitoredPoint p in chosen)
+        {
+            if (p.Case >= cases) throw new ArgumentException($"Sampling.MonitoredPoints holds case {p.Case}; the data have {cases}.", "config");
+            if (p.Location is int output)
+            {
+                if (output >= k) throw new ArgumentException($"Sampling.MonitoredPoints holds output {output}; the response has {k}.", "config");
+                points.Add(p);
+            }
+            else for (int l = 0; l < k; l++) points.Add(p with { Location = l });
+        }
+        if (points.Distinct().Count() != points.Count)
+            throw new ArgumentException("Sampling.MonitoredPoints names one point twice once a case without an output fills in every output.", "config");
+        if (declared is null)
+            log.Add(new("MonitoredPoints", string.Join("; ", points), "training cases at the quartile positions of the data's order, at every output"));
         return points;
     }
 

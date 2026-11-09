@@ -282,6 +282,7 @@ public sealed class BassStructureMoves
         Sync(state);
         BassTarget target = current ?? _model.Target;
         double tau = target.SamplesTau ? state.Tau : target.HeldTau!.Value;
+        if (target.Outputs is not null) return ComposeOutputs(state, rng, terms, target, tau);
         GPriorConditional conditional = target.CoefficientBlock(_design)(tau, 1.0);
         var centred = new double[conditional.Columns];   // (α, β_c) in the design's order
         double sigma2;
@@ -319,6 +320,37 @@ public sealed class BassStructureMoves
             : null;   // drawn last, so a fit without the block draws as it did
         return new BassDraw(new BassStructure(sorted), tau, sigma2, coefficients, lambda, target.Sigma2Rate?.RateAt(state.LogRate),
                             working.IsResponseItself || rebuilds ? null : working, rebuilds ? working.Latents : null, effects);
+    }
+
+    // Several outputs' retained draw (E34): Σ, then the coefficients given Σ (BassOutputDraws), then λ, the coefficients in the uncentred
+    // basis in the ids' order, one column per output, each output's intercept uncentred as the scalar one is.
+    private BassDraw ComposeOutputs(BassState state, Xoshiro256PlusPlus rng, BassTermTable terms, BassTarget target, double tau)
+    {
+        (double[,] sigma, double[,] centred) = BassOutputDraws.Sample(target, _design, state.Fit, tau, rng);
+        BassCountPrior count = _model.Prior.Count;
+        double lambda = Gamma.ShapeRate(count.Shape + state.Count, count.Rate + 1.0).Sample(rng);
+        int m = state.Count, k = sigma.GetLength(0);
+        var ids = new int[m];
+        for (int j = 0; j < m; j++) ids[j] = terms.Intern(state.Terms[j]);
+        var order = new int[m];
+        for (int j = 0; j < m; j++) order[j] = j;
+        int[] sorted = (int[])ids.Clone();
+        Array.Sort(sorted, order);
+        var means = new double[m];
+        for (int j = 0; j < m; j++) means[j] = ColumnMean(state.Terms[j]);
+        var coefficients = new double[m + 1, k];
+        for (int l = 0; l < k; l++)
+        {
+            double intercept = centred[0, l];
+            for (int r = 0; r < m; r++)
+            {
+                int j = order[r];
+                coefficients[r + 1, l] = centred[j + 1, l];
+                intercept -= centred[j + 1, l] * means[j];
+            }
+            coefficients[0, l] = intercept;
+        }
+        return new BassDraw(new BassStructure(sorted), tau, double.NaN, [], lambda, Sigma: sigma, OutputCoefficients: coefficients);
     }
 
     /// <summary>The coefficients' block's draw in this sweep (<see cref="BassCoefficientsBlock"/>), which the blocks after it read; null

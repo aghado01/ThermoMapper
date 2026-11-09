@@ -142,7 +142,13 @@ public static class Bass
             foreach (int code in grouping.Codes.Span) f.Add(code);
         }
         BassResponse response = data.Response;
-        f.Add(response is FunctionalResponse ? "functional" : "scalar").Add(response.Cases).Add(response.Locations).Add(response.Values);
+        f.Add(response switch { FunctionalResponse => "functional", MultiOutputResponse => "outputs", _ => "scalar" })
+         .Add(response.Cases).Add(response.Locations).Add(response.Values);
+        if (response is MultiOutputResponse several)
+        {
+            f.Add(several.Outputs);
+            foreach (string name in several.Names) f.Add(name);
+        }
         if (response is FunctionalResponse functional)
         {
             f.Add(functional.OutputVariables.Count);

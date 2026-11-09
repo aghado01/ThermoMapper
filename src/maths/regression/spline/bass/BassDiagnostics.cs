@@ -419,7 +419,8 @@ public sealed record BassModeSeparation(double LogPosteriorGap, double FittedDis
     }
 }
 
-/// <summary>A monitored point: a training case and, for a direct functional response, an output location.</summary>
+/// <summary>A monitored point: a training case and, for a direct functional response, an output location, or for several outputs (E34)
+/// the output.</summary>
 public readonly record struct BassMonitoredPoint(int Case, int? Location);
 
 /// <summary>The convergence of the fitted value at <paramref name="Point"/>.</summary>

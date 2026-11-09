@@ -36,6 +36,15 @@ public sealed record BassConfig
     public Sigma2Prior Sigma2 { get; init; } = Sigma2Prior.ScaledToResponse(1e-3);
 
     /// <summary>
+    /// Σ's prior for several outputs (E34; <see cref="OutputCovariancePrior"/>): null, the default, carries <see cref="Sigma2"/>'s
+    /// ScaledToResponse(c) to K outputs as decision 2's IW(K − 1 + 2c, 2c·S_Y), and refuses Sigma2's other kinds. Declared, it is read in
+    /// Sigma2's place. A single response refuses one. Left out of the serialized form when null, so every config without it keeps its
+    /// form and fingerprint.
+    /// </summary>
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public OutputCovariancePrior? OutputCovariance { get; init; }
+
+    /// <summary>
     /// The intercept convention: level centring (<see cref="GPriorCentre.Mean"/>) by default; Liang et al.'s flat
     /// intercept (<see cref="GPriorCentre.Flat"/>) and DiMatteo, Genovese and Kass's zero centre selectable (D03). The
     /// median centre is for the noise extensions' weights and is refused.

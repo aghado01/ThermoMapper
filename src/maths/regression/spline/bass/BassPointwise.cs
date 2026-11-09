@@ -306,6 +306,8 @@ internal sealed class BassDrawFit
             if ((uint)ids[j] >= (uint)terms.Count) throw new ArgumentException($"Term id {ids[j]} is not in the table.", parameter);
             if (j > 0 && ids[j] <= ids[j - 1]) throw new ArgumentException("A draw's term ids must be ascending and distinct.", parameter);
         }
+        if (draw.OutputCoefficients is not null)
+            throw new NotSupportedException("A draw of several outputs is read by E34's readouts (its slice 3); the readers of one response refuse it.");
         if (draw.Coefficients is null || draw.Coefficients.Length != ids.Length + 1)
             throw new ArgumentException("A draw needs one coefficient per term and the intercept's.", parameter);
         foreach (double a in draw.Coefficients)

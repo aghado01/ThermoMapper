@@ -181,7 +181,7 @@ internal sealed class BassEnsemble : IEnsembleModel<BassState>
                            new RunIdentity(config.Sampling.MasterSeed, config.Sampling.Chains, Fingerprint),
                            terms, draws, null, diagnostics,
                            ReportsEvidence ? BassEvidence.Of(_model, ladders!, diagnostics.Tempering!) : null,
-                           BassResidualDependence.Of(_model, terms, draws), summary.Checkpoint);
+                           _model.Resolved.Outputs is null ? BassResidualDependence.Of(_model, terms, draws) : null, summary.Checkpoint);
     }
 
     private BassDiagnostics Diagnostics(EnsembleRun summary, BassChainRun[] runs, BassLadder[]? ladders)
@@ -275,14 +275,44 @@ internal sealed class BassEnsemble : IEnsembleModel<BassState>
         for (int k = 0; k < order.Length; k++) order[k] = k;
         Array.Sort((int[])mapped.Clone(), order);
         var sorted = new int[ids.Length];
+        for (int k = 0; k < order.Length; k++) sorted[k] = mapped[order[k]];
+        if (draw.OutputCoefficients is { } several)
+        {
+            // Several outputs' rows follow their ids as one response's coefficients do.
+            int outputs = several.GetLength(1);
+            var rows = new double[ids.Length + 1, outputs];
+            for (int l = 0; l < outputs; l++)
+            {
+                rows[0, l] = several[0, l];
+                for (int k = 0; k < order.Length; k++) rows[k + 1, l] = several[order[k] + 1, l];
+            }
+            return draw with { Structure = new BassStructure(sorted), OutputCoefficients = rows };
+        }
         var coefficients = new double[draw.Coefficients.Length];
         coefficients[0] = draw.Coefficients[0];
-        for (int k = 0; k < order.Length; k++)
-        {
-            sorted[k] = mapped[order[k]];
-            coefficients[k + 1] = draw.Coefficients[order[k] + 1];
-        }
+        for (int k = 0; k < order.Length; k++) coefficients[k + 1] = draw.Coefficients[order[k] + 1];
         return draw with { Structure = new BassStructure(sorted), Coefficients = coefficients };
+    }
+
+    // ln|Σ| of a draw of several outputs' Σ, by Cholesky; positive definite by construction.
+    private static double LogDeterminant(double[,] sigma)
+    {
+        int k = sigma.GetLength(0);
+        var l = new double[k, k];
+        double sum = 0.0;
+        for (int i = 0; i < k; i++)
+            for (int j = 0; j <= i; j++)
+            {
+                double s = sigma[i, j];
+                for (int r = 0; r < j; r++) s -= l[i, r] * l[j, r];
+                if (i == j)
+                {
+                    l[i, i] = Math.Sqrt(s);
+                    sum += Math.Log(s);
+                }
+                else l[i, j] = s / l[j, j];
+            }
+        return sum;
     }
 
     // One sweep of a chain: the moves, then τ; a ladder's scan of every replica, then the swaps. Cancellation is checked
@@ -309,6 +339,21 @@ internal sealed class BassEnsemble : IEnsembleModel<BassState>
         functionals[f++] = state.Count;
         if (_model.Target.SamplesTau) functionals[f++] = draw.Tau;
         functionals[f++] = Temperature.LogPosterior(run.Moves.Target.Evaluate(state));
+        if (draw.Sigma is { } sigma)
+        {
+            // Several outputs (E34): ln|Σ| in σ²'s place, and each monitored (case, output) point's fitted value.
+            functionals[f++] = LogDeterminant(sigma);
+            double[,] a = draw.OutputCoefficients!;
+            Span<double> each = functionals[f..];
+            int[] termIds = draw.Structure.TermIds;
+            for (int p = 0; p < each.Length; p++) each[p] = a[0, _points[p].Location!.Value];
+            for (int k = 0; k < termIds.Length; k++)
+            {
+                double[] values = PointValues(run, termIds[k]);
+                for (int p = 0; p < each.Length; p++) each[p] += a[k + 1, _points[p].Location!.Value] * values[p];
+            }
+            return;
+        }
         functionals[f++] = draw.Sigma2;
         Span<double> fitted = functionals[f..];
         fitted.Fill(draw.Coefficients[0]);
@@ -460,6 +505,13 @@ internal sealed class BassPointInputs
             var names = new List<string>(4 + Points.Count) { "M" };
             if (_model.Target.SamplesTau) names.Add("tau");
             names.Add("log_posterior");
+            if (_model.Data.Response is MultiOutputResponse outputs)
+            {
+                // Several outputs (E34): ln|Σ| in σ²'s place, and each monitored point's output by name.
+                names.Add("log_det_Sigma");
+                foreach (BassMonitoredPoint p in Points) names.Add($"fitted[{p.Case},{outputs.Names[p.Location!.Value]}]");
+                return names;
+            }
             names.Add("sigma2");
             foreach (BassMonitoredPoint p in Points)
                 names.Add(p.Location is int r ? $"fitted[{p.Case},{r}]" : $"fitted[{p.Case}]");
