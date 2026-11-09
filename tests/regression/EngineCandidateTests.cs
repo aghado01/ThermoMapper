@@ -251,12 +251,12 @@ public sealed class EngineCandidateTests(ITestOutputHelper output)
     public void TheLogCdf_IsItsDensitysIntegral_BothTailsKept(string law) => Sweep(law);
 
     /// <summary>
-    /// The same under generalized-beta-prime mixing with a drift. Its table reads ln F about 10⁻³ off near x = 0, the density there right
-    /// to 12 digits: at m/s = −0.2, ln F(0) is −0.549285 against the integral's −0.550321, the table's slope 4% low across ±10⁻³·s, the
-    /// gap falling to 5·10⁻⁶ by 0.5·s; without a drift F(0) is ½ exactly. Handed on 2026-11-08 to the noise laws' owner, with
-    /// <c>NormalVarianceMeanMixture</c>; skipped until it is fixed, its assertions the correct references.
+    /// The same under generalized-beta-prime mixing with a drift. Its table read ln F about 10⁻³ off near x = 0, the density there right
+    /// to 12 digits: at m/s = −0.2, ln F(0) read −0.549285 against the integral's −0.550321. GBP(1, 1, 1.5)'s density has a kink at 0, and
+    /// with the drift the median left 0, so one cubic cell spanned it. Handed on 2026-11-08 to the noise laws' owner and fixed there: the
+    /// table steps into a kink or cusp at 0 as into a pole (<c>NormalVarianceMeanMixture</c>).
     /// </summary>
-    [Fact(Skip = "NormalVarianceMeanMixture under GBP mixing with a drift reads ln F about 1e-3 off near 0; handed on 2026-11-08.")]
+    [Fact]
     public void TheLogCdf_UnderGbpMixingWithADrift_IsItsDensitysIntegral() => Sweep("skewed gbp");
 
     private void Sweep(string law)

@@ -323,6 +323,51 @@ public sealed class GeneralizedBetaPrimeTests(ITestOutputHelper output)
         }
     }
 
+    [Fact]
+    public void NearZero_UnderADrift_TheTableHoldsItsIntegral()
+    {
+        // Where v's density near 0 goes as v^(α−1), α finite, the mixture's density goes as |x|^(2α−1) at 0: a pole at α ≤ ½, a cusp or kink
+        // above it, where the normal score is not smooth. A drift moves the median off 0, and a cubic cell across 0 missed the integral by
+        // 10⁻³ of ln F (GBP(1, 1, 1.5) at m/s = −0.2, the conformal chip's find). A seeded sweep over drifts and shapes, the GBP's and the
+        // variance gamma's, reads both log tails at 0, beside it and out to s against the integral.
+        var rng = new Xoshiro256PlusPlus(20261108);
+        double[] offsets = [0.0, 1e-9, -1e-9, 1e-6, -1e-6, 1e-4, -1e-4, 1e-3, -1e-3, 1e-2, -1e-2, 0.03, -0.03, 0.1, -0.1, 0.3, -0.3, 0.6, -0.6, 1.0, -1.0];
+        double worst = 0.0;
+        string worstAt = "";
+        for (int trial = 0; trial < 40; trial++)
+        {
+            double scale = Math.Exp(-2.0 + 4.0 * rng.NextDouble()), drift = scale * (-1.0 + 2.0 * rng.NextDouble());
+            NormalVarianceMeanMixture law;
+            string name;
+            if (trial % 4 == 3)
+            {
+                // The variance gamma, v ~ Gamma(p, a/2): α = p.
+                double shape = 0.55 + 2.5 * rng.NextDouble(), a = 0.5 + 2.0 * rng.NextDouble();
+                law = GeneralizedHyperbolic.Of(shape, a, 0.0, drift, scale);
+                name = $"VG({shape:F3}, {a:F3})";
+            }
+            else
+            {
+                // The GBP, α = p·a from just above the pole's ½ to 3.
+                double p = 0.5 + 1.5 * rng.NextDouble(), alpha = 0.52 + 2.5 * rng.NextDouble(), b = 0.4 + 2.5 * rng.NextDouble();
+                law = NormalGeneralizedBetaPrime.Of(p, alpha / p, b, drift, scale);
+                name = $"GBP({p:F3}, {alpha / p:F3}, {b:F3})";
+            }
+            double lawWorst = 0.0;
+            foreach (double offset in offsets.Append(law.Quantile(0.5) / scale))
+            {
+                double x = offset * scale, below = law.IntegratedLogCdf(x), above = law.IntegratedLogSurvival(x);
+                double gap = Math.Max(Math.Abs(law.LogCdf(x) - below) / Math.Max(1.0, Math.Abs(below)),
+                                      Math.Abs(law.LogSurvival(x) - above) / Math.Max(1.0, Math.Abs(above)));
+                lawWorst = Math.Max(lawWorst, gap);
+                if (gap > worst) (worst, worstAt) = (gap, $"{name}, m/s {drift / scale:F3}, x/s {offset:G3}");
+            }
+            output.WriteLine($"{name}, m/s {drift / scale,6:F3}, s {scale:F3}: worst gap {lawWorst:E2}");
+        }
+        output.WriteLine($"The worst relative gap in the log tails, at 0 and out to s: {worst:E2} ({worstAt})");
+        Assert.True(worst <= 1e-5, $"{worst:E2} at {worstAt}");
+    }
+
     [Theory]
     [MemberData(nameof(Mixtures))]
     public void DensityAndTails_MeetAFixedStepRule(double p, double a, double b, double drift, double scale)

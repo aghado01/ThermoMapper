@@ -25,10 +25,12 @@ namespace Maths.Distributions;
 /// the 10⁻¹² quantiles on each side, each step moving z by at most ¼ by its exact slope f(x)/φ(z), so a power tail takes steps growing with
 /// x; joined by cubic Hermite in asinh(x/s), linear in x near 0 and ln|x| far out, where a power tail's score goes as √ln|x| (in x a cell
 /// there spans a multiple of x, which a cubic in x follows poorly); the tails read back as ln Φ(±z); beyond the table, the integral itself.
-/// Near a pole the score goes as x·ln|x|, its slope infinite at 0: the walk's steps there are at most ¼ of |x| (½ within 10⁻²·s) down to
-/// 10⁻⁶·s, then the pole itself, and a cell with the pole at an end is read by the integral. Against the integral the table holds the log
-/// tails to 10⁻⁵ relative in the body and 3·10⁻⁴ out at a power tail's 10⁻⁹, its quantiles' levels to 4·10⁻⁵, within what a predictive's
-/// Monte Carlo over draws resolves.</para>
+/// Where v's density near 0 goes as a power, v^(α−1) (<see cref="LeftExponent"/> α finite), the density goes as |x|^(2α−1) at 0, so the
+/// score is not smooth there: at a pole (α ≤ ½) it goes as x·ln|x|, its slope infinite at 0, and above it the cusp or kink leaves the
+/// score's higher derivatives growing as |x| shrinks. Within s of 0 the walk's steps are at most ¼ of |x| (½ within 10⁻²·s) down to
+/// 10⁻⁶·s, then 0 itself, so no cubic spans it; a cell with a pole at an end is read by the integral. Against the integral the table
+/// holds the log tails to 10⁻⁵ relative in the body and 3·10⁻⁴ out at a power tail's 10⁻⁹, its quantiles' levels to 4·10⁻⁵, within what a
+/// predictive's Monte Carlo over draws resolves.</para>
 /// <para><b>Quantiles and draws.</b> Quantiles by Newton on the log tails, kept in a bracket; a draw is v then ζ, a draw on an interval the
 /// quantile of a uniform between its ends' masses.</para>
 /// </summary>
@@ -37,7 +39,7 @@ public abstract class NormalVarianceMeanMixture : IContinuousDistribution
     private const double Drop = 60.0;
     private const int MaxDepth = 40;
     private const double TableStep = 0.25, TableEnd = -27.631021115928547;   // ln 10⁻¹²
-    // The table's cells near a pole: at most ¼ of |x| long, ½ within 10⁻²·s, down to 10⁻⁶·s.
+    // The table's cells near 0 where the density is singular there: at most ¼ of |x| long, ½ within 10⁻²·s, down to 10⁻⁶·s.
     private const double PoleRatio = 0.25, PoleNearRatio = 0.5, PoleNear = 1e-2, PoleFloor = 1e-6;
     private readonly double _mode;
     private TailTable? _table;   // built on the first read of a tail
@@ -67,6 +69,9 @@ public abstract class NormalVarianceMeanMixture : IContinuousDistribution
 
     // Whether the density is +∞ at x = 0.
     private bool HasPole => LeftExponent <= 0.5;
+
+    // Whether the density is singular at x = 0, as |x|^(2α−1): a pole, a cusp or a kink, wherever v's density near 0 goes as a power.
+    private bool SingularAtZero => double.IsFinite(LeftExponent);
 
     /// <summary>The density by the integral over v (<see cref="IntegratedLogPdf"/>), where a family has no closed form.</summary>
     public virtual double LogPdf(double x) => IntegratedLogPdf(x);
@@ -350,14 +355,14 @@ public abstract class NormalVarianceMeanMixture : IContinuousDistribution
                     double rate = Math.Exp(owner.LogPdf(at) + 0.5 * score * score + 0.5 * Math.Log(2.0 * Math.PI));
                     side.Add((at, score, rate));
                     if (tail < TableEnd || !(rate > 0.0)) break;
-                    if (!owner.HasPole)
+                    if (!owner.SingularAtZero)
                     {
                         if (!double.IsFinite(rate)) break;
                         at += toward * TableStep / rate;
                     }
-                    // Near a pole the score goes as x·ln|x|, which a cubic follows only on cells short against |x|, its error going as the
-                    // step's fourth power times |x|: towards it, and within s of it, steps of at most ¼ of |x|, ½ within 10⁻²·s, down to
-                    // the floor, then onto the pole, and out from it the same way.
+                    // Near a singular 0 the score goes as x·ln|x| at a pole and as x plus sign(x)·|x|^(2α) above it, which a cubic follows
+                    // only on cells short against |x| and never across 0: towards it, and within s of it, steps of at most ¼ of |x|, ½
+                    // within 10⁻²·s, down to the floor, then onto 0, and out from it the same way.
                     else if (at == 0.0) at = toward * floor;
                     else
                     {
