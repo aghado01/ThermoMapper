@@ -72,7 +72,8 @@ public sealed class BassModel
         return new(config, data, resolved, transform, inputs, basis, admission, prior, proposal, kernel, target, observation, working, block);
     }
 
-    /// <summary>The random-intercept block (E21), integrated out of every marginal by whitening; null for a config without one.</summary>
+    /// <summary>The random-intercept block (E21) the config declares, integrated out of every marginal by whitening, which the working
+    /// response carries (<see cref="WorkingResponse.Whitening"/>); null for a config without one.</summary>
     public RandomInterceptBlock? RandomIntercept { get; }
 
     /// <summary>The config.</summary>
@@ -130,6 +131,5 @@ public sealed class BassModel
 
     /// <summary>A new intercept-only design over the data, one per chain, on <paramref name="working"/>; null is the model's.</summary>
     public BassDesign NewDesign(WorkingResponse? working = null)
-        => new(Basis, Data, Admission, Config.Coefficients.Form is RidgeForm, working ?? Working, Config.Intercept, BassPriorPrecision.Of(Config.Coefficients.Form),
-               RandomIntercept);
+        => new(Basis, Data, Admission, Config.Coefficients.Form is RidgeForm, working ?? Working, Config.Intercept, BassPriorPrecision.Of(Config.Coefficients.Form));
 }

@@ -150,7 +150,7 @@ public sealed class BassDesign
     private readonly BassAdmission _rules;
     private readonly bool _functional, _ridge;
     private readonly BassPriorPrecision _precision; // how the prior's precision reads the columns (E21)
-    private readonly RandomInterceptBlock? _block;  // random intercepts, integrated out by whitening each column (E21)
+    private readonly bool _whitened;                // a random-effect block's whitening rides the working response, by which each column is whitened (E21)
     private readonly bool _khatriRao;               // a direct response held as case and output factors, its rows unweighted
     private readonly int _cases, _locations, _rows;
     private BassDesignResponse _response;           // what the design reads of the working response it is on
@@ -213,7 +213,7 @@ public sealed class BassDesign
     internal void WarmTables()
     {
         int degree = _basis.Degree;
-        if (!TablesOn || _functional || _khatriRao || _priorColumns is not null || _counted is not null || _block is not null || degree is not (1 or 2)) return;
+        if (!TablesOn || _functional || _khatriRao || _priorColumns is not null || _counted is not null || _whitened || degree is not (1 or 2)) return;
         int variables = _basis.Inputs.Cases.ContinuousCount, served = Math.Min(variables, TableVariables());
         double[]? roots = _response.Roots;
         for (int v = 0; v < served; v++)
@@ -259,11 +259,11 @@ public sealed class BassDesign
     /// <paramref name="ridge"/> keeps the normalized ridge's spectrum and proposal terms beside the factor; and
     /// <paramref name="intercept"/> places the intercept for a prior apart from the Gram, which alone reads it; and
     /// <paramref name="precision"/> is the prior-precision builder: the g-form's or the normalized ridge's, as
-    /// <paramref name="ridge"/> says, when null, and one that agrees with <paramref name="ridge"/> when given.</summary>
+    /// <paramref name="ridge"/> says, when null, and one that agrees with <paramref name="ridge"/> when given. A random-effect block's
+    /// whitening comes with the working response (<see cref="WorkingResponse.Whitening"/>).</summary>
     public BassDesign(BassBasis basis, BassData data, BassAdmission rules, bool ridge = false, WorkingResponse? working = null,
-                      GPriorCentre intercept = GPriorCentre.Mean, BassPriorPrecision? precision = null, RandomInterceptBlock? block = null)
+                      GPriorCentre intercept = GPriorCentre.Mean, BassPriorPrecision? precision = null)
     {
-        _block = block;
         ArgumentNullException.ThrowIfNull(basis);
         ArgumentNullException.ThrowIfNull(data);
         ArgumentNullException.ThrowIfNull(rules);
@@ -281,6 +281,7 @@ public sealed class BassDesign
         if (basis.Inputs.Cases.Cases != _cases) throw new ArgumentException("The basis was not prepared from these data.", nameof(basis));
         working ??= new WorkingResponse(data.Response);
         if (!ReferenceEquals(working.Response, data.Response)) throw new ArgumentException("The working response is of another response.", nameof(working));
+        _whitened = working.Whitening is not null;
         _intercept = intercept;
         _output = working.Output;
         if (!_output.IsIdentity)
@@ -528,8 +529,9 @@ public sealed class BassDesign
     /// <summary>
     /// Proposes refitting the current structure on <paramref name="working"/>, its model's reading at another latent state
     /// (<see cref="WorkingResponse.Moved"/>); refused when the structure lies outside F under it. An offset alone keeps the columns,
-    /// the factor and the gate, at O(NM) with O(M²) for the factor's solve and a prior's terms. Weights whiten every column again and
-    /// factor their Gram strictly, at O(NM²), by the arithmetic of a design built on them and loaded with these terms. Weights that
+    /// the factor and the gate, at O(NM) with O(M²) for the factor's solve and a prior's terms. Weights, or a random-effect block's
+    /// whitening at another scale (<see cref="WorkingResponse.Whitening"/>), whiten every column again and factor their Gram strictly, at
+    /// O(NM²), by the arithmetic of a design built on them and loaded with these terms. Weights that
     /// count rows do not move: the support threshold and τ₀ read their sum at resolution.
     /// </summary>
     public DesignProposal ProposeFollow(WorkingResponse working)
@@ -591,6 +593,9 @@ public sealed class BassDesign
         if (working.Meaning != current.Meaning || working.PriorGram != current.PriorGram || !ReferenceEquals(working.Reference, current.Reference)
             || !ReferenceEquals(working.Output, current.Output))
             throw new ArgumentException("What a weight states, the prior's Gram, the reference and the inner product are the model's, which WorkingResponse.Moved keeps.", nameof(working));
+        if ((working.Whitening is null) != (current.Whitening is null))
+            throw new ArgumentException("A design's layout depends on whether its columns are whitened, so a model with a random-effect block declares it from the start.", nameof(working));
+        if (!ReferenceEquals(working.Whitening, current.Whitening)) return true;   // the block at another scale: every column whitened afresh
         double[]? now = current.WeightArray, next = working.WeightArray;
         if ((now is null) != (next is null)) throw new ArgumentException("A design's layout depends on whether it holds weights, so a model whose weights move declares them from the start.", nameof(working));
         if (ReferenceEquals(now, next) || now.AsSpan().SequenceEqual(next)) return false;
@@ -869,7 +874,7 @@ public sealed class BassDesign
         var a = new double[_cases];
         _basis.CaseColumn(term, _basis.Inputs.Cases, a);
         if (!Supported(a, _rules.SupportMinimum, _counted)) return null;
-        _block?.Whiten(a);   // the support reads the column as evaluated, the fit its whitened image
+        response.Working.Whitening?.Whiten(a);   // the support reads the column as evaluated, the fit its whitened image
         if (!_functional)
         {
             if (response.Roots is not null) return Whitened(term, a, response);
@@ -1056,7 +1061,8 @@ public sealed class BassDesign
         diagonal = 0.0;
         approximate = false;
         int degree = _basis.Degree;
-        if (!TablesOn || _functional || _khatriRao || _priorColumns is not null || _counted is not null || degree is not (1 or 2)
+        // Under a block the held columns are whitened, V^(−½)xⱼ, where the tables would sum them against the raw hinge: xⱼᵀV^(−½)h for xⱼᵀV⁻¹h.
+        if (!TablesOn || _functional || _khatriRao || _priorColumns is not null || _counted is not null || _whitened || degree is not (1 or 2)
             || term.Continuous.Count != 1 || term.Categorical.Count != 0 || term.Functional.Count != 0)
             return null;
         HingeFactor f = term.Continuous[0];

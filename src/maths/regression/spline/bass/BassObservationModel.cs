@@ -268,6 +268,7 @@ public sealed class WorkingResponse
         Latents = latents;
         Weighting = source.Weighting;
         Output = source.Output;
+        Whitening = source.Whitening;
         _weights = source._weights;
         (_offset, _shifted) = Shifted(Response, offset);
         ResponseMean = MeanOf(_weights, Values, Weighting, Response.Observations);
@@ -308,6 +309,13 @@ public sealed class WorkingResponse
 
     /// <summary>The response the working response derives from.</summary>
     public BassResponse Response { get; }
+
+    /// <summary>
+    /// The random-effect block whose whitening V^(−½) this reading's offset applies, its ln|V| in the log-Jacobian
+    /// (<see cref="RandomInterceptBlock.Whitened"/>); null where none does. The design whitens each column by the block of the reading it
+    /// is on, so a reading at another scale moves every column as moved weights do (E21).
+    /// </summary>
+    public RandomInterceptBlock? Whitening { get; internal init; }
 
     /// <summary>y − offset, case by case and location by location; the response itself when there is no offset.</summary>
     public ReadOnlySpan<double> Values => _shifted ?? Response.Values;

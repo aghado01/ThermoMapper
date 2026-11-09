@@ -214,8 +214,9 @@ public sealed class RandomInterceptBlock
     }
 
     /// <summary>
-    /// The working response of <paramref name="working"/> whitened: V^(−½)y, as an offset y − V^(−½)y, its weighting carrying −ln|V|. Unit
-    /// weights and no latents only: a weighted or latent working response would need V^(−½) under W, which is not built.
+    /// The working response of <paramref name="working"/> whitened: V^(−½)y, as an offset y − V^(−½)y, its weighting carrying −ln|V|, and
+    /// this block its <see cref="WorkingResponse.Whitening"/>, by which the design whitens each column. Unit weights and no latents only: a
+    /// weighted or latent working response would need V^(−½) under W, which is not built.
     /// </summary>
     public WorkingResponse Whitened(WorkingResponse working)
     {
@@ -227,7 +228,7 @@ public sealed class RandomInterceptBlock
         Whiten(white);
         var offset = new double[y.Length];
         for (int i = 0; i < y.Length; i++) offset[i] = y[i] - white[i];
-        return new WorkingResponse(working.Response, offset, reference: working.Reference, logJacobian: -LogDeterminant);
+        return new WorkingResponse(working.Response, offset, reference: working.Reference, logJacobian: -LogDeterminant) { Whitening = this };
     }
 
     /// <summary>
