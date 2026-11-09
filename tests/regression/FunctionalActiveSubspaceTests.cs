@@ -169,7 +169,7 @@ public sealed class FunctionalActiveSubspaceTests(ITestOutputHelper output)
         ActiveSubspaceAnalysis a = fit.ActiveSubspace(new ActiveSubspaceSpec { Draws = draws, OutputMetric = metric == "identity" ? null : new OutputMetric(w) });
         Assert.True(fit.Components.Count >= 2, $"the fixture has {fit.Components.Count} components");
         BassInputs inputs = BassInputs.Prepare(fit.ComponentData(0), fit.Components[0].Transform);
-        (PredictionCases cases, double[] weights) = Tensor(inputs, a.Measure);
+        (PredictionCases cases, double[] weights) = Tensor(inputs, a.Measure!);
         double worst = 0.0;
         for (int d = 0; d < draws.Length; d++)
         {
@@ -177,10 +177,10 @@ public sealed class FunctionalActiveSubspaceTests(ITestOutputHelper output)
             worst = Math.Max(worst, RelativeGap(a.Posterior.Draws[d].C, reference));
         }
         output.WriteLine($"{metric}: {fit.Components.Count} components, {m} locations, {draws.Length} joint draws; worst gap to quadrature {worst:E2}; " +
-                         $"Poincaré ratio up to {MaxFinite(a.Poincare.Ratio):F3}");
+                         $"Poincaré ratio up to {MaxFinite(a.Poincare!.Ratio):F3}");
         Assert.True(worst <= 1e-10, $"{worst:E2}");
         Assert.Equal(ActiveSubspaceRoute.Exact, a.Route);
-        Assert.Equal(0, a.Poincare.Violations);
+        Assert.Equal(0, a.Poincare!.Violations);
         Assert.Equal(draws, a.DrawIndex);
     }
 
@@ -210,15 +210,15 @@ public sealed class FunctionalActiveSubspaceTests(ITestOutputHelper output)
         var spec = new ActiveSubspaceSpec { Draws = draws, Dimension = 2, OutputMetric = metric == "identity" ? null : new OutputMetric(w) };
         ActiveSubspaceAnalysis a = fit.ActiveSubspace(data, spec);
         BassInputs inputs = BassInputs.Prepare(data, fit.Transform);
-        (PredictionCases cases, double[] weights) = Tensor(inputs, a.Measure);
+        (PredictionCases cases, double[] weights) = Tensor(inputs, a.Measure!);
         BassGradient g = fit.Gradient(data, cases, draws);
         double worst = 0.0;
         for (int d = 0; d < draws.Length; d++) worst = Math.Max(worst, RelativeGap(a.Posterior.Draws[d].C, Quadrature(DirectJacobians(g, d), weights, w)));
         output.WriteLine($"{metric}: {m} locations, {draws.Length} draws; worst gap to quadrature {worst:E2}; E[C]'s eigenvalues " +
-                         $"{a.Posterior.MeanCEigenvalues[0]:F4}, {a.Posterior.MeanCEigenvalues[1]:F4}; Poincaré ratio up to {MaxFinite(a.Poincare.Ratio):F3}");
+                         $"{a.Posterior.MeanCEigenvalues[0]:F4}, {a.Posterior.MeanCEigenvalues[1]:F4}; Poincaré ratio up to {MaxFinite(a.Poincare!.Ratio):F3}");
         Assert.True(worst <= 1e-10, $"{worst:E2}");
-        Assert.Equal(0, a.Poincare.Violations);
-        Assert.Null(a.Poincare.JacobiRatio);
+        Assert.Equal(0, a.Poincare!.Violations);
+        Assert.Null(a.Poincare!.JacobiRatio);
     }
 
     /// <summary>The direct fit's exact and sampled routes under a full W, each entry within 4.5 of the sampled route's standard errors.</summary>
@@ -241,9 +241,9 @@ public sealed class FunctionalActiveSubspaceTests(ITestOutputHelper output)
                     if (se > 0.0) worst = Math.Max(worst, gap / se);
                     else Assert.True(gap <= 1e-10 * Math.Max(1.0, Math.Abs(exact.Posterior.Draws[d].C[i, j])), $"draw {d}: a zero error with gap {gap:E2}");
                 }
-        output.WriteLine($"worst |exact − sampled| / se {worst:F2} over {exact.Posterior.Draws.Count} draws; sampled violations {sampled.Poincare.Violations}");
+        output.WriteLine($"worst |exact − sampled| / se {worst:F2} over {exact.Posterior.Draws.Count} draws; sampled violations {sampled.Poincare!.Violations}");
         Assert.True(worst <= 4.5, $"{worst:F2}");
-        Assert.Equal(0, sampled.Poincare.Violations);
+        Assert.Equal(0, sampled.Poincare!.Violations);
     }
 
     /// <summary>
@@ -290,7 +290,7 @@ public sealed class FunctionalActiveSubspaceTests(ITestOutputHelper output)
 
         // Location ℓ's C is its surface's: quadrature of that location's partials alone.
         BassInputs inputs = BassInputs.Prepare(data, fit.Transform);
-        (PredictionCases cases, double[] w) = Tensor(inputs, identity.Measure);
+        (PredictionCases cases, double[] w) = Tensor(inputs, identity.Measure!);
         BassGradient g = fit.Gradient(data, cases, draws);
         var single = new double[m, m];
         single[3, 3] = 1.0;
@@ -299,7 +299,7 @@ public sealed class FunctionalActiveSubspaceTests(ITestOutputHelper output)
     }
 
     /// <summary>The readout refuses a metric it cannot read: on a scalar fit, of the wrong size, not symmetric, not finite, with a
-    /// negative eigenvalue on either route; a basis fit's sampled route waits for slice 4.</summary>
+    /// negative eigenvalue on either route. (A basis fit's sampled route is built since slice 4: JointSampleActiveSubspaceTests.)</summary>
     [Fact]
     public void OutputMetric_RefusesWhatItDoesNotRead()
     {
@@ -320,7 +320,6 @@ public sealed class FunctionalActiveSubspaceTests(ITestOutputHelper output)
         Assert.Throws<ArgumentException>(() => fit.ActiveSubspace(data, spec with { OutputMetric = new OutputMetric(indefinite) }));
         Assert.Throws<ArgumentException>(() => fit.ActiveSubspace(data, spec with { OutputMetric = new OutputMetric(indefinite), Route = ActiveSubspaceRoute.Sampled, Points = 64 }));
         BassBasisFit basis = BassOutputComponentsTests.FitOf();
-        Assert.Throws<ArgumentException>(() => basis.ActiveSubspace(spec with { Route = ActiveSubspaceRoute.Sampled }));
         Assert.Throws<ArgumentException>(() => basis.ActiveSubspace(spec with { OutputMetric = new OutputMetric(Identity(basis.Decomposition.Locations + 1)) }));
     }
 

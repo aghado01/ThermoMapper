@@ -166,7 +166,7 @@ public sealed class CoActivePosterior
         var v = new double[p, p];
         for (int i = 0; i < p; i++)
             for (int j = 0; j < p; j++) v[i, j] = 0.5 * (cfg[i, j] + cfg[j, i]);
-        EigenResult e = DenseEigen.DecomposeSymmetric(v);
+        EigenResult e = ScaledEigen.Of(v);
         int[] order = [.. Enumerable.Range(0, p).OrderByDescending(i => Math.Abs(e.Eigenvalues[i])).ThenBy(i => i)];
         var values = new double[p];
         var directions = new double[p, p];

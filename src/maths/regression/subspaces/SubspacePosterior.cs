@@ -12,7 +12,7 @@ public sealed record DrawSubspace(double[,] C, double[] Eigenvalues, double[,] B
     {
         ArgumentNullException.ThrowIfNull(c);
         int p = Check(c, dimension);
-        EigenResult e = DenseEigen.DecomposeSymmetric(c);
+        EigenResult e = ScaledEigen.Of(c);
         var basis = new double[p, dimension];
         for (int j = 0; j < dimension; j++)
             for (int i = 0; i < p; i++) basis[i, j] = e.Eigenvectors[j][i];
@@ -208,7 +208,7 @@ public sealed class SubspacePosterior
     private static (double[] Values, double[,] Vectors) Eigen(double[,] m)
     {
         int p = m.GetLength(0);
-        EigenResult e = DenseEigen.DecomposeSymmetric(m);
+        EigenResult e = ScaledEigen.Of(m);
         var vectors = new double[p, p];
         for (int j = 0; j < p; j++)
             for (int i = 0; i < p; i++) vectors[i, j] = e.Eigenvectors[j][i];

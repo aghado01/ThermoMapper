@@ -13,7 +13,8 @@ public enum ActiveSubspaceRoute
     /// <summary>The moment service's derivative moments (<see cref="BassMoments.GradientOuterProduct"/>): exact.</summary>
     Exact,
 
-    /// <summary>The gradient readout averaged over points drawn from the law, shared by every draw, with its Monte Carlo error.</summary>
+    /// <summary>The gradient readout averaged over points shared by every draw, drawn from a product law or given as a joint sample
+    /// (<see cref="JointSample"/>), with its Monte Carlo error.</summary>
     Sampled,
 }
 
@@ -29,11 +30,26 @@ public enum InputMetric
     /// <summary>The inputs' own units.</summary>
     Raw,
 
-    /// <summary>Whitened by the law's covariance, affine-equivariant: under a product law, each input scaled by its standard deviation,
-    /// so C_z is the generalized problem C v = λ Σ⁻¹ v in z's coordinates. Under a product uniform law it is the box scaling up to a
-    /// constant.</summary>
+    /// <summary>Whitened by the law's covariance Σ_ρ in box units, L = Σ_ρ^{1/2} (the symmetric root, <see cref="Whitening"/>), so
+    /// C_z = LᵀCL is the generalized problem C v = λ Σ_ρ⁻¹ v: affine-equivariant. Under a product law Σ_ρ is diagonal and L scales each
+    /// input by its standard deviation, as <see cref="Standardized"/> does; under a joint sample, Σ_ρ is the sample's full covariance and
+    /// L mixes the inputs. Under a product uniform law it is the box scaling up to a constant.</summary>
     Whitened,
+
+    /// <summary>Each input scaled by its standard deviation under the law, L = diag(σ) in box units: whitening's diagonal, which keeps
+    /// the input axes. It is <see cref="Whitened"/> under a product law; under a joint sample it leaves the inputs' correlations in C's
+    /// metric, and it is not affine-equivariant.</summary>
+    Standardized,
 }
+
+/// <summary>
+/// A dependent law over the inputs given as a joint sample of points (E8, slice 4): the law is the sample's own, each point weighted by
+/// <paramref name="Weights"/> (nonnegative, of positive sum, normalized; equal when null). <paramref name="Points"/> are in the inputs'
+/// own units, one column per predictor of the fit, continuous and categorical, as prediction takes them, and lie in each input's box
+/// (its declared domain, or else its training range), as a product law's readout does. A calibration's posterior draws or an SMC run's weighted particles are such samples. Under one, the readout
+/// runs the sampled route at its points, the draws sharing them, and whitening takes its full covariance.
+/// </summary>
+public sealed record JointSample(PredictionCases Points, IReadOnlyList<double>? Weights = null);
 
 /// <summary>
 /// What E8's readout reads (<see cref="BassFit.ActiveSubspace"/>): the law, the metric, the subspace's dimension k, the route and the
@@ -42,8 +58,12 @@ public enum InputMetric
 public sealed record ActiveSubspaceSpec
 {
     /// <summary>The predictors' measures by name, in their own units, as <see cref="SensitivitySpec.Measures"/> takes them; a predictor
-    /// left out takes the uniform law on its box, or uniform level probabilities.</summary>
+    /// left out takes the uniform law on its box, or uniform level probabilities. Together they are a product law.</summary>
     public IReadOnlyDictionary<string, InputMeasure>? Measures { get; init; }
+
+    /// <summary>A dependent law as a joint sample (slice 4), in place of <see cref="Measures"/>: the sampled route at its points, which
+    /// <see cref="Points"/> and <see cref="Seed"/> then do not draw; the exact route is refused.</summary>
+    public JointSample? Sample { get; init; }
 
     /// <summary>The metric C and the subspaces are read in.</summary>
     public InputMetric Metric { get; init; } = InputMetric.Box;
@@ -54,7 +74,7 @@ public sealed record ActiveSubspaceSpec
     /// <summary>The route.</summary>
     public ActiveSubspaceRoute Route { get; init; } = ActiveSubspaceRoute.Auto;
 
-    /// <summary>The sampled route's points N, drawn once from the law and shared by every draw.</summary>
+    /// <summary>The sampled route's points N, drawn once from the product law and shared by every draw.</summary>
     public int Points { get; init; } = 4096;
 
     /// <summary>The seed of the sampled route's points.</summary>
@@ -98,6 +118,9 @@ public sealed record CoActiveSpec
     /// <summary>The predictors' measures by name, as <see cref="ActiveSubspaceSpec.Measures"/> takes them.</summary>
     public IReadOnlyDictionary<string, InputMeasure>? Measures { get; init; }
 
+    /// <summary>A dependent law as a joint sample, as <see cref="ActiveSubspaceSpec.Sample"/> takes it.</summary>
+    public JointSample? Sample { get; init; }
+
     /// <summary>The metric the matrices are read in.</summary>
     public InputMetric Metric { get; init; } = InputMetric.Box;
 
@@ -135,7 +158,7 @@ public sealed record CoActiveSpec
 /// <param name="Route">The route that ran.</param>
 /// <param name="Metric">The metric.</param>
 /// <param name="Map">L, as <see cref="ActiveSubspaceAnalysis.Map"/>: every matrix here is LᵀC_boxL.</param>
-/// <param name="Measure">The law, in the transformed units.</param>
+/// <param name="Measure">The product law, in the transformed units; null under a joint sample.</param>
 /// <param name="Points">The sampled route's points N; 0 on the exact route.</param>
 /// <param name="Posterior">The pairs and their summaries.</param>
 /// <param name="MonteCarloError">The sampled route's standard error of each entry of each pair's matrices, in the metric; null on the
@@ -144,7 +167,7 @@ public sealed record CoActiveSpec
 /// <param name="OtherDrawIndex">Each pair's draw of the second fit; null for two outputs of one fit.</param>
 public sealed record CoActiveAnalysis(
     IReadOnlyList<string> Inputs, IReadOnlyList<string> Excluded, ActiveSubspaceRoute Route, InputMetric Metric, double[,] Map,
-    ProductMeasure Measure, int Points, CoActivePosterior Posterior, IReadOnlyList<CoActiveError>? MonteCarloError,
+    ProductMeasure? Measure, int Points, CoActivePosterior Posterior, IReadOnlyList<CoActiveError>? MonteCarloError,
     IReadOnlyList<int> DrawIndex, IReadOnlyList<int>? OtherDrawIndex);
 
 /// <summary>The sampled route's standard error of each entry of one pair's C_f, C_g and C_fg (E8, slice 3).</summary>
@@ -171,14 +194,15 @@ public sealed record PoincareCheck(double[,] Total, double[,] Bound, double[,] R
 /// <param name="Excluded">The categorical predictors, which take no part in C (decision 3): their effect is Sobol's.</param>
 /// <param name="Route">The route that ran.</param>
 /// <param name="Metric">The metric C and the subspaces are in.</param>
-/// <param name="Map">L, p × p: box coordinates are L times metric coordinates (plus a shift), so C here is LᵀC_boxL.</param>
-/// <param name="Measure">The law, in the fit's transformed units.</param>
-/// <param name="Points">The sampled route's points N; 0 on the exact route.</param>
+/// <param name="Map">L, p × p: box coordinates are L times metric coordinates (plus a shift), so C here is LᵀC_boxL; diagonal but for
+/// whitening under a joint sample.</param>
+/// <param name="Measure">The product law, in the fit's transformed units; null under a joint sample.</param>
+/// <param name="Points">The sampled route's points N, drawn or the joint sample's; 0 on the exact route.</param>
 /// <param name="Posterior">The draws' C, subspaces and summaries, in the metric.</param>
 /// <param name="MonteCarloError">The sampled route's standard error of each entry of each draw's C, in the metric; null on the exact route.</param>
-/// <param name="Poincare">The per-draw consistency checks.</param>
+/// <param name="Poincare">The per-draw consistency checks; null under a joint sample, which has no marginal bound to check.</param>
 /// <param name="DrawIndex">Each draw's index among the fit's pooled draws.</param>
 public sealed record ActiveSubspaceAnalysis(
     IReadOnlyList<string> Inputs, IReadOnlyList<string> Excluded, ActiveSubspaceRoute Route, InputMetric Metric, double[,] Map,
-    ProductMeasure Measure, int Points, SubspacePosterior Posterior, double[][,]? MonteCarloError, PoincareCheck Poincare,
+    ProductMeasure? Measure, int Points, SubspacePosterior Posterior, double[][,]? MonteCarloError, PoincareCheck? Poincare,
     IReadOnlyList<int> DrawIndex);

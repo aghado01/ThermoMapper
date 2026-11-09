@@ -204,7 +204,7 @@ public sealed class ActiveSubspaceReadoutTests(ITestOutputHelper output)
         ActiveSubspaceAnalysis white = fit.ActiveSubspace(data, spec with { Metric = InputMetric.Whitened });
         double[] rawScale = [1.0 / 8.0, 1.0 / 8.0];
         // The laws' sds in box units, here: the uniform's (6/8)/√12, the truncated normal's by quadrature on [0, 1].
-        ContinuousMeasure m0 = box.Measure.Continuous(0)!;
+        ContinuousMeasure m0 = box.Measure!.Continuous(0)!;
         double sd0 = BoxSd(m0), sd1 = (6.0 / 8.0) / Math.Sqrt(12.0);
         double[] whiteScale = [sd0, sd1];
         double worst = 0.0;
@@ -269,13 +269,13 @@ public sealed class ActiveSubspaceReadoutTests(ITestOutputHelper output)
         BassData data = SensitivityFixture.Scalar();
         BassFit fit = SensitivityFixture.FitScalar(2);
         var spec = new ActiveSubspaceSpec { Measures = new Dictionary<string, InputMeasure> { ["x1"] = new UniformMeasure(0.2, 0.9) } };
-        PoincareCheck hinge = fit.ActiveSubspace(data, spec).Poincare;
+        PoincareCheck hinge = fit.ActiveSubspace(data, spec).Poincare!;
         double hingeWorst = Max(hinge.Ratio);
         Assert.Null(hinge.JacobiRatio);
 
         BassData kData = KhaosReadoutTests.Data(120, 20261110);
-        PoincareCheck legendre = Bass.Fit(KhaosReadoutTests.Config(5), kData).ActiveSubspace(kData).Poincare;
-        PoincareCheck linear = Bass.Fit(KhaosReadoutTests.Config(1, order: 1), kData).ActiveSubspace(kData).Poincare;
+        PoincareCheck legendre = Bass.Fit(KhaosReadoutTests.Config(5), kData).ActiveSubspace(kData).Poincare!;
+        PoincareCheck linear = Bass.Fit(KhaosReadoutTests.Config(1, order: 1), kData).ActiveSubspace(kData).Poincare!;
         double equality = 0.0;
         int held = 0;
         for (int d = 0; d < linear.Total.GetLength(0); d++)

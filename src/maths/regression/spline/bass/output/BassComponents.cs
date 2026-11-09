@@ -80,14 +80,15 @@ public sealed class BassBasisFit
     /// <summary>
     /// The active subspaces of the reconstructed output over the joint draws (E8's slice 3; <see cref="BassFit.ActiveSubspace"/>):
     /// C = E[JᵀW_yJ] with J the Jacobian of y = y_m + y_s∘(Kw), so C = Σ_kk′ (GᵀW_yG)_kk′ E[∇w_k∇w_k′ᵀ] with G = diag(y_s)K, under the
-    /// spec's output metric W_y, the identity by default. The exact route only, for now: the sampled route waits for joint samples.
+    /// spec's output metric W_y, the identity by default. On the sampled route, product law or joint sample, each component's gradient
+    /// readout at the shared points, with W_y's root taken in component space, GᵀW_yG (E8's slice 4).
     /// </summary>
     public ActiveSubspaceAnalysis ActiveSubspace(ActiveSubspaceSpec? spec = null) => BassActiveSubspaces.Of(this, spec ?? new ActiveSubspaceSpec());
 
     /// <summary>
     /// The co-active subspaces of two outputs of the reconstruction (E8's slice 3), f = a_fᵀy and g = a_gᵀy for the spec's output functionals
     /// <see cref="CoActiveSpec.Output"/> and <see cref="CoActiveSpec.OtherOutput"/> over the training output locations, over the joint
-    /// draws, on the exact route.
+    /// draws, on either route.
     /// </summary>
     public CoActiveAnalysis CoActiveSubspace(CoActiveSpec spec) => BassActiveSubspaces.CoActive(this, spec);
 

@@ -247,7 +247,7 @@ public sealed class CoActiveSubspaceTests(ITestOutputHelper output)
         (BassFit f, BassFit g) = CoActiveFixture.Fits();
         int[] sel = Spread(f.Draws.Sum(c => c.Count), 6), other = [.. sel.Select(d => (d + 7) % f.Draws.Sum(c => c.Count))];
         CoActiveAnalysis a = f.CoActiveSubspace(df, g, dg, new CoActiveSpec { Draws = sel, OtherDraws = other });
-        (PredictionCases cases, double[] w) = FunctionalActiveSubspaceTests.Tensor(BassInputs.Prepare(df, f.Transform), a.Measure);
+        (PredictionCases cases, double[] w) = FunctionalActiveSubspaceTests.Tensor(BassInputs.Prepare(df, f.Transform), a.Measure!);
         BassGradient gf = f.Gradient(df, cases, sel), gg = g.Gradient(dg, cases, other);
         double worst = 0.0;
         for (int s = 0; s < sel.Length; s++)
@@ -304,7 +304,7 @@ public sealed class CoActiveSubspaceTests(ITestOutputHelper output)
         CoActiveAnalysis aa = fit.CoActiveSubspace(data, spec with { OtherOutput = a });
         ActiveSubspaceAnalysis waa = fit.ActiveSubspace(data, new ActiveSubspaceSpec { Draws = sel, OutputMetric = new OutputMetric(Outer(a, a)) });
         CoActiveAnalysis twoFit = fit.CoActiveSubspace(data, fit, data, spec with { OtherDraws = sel });
-        (PredictionCases cases, double[] w) = FunctionalActiveSubspaceTests.Tensor(BassInputs.Prepare(data, fit.Transform), ab.Measure);
+        (PredictionCases cases, double[] w) = FunctionalActiveSubspaceTests.Tensor(BassInputs.Prepare(data, fit.Transform), ab.Measure!);
         BassGradient g = fit.Gradient(data, cases, sel);
         double swap = 0.0, reduce = 0.0, quadrature = 0.0;
         for (int s = 0; s < sel.Length; s++)
@@ -344,7 +344,7 @@ public sealed class CoActiveSubspaceTests(ITestOutputHelper output)
         double[] a = OutputA(m);
         int[] sel = Spread(fit.Draws.Sum(c => c.Count), 6);
         CoActiveAnalysis pair = fit.CoActiveSubspace(data, scalar, scalarData, new CoActiveSpec { Draws = sel, OtherDraws = sel, Output = a });
-        (PredictionCases cases, double[] w) = FunctionalActiveSubspaceTests.Tensor(BassInputs.Prepare(data, fit.Transform), pair.Measure);
+        (PredictionCases cases, double[] w) = FunctionalActiveSubspaceTests.Tensor(BassInputs.Prepare(data, fit.Transform), pair.Measure!);
         BassGradient gf = fit.Gradient(data, cases, sel), gs = scalar.Gradient(scalarData, cases, sel);
         double worst = 0.0;
         for (int s = 0; s < sel.Length; s++)
@@ -371,7 +371,7 @@ public sealed class CoActiveSubspaceTests(ITestOutputHelper output)
         CoActiveAnalysis ab = fit.CoActiveSubspace(spec);
         CoActiveAnalysis aa = fit.CoActiveSubspace(spec with { OtherOutput = a });
         ActiveSubspaceAnalysis waa = fit.ActiveSubspace(new ActiveSubspaceSpec { Draws = sel, OutputMetric = new OutputMetric(Outer(a, a)) });
-        (PredictionCases cases, double[] w) = FunctionalActiveSubspaceTests.Tensor(BassInputs.Prepare(fit.ComponentData(0), fit.Components[0].Transform), ab.Measure);
+        (PredictionCases cases, double[] w) = FunctionalActiveSubspaceTests.Tensor(BassInputs.Prepare(fit.ComponentData(0), fit.Components[0].Transform), ab.Measure!);
         double reduce = 0.0, quadrature = 0.0;
         for (int s = 0; s < sel.Length; s++)
         {
@@ -392,7 +392,7 @@ public sealed class CoActiveSubspaceTests(ITestOutputHelper output)
     /// <summary>
     /// The readout refuses what it does not read: fits on other inputs, or of other hinge degrees; selections of different lengths; an
     /// output functional on a scalar fit or of the wrong length; a functional fit without one; OtherDraws for two outputs of one fit;
-    /// two outputs of a scalar fit; a basis fit's sampled route or a missing output.
+    /// two outputs of a scalar fit; a basis fit's missing output. (Its sampled route is built since slice 4.)
     /// </summary>
     [Fact]
     public void CoActive_RefusesWhatItDoesNotRead()
@@ -415,7 +415,6 @@ public sealed class CoActiveSubspaceTests(ITestOutputHelper output)
         BassBasisFit basis = BassOutputComponentsTests.FitOf();
         int mb = basis.Decomposition.Locations;
         Assert.Throws<ArgumentException>(() => basis.CoActiveSubspace(new CoActiveSpec { Draws = [0], Output = OutputA(mb) }));
-        Assert.Throws<ArgumentException>(() => basis.CoActiveSubspace(new CoActiveSpec { Draws = [0], Output = OutputA(mb), OtherOutput = OutputB(mb), Route = ActiveSubspaceRoute.Sampled }));
     }
 
     /// <summary>The posterior's means under weights: E[C_fg] is the weighted mean, the weights normalized; V its symmetric part.</summary>

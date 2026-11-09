@@ -21,6 +21,9 @@ namespace Maths.Regression.Tests;
 /// with its consistency checks and without them as the summary alone; the sampled route at 256 draws and 4,096 points.</item>
 /// <item>slice 3, per draw or pair: a direct functional fit's C over its 7 locations under the identity and a full W, a basis fit's over
 /// its joint draws, two scalar fits' co-active pairs on both routes, and two outputs of the functional fit.</item>
+/// <item>slice 4: a scalar fit's readout under a joint sample of 4,096 and 16,384 points, box and whitened; the basis fit's sampled
+/// route per joint draw; and whitening itself, <see cref="Maths.Regression.Subspaces.Whitening"/>'s moments and root, at 16,384 points
+/// of 2 and 10 inputs.</item>
 /// </list>
 /// Indicative: the best of five on a shared machine.
 /// </summary>
@@ -75,6 +78,39 @@ public sealed class ActiveSubspaceCostTests(ITestOutputHelper output)
         output.WriteLine($"clock: {(BassCost.Cycles ? "thread cycles" : "wall")}; per draw at 3,000 draws: functional C over {m} locations {identity:F1} µs " +
                          $"(identity W), {full:F1} µs (full W); two outputs {outputs:F1} µs; basis C over {basis.Decomposition.Locations} locations and " +
                          $"{basis.Components.Count} components {basisC:F1} µs; per pair: two scalar fits exact {exact:F1} µs, sampled at 4,096 points {sampled:F0} µs");
+    }
+
+    [Fact]
+    public void JointSampleCostRow()
+    {
+        if (!BassQualification.Enabled) return;
+        (BassData data, _) = CoActiveFixture.Data();
+        (BassFit fit, _) = CoActiveFixture.Fits();
+        int pooled = fit.Draws.Sum(c => c.Count);
+        int[] some = [.. Enumerable.Range(0, 256).Select(d => d % pooled)];
+        var rng = new Maths.Rng.Xoshiro256PlusPlus(5);
+        var rows = new List<string>();
+        foreach (int n in new[] { 4096, 16384 })
+        {
+            double[][] x = JointSampleActiveSubspaceTests.Triangle(rng, n);
+            var sample = new JointSample(new PredictionCases([new ContinuousColumn("x0", x[0]), new ContinuousColumn("x1", x[1])]));
+            var spec = new ActiveSubspaceSpec { Draws = some, Sample = sample };
+            double box = Best(() => fit.ActiveSubspace(data, spec), some.Length);
+            double white = Best(() => fit.ActiveSubspace(data, spec with { Metric = InputMetric.Whitened }), some.Length);
+            rows.Add($"{n} points: {box:F0} µs box, {white:F0} µs whitened");
+        }
+        BassBasisFit basis = BassOutputComponentsTests.FitOf();
+        int[] joint = [.. Enumerable.Range(0, 128).Select(d => d % basis.JointDraws.Count)];
+        double basisSampled = Best(() => basis.ActiveSubspace(new ActiveSubspaceSpec { Draws = joint, Route = ActiveSubspaceRoute.Sampled }), joint.Length);
+        var whitening = new List<string>();
+        foreach (int p in new[] { 2, 10 })
+        {
+            double[][] cols = [.. Enumerable.Range(0, p).Select(_ => Enumerable.Range(0, 16384).Select(_ => rng.NextDouble()).ToArray())];
+            double cost = Best(() => Maths.Regression.Subspaces.Whitening.SymmetricRoot(Maths.Regression.Subspaces.Whitening.Moments(cols).Covariance), 1);
+            whitening.Add($"p {p}: {cost:F0} µs");
+        }
+        output.WriteLine($"clock: {(BassCost.Cycles ? "thread cycles" : "wall")}; per draw under a joint sample, {string.Join("; ", rows)}; " +
+                         $"the basis fit's sampled route per joint draw at 4,096 points {basisSampled:F0} µs; whitening at 16,384 points, {string.Join(", ", whitening)}");
     }
 
     private static double Best(Action call, int calls)

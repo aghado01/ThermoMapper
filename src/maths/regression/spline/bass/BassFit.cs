@@ -143,7 +143,9 @@ public sealed record BassFit(
     /// law, by default the uniform law on each input's box, in its declared metric, its top-k eigenspace and gap, and the posterior's two
     /// summaries apart: E[C] and the subspaces' projection mean, with each draw's principal angles to that mean and decision 6's
     /// consistency checks, all under the draw weights. C comes from the moment service where the law is a product over terms with
-    /// factors, or from the gradient readout averaged over points the draws share, with its Monte Carlo error. Categorical inputs take
+    /// factors, or from the gradient readout averaged over points the draws share, with its Monte Carlo error: drawn from the product law,
+    /// or a dependent law's joint sample (<see cref="ActiveSubspaceSpec.Sample"/>, E8's slice 4), whose full covariance whitening then
+    /// takes. Categorical inputs take
     /// no part in C. A functional response reads C = E[JᵀW_yJ] over the training output locations under the spec's output metric W_y, the
     /// identity by default (E8's slice 3). <paramref name="data"/> must be the data the fit was run on.
     /// </summary>
