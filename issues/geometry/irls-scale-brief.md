@@ -60,6 +60,46 @@ Date: 2026-11-08. Status: commissioned by the user ("chip off for that fix"), fr
 
 ## Report
 
+### 2026-11-08: stable angles on the Grassmannian and the sphere (finding 4, at the user's go-ahead)
+
+**Commits.** `0b4ed4e` adds the LinAlg principal-angle routine and moves the Grassmann maps onto it. `db0d13f` gives the sphere atan2 angles. This entry is its own commit. The Grassmann discussion proposed the routine and its LinAlg placement, and the user approved both here. The user asked for the sphere as the step after.
+
+**The routine.** `Maths.LinAlg.PrincipalAngles.Between` takes `double[,]` bases or column-major spans and allows mixed ranks.
+- The cosines come from the SVD of AᵀB.
+- The sines come from the SVD of the residual (I − LLᵀ)S of the smaller basis off the larger span.
+- The two are paired by order through atan2 (Björck and Golub 1973; Knyazev and Argentati 2002).
+- Every angle holds to about √(p·k)·ε rad, where an arccos stops near 2e-8. Tests cover known angles from 0 and 1e-14 to π/2 under random rotations, a cluster at 1e-13, mixed ranks, swapped bases and in-span rotations.
+- Readouts on the angles (the containment defect, the projection distance) are left to their callers.
+
+**The Grassmannian (`0b4ed4e`).**
+- `Distance` takes the routine.
+- `LogMap` keeps the Bendokat–Zimmermann–Absil form. It reads each angle as atan2(‖wᵢ‖, cᵢ) from its residual wᵢ = (I − YYᵀ)Zvᵢ, whose norm is the sine exactly, and loses its absolute 1e-12 small-angle guard. The 1e-12 cut-locus rule on the cosines stays.
+- `ExpMap` keeps every left vector, so steps below 1e-12 move the frame.
+- In the spread unit, the median now converges in at most 11 iterations at every spread down to s = 1e-14. Its relative error is about 1e-9 down to s = 1e-6, then about 5e-16/s, the rounding of the unit-length frames (5e-4 at 1e-12). The mean behaves the same. Before this change, iterations went unbounded below 1e-6. The curved sweep now runs to 1e-12 with a 1e-14/s allowance.
+- **Coherent upgrades.** `MoMPCA`'s τ̂_U floor follows the new resolution, p·r·ε²/[r(p−r)]. The `Data`-unit Grassmann median and mean pins moved by up to 7e-11 with the angles and are re-pinned, called out in the test. The Euclidean pins stay bit for bit with afc814d.
+
+**The sphere (`db0d13f`).**
+- `SphericalGeodesic.Distance` uses Kahan's 2·atan2(‖â − b̂‖, ‖â + b̂‖). It also serves the graph metric registry.
+- `SphericalManifold.LogMap` uses the same θ, with the direction from the residual q̂ − ⟨p̂,q̂⟩p̂. Its θ < 1e-12 guard becomes θ = 0, and the antipode stays the cut locus at π − θ < 1e-12.
+- `ExpMap`'s 1e-12 step guard becomes v = 0.
+- S⁹ joins the Grassmannians in the sweep down to 1e-12. `SphericalManifoldTests` checks angles from 1e-15 to π − 1e-6 in distance and Log, tiny steps through Exp and back, and the antipode.
+
+**Kept on purpose.** The solver's cut-locus fallback keeps its 1e-6 distance floor. The sphere and the Grassmannian no longer need it, but the hyperbolic models still read distances through arcosh, which is noise below about 2e-8 (finding 7).
+
+**`SubspacePosterior.PrincipalAngles` is handed to E8.** Its file holds E8's uncommitted edits, which extend the same method to mixed ranks through arccos, and a pathspec commit here would have taken them in. A message to E8's session gives the one-line body (`Maths.LinAlg.PrincipalAngles.Between(a, b)`) and names the two notes that still cite decision 5's arccos floor (`SubspacePosterior.cs`, `ActiveSubspaces.md`).
+
+**Runs.**
+- `0b4ed4e`: `PrincipalAnglesTests` 6 of 6; Geometry 65 of 65 at commit scope with the pinned tier; DimReduction 69 of 69; Oracle 2 of 2 with R running (the Grassmann parity oracle, and PCA against `prcomp`).
+- `db0d13f`: `SphericalManifoldTests` and the S⁹ sweep, with Geometry 77 of 77 as a whole assembly; Mapper's selected class, 1 of 1; and VizCore's 33 tests on `SphericalGeodesic` (geodesic distance, graph bandwidth, SPC graph builder), all passing.
+
+**Findings:**
+7. **The hyperbolic models keep the old floors.**
+   - The Poincaré ball's and the hyperboloid's distances go through arcosh, which resolves about 1e-8 near zero.
+   - The hyperboloid's Log returns 0 below α = 1 + 1e-12, a distance of about 1.4e-6.
+   - Both Exp maps drop tangent steps below 1e-12.
+   - Their medians at small spreads are therefore limited as the sphere's were. The same treatment would fix them: an atan2 or log1p form for the distance, and exact-zero guards. Once both models move, the solver's 1e-6 cut-locus floor can drop.
+8. **test-select reads VizCore.Tests as having no test classes.** The project uses default compile items, which the name graph does not follow. Its classes on `SphericalGeodesic` were run here by filter instead. The gap is flagged here as AGENTS.md asks for tool inaccuracies, and the fix belongs in test-select.
+
 ### 2026-11-08: MoMPCA's calibration, scale-equivariant (finding 1, at the user's go-ahead)
 
 **Commit.** `fa8776d`. The entry below this one records finding 1: the brief's 1e-6 `MoMPCA` case failed on `MoMPCA`'s own α̂ clamp, not on the solver. The user said to fix the clamp here.
