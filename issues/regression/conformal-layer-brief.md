@@ -212,6 +212,35 @@ Under "Reports" below, newest first, per slice: what landed by commit; the gates
 
 Newest first.
 
+### 2026-11-09 — Slice 7, the seams completed: each names the forms it serves
+
+Built at the user's decisions of 2026-11-09 (6 to 8 above), relayed by the main session.
+
+**Landed** on `main`, nothing pushed (the docs and E16's line are in the log beside this report):
+- `e3071cf`, with its tests in `EngineCandidateTests`:
+  - `ConformalForms` (`Full`, `Split`, `Both`) and `CandidateLogDensity.Forms` and `FormsReason`, both by default;
+  - every entry point holds a seam to its forms, quoting the engine's reason;
+  - the hierarchical P-spline's and BGP's seams name the split form alone.
+- The page: the forms on "The seams", slice 5's table updated, and the API row.
+
+**Gates.**
+- *Each engine's forms:* BAPS's and BARS's seams serve both, and the full step takes them as before. The hierarchical P-spline's serves the split form, and the full step now refuses it beside point units and whole-curve units alike, quoting the shared design. BGP's serves the split form, and its refusal says why its terms are leave-unit-out.
+- *The layer holds every entry point to the flag:* the full step, its distribution and its scores; the split form and its distribution; an inductive stream's density and centrality scores. Out-of-range flags are refused.
+- *The conformal tests:* 78 of 78. *Per commit,* the selected classes and the pinned tier: 2,141 of 2,141. *At the slice's end,* the whole assembly at e3071cf: 2,736 of 2,736.
+
+**The weighted BASS fit's candidates: nothing to build.** The plan's second item was slice 1's "candidates for a weighted fit, each case with its weight". Reading it first showed no weighted Gaussian BASS fit can be made:
+- `Bass.Fit` builds its model from the config alone and takes no observation model.
+- The config's observation models are the Gaussian, with unit weights, and the noise laws, whose terms read the law's density.
+- A weighted working response exists only inside the core's tests, at `BassModel`'s level (`BassWeightedCoreTests`'s own observation model).
+
+The seam's refusal stays as a guard. The candidates are recorded on the page as waiting for a weighted fit to be reachable: each case would carry its weight, and the term would be the training row's, N(y; f, σ²/w) for precision weights or w copies of the Gaussian term for replication.
+
+**Decided in building it.**
+- *The flag is three values.* A seam that leaves a form out gives its reason, which the refusal quotes; a refusal without one says the engine gave none.
+- *An inductive stream's scores need the split form,* since they score as its calibration does.
+
+**Next:** slice 8, exact ends and quantiles. Slices 9, 10 and 12 wait for their Lean.
+
 ### 2026-11-08 — Slice 6c, the alarms (E35's Ville, CUSUM and Shiryaev–Roberts); E35 built
 
 Built after the main session verified 6b. With it E35 is built as planned: the p-values (6a), the bets and capital (6b), and the alarms.

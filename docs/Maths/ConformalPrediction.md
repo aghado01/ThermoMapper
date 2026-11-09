@@ -29,6 +29,11 @@ Where things are:
 
 **Each draw's log CDF** (`LogCdf` on both, slice 4): ln F(y | x, θ_s) in the density's layout, the latents treated alike, for a score that orders one value, so the training units must be one observation each. The log keeps both tails: with ℓ = ln F, F = e^ℓ, and 1 − F = −expm1(ℓ) to full relative precision near 1, where a probability rounds to 1. Null where the engine gave none.
 
+**The forms each seam serves** (`Forms`, slice 7). A candidate seam names the forms of the layer it serves: `ConformalForms.Full`, `Split` or `Both`, the default.
+- *An engine whose candidates break a form's premise* names the forms that remain, with the reason (`FormsReason`). The layer refuses the seam in the form left out, quoting that reason.
+- *Every entry point reads it.* The full step, its distribution and its scores read it, as do the split form, its distribution, and an inductive stream's scores.
+- *Two engines name the split form alone:* the hierarchical P-spline (slice 5) and BGP.
+
 ## The full step (Fong and Holmes 2021)
 
 For a candidate y at case t:
@@ -393,7 +398,7 @@ Each engine joins as BASS does: log p(y | x_t, θ_s) at new cases, in its pointw
 |---|---|---|---|
 | BAPS | `Baps.CandidateLogDensity(result, design, grids, strata, cdf)`: N(y; z_tβ, σ²) at the new cases' design rows | Takes it | Takes it |
 | BARS | `BarsEnsemble.CandidateLogDensity(result, x, grids, strata, quadrature, cdf)`: each observation model's term at the draw's knots and coefficients, each observation's latent integrated as in training | Takes it | Takes it |
-| The hierarchical P-spline | `HierarchicalPSpline.CandidateLogDensity(result, design, replicates, grids, strata, cdf)`: N(y; z_tβ_r, σ²), a new point on a seen curve, conditioned on its drawn curve | Its guarantee does not reach it | Takes it |
+| The hierarchical P-spline | `HierarchicalPSpline.CandidateLogDensity(result, design, replicates, grids, strata, cdf)`: N(y; z_tβ_r, σ²), a new point on a seen curve, conditioned on its drawn curve | Refuses it: its seam names the split form alone (slice 7) | Takes it |
 | BGP | `BgpSampler.CandidateLogDensity(result, xCases, grids, strata, cdf)`: the GP's predictive given the training data at each draw (t, η) | Refuses it | Takes it |
 | The changepoint posterior | None | | |
 
@@ -408,7 +413,7 @@ Each engine joins as BASS does: log p(y | x_t, θ_s) at new cases, in its pointw
   A value outside the response's support takes −∞: a count that is not a whole number, a negative ordinate. The Gibbs-loss model is refused, as its pointwise density is: its likelihood is a pseudo-likelihood.
 - *The hierarchical P-spline.* The candidate conditions on β_r, as a training unit that splits its replicate does, and a point on a new curve is refused: it would integrate that curve while the training units condition on theirs (CB-4).
   - Its full step lacks exchangeability. The model takes one design for every replicate, so each training point's input is held by every curve, and a new point's input by none. The candidate is not exchangeable with the training points, and no partition restores it.
-  - The layer cannot tell this from the seam, whose latents match the training density's, so the docstring states it.
+  - The latents match the training density's, so the layer cannot tell this from them. Since slice 7 the seam names the split form alone (`Forms`), and the full step refuses it, at the user's decision of 2026-11-09.
   - The split form holds: calibration and test points on the seen curves, each at an input drawn as the others are, are exchangeable with one another for any fit.
   - A whole new curve on the shared design is exchangeable with the training curves, but it is a vector: E17's whole-curve bands.
 - *BGP.* Its content is the collapsed one: f, the constant mean and s² are integrated against their posterior given the training data, never drawn.
@@ -780,7 +785,7 @@ Every guarantee on this page rests on exchangeability. A conformal test martinga
 
 | Area | Types and members |
 |---|---|
-| The seams | `PointwiseLogDensity` (training); `CandidateLogDensity(values, grids, latents, stratumOf, chainLengths)` with `Weights`, `Offset(t)`, `Cases`, `Draws`; `LogCdf` on both, each draw's ln F |
+| The seams | `PointwiseLogDensity` (training); `CandidateLogDensity(values, grids, latents, stratumOf, chainLengths)` with `Forms` (`ConformalForms`: `Full`, `Split`, `Both`), `FormsReason`, `Weights`, `Offset(t)`, `Cases`, `Draws`; `LogCdf` on both, each draw's ln F |
 | BASS's candidate density | `BassFit.CandidateLogDensity(data, cases, grids, strata, unseenLevels, quadrature, cdf)`; `BassFit.PointwiseLogDensity(..., cdf)`; `BassCandidates.UnitLogCdf` and `BassPointwise.Latents` (internal, shared) |
 | The other engines' (slice 5) | `Baps.CandidateLogDensity(result, design, grids, strata, cdf)` and `Baps.PointwiseLogDensity(..., cdf)`; `BarsEnsemble.CandidateLogDensity(result, x, grids, strata, quadrature, cdf)` and `BarsEnsemble.PointwiseLogDensity(..., cdf)`; `HierarchicalPSpline.CandidateLogDensity(result, design, replicates, grids, strata, cdf)`, for the split form; `BgpSampler.CandidateLogDensity(result, xCases, grids, strata, cdf)` and `GpRegression.PredictiveLogDensities(fit, xTest, grids)`, for the split form; `IWeightResampler.MarginalLogCdf`; `NoiseLogCdf`, `CandidateSeam` and `BarsNoise.LogCdfAt` (internal, shared) |
 | The full step | `ConformalBayes.FullStep(training, candidates, ConformalOptions { Alpha, ErrorLevel, Inflate, FallbackShare (opt-in, null by default), MarginBounds (opt-in, null by default), InflationBounds })` → `ConformalPrediction(Sets, Alpha)`; `ConformalBayes.Scores(training, candidates, column)` → `ConformalScores(Units, Scores, Candidate, EffectiveSampleSize)` |
@@ -797,6 +802,7 @@ Every guarantee on this page rests on exchangeability. A conformal test martinga
 - CQR's asymmetric form, cross-conformal and the jackknife+ (above).
 - The split form's set ends and quantiles in closed form, F̂⁻¹(· | x) at the calibration PITs' order statistics, which needs each engine's quantile function; and cross-conformal predictive distributions (slice 4's alternatives).
 - BASS's candidate seam for a direct functional fit's curves, and a whole new curve for the hierarchical P-spline (E17).
+- Candidates for a weighted BASS fit, which wait for such a fit to be reachable (slice 7's finding). `Bass.Fit` takes no observation model, and its models are the unweighted Gaussian and the noise laws, which read their own densities.
 - A BGP content with f drawn at the training and candidate inputs per retained state, which the full step would take (slice 5's follow-up).
 - The changepoint posterior's seam, which no candidate exchangeable with its units admits (slice 5).
 - The conformal test martingale's full form, every score recomputed at every arrival, and one monitor per stratum (E35, recorded in the brief's slice 6 plan).
