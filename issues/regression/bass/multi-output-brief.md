@@ -98,6 +98,51 @@ Under "Reports" below, newest first, per slice: what landed by commit; the gates
 
 ## Reports
 
+### Slice 1 Geweke recheck (2026-11-09)
+
+The original uninterrupted run reproduced on `b360316`. With 400,000 independent draws, 600,000 successive sweeps, 50 batches and the original bound of 4, seed 20261123 gave mean ln τ of −3.75481 on the independent side and −3.46080 on the successive side. Its 1% quantiles were −11.254 and −8.475. The original probe agreed with the dense matrix-t marginal on all 600,000 visited states (maximum relative error 2.84·10⁻¹³). The qualification change is test-side in `ac9726b`.
+
+The shorter and longer diagnostics drew their successive initial states from the same RNG **after** consuming 100,000 or 400,000 independent draws. Their successive trajectories therefore start at different states and stream positions. The change from z = −3.38 to −7.25 cannot be read as the effect of extending one realization by a factor of four.
+
+**Fixed responses and structures.** The declared IW(6, Ψ), zero centre and Gamma(½, rate 6) scale prior are independent of the response. The independent simulator samples admissible structures from the prior and draws Σ and the centred matrix-normal coefficients. All eight original statistics depend only on these parameters, so that simulator can integrate out Y. The successive simulator generates Gaussian observations, then takes one structure/τ sweep and one posterior draw of Σ and the coefficients for each new response. The original probe used the same random draws and added the reference calculation after recording the state.
+
+The two simulators share the basis evaluator and inverse-Wishart sampler. At a prior draw, each output starts with an independent vector with covariance G⁻¹ across its basis coefficients. The Cholesky factor of Σ mixes the vectors across outputs, and division by √τ gives coefficient covariance Σ ⊗ (τG)⁻¹. The separately drawn intercept has covariance Σ/(12τ). The dense matrix-normal and inverse-Wishart references have their own checks in slices 0 and 1.
+
+At each of 101 equally spaced ln τ values from −25 through 0, the production density on **ln τ** was compared, up to one fixed-structure constant, with the dense matrix-t log marginal plus `u/2 − 6·exp(u)`. All 404 evaluations were finite and on support. The nonempty structure has one hinge and one two-way interaction. The shifted fixture adds (400, −200) to every response, putting appreciable conditional mass in the disputed tail. Each row used 500 warm-up updates and 60,000 updates of the production `BassTauBlock`, with the structure and response held fixed. The reference used Gauss–Legendre quadrature, split at the probability cutoff. Halving the panel width and widening [−50, 6] to [−60, 8] changed the mean and probability by less than 10⁻⁹.
+
+| Terms | Shift | Max log-density error (nats) | Mean ln τ, quadrature / block | Lower-tail probability, quadrature / block |
+| ---: | ---: | ---: | ---: | ---: |
+| 0 | 0 | 2.84·10⁻¹⁴ | −1.96785 / −1.96644 | 0.035845 / 0.035683 below −4 |
+| 2 | 0 | 4.26·10⁻¹⁴ | −1.22178 / −1.21984 | 0.000293 / 0.000217 below −4 |
+| 0 | 400 | 1.49·10⁻¹⁰ | −14.40515 / −14.40224 | 0.624001 / 0.624733 below −14 |
+| 2 | 400 | 2.94·10⁻¹⁰ | −13.05732 / −13.05695 | 0.097510 / 0.096983 below −14 |
+
+Across the eight readings the largest |z| was 1.46. A separate proposal check on the 12-case interacting design compared 24,452 proposed fits, before any acceptance decision, with dense refits at ln τ = −25, −15, −7 and 0. The maximum absolute marginal difference was 3.53·10⁻¹¹ nats, the smallest admitted angle statistic was 0.000719, and 6,509 refusals agreed with explicit design loads. This checks candidate scoring and support on the sampled proposals. [Fixed structures and replicated paths](../../../artifacts/e34-geweke-recheck/investigation.trx) · [Proposal checks](../../../artifacts/e34-geweke-recheck/proposals.trx)
+
+**Why the successive simulator can miss the tail.** Under the zero centre the intercept conditional mean is ȳ/(1+τ). At fixed τ, observing new Y around the previous fitted level and drawing the intercept again retains a fraction 1/(1+τ) of that level in expectation. At the analytic prior 1% quantile (ln τ ≈ −11.2436), that fraction is about 0.999987. This calculation holds τ fixed. The actual diagnostic samples it. Empirically, 337 of 488 paths starting below the 1% cutoff ended below it 50 sweeps later. Dividing a single path into batches cannot account for excursions that path never observed.
+
+Two controls used the same seeds and the same 400,000/600,000 budgets:
+
+- The committed joint-invariance test uses 12,000 independently initialized paths, 50 consecutive sweeps per path. Only the posterior sweep and composition advance a path after initialization. Its standard error uses the independent path means. The eight original statistics keep the same bound, with a ninth for the analytic lower 1% event (`n·τ` has the law of a squared standard normal). The independent simulator is also checked against the analytic mean ln τ and the tail probability.
+- An uninterrupted control kept structure, τ and Σ through all 600,000 sweeps. Before generating every 50th response it redrew only the fitted coefficients from their declared conditional prior given those three quantities. This preserves the joint law at the simulation stage where the previous Y has been discarded. The next production sweep and posterior composition ran as before. It passed all eight original statistics on all four seeds. On seed 20261123 its 1% quantile moved from −8.475 to −10.665. Its below-cutoff frequencies still ranged from 0.00481 to 0.01050 across the four runs.
+
+| Seed | Original single path, ln τ z / worst absolute z | Coefficient-refresh path, ln τ z / worst absolute z | Independent paths, ln τ z / worst absolute z | Independent paths, fraction below prior q₀.₀₁ |
+| --- | ---: | ---: | ---: | ---: |
+| 20261122 | −0.89 / 1.13 | −0.57 / 1.31 | +0.45 / 1.84 | 0.01103 |
+| 20261123 | **−7.25 / 7.25** | −0.18 / 1.30 | −0.52 / 1.86 | 0.00943 |
+| 20261124 | −0.53 / 2.38 | +0.10 / 0.96 | −0.44 / 1.49 | 0.00941 |
+| 20261125 | −1.36 / 1.92 | −0.83 / 1.13 | −0.56 / 0.85 | 0.01030 |
+
+The controls identify slow exploration of the simulated fitted levels as a contributor to the single-path discrepancy. The original seed's continuous-path tail estimate remains unqualified at this budget. The fixed-structure target, conditional update and replicated joint-invariance gates pass for the fixtures above. The production sampler and priors required no correction on this evidence. [Original four-seed rerun](../../../artifacts/e34-geweke-recheck/original.trx) · [Uninterrupted control](../../../artifacts/e34-geweke-recheck/coefficient-refresh.trx)
+
+The reproduction inputs sit with the local receipts. On a snapshot of `b360316`, the first patch adds the pending seeds and sets the original length to 400,000/600,000. Applying the second patch on top adds the conditional coefficient redraw and tail readout. Run `dotnet test` on the regression test project with `--filter FullyQualifiedName~MultiOutputLawTests.Geweke` and `BASS_QUALIFICATION=1` for either comparison. To reproduce the proposal check, add its source beside the test, mark `MultiOutputLawTests` partial in the snapshot, and select `MultiOutputLawTests.ProposalFits`. [Original overlay](../../../artifacts/e34-geweke-recheck/original-length-seeds.patch) · [Control overlay](../../../artifacts/e34-geweke-recheck/coefficient-refresh.patch) · [Proposal probe](../../../artifacts/e34-geweke-recheck/proposal-check.cs)
+
+**Verification on a clean archive of `ac9726b`.** With `BASS_QUALIFICATION=1`, the four seeds, frozen-structure tests, multi-output references, core and fit tests, and the complete pinned tier passed 94/94. The 33 pins include all ten scalar bit-identity cases and the qualification-only WHAM hash `86f45b016b3f3f47`. The largest independent-simulator |z| against the analytic mean or tail probability was 2.14. The Commit selection passed 45/45 with the flag unset. The runs used Release, below-normal priority, `MSBUILDDISABLENODEREUSE=1`, `DOTNET_PROCESSOR_COUNT=2`, and the dedicated `artifacts/e34-geweke-recheck/` root. [Qualification results](../../../artifacts/e34-geweke-recheck/qualified.trx) · [Commit selection](../../../artifacts/e34-geweke-recheck/commit.trx)
+
+The full regression assembly passed 2,742/2,742 with zero skips and `BASS_QUALIFICATION` unset (Slice scope, two test threads, 18 min 12 s). The initial Commit invocation stopped during restore before producing a TRX. The serial Release build succeeded, then both test-select scopes ran with `-NoBuild` on those binaries. [Full assembly](../../../artifacts/e34-geweke-recheck/slice.trx)
+
+**Remaining scope.** Slice 2 covers the sampler and evidence extensions in the table above. The Σ default decision remains with slice 3's small-n coverage comparison against Huang and Wand. This recheck covers the slice 1 g-form with a declared IW and a sampled τ.
+
 ### Slice 1: the core (chip, 2026-11-09)
 
 **Landed:**
@@ -143,7 +188,7 @@ The whole regression assembly (Slice scope, slow tier included) on a snapshot of
 
 **Follow-ups, with the decision each would change:**
 - *Σ's lower triangle in the run's diagnostics,* if a run's correlations converge more slowly than ln|Σ| shows. That would change the diagnostics record's shape; nothing has shown the need.
-- *Geweke's ln τ at z = −3.38 on one seed,* the same sign on the other (−0.72). It is inside the bound the scalar Geweke gates use. A third seed would decide whether it is chance or a slow τ in the successive chain; if it recurs past 4, τ's step for K outputs gets a closer look.
+- The four-seed Geweke follow-up and the limits of its original single-path diagnostic are recorded in the slice 1 recheck above.
 
 ### Slice 0, addendum: the sources read (chip, 2026-11-08)
 
