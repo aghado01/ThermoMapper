@@ -89,7 +89,7 @@ public enum InflationBounds
     Uniform,
 }
 
-/// <summary>A run of accepted grid values, from its lowest to its highest; the set's boundary lies in the gaps beside it.</summary>
+/// <summary>Lower and upper response coordinates. On a sampled set they bound a run of accepted grid values.</summary>
 public readonly record struct GridInterval(double Lower, double Upper);
 
 /// <summary>
@@ -276,6 +276,34 @@ public sealed record ConformalSet(int Case, int Stratum, int Units, int Level, d
             for (int g = 1; g < Grid.Length; g++) gap = Math.Max(gap, Grid[g] - Grid[g - 1]);
             return gap;
         }
+    }
+
+    /// <summary>Bisect each change of decision on the grid to an absolute response tolerance. Supply the same fit and options
+    /// evaluated at the selected case on the singleton grid [y]. Returns both witnesses in each changing cell. An accepted grid
+    /// edge stays open, and crossings between equal decisions are unobserved.</summary>
+    public IReadOnlyList<ConformalBoundary> RefineBoundaries(Func<double, ConformalSet> at, double tolerance)
+    {
+        ArgumentNullException.ThrowIfNull(at);
+        ConformalBisection.CheckTolerance(tolerance);
+        var boundaries = new List<ConformalBoundary>();
+        if (WholeSpace) return boundaries;
+        bool Decide(double y)
+        {
+            ConformalSet probe = at(y);
+            if (probe.Grid.Length != 1 || probe.Grid[0] != y || probe.Stratum != Stratum || probe.Units != Units ||
+                probe.Level != Level || probe.Inflated != Inflated || probe.Margin?.Inflation != Margin?.Inflation ||
+                probe.ErrorLevel != ErrorLevel || probe.WholeSpace)
+                throw new ArgumentException("Refinement needs the same set rule and stratum at the requested y.", nameof(at));
+            return probe.Accepts(0);
+        }
+        for (int g = 1; g < Grid.Length; g++)
+        {
+            bool left = Accepts(g - 1);
+            if (left == Accepts(g)) continue;
+            var (lo, hi) = ConformalBisection.Narrow(Grid[g - 1], Grid[g], left, Decide, tolerance);
+            boundaries.Add(left ? new(lo, hi) : new(hi, lo));
+        }
+        return boundaries;
     }
 
     /// <summary>Whether the lowest grid value is accepted, so the set may extend below the grid.</summary>

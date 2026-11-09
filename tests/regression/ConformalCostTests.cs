@@ -209,4 +209,66 @@ public sealed class ConformalCostTests(ITestOutputHelper output)
                          + $"{1e3 * perGrid / Grid:F1} µs per candidate; the whole call on one grid {split:F2} ms");
         output.WriteLine($"  the full step's opt-in: the whole call on one grid {full:F2} ms, {1e3 * full / Grid:F1} µs per candidate");
     }
+
+    [Theory]
+    [InlineData(1000, 1000)]
+    [InlineData(1000, 4000)]
+    public void ExactEndsCostRow(int n, int s)
+    {
+        if (!BassQualification.Enabled) return;
+        var rng = new Xoshiro256PlusPlus(20261109);
+        double[] beta = [.. Enumerable.Range(0, s).Select(_ => rng.NextDouble())];
+        double[] x = [.. Enumerable.Range(0, n).Select(_ => 2 * rng.NextDouble() - 1)];
+        double[][] y = [.. x.Select(v => new[] { ConformalBayesTests.Truth(v, 0.5, rng) })];
+        var cal = ConformalPredictiveDistributionTests.Seam(beta, 1, null, x, y);
+        // At x = 0 the common N(0,1) predictive has a native inverse. Time the actual candidate seam, rank and readouts on both paths.
+        CandidateLogDensity Test(double[] g) => ConformalPredictiveDistributionTests.Seam(beta, 1, null, [0], [g]);
+        SplitPitCalibration fit = null!;
+        double sort = Best(() => fit = SplitConformal.CalibrateDistribution(cal));
+        double[] grid = [.. Enumerable.Range(0, Grid).Select(i => -6 + 12.0 * i / (Grid - 1))];
+        double gridded = Best(() =>
+        {
+            var d = fit.OnGrid(Test(grid)).Distributions[0];
+            _ = d.Quantile(0.5);
+            _ = d.Intervals(0.1);
+        });
+        int calls = 0;
+        double Measure(Func<double, double>? inverse) => Best(() =>
+        {
+            calls = 0;
+            var d = fit.AtCase(v => { calls++; return Test([v]); }, predictiveQuantile: inverse);
+            _ = d.Interval(0.1);
+            _ = d.Quantile(0.5);
+        });
+        double native = Measure(Maths.Distributions.Normal.StandardQuantile);
+        int nativeProbes = calls;
+        double root = Measure(null);
+        output.WriteLine($"n {n}, S {s}, G {Grid}, {(BassCost.Cycles ? "cycles" : "wall")}, best of five: calibration {sort:F2} ms; " +
+                         $"median and 90% ends: grid {gridded:F2} ms ({1000 * gridded / Grid:F2} µs/candidate), native {native:F2} ms ({nativeProbes} probes), CDF root {root:F2} ms ({calls} probes)");
+    }
+
+    [Fact]
+    public void RefinedBoundariesCostRow()
+    {
+        if (!BassQualification.Enabled) return;
+        const int n = 39, s = 40;
+        var rng = new Xoshiro256PlusPlus(20261109);
+        double[] xs = [.. Enumerable.Range(0, n).Select(_ => rng.NextDouble())];
+        double[][] ys = [.. xs.Select(x => new[] { ConformalBayesTests.Truth(x, 0.5, rng) })];
+        double[] beta = [.. Enumerable.Range(0, s).Select(_ => rng.NextDouble())];
+        var cal = ConformalPredictiveDistributionTests.Seam(beta, 1, null, xs, ys);
+        ConformalSet Set(double[] grid) => SplitConformal.Density(cal, ConformalPredictiveDistributionTests.Seam(beta, 1, null, [0.2], [grid])).Sets[0];
+        double[] coarse = [.. Enumerable.Range(0, 17).Select(i => -4.0 + i * 0.5)];
+        double[] fine = [.. Enumerable.Range(0, 8001).Select(i => -4.0 + i * 0.001)];
+        int calls = 0;
+        double gridCost = Best(() => _ = Set(fine).Intervals);
+        double cost = Best(() =>
+        {
+            calls = 0;
+            var bounds = Set(coarse).RefineBoundaries(y => { calls++; return Set([y]); }, 0.001);
+            Assert.Equal(2, bounds.Count);
+        });
+        output.WriteLine($"split density, n {n}, S {s}, resolution 0.001, {(BassCost.Cycles ? "cycles" : "wall")}, best of five: " +
+                         $"grid G={fine.Length} {gridCost:F2} ms; grid G={coarse.Length} plus {calls} singleton probes {cost:F2} ms (calibration reread at each probe)");
+    }
 }

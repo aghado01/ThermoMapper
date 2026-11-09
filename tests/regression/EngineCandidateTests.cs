@@ -32,6 +32,17 @@ public sealed class EngineCandidateTests(ITestOutputHelper output)
 
     private static double[][] Singletons(IEnumerable<double> y) => [.. y.Select(v => new[] { v })];
 
+    // Invert the retained fit's predictive at one case, and check its median crossing against the public grid rank.
+    private static void CheckSplitMedian(CandidateLogDensity calibration, Func<double[], CandidateLogDensity> at)
+    {
+        const double tolerance = 1e-7;
+        var d = SplitConformal.CalibrateDistribution(calibration).AtCase(y => at([y]), tolerance: tolerance);
+        double median = d.Quantile(0.5);
+        Assert.True(double.IsFinite(median));
+        var around = SplitConformal.Distribution(calibration, at([median - 2 * tolerance, median + 2 * tolerance])).Distributions[0];
+        Assert.True(around.Mid(0) < 0.5 && around.Mid(1) >= 0.5);
+    }
+
     // Every training unit's column against the candidates', one case per unit, each on a grid of its own response: bit for bit.
     private static void AssertColumns(PointwiseLogDensity training, CandidateLogDensity candidates)
     {
@@ -78,6 +89,7 @@ public sealed class EngineCandidateTests(ITestOutputHelper output)
         AssertColumns(training, candidates);
         Assert.Equal(ConformalForms.Both, candidates.Forms);
         Assert.Equal(50, ConformalBayes.FullStep(training, candidates).Sets.Count);
+        CheckSplitMedian(candidates, g => model.CandidateLogDensity(r, z, [.. Enumerable.Repeat(g, y.Length)], cdf: true));
         Assert.Throws<ArgumentException>(() => model.CandidateLogDensity(r, new double[1, z.GetLength(1) - 1], [[0.0]]));
         Assert.Throws<ArgumentException>(() => model.PointwiseLogDensity(r, UnitPartition.ConsecutiveBlocks(25, 2), cdf: true));
     }
@@ -145,6 +157,7 @@ public sealed class EngineCandidateTests(ITestOutputHelper output)
         AssertColumns(training, candidates);
         Assert.Equal(ConformalForms.Both, candidates.Forms);
         Assert.Equal(50, ConformalBayes.FullStep(training, candidates).Sets.Count);
+        if (law == "normal") CheckSplitMedian(candidates, g => ensemble.CandidateLogDensity(r, [0.3], [g], cdf: true));
     }
 
     [Fact]
@@ -341,6 +354,7 @@ public sealed class EngineCandidateTests(ITestOutputHelper output)
         // The split form takes it: calibration and test points on the seen curves.
         ConformalPrediction split = SplitConformal.Density(candidates, model.CandidateLogDensity(h, design, replicates, [.. Enumerable.Repeat(new[] { 1.0, 2.0 }, 16)]));
         Assert.All(split.Sets, s => Assert.Equal(17, s.Units));
+        CheckSplitMedian(candidates, g => model.CandidateLogDensity(h, design, replicates, [.. Enumerable.Repeat(g, 16)], cdf: true));
 
         Assert.Contains("new curve", Assert.Throws<ArgumentOutOfRangeException>(() => model.CandidateLogDensity(h, design, [.. replicates.Select(r => r + 1)], Singletons(y.SelectMany(v => v)))).Message);
         HierarchicalResult lean = model.Run(chains: 1, masterSeed: 5, burn: 100, samples: 20, retainReplicates: false);
@@ -437,6 +451,7 @@ public sealed class EngineCandidateTests(ITestOutputHelper output)
         Assert.All(sets.Sets, s => Assert.True(s.Width > 0.0));
         Assert.Equal(2, SplitConformal.Distribution(calibration, test).Distributions.Count);
         Assert.Equal(ConformalForms.Split, calibration.Forms);
+        CheckSplitMedian(calibration, g => sampler.CandidateLogDensity(r, new double[,] { { x[0, 0] } }, [g], cdf: true));
         Assert.Contains("leave-unit-out", Assert.Throws<ArgumentException>(
             () => ConformalBayes.FullStep(sampler.PointwiseLogDensity(r), sampler.CandidateLogDensity(r, x, Singletons(y)))).Message);
     }
