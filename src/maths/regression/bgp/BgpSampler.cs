@@ -113,7 +113,7 @@ public sealed record BgpResult(
 /// warm-started replicas and gains the cross-chain R̂ + ESS it previously lacked; the target is unimodal /
 /// log-concave, so the chains warm-start at the prior midpoint rather than overdisperse.
 /// </summary>
-public sealed class BgpSampler : IEnsembleModel<double>
+public sealed partial class BgpSampler : IEnsembleModel<double>
 {
     private readonly GpRegression _gp;
     private readonly EmpiricalBayesBandwidthPrior _prior;
@@ -312,7 +312,8 @@ public sealed class BgpSampler : IEnsembleModel<double>
     /// <summary>
     /// The run's pointwise density (OQ17) in the collapsed content: per draw and unit, the leave-unit-out predictive
     /// log p(y_U | y_rest, t, η), with f, the constant mean and s² integrated out (<see cref="GpRegression.LeaveOutLogDensities"/>).
-    /// It is BGP's one content, since f is integrated and never drawn. PSIS-LOO reads it; WAIC refuses it. Draws that
+    /// It is BGP's one content, since f is integrated and never drawn. PSIS-LOO reads it; WAIC and the conformal layer's full step
+    /// refuse it, and the split form reads the candidate density (<see cref="CandidateLogDensity"/>) instead. Draws that
     /// repeat their predecessor's (t, η), as a rejected proposal does, reuse its row, so a run costs one O(n³) refit per
     /// accepted state.
     /// </summary>
@@ -337,12 +338,7 @@ public sealed class BgpSampler : IEnsembleModel<double>
                 for (int u = 0; u < partition.Units; u++) values[row, u] = terms![u];
                 row++;
             }
-        var latents = new List<LatentReport> { new("bandwidth t", LatentScope.Global, LatentTreatment.Conditioned) };
-        if (_unknownScale) latents.Add(new("noise ratio η", LatentScope.Global, LatentTreatment.Conditioned));
-        latents.Add(new("regression function f", LatentScope.Global, LatentTreatment.IntegratedGivenOthers));
-        latents.Add(new("constant mean m", LatentScope.Global, LatentTreatment.IntegratedGivenOthers));
-        if (_unknownScale) latents.Add(new("signal variance s²", LatentScope.Global, LatentTreatment.IntegratedGivenOthers));
-        return new PointwiseLogDensity(values, partition, latents, ChainLengths.Of(result.BandwidthDraws));
+        return new PointwiseLogDensity(values, partition, Latents(), ChainLengths.Of(result.BandwidthDraws));
     }
 
     private static double Quantile(List<double> sorted, double q)

@@ -2,7 +2,6 @@ using System;
 using System.Collections.Generic;
 using Maths.Distributions;
 using Maths.Regression.Conformal;
-using Maths.Regression.GPrior;
 
 namespace Maths.Regression.Spline.Bass;
 
@@ -118,16 +117,6 @@ internal static class BassCandidates
         return logCdfs;
     }
 
-    private const double Ln2 = 0.69314718055994530942;
-
-    /// <summary>
-    /// ln F(e) under a noise at a draw, each half on its own tail: above the median ln(1 − S(e)) from the survival, which a law integrates on
-    /// the upper side. The mixtures' tables end at the 10⁻¹² tails, and beyond the upper one their <c>LogCdf</c> integrates the lower side,
-    /// losing 1 − F's digits and reading a few units of 10⁻¹⁵ above 0. The closed forms' own <c>LogCdf</c> takes this path already.
-    /// </summary>
-    internal static double LogCdf(IContinuousDistribution noise, double e)
-    {
-        double lower = noise.LogCdf(e);
-        return lower > -Ln2 ? LogFunctions.Log1mExp(noise.LogSurvival(e)) : lower;
-    }
+    /// <summary>ln F(e) under a noise at a draw, each half on its own tail (<see cref="NoiseLogCdf"/>, which every engine's seam shares).</summary>
+    internal static double LogCdf(IContinuousDistribution noise, double e) => NoiseLogCdf.Of(noise, e);
 }

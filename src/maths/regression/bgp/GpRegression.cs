@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 using Maths.Distributions;
 using Maths.LinAlg;
 using Maths.Samplers.Ensemble;
@@ -123,6 +124,9 @@ public sealed class GpRegression
     }
 
     public int Count => _n;
+
+    /// <summary>The inputs' dimension D.</summary>
+    internal int Dimension => _d;
 
     /// <summary>How this GP treats the noise and signal variances.</summary>
     public GpNoiseModel NoiseModel { get; }
@@ -281,6 +285,63 @@ public sealed class GpRegression
                 : LeaveOutPredictive.StudentT(block, pr, factored.Fit.Quadratic, _n - 1);
         }
         return terms;
+    }
+
+    /// <summary>
+    /// The predictive log density of a new observation at each row of <paramref name="xTest"/> (original units), at each value on that
+    /// case's grid, at one fit: f, the constant mean and, for an unknown scale, s² integrated out against their posterior given the data,
+    /// the collapsed content's term for an observation outside the data (E16's candidate seam, slice 5). A known σ² gives N(f̂(x*), v + σ²), with v
+    /// <see cref="PredictVariance"/>'s variance of f, the mean's uncertainty included. An unknown scale under 1/s² gives a Student t on
+    /// n − 1 degrees of freedom, location f̂(x*) and scale² Q(v + η)/(n − 1). Either way it is the evidence ratio
+    /// log p(Y, y* | t, η) − log p(Y | t, η), so a fit of the data less one observation gives, at that observation,
+    /// <see cref="LeaveOutLogDensities"/>' term. The values run case by case, each case's grid in order. One refit, O(n³), serves every case.
+    /// </summary>
+    public double[] PredictiveLogDensities(GpFit fit, double[,] xTest, IReadOnlyList<double[]> grids)
+    {
+        ArgumentNullException.ThrowIfNull(fit);
+        ArgumentNullException.ThrowIfNull(xTest);
+        if (xTest.GetLength(1) != _d) throw new ArgumentException("Test inputs must have the training dimension.", nameof(xTest));
+        int[] offsets = CandidateSeam.Offsets(grids, xTest.GetLength(0));
+        var values = new double[offsets[^1]];
+        PredictiveInFrame(fit, Transform.MapInputs(xTest), grids, values, null);
+        return values;
+    }
+
+    /// <summary>As <see cref="PredictiveLogDensities"/>, for test inputs already in the fitted frame, writing each value's log density and,
+    /// when <paramref name="logCdfs"/> is given, its log CDF, each tail kept.</summary>
+    internal void PredictiveInFrame(GpFit fit, double[,] mappedTest, IReadOnlyList<double[]> grids, double[] values, double[]? logCdfs)
+    {
+        if (fit.Alpha.Length != _n) throw new ArgumentException("The fit is not of this GP's data.", nameof(fit));
+        double[] mean = PredictMeanInFrame(fit, mappedTest);
+        double[] variance = ConditionalVarianceInFrame(Refit(fit), mappedTest);
+        double halfAll = 0.5 * _n, logRatio = SpecialFunctions.LogGamma(halfAll) - SpecialFunctions.LogGamma(0.5 * (_n - 1));
+        int at = 0;
+        for (int t = 0; t < grids.Count; t++)
+        {
+            double v = variance[t] + fit.NoiseRatio;   // a new observation's, in units of the signal variance
+            double[] grid = grids[t];
+            if (NoiseModel == GpNoiseModel.Known)
+            {
+                double logNorm = -0.5 * Math.Log(2.0 * Math.PI * v), sd = Math.Sqrt(v);
+                for (int g = 0; g < grid.Length; g++, at++)
+                {
+                    double e = grid[g] - mean[t];
+                    values[at] = logNorm - 0.5 * e * e / v;
+                    if (logCdfs is not null) logCdfs[at] = Normal.StandardLogCdf(e / sd);
+                }
+            }
+            else
+            {
+                double scale2 = fit.Quadratic * v, logNorm = logRatio - 0.5 * Math.Log(Math.PI * scale2);
+                IContinuousDistribution? law = logCdfs is null ? null : StudentT.LocationScale(_n - 1, 0.0, Math.Sqrt(scale2 / (_n - 1)));
+                for (int g = 0; g < grid.Length; g++, at++)
+                {
+                    double e = grid[g] - mean[t];
+                    values[at] = logNorm - halfAll * SpecialFunctions.Log1p(e * e / scale2);
+                    if (law is not null) logCdfs![at] = NoiseLogCdf.Of(law, e);
+                }
+            }
+        }
     }
 
     /// <summary>

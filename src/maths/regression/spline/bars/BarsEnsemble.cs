@@ -179,7 +179,7 @@ public sealed record BarsResult(
 /// the BARS semantics and assembles <see cref="BarsResult"/> from the pooled functionals + its own pooled sinks
 /// (peak-intensity λ(T), span-coverage π(T), the per-draw argmax cloud). Parallelism is across chains, never data.
 /// </summary>
-public sealed class BarsEnsemble : IEnsembleModel<KnotConfig>
+public sealed partial class BarsEnsemble : IEnsembleModel<KnotConfig>
 {
     private readonly IBasis _basis;
     private readonly IObservationModel _model;
@@ -654,8 +654,12 @@ public sealed class BarsEnsemble : IEnsembleModel<KnotConfig>
     /// <param name="content">The draw content (<see cref="PointwiseContent"/>); the retained parameters by default.</param>
     /// <param name="quadrature">Under a noise whose marginal is an integral over v (<see cref="IMixingLaw.MarginalByQuadrature"/>, the
     /// generalized beta prime's), whether to read it, hundreds of nodes per observation and draw; refused otherwise.</param>
+    /// <param name="cdf">Adds each draw's log CDF at each unit's response (<see cref="Maths.Regression.PointwiseLogDensity.LogCdf"/>), from
+    /// the term's own law, for the full step's predictive distribution: the retained parameters' content, each unit one observation, and a
+    /// continuous response. The candidates' log CDF (<see cref="CandidateLogDensity"/>) reads the same law.</param>
     public PointwiseLogDensity PointwiseLogDensity(BarsResult result, double[] x, double[] y, UnitPartition? units = null,
-                                                   PointwiseContent content = PointwiseContent.RetainedParameters, bool quadrature = false)
+                                                   PointwiseContent content = PointwiseContent.RetainedParameters, bool quadrature = false,
+                                                   bool cdf = false)
     {
         ArgumentNullException.ThrowIfNull(result);
         ArgumentNullException.ThrowIfNull(x);
@@ -666,24 +670,23 @@ public sealed class BarsEnsemble : IEnsembleModel<KnotConfig>
             throw new ArgumentException("The partition must cover the fitted observations.", nameof(units));
         if (content is not (PointwiseContent.RetainedParameters or PointwiseContent.CollapsedPredictive))
             throw new ArgumentOutOfRangeException(nameof(content));
-        if (content == PointwiseContent.CollapsedPredictive) return CollapsedPointwise(result, x, y, partition);
-        if (_noise is { } law && law.Mixing.MarginalByQuadrature && !quadrature)
-            throw new NotSupportedException($"{law.Name}'s marginal is an integral over v per observation and draw; ask for it with quadrature: true.");
-        Func<double, double, double, double> term = _model switch   // (yᵢ, ηᵢ = zᵢβ, σ²) → log density
+        if (content == PointwiseContent.CollapsedPredictive)
+            return cdf ? throw new ArgumentException("The CDF is read for the retained parameters' content.", nameof(cdf))
+                       : CollapsedPointwise(result, x, y, partition);
+        CheckQuadrature(quadrature);
+        Func<double, double, double, double> term = RetainedTerm();
+        if (cdf)
         {
-            WeightedNormalModel when _resampler is IWeightResampler resampler
-                => (yi, eta, s2) => resampler.MarginalLogDensity(yi - eta, s2),
-            WeightedNormalModel => (yi, eta, s2) => -0.5 * Math.Log(2.0 * Math.PI * s2) - 0.5 * (yi - eta) * (yi - eta) / s2,
-            PoissonModel => (yi, eta, _) => yi * eta - Math.Exp(eta) - SpecialFunctions.LogGamma(yi + 1.0),
-            WhittleModel => (yi, eta, _) => -eta - yi * Math.Exp(-eta),
-            _ => throw new NotSupportedException(
-                $"{_model.GetType().Name} has no pointwise density: its likelihood is a pseudo-likelihood, not a density of a new observation."),
-        };
+            CandidateSeam.OneObservationEach(partition, nameof(units));
+            CheckLogCdf();
+        }
 
         int n = y.Length, draws = 0;
         foreach (IReadOnlyList<BarsDraw> chain in result.Draws) draws += chain.Count;
         var values = new double[draws, partition.Units];
+        double[,]? logCdfs = cdf ? new double[draws, partition.Units] : null;
         var terms = new double[n];
+        var etas = new double[n];
         int row = 0;
         foreach (IReadOnlyList<BarsDraw> chain in result.Draws)
             foreach (BarsDraw d in chain)
@@ -691,12 +694,9 @@ public sealed class BarsEnsemble : IEnsembleModel<KnotConfig>
                 double[,] z = _basis.Design(d.Knots, x);
                 for (int i = 0; i < n; i++)
                 {
-                    double eta = 0.0;
-                    for (int j = 0; j < d.Coefficients.Length; j++) eta += z[i, j] * d.Coefficients[j];
-                    // Under a noise the law's density with vᵢ integrated, at the draw's σ² and skew.
-                    terms[i] = _noise is { } noise
-                        ? noise.Mixing.MarginalLogDensity(y[i] - eta, d.Sigma2 * noise.VarianceScale, Math.Sqrt(d.Sigma2) * d.Skew)
-                        : term(y[i], eta, d.Sigma2);
+                    double eta = Linear(z, i, d.Coefficients);
+                    etas[i] = eta;
+                    terms[i] = Term(term, y[i], eta, d);
                 }
                 for (int u = 0; u < partition.Units; u++)
                 {
@@ -704,25 +704,18 @@ public sealed class BarsEnsemble : IEnsembleModel<KnotConfig>
                     foreach (int i in partition.Members[u]) sum += terms[i];
                     values[row, u] = sum;
                 }
+                if (logCdfs is not null)
+                {
+                    Func<double, double, double> logCdf = LogCdfAt(d);
+                    for (int u = 0; u < partition.Units; u++)
+                    {
+                        int i = partition.Members[u][0];
+                        logCdfs[row, u] = logCdf(y[i], etas[i]);
+                    }
+                }
                 row++;
             }
-
-        var latents = new List<LatentReport>
-        {
-            new("knot configuration", LatentScope.Global, LatentTreatment.Conditioned),
-            new("coefficients β", LatentScope.Global, LatentTreatment.Conditioned),
-        };
-        if (_model is WeightedNormalModel)
-        {
-            latents.Add(new LatentReport("noise variance σ²", LatentScope.Global, LatentTreatment.Conditioned));
-            if (_resampler is not null) latents.Add(new LatentReport("robust weights wᵢ", LatentScope.Observation, LatentTreatment.Integrated));
-            if (_noise is { } noise)
-            {
-                latents.Add(new LatentReport("latent scales vᵢ", LatentScope.Observation, LatentTreatment.Integrated));
-                if (noise.SkewPrior is not null) latents.Add(new LatentReport("skew β", LatentScope.Global, LatentTreatment.Conditioned));
-            }
-        }
-        return new PointwiseLogDensity(values, partition, latents, ChainLengths.Of(result.Draws));
+        return new PointwiseLogDensity(values, partition, RetainedLatents(), ChainLengths.Of(result.Draws)) { LogCdf = logCdfs };
     }
 
     // The collapsed content: each draw's knots refitted, and its fit's leave-unit-out predictive per unit.

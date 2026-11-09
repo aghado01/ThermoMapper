@@ -34,6 +34,10 @@ public sealed record ChangepointDraw(int[] SegmentEnds, double[] Levels)
 /// level from the segment model (<see cref="ISegmentModel.SampleLevel"/>). Given k the prior is uniform over
 /// segmentations, so this is the posterior over segmentations exactly.</para>
 /// The tables hold 4(n+1)² + 2(K+1)(n+1) numbers, and the posterior keeps the segment model for the level draws.
+/// <para>The conformal layer takes no candidate density from it (E16, slice 5). The posterior is over segmentations of the n positions
+/// it was given, one observation at each. A candidate at another position, a held-out one included, falls outside every segmentation, and
+/// a second value at a seen position is not a unit of that sequence. No candidate is exchangeable with the units, the premise of the full
+/// step and of the split form alike.</para>
 /// </summary>
 public sealed class ChangepointPosterior
 {

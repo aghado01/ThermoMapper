@@ -21,6 +21,11 @@ public interface IWeightResampler
     /// <summary>The log density of one residual with its weight integrated out under the weight's prior: the error
     /// model's marginal, which a pointwise density uses, since each weight belongs to one observation (OQ17).</summary>
     double MarginalLogDensity(double residual, double sigma2);
+
+    /// <summary>The log CDF of one residual with its weight integrated out, the same marginal's, each tail kept: the conformal predictive
+    /// distribution reads it (E16). A resampler without one says so.</summary>
+    double MarginalLogCdf(double residual, double sigma2) =>
+        throw new NotSupportedException($"{GetType().Name} gives no marginal CDF, which the conformal predictive distribution reads.");
 }
 
 /// <summary>
@@ -59,6 +64,9 @@ public sealed class StudentTWeights : IWeightResampler
 
     /// <summary>The Student t_ν(0, σ) log density: Γ((ν+1)/2)/(Γ(ν/2)√(νπσ²))·(1 + r²/(νσ²))^(−(ν+1)/2), the law's.</summary>
     public double MarginalLogDensity(double residual, double sigma2) => _law.MarginalLogDensity(residual, sigma2, 0.0);
+
+    /// <summary>The Student t_ν(0, σ) log CDF, each tail from its own side.</summary>
+    public double MarginalLogCdf(double residual, double sigma2) => NoiseLogCdf.Of(StudentT.LocationScale(DegreesOfFreedom, 0.0, Math.Sqrt(sigma2)), residual);
 }
 
 /// <summary>
@@ -110,5 +118,20 @@ public sealed class ContaminatedNormalWeights : IWeightResampler
         double outlier = Math.Log(_pi) + normal - Math.Log(_kappa) - 0.5 * z2 / (_kappa * _kappa);
         double top = Math.Max(good, outlier);
         return top + Math.Log(Math.Exp(good - top) + Math.Exp(outlier - top));
+    }
+
+    /// <summary>The mixture's log CDF, (1−π) Φ(r/σ) + π Φ(r/(κσ)), each tail summed in logs and read from its own side.</summary>
+    public double MarginalLogCdf(double residual, double sigma2)
+    {
+        double z = residual / Math.Sqrt(sigma2);
+        double lower = LogAdd(Math.Log(1.0 - _pi) + Normal.StandardLogCdf(z), Math.Log(_pi) + Normal.StandardLogCdf(z / _kappa));
+        double upper = LogAdd(Math.Log(1.0 - _pi) + Normal.StandardLogCdf(-z), Math.Log(_pi) + Normal.StandardLogCdf(-z / _kappa));
+        return NoiseLogCdf.FromTails(lower, upper);
+    }
+
+    private static double LogAdd(double a, double b)
+    {
+        double top = Math.Max(a, b);
+        return double.IsNegativeInfinity(top) ? top : top + Math.Log(Math.Exp(a - top) + Math.Exp(b - top));
     }
 }

@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.Globalization;
+using Maths.Distributions;
 using Maths.LinAlg;
 using Maths.Rng;
 using Maths.Samplers.Blocks;
@@ -160,7 +161,7 @@ public sealed record BapsDraw(double[] Coefficients, double[]? ConditionalMean, 
 /// checkpoints. Every draw is retained, and the Bayes fit, the λ posterior (median + 95% interval), σ and the bands are
 /// read from the draws.
 /// </summary>
-public sealed class Baps
+public sealed partial class Baps
 {
     private readonly double[,] _z;
     private readonly double[] _y;
@@ -653,46 +654,48 @@ public sealed class Baps
     /// log p(y_unit | draw) for every retained draw of a result this model produced and every unit (OQ17), on the data it
     /// fitted: the retained-parameters content. A draw's coefficients and σ² are global, so every unit conditions on them,
     /// and its term is N(yᵢ; zᵢβ, σ²) summed over the unit's observations. The smoothing parameters (λ, τ², the local
-    /// multipliers η, the components' τⱼ²) enter only β's prior, not the term.
+    /// multipliers η, the components' τⱼ²) enter only β's prior, not the term. The candidate density at new cases is
+    /// <see cref="CandidateLogDensity"/>.
     /// </summary>
     /// <param name="result">A run of this model, whose retained draws are scored.</param>
     /// <param name="units">The partition of the n observations; null takes each observation as its own unit.</param>
-    public PointwiseLogDensity PointwiseLogDensity(BapsResult result, UnitPartition? units = null)
+    /// <param name="cdf">Adds each draw's log CDF at each unit's response, ln Φ((yᵢ − zᵢβ)/σ)
+    /// (<see cref="Maths.Regression.PointwiseLogDensity.LogCdf"/>), for the full step's predictive distribution; each unit must then
+    /// be one observation.</param>
+    public PointwiseLogDensity PointwiseLogDensity(BapsResult result, UnitPartition? units = null, bool cdf = false)
     {
         ArgumentNullException.ThrowIfNull(result);
         UnitPartition partition = units ?? UnitPartition.EachObservation(_n);
         if (partition.Observations != _n)
             throw new ArgumentException("The partition must cover the fitted observations.", nameof(units));
+        if (cdf) CandidateSeam.OneObservationEach(partition, nameof(units));
         var values = new double[result.Draws, partition.Units];
+        double[,]? logCdfs = cdf ? new double[result.Draws, partition.Units] : null;
         var terms = new double[_n];
+        double[]? cdfTerms = cdf ? new double[_n] : null;
         int row = 0;
         foreach (IReadOnlyList<BapsDraw> chain in result.PosteriorDraws)
             foreach (BapsDraw d in chain)
             {
                 if (d.Coefficients.Length != _nu)
                     throw new ArgumentException("The result's draws do not fit this model's basis.", nameof(result));
-                double logNorm = -0.5 * Math.Log(2.0 * Math.PI * d.Sigma2);
+                double logNorm = -0.5 * Math.Log(2.0 * Math.PI * d.Sigma2), sigma = Math.Sqrt(d.Sigma2);
                 for (int i = 0; i < _n; i++)
                 {
-                    double fit = 0.0;
-                    for (int j = 0; j < _nu; j++) fit += _z[i, j] * d.Coefficients[j];
-                    double r = _y[i] - fit;
+                    double r = _y[i] - Fit(_z, i, d.Coefficients);
                     terms[i] = logNorm - 0.5 * r * r / d.Sigma2;
+                    if (cdfTerms is not null) cdfTerms[i] = Normal.StandardLogCdf(r / sigma);
                 }
                 for (int u = 0; u < partition.Units; u++)
                 {
                     double sum = 0.0;
                     foreach (int i in partition.Members[u]) sum += terms[i];
                     values[row, u] = sum;
+                    if (logCdfs is not null) logCdfs[row, u] = cdfTerms![partition.Members[u][0]];
                 }
                 row++;
             }
-        var latents = new List<LatentReport>
-        {
-            new("coefficients β", LatentScope.Global, LatentTreatment.Conditioned),
-            new("noise variance σ²", LatentScope.Global, LatentTreatment.Conditioned),
-        };
-        return new PointwiseLogDensity(values, partition, latents, ChainLengths.Of(result.PosteriorDraws));
+        return new PointwiseLogDensity(values, partition, Latents(), ChainLengths.Of(result.PosteriorDraws)) { LogCdf = logCdfs };
     }
 
     private double ResidualSS(double[] beta)

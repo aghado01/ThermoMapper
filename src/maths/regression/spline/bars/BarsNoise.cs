@@ -85,6 +85,37 @@ public sealed class BarsNoise
         return new(mixing, varianceScale, skewPrior.Mean, skewPrior, $"{Describe(mixing)}, β ~ N({Text(skewPrior.Mean)}, {Text(skewPrior.Sd)}²)");
     }
 
+    /// <summary>
+    /// The noise's log CDF at a draw, e ↦ ln F(ε = e | σ², β), v integrated out and each tail kept (E16, slice 5): Student t's closed form
+    /// without a skew, the asymmetric Laplace's under exponential mixing, and otherwise the mixture's own law, the generalized hyperbolic or
+    /// the normal–generalized-beta-prime, built once per draw. It is the law <see cref="IMixingLaw.MarginalLogDensity"/> reads at
+    /// s² = σ²c and m = σβ.
+    /// </summary>
+    internal Func<double, double> LogCdfAt(double sigma2, double skew)
+    {
+        double unitVariance = sigma2 * VarianceScale, drift = Math.Sqrt(sigma2) * skew;
+        IContinuousDistribution law = Mixing switch
+        {
+            StudentTMixing t when drift == 0.0 => Maths.Distributions.StudentT.LocationScale(t.DegreesOfFreedom, 0.0, Math.Sqrt(unitVariance)),
+            StudentTMixing t => new GigMixing(t.Prior).Noise(unitVariance, drift),
+            ExponentialMixing => AsymmetricLaplaceOf(unitVariance, drift),
+            GigMixing mixing => mixing.Noise(unitVariance, drift),
+            GbpMixing mixing => mixing.Noise(unitVariance, drift),
+            _ => throw new NotSupportedException($"{Mixing.GetType().Name} gives no noise distribution, so no CDF."),
+        };
+        return e => NoiseLogCdf.Of(law, e);
+    }
+
+    // Exponential mixing's marginal, (m² + 2s²)^(−½)·exp(m·r/s² − |r|·√(m² + 2s²)/s²), as ALD(0, 1/(a + b), b/(a + b)) with left rate
+    // a = (√(m² + 2s²) + m)/s² and right rate b = (√(m² + 2s²) − m)/s²; the smaller rate is taken as 2/(√(m² + 2s²) + |m|), with no cancellation.
+    private static AsymmetricLaplace AsymmetricLaplaceOf(double unitVariance, double drift)
+    {
+        double root = Math.Sqrt(drift * drift + 2.0 * unitVariance);
+        double small = 2.0 / (root + Math.Abs(drift)), large = (root + Math.Abs(drift)) / unitVariance;
+        (double left, double right) = drift >= 0.0 ? (large, small) : (small, large);
+        return AsymmetricLaplace.Of(0.0, 1.0 / (left + right), right / (left + right));
+    }
+
     /// <summary>The noise's description with c: what a run's fingerprint takes.</summary>
     public string Fingerprint => $"{Name}; c {Text(VarianceScale)}";
 

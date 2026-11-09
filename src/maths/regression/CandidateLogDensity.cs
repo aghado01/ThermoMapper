@@ -108,3 +108,46 @@ public sealed record CandidateLogDensity
     /// <summary>Case <paramref name="t"/>'s first column; its grid's values follow in order.</summary>
     public int Offset(int t) => _offsets[t];
 }
+
+/// <summary>
+/// ln F(e) under a noise at a draw, each half on its own tail, for every engine's candidate seam: above the median ln(1 − S(e)) from the
+/// survival, which a law integrates on the upper side. The mixtures' tables end at the 10⁻¹² tails, and beyond the upper one their
+/// <c>LogCdf</c> integrates the lower side, losing 1 − F's digits and reading a few units of 10⁻¹⁵ above 0. The closed forms' own
+/// <c>LogCdf</c> takes this path already.
+/// </summary>
+internal static class NoiseLogCdf
+{
+    private const double Ln2 = 0.69314718055994530942;
+
+    public static double Of(Maths.Distributions.IContinuousDistribution noise, double e)
+    {
+        double lower = noise.LogCdf(e);
+        return lower > -Ln2 ? GPrior.LogFunctions.Log1mExp(noise.LogSurvival(e)) : lower;
+    }
+
+    /// <summary>The same split for a law given by its two tails' logs, ln F(e) and ln S(e), each read where it keeps its digits.</summary>
+    public static double FromTails(double logCdf, double logSurvival) => logCdf > -Ln2 ? GPrior.LogFunctions.Log1mExp(logSurvival) : logCdf;
+}
+
+/// <summary>What every engine's candidate seam checks alike: one grid per case, and units of one observation where a CDF is read.</summary>
+internal static class CandidateSeam
+{
+    /// <summary>Each case's first column, the grids' candidates counted case by case; one grid per case of <paramref name="cases"/>.</summary>
+    public static int[] Offsets(IReadOnlyList<double[]> grids, int cases)
+    {
+        ArgumentNullException.ThrowIfNull(grids);
+        if (grids.Count != cases) throw new ArgumentException($"One grid per case is required: {grids.Count} grids for {cases} cases.", nameof(grids));
+        var offsets = new int[cases + 1];
+        for (int t = 0; t < cases; t++)
+            offsets[t + 1] = checked(offsets[t] + (grids[t] ?? throw new ArgumentException($"Case {t}'s grid is null.", nameof(grids))).Length);
+        return offsets;
+    }
+
+    /// <summary>Refuses a partition with a unit of more than one observation: a CDF orders one value.</summary>
+    public static void OneObservationEach(UnitPartition units, string parameter)
+    {
+        for (int u = 0; u < units.Units; u++)
+            if (units.Members[u].Length != 1)
+                throw new ArgumentException($"Unit {u} holds {units.Members[u].Length} observations; a CDF orders one value.", parameter);
+    }
+}

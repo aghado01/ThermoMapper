@@ -195,7 +195,7 @@ public sealed record HalfTDeviationPrior(double Degrees = 1.0, double? Scale = n
 /// slice sampling by default, or Bach &amp; Klein's 2025 Newton update). Every scheme accepts it.
 /// </para>
 /// </summary>
-public sealed class HierarchicalPSpline
+public sealed partial class HierarchicalPSpline
 {
     private readonly double[,] _z;
     private readonly double[][] _responses;
@@ -433,7 +433,8 @@ public sealed class HierarchicalPSpline
     /// of a new curve; a unit that holds only some of them conditions on β_r, the question of a new point on a seen curve,
     /// which needs the retained replicate draws. β_0, σ² and τ_u² are global and always conditioned on. With
     /// ZᵀZ = V diag(λ) Vᵀ the marginal's log-determinant is n·ln σ² + Σ ln(1 + τ_u²λ_k/σ²) and its quadratic
-    /// (‖e‖² − Σ (v_kᵀZᵀe)²/(σ²/τ_u² + λ_k))/σ² for e = y_r − Zβ_0.
+    /// (‖e‖² − Σ (v_kᵀZᵀe)²/(σ²/τ_u² + λ_k))/σ² for e = y_r − Zβ_0. The candidate density of a new point on a seen curve is
+    /// <see cref="CandidateLogDensity"/>.
     /// </summary>
     /// <param name="result">A run of this model, whose retained draws are scored.</param>
     /// <param name="units">The partition of the R·n observations; null takes each observation as its own unit, and
@@ -518,9 +519,7 @@ public sealed class HierarchicalPSpline
                             double[] beta = d.Replicates![r];
                             foreach (int i in points)
                             {
-                                double f = 0.0;
-                                for (int j = 0; j < _nu; j++) f += _z[i, j] * beta[j];
-                                double e = y[i] - f;
+                                double e = y[i] - CurveAt(_z, i, beta);
                                 sum += -0.5 * Math.Log(2.0 * Math.PI * s2) - 0.5 * e * e / s2;
                             }
                         }
@@ -530,14 +529,7 @@ public sealed class HierarchicalPSpline
                 row++;
             }
 
-        var latents = new[]
-        {
-            new LatentReport("replicate curves β_r", LatentScope.Group, tally.Result),
-            new LatentReport("population curve β_0", LatentScope.Global, LatentTreatment.Conditioned),
-            new LatentReport("noise variance σ²", LatentScope.Global, LatentTreatment.Conditioned),
-            new LatentReport("deviation variance τ_u²", LatentScope.Global, LatentTreatment.Conditioned),
-        };
-        return new PointwiseLogDensity(values, partition, latents, ChainLengths.Of(result.PosteriorDraws));
+        return new PointwiseLogDensity(values, partition, Latents(tally.Result), ChainLengths.Of(result.PosteriorDraws));
     }
 
     /// <summary>
