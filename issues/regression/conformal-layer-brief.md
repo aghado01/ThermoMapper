@@ -169,6 +169,44 @@ Under "Reports" below, newest first, per slice: what landed by commit; the gates
 
 Newest first.
 
+### 2026-11-08 — Slice 6a, the smoothed p-values of a stream (E35's M-1)
+
+Built at the user's go-ahead for E35, the main session having verified slice 5.
+
+**Landed** on `main`, nothing pushed (the docs and E16's line are in the log beside this report):
+- `415c08c` the following, with `SmoothedPValueTests`:
+  - `SmoothedPValues`, the p-values;
+  - `OrderStatisticTree`, its ranks;
+  - `StreamScores`, a fixed fit's density, standardized residual and PIT centrality.
+- The section on `ConformalPrediction.md`, "Conformal test martingales".
+
+**The gates M-1 sets, as enforced.**
+- *Ranked against the whole stream:* one tree holds every score, and there is no calibration-set entry point.
+- *A fresh θₙ per step,* in (0, 1], from the stream's own seeded generator.
+- *Each score taken once, never revised:* the inductive form's fixed fit, scored as the split form scores its calibration.
+- *The stream's exchangeability* is the caller's premise, stated on the type.
+
+**Gates** (numbers on the page).
+- *M-1's finite core, by enumeration:* seven data sets of four and five units, ties included. Every rank sequence has probability 1 over the orderings, to 10⁻¹².
+- *i.i.d. uniform:* 400 streams of 50, with continuous, three-valued and all-tied scores, pooled and per position, and the lag-one correlation. Also uniform on a fixed N(μ, 1) fit's density and centrality scores of a t₃ stream.
+- *Each premise broken, beside the type:*
+  - a fixed calibration set: P(both lowest) is 1/10 against the stream's 1/20, exact;
+  - CB-1's tie rule: 1 at every step of an all-tied stream;
+  - scores kept from earlier fits: KS 0.057 against a fixed score's 0.0067.
+- *The tree against a brute-force count,* ties, zeros and infinities included, its height within the AVL bound.
+- *Cost:* about 0.4 µs per arrival warmed at n 10⁵, on par with `SortedSet`. The loaded cost row read 0.9 to 1.6 µs, and three-valued scores cost 25 to 30 ns.
+- *Per commit,* the selected classes and the pinned tier: 52 of 52. *At the slice's end,* the whole assembly at 415c08c: 2,551 of 2,552, the one skipped the GBP test.
+
+**Defects found: one of mine, before the commit.** The tree's first form wrote a child back with `_left[node] = Insert(...)`. C# reads the array before the call, so when an insert below grew the arrays, the write went to the old one: ranks ran one short, and p rose above 1. The tests caught it. The child is now written back after the call, and the comment there says why.
+
+**Decided in building it.**
+- *One walk ranks and inserts.* Ranking first and then inserting walked the tree twice.
+- *The nodes are one array of structs,* not six parallel arrays. That halved the cost: each level's fields sit in one cache line.
+- *θ lies in (0, 1],* so p never reads 0 and a power bet's p^(ε − 1) stays finite.
+- *The centrality is min(F̂, 1 − F̂)* from the two tails, which orders units as the PIT's distance from ½ does, reversed. It is the two-sided choice; the PIT itself would test one direction.
+
+**Next:** 6b, the bets and the capital.
+
 ### 2026-11-08 — Slice 6·0, BGP's seam at the run's test points
 
 Built at the main session's note of 2026-11-08, slice 5's first follow-up, as slice 6's prelude.

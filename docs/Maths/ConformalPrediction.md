@@ -644,6 +644,50 @@ A unit far out, or of high leverage, makes the weights degenerate when it is the
 - *The density score costs one predictive per candidate.* It needs no product over the units and no margin, against the full step's 644 to 700 ms per grid at S 4,000.
 - *On BASS the readings cost more than the fits.* Each Gaussian fact at S 1,000 reads four predictive quantiles (`BassPrediction.Quantile`) at 299 cases, and took 812 to 860 s for 30 replications. The chain stopped early, at S 20, took 17 s. The quantile pair took 27 s for 60 fits, since its readings are surface means.
 
+## Conformal test martingales (E35, slice 6)
+
+Every guarantee on this page rests on exchangeability. A conformal test martingale tests it as the data arrive, with a false-alarm rate fixed in advance and no stopping rule (Vovk, Nouretdinov and Gammerman 2003; Vovk et al. 2021). Each new observation's score is ranked among every score so far, a betting function turns the ranks' p-values into capital, and an alarm reads the capital. The contract is M-1 and M-2 in `ConformalValidity.lean`, recorded in [conformal-lemmas.md](../../lean/Protolemmata/Conformal/conformal-lemmas.md) under E35. The build is [the layer's brief](../../issues/regression/conformal-layer-brief.md), slice 6.
+
+### The p-values (slice 6a)
+
+**What they are** (`SmoothedPValues`, M-1). Each new conformity score, higher conforming better, is ranked among every score so far, itself included: pₙ = (Lₙ + θₙTₙ)/n.
+- Lₙ counts the scores strictly below the newest, and Tₙ those equal to it, itself included.
+- θₙ is uniform on (0, 1], fresh at each step from the stream's own seeded generator. So p never reads 0, and the draws are independent of the scores by construction.
+- A small p is a nonconforming newest unit.
+
+**The guarantee.** If the stream's units are exchangeable and each score is one fixed function of its unit, p₁, p₂, … are i.i.d. uniform (`seqRank_uniform`, `seqRank_law`).
+- *The inductive form* gives that fixed function: a fit made on a training set proper that is not in the stream, CB-2's conditioning.
+- *The type enforces the rest.* Every score is ranked against the whole stream, and there is no calibration-set entry point. Ties are broken by θ, never by CB-1's rule. Each score is taken once and never revised.
+- *The exchangeability itself is the caller's premise.* A stream with a trend or a season needs a score that removes it, or the test flags the structure. Runs chosen adaptively (E30) are not exchangeable by design.
+
+**A fixed fit's scores** (`StreamScores`), the split form's arithmetic:
+- *the predictive density,* ln p̂(y | x), through the candidate seam, each unit read at its observed response;
+- *the standardized residual,* −|y − μ(x)|/ρ(x);
+- *the PIT's centrality,* min(F̂, 1 − F̂), read by both tails from the log CDF seams. A unit far in either tail of the fit's predictive conforms least. Far tails keep their digits: 8.6 sds above, 1 − F̂ is the tail's own value, not 1 − F̂ rounded to 0.
+
+**The ranks** (`OrderStatisticTree`, internal). An AVL tree whose nodes count their subtrees, one struct per node, inserts a score and ranks it among those before it in one walk, O(log n). Equal scores share a node. The split form's calibration, fixed, keeps its sorted array.
+
+**Checks** (`SmoothedPValueTests`).
+- *M-1's finite core, by enumeration.* For seven data sets of four and five units, ties and 0 against −0 included, every ordering was run. Each sequence of ranks rₙ ∈ 1, …, n has total probability 1 over the orderings, to 10⁻¹².
+- *i.i.d. uniform on exchangeable streams,* 400 streams of 50, the 1% Kolmogorov–Smirnov critical value 0.0115 pooled and 0.0975 per position over 50:
+
+| Scores | KS pooled | Worst position | Lag-one correlation |
+|---|---|---|---|
+| Continuous | 0.0041 | 0.073 | −0.017 |
+| Three values | 0.0056 | 0.072 | −0.007 |
+| All tied | 0.0077 | 0.074 | −0.010 |
+
+- *A fixed fit that the stream does not share,* N(μ, 1) fitted against a t₃ stream: its density and centrality scores give uniform p-values, KS 0.0123 and 0.0121 against 0.0182.
+- *Each premise broken in a reference implementation beside the type:*
+  - *a fixed calibration set* makes two tests' p-values dependent: P(both lowest) is 1/10 exactly, where ranked against the stream it is 1/4 · 1/5;
+  - *CB-1's tie rule* reads 1 at every step of an all-tied stream, where the smoothed p is uniform;
+  - *scores kept from earlier fits* (the residual from the running mean, kept) drift: KS 0.057 and mean p 0.458, against 0.0067 and 0.502 for a fixed score (critical 0.0094).
+- *The tree against a brute-force count:* twelve seeded runs of up to 3,000 inserts, with ties, both zeros, ±10³⁰⁰ and ±∞, every rank exact. The tallest tree, 14, is within the AVL bound.
+- *Cost,* on the cycle clock, indicative:
+  - With continuous scores, a warmed arrival costs about 0.4 µs at n 10⁵, on par with .NET's `SortedSet`, which keeps no ranks. The loaded cost row read 0.9 µs to n 10⁵ and 1.6 µs to 10⁶, where the tree outgrows the cache.
+  - With three distinct values it costs 25 to 30 ns.
+  - A Bayesian fit's score, S predictive densities, costs more than the rank.
+
 ## API at a glance
 
 | Area | Types and members |
@@ -656,6 +700,7 @@ A unit far out, or of high leverage, makes the weights degenerate when it is the
 | CB-3's reading | `ConformalSet.Gap`, `SplitHalfMass`, `SplitHalfDisagreements`, `AcceptsPlain(g)`, `AcceptsInflated(g)`; `ConformalSet.Margin` → `ConformalMargin` (`Multiple`, `CandidateErrors`, `UniformErrors`, `CandidateCarriedErrors`, `CarriedUniformErrors`, `UnitCarriedErrors`, `Fragile`, `InflatedRanks`, `ParetoK`, `ParetoKThreshold`, `Bounds`, `Inflation`, `Computed`, `Count`, `Untrusted(k)`); `ConformalSet.Inflated`, `ErrorLevel`, `CoverageUnderError`, `FallBack`; `MarginBounds` (`Uniform`, `Carried`); `InflationBounds` (`PerPosition`, the default, `Uniform`); `ConformalScores.Errors`, `CandidateError` |
 | The split form | `SplitConformal.Density(calibration, candidates, alpha)` → `ConformalPrediction(Sets, Alpha, Form)`; `SplitConformal.Quantiles(QuantileReadings(Lower, Upper, StratumOf), response, test, alpha)` and `SplitConformal.Residuals(ResidualReadings(Center, Scale, StratumOf), response, test, alpha)` → `ConformalIntervals(Intervals, Alpha, Calibration)`; `ConformalInterval`: `Units`, `Level`, `Threshold`, `Lower`, `Upper`, `WholeSpace`, `Coverage`, `Empty`, `Width`, `Contains(y)`; `SplitConformal.Calibrate(scores, stratumOf, alpha)` → `SplitCalibration`: `Units(h)`, `Level(h)`, `Threshold(h)`, `Rank(h, s)`, `PValue(h, s)`, `Accepts(h, s)`; `ConformalForm` (`Full`, `Split`) |
 | The predictive distribution | `SplitConformal.Distribution(calibration, candidates)` (the default) and `ConformalBayes.Distribution(training, candidates)` (the opt-in) → `ConformalDistributions(Distributions, Form)` with `Flagged`; `ConformalDistribution`: `Units`, `Grid`, `Below`, `Tied`, `Form`, `Fall`, `ScoreFall`, `Monotone`, `Lower(g)`, `Upper(g)`, `At(g, τ)`, `Mid(g)`, `Level(α)`, `Coverage(α)`, `WholeSpace(α)`, `Accepts(g, α)`, `Intervals(α)`, `Width(α)`, `OpenBelow(α)`, `OpenAbove(α)`, `Quantile(p)`, `Crps(y)` |
+| Conformal test martingales (E35) | `SmoothedPValues(seed)`: `Add(score)` → `SmoothedPValue(Count, Score, Below, Tied, Theta, P)`, `AddRange`, `Count`; `StreamScores.Density(units)`, `Residuals(readings, response)`, `Centrality(units)`; `OrderStatisticTree<T>` (internal): `Add(key)` → (Below, Tied) before it, `Rank(key)`, `Count`, `Distinct`, `Height` |
 | The product | `DenseProduct.Multiply`, `Pack`, `FusedDot`; `PackedColumns` |
 
 ## Not built yet
@@ -666,6 +711,7 @@ A unit far out, or of high leverage, makes the weights degenerate when it is the
 - BASS's candidate seam for a direct functional fit's curves, and a whole new curve for the hierarchical P-spline (E17).
 - A BGP content with f drawn at the training and candidate inputs per retained state, which the full step would take (slice 5's follow-up).
 - The changepoint posterior's seam, which no candidate exchangeable with its units admits (slice 5).
+- The conformal test martingale's bets and capital, and its alarms (E35, slices 6b and 6c).
 - CB-4's latent-posterior reading, and Hoff's leave-one-out score.
 - Refining a set's boundaries between grid values.
 
