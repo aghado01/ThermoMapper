@@ -60,6 +60,20 @@ Date: 2026-11-08. Status: commissioned by the user ("chip off for that fix"), fr
 
 ## Report
 
+### 2026-11-08: MoMPCA's calibration, scale-equivariant (finding 1, at the user's go-ahead)
+
+**Commit.** `fa8776d`. The entry below this one records finding 1: the brief's 1e-6 `MoMPCA` case failed on `MoMPCA`'s own α̂ clamp, not on the solver. The user said to fix the clamp here.
+
+**What changed.** `MoMPCA` had two constants in absolute units. Both are now relative:
+- **The α̂ clamp.** α̂ was clamped to [1e-6, 2 − 1e-6], and the subspace weight was taken as 2 − α̂. The clamp bounds τ̂_U/τ̂_μ, a ratio in data units. Now α̂ = 2τ̂_U/(τ̂_μ + τ̂_U) and 2 − α̂ = 2τ̂_μ/(τ̂_μ + τ̂_U) are each computed directly. Each τ̂ is floored at its factor's resolution, which still keeps both scales positive when a majority of blocks agree exactly:
+  - (ε·max‖xᵢ‖)²/p, the rounding of the block means, which rescales with the data;
+  - 2ε/[r(p−r)], the arccos resolution of a Grassmann distance, in radians.
+- **The Jacobi tolerance** of the projected-covariance eigendecomposition was an absolute 1e-12. At s ≤ 1e-6 it skipped every rotation and returned the in-subspace axes unrotated; the widened test found it. It is now 1e-12 of the matrix's largest entry.
+
+**Gate.** `ComputeMoM_RescaledData_GivesTheRescaledMeanAndTheSameSubspace` runs s = 1e-12, 1e-9, 1e-6, 1e-3, 1e2, 1e3 and 1e6 on two fixtures: the tilted blocks (α̂₁ ≈ 0.15) and the corrupted 2-D blocks (α̂₁ ≈ 0.05). The mean, basis and variances hold within 1e-10 of scale 1, and α̂ within 1e-9 of 2/(1 + s²(2 − α̂₁)/α̂₁). The brief's 1e-6 case passes. With the clamp, the two fixtures moved at 1e-6 and 1e3 by 0.6% to 2.6% in the mean and 0.002 to 0.03 rad in the subspace.
+
+**Moves.** α̂ changes where the clamp bound at scale 1. On the circle and ellipse fixtures the clean frames coincide (τ̂_U = 0) and the block means agree to rounding, so both τ̂ sit at their floors. α̂ goes from the clamp's 1e-6 to 2 within rounding, with a subspace weight near 1e-16. The joint median still follows the frames, since the means differ only by rounding. The calibrated-scale test asserted the clamp's range [1e-6, 2 − 1e-6]; it now asserts [0, 2]. Every other `MoMPCA` test passes unchanged, and the geometry assembly passes whole (68 of 68). No other code calls `MoMPCA`.
+
 ### 2026-11-08: the spread unit and the optimality check at the nearest data point (chip-irls)
 
 **Commits.** `61a7fac` reads the solver's constants in units of the data's spread. `e70afaf` tests the optimality condition at the nearest data point and reads a radius cut short at the cut locus as the distance. This report is its own commit. Nothing was removed; the private `CheckOptimality` became `VertexIsOptimal`, which covers what it tested.
