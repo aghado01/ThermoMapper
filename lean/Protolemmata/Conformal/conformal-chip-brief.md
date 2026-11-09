@@ -1,6 +1,15 @@
 # Conformal validity in the Lean harness — chip brief
 
-Date: 2026-11-05. Status: done 2026-11-06, CB-1 to CB-4 proved; E35's M-1 and M-2 proved on 2026-11-08; reports below. Written at the user's request, from E16's reading of the conformal literature.
+CB-1 to CB-4 were proved on 2026-11-06 and E35's M-1 and M-2 on 2026-11-08. Their reports are below. The next assignment is E16 slice 9.
+
+## E16 slice 9 — cross-fitted intervals and asymmetric CQR (2026-11-09)
+
+This is the Lean prerequisite for the [conformal layer's slice 9](../../../issues/regression/conformal-layer-brief.md#e16s-completion-the-plan-slices-7-onward). Establish the finite-sample statements the implementation may claim:
+
+- **Jackknife+.** Read the jackknife+ theorem of Barber, Candès, Ramdas and Tibshirani against the proposed rule. State the exchangeability and fitting-symmetry hypotheses, the exact order-statistic indices and endpoint conventions, and prove the marginal coverage lower bound of at least 1 − 2α. State which hypotheses and bound apply to CV+ if you include it. The engine brief's near-1 − α coverage is an empirical measurement.
+- **Asymmetric conformalized quantile regression (CQR).** With a fixed fit independent of the exchangeable calibration and test units, calibrate the lower and upper scores separately at α/2. State each tail's miscoverage bound, how ties and small calibration samples affect the endpoints, and the resulting two-sided coverage bound.
+
+Use the existing [protolemma ledger](conformal-lemmas.md) and [small-case checks](conformal-checks.py) to pin down ranks and ties before proving the statements in [ConformalValidity.lean](../../Enthymemata/ConformalValidity.lean). Run `lake build Enthymemata.ConformalValidity` and the existing meta-CI gate from the environment section. Report theorem names, assumptions, any counterexamples or weaker bounds, and the exact rank rules the C# worker can implement. The layer plan separately describes the later Lean work for slices 10 and 12.
 
 ## Context
 
