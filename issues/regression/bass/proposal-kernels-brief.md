@@ -1,6 +1,6 @@
 # Proposal kernels: E4's history-based and residual-informed births
 
-Date: 2026-11-08. Status: the plan, drafted by the KHAOS chip for the coordinating session's verification; nothing built.
+Date: 2026-11-08. Status: slice 1, the history birth, landed (`b1df14e`) at the user's word, opt-in, and its measurement makes no default candidate; waiting for the coordinating session's verification, then slice 2, the residual birth.
 
 ## Why
 
@@ -47,7 +47,7 @@ q(t | S) = (1 − ω_H − ω_R)·q_base(t | S) + ω_H·q_H(t | S) + ω_R·q_R(t
 - The weights are recomputed at a fixed cadence of sweeps during burn-in, from the past only, and frozen at burn-in's end. Production is then a fixed Metropolis–Hastings kernel.
 - So every step leaves the posterior invariant (Nott and Kohn's condition (3)), and the base share bounds the kernel below (condition (4)). Their condition (5), diminishing change, is not needed once the kernel is frozen.
 - Before the first refresh, the component is the base kernel's own weights.
-- *Per chain, and per rung under a ladder:* each rung learns from the states it holds. Chains stay independent.
+- *Per chain, and per rung under a ladder:* each rung learns from the states it holds. Chains stay independent. *(Built otherwise: one history per chain, the b = 1 rung's, which every rung reads; slice 1's report says why.)*
 - *Checkpoints* carry the running sums and the frozen weights, so resume replays bit for bit.
 - *SMC.* At each stage, the weights come from the stage's weighted population and stay fixed through that stage's mutations. This is the population-tuned kernel of adaptive SMC; the stage's kernel leaves π_b invariant given the population.
 - *The flat histogram.* The weights learn in the learning phase and freeze with the multicanonical weights.
@@ -187,4 +187,64 @@ Under "Reports" below, newest first, per slice:
 
 ## Reports
 
-None yet.
+### Slice 1: the birth mixture and the history birth (chip, 2026-11-08)
+
+At the user's word ("Start slice 1"), on the plan as written.
+
+**Landed** on `main`, nothing pushed:
+- `b1df14e`: the mixture, the history birth and their gates.
+  - `BirthMixture` and `HistoryBirth` on `BassSampling.Births`, validated, left out of the serialized form when null, so every existing fingerprint stands.
+  - `BassBirthMixture`, `BassInclusionHistory`, `BassVariableWeights` and `IBassWeightedBirth` (`BassBirthMixture.cs`).
+  - The weighted births in `BassTermProposal` and `LegendreTermProposal`. Their own paths are unchanged, and `make_weights` takes raw weights through the same arithmetic.
+  - A kernel per chain's moves (`BassStructureMoves`), the history in its snapshot, the refresh and freeze in the run's burn-in, a ladder's shared history, SMC's `Prepare`, the flat histogram's learning, and the readout (`BassChainAccount.Inclusion`).
+  - The gates: `HistoryBirthTests`, and the measurement's harness, `ProposalKernelMeasurementTests`.
+- This commit: `BayesianRegression.md`'s section, its API, config and source-map rows; `PolynomialChaos.md`'s row; the notation ledger's entry; the measurement's table, `proposal-kernels-history.csv`; the harness's warm-up and alternating order; the slow tier; the status line and this report.
+
+**What is built,** as an engine kernel for hinge and Legendre terms alike ([the section](../../../docs/Maths/BayesianRegression.md#bass-the-birth-mixture-and-the-history-birth-e4)).
+- *The mixture:* q = (1 − ω_H)·q_base + ω_H·q_H. One uniform picks the component, ln q is the log-sum-exp of exact components, and the base share keeps support. Deaths and changes are the base kernel's.
+- *The history birth:* each variable's weight is max(ĥ_u, δ), ĥ_u the share of the chain's recorded states that use it.
+  - Hinge births take the weights through Wallenius' law at every order, one included, in place of z_u ∝ w₂ + a_u.
+  - Legendre births take them in place of `make_weights`' (aⱼ^α + ε).
+- *D10's policy:* recorded every burn-in sweep, refreshed every `Refresh` sweeps, frozen at burn-in's end. SMC reads each stage's weighted population in `Prepare`. The flat histogram learns with its weights and freezes at production.
+
+**The gates.**
+
+| Gate | Reading |
+| --- | --- |
+| The history | Records, refreshes at the cadence, the freeze's final refresh and a mid-learning copy, against counts kept in the test, exactly. A population's weighted share, exactly. A freeze before any record leaves the base law |
+| The kernel's own law | Σ_t q(t \| S) plus the empty draw is 1 within 1.3·10⁻¹⁴, for the mixture and for the history component alone, at four structures each of four fixtures (three continuous inputs at K ≤ 2, categorical, functional, Legendre), with a skewed ĥ whose main first variable sits at its floor. Each ln q against the statement written out in the test, to 8.9·10⁻¹⁶. 200,000 draws against q by χ²: z −0.03, −0.57, 0.29 and −1.39 |
+| Detailed balance, exactly | The sweep's flows against the enumerated law, births from the statement and ratios from the production mixture: worst gaps 1.4·10⁻¹⁴ to 5.7·10⁻¹⁴ in logs over seven cases (hinge continuous, skewed and learned; categorical; functional; three inputs; Legendre, skewed and learned). A mixture whose ratio reads another share fails it |
+| The chain's law after a learned freeze | 5,000 learning sweeps, then 400,000 against the enumeration: worst \|z\| 2.07 (hinge, 2,263 structures) and 2.21 (Legendre, 466). The frozen history records nothing more |
+| Geweke | Proper priors, a skewed ĥ, 200,000 marginal draws against 300,000 successive steps: worst \|z\| 2.32 on three hinge inputs at order 2, 1.45 on Legendre |
+| The ladder | Its rungs share the b = 1 history through every resize of a self-sizing ladder (Legendre: 8 rungs to 5). Each rung's count law and E[ln τ] against the enumeration's tempered law after a learned freeze, within 5 errors at every rung: hinge (b 1, 0.5, 0.2; the hinge ladder resized 8 rungs to 4) and Legendre (b 1, 0.4, 0.1 and the reference rung) |
+| SMC | `Prepare`'s weights are the population's weighted share to 10⁻¹⁴. ln p(y) −72.2912 ± 0.0137 against the enumeration's −72.2910 (raw ridge), and −69.5992 ± 0.0166 against −69.5869 (modified g-prior), flags clear |
+| The flat histogram | Learned ln w within 0.017 of SAMC's limit, and every inclusion and structure within its allowance of the enumeration |
+| Resume | Bit for bit for a chain, a ladder, SMC across stages, and the flat histogram across learning and production; each chain's frozen ĥ equal |
+| Hinge BASS untouched | The Commit scope on `b1df14e`'s tree before its commit, rebuilt after HEAD moved: 1,874 of 1,874, the pinned tier among them. The whole regression assembly once at the slice's end, on `b1df14e` with the harness's warm-up: 2,676 of 2,676, the eight pinned hashes and the SMC baseline among them |
+
+**The measurement.** Pre-registered as the brief fixed it (the table: [`proposal-kernels-history.csv`](proposal-kernels-history.csv); the page's [section](../../../docs/Maths/BayesianRegression.md#bass-the-birth-mixture-and-the-history-birth-e4) holds the full readout).
+- *The design:* four master seeds of four chains, 5,000 + 5,000 sweeps, each fit on one thread, ω_H = ¼, δ 0.01, a refresh every 100 sweeps. The reading is bulk ESS per CPU second, history over base.
+- *Friedman, p 10:* M 0.73 (z −4.2) and one fitted value 0.74 (z −2.2), both lower; the rest within the seeds' spread.
+- *Friedman, p 50,* the history birth's own regime: one fitted value higher, 1.50 (z 2.1); M 1.19, the log posterior 0.59 and the rest within the spread.
+- *Ishigami, the raw ridge:* every ratio 1.27–1.51, none beyond the spread (|z| ≤ 0.95). *The modified g-prior:* 0.70–2.20, none beyond it.
+- *Friedman's structural group fails D10's verdict under both kernels* (R̂ of M 1.3–3.0). The history birth does not move chains between its representations, as the local-move mixing brief's reframe expects.
+- *τ's ESS* under the g-form falls 13× and 25× on Friedman, within a base spread wide enough that neither is beyond it (z −1.7, −1.0). Recorded, not explained.
+- *Births' acceptance* moves little: 1.86% → 2.03% (p 10), 2.08% → 1.49% (p 50), 1.25% → 1.49% (raw ridge), 13.8% → 13.9% (modified g).
+- *A discarded run.* The first run left tiered compilation on, and its first timed fit carried the process's compilation: 6.8 CPU s, against 1.4 for the same fit with tiering off. A short discarded warm-up fit did not absorb it. The measurement was rerun whole with `DOTNET_TieredCompilation=0`, and the harness now warms each fixture and alternates the arms' order by seed. The discarded table stays in the run's artifacts.
+
+**The decision it changes: none to a default.** No fixture gains across D10's groups, and the one gain beyond the spread is one comparison of 27, beside a loss on p 10. The history birth stays opt-in. Nott and Kohn's best linear predictor, the step after the marginal frequencies, is not pursued on this reading: it targets correlated inclusions, and Friedman's failure is the representations, which neither birth moves.
+
+**The cost.** On the cycle clock, indicative (`HistoryBirth_CostRow`, tiered compilation off). A birth's kernel work, its draw and its ratio, rises from 1.10 to 1.81 µs at the cost report's base (the rich surface, M 20), from 1.32 to 2.31 µs at p 50, and from 6.32 to 10.71 µs on Ishigami (M 10). A death's ratio rises 2.0–3.2×, from 0.45 to 1.11 µs, 0.52 to 1.65 µs and 4.51 to 8.82 µs. The design's work, the factor and the marginal, is the same under both. A whole fit took 4–9% more CPU in the measurement.
+
+**Decisions beyond the brief.**
+- *One history per chain under a ladder,* not one per rung. Every rung reads the b = 1 rung's, which records the b = 1 state. A self-sizing ladder rebuilds rungs as it resizes, and a shared history survives that; a frozen kernel leaves each rung's law invariant either way.
+- *The marginal frequencies only,* as E4's entry states the kernel. Nott and Kohn's best linear predictor is recorded below with its decision.
+- *The SMC readout.* An SMC fit reports no per-chain ĥ; its kernel's last stage's weights are on `BassSmcKernel.History`, not on the fit.
+- *The flat histogram's pilot ladder* does not learn: it runs the base birth, which is valid, and its pilot only places the nodes.
+- *Samplers' page* has no D10 section to extend, so the adaptation as built sits in the BASS section.
+- *The slow tier* was rewritten from the slice's profile at 16 s, not 10: the profile ran under load, its four stable reference tests 1.5–1.9× slower than in the last profile (median 1.6). It holds 80 methods, four of them this slice's.
+
+**Left unbuilt, and why.**
+- *Nott and Kohn's best linear predictor:* the inclusion of u predicted from the current γ₋ᵤ by the history's covariance. It would act where inclusions correlate, and this measurement gives no reason to try it (above).
+- *Adaptation past burn-in,* under Nott and Kohn's condition (5): only if a frozen kernel is measured to lose what continued adaptation keeps.
+- *History weights in the swaps and variable changes:* only if the history birth measures well.

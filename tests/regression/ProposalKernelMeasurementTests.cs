@@ -23,7 +23,8 @@ namespace Maths.Regression.Tests;
 /// <item><b>Arms.</b> The fit's own birth, and the birth mixture with the history birth at ω_H = ¼, δ = 0.01, a refresh every 100
 /// sweeps: settings fixed before any run.</item>
 /// <item><b>The design.</b> Four master seeds of four chains, 5,000 burn-in sweeps and 5,000 kept, each fit on one thread, the arms
-/// interleaved by seed so they share the machine's conditions.</item>
+/// interleaved by seed so they share the machine's conditions, their order alternating by seed. A short fit of each arm per
+/// fixture runs first and is discarded, so no timed fit carries the process's compilation of its paths.</item>
 /// <item><b>Readings,</b> per fit: the process's CPU seconds and the wall clock; for M, τ where drawn, the log posterior, σ² and the
 /// monitored fitted values, R̂ and the bulk and tail ESS; births attempted and accepted in the sampling phase.</item>
 /// </list>
@@ -97,8 +98,13 @@ public sealed class ProposalKernelMeasurementTests(ITestOutputHelper output)
         output.WriteLine($"table: {csv} ({done.Count} fits there already)");
 
         foreach (Fixture f in Fixtures().Where(f => wanted.Length == 0 || wanted.Contains(f.Name)))
+        {
+            // A short fit of each arm first, discarded, so no timed fit carries the process's compilation of its paths.
+            foreach (string arm in new[] { "base", "history" })
+                Bass.Fit(Arm(f, arm, 99, 300, 300) with { Sampling = Arm(f, arm, 99, 300, 300).Sampling with { Chains = 1 } }, f.Data,
+                         new BassRunOptions { MaxDegreeOfParallelism = 1 });
             for (int k = 0; k < seeds; k++)
-                foreach (string arm in new[] { "base", "history" })
+                foreach (string arm in k % 2 == 0 ? new[] { "base", "history" } : new[] { "history", "base" })   // the order alternates by seed
                 {
                     int seed = 101 + k;
                     if (done.Contains($"{f.Name}|{arm}|{seed}")) continue;
@@ -123,6 +129,7 @@ public sealed class ProposalKernelMeasurementTests(ITestOutputHelper output)
                     output.WriteLine($"{f.Name}, {arm}, seed {seed}: {cpu:F1} CPU s ({wall:F1} wall); births {births.Accepted}/{births.Attempts}; " +
                                      string.Join(", ", functionals.Select(x => $"{x.Name} R̂ {x.Diagnostic.RHat.Value:F3} ESS {x.Diagnostic.BulkEss.Value:F0}")));
                 }
+        }
     }
 
     /// <summary>

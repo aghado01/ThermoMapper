@@ -11,6 +11,15 @@ Splits in the module's language (symbols, identifiers, terms), logged as session
 
 ## Entries
 
+### ω_H beside the local steps' ω; δ for the history birth's floor beside the factor border's δ; ĥ_u beside h₁, h₂ and ĉ (2026-11-08)
+
+- **Kind:** one name for several concepts.
+- **Readings:**
+  - ω_H, the history birth's share of the births (`HistoryBirth.Share`; `docs/Maths/BayesianRegression.md`, "BASS: the birth mixture and the history birth (E4)"), beside ω, the local steps' window fraction (`LocalSteps.WindowFraction`, "BASS: the local-move options (F-M2)").
+  - δ, the history weights' floor (`HistoryBirth.Floor`), which is Nott and Kohn's δ, beside δ, the factor border's residual norm in the design (the port-fitting brief's shared state; `BassDesign`).
+  - ĥ_u, a variable's inclusion frequency over the chain's history (`BassInclusionHistory.Frequencies`), which is Nott and Kohn's ĉ, beside h₁ and h₂, the count prior's hyperparameters (`BassCountPrior`), and h in the priors for a moving response (the 2026-11-02 entry).
+- **Found:** 2026-11-08, the proposal-kernels brief's slice 1.
+
 ### G for the reconstruction's map and for the output side; k for a fixed and a per-draw rank (2026-11-08)
 
 - **Kind:** one name for several concepts.

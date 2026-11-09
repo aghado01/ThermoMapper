@@ -9,7 +9,7 @@ Companion to [extensions-brief.md](extensions-brief.md). An item is ticked when 
 - [x] **E1** Generalized-hyperbolic noise (GBMARS), with OQ20's BARS side. Built ([brief](gbass-noise-brief.md)): slices 0–4 and the GIG's ratio-of-uniforms draw landed by 2026-11-06; slices 5 and 6, the engine's reach and OQ20's BARS side, 2026-11-07; slice 7, interweaving, and the move along β·v, 2026-11-08. Open: the flat histogram under a noise (the user's decision) and the reports' follow-ups.
 - [ ] **E2** Robust centring and bases (OQ16).
 - [ ] **E3** Free-knot tensor-product surfaces (ABMRS). Queued by the user on 2026-11-08: after the current queue, and possibly after some of the unordered entries.
-- [ ] **E4** Additional proposal kernels. The Bernoulli-inclusion birth and both mutations are built, through F-X4, in KHAOS slice 1 ([brief](khaos-brief.md), 2026-11-07). The history-based proposal (Nott and Kohn 2005) and residual-informed mixtures were queued to the KHAOS chip on 2026-11-08 at the user's request.
+- [ ] **E4** Additional proposal kernels. The Bernoulli-inclusion birth and both mutations are built, through F-X4, in KHAOS slice 1 ([brief](khaos-brief.md), 2026-11-07). The history-based proposal (Nott and Kohn 2005) and residual-informed mixtures were queued to the KHAOS chip on 2026-11-08 at the user's request ([their brief](proposal-kernels-brief.md)). The history birth landed opt-in on 2026-11-08 (slice 1, `b1df14e`), and its measurement makes no default candidate; the residual birth is slice 2.
 - [x] **E5** KHAOS's modified g-prior. Built in KHAOS slice 2 (`f289af3`, 2026-11-08), through the prior-precision builder.
 - [ ] **E6** Basis-estimation uncertainty.
 - [ ] **E7** Moments for piecewise polynomials.
