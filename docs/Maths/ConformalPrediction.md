@@ -436,8 +436,8 @@ Each engine joins as BASS does: log p(y | x_t, θ_s) at new cases, in its pointw
   - The hierarchical P-spline's, against the column of a unit that splits its replicate. Beside whole-curve units, which integrate β_r, the full step refuses it.
 - *BGP's, against its pointwise content:* a GP fit on the data less one case gives, at that case, the leave-one-out term of the fit on all of them. The largest relative gap over 36 cases is 1.7·10⁻¹⁴ with a known σ² and 1.6·10⁻¹⁴ with an unknown scale. The full step refuses the seam, and the split form takes it.
 - *Each law's log CDF against its density's integral,* a seeded sweep over σ² from e⁻⁴ to e⁴: a slice of the body, and each tail where the density falls to 10⁻¹² of the body's.
-  - The closed forms agree to 10⁻¹¹ or better in the body and 3·10⁻¹⁰ in the tails.
-  - The tabled mixtures agree within their tables' stated 10⁻⁵: 1.2·10⁻⁶ at worst in the body, 6·10⁻⁷ in the tails.
+  - The closed forms agree to 10⁻¹² or better in the body and 3·10⁻¹⁰ in the tails.
+  - The tabled mixtures agree within their tables' stated 10⁻⁵: 6.8·10⁻⁶ at worst in the body (GBP without a drift), 6·10⁻⁷ in the tails.
 - *Held-out coverage on data from outside every model.*
   - The truth is f = sin(2πx) + x/2, with noise 0.2ζ plus, one time in seven, 0.8·Exp(1).
   - There are 20 fits each, with m 100 and k 10, nominal 0.900. The full step's fits have n 99. The split form's have 99 calibration units, beside a training fit of 99 for the hierarchical P-spline (three curves on a shared design of 33) and 60 for BGP.

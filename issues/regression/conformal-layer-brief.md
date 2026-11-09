@@ -155,7 +155,7 @@ Built at the user's go-ahead of 2026-11-08 ("Yes, start it", relayed by the main
 - *At the training cases, the pointwise column, bit for bit, largest gap 0.* BAPS, and BARS under all nine of its models and noises: Gaussian, t weights, contaminated, t noise, quantile, skewed GIG, skewed GBP, Poisson and Whittle. Each log CDF and latent report matches too, and the full step takes each pair.
 - *The hierarchical P-spline's,* against the column of a unit that splits its replicate. Beside whole-curve units the full step refuses it.
 - *BGP's, against its pointwise content:* a fit on the data less one case gives, at that case, the leave-one-out term of the fit on all of them, to 1.7·10⁻¹⁴ (known σ²) and 1.6·10⁻¹⁴ (unknown scale). The full step refuses the seam, and the split form takes it.
-- *Each law's log CDF against its density's integral,* a seeded sweep over σ² from e⁻⁴ to e⁴, the body and both tails out to where the density falls 10⁻¹². The closed forms agree to 10⁻¹¹ in the body and 3·10⁻¹⁰ in the tails. The tabled mixtures agree within their tables' stated 10⁻⁵: 1.2·10⁻⁶ in the body, 6·10⁻⁷ in the tails.
+- *Each law's log CDF against its density's integral,* a seeded sweep over σ² from e⁻⁴ to e⁴, the body and both tails out to where the density falls 10⁻¹². The closed forms agree to 10⁻¹² in the body and 3·10⁻¹⁰ in the tails. The tabled mixtures agree within their tables' stated 10⁻⁵: 6.8·10⁻⁶ at worst in the body (GBP without a drift), 6·10⁻⁷ in the tails.
 - *Held-out coverage from truth outside every model:* f = sin(2πx) + x/2 with noise 0.2ζ plus, one time in seven, 0.8·Exp(1). There are 20 fits each, m 100 and k 10, 50 held-out cases per fit, and the se is the fits' spread.
 
 | Engine and form | Coverage (se) | Mean width | Sets of two intervals |
@@ -179,7 +179,7 @@ Built at the user's go-ahead of 2026-11-08 ("Yes, start it", relayed by the main
   - The full step's 200 ms is its default step at S 1,000, as the margin's opt-in report measured it, the training side included.
   - BGP's seam is its refits: one O(n³) refit per accepted state, as its pointwise density pays, shared by every case in the call. The run already holds each draw's variance at its own test points, a cheaper path recorded as a follow-up in the brief.
 
-- *Per commit,* the selected classes and the pinned tier: 2,056 of 2,057, the one skipped the GBP test below. *At the slice's end:* the whole assembly, its line added once it has run.
+- *Per commit,* the selected classes and the pinned tier: 2,056 of 2,057, the one skipped the GBP test below. *At the slice's end,* the whole assembly at d2e153b: 2,496 of 2,497, the same one skipped.
 
 **Defects found.**
 - *None in the seams.*
