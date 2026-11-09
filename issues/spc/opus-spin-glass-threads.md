@@ -95,7 +95,40 @@ Where it stops being an analogy. Sketch only.
   - antiferromagnetic-Potts cluster moves (WSK);
   - two-replica cluster moves (Houdayer);
   - local updates inside parallel tempering, the spin-glass workhorse. This is
-    where `Maths.Samplers` already helps (Thread 5).
+    where `Maths.Samplers` already helps (Thread 5);
+  - Swendsen–Wang cuts (Barbu and Zhu 2005), SW's cluster step used as a
+    Metropolis–Hastings proposal for any distribution over labellings or
+    partitions:
+    1. Inside each label, turn each positive edge on with p_e = 1 − e^{−βJ_e}.
+       Negative edges never bond.
+    2. Pick one component V₀ and propose a label for it, another existing one or
+       an unused one, so splits and merges happen and the cluster count moves.
+    3. Accept with min(1, r · e^{β[J⁻(V₀, new) − J⁻(V₀, old ∖ V₀)]}), where
+       J⁻(A, B) sums the negative couplings between A and B and r is the label
+       proposal's reverse-over-forward ratio. The positive edges cancel against
+       Theorem 2's bond factor ∏(1 − p_e) exactly as in SW, so only the
+       repulsions decide acceptance.
+
+    It is exact for any signed J. Its cost is acceptance, which falls when a
+    proposed merge lands across strong repulsion. On J ≥ 0 it reduces to SW but
+    relabels one component per step where SW relabels all of them. SWC-2 grows
+    V₀ from one seed node, which is cheaper. SWC-3 draws the label in proportion
+    to target × bond factor and always accepts, at one target evaluation per
+    candidate label. Over partitions rather than labellings, q leaves the model
+    at every T, not only at T → 0, but that measure lacks the colouring count
+    q(q−1)…(q−k+1), so it is a different model at finite T.
+
+    A split or merge has two paths, picking either part as V₀. Apply the rule
+    per path, with the label probabilities of the component actually picked:
+    each path has exactly one reverse path, so detailed balance holds path by
+    path and therefore for the chain. The paper's Appendix B instead reduces the
+    two-path sum with its eq. 48, which holds for a uniform label proposal but
+    not for the similarity-weighted one the paper recommends. (Derived here
+    2026-11-08, not checked against a source.)
+
+    `PBCT and SPC Synthesis.md` §3 applies SWC to PBCT partitions. Its bond
+    factor agrees with Theorem 2; its claim that only three-body and higher
+    terms are left to cause rejection is untested.
 - **Observables.** Magnetization and FK susceptibility lose their meaning. Use
   replica overlaps at each T from two or more independent chains. Thread 2's
   link overlap on co-membership is label-free, so P(Q) per temperature is
@@ -261,6 +294,9 @@ Where it stops being an analogy. Sketch only.
 ## Reading leads (verify before citing)
 
 ### In D:/aghado01/codex-scientiae/supellex-private/PDFs/SPC
+- Barbu, Zhu, *Generalizing Swendsen-Wang to Sampling Arbitrary Posterior
+  Probabilities* (TPAMI 27(8), 1239–1253, 2005): `tpami.2005.161`. Read
+  2026-11-08 for Thread 4's sampling options.
 - Bansal, Blum, Chawla, *Correlation Clustering* (Machine Learning 2004):
   `Bansal2004`.
 - Reichardt, Bornholdt, *Statistical mechanics of community detection* (PRE 2006):
