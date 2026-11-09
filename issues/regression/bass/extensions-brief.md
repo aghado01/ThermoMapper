@@ -39,7 +39,7 @@ Extensions beyond the port's completion contract, collected from the [full port 
 | Tree ensembles, with BCF's multiplier (E31) | Chipman, George and McCulloch 2010; Hahn, Murray and Carvalho 2020; [the notes](../perplexity-bart-etc.md) | Samplers: `BlockScan`, `IRjMove`, the target's separable case. A leaf contract beside `IObservationModel`. Readouts: declared smoothness | Candidate |
 | Additive models with a GP component (E32) | [The notes](../perplexity-bart-etc.md) | BGP: `y` per fit, σ² from outside with s² free, a declared mean. Fitting: the marginal given σ² | Candidate |
 | Regression-family integration (E33) | [The notes](../perplexity-bart-etc.md) | Every family: an inventory, declared capabilities, four verdicts | Candidate |
-| Several outputs on one basis, with Σ integrated (E34) | Brown, Vannucci and Fearn 1998; Huang and Wand 2013; [the lineage review](lineage-review.md) | Fitting: the collapsed core with a K × K quadratic form, the latent record by row. Samplers: nothing new | After E8 (2026-11-08) |
+| Several outputs on one basis, with Σ integrated (E34) | Brown, Vannucci and Fearn 1998; Huang and Wand 2013; [the lineage review](lineage-review.md) | Fitting: the collapsed core with a K × K quadratic form, the latent record by row. Samplers: nothing new | Building ([brief](multi-output-brief.md), 2026-11-08) |
 | Direct-functional BASS for families of SPC sweeps | Derivations review §7, item 9 | The completed port | Application |
 
 ## Upgrades to existing code
@@ -528,7 +528,7 @@ The user asked for this on 2026-11-08, after the Kimi review raised it under ABM
     - *What GBASS's build carries over (2026-11-08).* The move along β·v becomes a move along γ·vᵢ, (γ, v) → (γ/κ, κ·v), on the marginal with A and Σ integrated. As GBASS's fix (`1a8459c`) found, that makes it a partially collapsed step: after an accepted move, A and Σ are drawn afresh before any block reads them, and the proposal reads the state alone. The skewed horseshoe's default (`bf21578`) and its recorded mixing limit on hot rungs carry over with it, and so does interweaving.
   - *Random intercepts (E21, built in KHAOS slice 3, `0a2168c`).* The block whitens the rows by V = I + s²ZZᵀ. With one s shared across the outputs, the whitening acts on Y's rows alone and the matrix-normal form carries over. An s per output gives each column its own V, which breaks it. A shared s is the first form; the block's log-Jacobian then enters once per output, K times the one-output term.
   - *Samplers.* The structure chain is BASS's, so the ladder (with `RungWorkers`), SMC with its two flags and the flat histogram need no change. Each gates the K-output law by enumeration, as GBASS's slice 5 gated its noise.
-  - *Tempering and evidence.* The tilted likelihood keeps the collapse, as slice 5's σ² did: p(Y | A, Σ)^b is N(BA, Σ/b) times |Σ|^(n(1 − b)/2). That shifts the IW's degrees of freedom, and small b brings the same properness condition the σ² prior meets.
+  - *Tempering and evidence.* The tilted likelihood keeps the collapse, as slice 5's σ² did: p(Y | A, Σ)^b is N(BA, Σ/b) times |Σ|^(n(1 − b)/2). With A and Σ integrated against it, Σ's conditional is IW(ν₀ + b·ν_data, Ψ₀ + b·R), proper whenever ν₀ + b·ν_data > K − 1: at every b under a proper prior (corrected 2026-11-08 in [E34's build brief](multi-output-brief.md), decision 3).
   - *Readouts.* The matrix-t predictive gives joint bands, the cross-output correlation of predictions, the probability that every output meets its specification, and Sobol indices per output and for any declared combination.
 - **Where it sits.**
   - *E22 builds on it.* Given E22's latents z, a free Σ is this entry's collapse. A correlation matrix R, which binary and ordinal outcomes need, is drawn by parameter expansion around the same inverse-Wishart.
@@ -551,10 +551,10 @@ The user asked for this on 2026-11-08, after the Kimi review raised it under ABM
     - recovery of a known Σ and of surfaces from outside the model;
     - *the Kronecker convention:* the collapsed marginal against the dense vec form with an asymmetric Σ at K = 2, so that Σ ⊗ S₀ and S₀ ⊗ Σ cannot pass for each other under the code's vec order;
     - *equivariance:* Y → YL with Ψ₀ → LᵀΨ₀L leaves the structure posterior unchanged, for an invertible L that rescales and mixes the outputs;
-    - *properness under tempering:* a rung whose degrees of freedom fall to ν₀ − n(1 − b) ≤ K − 1 is refused, and the evidence path's hot end is placed above it.
+    - *properness under tempering:* a rung is refused only where ν₀ + b·ν_data ≤ K − 1, which happens only under an improper ν₀. This first read "where ν₀ − n(1 − b) ≤ K − 1", which asked the tilted prior alone to be proper, a condition stricter than the target needs (corrected 2026-11-08).
 
   These need no Lean. The marginal is a textbook integral that the tests pin numerically, and the structure chain is BASS's. The nearby place where a precise statement pays is E22's parameter expansion for R, whose validity rests on the expansion prior's invariance.
-- **Ordered after E8** by the user on 2026-11-08 ([the build order](lineage-review.md#build-order)). Updated on 2026-11-08 with what GBASS, KHAOS slice 3 and the Grassmann discussion changed. Its build brief is written when E8's last slice lands.
+- **Ordered after E8** by the user on 2026-11-08 ([the build order](lineage-review.md#build-order)). Updated on 2026-11-08 with what GBASS, KHAOS slice 3 and the Grassmann discussion changed. **Commissioned** by the user on 2026-11-08, after E8 was completed ([build brief](multi-output-brief.md)).
 
 ## Multi-fidelity emulation through the offset
 

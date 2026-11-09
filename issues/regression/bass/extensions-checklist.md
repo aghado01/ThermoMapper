@@ -39,7 +39,7 @@ Companion to [extensions-brief.md](extensions-brief.md). An item is ticked when 
 - [ ] **E31** Tree ensembles, with BCF's multiplier.
 - [ ] **E32** Additive models with a GP component.
 - [ ] **E33** Regression-family integration.
-- [ ] **E34** Several outputs on one basis, with Σ integrated (multi-output BASS). Requested by the user, 2026-11-08.
+- [ ] **E34** Several outputs on one basis, with Σ integrated (multi-output BASS). Requested by the user, 2026-11-08; commissioned 2026-11-08 ([build brief](multi-output-brief.md)).
 - [ ] **E35** Conformal test martingales: exchangeability checked online. Sources gathered by the user, 2026-11-08; after the conformal layer's slice 5.
 - [ ] **E36** Projection-pursuit ridges on the BASS core (BPPR), with `gcbeck/bppr`'s ideas weighed. Recorded 2026-11-08; after E8, not ordered.
 - [ ] **E37** Predictability of the truncation residual (D07's rank rule). Recorded 2026-11-08 from the Grassmann discussion, on the user's go-ahead; not ordered.
