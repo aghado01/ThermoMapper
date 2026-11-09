@@ -53,6 +53,21 @@ Work through where subspace geometry earns its place in the regression engine: p
 
 ## Report
 
+### 2026-11-08, what the AbliteraLUS comparison note offers this brief
+
+The note (`issues/geometry/gemini-abliteralus-thermomapper.md`, a comparison Gemini wrote) proposes five ports. Its Grassmann claims were checked against `abliteralus/analysis/grassmann.py`.
+- **Sine-based angles.** `principal_angles` takes the cosines from svdvals(Y Zᵀ) and the sines from the residual of Y off span(Z), with bases stored as rows, and pairs them by atan2. That code's `log_map` and `karcher_mean` still use acos, so the note's claim that the stable angles matter for Karcher convergence does not describe it. A port here has to cover `LogMap` as well, since `GeometricMedian` iterates on it. Edelman, Arias and Smith's form, U atan(Σ) Vᵀ from the SVD of (I − YYᵀ)Z(YᵀZ)⁻¹, reads the residual directly (cited from memory).
+- **The projection distance across ranks applies to E8.** It is the projection mean's own geometry, so each draw can keep its own k, chosen by its own gap, and both P̄ and the distance stay defined. For k_y ≤ k_z it splits exactly: d² = (k_z − k_y)/2 + ‖(I − P_Z)Y‖²_F, a rank term plus a containment defect.
+  - Reported apart, the two terms say whether the draws differ in how many directions they hold or in which directions.
+  - The implemented form, (k_y + k_z)/2 − Σcos², has the same floor as arccos. The split form computes the defect from the residual and so avoids it.
+  - Ye and Lim (2016) is the established reference for distances between subspaces of different dimensions (cited from memory).
+- **The diameter bound.** √min(k, p − k)·π/2 is correct for the geodesic distance. The projection distance has a different maximum, so normalizing a distance needs that metric's own diameter.
+- **Marchenko–Pastur and BBP bear on D07's rank, not on E8.** For noisy outputs with m ≫ n, the leading sample eigenvector's angle to the population one does not vanish (Paul 2007, cited from memory), which quantifies the PCA basis's Grassmann error. The note's noise-floor rule, σ² estimated from the bulk median, is Gavish and Donoho's optimal hard threshold (cited from memory). Neither applies to a deterministic simulator, whose outputs have no noise bulk, and both still rank components by noise rather than by how predictable they are.
+- **Not for this brief:**
+  - Bures–Wasserstein: a PSD barycenter of the draws' C is possible, but no decision rests on it.
+  - Empirical curvature, cones and DSI, and the seam detector.
+  - The orthogonal sham control is a negative control. E8's counterpart is the response's variation along random directions in the complement; the truncation-residual test's counterpart is a permutation of the cases.
+
 ### 2026-11-08, orientation pass: the code read, and corrections raised before discussion
 
 Checked against the code:
