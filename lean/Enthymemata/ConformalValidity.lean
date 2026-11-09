@@ -19,7 +19,7 @@ import Mathlib.Tactic.Positivity
 import Mathlib.Tactic.Ring
 
 /-!
-# Conformal validity (CB-1 to CB-4, and E35's M-1 and M-2)
+# Conformal validity (CB-1 to CB-4, E35's M-1 and M-2, and slice 9's cross-fitted forms)
 
 The finite statements of `Protolemmata/Conformal/conformal-lemmas.md`: prediction sets valid
 whatever the model does, as `GuardedEstimator`'s means are valid whatever the emulator does.
@@ -55,6 +55,18 @@ unit's stratum.
   (a martingale with expectation 1); `lintegral_capital_le` its supermartingale form;
   `lintegral_stoppedCapital`, the e-value at a stopping time; `ville_horizon` and `ville`, Ville's
   inequality.
+* **Slice 9, the jackknife+** (Barber, Candès, Ramdas and Tibshirani). `card_refused_pairwise_le`,
+  the counting core: at most `2k − 1` units are each stranger than `|C| − k` others or more. The
+  cross-fitted rule covers at least `1 − (2k − 1)/|C|` over orderings
+  (`coverage_pairwise_orderings`) and under a law exchangeable up to a relabeling of the fits'
+  randomness (`coverage_pairwise`, `crossFit_coverage`). The jackknife+ interval refuses only a
+  strange test unit
+  (`not_acceptsPairwise_of_jackRefuses`), so `jackknifePlus_orderings`, `jackknifePlus_coverage`
+  and `jackknifePlus_two_alpha`, its `1 − 2α`.
+* **Slice 9, asymmetric CQR** (Romano, Patterson and Candès, Theorem 2). `cqrAsym_coverage`, each
+  tail missing at most `k/|C|` and the set covering at least `1 − (k_lo + k_hi)/|C|`;
+  `cqrAsym_coverage_half` at `α/2` per tail; `cqrLo_isUpperSet`, `cqrHi_isLowerSet` and
+  `cqrAsym_ordConnected`, each tail refusing on its own side of an interval.
 -/
 
 open Finset
@@ -1539,5 +1551,528 @@ theorem ville [IsProbabilityMeasure μ] (hf : ∀ n, Measurable (Function.uncurr
   exact le_of_tendsto' (tendsto_measure_iUnion_atTop hmono) hbound
 
 end Betting
+
+/-! ### Slice 9: the jackknife+ and the cross-fitted rule -/
+
+section CrossFitted
+
+variable {ι : Type*}
+
+/-- The units of `C` that `u` is stranger than: those `j` with `s u j < s j u`, where `s i j` is
+unit `i`'s conformity under the fit that leaves out `i` and `j`. A tie makes neither stranger. -/
+def strangerThan {α : Type*} [LinearOrder α] (C : Finset ι) (s : ι → ι → α) (u : ι) : Finset ι :=
+  C.filter fun j => s u j < s j u
+
+/-- **The cross-fitted accept rule at level `k`.** `u` is refused when it is stranger than at least
+`|C| − k` units of `C`. On leave-two-out scores this is the `n`-fold cross-conformal set, and the
+jackknife+ interval contains it (`not_acceptsPairwise_of_jackRefuses`). -/
+def AcceptsPairwise {α : Type*} [LinearOrder α] (k : ℕ) (C : Finset ι) (s : ι → ι → α) (u : ι) :
+    Prop :=
+  (strangerThan C s u).card + k < C.card
+
+instance {α : Type*} [LinearOrder α] (k : ℕ) (C : Finset ι) (s : ι → ι → α) (u : ι) :
+    Decidable (AcceptsPairwise k C s u) :=
+  inferInstanceAs (Decidable (_ < _))
+
+theorem notMem_strangerThan_self {α : Type*} [LinearOrder α] (C : Finset ι) (s : ι → ι → α)
+    (u : ι) : u ∉ strangerThan C s u :=
+  fun h => lt_irrefl _ (mem_filter.1 h).2
+
+/-- At level `0` the cross-fitted rule accepts every unit of `C`: the set is the whole space. -/
+theorem acceptsPairwise_zero {α : Type*} [LinearOrder α] {C : Finset ι} (s : ι → ι → α) {u : ι}
+    (hu : u ∈ C) : AcceptsPairwise 0 C s u := by
+  have h : strangerThan C s u ⊂ C :=
+    (ssubset_iff_of_subset (filter_subset _ _)).2 ⟨u, hu, notMem_strangerThan_self C s u⟩
+  have := card_lt_card h
+  unfold AcceptsPairwise
+  omega
+
+/-- **The counting core**, Landau's argument as Barber, Candès, Ramdas and Tibshirani use it.
+Whatever the comparisons and their ties, at most `2k − 1` units of `C` are refused at level `k`:
+each refused unit is stranger than at least `|C| − k` units, and among the refused units each
+comparison goes at most one way. -/
+theorem card_refused_pairwise_le {α : Type*} [LinearOrder α] (C : Finset ι) (s : ι → ι → α)
+    (k : ℕ) : (C.filter fun u => ¬ AcceptsPairwise k C s u).card ≤ 2 * k - 1 := by
+  classical
+  set F := C.filter fun u => ¬ AcceptsPairwise k C s u
+  have hFC : F ⊆ C := filter_subset _ _
+  set a : ι → ℕ := fun u => (F.filter fun j => s u j < s j u).card with ha
+  have hunit : ∀ u ∈ F, C.card ≤ a u + (C \ F).card + k := by
+    intro u hu
+    have href : C.card ≤ (strangerThan C s u).card + k := by
+      simpa only [AcceptsPairwise, not_lt] using (mem_filter.1 hu).2
+    have hsplit : (strangerThan C s u).card ≤ a u + (C \ F).card := by
+      calc (strangerThan C s u).card ≤ ((F.filter fun j => s u j < s j u) ∪ (C \ F)).card := by
+            refine card_le_card fun j hj => ?_
+            rw [strangerThan, mem_filter] at hj
+            by_cases hjF : j ∈ F
+            · exact mem_union_left _ (mem_filter.2 ⟨hjF, hj.2⟩)
+            · exact mem_union_right _ (mem_sdiff.2 ⟨hj.1, hjF⟩)
+        _ ≤ _ := card_union_le _ _
+    omega
+  have hcard : C.card = F.card + (C \ F).card := by
+    rw [card_sdiff_of_subset hFC]
+    have := card_le_card hFC
+    omega
+  have hsum : F.card * C.card ≤ (∑ u ∈ F, a u) + F.card * (C \ F).card + F.card * k := by
+    have h := sum_le_sum hunit
+    simp only [sum_const, smul_eq_mul, sum_add_distrib] at h
+    linarith
+  have hle : ∀ u j, ((if s u j < s j u then 1 else 0) + (if s j u < s u j then 1 else 0) +
+      (if u = j then 1 else 0) : ℕ) ≤ 1 := by
+    intro u j
+    by_cases huj : u = j
+    · subst huj
+      simp
+    · by_cases h1 : s u j < s j u
+      · have h2 : ¬ s j u < s u j := fun h2 => lt_asymm h1 h2
+        simp [h1, h2, huj]
+      · simp only [h1, huj, if_false]
+        split_ifs <;> omega
+  have hA : ∑ u ∈ F, a u = ∑ u ∈ F, ∑ j ∈ F, if s u j < s j u then 1 else 0 := by
+    simp only [ha, card_filter]
+  have hB : ∑ u ∈ F, a u = ∑ u ∈ F, ∑ j ∈ F, if s j u < s u j then 1 else 0 := by
+    rw [hA, sum_comm]
+  have hD : F.card = ∑ u ∈ F, ∑ j ∈ F, if u = j then 1 else 0 := by
+    rw [card_eq_sum_ones]
+    refine sum_congr rfl fun u hu => ?_
+    rw [sum_ite_eq]
+    simp [hu]
+  have hpairs : 2 * (∑ u ∈ F, a u) + F.card ≤ F.card * F.card := by
+    calc 2 * (∑ u ∈ F, a u) + F.card
+        = ∑ u ∈ F, ∑ j ∈ F, ((if s u j < s j u then 1 else 0) + (if s j u < s u j then 1 else 0) +
+            (if u = j then 1 else 0)) := by
+          rw [two_mul]
+          nth_rw 1 [hA]
+          rw [hB, hD, ← sum_add_distrib, ← sum_add_distrib]
+          refine sum_congr rfl fun u _ => ?_
+          rw [← sum_add_distrib, ← sum_add_distrib]
+      _ ≤ ∑ u ∈ F, ∑ j ∈ F, 1 := sum_le_sum fun u _ => sum_le_sum fun j _ => hle u j
+      _ = F.card * F.card := by simp
+  have h1 : F.card * F.card ≤ (∑ u ∈ F, a u) + F.card * k := by
+    rw [hcard, mul_add] at hsum
+    linarith
+  have h2 : F.card * (F.card + 1) ≤ F.card * (2 * k) := by
+    have : F.card * F.card + F.card ≤ 2 * (F.card * k) := by linarith
+    calc F.card * (F.card + 1) = F.card * F.card + F.card := by ring
+      _ ≤ 2 * (F.card * k) := this
+      _ = F.card * (2 * k) := by ring
+  rcases Nat.eq_zero_or_pos F.card with h0 | hpos
+  · rw [h0]
+    exact Nat.zero_le _
+  · have := Nat.le_of_mul_le_mul_left h2 hpos
+    omega
+
+/-- The share of units the cross-fitted rule accepts: at least `1 − (2k − 1)/|C|`. -/
+theorem ratio_acceptsPairwise_ge {α : Type*} [LinearOrder α] {C : Finset ι} (hC : C.Nonempty)
+    (s : ι → ι → α) (k : ℕ) :
+    1 - ((2 * k - 1 : ℕ) : ℝ) / C.card ≤
+      ((C.filter fun u => AcceptsPairwise k C s u).card : ℝ) / C.card := by
+  have hc : (0 : ℝ) < C.card := by exact_mod_cast hC.card_pos
+  have hrej := card_refused_pairwise_le C s k
+  have hsplit := C.card_filter_add_card_filter_not (fun u => AcceptsPairwise k C s u)
+  have hcount : (C.card : ℝ) - ((2 * k - 1 : ℕ) : ℝ) ≤
+      (C.filter fun u => AcceptsPairwise k C s u).card := by
+    have : C.card ≤ (C.filter fun u => AcceptsPairwise k C s u).card + (2 * k - 1) := by omega
+    have : (C.card : ℝ) ≤ ((C.filter fun u => AcceptsPairwise k C s u).card : ℝ) +
+        ((2 * k - 1 : ℕ) : ℝ) := by exact_mod_cast this
+    linarith
+  rw [one_sub_div hc.ne']
+  exact div_le_div_of_nonneg_right hcount hc.le
+
+/-- The level in Barber et al.'s terms: at `k ≤ α m`, the bound `1 − (2k − 1)/m` is at least
+`1 − 2α`, and above it by `1/m` at `k = α m ≥ 1`. -/
+theorem one_sub_two_mul_le {k m : ℕ} {α : ℝ} (hm : 0 < m) (hk : (k : ℝ) ≤ α * m) :
+    1 - 2 * α ≤ 1 - ((2 * k - 1 : ℕ) : ℝ) / m := by
+  have hm' : (0 : ℝ) < m := by exact_mod_cast hm
+  have h1 : ((2 * k - 1 : ℕ) : ℝ) ≤ 2 * k := by
+    have : 2 * k - 1 ≤ 2 * k := Nat.sub_le _ _
+    exact_mod_cast this
+  have : ((2 * k - 1 : ℕ) : ℝ) / m ≤ 2 * α := by
+    rw [div_le_iff₀ hm']
+    linarith
+  linarith
+
+/-- The jackknife+'s conformity: minus a regression fit's absolute residual. `cov` and `resp` read a
+unit's covariate and response. -/
+def jackFit {Z X : Type*} (cov : Z → X) (resp : Z → ℝ) (alg : Finset ι → (ι → Z) → X → ℝ)
+    (T : Finset ι) (z : ι → Z) (p : Z) : ℝ :=
+  -|resp p - alg T z (cov p)|
+
+variable [Fintype ι] [DecidableEq ι]
+
+/-- A matrix score on data sets is **pairwise-equivariant on `C`** when reordering the units of `C`
+reorders the matrix's rows and columns with them. -/
+def PairEquivariant {Z α : Type*} (C : Finset ι) (S : (ι → Z) → ι → ι → α) : Prop :=
+  ∀ σ ∈ permsOn C, ∀ z i j, S (z ∘ σ) i j = S z (σ i) (σ j)
+
+theorem acceptsPairwise_comp {α : Type*} [LinearOrder α] {k : ℕ} {C : Finset ι}
+    {σ : Equiv.Perm ι} (hσ : σ ∈ permsOn C) (s : ι → ι → α) (u : ι) :
+    AcceptsPairwise k C (fun i j => s (σ i) (σ j)) u ↔ AcceptsPairwise k C s (σ u) := by
+  have h : (strangerThan C (fun i j => s (σ i) (σ j)) u).card = (strangerThan C s (σ u)).card := by
+    apply card_equiv σ
+    intro j
+    simp only [strangerThan, mem_filter, mem_iff_of_mem_permsOn hσ]
+  simp only [AcceptsPairwise, h]
+
+/-- **The cross-fitted rule over orderings.** For a pairwise-equivariant score, over every ordering
+of a fixed data set, the test unit is accepted at level `k` at least `1 − (2k − 1)/|C|` of the time,
+whatever the ties. -/
+theorem coverage_pairwise_orderings {Z α : Type*} [LinearOrder α] {C : Finset ι} {t : ι}
+    (ht : t ∈ C) {S : (ι → Z) → ι → ι → α} (hS : PairEquivariant C S) (z : ι → Z) (k : ℕ) :
+    1 - ((2 * k - 1 : ℕ) : ℝ) / C.card ≤
+      (((permsOn C).filter fun σ : Equiv.Perm ι => AcceptsPairwise k C (S (z ∘ σ)) t).card : ℝ) /
+        (permsOn C).card := by
+  have hfilt : ((permsOn C).filter fun σ : Equiv.Perm ι => AcceptsPairwise k C (S (z ∘ σ)) t) =
+      (permsOn C).filter fun σ : Equiv.Perm ι => AcceptsPairwise k C (S z) (σ t) := by
+    refine filter_congr fun σ hσ => ?_
+    have : S (z ∘ σ) = fun i j => S z (σ i) (σ j) :=
+      funext fun i => funext fun j => hS σ hσ z i j
+    rw [this, acceptsPairwise_comp hσ]
+  rw [hfilt, ratio_permsOn ht (fun u => AcceptsPairwise k C (S z) u)]
+  exact ratio_acceptsPairwise_ge ⟨t, ht⟩ (S z) k
+
+/-- **The cross-fitted rule under an exchangeable law.** `W` carries the fits' randomness, and
+`act σ` relabels it when the units of `C` are reordered by `σ`. The law of the randomness and the
+data together is invariant under each reordering with its relabeling, and the matrix equivariant
+under the pair. With `act` the identity, the law is exchangeable given `w` and the matrix
+equivariant for each `w`; a relabeling admits fits symmetric only in law, such as a sampler whose
+seeds travel with the units. Then the test unit is accepted with probability at least
+`1 − (2k − 1)/|C|`. -/
+theorem coverage_pairwise {W Z α : Type*} [Fintype W] [Fintype Z] [LinearOrder α] {C : Finset ι}
+    {t : ι} (ht : t ∈ C) (P : W → (ι → Z) → ℝ) (hP0 : ∀ w z, 0 ≤ P w z)
+    (hP1 : ∑ w, ∑ z, P w z = 1) (act : Equiv.Perm ι → W ≃ W)
+    (hP : ∀ σ ∈ permsOn C, ∀ w z, P (act σ w) (z ∘ σ) = P w z) (S : W → (ι → Z) → ι → ι → α)
+    (hS : ∀ σ ∈ permsOn C, ∀ w z i j, S (act σ w) (z ∘ σ) i j = S w z (σ i) (σ j)) (k : ℕ) :
+    1 - ((2 * k - 1 : ℕ) : ℝ) / C.card ≤
+      ∑ w, ∑ z, P w z * if AcceptsPairwise k C (S w z) t then 1 else 0 := by
+  rw [← Fintype.sum_prod_type'] at hP1 ⊢
+  have hG : ((permsOn C).card : ℝ) ≠ 0 := by exact_mod_cast (card_permsOn_pos C).ne'
+  have hswap : ∀ σ ∈ permsOn C,
+      ∑ x : W × (ι → Z), P x.1 x.2 * (if AcceptsPairwise k C (S x.1 x.2) t then (1 : ℝ) else 0) =
+        ∑ x : W × (ι → Z),
+          P x.1 x.2 * (if AcceptsPairwise k C (S x.1 x.2) (σ t) then 1 else 0) := by
+    intro σ hσ
+    rw [← Equiv.sum_comp ((act σ).prodCongr (reorder σ))]
+    refine Fintype.sum_congr _ _ fun x => ?_
+    simp only [Equiv.prodCongr_apply, Prod.map_fst, Prod.map_snd]
+    rw [show reorder σ x.2 = x.2 ∘ σ from rfl, hP σ hσ]
+    have : S (act σ x.1) (x.2 ∘ σ) = fun i j => S x.1 x.2 (σ i) (σ j) :=
+      funext fun i => funext fun j => hS σ hσ x.1 x.2 i j
+    rw [this]
+    simp only [acceptsPairwise_comp hσ]
+  have key : ∀ x : W × (ι → Z), (1 - ((2 * k - 1 : ℕ) : ℝ) / C.card) * P x.1 x.2 ≤
+      P x.1 x.2 * ((∑ σ ∈ permsOn C,
+        if AcceptsPairwise k C (S x.1 x.2) (σ t) then (1 : ℝ) else 0) / (permsOn C).card) := by
+    intro x
+    rw [mul_comm]
+    refine mul_le_mul_of_nonneg_left ?_ (hP0 x.1 x.2)
+    rw [sum_boole, ratio_permsOn ht (fun u => AcceptsPairwise k C (S x.1 x.2) u)]
+    exact ratio_acceptsPairwise_ge ⟨t, ht⟩ _ k
+  calc 1 - ((2 * k - 1 : ℕ) : ℝ) / C.card
+      = ∑ x : W × (ι → Z), (1 - ((2 * k - 1 : ℕ) : ℝ) / C.card) * P x.1 x.2 := by
+        rw [← mul_sum, hP1, mul_one]
+    _ ≤ ∑ x : W × (ι → Z), P x.1 x.2 * ((∑ σ ∈ permsOn C,
+          if AcceptsPairwise k C (S x.1 x.2) (σ t) then (1 : ℝ) else 0) / (permsOn C).card) :=
+        sum_le_sum fun x _ => key x
+    _ = (∑ σ ∈ permsOn C, ∑ x : W × (ι → Z),
+          P x.1 x.2 * if AcceptsPairwise k C (S x.1 x.2) (σ t) then 1 else 0) /
+          (permsOn C).card := by
+        simp only [mul_div_assoc', mul_sum, sum_div]
+        exact sum_comm
+    _ = (∑ σ ∈ permsOn C, ∑ x : W × (ι → Z),
+          P x.1 x.2 * if AcceptsPairwise k C (S x.1 x.2) t then 1 else 0) /
+          (permsOn C).card := by
+        rw [sum_congr rfl fun σ hσ => (hswap σ hσ).symm]
+    _ = _ := by
+        rw [sum_const, nsmul_eq_mul]
+        field_simp
+
+/-- Leaving out `i` and `j`, renamed by `σ`, leaves out `σ i` and `σ j`. -/
+theorem image_sdiff_pair (σ : Equiv.Perm ι) (i j : ι) :
+    (univ \ {i, j}).image σ = univ \ {σ i, σ j} := by
+  ext x
+  simp only [mem_image, mem_sdiff, mem_univ, true_and, mem_insert, mem_singleton]
+  constructor
+  · rintro ⟨a, ha, rfl⟩ h
+    exact ha (h.imp (fun h => σ.injective h) (fun h => σ.injective h))
+  · intro hx
+    refine ⟨σ.symm x, fun h => hx ?_, σ.apply_symm_apply x⟩
+    rcases h with h | h
+    · left
+      rw [← h, σ.apply_symm_apply]
+    · right
+      rw [← h, σ.apply_symm_apply]
+
+/-- The leave-two-out score: unit `i` read by the fit to every unit but `i` and `j`. -/
+def pairScore {Z β : Type*} (fit : Finset ι → (ι → Z) → Z → β) (z : ι → Z) (i j : ι) : β :=
+  fit (univ \ {i, j}) z (z i)
+
+/-- A **symmetric fit** reads its training units as a set: on the data reordered by `σ`, the fit
+to the units `T` is the fit to the units `T.image σ` of the original, which hold the same data. -/
+def FitSymmetric {Z β : Type*} (C : Finset ι) (fit : Finset ι → (ι → Z) → β) : Prop :=
+  ∀ σ ∈ permsOn C, ∀ T z, fit T (z ∘ σ) = fit (T.image σ) z
+
+theorem pairScore_comp {Z β : Type*} {fit fit' : Finset ι → (ι → Z) → Z → β} {σ : Equiv.Perm ι}
+    {z : ι → Z} (h : ∀ T, fit' T (z ∘ σ) = fit (T.image σ) z) (i j : ι) :
+    pairScore fit' (z ∘ σ) i j = pairScore fit z (σ i) (σ j) := by
+  simp only [pairScore, h, image_sdiff_pair, Function.comp_apply]
+
+/-- A symmetric fit's leave-two-out score is pairwise-equivariant. -/
+theorem pairScore_equivariant {Z β : Type*} {C : Finset ι} {fit : Finset ι → (ι → Z) → Z → β}
+    (h : FitSymmetric C fit) : PairEquivariant C (pairScore fit) :=
+  fun σ hσ z i j => pairScore_comp (fun T => h σ hσ T z) i j
+
+/-- **The cross-fitted rule with any score** (Vovk's `n`-fold cross-conformal set). Each unit is
+scored by a fit to every unit but itself and the other unit of the pair, under any conformity score
+the fit defines; the fit is symmetric up to the relabeling `act` of its randomness. Then the test
+unit is accepted with probability at least `1 − (2k − 1)/|C|`. -/
+theorem crossFit_coverage {W Z α : Type*} [Fintype W] [Fintype Z] [LinearOrder α] {C : Finset ι}
+    {t : ι} (ht : t ∈ C) (P : W → (ι → Z) → ℝ) (hP0 : ∀ w z, 0 ≤ P w z)
+    (hP1 : ∑ w, ∑ z, P w z = 1) (act : Equiv.Perm ι → W ≃ W)
+    (hP : ∀ σ ∈ permsOn C, ∀ w z, P (act σ w) (z ∘ σ) = P w z)
+    (fit : W → Finset ι → (ι → Z) → Z → α)
+    (hfit : ∀ σ ∈ permsOn C, ∀ w T z, fit (act σ w) T (z ∘ σ) = fit w (T.image σ) z) (k : ℕ) :
+    1 - ((2 * k - 1 : ℕ) : ℝ) / C.card ≤
+      ∑ w, ∑ z, P w z * if AcceptsPairwise k C (pairScore (fit w) z) t then 1 else 0 :=
+  coverage_pairwise ht P hP0 hP1 act hP (fun w => pairScore (fit w))
+    (fun σ hσ w z i j => pairScore_comp (fun T => hfit σ hσ w T z) i j) k
+
+/-- **The jackknife+ refuses** the test unit `t` at level `k` when at least `|C| − k` of the upper
+ends `μ̂₋ᵢ(Xₜ) + Rᵢ` lie strictly below `Yₜ`, or at least `|C| − k` of the lower ends
+`μ̂₋ᵢ(Xₜ) − Rᵢ` strictly above it. Here `i` runs over the other units of `C`, `μ̂₋ᵢ` is the fit
+leaving out `i` and `t`, and `Rᵢ` its absolute residual at `i`. That is `Yₜ` outside the closed
+interval from the `k`-th smallest lower end to the `k`-th largest upper end, with
+`k = ⌊α(n + 1)⌋` at Barber et al.'s level `α`. With a fit that reads only its training units, the
+interval is computed from the training data and `Xₜ`. -/
+def JackRefuses {Z X : Type*} (cov : Z → X) (resp : Z → ℝ) (k : ℕ) (C : Finset ι)
+    (alg : Finset ι → (ι → Z) → X → ℝ) (z : ι → Z) (t : ι) : Prop :=
+  C.card ≤ ((C.erase t).filter fun i => alg (univ \ {i, t}) z (cov (z t)) +
+      |resp (z i) - alg (univ \ {i, t}) z (cov (z i))| < resp (z t)).card + k ∨
+    C.card ≤ ((C.erase t).filter fun i => resp (z t) < alg (univ \ {i, t}) z (cov (z t)) -
+      |resp (z i) - alg (univ \ {i, t}) z (cov (z i))|).card + k
+
+noncomputable instance {Z X : Type*} (cov : Z → X) (resp : Z → ℝ) (k : ℕ) (C : Finset ι)
+    (alg : Finset ι → (ι → Z) → X → ℝ) (z : ι → Z) (t : ι) :
+    Decidable (JackRefuses cov resp k C alg z t) :=
+  inferInstanceAs (Decidable (_ ∨ _))
+
+/-- **The jackknife+ refuses only a strange test unit.** Each upper end below `Yₜ`, or lower end
+above it, is a unit `i` whose residual under the fit leaving out `i` and `t` is below the test
+unit's: a refusal by the interval is a refusal by the cross-fitted rule, so the jackknife+ interval
+contains the cross-fitted set. -/
+theorem not_acceptsPairwise_of_jackRefuses {Z X : Type*} {cov : Z → X} {resp : Z → ℝ} {k : ℕ}
+    {C : Finset ι} {alg : Finset ι → (ι → Z) → X → ℝ} {z : ι → Z} {t : ι}
+    (h : JackRefuses cov resp k C alg z t) :
+    ¬ AcceptsPairwise k C (pairScore (jackFit cov resp alg) z) t := by
+  unfold AcceptsPairwise
+  rw [not_lt]
+  have hpair : ∀ i, (univ \ {t, i} : Finset ι) = univ \ {i, t} := fun i => by rw [pair_comm]
+  rcases h with h | h
+  · refine h.trans (Nat.add_le_add_right (card_le_card fun i hi => ?_) k)
+    rw [mem_filter, mem_erase] at hi
+    rw [strangerThan, mem_filter]
+    refine ⟨hi.1.2, ?_⟩
+    simp only [pairScore, jackFit, hpair]
+    rw [neg_lt_neg_iff]
+    have h3 := le_abs_self (resp (z t) - alg (univ \ {i, t}) z (cov (z t)))
+    linarith [hi.2]
+  · refine h.trans (Nat.add_le_add_right (card_le_card fun i hi => ?_) k)
+    rw [mem_filter, mem_erase] at hi
+    rw [strangerThan, mem_filter]
+    refine ⟨hi.1.2, ?_⟩
+    simp only [pairScore, jackFit, hpair]
+    rw [neg_lt_neg_iff]
+    have h3 := le_abs_self (alg (univ \ {i, t}) z (cov (z t)) - resp (z t))
+    rw [abs_sub_comm] at h3
+    linarith [hi.2]
+
+/-- **The jackknife+ over orderings.** With a symmetric fit, over every ordering of a fixed data
+set, the jackknife+ covers the test unit at least `1 − (2k − 1)/|C|` of the time. -/
+theorem jackknifePlus_orderings {Z X : Type*} {C : Finset ι} {t : ι} (ht : t ∈ C) (cov : Z → X)
+    (resp : Z → ℝ) {alg : Finset ι → (ι → Z) → X → ℝ} (halg : FitSymmetric C alg) (z : ι → Z)
+    (k : ℕ) :
+    1 - ((2 * k - 1 : ℕ) : ℝ) / C.card ≤
+      (((permsOn C).filter fun σ : Equiv.Perm ι =>
+        ¬ JackRefuses cov resp k C alg (z ∘ σ) t).card : ℝ) / (permsOn C).card := by
+  have hsym : FitSymmetric C (jackFit cov resp alg) := fun σ hσ T z => by
+    funext p
+    simp only [jackFit, halg σ hσ T z]
+  refine (coverage_pairwise_orderings ht (pairScore_equivariant hsym) z k).trans ?_
+  have hG : (0 : ℝ) ≤ (permsOn C).card := Nat.cast_nonneg _
+  refine div_le_div_of_nonneg_right ?_ hG
+  have hsub : ((permsOn C).filter fun σ : Equiv.Perm ι =>
+      AcceptsPairwise k C (pairScore (jackFit cov resp alg) (z ∘ σ)) t) ⊆
+      (permsOn C).filter fun σ : Equiv.Perm ι => ¬ JackRefuses cov resp k C alg (z ∘ σ) t := by
+    intro σ hσ
+    rw [mem_filter] at hσ ⊢
+    exact ⟨hσ.1, fun href => not_acceptsPairwise_of_jackRefuses href hσ.2⟩
+  exact_mod_cast card_le_card hsub
+
+/-- **The jackknife+ under an exchangeable law** (Barber, Candès, Ramdas and Tibshirani, Theorem 1,
+with its finite bound). Given the fits' randomness `w`, the units of `C` are exchangeable up to the
+relabeling `act`, and the regression fit is symmetric up to it. Then the jackknife+ covers the test
+unit with probability at least `1 − (2k − 1)/|C|`, whatever the fit. -/
+theorem jackknifePlus_coverage {W Z X : Type*} [Fintype W] [Fintype Z] {C : Finset ι} {t : ι}
+    (ht : t ∈ C) (P : W → (ι → Z) → ℝ) (hP0 : ∀ w z, 0 ≤ P w z) (hP1 : ∑ w, ∑ z, P w z = 1)
+    (act : Equiv.Perm ι → W ≃ W) (hP : ∀ σ ∈ permsOn C, ∀ w z, P (act σ w) (z ∘ σ) = P w z)
+    (cov : Z → X) (resp : Z → ℝ) (alg : W → Finset ι → (ι → Z) → X → ℝ)
+    (halg : ∀ σ ∈ permsOn C, ∀ w T z, alg (act σ w) T (z ∘ σ) = alg w (T.image σ) z) (k : ℕ) :
+    1 - ((2 * k - 1 : ℕ) : ℝ) / C.card ≤
+      ∑ w, ∑ z, P w z * if ¬ JackRefuses cov resp k C (alg w) z t then 1 else 0 := by
+  refine (crossFit_coverage ht P hP0 hP1 act hP (fun w => jackFit cov resp (alg w))
+    (fun σ hσ w T z => by funext p; simp only [jackFit, halg σ hσ w T z]) k).trans ?_
+  refine sum_le_sum fun w _ => sum_le_sum fun z _ => mul_le_mul_of_nonneg_left ?_ (hP0 w z)
+  by_cases hacc : AcceptsPairwise k C (pairScore (jackFit cov resp (alg w)) z) t
+  · have : ¬ JackRefuses cov resp k C (alg w) z t := fun h =>
+      not_acceptsPairwise_of_jackRefuses h hacc
+    simp [hacc, this]
+  · simp only [hacc, if_false]
+    split_ifs <;> norm_num
+
+/-- **The jackknife+'s `1 − 2α`.** At `k ≤ α|C|`, `k = ⌊α(n + 1)⌋` in particular, the jackknife+
+covers with probability at least `1 − 2α`. -/
+theorem jackknifePlus_two_alpha {W Z X : Type*} [Fintype W] [Fintype Z] {C : Finset ι} {t : ι}
+    (ht : t ∈ C) (P : W → (ι → Z) → ℝ) (hP0 : ∀ w z, 0 ≤ P w z) (hP1 : ∑ w, ∑ z, P w z = 1)
+    (act : Equiv.Perm ι → W ≃ W) (hP : ∀ σ ∈ permsOn C, ∀ w z, P (act σ w) (z ∘ σ) = P w z)
+    (cov : Z → X) (resp : Z → ℝ) (alg : W → Finset ι → (ι → Z) → X → ℝ)
+    (halg : ∀ σ ∈ permsOn C, ∀ w T z, alg (act σ w) T (z ∘ σ) = alg w (T.image σ) z) {k : ℕ}
+    {α : ℝ} (hk : (k : ℝ) ≤ α * C.card) :
+    1 - 2 * α ≤ ∑ w, ∑ z, P w z * if ¬ JackRefuses cov resp k C (alg w) z t then 1 else 0 :=
+  (one_sub_two_mul_le (card_pos.2 ⟨t, ht⟩) hk).trans
+    (jackknifePlus_coverage ht P hP0 hP1 act hP cov resp alg halg k)
+
+end CrossFitted
+
+/-! ### Slice 9: asymmetric CQR, a threshold per tail -/
+
+section AsymmetricCQR
+
+/-- CQR's lower-tail conformity `y − q_lo(x)`, the negative of Romano, Patterson and Candès's
+`E_lo`. -/
+def cqrLoScore {X : Type*} (qlo : X → ℝ) (p : X × ℝ) : ℝ := p.2 - qlo p.1
+
+/-- CQR's upper-tail conformity `q_hi(x) − y`, the negative of their `E_hi`. -/
+def cqrHiScore {X : Type*} (qhi : X → ℝ) (p : X × ℝ) : ℝ := qhi p.1 - p.2
+
+/-- At level `0` the accept rule accepts every unit of `C`: a tail at level `0` has an infinite
+end. -/
+theorem accepts_zero {ι α : Type*} [LinearOrder α] {C : Finset ι} (s : ι → α) {u : ι}
+    (hu : u ∈ C) : Accepts 0 C s u :=
+  card_pos.2 ⟨u, mem_filter.2 ⟨hu, le_rfl⟩⟩
+
+/-- **Two events at once.** Their joint probability is at least the sum of theirs, less one. -/
+theorem sum_and_ge {W V : Type*} [Fintype W] [Fintype V] (P : W → V → ℝ) (hP0 : ∀ w v, 0 ≤ P w v)
+    (hP1 : ∑ w, ∑ v, P w v = 1) (A B : W → V → Prop) [∀ w v, Decidable (A w v)]
+    [∀ w v, Decidable (B w v)] :
+    (∑ w, ∑ v, P w v * if A w v then 1 else 0) + (∑ w, ∑ v, P w v * if B w v then 1 else 0) - 1 ≤
+      ∑ w, ∑ v, P w v * if A w v ∧ B w v then 1 else 0 := by
+  have key : ∀ w v, P w v * (if A w v then 1 else 0) + P w v * (if B w v then 1 else 0) - P w v ≤
+      P w v * (if A w v ∧ B w v then 1 else 0) := by
+    intro w v
+    have h := hP0 w v
+    by_cases ha : A w v <;> by_cases hb : B w v
+    · rw [if_pos ha, if_pos hb, if_pos ⟨ha, hb⟩]
+      linarith
+    · rw [if_pos ha, if_neg hb, if_neg fun h => hb h.2]
+      linarith
+    · rw [if_neg ha, if_pos hb, if_neg fun h => ha h.1]
+      linarith
+    · rw [if_neg ha, if_neg hb, if_neg fun h => ha h.1]
+      linarith
+  have hsum := sum_le_sum fun w (_ : w ∈ univ) => sum_le_sum fun v (_ : v ∈ univ) => key w v
+  simp only [sum_sub_distrib, sum_add_distrib] at hsum
+  linarith
+
+variable {ι : Type*} [Fintype ι] [DecidableEq ι]
+
+/-- **Asymmetric CQR, each tail and both** (Romano, Patterson and Candès, Theorem 2). `W` is the
+training split with anything else the quantile fits read, under any law; given `w`, the calibration
+and test units are exchangeable, and `pt` reads a unit as `(x, y)`. Each tail is the accept rule on
+its own conformity at its own level. The test unit falls below the set with probability at most
+`k_lo/|C|`, above it with probability at most `k_hi/|C|`, and in it with probability at least
+`1 − (k_lo + k_hi)/|C|`, whatever the fits. -/
+theorem cqrAsym_coverage {W Z X : Type*} [Fintype W] [Fintype Z] {C : Finset ι} {t : ι}
+    (ht : t ∈ C) (P : W → (ι → Z) → ℝ) (hP0 : ∀ w z, 0 ≤ P w z) (hP1 : ∑ w, ∑ z, P w z = 1)
+    (hP : ∀ σ ∈ permsOn C, ∀ w z, P w (z ∘ σ) = P w z) (pt : Z → X × ℝ) (qlo qhi : W → X → ℝ)
+    (klo khi : ℕ) :
+    1 - (klo : ℝ) / C.card ≤ ∑ w, ∑ z, P w z *
+        (if Accepts klo C (fun i => cqrLoScore (qlo w) (pt (z i))) t then 1 else 0) ∧
+      1 - (khi : ℝ) / C.card ≤ ∑ w, ∑ z, P w z *
+        (if Accepts khi C (fun i => cqrHiScore (qhi w) (pt (z i))) t then 1 else 0) ∧
+      1 - ((klo : ℝ) + khi) / C.card ≤ ∑ w, ∑ z, P w z *
+        (if Accepts klo C (fun i => cqrLoScore (qlo w) (pt (z i))) t ∧
+          Accepts khi C (fun i => cqrHiScore (qhi w) (pt (z i))) t then 1 else 0) := by
+  have hlo : 1 - (klo : ℝ) / C.card ≤ ∑ w, ∑ z, P w z *
+      (if Accepts klo C (fun i => cqrLoScore (qlo w) (pt (z i))) t then 1 else 0) :=
+    split_coverage ht P hP0 hP1 hP (fun w p => cqrLoScore (qlo w) (pt p)) klo
+  have hhi : 1 - (khi : ℝ) / C.card ≤ ∑ w, ∑ z, P w z *
+      (if Accepts khi C (fun i => cqrHiScore (qhi w) (pt (z i))) t then 1 else 0) :=
+    split_coverage ht P hP0 hP1 hP (fun w p => cqrHiScore (qhi w) (pt p)) khi
+  have hand := sum_and_ge P hP0 hP1
+    (fun w z => Accepts klo C (fun i => cqrLoScore (qlo w) (pt (z i))) t)
+    (fun w z => Accepts khi C (fun i => cqrHiScore (qhi w) (pt (z i))) t)
+  refine ⟨hlo, hhi, ?_⟩
+  have : 1 - ((klo : ℝ) + khi) / C.card =
+      (1 - (klo : ℝ) / C.card) + (1 - (khi : ℝ) / C.card) - 1 := by
+    ring
+  rw [this]
+  exact le_trans (by linarith [hlo, hhi]) hand
+
+/-- **Asymmetric CQR at `α/2` per tail.** At `k_lo, k_hi ≤ (α/2)|C|`, `⌊(α/2)(n₂ + 1)⌋` each, the
+set covers with probability at least `1 − α`, each tail missing at most `α/2`. -/
+theorem cqrAsym_coverage_half {W Z X : Type*} [Fintype W] [Fintype Z] {C : Finset ι} {t : ι}
+    (ht : t ∈ C) (P : W → (ι → Z) → ℝ) (hP0 : ∀ w z, 0 ≤ P w z) (hP1 : ∑ w, ∑ z, P w z = 1)
+    (hP : ∀ σ ∈ permsOn C, ∀ w z, P w (z ∘ σ) = P w z) (pt : Z → X × ℝ) (qlo qhi : W → X → ℝ)
+    {klo khi : ℕ} {α : ℝ} (hlo : (klo : ℝ) ≤ α / 2 * C.card) (hhi : (khi : ℝ) ≤ α / 2 * C.card) :
+    1 - α ≤ ∑ w, ∑ z, P w z *
+      (if Accepts klo C (fun i => cqrLoScore (qlo w) (pt (z i))) t ∧
+        Accepts khi C (fun i => cqrHiScore (qhi w) (pt (z i))) t then 1 else 0) := by
+  have hc : (0 : ℝ) < C.card := by exact_mod_cast card_pos.2 ⟨t, ht⟩
+  refine le_trans ?_ (cqrAsym_coverage ht P hP0 hP1 hP pt qlo qhi klo khi).2.2
+  have : ((klo : ℝ) + khi) / C.card ≤ α := by
+    rw [div_le_iff₀ hc]
+    linarith
+  linarith
+
+/-- **The lower tail refuses below, the upper tail above.** With the calibration units held and the
+test unit at `x`, the lower tail accepts an upper set of `y`. -/
+theorem cqrLo_isUpperSet {ι₀ X : Type*} [Fintype ι₀] (qlo : X → ℝ) (cal : ι₀ → X × ℝ) (x : X)
+    (k : ℕ) :
+    IsUpperSet {y : ℝ |
+      Accepts k univ (fun i : Option ι₀ => cqrLoScore qlo (i.elim (x, y) cal)) none} := by
+  intro y y' hyy' hy
+  refine accepts_mono ?_ (fun j hj => ?_) hy
+  · simp only [Option.elim, cqrLoScore]
+    linarith
+  · cases j with
+    | none => exact absurd rfl hj
+    | some j => rfl
+
+/-- The upper tail accepts a lower set of `y`. -/
+theorem cqrHi_isLowerSet {ι₀ X : Type*} [Fintype ι₀] (qhi : X → ℝ) (cal : ι₀ → X × ℝ) (x : X)
+    (k : ℕ) :
+    IsLowerSet {y : ℝ |
+      Accepts k univ (fun i : Option ι₀ => cqrHiScore qhi (i.elim (x, y) cal)) none} := by
+  intro y y' hyy' hy
+  refine accepts_mono ?_ (fun j hj => ?_) hy
+  · simp only [Option.elim, cqrHiScore]
+    linarith
+  · cases j with
+    | none => exact absurd rfl hj
+    | some j => rfl
+
+/-- **Asymmetric CQR's set is an interval**: an upper set from the lower tail meeting a lower set
+from the upper tail. -/
+theorem cqrAsym_ordConnected {ι₀ X : Type*} [Fintype ι₀] (qlo qhi : X → ℝ) (cal : ι₀ → X × ℝ)
+    (x : X) (klo khi : ℕ) :
+    Set.OrdConnected {y : ℝ |
+      Accepts klo univ (fun i : Option ι₀ => cqrLoScore qlo (i.elim (x, y) cal)) none ∧
+        Accepts khi univ (fun i : Option ι₀ => cqrHiScore qhi (i.elim (x, y) cal)) none} := by
+  rw [Set.setOf_and]
+  exact (cqrLo_isUpperSet qlo cal x klo).ordConnected.inter
+    (cqrHi_isLowerSet qhi cal x khi).ordConnected
+
+end AsymmetricCQR
 
 end Conformal

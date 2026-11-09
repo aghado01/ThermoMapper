@@ -1,8 +1,10 @@
 # Conformal validity in the Lean harness — chip brief
 
-CB-1 to CB-4 were proved on 2026-11-06 and E35's M-1 and M-2 on 2026-11-08. Their reports are below. The next assignment is E16 slice 9.
+CB-1 to CB-4 were proved on 2026-11-06, E35's M-1 and M-2 on 2026-11-08, and E16 slice 9's jackknife+ and asymmetric CQR on 2026-11-09. Their reports are below.
 
 ## E16 slice 9 — cross-fitted intervals and asymmetric CQR (2026-11-09)
+
+Status: done 2026-11-09, report below.
 
 This is the Lean prerequisite for the [conformal layer's slice 9](../../../issues/regression/conformal-layer-brief.md#e16s-completion-the-plan-slices-7-onward). Establish the finite-sample statements the implementation may claim:
 
@@ -127,6 +129,92 @@ The user asked for this on 2026-11-08 ("Yes, start it"), relayed by the BASS ext
 ## Reports
 
 Newest first.
+
+### 2026-11-09 — slice 9: the jackknife+ and asymmetric CQR proved
+
+**Proved** in `lean/Enthymemata/ConformalValidity.lean`, now 153 declarations and still PROOF-CLOSED. `#print axioms` on the slice 9 results shows the standard three only. [conformal-lemmas.md](conformal-lemmas.md) has the record, in its slice 9 section.
+- *The jackknife+:*
+  - `card_refused_pairwise_le`, the counting core;
+  - `coverage_pairwise_orderings`, over orderings;
+  - `coverage_pairwise` and `crossFit_coverage`, under a law and for any score;
+  - `not_acceptsPairwise_of_jackRefuses`, the interval contains the cross-fitted set;
+  - `jackknifePlus_orderings`, `jackknifePlus_coverage` and `jackknifePlus_two_alpha`;
+  - `acceptsPairwise_zero`, `pairScore_equivariant` and `one_sub_two_mul_le` as tools.
+- *Asymmetric CQR:*
+  - `cqrAsym_coverage`, each tail and both;
+  - `cqrAsym_coverage_half`, at α/2 per tail;
+  - `cqrLo_isUpperSet`, `cqrHi_isLowerSet` and `cqrAsym_ordConnected`, each tail's side;
+  - `accepts_zero` and `sum_and_ge` as tools.
+
+**The rules the C# worker can implement.** n training units, m = n + 1. Each rule cites its Lean declaration.
+- *Jackknife+ at level α.*
+  - Set k = ⌊α(n + 1)⌋. Refit μ̂₋ᵢ without unit i, for each i, and take Rᵢ = |Yᵢ − μ̂₋ᵢ(Xᵢ)|.
+  - The interval is closed, from the k-th smallest of μ̂₋ᵢ(x) − Rᵢ to the k-th largest of μ̂₋ᵢ(x) + Rᵢ. A y at an end is covered.
+  - At k = 0 the interval is the whole line; the layer says so, as at small strata in CB-1.
+  - As counts (`JackRefuses`): y is refused when at least n + 1 − k upper ends are strictly below it, or at least n + 1 − k lower ends strictly above it.
+- *The guarantee to assert:*
+  - coverage at least 1 − (2k − 1)/(n + 1) (`jackknifePlus_coverage`), which is at least 1 − 2α (`jackknifePlus_two_alpha`);
+  - on enumerable fixtures, over every ordering (`jackknifePlus_orderings`).
+  - The bound is attained, so no test may assert more. At k = 1 it is 1 − 1/(n + 1), the split form's exact rate.
+- *The cross-fitted set with any score* (`AcceptsPairwise`, `crossFit_coverage`), Vovk's n-fold cross-conformal set.
+  - The test candidate is refused when it is stranger than at least n + 1 − k units. Unit i counts when the candidate's conformity under μ̂₋ᵢ is strictly below unit i's own conformity under μ̂₋ᵢ, and a tie does not count.
+  - The same guarantee holds. For the residual score, the set lies inside the jackknife+ interval.
+  - This is the form that takes conformal Bayes' predictive densities, since it is not tied to |y − μ̂|.
+- *The fits* (`FitSymmetric`).
+  - Every leave-out fit reads its training units as a set.
+  - A sampler qualifies if it receives its units in one uniformly random order drawn once per run and shared by every leave-out fit, or if its seeds travel with the units. That is the law form's relabeling `act`.
+  - A sampler that sweeps units in index order with a fixed seed is outside the statement.
+  - A fit may depend on its sample size and need not be stable. The plain jackknife, centred on the fit to all n units, has no guarantee, and its coverage is 0 in the checks with such a fit.
+- *Asymmetric CQR at α/2* (`cqrAsym_coverage`, `cqrAsym_coverage_half`).
+  - Set k_lo = k_hi = ⌊(α/2)(n₂ + 1)⌋.
+  - The lower end is q_lo(x) + c_lo(k_lo), where c_lo(k) is the k-th smallest of yᵢ − q_lo(xᵢ) over calibration. The upper end is q_hi(x) − c_hi(k_hi), from q_hi(xᵢ) − yᵢ. Both are closed, with ties counted for the test, as CB-1's rule.
+  - At level 0 that end is infinite (`accepts_zero`), which happens below n₂ + 1 = 2/α: n₂ < 19 at α = 0.1.
+  - Assert each tail missing at most k/m, exactly k/m on distinct scores, and two-sided coverage at least 1 − (k_lo + k_hi)/m, at least 1 − α. The rounding can leave it up to 1/m above 1 − α.
+
+**What changed from the task.**
+- *The jackknife+'s bound is 1 − (2k − 1)/(n + 1),* sharper than 1 − 2α by at least 1/(n + 1), and attained.
+  - A symmetric fit built from a regular tournament covers exactly that over every ordering, for every (m, k) checked up to m = 7.
+  - At α = 0.1 and n = 19 the worst case is 0.85.
+  - Nothing proved false.
+- *The law form is stated up to a relabeling of the fits' randomness,* so the "fitting-symmetry hypothesis" is one a sampler can meet in law. The task asked only for symmetry.
+- *CV+ is not included,* and neither are cross-conformal predictive distributions. The reasons are in the ledger; CV+ is a follow-up below.
+- *The engine brief's "near 1 − α" is a measurement under stability, not a guarantee,* as the assignment said.
+
+**Checks first** (`conformal-checks.py`, section "Slice 9"). All assertions hold.
+- *The jackknife+:*
+  - the counting core on 92,577 comparison outcomes, with 2k − 1 attained;
+  - the order statistics, Barber et al.'s quantiles and the counts agreeing on 304,500 cases;
+  - 4,920 orderings over 4 data sets and 5 symmetric fits;
+  - exact laws, i.i.d. and Pólya, at m = 4;
+  - the attaining fit at 10 values of (m, k).
+- *Each premise broken:* the plain jackknife, and ties counted as strange.
+- *Order-reading fits:* exhaustive at m = 4, with none beyond the bound.
+- *Asymmetric CQR:*
+  - each tail and both under an i.i.d. law at every pair of levels;
+  - each tail exact over orderings;
+  - 16,384 accept sets matching the closed ends and Romano et al.'s quantile;
+  - symmetric CQR putting all its miscoverage above the set (0.363), against 0.127 per tail for the asymmetric form.
+
+**Prior art, read.**
+- Barber, Candès, Ramdas and Tibshirani 2023 (2202.13415v5), its jackknife+ appendix: the definition and quantile conventions, the background theorem, the proof via Landau's theorem, and the cross-conformal remark.
+- Romano, Patterson and Candès 2019 (1905.03222v1), Theorem 2 and their quantile convention.
+- Barber et al. 2021 is not on disk. It is read through the 2023 restatement, and nothing was fetched.
+
+**Gates.**
+- `lake build Enthymemata.ConformalValidity`: clean, no warnings.
+- `lake build Enthymemata`: green; the only warnings come from apologies already present in other files.
+- `scripts/meta-ci.ps1 -NoBuild`: PASS.
+- Builds ran at below-normal priority, and nothing was fetched. D: had 39 GB free at the end.
+
+**Follow-ups, each with the decision it would change.**
+- *CV+ with K folds.* It decides whether the layer offers K fits instead of n.
+  - It needs Barber et al. 2021 for the added term; fetching the paper is your call.
+  - It also needs a finite statement of its own, because the test unit belongs to no fold.
+- *Open, no decision waiting:*
+  - whether the jackknife+ alone needs a symmetric fit, since the search found no counterexample;
+  - the law forms on a continuous data space, as before.
+
+**What stopped me:** nothing.
 
 ### 2026-11-08 — E35: M-1 and M-2 proved
 

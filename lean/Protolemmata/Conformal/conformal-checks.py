@@ -1,4 +1,4 @@
-"""Numeric checks of conformal-lemmas.md (CB-1 to CB-4, M-1 and M-2), labelled by item, before any Lean.
+"""Numeric checks of conformal-lemmas.md (CB-1 to CB-4, M-1 and M-2, slice 9), labelled by item, before any Lean.
 
 Exhaustive enumeration over every ordering at small n, in exact rational arithmetic, so each check
 is an assertion and a printed figure, not an estimate. Standard library only.
@@ -969,6 +969,461 @@ for c in (2, 10):
     assert hj / R3 <= 1 / c + 4 * se and hp / R3 <= 1 / c + 4 * se
     print(f"M-2 Ville kept over {Nmax} uniform p's, c = {c}: Simple Jumper {hj / R3:.4f}, power eps = 1/2 "
           f"{hp / R3:.4f} (bound {1 / c})")
+
+
+print()
+print("=== Slice 9: the jackknife+ and the cross-fitted rule ===")
+
+# Conventions. m = n + 1 units: n training units and the test. pair[i][j] is unit i's conformity
+# under the fit that leaves out units i and j. For the jackknife+ it is minus i's absolute residual
+# |y_i - mu_{-ij}(x_i)|, and the fit leaving out i and the test is the leave-one-out fit mu_{-i}.
+# Unit i is stranger than j when pair[i][j] < pair[j][i], strictly, so a tie makes neither
+# stranger. The cross-fitted rule at level k refuses u when u is stranger than at least m - k units.
+# The jackknife+ takes k = floor(alpha (n + 1)).
+rng9 = random.Random(20261109)
+
+
+def stranger_count(P, u, C):
+    return sum(1 for j in C if P[u][j] < P[j][u])
+
+
+def refuses_pairwise(k, P, u, C):
+    return stranger_count(P, u, C) + k >= len(C)
+
+
+def pair_bound(k):
+    """At most 2k - 1 units are refused at level k, and none at k = 0."""
+    return max(2 * k - 1, 0)
+
+
+def comparisons(m, ties=True):
+    """Every outcome of the m(m - 1)/2 comparisons: i stranger, j stranger, or (with ties) neither."""
+    pairs = list(itertools.combinations(range(m), 2))
+    for choice in itertools.product(range(3 if ties else 2), repeat=len(pairs)):
+        P = [[0] * m for _ in range(m)]
+        for (i, j), c in zip(pairs, choice):
+            if c == 0:
+                P[j][i] = 1
+            elif c == 1:
+                P[i][j] = 1
+        yield P
+
+
+# The counting core, Landau's argument as Barber et al. use it: whatever the comparisons, ties
+# included, at most 2k - 1 units are refused at level k. The count is attained by 2k - 1 units in a
+# regular tournament, each stranger than every unit outside it, so it cannot be sharpened.
+n_cases = 0
+for m, ties in ((1, True), (2, True), (3, True), (4, True), (5, True), (6, False)):
+    worst = [0] * (m + 1)
+    for P in comparisons(m, ties):
+        n_cases += 1
+        sc = [stranger_count(P, u, range(m)) for u in range(m)]
+        for k in range(m + 1):
+            r = sum(1 for c in sc if c + k >= m)
+            assert r <= pair_bound(k)
+            worst[k] = max(worst[k], r)
+    assert worst == [min(pair_bound(k), m) for k in range(m + 1)]
+print(f"Slice 9, the counting core: {n_cases} comparison outcomes (all, ties included, to m = 5; every "
+      f"tournament at m = 6); at most 2k - 1 units refused at level k, and 2k - 1 attained")
+
+INF = math.inf
+
+
+def jack_ends(vlo, vhi, k):
+    """The jackknife+ interval at level k: [k-th smallest lower end, k-th largest upper end]. It is
+    the whole line at k = 0 and empty past k = n."""
+    if k == 0:
+        return -INF, INF
+    if k > len(vhi):
+        return INF, -INF
+    return sorted(vlo)[k - 1], sorted(vhi)[len(vhi) - k]
+
+
+def smallest_quantile(atoms, level):
+    """The smallest q with F(q) >= level, each atom of mass 1/len(atoms)."""
+    a = sorted(atoms)
+    return min(q for q in a if Q(sum(1 for v in a if v <= q), len(a)) >= level)
+
+
+def largest_quantile(atoms, level):
+    """The largest level-quantile: the largest atom q with P(X < q) <= level."""
+    a = sorted(atoms)
+    return max(q for q in a if Q(sum(1 for v in a if v < q), len(a)) <= level)
+
+
+# The rule's three forms agree, ties included:
+# - Barber et al.'s, the largest alpha-quantile of the lower ends with an atom at -inf and the
+#   smallest (1 - alpha)-quantile of the upper ends with an atom at +inf;
+# - the k-th smallest lower end and the k-th largest upper end, k = floor(alpha (n + 1));
+# - the counts the Lean states: refused when at least n + 1 - k upper ends lie strictly below y, or
+#   at least n + 1 - k lower ends strictly above it.
+# The interval is closed: a y at an end is covered.
+n_cases = 0
+for n in range(1, 8):
+    for _ in range(150):
+        vlo = [Q(rng9.randint(-6, 6), 2) for _ in range(n)]
+        vhi = [Q(rng9.randint(-6, 6), 2) for _ in range(n)]
+        ys = sorted(set([Q(j, 4) for j in range(-14, 15)] + vlo + vhi))
+        for a in range(1, 11):
+            alpha = Q(a, 20)
+            k = math.floor(alpha * (n + 1))
+            lo, hi = jack_ends(vlo, vhi, k)
+            assert hi == smallest_quantile(vhi + [INF], 1 - alpha)
+            assert lo == largest_quantile(vlo + [-INF], alpha)
+            for y in ys:
+                assert (y > hi) == (sum(1 for v in vhi if v < y) + k >= n + 1)
+                assert (y < lo) == (sum(1 for v in vlo if v > y) + k >= n + 1)
+                n_cases += 1
+print(f"Slice 9, the jackknife+'s ends: {n_cases} cases (n to 7, alpha from 1/20 to 1/2, ends tied and "
+      f"y at the ends); Barber et al.'s quantiles, the k-th order statistics and the counts agree")
+
+
+def fit_mean(train):
+    ybar = sum(p[1] for p in train) / len(train)
+    return lambda x: ybar
+
+
+def fit_median(train):
+    ys, h = sorted(p[1] for p in train), len(train)
+    med = ys[h // 2] if h % 2 else (ys[h // 2 - 1] + ys[h // 2]) / 2
+    return lambda x: med
+
+
+def fit_line(train):
+    h = len(train)
+    xb, yb = sum(p[0] for p in train) / h, sum(p[1] for p in train) / h
+    sxx = sum((p[0] - xb) ** 2 for p in train)
+    b = sum((p[0] - xb) * (p[1] - yb) for p in train) / sxx if sxx else Q(0)
+    return lambda x: yb + b * (x - xb)
+
+
+def fit_nearest(train):
+    def f(x):
+        d = min(abs(p[0] - x) for p in train)
+        near = [p[1] for p in train if abs(p[0] - x) == d]
+        return sum(near) / len(near)
+    return f
+
+
+def fit_size_unstable(n):
+    """Symmetric, but its fit on all n training units sits 100 above its fits on n - 1."""
+    def fit(train):
+        ybar = sum(p[1] for p in train) / len(train)
+        return lambda x: ybar + (100 if len(train) >= n else 0)
+    return fit
+
+
+def fit_without(z, fit, out):
+    return fit(tuple(z[j] for j in range(len(z)) if j not in out))
+
+
+def pair_matrix(z, fit):
+    m = len(z)
+    return [[-abs(z[i][1] - fit_without(z, fit, (i, j))(z[i][0])) if i != j else Q(0) for j in range(m)]
+            for i in range(m)]
+
+
+def jack_refuses(k, z, fit, t):
+    """The jackknife+ at level k for the test unit t, by its interval; the count form must agree."""
+    m, y = len(z), z[t][1]
+    vlo, vhi = [], []
+    for i in range(m):
+        if i != t:
+            f = fit_without(z, fit, (i, t))
+            r = abs(z[i][1] - f(z[i][0]))
+            vlo.append(f(z[t][0]) - r)
+            vhi.append(f(z[t][0]) + r)
+    lo, hi = jack_ends(vlo, vhi, k)
+    refused = y < lo or y > hi
+    assert refused == (sum(1 for v in vhi if v < y) + k >= m or sum(1 for v in vlo if v > y) + k >= m)
+    return refused
+
+
+def jackknife_refuses(k, z, fit, t):
+    """The plain jackknife: the fit on all n training units, widened by the k-th largest
+    leave-one-out residual."""
+    m = len(z)
+    e = abs(z[t][1] - fit_without(z, fit, (t,))(z[t][0]))
+    rs = [abs(z[i][1] - fit_without(z, fit, (i, t))(z[i][0])) for i in range(m) if i != t]
+    return sum(1 for r in rs if r < e) + k >= m
+
+
+def as_q(pts):
+    return tuple((Q(x), Q(y)) for x, y in pts)
+
+
+# Over every ordering of a fixed data set, with symmetric fits: the leave-two-out matrix is
+# equivariant, the interval refuses only a strange test, so the jackknife+ covers at least as often
+# as the cross-fitted set, which covers at least 1 - (2k - 1)/m. The plain jackknife, which centres
+# on the fit to all n training units, has no such bound: with a fit that changes with its sample size
+# it covers nothing at any k >= 1, while the jackknife+ on the same fit holds.
+jk_data = [as_q([(0, 0), (1, 1), (2, 1), (3, 4)]),
+           as_q([(0, 0), (1, 2), (2, 1), (3, 3), (4, 9)]),
+           as_q([(0, 1), (0, 1), (1, 1), (2, 1), (3, 2)]),
+           as_q([(0, 0), (1, 3), (2, 0), (3, 3), (4, 0), (5, 3)])]
+jk_fits = {"mean": lambda n: fit_mean, "median": lambda n: fit_median, "line": lambda n: fit_line,
+           "nearest": lambda n: fit_nearest, "size-unstable": fit_size_unstable}
+n_orderings, slack, plus_over_set, tight_cases = 0, None, 0, []
+for z in jk_data:
+    m, t = len(z), len(z) - 1
+    perms = list(itertools.permutations(range(m)))
+    for name, make in jk_fits.items():
+        fit = make(m - 1)
+        P0 = pair_matrix(z, fit)
+        hits = {k: [0, 0, 0] for k in range(m + 1)}
+        for p in perms:
+            zp = compose(z, p)
+            Pp = pair_matrix(zp, fit)
+            assert all(Pp[i][j] == P0[p[i]][p[j]] for i in range(m) for j in range(m))
+            for k in range(m + 1):
+                ref_j = jack_refuses(k, zp, fit, t)
+                ref_p = refuses_pairwise(k, Pp, t, range(m))
+                assert ref_p or not ref_j
+                hits[k][0] += not ref_j
+                hits[k][1] += not ref_p
+                hits[k][2] += not jackknife_refuses(k, zp, fit, t)
+            n_orderings += 1
+        for k in range(m + 1):
+            cj, cp, cjk = (Q(h, len(perms)) for h in hits[k])
+            assert cj >= cp >= 1 - Q(pair_bound(k), m)
+            plus_over_set += cj > cp
+            if 1 <= k and 2 * k - 1 < m:
+                d = cp - (1 - Q(pair_bound(k), m))
+                slack = d if slack is None else min(slack, d)
+                if d == 0:
+                    tight_cases.append(f"data set {jk_data.index(z) + 1}, {name}, k = {k}: {cj}")
+            if name == "size-unstable" and k >= 1:
+                assert cjk == 0
+print(f"Slice 9, jackknife+ over orderings: {len(jk_data)} data sets (m = 4 to 6, ties included) x 5 "
+      f"symmetric fits, {n_orderings} orderings; every bound holds, least slack {slack} where the bound "
+      f"is not 0; the interval covers more than the cross-fitted set in {plus_over_set} (data, fit, k) cases")
+print("Slice 9, the sharp bound met by an ordinary fit: " + "; ".join(tight_cases))
+print("Slice 9, the plain jackknife with a fit that changes with its sample size: coverage 0 at every "
+      "k >= 1; the jackknife+ on the same fit meets its bound")
+
+# Under an exchangeable law, exactly: i.i.d. units on four points, and a Polya urn.
+pts4 = as_q([(0, 0), (0, 2), (1, 1), (2, 3)])
+for law_name, law in (("i.i.d.", iid_law([Q(1, 2), Q(1, 4), Q(1, 8), Q(1, 8)], 4)), ("Polya", polya_law(4, 4))):
+    covs = []
+    for name in ("mean", "line", "nearest"):
+        fit = jk_fits[name](3)
+        for k in range(5):
+            cov = sum(w for zi, w in law.items() if not jack_refuses(k, tuple(pts4[a] for a in zi), fit, 3))
+            assert cov >= 1 - Q(pair_bound(k), 4)
+            if k == 1:
+                covs.append(f"{name} {float(cov):.4f}")
+    print(f"Slice 9, jackknife+ under the {law_name} law, m = 4, k = 1 (bound 3/4): " + ", ".join(covs))
+
+
+def lookup_fit(data, R):
+    """A symmetric fit made for one data set of distinct points. Given the training points in any
+    order, it names the two missing units a, b and predicts y_a - R[a][b] at x_a and y_b - R[b][a] at
+    x_b, so the leave-two-out residuals are R's entries, each on the upper side."""
+    index = {p: i for i, p in enumerate(data)}
+
+    def fit(train):
+        a, b = sorted(set(range(len(data))) - {index[p] for p in train})
+        pred = {data[a][0]: data[a][1] - R[a][b], data[b][0]: data[b][1] - R[b][a]}
+        return lambda x: pred.get(x, Q(0))
+    return fit
+
+
+def tournament_residuals(m, k):
+    """2k - 1 units in a regular tournament, each with the larger residual against every unit outside."""
+    s = 2 * k - 1
+    R = [[Q(1)] * m for _ in range(m)]
+    for i in range(s):
+        for j in range(m):
+            if j >= s or 1 <= (j - i) % s <= (s - 1) // 2:
+                R[i][j], R[j][i] = Q(2), Q(1)
+    return R
+
+
+# The bound is attained by the jackknife+ itself: a symmetric fit whose leave-two-out residuals are
+# a regular tournament's covers exactly 1 - (2k - 1)/m over the orderings, below Barber et al.'s
+# 1 - 2alpha only by 1/m at alpha = k/m.
+attained = []
+for m, k in ((3, 1), (3, 2), (4, 1), (4, 2), (5, 1), (5, 2), (5, 3), (6, 2), (6, 3), (7, 3)):
+    data = as_q([(i, 0) for i in range(m)])
+    fit = lookup_fit(data, tournament_residuals(m, k))
+    perms = list(itertools.permutations(range(m)))
+    cov = Q(sum(1 for p in perms if not jack_refuses(k, compose(data, p), fit, m - 1)), len(perms))
+    assert cov == 1 - Q(pair_bound(k), m)
+    attained.append(f"m = {m}, k = {k}: {cov}")
+print("Slice 9, the bound attained by a symmetric fit: " + "; ".join(attained))
+m, k = 20, 2
+data = as_q([(i, 0) for i in range(m)])
+fit = lookup_fit(data, tournament_residuals(m, k))
+swap_last = lambda u: tuple(m - 1 if i == u else (u if i == m - 1 else i) for i in range(m))
+cov20 = Q(sum(1 for u in range(m) if not jack_refuses(k, compose(data, swap_last(u)), fit, m - 1)), m)
+assert cov20 == Q(17, 20)
+print(f"Slice 9, at alpha = 0.1 and n = 19 (k = 2): the worst case covers {cov20} = {float(cov20)} "
+      f"(each unit as the test), against Barber et al.'s 1 - 2alpha = 0.8")
+
+# Ties count for neither unit. Counting a tie as strange breaks the counting core: with every
+# residual tied, every unit is refused at k = 1. The closed interval covers y at its ends, here all y.
+z_tied = as_q([(0, 1), (1, 1), (2, 1), (3, 1)])
+Pt = pair_matrix(z_tied, fit_mean)
+tie_strange = sum(1 for u in range(4) if sum(1 for j in range(4) if j != u and Pt[u][j] <= Pt[j][u]) + 1 >= 4)
+assert tie_strange == 4 > pair_bound(1)
+assert sum(1 for u in range(4) if refuses_pairwise(1, Pt, u, range(4))) == 0
+assert not jack_refuses(1, z_tied, fit_mean, 3)
+print("Slice 9, ties: all residuals tied, a tie counted as strange refuses all 4 units at k = 1 "
+      "(the core allows 1); with ties counting for neither, none is refused, and the closed "
+      "interval covers y at its ends")
+
+
+# A fit that reads its training units' order is outside the hypothesis. Model one exactly: given the
+# ordered training tuple it picks which of the two missing units is stranger. Exhaustively at m = 4
+# (every such choice, 2^12 fits), none refuses the test on more than (2k - 1)/m of the orderings.
+# The Lean statement needs the symmetry; whether the jackknife+'s row alone needs it is left open.
+def order_reading_worst(m, k):
+    t = m - 1
+    perms = list(itertools.permutations(range(m)))
+    tuples = sorted({tuple(s[j] for j in range(m) if j not in (i, t)) for s in perms for i in range(t)})
+    idx = {tp: n for n, tp in enumerate(tuples)}
+    rows = [[(idx[tuple(s[j] for j in range(m) if j not in (i, t))], s[t] < s[i]) for i in range(t)]
+            for s in perms]
+    best = 0
+    for bits in range(2 ** len(tuples)):
+        hits = sum(1 for r in rows
+                   if sum(1 for (ti, tmin) in r if (((bits >> ti) & 1) == 0) == tmin) + k >= m)
+        best = max(best, hits)
+    return Q(best, len(perms))
+
+
+for k in (1, 2):
+    w = order_reading_worst(4, k)
+    assert w == Q(pair_bound(k), 4)
+    print(f"Slice 9, order-reading fits, m = 4, k = {k}: the worst refuses {w} of the orderings, "
+          f"the symmetric bound {Q(pair_bound(k), 4)}")
+
+print()
+print("=== Slice 9: asymmetric CQR, a threshold per tail ===")
+
+
+# Each tail is CB-1's rule on its own conformity, fitted on the training split: y - q_lo(x) below,
+# q_hi(x) - y above, at levels k_lo and k_hi, each floor((alpha/2) m) at alpha/2. The set is
+# [q_lo(x) + c_lo(k_lo), q_hi(x) - c_hi(k_hi)], with c(k) the k-th smallest calibration conformity
+# of that tail, and an end is infinite at level 0. Ties count for the test, as in CB-1.
+def lo_conf(qlo):
+    return lambda p: p[1] - qlo[p[0]]
+
+
+def hi_conf(qhi):
+    return lambda p: qhi[p[0]] - p[1]
+
+
+xy9 = [(x, y) for x in (0, 1) for y in range(4)]
+pxy9 = {(0, 0): Q(1, 8), (0, 1): Q(1, 4), (0, 2): Q(1, 16), (0, 3): Q(1, 16),
+        (1, 0): Q(1, 16), (1, 1): Q(1, 16), (1, 2): Q(1, 8), (1, 3): Q(1, 4)}
+qlo9, qhi9 = {0: Q(1, 2), 1: Q(2)}, {0: Q(1), 1: Q(5, 2)}
+slo9, shi9 = lo_conf(qlo9), hi_conf(qhi9)
+
+# Under an i.i.d. law, N = 4 units, every pair of levels: each tail refuses at most k/N, and the set
+# covers at least 1 - (k_lo + k_hi)/N.
+N = 4
+law9 = {}
+for z in itertools.product(xy9, repeat=N):
+    w = Q(1)
+    for p in z:
+        w *= pxy9[p]
+    law9[z] = w
+for klo in range(N + 1):
+    for khi in range(N + 1):
+        lo_ok = hi_ok = both = Q(0)
+        for z, w in law9.items():
+            a = accepts(klo, tuple(slo9(p) for p in z), N - 1, range(N))
+            b = accepts(khi, tuple(shi9(p) for p in z), N - 1, range(N))
+            lo_ok += w * a
+            hi_ok += w * b
+            both += w * (a and b)
+        assert lo_ok >= 1 - Q(klo, N) and hi_ok >= 1 - Q(khi, N) and both >= 1 - Q(klo + khi, N)
+        if klo == khi == 1:
+            print(f"Asymmetric CQR, i.i.d. law, N = 4, k_lo = k_hi = 1: below the set {1 - lo_ok}, above it "
+                  f"{1 - hi_ok} (each at most 1/4), covered {both} (at least 1/2), ties included")
+
+# Over orderings with distinct scores in each tail: each tail refuses exactly k/m, and two-sided
+# coverage lies between 1 - (k_lo + k_hi)/m and 1 - max(k_lo, k_hi)/m.
+z_cont = as_q([(0, Q(3, 10)), (1, Q(17, 10)), (0, Q(22, 10)), (1, Q(4, 10)), (0, Q(11, 10))])
+m = len(z_cont)
+assert injective_on([slo9(p) for p in z_cont], range(m)) and injective_on([shi9(p) for p in z_cont], range(m))
+G = perms_on(m, range(m))
+for klo in range(m + 1):
+    for khi in range(m + 1):
+        a = coverage_orderings(z_cont, lambda zz: tuple(slo9(p) for p in zz), klo, m - 1, range(m))
+        b = coverage_orderings(z_cont, lambda zz: tuple(shi9(p) for p in zz), khi, m - 1, range(m))
+        assert a == 1 - Q(klo, m) and b == 1 - Q(khi, m)
+        both = Q(sum(1 for p in G if accepts(klo, tuple(slo9(q) for q in compose(z_cont, p)), m - 1, range(m))
+                     and accepts(khi, tuple(shi9(q) for q in compose(z_cont, p)), m - 1, range(m))), len(G))
+        assert 1 - Q(klo + khi, m) <= both <= 1 - Q(max(klo, khi), m)
+print(f"Asymmetric CQR over orderings, m = {m}, distinct scores: each tail refuses exactly k/m at every "
+      f"level, and two-sided coverage lies in [1 - (k_lo + k_hi)/m, 1 - max(k_lo, k_hi)/m]")
+
+# The ends: on a grid in y, the accepted set is [q_lo + c_lo(k_lo), q_hi - c_hi(k_hi)], ties to the
+# test and an infinite end at level 0; Romano et al.'s Q_{1 - alpha_lo}, the
+# ceil((1 - alpha_lo)(n2 + 1))-th smallest of q_lo(x_i) - y_i (infinite past n2), gives the same lower
+# end with k_lo = floor(alpha_lo (n2 + 1)).
+grid9 = [Q(i, 4) for i in range(-12, 25)]
+n_sets = 0
+for cal in itertools.product(xy9, repeat=3):
+    clo = sorted(slo9(p) for p in cal)
+    chi = sorted(shi9(p) for p in cal)
+    elo = sorted(qlo9[p[0]] - p[1] for p in cal)
+    for x in (0, 1):
+        for klo in range(4):
+            for khi in range(4):
+                lo_end = -INF if klo == 0 else qlo9[x] + clo[klo - 1]
+                hi_end = INF if khi == 0 else qhi9[x] - chi[khi - 1]
+                acc = [y for y in grid9
+                       if accepts(klo, tuple(slo9(p) for p in cal) + (slo9((x, y)),), 3, range(4))
+                       and accepts(khi, tuple(shi9(p) for p in cal) + (shi9((x, y)),), 3, range(4))]
+                assert acc == [y for y in grid9 if lo_end <= y <= hi_end]
+                n_sets += 1
+        for a in range(1, 20):
+            alpha_lo = Q(a, 20)
+            K = math.ceil((1 - alpha_lo) * 4)
+            k = math.floor(alpha_lo * 4)
+            assert K == 4 - k
+            q_end = -INF if K > 3 else qlo9[x] - elo[K - 1]
+            assert q_end == (-INF if k == 0 else qlo9[x] + clo[k - 1])
+print(f"Asymmetric CQR, the ends: {n_sets} accept sets on a grid, each [q_lo + c_lo(k_lo), q_hi - c_hi(k_hi)]; "
+      f"Romano et al.'s per-tail quantile gives the same ends")
+
+# Symmetric CQR controls only the total. With both quantile fits below the data, its conformity
+# min(y - q_lo, q_hi - y) is always the upper one, and all its miscoverage falls above the set.
+qlo_low, qhi_low = {0: Q(-2), 1: Q(-2)}, {0: Q(-1), 1: Q(-1)}
+s_sym = cqr_score(qlo_low, qhi_low)
+s_up = hi_conf(qhi_low)
+s_dn = lo_conf(qlo_low)
+sym_above = sym_below = asym_above = Q(0)
+for z, w in law9.items():
+    sym = tuple(s_sym(p) for p in z)
+    if not accepts(2, sym, N - 1, range(N)):
+        if s_up(z[-1]) <= s_dn(z[-1]):
+            sym_above += w
+        else:
+            sym_below += w
+    if not accepts(1, tuple(s_up(p) for p in z), N - 1, range(N)):
+        asym_above += w
+assert sym_below == 0 and sym_above > Q(1, 4) >= asym_above
+print(f"Symmetric CQR at k = 2 (alpha = 1/2), quantile fits below the data: above the set {sym_above}, "
+      f"below 0; asymmetric at k = 1 per tail: above {asym_above} (at most 1/4)")
+
+# Small calibration sets and rounding. A tail's end is finite only once floor((alpha/2) m) >= 1,
+# m >= 2/alpha, twice the symmetric form's m >= 1/alpha. And 2 floor(alpha m / 2) is floor(alpha m)
+# or one less, so the two-sided guarantee is 1 - alpha or up to 1/m above it.
+rows9 = []
+for alpha in (Q(1, 5), Q(1, 10), Q(1, 20)):
+    m_sym = min(mm for mm in range(1, 400) if math.floor(alpha * mm) >= 1)
+    m_asym = min(mm for mm in range(1, 400) if math.floor(alpha / 2 * mm) >= 1)
+    assert m_asym == math.ceil(2 / alpha) and m_sym == math.ceil(1 / alpha)
+    rows9.append(f"alpha = {float(alpha)}: m >= {m_sym} symmetric, m >= {m_asym} per tail")
+for mm in range(1, 200):
+    for alpha in (Q(1, 5), Q(1, 10), Q(1, 20)):
+        assert 2 * math.floor(alpha * mm / 2) in (math.floor(alpha * mm), math.floor(alpha * mm) - 1)
+print("Asymmetric CQR, finite ends need " + "; ".join(rows9) + ". At alpha = 0.1, m = 30: "
+      f"two-sided {1 - Q(2 * math.floor(Q(3, 2)), 30)} per-tail against {1 - Q(3, 30)} symmetric")
 
 
 print()

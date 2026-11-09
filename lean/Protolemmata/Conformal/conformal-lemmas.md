@@ -2,7 +2,7 @@
 
 Pins the contract of the engine's conformal layer, one layer over retained draws and pointwise densities for every model with a pointwise density ([E16](../../../issues/regression/bass/extensions-brief.md#conformal-bayes-the-consumer)). The layer owns coverage and the score owns width. These are the finite statements of that split. They are the sibling of [GuardedEstimator](../BASS/guarded-estimator-lemmas.md): there, means valid whatever the emulator does; here, prediction sets valid whatever the model does. Written from the [chip brief](conformal-chip-brief.md).
 
-**Status (2026-11-06).** Proved in `lean/Enthymemata/ConformalValidity.lean`, namespace `Conformal`, with no apologies (PROOF-CLOSED, 119 declarations counting E35's M-1 and M-2 at the end of this page; `#print axioms` shows `propext`, `Classical.choice`, `Quot.sound` only):
+**Status (2026-11-06).** Proved in `lean/Enthymemata/ConformalValidity.lean`, namespace `Conformal`, with no apologies (PROOF-CLOSED, 153 declarations counting E35's M-1 and M-2 and slice 9 at the end of this page; `#print axioms` shows `propext`, `Classical.choice`, `Quot.sound` only):
 - CB-1: `card_rankLe_le`, `coverage_orderings`, `coverage_orderings_eq`, `coverage_strict_le`, `coverage_orderings_le`, `rank_uniform`, `coverage_tieBreak`, `coverage_given`, `coverage_law`, `coverage_stratum`;
 - CB-2: `split_coverage`, `exchangeable_given_training`, `cqr_ordConnected`;
 - CB-4: `sum_jointU`, `post_addOneIn`, `integratedScore_equivariant`, `latentScore_equivariant`, `latentScore_eq`, `sum_jointU_addOneIn`, `integratedScore_le_latentScore`, `accepts_latent_of_mixed`, `mixed_counterexample`;
@@ -250,3 +250,109 @@ Each Sₙ/S_i is the betting product from i + 1 to n, so `lintegral_capital` giv
 - Vovk et al. 2021 (Simple Jumper).
 - Vovk, *Statistical Science* 2021 (Ville's procedure, CUSUM, Shiryaev–Roberts).
 - The text extractions were checked against the formulas used here: (6) of 2003, Algorithm 1 of 2021, and (12) to (15) of *Statistical Science*.
+
+---
+
+## Slice 9 — cross-fitted forms and asymmetric CQR
+
+Posed and proved on 2026-11-09 for the [conformal layer's slice 9](../../../issues/regression/conformal-layer-brief.md#e16s-completion-the-plan-slices-7-onward), before any C#, from the [chip brief's assignment](conformal-chip-brief.md#e16-slice-9--cross-fitted-intervals-and-asymmetric-cqr-2026-11-09). The point is the contract: the exact rank rules the layer implements, and the hypotheses it must meet.
+
+**Status (2026-11-09).** Both statements are proved in `lean/Enthymemata/ConformalValidity.lean`, PROOF-CLOSED at 153 declarations, and `#print axioms` shows the standard three only. [`conformal-checks.py`](conformal-checks.py), section "Slice 9", ran first, and every assertion holds. Not included: CV+ and cross-conformal predictive distributions (below).
+
+### J+ — the jackknife+ covers at least 1 − (2k − 1)/(n + 1), so at least 1 − 2α
+
+**Conventions.** These extend CB-1's, with conformity scores throughout.
+- *Units.* There are m = n + 1 units in `C`: n training units and the test unit, with no split. Units outside `C` stay in every fit's training set, and with `C` every unit the form is the standard one.
+- *The leave-two-out score.* s(i, j) is unit i's conformity under the fit to every unit but i and j (`pairScore`). For the jackknife+ it is −|Yᵢ − μ̂₋ᵢⱼ(Xᵢ)| (`jackFit`). The fit leaving out i and the test unit is the jackknife+'s leave-one-out fit μ̂₋ᵢ.
+- *Stranger.* Unit u is stranger than j when s(u, j) < s(j, u), strictly, so a tie makes neither stranger (`strangerThan`).
+- **The cross-fitted rule at level k** refuses u when u is stranger than at least m − k units (`AcceptsPairwise`). With the leave-two-out scores of any conformity score, this is Vovk's n-fold cross-conformal set.
+- **The jackknife+ at level k** (`JackRefuses`), with k = ⌊α(n + 1)⌋:
+  - The interval is closed, from the k-th smallest lower end μ̂₋ᵢ(X) − Rᵢ to the k-th largest upper end μ̂₋ᵢ(X) + Rᵢ, where Rᵢ = |Yᵢ − μ̂₋ᵢ(Xᵢ)|.
+  - Equivalently, y is refused when at least n + 1 − k upper ends lie strictly below it, or at least n + 1 − k lower ends strictly above it. A y at an end is covered.
+  - At k = 0 the interval is the whole line (`acceptsPairwise_zero` for the rule). Past k = n it is empty.
+  - These are Barber et al.'s ends: the largest α-quantile of the lower ends with an atom at −∞, and the smallest (1 − α)-quantile of the upper ends with an atom at +∞.
+
+**Claims.**
+- *The counting core* (`card_refused_pairwise_le`). Whatever the comparisons and their ties, at most 2k − 1 units are refused at level k, and none at k = 0.
+  - Each refused unit is stranger than at least m − k units, at most m − |F| of them outside the refused set F.
+  - Inside F each comparison goes at most one way, so the comparisons there sum to at most |F|(|F| − 1)/2.
+  - So |F|(m − k) ≤ |F|(|F| − 1)/2 + |F|(m − |F|), which gives |F| ≤ 2k − 1. This is Landau's argument as Barber et al. use it.
+- *Over orderings* (`coverage_pairwise_orderings`). For a matrix score equivariant on `C` (`PairEquivariant`), the test unit is accepted on at least 1 − (2k − 1)/m of the orderings of a fixed data set.
+- *Under a law* (`coverage_pairwise`, `crossFit_coverage`). The bound holds with probability at least 1 − (2k − 1)/m, for any conformity score of a symmetric fit (`FitSymmetric`).
+- *The jackknife+*. `not_acceptsPairwise_of_jackRefuses`: the interval refuses only a strange test unit, so it contains the cross-fitted set. Hence `jackknifePlus_orderings`, `jackknifePlus_coverage`, and `jackknifePlus_two_alpha`: 1 − 2α at any k ≤ α(n + 1).
+
+**The hypotheses, as the layer must meet them.**
+1. *Exchangeability of all n + 1 units,* the training units and the test unit together.
+2. *A symmetric fit.* On the data reordered by σ, the fit to the units T is the fit to the units σ(T) of the original: it reads its training units as a set (`FitSymmetric`).
+   - The law forms take this up to a relabeling `act σ` of the fits' randomness. The law of the randomness and the data together must be invariant under each reordering with its relabeling.
+   - So a fit that reads the order of its units qualifies when it reads them in one uniformly random order drawn per run and shared by every leave-out fit, or when its seeds are attached to the units.
+   - A sampler that sweeps the units in index order with a fixed seed does not qualify as stated.
+3. *Nothing else.* The fit may change with its sample size, need not be stable, and need not mix. The theorem does not need the fit to read only its training units. That locality is what makes the interval computable from the training data and X.
+
+**What changed from the task.**
+- *The bound is sharper than 1 − 2α:* 1 − (2k − 1)/(n + 1).
+  - Barber et al.'s count |S| ≤ 2α(n + 1) is 2k − 1 in integers. With k = ⌊α(n + 1)⌋ the bound is at least 1 − 2α + 1/(n + 1) for k ≥ 1.
+  - At k = 1 it is 1 − 1/(n + 1), the split form's exact rate, so the factor of 2 first costs anything at k = 2.
+  - At α = 0.1 and n = 19, the worst case is 0.85, not 0.80.
+- *The bound is attained.*
+  - A symmetric fit whose leave-two-out residuals form a regular tournament on 2k − 1 units covers exactly 1 − (2k − 1)/m. That holds over every ordering, for each (m, k) checked with 2k − 1 ≤ m up to m = 7.
+  - Ordinary fits (mean, median, least-squares line, nearest neighbour) meet the bound at k = 1.
+  - So "near 1 − α", the engine brief's figure, is a measurement under stability, not a guarantee.
+- *The law form generalizes the task's.* It is stated up to a relabeling of the randomness, which admits samplers symmetric only in law (hypothesis 2).
+
+**Checks** (`conformal-checks.py`, slice 9).
+- *The counting core:* all 92,577 comparison outcomes. That is every outcome, ties included, up to m = 5, plus every tournament at m = 6. At most 2k − 1 units are refused, and exactly 2k − 1 is attained, capped at m.
+- *The ends:* 304,500 cases, n up to 7, α from 1/20 to 1/2, with tied ends and y at the ends. Barber et al.'s quantiles, the k-th order statistics and the counts agree.
+- *Over orderings:* 4 data sets (m = 4 to 6, ties included) × 5 symmetric fits, 4,920 orderings.
+  - The leave-two-out matrix is equivariant, the interval refuses only a strange test unit, and every bound holds.
+  - The interval and the cross-fitted set covered alike in every case there.
+- *Under a law, exactly:* i.i.d. units on four points and a Pólya urn, m = 4, k = 1, against the bound 3/4. The coverage is 0.817 to 0.843.
+- *Each premise broken.*
+  - The plain jackknife, centred on the fit to all n units, covers nothing at any k ≥ 1 when the fit shifts with its sample size. The jackknife+ on the same fit meets its bound.
+  - A tie counted as strange refuses all 4 units of a tied set at k = 1, where the core allows 1.
+- *Order-reading fits.* Every fit that picks the stranger of two missing units from the ordered training tuple was searched exhaustively at m = 4: 2¹² fits. None refuses more than (2k − 1)/m. A seeded annealed search at m = 5 and 6, run outside the checks file, found none either.
+
+**Not included.**
+- *CV+ (K folds).* Barber et al. 2021 give it a guarantee of 1 − 2α less a term in K and n. The 2023 restatement on disk says only "a similar distribution-free guarantee", and the 2021 paper is not on disk, so the term is not stated here.
+  - The finite form here does not reach CV+. CV+ compares the test unit and training unit i under the fit leaving out i's whole fold, and the test unit belongs to no fold. That breaks the pairwise symmetry the tournament uses, so CV+ needs its own statement.
+  - It is open, and decides whether the layer offers K fits instead of n.
+- *Cross-conformal predictive distributions* (Vovk et al. 2018) are valid only approximately, and are not posed.
+- *Whether the jackknife+ itself needs a symmetric fit* is open. The Lean statement needs the symmetry for the whole matrix, while the jackknife+ reads only the test unit's row, and the search above found no counterexample.
+
+**Prior art, read.**
+- Barber, Candès, Ramdas and Tibshirani 2023 (arXiv 2202.13415v5), the jackknife+ appendix, read in TeX:
+  - the definition, with its footnote on which quantile is taken;
+  - the background theorem, and its proof by the comparison matrix and Landau's theorem;
+  - the remark that the n-fold cross-conformal set with any score has the same guarantee and lies inside the jackknife+ interval.
+- Barber et al. 2021 itself is not on disk. Its theorem and proof are read here through that restatement.
+
+### CQR-A — asymmetric CQR, a threshold per tail
+
+**Setting.** This is the split form (CB-2).
+- The training split w fits q_lo and q_hi. Given w, the calibration and test units are exchangeable.
+- Each tail has its own conformity: y − q_lo(x) below (`cqrLoScore`) and q_hi(x) − y above (`cqrHiScore`), the negatives of Romano et al.'s E_lo and E_hi.
+- Each tail is ranked by CB-1's accept rule at its own level, k_lo and k_hi, with ties counted for the test unit. At α/2 per tail, k_lo = k_hi = ⌊(α/2)(n₂ + 1)⌋.
+
+**The ends.**
+- The set is the closed interval [q_lo(x) + c_lo(k_lo), q_hi(x) − c_hi(k_hi)]. Here c(k) is the k-th smallest calibration conformity of that tail.
+- At level 0 a tail's end is infinite (`accepts_zero`).
+- Romano et al.'s Q_{1−α_lo}(E_lo) is the ⌈(1 − α_lo)(n₂ + 1)⌉-th smallest of q_lo(xᵢ) − yᵢ, infinite past n₂. It gives the same lower end, and the upper end likewise.
+
+**Claims.**
+- *Each tail and both* (`cqrAsym_coverage`). The test unit falls below the set with probability at most k_lo/m and above it with probability at most k_hi/m. The set covers with probability at least 1 − (k_lo + k_hi)/m, whatever the fits.
+- *At α/2 per tail* (`cqrAsym_coverage_half`), coverage is at least 1 − α.
+- *Each tail exact with distinct scores.* CB-1's `coverage_orderings_eq` with `splitScore_equivariant` gives exactly k/m per tail. Random tie-breaking (`coverage_tieBreak`) makes any data set so.
+- *The two-sided coverage is at most 1 − max(k_lo, k_hi)/m.* Checked, not formalized: the set lies inside each tail's.
+- *Each tail refuses on its own side* (`cqrLo_isUpperSet`, `cqrHi_isLowerSet`). The lower tail accepts an upper set of y and the upper tail a lower set, so the set is an interval (`cqrAsym_ordConnected`). A lower-tail refusal is y below the set, and an upper-tail refusal y above it.
+
+**Small calibration sets and rounding.**
+- *A tail's end is finite only once ⌊(α/2)m⌋ ≥ 1,* that is m ≥ 2/α: n₂ ≥ 19 at α = 0.1, against n₂ ≥ 9 for the symmetric form.
+- *Rounding costs up to 1/m.* 2⌊αm/2⌋ is ⌊αm⌋ or one less, so the two-sided guarantee is up to 1/m above 1 − α. At α = 0.1 and m = 30 it is 14/15, against 9/10 for the symmetric form.
+
+**Checks** (`conformal-checks.py`, slice 9).
+- *Under an i.i.d. law,* N = 4, every pair of levels, ties included: each tail and both hold. At k_lo = k_hi = 1, the set misses below 0.190 of the time and above 0.170, and covers 0.640.
+- *Over orderings with distinct scores:* each tail refuses exactly k/m at every level, and two-sided coverage lies in [1 − (k_lo + k_hi)/m, 1 − max(k_lo, k_hi)/m].
+- *The ends:* 16,384 accept sets on a grid match the closed form and Romano et al.'s quantile.
+- *Symmetric CQR controls only the total.* With both quantile fits below the data, every refusal falls above the set: 0.363 above, against 0.127 for the asymmetric form at k = 1 per tail.
+
+**Prior art, read.** Romano, Patterson and Candès 2019 (arXiv 1905.03222v1), read in TeX: Theorem 2 with its proof, and their quantile Q_{1−α}(E, I₂), the (1 − α)(1 + 1/|I₂|)-th empirical quantile. Linusson et al. 2014, which they cite, was not read.
