@@ -260,6 +260,45 @@ public sealed class BassMoments
         return c;
     }
 
+    /// <summary>
+    /// K_ab = Σ_ij M_ij·E[∂ᵢB_a ∂ⱼB_b] for <paramref name="terms"/> and a symmetric p × p input metric M over
+    /// <see cref="GradientVariables"/>: the Gram of the terms' gradients under M, so G = E[J M Jᵀ] = HKHᵀ for outputs J = H·∇B (E8,
+    /// slice 5's output side), and with M diagonal in the Poincaré constants, the matrix check's bound.
+    /// </summary>
+    public double[,] GradientGram(IReadOnlyList<BassTerm> terms, double[,] metric)
+    {
+        ArgumentNullException.ThrowIfNull(terms);
+        ArgumentNullException.ThrowIfNull(metric);
+        int t = terms.Count, p = _gradientVariables.Length;
+        if (metric.GetLength(0) != p || metric.GetLength(1) != p) throw new ArgumentException($"The input metric is {p} × {p}.", nameof(metric));
+        var k = new double[t, t];
+        for (int a = 0; a < t; a++)
+            for (int b = a; b < t; b++)
+            {
+                TermPairGradientMoments g = GradientPair(terms[a], terms[b]);
+                double s = 0.0;
+                for (int i = 0; i < g.Rows.Length; i++)
+                    for (int j = 0; j < g.Columns.Length; j++)
+                    {
+                        double m = metric[_gradientPosition[g.Rows[i]], _gradientPosition[g.Columns[j]]];
+                        if (m != 0.0) s += m * g.Values[i, j];
+                    }
+                k[a, b] = k[b, a] = s;
+            }
+        return k;
+    }
+
+    /// <summary>Σ_ab = Cov(B_a, B_b) under the product law, from the term pairs' moments: outputs y = H·B have Cov(y) = HΣHᵀ.</summary>
+    public double[,] CovarianceGram(IReadOnlyList<BassTerm> terms)
+    {
+        ArgumentNullException.ThrowIfNull(terms);
+        int t = terms.Count;
+        var c = new double[t, t];
+        for (int a = 0; a < t; a++)
+            for (int b = a; b < t; b++) c[a, b] = c[b, a] = Pair(terms[a], terms[b]).Covariance;
+        return c;
+    }
+
     private TermPairMoments Build(TermShape a, TermShape b)
     {
         // Per variable of either term: E[φ_a φ_b] (a factor alone where the other term lacks the variable), and the

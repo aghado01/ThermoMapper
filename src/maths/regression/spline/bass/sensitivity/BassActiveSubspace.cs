@@ -56,13 +56,21 @@ internal static class BassActiveSubspaces
     public static ActiveSubspaceAnalysis Of(BassFit fit, BassData data, ActiveSubspaceSpec spec)
     {
         ArgumentNullException.ThrowIfNull(spec);
+        return Read(fit, data, spec, spec.OutputPatterns).Analysis;
+    }
+
+    // The readout, with G's per-draw factors when patterns are asked (slice 5's output side and basis adequacy).
+    private static (ActiveSubspaceAnalysis Analysis, double[][,]? Factors) Read(BassFit fit, BassData data, ActiveSubspaceSpec spec, int patterns)
+    {
         Fingerprint(fit, data);
         BassInputs inputs = BassInputs.Prepare(data, fit.Transform);
         Frame frame = FrameOf(inputs, fit.Transform, fit.Config.Structure.Degree, spec.Measures, spec.Sample, spec.Metric, spec.Route, spec.Points, spec.Dimension);
         bool functional = data.Response is FunctionalResponse;
         int m = data.Response.Locations;
         if (!functional && spec.OutputMetric is not null) throw new ArgumentException("An output metric applies to a functional fit's outputs; this fit's response is scalar.", nameof(spec));
+        Patterns(patterns, functional, m);
         double[,] w = Metric(spec.OutputMetric, m);
+        double[,]? s0 = patterns > 0 ? PsdRoot(w) : null;
         BassDraw[] pooled = [.. fit.Draws.SelectMany(c => c)];
         (int[] selected, double[] weights) = Draws3.Select(spec.Draws, pooled.Length, fit.DrawWeights, nameof(spec));
         Func<int, Surface> surface = functional ? DirectFunctional(fit, data, inputs, pooled) : d => Scalar(fit, pooled[d]);
@@ -70,13 +78,16 @@ internal static class BassActiveSubspaces
 
         var cMetric = new double[selected.Length][,];
         var draws = new DrawSubspace[selected.Length];
-        // The terms and M = HᵀW_yH, for the exact route and the checks, which a product law allows.
+        double[][,]? factors = patterns > 0 ? new double[selected.Length][,] : null;
+        // The terms, H and M = HᵀW_yH, for the exact route and the checks, which a product law allows.
         var forms = moments is null ? null : new (BassTerm[] Terms, double[,] M)[selected.Length];
+        var hs = moments is null ? null : new double[selected.Length][,];
         if (forms is not null)
             for (int d = 0; d < selected.Length; d++)
             {
                 Surface s = surface(selected[d]);
                 forms[d] = (s.Terms, functional ? Quadratic(s.H, w) : Outer(Row(s.H, 0)));
+                hs![d] = s.H;
             }
         double[][,]? error = null;
         if (frame.Route == ActiveSubspaceRoute.Exact)
@@ -88,6 +99,7 @@ internal static class BassActiveSubspaces
                                             : moments!.GradientOuterProduct(terms, Coefficients(pooled[selected[d]]));
                 cMetric[d] = Congruence(cBox, frame.L);
                 draws[d] = DrawSubspace.FromC(cMetric[d], spec.Dimension);
+                if (factors is not null) factors[d] = OutputFactor(moments, frame, terms, hs![d], s0!);
             }
         }
         else
@@ -103,20 +115,26 @@ internal static class BassActiveSubspaces
                 for (int b = 0; b < chunk.Length; b++)
                 {
                     int bb = b;
-                    (draws[start + b], cMetric[start + b], error[start + b]) =
-                        SampledDraw(frame, points, root, m, (r, l, i) => g.Partials[i][bb, r, l], spec.Dimension);
+                    (draws[start + b], cMetric[start + b], error[start + b], double[,]? gf) =
+                        SampledDraw(frame, points, root, m, (r, l, i) => g.Partials[i][bb, r, l], spec.Dimension, s0);
+                    if (factors is not null) factors[start + b] = gf!;
                 }
             }
         }
         var posterior = SubspacePosterior.Of(draws, weights);
         PoincareCheck? poincare = null;
+        MatrixPoincareCheck? matrix = null;
         if (forms is not null)
         {
             double[,]? jacobi = !functional && LegendreOnBoxes(fit.Terms, pooled, frame, selected) ? Jacobi(fit, data, frame, selected) : null;
             poincare = Poincare(frame, moments!, forms, cMetric, error, jacobi);
+            matrix = MatrixCheck(frame, moments!, forms, hs!, Root(w));
         }
-        return new ActiveSubspaceAnalysis(Array.AsReadOnly(frame.Names), Array.AsReadOnly(frame.Excluded), frame.Route, spec.Metric, frame.Map,
-                                          frame.Measure, PointCount(frame, spec.Points), posterior, error, poincare, Array.AsReadOnly(selected));
+        var analysis = new ActiveSubspaceAnalysis(Array.AsReadOnly(frame.Names), Array.AsReadOnly(frame.Excluded), frame.Route, spec.Metric, frame.Map,
+                                                  frame.Measure, PointCount(frame, spec.Points), posterior, error, poincare, Array.AsReadOnly(selected),
+                                                  spec.Rank is null ? null : RankPosterior.Of(draws, weights, spec.Rank),
+                                                  factors is null ? null : OutputPosterior.Of(factors, weights, patterns), matrix);
+        return (analysis, factors);
     }
 
     public static ActiveSubspaceAnalysis Of(BassBasisFit fit, ActiveSubspaceSpec spec)
@@ -125,17 +143,23 @@ internal static class BassActiveSubspaces
         ArgumentNullException.ThrowIfNull(spec);
         (BassInputs inputs, BassFit first, int degree) = BasisInputs(fit);
         Frame frame = FrameOf(inputs, first.Transform, degree, spec.Measures, spec.Sample, spec.Metric, spec.Route, spec.Points, spec.Dimension);
-        double[,] w = Metric(spec.OutputMetric, fit.Decomposition.Locations);
+        int m = fit.Decomposition.Locations;
+        Patterns(spec.OutputPatterns, true, m);
+        double[,] w = Metric(spec.OutputMetric, m);
+        double[,]? s0 = spec.OutputPatterns > 0 ? PsdRoot(w) : null;
         (int[] selected, Func<int, Surface> surface) = BasisSurfaces(fit, spec.Draws, nameof(spec));
         BassMoments? moments = frame.Measure is null ? null : BassMoments.On(inputs, degree, frame.Measure);
         var cMetric = new double[selected.Length][,];
         var draws = new DrawSubspace[selected.Length];
+        double[][,]? factors = spec.OutputPatterns > 0 ? new double[selected.Length][,] : null;
         var forms = moments is null ? null : new (BassTerm[] Terms, double[,] M)[selected.Length];
+        var hs = moments is null ? null : new double[selected.Length][,];
         if (forms is not null)
             for (int d = 0; d < selected.Length; d++)
             {
                 Surface s = surface(selected[d]);
                 forms[d] = (s.Terms, Quadratic(s.H, w));
+                hs![d] = s.H;
             }
         double[][,]? error = null;
         if (frame.Route == ActiveSubspaceRoute.Exact)
@@ -144,6 +168,7 @@ internal static class BassActiveSubspaces
             {
                 cMetric[d] = Congruence(Symmetric(moments!.GradientCross(forms![d].Terms, forms[d].Terms, forms[d].M)), frame.L);
                 draws[d] = DrawSubspace.FromC(cMetric[d], spec.Dimension);
+                if (factors is not null) factors[d] = OutputFactor(moments, frame, forms[d].Terms, hs![d], s0!);
             }
         }
         else
@@ -152,6 +177,7 @@ internal static class BassActiveSubspaces
             error = new double[selected.Length][,];
             double[,] root = Root(ComponentMetric(fit, w));
             int r = fit.Components.Count;
+            double[,]? outputMap = s0 is null ? null : Multiply(s0, ReconstructionMap(fit));   // S·G, m × K
             PointSet points = PointsOf(frame, spec.Points, spec.Seed);
             int batch = (int)Math.Max(1, BatchValues / ((long)points.N * r * frame.P));
             for (int start = 0; start < selected.Length; start += batch)
@@ -161,22 +187,49 @@ internal static class BassActiveSubspaces
                 for (int b = 0; b < chunk.Length; b++)
                 {
                     int bb = b;
-                    (draws[start + b], cMetric[start + b], error[start + b]) =
-                        SampledDraw(frame, points, root, r, (q, k, i) => g[k].Partials[i][bb, q, 0], spec.Dimension);
+                    (draws[start + b], cMetric[start + b], error[start + b], double[,]? gf) =
+                        SampledDraw(frame, points, root, r, (q, k, i) => g[k].Partials[i][bb, q, 0], spec.Dimension, outputMap);
+                    if (factors is not null) factors[start + b] = gf!;
                 }
             }
         }
-        var posterior = SubspacePosterior.Of(draws, [.. selected.Select(_ => 1.0)]);
+        double[] weights = [.. selected.Select(_ => 1.0)];
+        var posterior = SubspacePosterior.Of(draws, weights);
         PoincareCheck? poincare = forms is null ? null : Poincare(frame, moments!, forms, cMetric, error, null);
+        MatrixPoincareCheck? matrix = forms is null ? null : MatrixCheck(frame, moments!, forms, hs!, Root(w));
         return new ActiveSubspaceAnalysis(Array.AsReadOnly(frame.Names), Array.AsReadOnly(frame.Excluded), frame.Route, spec.Metric, frame.Map,
-                                          frame.Measure, PointCount(frame, spec.Points), posterior, error, poincare, Array.AsReadOnly(selected));
+                                          frame.Measure, PointCount(frame, spec.Points), posterior, error, poincare, Array.AsReadOnly(selected),
+                                          spec.Rank is null ? null : RankPosterior.Of(draws, weights, spec.Rank),
+                                          factors is null ? null : OutputPosterior.Of(factors, weights, spec.OutputPatterns), matrix);
+    }
+
+    // Basis adequacy (slice 5): the direct fit's G against the basis's span, both under the spec's output metric.
+    public static BasisAdequacy Adequacy(BassBasisFit fit, BassFit direct, BassData directData, ActiveSubspaceSpec spec)
+    {
+        ArgumentNullException.ThrowIfNull(fit);
+        ArgumentNullException.ThrowIfNull(direct);
+        ArgumentNullException.ThrowIfNull(spec);
+        Fingerprint(direct, directData);
+        if (directData.Response is not FunctionalResponse)
+            throw new ArgumentException("Adequacy reads a direct-mode functional fit beside the basis fit; this fit's response is scalar.", nameof(directData));
+        int m = fit.Decomposition.Locations;
+        if (directData.Response.Locations != m)
+            throw new ArgumentException($"The direct fit has {directData.Response.Locations} output locations and the basis {m}: adequacy needs the same cases.", nameof(directData));
+        (BassInputs basisInputs, BassFit first, _) = BasisInputs(fit);
+        SameInputs(first.Transform, basisInputs, direct.Transform, BassInputs.Prepare(directData, direct.Transform));
+        int k = Math.Max(1, spec.OutputPatterns);
+        (ActiveSubspaceAnalysis analysis, double[][,]? factors) = Read(direct, directData, spec, k);
+        double[,] span = Multiply(PsdRoot(Metric(spec.OutputMetric, m)), ReconstructionMap(fit));
+        return BasisAdequacy.Of(factors!, analysis.Posterior.Weights, span, k);
     }
 
     // One draw on the sampled route. At each point the outputs' Jacobian in box units (∂/∂x = width·∂/∂z) is mapped by the output
     // metric's root, over its rows, and into the input metric by L; each mapped row over √w joins the draw's factor, and its Gram
     // matrix C's weighted running sums. jacobian(r, l, i) is output (or component) l's partial in input i, in the input's own units.
-    private static (DrawSubspace Draw, double[,] C, double[,] Error) SampledDraw(Frame frame, PointSet points, double[,] root, int m,
-                                                                               Func<int, int, int, double> jacobian, int dimension)
+    // With an output map O (slice 5), G's factor stacks each point's O·J·L·√w side by side, m_O × Np, so G = FFᵀ is never formed.
+    private static (DrawSubspace Draw, double[,] C, double[,] Error, double[,]? G) SampledDraw(Frame frame, PointSet points, double[,] root, int m,
+                                                                                            Func<int, int, int, double> jacobian, int dimension,
+                                                                                            double[,]? outputMap = null)
     {
         int p = frame.P, rows = root.GetLength(0), n = points.N;
         var box = new double[m, p];
@@ -184,6 +237,9 @@ internal static class BassActiveSubspaces
         var metric = new double[rows, p];
         var factor = new double[n * rows, p];
         var sums = new WeightedSums(p, symmetric: true);
+        int outputs = outputMap?.GetLength(0) ?? 0;
+        double[,]? g = outputMap is null ? null : new double[outputs, n * p];
+        var outputRow = new double[1, p];
         for (int r = 0; r < n; r++)
         {
             double weight = points.Weights[r];
@@ -211,9 +267,142 @@ internal static class BassActiveSubspaces
                     sums.Add(i, j, v, weight);
                 }
             sums.AddWeight(weight);
+            for (int o = 0; o < outputs; o++)
+            {
+                for (int i = 0; i < p; i++)
+                {
+                    double v = 0.0;
+                    for (int l = 0; l < m; l++)
+                        if (outputMap![o, l] != 0.0) v += outputMap[o, l] * box[l, i];
+                    mapped[i] = v;
+                }
+                ToMetric(frame, mapped, outputRow, 0);
+                for (int j = 0; j < p; j++) g![o, r * p + j] = outputRow[0, j] * rootWeight;
+            }
         }
         (double[,] c, double[,] e) = sums.Result();
-        return (DrawSubspace.FromFactor(factor, dimension), c, e);
+        return (DrawSubspace.FromFactor(factor, dimension), c, e, g);
+    }
+
+    // G's factor on the exact route: G = E[J W_x Jᵀ] = S·H·K·Hᵀ·S with K_ab = Σ_ij (LLᵀ)_ij E[∂ᵢB_a ∂ⱼB_b], so F = S·H·F_K with K = F_KF_Kᵀ
+    // from K's eigendecomposition, its positive part.
+    private static double[,] OutputFactor(BassMoments moments, Frame frame, BassTerm[] terms, double[,] h, double[,] s)
+    {
+        int p = frame.P, t = terms.Length;
+        var wx = new double[p, p];
+        for (int i = 0; i < p; i++)
+            for (int j = 0; j < p; j++)
+                for (int k = 0; k < p; k++) wx[i, j] += frame.L[i, k] * frame.L[j, k];
+        double[,] gram = moments.GradientGram(terms, wx);
+        EigenResult e = ScaledEigen.Of(gram);
+        double top = Math.Max(e.Eigenvalues.Max(), 0.0);
+        int[] kept = [.. Enumerable.Range(0, t).Where(q => e.Eigenvalues[q] > 1e-14 * top)];
+        var fk = new double[t, Math.Max(1, kept.Length)];
+        for (int c = 0; c < kept.Length; c++)
+        {
+            double root = Math.Sqrt(e.Eigenvalues[kept[c]]);
+            for (int a = 0; a < t; a++) fk[a, c] = root * e.Eigenvectors[kept[c]][a];
+        }
+        return Multiply(s, Multiply(h, fk));
+    }
+
+    // The matrix Poincaré check per draw under a product law of uniform laws over continuous inputs alone: Cov(Rf) = (RH)Σ_B(RH)ᵀ against
+    // E[RJ D JᵀRᵀ] = (RH)K_D(RH)ᵀ, Σ_B the terms' covariances, K_D their gradients' Gram under D = diag((b − a)²/π²) in box units.
+    private static MatrixPoincareCheck? MatrixCheck(Frame frame, BassMoments moments, (BassTerm[] Terms, double[,] M)[] forms, double[][,] hs, double[,] root)
+    {
+        ProductMeasure measure = frame.Measure!;
+        if (frame.Inputs.Cases.CategoricalCount > 0) return null;
+        int p = frame.P;
+        var d = new double[p, p];
+        for (int i = 0; i < p; i++)
+        {
+            int v = frame.Variables[i];
+            if (measure.Declared[v] is not UniformMeasure) return null;
+            ContinuousMeasure law = measure.Continuous(v)!;
+            d[i, i] = (law.Upper - law.Lower) * (law.Upper - law.Lower) / (Math.PI * Math.PI);
+        }
+        var ratios = new double[forms.Length];
+        int violations = 0;
+        for (int s = 0; s < forms.Length; s++)
+        {
+            BassTerm[] terms = forms[s].Terms;
+            double[,] rh = Multiply(root, hs[s]);
+            double[,] covariance = Sandwich(rh, moments.CovarianceGram(terms)), bound = Sandwich(rh, moments.GradientGram(terms, d));
+            ratios[s] = MatrixPoincare.Ratio(covariance, bound);
+            if (!(ratios[s] <= 1.0 + 1e-9)) violations++;
+        }
+        return new MatrixPoincareCheck(Array.AsReadOnly(ratios), violations);
+    }
+
+    // A·M·Aᵀ.
+    private static double[,] Sandwich(double[,] a, double[,] m)
+    {
+        double[,] am = Multiply(a, m);
+        int r = a.GetLength(0), t = a.GetLength(1);
+        var s = new double[r, r];
+        for (int i = 0; i < r; i++)
+            for (int j = 0; j < r; j++)
+            {
+                double v = 0.0;
+                for (int k = 0; k < t; k++) v += am[i, k] * a[j, k];
+                s[i, j] = v;
+            }
+        for (int i = 0; i < r; i++)
+            for (int j = i + 1; j < r; j++) s[i, j] = s[j, i] = 0.5 * (s[i, j] + s[j, i]);
+        return s;
+    }
+
+    private static double[,] Multiply(double[,] a, double[,] b)
+    {
+        int n = a.GetLength(0), inner = a.GetLength(1), q = b.GetLength(1);
+        if (b.GetLength(0) != inner) throw new ArgumentException("The shapes do not chain.");
+        var c = new double[n, q];
+        for (int i = 0; i < n; i++)
+            for (int k = 0; k < inner; k++)
+            {
+                double x = a[i, k];
+                if (x == 0.0) continue;
+                for (int j = 0; j < q; j++) c[i, j] += x * b[k, j];
+            }
+        return c;
+    }
+
+    // The reconstruction's map G = diag(y_s)K, m × K.
+    private static double[,] ReconstructionMap(BassBasisFit fit)
+    {
+        LinearReconstruction map = fit.Decomposition.Map;
+        int m = map.Locations, r = fit.Components.Count;
+        var g = new double[m, r];
+        for (int l = 0; l < m; l++)
+            for (int k = 0; k < r; k++) g[l, k] = map.Scales[l] * map.Basis(l, k);
+        return g;
+    }
+
+    // W_y's symmetric root, positive semidefinite: S = Σ √λ_q v_qv_qᵀ, so the output side keeps the locations' coordinates.
+    private static double[,] PsdRoot(double[,] w)
+    {
+        int m = w.GetLength(0);
+        EigenResult e = ScaledEigen.Of(w);
+        var s = new double[m, m];
+        for (int q = 0; q < m; q++)
+        {
+            double root = Math.Sqrt(Math.Max(0.0, e.Eigenvalues[q]));
+            if (root == 0.0) continue;
+            double[] v = e.Eigenvectors[q];
+            for (int i = 0; i < m; i++)
+                for (int j = 0; j < m; j++) s[i, j] += root * v[i] * v[j];
+        }
+        for (int i = 0; i < m; i++)
+            for (int j = i + 1; j < m; j++) s[i, j] = s[j, i] = 0.5 * (s[i, j] + s[j, i]);
+        return s;
+    }
+
+    // Output patterns: 0 reads none; otherwise a functional fit's, from 1 to its locations.
+    private static void Patterns(int patterns, bool functional, int m)
+    {
+        if (patterns == 0) return;
+        if (!functional) throw new ArgumentException("Output patterns read a functional fit's outputs; this fit's response is scalar.", nameof(patterns));
+        if (patterns < 0 || patterns > m) throw new ArgumentOutOfRangeException(nameof(patterns), $"Output patterns run from 1 to the {m} output locations.");
     }
 
     // A row of box-unit partials into the metric: gᵀL, into row q of the target.

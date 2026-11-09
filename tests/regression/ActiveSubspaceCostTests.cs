@@ -24,6 +24,8 @@ namespace Maths.Regression.Tests;
 /// <item>slice 4: a scalar fit's readout under a joint sample of 4,096 and 16,384 points, box and whitened; the basis fit's sampled
 /// route per joint draw; and whitening itself, <see cref="Maths.Regression.Subspaces.Whitening"/>'s moments and root, at 16,384 points
 /// of 2 and 10 inputs.</item>
+/// <item>slice 5, per draw at 3,000 draws: the exact readout on a scalar fit whose law the matrix check reads, beside it with per-draw
+/// ranks; a functional fit's output side on both routes; and basis adequacy per draw of the direct fit.</item>
 /// </list>
 /// Indicative: the best of five on a shared machine.
 /// </summary>
@@ -111,6 +113,34 @@ public sealed class ActiveSubspaceCostTests(ITestOutputHelper output)
         }
         output.WriteLine($"clock: {(BassCost.Cycles ? "thread cycles" : "wall")}; per draw under a joint sample, {string.Join("; ", rows)}; " +
                          $"the basis fit's sampled route per joint draw at 4,096 points {basisSampled:F0} µs; whitening at 16,384 points, {string.Join(", ", whitening)}");
+    }
+
+    [Fact]
+    public void SettledItemsCostRow()
+    {
+        if (!BassQualification.Enabled) return;
+        (BassData df, _) = CoActiveFixture.Data();
+        (BassFit f, _) = CoActiveFixture.Fits();
+        int[] many = [.. Enumerable.Range(0, 3000).Select(d => d % f.Draws.Sum(c => c.Count))];
+        var spec = new ActiveSubspaceSpec { Draws = many };
+        double plain = Best(() => f.ActiveSubspace(df, spec), many.Length);
+        double ranked = Best(() => f.ActiveSubspace(df, spec with { Rank = Maths.Regression.Subspaces.RankRule.TraceShare(0.95) }), many.Length);
+        BassData functional = SensitivityFixture.Functional();
+        BassFit fit = SensitivityFixture.FitFunctional();
+        int[] fdraws = [.. Enumerable.Range(0, 3000).Select(d => d % fit.Draws.Sum(c => c.Count))];
+        var fspec = new ActiveSubspaceSpec { Draws = fdraws };
+        double without = Best(() => fit.ActiveSubspace(functional, fspec), fdraws.Length);
+        double exactG = Best(() => fit.ActiveSubspace(functional, fspec with { OutputPatterns = 2 }), fdraws.Length);
+        int[] some = fdraws[..256];
+        double sampledG = Best(() => fit.ActiveSubspace(functional, fspec with { Draws = some, OutputPatterns = 2, Route = ActiveSubspaceRoute.Sampled }), some.Length)
+                          - Best(() => fit.ActiveSubspace(functional, fspec with { Draws = some, Route = ActiveSubspaceRoute.Sampled }), some.Length);
+        (BassData ad, BassFit direct, BassPredictor[] predictors, double[,] y, _, _) = RankAndOutputSideTests.AdequacyFixture.Value;
+        BassBasisFit basis = BassComponents.Fit(BassDecomposition.FromPca(y, new BassPcaSpec { Rank = 1 }), predictors, BassOutputComponentsTests.Config());
+        int[] adraws = [.. Enumerable.Range(0, 600).Select(d => d % direct.Draws.Sum(c => c.Count))];
+        double adequacy = Best(() => basis.Adequacy(direct, ad, new ActiveSubspaceSpec { Draws = adraws }), adraws.Length);
+        output.WriteLine($"clock: {(BassCost.Cycles ? "thread cycles" : "wall")}; per draw at 3,000 draws: a scalar fit's exact readout with the matrix check " +
+                         $"{plain:F1} µs, with per-draw ranks too {ranked:F1} µs; a functional fit's exact readout {without:F1} µs, with two output patterns " +
+                         $"{exactG:F1} µs; the sampled output side's own cost at 4,096 points {sampledG:F0} µs; basis adequacy per direct draw (12 locations) {adequacy:F1} µs");
     }
 
     private static double Best(Action call, int calls)

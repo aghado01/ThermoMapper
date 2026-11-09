@@ -93,6 +93,16 @@ public sealed class BassBasisFit
     public CoActiveAnalysis CoActiveSubspace(CoActiveSpec spec) => BassActiveSubspaces.CoActive(this, spec);
 
     /// <summary>
+    /// Basis adequacy (E8's slice 5): beside <paramref name="direct"/>, a direct-mode fit of the same cases, the share of its
+    /// G = E[J W_x Jᵀ] outside this fit's span, G = diag(y_s)K, and the containment defect of G's leading patterns in it, per draw of
+    /// the direct fit and for E[G], under the spec's law, input metric and output metric. The spec's <see cref="ActiveSubspaceSpec.OutputPatterns"/>
+    /// gives the patterns read, 1 when 0. Did the truncation drop structure that moves with the inputs? This fit's own G lies inside its
+    /// span by construction, so the direct fit answers.
+    /// </summary>
+    public Maths.Regression.Subspaces.BasisAdequacy Adequacy(BassFit direct, BassData directData, ActiveSubspaceSpec? spec = null)
+        => BassActiveSubspaces.Adequacy(this, direct, directData, spec ?? new ActiveSubspaceSpec());
+
+    /// <summary>
     /// The main and two-way effect functions of the reconstructed output over the joint draws (O8 for basis fits;
     /// <see cref="BassBasisEffects.Of"/>) under <paramref name="spec"/>'s measure: per output location and integrated over
     /// the locations, in output units.

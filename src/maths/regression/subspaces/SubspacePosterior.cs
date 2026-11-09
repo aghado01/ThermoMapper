@@ -7,6 +7,12 @@ namespace Maths.Regression.Subspaces;
 /// <summary>One draw's C with its eigenvalues, descending, and its top-k eigenspace as a p × k orthonormal basis.</summary>
 public sealed record DrawSubspace(double[,] C, double[] Eigenvalues, double[,] Basis)
 {
+    private readonly double[,]? _vectors;
+
+    /// <summary>All the eigenvectors the draw's subspace was read from, as columns in the eigenvalues' order (p × p from C, or as many
+    /// as the factor's rank); the basis when none were kept. A per-draw rank (slice 5) reads its leading k_s.</summary>
+    public double[,] Vectors { get => _vectors ?? Basis; init => _vectors = value; }
+
     /// <summary>The draw's subspace from C itself, by the symmetric eigendecomposition.</summary>
     public static DrawSubspace FromC(double[,] c, int dimension)
     {
@@ -14,9 +20,14 @@ public sealed record DrawSubspace(double[,] C, double[] Eigenvalues, double[,] B
         int p = Check(c, dimension);
         EigenResult e = ScaledEigen.Of(c);
         var basis = new double[p, dimension];
-        for (int j = 0; j < dimension; j++)
-            for (int i = 0; i < p; i++) basis[i, j] = e.Eigenvectors[j][i];
-        return new DrawSubspace(c, [.. e.Eigenvalues], basis);
+        var vectors = new double[p, p];
+        for (int j = 0; j < p; j++)
+            for (int i = 0; i < p; i++)
+            {
+                vectors[i, j] = e.Eigenvectors[j][i];
+                if (j < dimension) basis[i, j] = vectors[i, j];
+            }
+        return new DrawSubspace(c, [.. e.Eigenvalues], basis) { Vectors = vectors };
     }
 
     /// <summary>
@@ -42,9 +53,14 @@ public sealed record DrawSubspace(double[,] C, double[] Eigenvalues, double[,] B
         for (int i = 0; i < svd.SingularValues.Length; i++) eigenvalues[i] = svd.SingularValues[i] * svd.SingularValues[i];
         if (svd.RightVectors.Length < dimension) return FromC(c, dimension);   // fewer points than the dimension: C's own eigenspace
         var basis = new double[p, dimension];
-        for (int j = 0; j < dimension; j++)
-            for (int i = 0; i < p; i++) basis[i, j] = svd.RightVectors[j][i];
-        return new DrawSubspace(c, eigenvalues, basis);
+        var vectors = new double[p, svd.RightVectors.Length];
+        for (int j = 0; j < svd.RightVectors.Length; j++)
+            for (int i = 0; i < p; i++)
+            {
+                vectors[i, j] = svd.RightVectors[j][i];
+                if (j < dimension) basis[i, j] = vectors[i, j];
+            }
+        return new DrawSubspace(c, eigenvalues, basis) { Vectors = vectors };
     }
 
     /// <summary>The gap λ_k − λ_{k+1} at the basis's dimension (λ_{p+1} = 0).</summary>
@@ -70,7 +86,8 @@ public sealed record DrawSubspace(double[,] C, double[] Eigenvalues, double[,] B
 /// in order give the mean subspace for every k (the flag mean, cited from memory).</item>
 /// </list>
 /// The angles between E[C]'s top-k eigenspace and the mean subspace say how far apart the two summaries sit; they differ when the
-/// draws disagree (SG-5). Angles are arccos of the cosines from a thin SVD, which resolve to about 1.5·10⁻⁸ rad (decision 5).
+/// draws disagree (SG-5). Angles come from LinAlg's stable routine (slice 5), accurate to about √(p·k)·ε rad; slice 2 took the arccos
+/// of the cosines, which resolves about 1.5·10⁻⁸ rad (decision 5).
 /// Outlying draws are reported through their angles, not down-weighted.
 /// </summary>
 public sealed class SubspacePosterior
@@ -188,20 +205,18 @@ public sealed class SubspacePosterior
                                      angles, PrincipalAngles(meanCSubspace, mean));
     }
 
-    /// <summary>The principal angles between the spans of the orthonormal bases <paramref name="a"/> and <paramref name="b"/>
-    /// (p × k each), ascending: the arccos of the singular values of aᵀb.</summary>
+    /// <summary>The principal angles between the spans of the orthonormal bases <paramref name="a"/> (p × k_a) and <paramref name="b"/>
+    /// (p × k_b), min(k_a, k_b) of them, ascending, none when either is empty: LinAlg's stable routine
+    /// (<see cref="global::Maths.LinAlg.PrincipalAngles.Between(double[,], double[,])"/>), which pairs the cosines of aᵀb with the sines
+    /// of the residual off the other span through atan2, so small angles keep their accuracy where an arccos of the cosines alone
+    /// resolves only about 2·10⁻⁸ rad (E8, slice 5, the Grassmann discussion's item 2).</summary>
     public static double[] PrincipalAngles(double[,] a, double[,] b)
     {
-        int p = a.GetLength(0), k = a.GetLength(1);
-        if (b.GetLength(0) != p || b.GetLength(1) != k) throw new ArgumentException("The bases share their shape.", nameof(b));
-        var m = new double[k, k];
-        for (int i = 0; i < k; i++)
-            for (int j = 0; j < k; j++)
-                for (int r = 0; r < p; r++) m[i, j] += a[r, i] * b[r, j];
-        double[] cosines = ThinSvd.Decompose(m).SingularValues;
-        var angles = new double[k];
-        for (int i = 0; i < k; i++) angles[i] = Math.Acos(Math.Clamp(cosines[i], 0.0, 1.0));
-        return angles;
+        ArgumentNullException.ThrowIfNull(a);
+        ArgumentNullException.ThrowIfNull(b);
+        if (b.GetLength(0) != a.GetLength(0)) throw new ArgumentException("The bases have one row per input.", nameof(b));
+        if (a.GetLength(1) == 0 || b.GetLength(1) == 0) return [];
+        return global::Maths.LinAlg.PrincipalAngles.Between(a, b);
     }
 
     // The symmetric eigendecomposition, eigenvalues descending, eigenvectors as columns.

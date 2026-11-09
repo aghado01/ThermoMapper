@@ -87,7 +87,25 @@ public sealed record ActiveSubspaceSpec
     /// <summary>A functional fit's output metric W_y over its training output locations (slice 3): C = E[JᵀW_yJ], J the outputs × inputs
     /// Jacobian. The identity, F-X6's Q, when null; refused for a scalar fit.</summary>
     public OutputMetric? OutputMetric { get; init; }
+
+    /// <summary>A declared rule for each draw's own k_s (slice 5), read beside the fixed-k readout as <see cref="RankPosterior"/>. There
+    /// is no default: without a rule no per-draw rank is read.</summary>
+    public RankRule? Rank { get; init; }
+
+    /// <summary>The output patterns to read (slice 5): for a functional fit, G = E[J W_x Jᵀ]'s leading patterns per draw and for E[G],
+    /// in the input metric W_x = LLᵀ and the output metric's symmetric root. 0, the default, reads none; refused for a scalar fit.</summary>
+    public int OutputPatterns { get; init; }
 }
+
+/// <summary>
+/// The matrix Poincaré check per draw (E8, slice 5): the largest generalized eigenvalue of the outputs' covariance Cov_ρ(f) against
+/// E[J D Jᵀ], D the inputs' Poincaré constants in box units, both under the output metric's root; at most 1 when Efron–Stein and each
+/// input's Poincaré inequality hold. Read from the moment route under a product law whose every input is continuous and uniform; a
+/// ratio above 1 + 10⁻⁹ is a violation, which is a defect.
+/// </summary>
+/// <param name="Ratios">Each draw's ratio.</param>
+/// <param name="Violations">The ratios above one beyond rounding.</param>
+public sealed record MatrixPoincareCheck(IReadOnlyList<double> Ratios, int Violations);
 
 /// <summary>
 /// The output metric W_y of a functional fit's C = E[JᵀW_yJ] (E8, slice 3; F-X6's Q): a symmetric positive semidefinite m × m matrix over
@@ -202,7 +220,11 @@ public sealed record PoincareCheck(double[,] Total, double[,] Bound, double[,] R
 /// <param name="MonteCarloError">The sampled route's standard error of each entry of each draw's C, in the metric; null on the exact route.</param>
 /// <param name="Poincare">The per-draw consistency checks; null under a joint sample, which has no marginal bound to check.</param>
 /// <param name="DrawIndex">Each draw's index among the fit's pooled draws.</param>
+/// <param name="Ranks">Each draw at its own rank by the spec's rule (slice 5); null without a rule.</param>
+/// <param name="Outputs">G = E[J W_x Jᵀ]'s patterns (slice 5); null unless asked of a functional fit.</param>
+/// <param name="MatrixPoincare">The matrix Poincaré check (slice 5); null unless the law is a product of uniform laws over continuous
+/// inputs alone.</param>
 public sealed record ActiveSubspaceAnalysis(
     IReadOnlyList<string> Inputs, IReadOnlyList<string> Excluded, ActiveSubspaceRoute Route, InputMetric Metric, double[,] Map,
     ProductMeasure? Measure, int Points, SubspacePosterior Posterior, double[][,]? MonteCarloError, PoincareCheck? Poincare,
-    IReadOnlyList<int> DrawIndex);
+    IReadOnlyList<int> DrawIndex, RankPosterior? Ranks = null, OutputPosterior? Outputs = null, MatrixPoincareCheck? MatrixPoincare = null);
