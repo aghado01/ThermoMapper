@@ -173,6 +173,8 @@ public sealed record ConformalMargin(double Multiple, double[] CandidateErrors, 
 /// score (<see cref="SplitConformal.Density"/>) reports its sets here too, ranked among the stratum's calibration units: its
 /// scores are the training split's predictive, with no add-one-in weights, so no ESS, no margin and no diagnostics, and the
 /// draws' error costs no coverage (CB-2).
+/// The n-fold pairwise form counts each unit against the candidate under that unit's leave-one-out fit. Its finite coverage
+/// bound is <see cref="Coverage"/>, conditional on the fitting symmetry of <see cref="CrossConformal"/>.
 /// </summary>
 /// <param name="Case">The test case, in the candidates' order.</param>
 /// <param name="Stratum">Its stratum.</param>
@@ -185,7 +187,7 @@ public sealed record ConformalMargin(double Multiple, double[] CandidateErrors, 
 /// <param name="Tied">Those scoring equal to it; the strict rule (accept when Below ≥ k) and random tie-breaking read
 /// these with <see cref="Below"/>.</param>
 /// <param name="CandidateScores">The candidate's own log conformity score at y_g, ln p(y_g | all m units), in the split form
-/// ln p(y_g | the training split); −∞ outside every draw's support.</param>
+/// ln p(y_g | the training split); −∞ outside every draw's support. Null in the pairwise form, which has one score per fit.</param>
 /// <param name="EffectiveSampleSizes">Kish's ESS of the add-one-in weights at y_g, 1/Σ w̃²; 0 outside every draw's
 /// support; null in the split form.</param>
 /// <param name="Margin">CB-3's reading: the inflated rule's always, the margin's band when asked for; null for the whole space and in
@@ -200,16 +202,19 @@ public sealed record ConformalMargin(double Multiple, double[] CandidateErrors, 
 /// the run's error. The main session's construction (2026-11-07), not from a paper. NaN on a grid of one value, where it has no
 /// width, for the whole space, when the draws do not split, and in the split form.</param>
 /// <param name="SplitHalfDisagreements">The grid values where the two halves' plain sets disagree.</param>
+/// <param name="Form">The scoring form, which determines the finite coverage bound.</param>
 public sealed record ConformalSet(int Case, int Stratum, int Units, int Level, double[] Grid, double[]? PValues, int[]? Below,
                                   int[]? Tied, double[]? CandidateScores, double[]? EffectiveSampleSizes,
                                   ConformalMargin? Margin = null, bool Inflated = false, double ErrorLevel = 0.0, bool FallBack = false,
-                                  double SplitHalfMass = double.NaN, int SplitHalfDisagreements = 0)
+                                  double SplitHalfMass = double.NaN, int SplitHalfDisagreements = 0,
+                                  ConformalForm Form = ConformalForm.Full)
 {
     /// <summary>Whether the stratum is too small for the level (k = 0), so the set is the whole space.</summary>
     public bool WholeSpace => PValues is null;
 
-    /// <summary>The guaranteed coverage 1 − k/m under exact scores: at least this, exactly this with distinct scores.</summary>
-    public double Coverage => 1.0 - (double)Level / Units;
+    /// <summary>The finite-sample lower bound under the form's assumptions: 1 − k/m for full and split, and
+    /// max(0, 1 − (2k − 1)/m) for cross-fitted scores, with 1 at k = 0.</summary>
+    public double Coverage => Form == ConformalForm.CrossFitted ? CrossConformal.Coverage(Units, Level) : 1.0 - (double)Level / Units;
 
     /// <summary>
     /// The coverage the set keeps under its scores' Monte Carlo error, indicative since the bounds are not sure ones:
@@ -292,7 +297,7 @@ public sealed record ConformalSet(int Case, int Stratum, int Units, int Level, d
             ConformalSet probe = at(y);
             if (probe.Grid.Length != 1 || probe.Grid[0] != y || probe.Stratum != Stratum || probe.Units != Units ||
                 probe.Level != Level || probe.Inflated != Inflated || probe.Margin?.Inflation != Margin?.Inflation ||
-                probe.ErrorLevel != ErrorLevel || probe.WholeSpace)
+                probe.ErrorLevel != ErrorLevel || probe.Form != Form || probe.WholeSpace)
                 throw new ArgumentException("Refinement needs the same set rule and stratum at the requested y.", nameof(at));
             return probe.Accepts(0);
         }
@@ -331,7 +336,7 @@ public sealed record ConformalSet(int Case, int Stratum, int Units, int Level, d
 }
 
 /// <summary>The sets, one per test case in the candidates' order, at miscoverage <paramref name="Alpha"/>, from the full step or the
-/// split form's density score (<paramref name="Form"/>).</summary>
+/// split form's density score or the n-fold pairwise score (<paramref name="Form"/>).</summary>
 public sealed record ConformalPrediction(IReadOnlyList<ConformalSet> Sets, double Alpha, ConformalForm Form = ConformalForm.Full);
 
 /// <summary>One candidate's conformity scores (<see cref="ConformalBayes.Scores"/>): the log scores of its stratum's training

@@ -12,6 +12,9 @@ public enum ConformalForm
 
     /// <summary>The split form (<see cref="SplitConformal"/>): held-out calibration units scored by a fit on the training split.</summary>
     Split,
+
+    /// <summary>The n-fold leave-one-out pairwise rule (<see cref="CrossConformal"/>).</summary>
+    CrossFitted,
 }
 
 /// <summary>
@@ -244,7 +247,7 @@ public static class SplitConformal
             double[] grid = candidates.Grids[t];
             if (k == 0)
             {
-                sets[t] = new ConformalSet(t, h, m, k, grid, null, null, null, null, null);
+                sets[t] = new ConformalSet(t, h, m, k, grid, null, null, null, null, null, Form: ConformalForm.Split);
                 continue;
             }
             int g = grid.Length;
@@ -258,7 +261,7 @@ public static class SplitConformal
                 (below[j], tied[j]) = fit.Rank(h, own[j]);
                 p[j] = (below[j] + tied[j] + 1) / (double)m;
             }
-            sets[t] = new ConformalSet(t, h, m, k, grid, p, below, tied, own, null);
+            sets[t] = new ConformalSet(t, h, m, k, grid, p, below, tied, own, null, Form: ConformalForm.Split);
         }
         return new ConformalPrediction(sets, alpha, ConformalForm.Split);
     }
@@ -319,6 +322,39 @@ public static class SplitConformal
                 : new ConformalInterval(t, h, fit.Units(h), fit.Level(h), c, test.Lower[t] + c, test.Upper[t] - c);
         }
         return new ConformalIntervals(intervals, alpha, fit);
+    }
+
+    /// <summary>Asymmetric CQR (<c>cqrAsym_coverage_half</c>): calibrate y − q_lo and q_hi − y separately at α/2.
+    /// Each tail's zero level gives an infinite end. The fit uses the training split, and calibration and test units must be
+    /// exchangeable given that split.</summary>
+    public static AsymmetricConformalIntervals AsymmetricQuantiles(QuantileReadings calibration, IReadOnlyList<double> response,
+                                                                   QuantileReadings test, double alpha = 0.1)
+    {
+        CheckAlpha(alpha);
+        int n = Check(calibration, response, nameof(calibration));
+        int cases = Check(test, null, nameof(test));
+        var lower = new double[n];
+        var upper = new double[n];
+        for (int i = 0; i < n; i++)
+        {
+            lower[i] = response[i] - calibration.Lower[i];
+            upper[i] = calibration.Upper[i] - response[i];
+            if (!double.IsFinite(lower[i]) || !double.IsFinite(upper[i]))
+                throw new ArgumentException("The tail conformities overflow the response scale. Rescale responses and quantiles together.", nameof(calibration));
+        }
+        // A subnormal α can round α/2 to zero. Its finite ranks are still zero at every supported sample size.
+        double tailAlpha = Math.Max(double.Epsilon, alpha / 2);
+        var lo = new SplitCalibration(lower, calibration.StratumOf, tailAlpha);
+        var hi = new SplitCalibration(upper, calibration.StratumOf, tailAlpha);
+        var intervals = new AsymmetricConformalInterval[cases];
+        for (int t = 0; t < cases; t++)
+        {
+            int h = test.StratumOf?[t] ?? 0;
+            double cLo = lo.Threshold(h), cHi = hi.Threshold(h);
+            intervals[t] = new(t, h, lo.Units(h), lo.Level(h), hi.Level(h), cLo, cHi,
+                               test.Lower[t] + cLo, test.Upper[t] - cHi);
+        }
+        return new(intervals, alpha, lo, hi);
     }
 
     /// <summary>
