@@ -49,6 +49,36 @@ source_assignment <- function(fn, name, n = 1) {
   found[[n]][[3]]
 }
 
+# A pinned function with corrections patched in. Each patch replaces one expression of the pinned body, matched by identical(), and
+# states how many times it must match, so a change in the pinned source stops the oracle rather than leaving a patch unapplied.
+# (khaos_helpers.R carries the same three definitions, from before they were shared here.)
+replace_lang <- function(e, from, to) {
+  count <- 0
+  rec <- function(x) {
+    if (identical(x, from)) { count <<- count + 1; return(to) }
+    if (is.call(x)) {
+      parts <- as.list(x)
+      for (k in seq_along(parts)) if (!identical(parts[[k]], quote(expr = ))) parts[k] <- list(rec(parts[[k]]))
+      return(as.call(parts))
+    }
+    x
+  }
+  out <- rec(e)
+  list(expr = out, count = count)
+}
+patch_body <- function(fn, patches, env) {
+  b <- body(fn)
+  for (p in patches) {
+    r <- replace_lang(b, p$from, p$to)
+    if (r$count != p$n) stop("patch ", paste(deparse(p$from), collapse = " "), " matched ", r$count, " times, not ", p$n)
+    b <- r$expr
+  }
+  body(fn) <- b
+  environment(fn) <- env
+  fn
+}
+patch <- function(from, to, n = 1) list(from = from, to = to, n = n)
+
 # Gauss-Legendre nodes and weights on [a, b] (Golub-Welsch), exact for polynomials of degree 2n - 1.
 gauss_legendre <- function(n, a = -1, b = 1) {
   k <- seq_len(n - 1)

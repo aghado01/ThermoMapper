@@ -158,31 +158,30 @@ breaks_of <- function(d, v) {
   c(k, if (l$kind == "uniform") c(l$lower, l$upper) else numeric(0))
 }
 
-# ---- coactivity with corrections patched in ------------------------------------------------------------------------------------
-# C_bass_univariate, XI_FUNC and XI_FUNC_TNORM_SVW copied into an environment under the namespace, each patch matched exactly once in
-# the deparsed body:
-#   second_moment: Z2 = Delta1 + AA phi(AA) - BB phi(BB), the truncated normal's second moment (the code and the paper's equation for
-#     xi_TNorm have - AA phi(AA));
-#   weights: each component's weight w z/cc, its share of the truncated mixture, so the component's truncated moment is weighted once.
-patched <- function(fn, from, to) {
-  text <- deparse(fn, width.cutoff = 500L)
-  hits <- sum(lengths(regmatches(text, gregexpr(from, text, fixed = TRUE))))
-  if (hits != 1) stop("expected one match of ", from, ", found ", hits)
-  eval(parse(text = sub(from, to, text, fixed = TRUE)))
-}
+# ---- coactivity with slice 0's corrections -------------------------------------------------------------------------------------
+# Each patch replaces one expression of the pinned body, matched by identical() the number of times it states (patch_body in
+# _common.R), in copies of XI_FUNC_TNORM_SVW and C_bass_univariate under an environment whose parent is the namespace; XI_FUNC is
+# copied unpatched so that it calls the patched second moment.
+# XI_FUNC_TNORM_SVW: the truncated normal's second moment, the integral of z^2 phi(z) over [AA, BB], is Delta1 + AA phi(AA) - BB phi(BB);
+# the code and the paper's xi_TNorm write - AA phi(AA).
+second_moment_patches <- list(
+  patch(quote(Z2 <- Delta1 - AA * dnorm(AA) - BB * dnorm(BB)), quote(Z2 <- Delta1 + AA * dnorm(AA) - BB * dnorm(BB))))
+# C_bass_univariate: a normal mixture's component takes its share of the truncated mixture, w z/cc, so its truncated moment, which
+# divides by z, is weighted once; the code writes w/cc.
+weight_patches <- list(
+  patch(quote(prior[[i]]$weights <- prior[[i]]$weights/cc), quote(prior[[i]]$weights <- prior[[i]]$weights * prior[[i]]$z/cc)))
+
 coactivity_corrected <- function(second_moment = TRUE, weights = TRUE) {
   env <- new.env(parent = cns)
-  tnorm <- cns$XI_FUNC_TNORM_SVW
-  if (second_moment) tnorm <- patched(tnorm, "Z2 <- Delta1 - AA * dnorm(AA) - BB * dnorm(BB)", "Z2 <- Delta1 + AA * dnorm(AA) - BB * dnorm(BB)")
-  univariate <- cns$C_bass_univariate
-  if (weights) univariate <- patched(univariate, "prior[[i]]$weights <- prior[[i]]$weights/cc", "prior[[i]]$weights <- prior[[i]]$weights * prior[[i]]$z/cc")
-  xi <- cns$XI_FUNC
-  for (f in c("tnorm", "univariate", "xi")) { g <- get(f); environment(g) <- env; assign(f, g) }
-  assign("XI_FUNC_TNORM_SVW", tnorm, env); assign("XI_FUNC", xi, env); assign("C_bass_univariate", univariate, env)
+  assign("XI_FUNC_TNORM_SVW", patch_body(cns$XI_FUNC_TNORM_SVW, if (second_moment) second_moment_patches else list(), env), env)
+  assign("XI_FUNC", patch_body(cns$XI_FUNC, list(), env), env)
+  univariate <- patch_body(cns$C_bass_univariate, if (weights) weight_patches else list(), env)
+  assign("C_bass_univariate", univariate, env)
   function(mod, prior) univariate(mod, prior = prior, mcmc.use = NULL, use_native_scale = FALSE, verbose = FALSE)
 }
 second_fixed <- coactivity_corrected(second_moment = TRUE, weights = FALSE)
 both_fixed <- coactivity_corrected(second_moment = TRUE, weights = TRUE)
+tnorm_fixed <- patch_body(cns$XI_FUNC_TNORM_SVW, second_moment_patches, cns)
 
 draws <- read_draws(D)
 results <- lapply(draws, function(d) {
@@ -204,7 +203,7 @@ normal_second_moment <- lapply(list(c(0.5, 0.5, 0.3, 1), c(0.2, 0.3, 0, 0.6), c(
   lo <- max(s[3], 0); hi <- min(s[4], 1)
   z <- pnorm((1 - s[1]) / s[2]) - pnorm((0 - s[1]) / s[2])
   list(mean = s[1], sd = s[2], lower = lo, upper = hi, code = cns$XI_FUNC_TNORM_SVW(2, lo, hi, pr, 1),
-       corrected = environment(second_fixed)$tnorm(2, lo, hi, pr, 1),
+       corrected = tnorm_fixed(2, lo, hi, pr, 1),
        integral = integrate(function(x) x^2 * dnorm(x, s[1], s[2]), lo, hi, rel.tol = 1e-13)$value / z)
 })
 
