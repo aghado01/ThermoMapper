@@ -53,6 +53,12 @@ public sealed class BassModel
         if (data.Response is MultiOutputResponse && (observation is not GaussianObservation || config.RandomIntercept is not null))
             throw new ArgumentException("Several outputs take Gaussian noise without random intercepts in E34's slice 1; the noise by row and the random "
                                         + "intercepts (decisions 6 and 7) arrive in slice 4.", nameof(config));
+        if (config.Sampling.Births?.Residual is not null && data.Response is not ScalarResponse)
+            throw new ArgumentException("E4's residual birth (Sampling.Births.Residual) reads a scalar response's residual; a direct functional "
+                                        + "response's, or several outputs', is a matrix, which no score here reads.", nameof(config));
+        if (config.Sampling.Births?.Residual is not null && !System.Linq.Enumerable.Any(data.Predictors, p => p is ContinuousPredictor))
+            throw new ArgumentException("E4's residual birth (Sampling.Births.Residual) adds continuous factors, and the data hold no continuous "
+                                        + "predictor.", nameof(config));
         WorkingResponse working = observation.Working(data.Response);
         RandomInterceptBlock? block = null;
         if (config.RandomIntercept is { } intercepts)

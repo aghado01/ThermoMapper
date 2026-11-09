@@ -236,12 +236,15 @@ public sealed class BassInclusionHistory
 internal sealed record BassInclusionHistorySnapshot(long[]?[] Included, long Recorded, double[]?[]? Frequencies, bool Learning, bool Frozen);
 
 /// <summary>
-/// E4's birth mixture over a fit's own kernel (the proposal-kernels brief): q(t | S) = (1 − ω_H)·q_base(t | S) +
-/// ω_H·q_H(t | S), q_H the base birth under the history's weights (<see cref="BassInclusionHistory"/>), and q_H = q_base
-/// before its first refresh.
+/// E4's birth mixture over a fit's own kernel (the proposal-kernels brief): q(t | S) = (1 − ω_H − ω_R)·q_base(t | S) +
+/// ω_H·q_H(t | S) + ω_R·q_R(t | S), the components declared.
 /// <list type="bullet">
-/// <item><b>Exactness.</b> ln q is the log-sum-exp of the components' exact ln q, and a death's reverse is the same sum under
-/// the counts without the dying term; the base share keeps every structure the base birth reaches.</item>
+/// <item><b>q_H,</b> the history birth: the base birth under the history's weights (<see cref="BassInclusionHistory"/>), and
+/// q_H = q_base before its first refresh.</item>
+/// <item><b>q_R,</b> the residual birth (<see cref="BassResidualBirth"/>), which reads the structure the birth starts from and b
+/// through the birth's context.</item>
+/// <item><b>Exactness.</b> ln q is the log-sum-exp of the components' exact ln q, and a death's reverse is the same sum under the
+/// counts and the structure without the dying term; the base share keeps every structure the base birth reaches.</item>
 /// <item><b>Draws.</b> One uniform picks the component, then the component draws.</item>
 /// <item><b>Deaths and changes</b> are the base kernel's.</item>
 /// </list>
@@ -250,60 +253,108 @@ internal sealed record BassInclusionHistorySnapshot(long[]?[] Included, long Rec
 internal sealed class BassBirthMixture : IBassProposalKernel
 {
     private readonly IBassProposalKernel _base;
-    private readonly IBassWeightedBirth _weighted;
-    private readonly double _share, _logShare, _logBase;
+    private readonly IBassWeightedBirth? _weighted;
+    private readonly BassResidualBirth? _residual;
+    private readonly double _historyShare, _residualShare, _logBaseShare, _logHistoryShare, _logResidualShare, _logBaseAndHistory;
 
     /// <summary>The mixture over <paramref name="kernel"/> with the history birth <paramref name="spec"/>, reading
     /// <paramref name="history"/>.</summary>
     public BassBirthMixture(IBassProposalKernel kernel, HistoryBirth spec, BassInclusionHistory history)
+        : this(kernel, spec ?? throw new ArgumentNullException(nameof(spec)), history ?? throw new ArgumentNullException(nameof(history)), null, null)
+    {
+    }
+
+    /// <summary>The mixture over <paramref name="kernel"/> with the history birth <paramref name="historySpec"/> reading
+    /// <paramref name="history"/>, and the residual birth <paramref name="residual"/> at <paramref name="residualSpec"/>'s share, each
+    /// left out when null.</summary>
+    public BassBirthMixture(IBassProposalKernel kernel, HistoryBirth? historySpec, BassInclusionHistory? history, BassResidualBirth? residual,
+                            ResidualBirth? residualSpec)
     {
         ArgumentNullException.ThrowIfNull(kernel);
-        ArgumentNullException.ThrowIfNull(spec);
-        ArgumentNullException.ThrowIfNull(history);
+        if ((historySpec is null) != (history is null)) throw new ArgumentException("A history birth needs its settings and its history.", nameof(history));
+        if ((residual is null) != (residualSpec is null)) throw new ArgumentException("A residual birth needs its settings and its scores.", nameof(residual));
+        if (historySpec is null && residual is null) throw new ArgumentException("The mixture declares no component.", nameof(kernel));
         _base = kernel;
-        _weighted = kernel as IBassWeightedBirth ?? throw new ArgumentException("The kernel has no weighted birth.", nameof(kernel));
-        _share = spec.Share;
-        _logShare = Math.Log(spec.Share);
-        _logBase = SpecialFunctions.Log1p(-spec.Share);
+        _weighted = history is null ? null : kernel as IBassWeightedBirth ?? throw new ArgumentException("The kernel has no weighted birth.", nameof(kernel));
+        _residual = residual;
+        _historyShare = historySpec?.Share ?? 0.0;
+        _residualShare = residualSpec?.Share ?? 0.0;
+        double baseShare = 1.0 - _historyShare - _residualShare;
+        if (!(baseShare > 0.0)) throw new ArgumentException("The components' shares leave the base birth none.", nameof(residualSpec));
+        _logBaseShare = SpecialFunctions.Log1p(-(_historyShare + _residualShare));   // slice 1's form, so a history-only fit draws as it did
+        _logHistoryShare = Math.Log(_historyShare);
+        _logResidualShare = Math.Log(_residualShare);
+        _logBaseAndHistory = Math.Log(baseShare + _historyShare);
         History = history;
     }
 
-    /// <summary>The history whose weights the history birth reads.</summary>
-    public BassInclusionHistory History { get; set; }
+    /// <summary>The history whose weights the history birth reads; null without one.</summary>
+    public BassInclusionHistory? History { get; set; }
 
     /// <inheritdoc/>
     public BassStructurePrior Prior => _base.Prior;
 
     /// <inheritdoc/>
-    public BassTerm? DrawBirth(Xoshiro256PlusPlus rng, BassTermCounts counts)
+    public BassTerm? DrawBirth(Xoshiro256PlusPlus rng, BassTermCounts counts) => DrawBirth(rng, counts, null);
+
+    /// <inheritdoc/>
+    public BassTerm? DrawBirth(Xoshiro256PlusPlus rng, BassTermCounts counts, BassBirthContext? at)
     {
         ArgumentNullException.ThrowIfNull(rng);
-        bool history = rng.NextDouble() < _share;
-        return history && History.Weights is { } weights ? _weighted.DrawBirth(rng, counts, weights) : _base.DrawBirth(rng, counts);
+        double u = rng.NextDouble();
+        if (u < _historyShare) return History?.Weights is { } weights ? _weighted!.DrawBirth(rng, counts, weights) : _base.DrawBirth(rng, counts);
+        if (u < _historyShare + _residualShare) return _residual!.Draw(rng, Needed(at));
+        return _base.DrawBirth(rng, counts);
     }
 
     /// <inheritdoc/>
-    public double LogBirth(BassTerm term, BassTermCounts counts) => Mix(_base.LogBirth(term, counts), term, counts, 0);
+    public double LogBirth(BassTerm term, BassTermCounts counts) => LogBirth(term, counts, null);
+
+    /// <summary>ln q(t | S), the birth starting from <paramref name="at"/>, which the residual birth needs.</summary>
+    public double LogBirth(BassTerm term, BassTermCounts counts, BassBirthContext? at) => Mix(_base.LogBirth(term, counts), term, counts, 0, at);
 
     /// <inheritdoc/>
-    public double LogBirthRatio(BassTerm born, BassTermCounts counts) => -Math.Log(counts.Terms + 1.0) - LogBirth(born, counts);
+    public double LogBirthRatio(BassTerm born, BassTermCounts counts) => LogBirthRatio(born, counts, null);
 
     /// <inheritdoc/>
-    public double LogDeathRatio(BassTerm dying, BassTermCounts counts)
+    public double LogBirthRatio(BassTerm born, BassTermCounts counts, BassBirthContext? at) => -Math.Log(counts.Terms + 1.0) - LogBirth(born, counts, at);
+
+    /// <inheritdoc/>
+    public double LogDeathRatio(BassTerm dying, BassTermCounts counts) => LogDeathRatio(dying, counts, null);
+
+    /// <inheritdoc/>
+    public double LogDeathRatio(BassTerm dying, BassTermCounts counts, BassBirthContext? reduced)
     {
         double logM = Math.Log(counts.Terms);
-        return Mix(_base.LogDeathRatio(dying, counts) - logM, dying, counts, 1) + logM;
+        return Mix(_base.LogDeathRatio(dying, counts) - logM, dying, counts, 1, reduced) + logM;
     }
 
     /// <inheritdoc/>
     public BassTermMove ProposeChange(Xoshiro256PlusPlus rng, BassTerm term, BassTermCounts counts) => _base.ProposeChange(rng, term, counts);
 
-    // ln[(1 − ω)·q_base + ω·q_H] from ln q_base, or ln q_base itself before the history's first refresh.
-    private double Mix(double logBase, BassTerm term, BassTermCounts counts, int shift)
+    private BassBirthContext Needed(BassBirthContext? at)
+        => at ?? throw new InvalidOperationException("E4's residual birth reads the structure the birth starts from; call with its context.");
+
+    // ln[(1 − ω_H − ω_R)·q_base + ω_H·q_H + ω_R·q_R] from ln q_base; before the history's first refresh q_H = q_base, and with neither a
+    // refreshed history nor a residual birth, ln q_base itself.
+    private double Mix(double logBase, BassTerm term, BassTermCounts counts, int shift, BassBirthContext? at)
     {
-        if (History.Weights is not { } weights) return logBase;
-        double a = _logBase + logBase, b = _logShare + _weighted.LogBirth(term, counts, shift, weights);
-        double top = Math.Max(a, b);
-        return double.IsNegativeInfinity(top) ? top : top + Math.Log(Math.Exp(a - top) + Math.Exp(b - top));
+        BassVariableWeights? weights = History?.Weights;
+        if (weights is null && _residual is null) return logBase;
+        Span<double> parts = stackalloc double[3];
+        int count = 0;
+        if (weights is null) parts[count++] = _logBaseAndHistory + logBase;
+        else
+        {
+            parts[count++] = _logBaseShare + logBase;
+            parts[count++] = _logHistoryShare + _weighted!.LogBirth(term, counts, shift, weights);
+        }
+        if (_residual is not null) parts[count++] = _logResidualShare + _residual.LogProbability(term, Needed(at));
+        double top = double.NegativeInfinity;
+        for (int i = 0; i < count; i++) top = Math.Max(top, parts[i]);
+        if (double.IsNegativeInfinity(top)) return top;
+        double sum = 0.0;
+        for (int i = 0; i < count; i++) sum += Math.Exp(parts[i] - top);
+        return top + Math.Log(sum);
     }
 }

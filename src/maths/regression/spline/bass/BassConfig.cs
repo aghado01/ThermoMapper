@@ -233,12 +233,24 @@ public sealed record BassConfig
         }
         if (run.Births is { } births)
         {
-            if (births.History is not { } history) throw Bad("Sampling.Births", "must declare a component; null turns the mixture off");
-            if (!(history.Share > 0.0 && history.Share < 1.0))
-                throw Bad("Sampling.Births.History.Share", "must lie in (0, 1), so the fit's own birth keeps a positive share");
-            if (!(history.Floor > 0.0 && history.Floor <= 1.0))
-                throw Bad("Sampling.Births.History.Floor", "must lie in (0, 1], so every variable keeps a positive weight");
-            if (history.Refresh < 1) throw Bad("Sampling.Births.History.Refresh", "must be at least 1 sweep");
+            if (births.History is null && births.Residual is null) throw Bad("Sampling.Births", "must declare a component; null turns the mixture off");
+            double shares = 0.0;
+            if (births.History is { } history)
+            {
+                if (!(history.Share > 0.0 && history.Share < 1.0))
+                    throw Bad("Sampling.Births.History.Share", "must lie in (0, 1), so the fit's own birth keeps a positive share");
+                if (!(history.Floor > 0.0 && history.Floor <= 1.0))
+                    throw Bad("Sampling.Births.History.Floor", "must lie in (0, 1], so every variable keeps a positive weight");
+                if (history.Refresh < 1) throw Bad("Sampling.Births.History.Refresh", "must be at least 1 sweep");
+                shares += history.Share;
+            }
+            if (births.Residual is { } residual)
+            {
+                if (!(residual.Share > 0.0 && residual.Share < 1.0))
+                    throw Bad("Sampling.Births.Residual.Share", "must lie in (0, 1), so the fit's own birth keeps a positive share");
+                shares += residual.Share;
+            }
+            if (!(shares < 1.0)) throw Bad("Sampling.Births", "the components' shares must sum below 1, so the fit's own birth keeps a positive share");
         }
         if (s.Legendre is not null)
         {
@@ -848,7 +860,12 @@ public sealed record FactorMoves(double Change = 1, double PruneOrGrow = 1, doub
 public sealed record BirthMixture
 {
     /// <summary>The history-based birth (<see cref="HistoryBirth"/>); null leaves it out.</summary>
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
     public HistoryBirth? History { get; init; }
+
+    /// <summary>The residual-informed birth (<see cref="ResidualBirth"/>); null leaves it out.</summary>
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public ResidualBirth? Residual { get; init; }
 }
 
 /// <summary>
@@ -862,6 +879,16 @@ public sealed record BirthMixture
 /// <param name="Floor">δ, each weight's floor, in (0, 1]: Nott and Kohn's truncation.</param>
 /// <param name="Refresh">Sweeps between refreshes in burn-in, at least 1.</param>
 public sealed record HistoryBirth(double Share = 0.25, double Floor = 0.01, int Refresh = 100);
+
+/// <summary>
+/// The residual-informed birth (E4; the proposal-kernels brief's slice 2): a parent drawn uniformly over the intercept and the
+/// structure's terms that can take one more continuous factor (a hinge, or a Legendre factor), then the new factor ∝ exp(½·b·Δℓ), Δℓ
+/// its single column's profile-likelihood gain against the structure's least-squares residual, at the move's inverse temperature b.
+/// Its probability is exact, a death's reverse reads the reduced structure's residual, and the fit's own birth keeps its share, so
+/// every structure stays reachable. A scalar response only.
+/// </summary>
+/// <param name="Share">ω_R, the component's share of the births, in (0, 1).</param>
+public sealed record ResidualBirth(double Share = 0.25);
 
 /// <summary>
 /// A self-sizing ladder's split rule (F-M2's lever 4b, decided 2026-10-29): each adaptation round, every adjacent pair

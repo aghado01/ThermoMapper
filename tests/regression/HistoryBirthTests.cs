@@ -96,7 +96,7 @@ public sealed class HistoryBirthTests(ITestOutputHelper output)
     // enumeration elsewhere); q_H replaces each part's variable law, uniform at K = 1 or Wallenius' over w₂ + a, by Wallenius' over the
     // floored ĥ. Legendre: the inclusion law Σ_{q₀} J(q₀)P(χ | q₀)/P(valid | q₀), each validity enumerated, from make_weights' η over
     // (a^α + ε) or over the floored ĥ, with the degree and composition laws.
-    private static (double Base, double History) Laws(BassModel model, BassInclusionHistory history, BassTerm t, BassTermCounts counts)
+    internal static (double Base, double History) Laws(BassModel model, BassInclusionHistory history, BassTerm t, BassTermCounts counts)
     {
         if (model.Prior.Legendre is null)
         {

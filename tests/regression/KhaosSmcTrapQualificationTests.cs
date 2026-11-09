@@ -28,6 +28,8 @@ namespace Maths.Regression.Tests;
 /// and show whether the population still drifts there.</item>
 /// <item><b>A schedule that cannot jump:</b> the same at 5 sweeps, with each b′ at most r·b, r = 1.25 and 1.1.</item>
 /// <item><b>KHAOS's g-prior</b> (ζ = 1, g₀² ~ IG(0.001, 1,000) drawn) under the engine's schedule.</item>
+/// <item><b>E4's residual birth</b> (the proposal-kernels brief's slice 2) at ω_R = ¼ on the raw ridge, under the engine's schedule and
+/// the 1.25 cap, each replicate's births' acceptance read from its kernel's account; the part <c>residual</c>, not in the default list.</item>
 /// <item><b>The tempering ladder</b> with its reference rung, self-sizing, four chains: the cold chains' M and σ², the stepping-stone
 /// and path-sampling ln Ẑ, the pair rejections and the evidence's saturation flag.</item>
 /// </list>
@@ -42,11 +44,12 @@ public sealed class KhaosSmcTrapQualificationTests(ITestOutputHelper output)
     private const int Particles = 500, CheckStages = 2, MasterSeed = 20261108;   // the adaptive-mutation measurement's
     private const double TargetCess = 0.99, FoundBelow = 2 * 0.2245;
 
-    private sealed record Arm(string Name, bool GPrior, int Rate, double? Cap, int Replicates);
+    private sealed record Arm(string Name, bool GPrior, int Rate, double? Cap, int Replicates, bool Residual = false);
 
     private sealed record Stage(double B, double MeanM, int Distinct, double MeanLogPi, double SdLogPi, double Ess, double Moved);
 
-    private sealed record Replicate(Arm Arm, int Index, double LogZ, double LogZError, double M, double Sigma2, double Seconds, Stage[] Stages, Stage[] Checks)
+    private sealed record Replicate(Arm Arm, int Index, double LogZ, double LogZError, double M, double Sigma2, double Seconds, Stage[] Stages, Stage[] Checks,
+                                    long BirthsAttempted = 0, long BirthsAccepted = 0)
     {
         public bool Found => Sigma2 < FoundBelow;
 
@@ -101,7 +104,8 @@ public sealed class KhaosSmcTrapQualificationTests(ITestOutputHelper output)
         };
         SmcStage<BassParticle> At(double b) => new(target, new Temperature(b, TemperingPath.Likelihood));
         long t0 = BassCost.Tick();
-        SmcRun<BassParticle> run = SmcRun<BassParticle>.Start(At(0.0), new BassParticles(model), new BassSmcKernel(model), options, streams[0]);
+        var kernel = new BassSmcKernel(model);
+        SmcRun<BassParticle> run = SmcRun<BassParticle>.Start(At(0.0), new BassParticles(model), kernel, options, streams[0]);
         var stages = new List<Stage>();
         while (run.Stage.Temperature.InverseTemperature < 1.0)
         {
@@ -112,6 +116,7 @@ public sealed class KhaosSmcTrapQualificationTests(ITestOutputHelper output)
         }
         double seconds = (BassCost.Tick() - t0) / BassCost.TicksPerSecond;
         SmcResult<BassParticle> result = run.Result();
+        BassKindCount births = kernel.Account.Kinds[BassMoveKind.Birth];
 
         int[] composition = SeedTree.Derive(streams[1], Particles);
         var terms = new BassTermTable();
@@ -129,7 +134,8 @@ public sealed class KhaosSmcTrapQualificationTests(ITestOutputHelper output)
             run.Advance(At(1.0));
             checks.Add(Read(model, run));
         }
-        return new Replicate(arm, index, result.LogNormalizerRatio, result.LogNormalizerError, m, sigma2, seconds, [.. stages], [.. checks]);
+        return new Replicate(arm, index, result.LogNormalizerRatio, result.LogNormalizerError, m, sigma2, seconds, [.. stages], [.. checks],
+                             births.Attempts, births.Accepted);
     }
 
     [Fact]
@@ -146,27 +152,36 @@ public sealed class KhaosSmcTrapQualificationTests(ITestOutputHelper output)
         output.WriteLine($"artifacts: {artifacts.RunDirectory}");
         BassSmcMutationQualificationTests.Fixture raw = BassSmcMutationQualificationTests.Khaos(), g = GPrior(raw);
         BassModel rawModel = BassModel.Create(raw.Config, raw.Data), gModel = BassModel.Create(g.Config, g.Data);
+        // E4's residual birth (the proposal-kernels brief's slice 2) on the raw ridge, at ω_R = ¼, the measurement's setting.
+        BassModel residualModel = BassModel.Create(raw.Config with
+        {
+            Sampling = raw.Config.Sampling with { Births = new BirthMixture { Residual = new ResidualBirth(Share: 0.25) } },
+        }, raw.Data);
         Assert.True(rawModel.Target.HasCompleteValues && gModel.Target.HasCompleteValues);
 
         var arms = new List<Arm>();
         if (parts.Contains("engine")) arms.AddRange([new("engine, 5 sweeps", false, 5, null, replicates), new("engine, 20 sweeps", false, 20, null, half)]);
         if (parts.Contains("capped")) arms.AddRange([new("capped r 1.25, 5 sweeps", false, 5, 1.25, half), new("capped r 1.1, 5 sweeps", false, 5, 1.1, half)]);
         if (parts.Contains("gprior")) arms.Add(new("g-prior, engine, 5 sweeps", true, 5, null, half));
+        if (parts.Contains("residual"))
+            arms.AddRange([new("residual birth, engine, 5 sweeps", false, 5, null, half, Residual: true),
+                           new("residual birth, capped r 1.25, 5 sweeps", false, 5, 1.25, half, Residual: true)]);
 
         using var rowsCsv = new StreamWriter(Path.Combine(artifacts.RunDirectory, "khaos-trap-replicates.csv")) { NewLine = "\n" };
         using var stagesCsv = new StreamWriter(Path.Combine(artifacts.RunDirectory, "khaos-trap-stages.csv")) { NewLine = "\n" };
-        rowsCsv.WriteLine("arm,replicate,found,log_z,log_z_error,m,sigma2,seconds,stages,stages_above_0.01,last_from,least_late,drift,drift_error");
+        rowsCsv.WriteLine("arm,replicate,found,log_z,log_z_error,m,sigma2,seconds,stages,stages_above_0.01,last_from,least_late,drift,drift_error,births_attempted,births_accepted");
         stagesCsv.WriteLine("arm,replicate,stage,check,b,mean_m,distinct,mean_log_pi,sd_log_pi,ess,moved");
         int[] seeds = SeedTree.Derive(MasterSeed, replicates);
         var jobs = arms.SelectMany(a => Enumerable.Range(0, a.Replicates).Select(r => (a, r))).ToArray();
         var done = new Replicate[jobs.Length];
         Parallel.For(0, jobs.Length, new ParallelOptions { MaxDegreeOfParallelism = threads },
-                     k => done[k] = Run(jobs[k].a, jobs[k].a.GPrior ? gModel : rawModel, jobs[k].r, seeds[jobs[k].r]));
+                     k => done[k] = Run(jobs[k].a, jobs[k].a.Residual ? residualModel : jobs[k].a.GPrior ? gModel : rawModel, jobs[k].r, seeds[jobs[k].r]));
 
         foreach (Replicate x in done)
         {
             rowsCsv.WriteLine(string.Join(",", Csv(x.Arm.Name), x.Index, x.Found ? 1 : 0, F(x.LogZ), F(x.LogZError), F(x.M), F(x.Sigma2), F(x.Seconds),
-                                          x.Stages.Length, x.StagesAbove(0.01), F(x.LastFrom), F(x.LeastLate), F(x.Drift), F(x.DriftError)));
+                                          x.Stages.Length, x.StagesAbove(0.01), F(x.LastFrom), F(x.LeastLate), F(x.Drift), F(x.DriftError),
+                                          x.BirthsAttempted, x.BirthsAccepted));
             foreach ((Stage s, int i, bool check) in x.Stages.Select((s, i) => (s, i, false)).Concat(x.Checks.Select((s, i) => (s, x.Stages.Length + i, true))))
                 stagesCsv.WriteLine(string.Join(",", Csv(x.Arm.Name), x.Index, i, check ? 1 : 0, F(s.B), F(s.MeanM), s.Distinct, F(s.MeanLogPi), F(s.SdLogPi), F(s.Ess), F(s.Moved)));
         }
@@ -182,7 +197,7 @@ public sealed class KhaosSmcTrapQualificationTests(ITestOutputHelper output)
             string Median(Replicate[] xs) => xs.Length == 0 ? "-" : BassMixing.Quantile([.. xs.Select(x => x.Drift)], 0.5).ToString("F2", CultureInfo.InvariantCulture);
             output.WriteLine($"{arm.Name} | {f.Length}/{all.Length} | {Z(f)} | {Z(t)} | {Mean(f, x => x.Stages.Length)}, {Mean(t, x => x.Stages.Length)} | " +
                              $"{Mean(f, x => x.Seconds)}, {Mean(t, x => x.Seconds)} | {Count(x => x.Jumped)} | {Count(x => x.LeastLate < 0.1)} | {Count(x => x.Drifted)} | " +
-                             $"{Median(f)}, {Median(t)}");
+                             $"{Median(f)}, {Median(t)}; births accepted {100.0 * all.Sum(x => x.BirthsAccepted) / Math.Max(1, all.Sum(x => x.BirthsAttempted)):F2}%");
         }
         foreach (Replicate x in done.Where(x => x.Index < 2 || x.Found))
             output.WriteLine($"  {x.Arm.Name} r{x.Index}: ln Ẑ {x.LogZ:F2} ± {x.LogZError:F2}, M {x.M:F2}, σ² {x.Sigma2:F3}, {x.Stages.Length} stages " +

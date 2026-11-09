@@ -109,13 +109,15 @@ public sealed class BassStructureMoves
         Moves = Palette();
     }
 
-    // The model's kernel, or with E4's history birth declared, the mixture over it with a history of this chain's own:
-    // empty, or as `history` left it.
+    // The model's kernel, or with E4's birth mixture declared, the mixture over it: a history birth with a history of this chain's
+    // own (empty, or as `history` left it), and a residual birth with caches of its own.
     private static IBassProposalKernel KernelOf(BassModel model, BassInclusionHistorySnapshot? history)
     {
-        if (model.Config.Sampling.Births?.History is not { } spec) return model.Kernel;
-        BassInclusionHistory own = history is null ? new BassInclusionHistory(model.Prior, spec) : BassInclusionHistory.Restore(model.Prior, spec, history);
-        return new BassBirthMixture(model.Kernel, spec, own);
+        if (model.Config.Sampling.Births is not { } births) return model.Kernel;
+        BassInclusionHistory? own = births.History is not { } spec ? null
+            : history is null ? new BassInclusionHistory(model.Prior, spec) : BassInclusionHistory.Restore(model.Prior, spec, history);
+        BassResidualBirth? residual = births.Residual is null ? null : new BassResidualBirth(model);
+        return new BassBirthMixture(model.Kernel, births.History, own, residual, births.Residual);
     }
 
     /// <summary>The inclusion history E4's history birth reads (<see cref="BassInclusionHistory"/>); null without one.</summary>
