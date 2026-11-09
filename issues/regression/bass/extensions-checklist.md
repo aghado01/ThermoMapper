@@ -26,7 +26,7 @@ Companion to [extensions-brief.md](extensions-brief.md). An item is ticked when 
 - [ ] **E18** Posteriors for readouts by resampling units.
 - [x] **E19** Polynomial-chaos terms. Built ([brief](khaos-brief.md)): KHAOS's six slices, in the user's order 0, 1, 2, 5, 4, 3, landed and verified by 2026-11-08, with CRAN's `khaos` 2.1.1 pinned and SMC's two flags from slice 5's trap (`42739ac`).
 - [ ] **E20** Data-augmented observation models.
-- [ ] **E21** A prior-precision builder, with ridge blocks. The builder is built (KHAOS slice 2, `f289af3`). Random-effect intercepts are built for one grouping with s held (KHAOS slice 3, `0a2168c`), integrated out by whitening. Open: s drawn, several or nested groupings, random slopes, and the block under the noises and conformal prediction. These were sent to the GBASS chip on 2026-11-08 at the user's request, with a brief to come (`ridge-blocks-brief.md`).
+- [ ] **E21** A prior-precision builder, with ridge blocks. The builder is built (KHAOS slice 2, `f289af3`). Random-effect intercepts are built for one grouping with s held (KHAOS slice 3, `0a2168c`), integrated out by whitening. Open: s drawn, several or nested groupings, random slopes, and the block under the noises and conformal prediction. These were sent to the GBASS chip on 2026-11-08 at the user's request; its [brief](ridge-blocks-brief.md) plans them in six slices, waiting on the main session's verification.
 - [ ] **E22** Correlated outputs and coupling within a run.
 - [ ] **E23** Multi-fidelity emulation through the offset.
 - [ ] **E24** Guarded estimators.
