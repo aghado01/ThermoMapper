@@ -119,20 +119,20 @@ In the table, $\hat p=p/\|p\|$, and $\langle a,b\rangle_L$ is the Lorentz produc
 
 ### The IRLS engine (`Irls.Solve`)
 
-`Irls.Solve` minimizes $F(p)=\sum_iw_i\rho(d(p,x_i))$. With L2 the minimizer is the Fréchet/Karcher mean. With L1 it is the geometric median. The manifold enters only through `Distance`, `LogMap`, `ExpMap`, `AddScaled`, `Norm` and `IsFlat`.
+`Irls.Solve` minimizes $F(p)=\sum_iw_i\rho(d(p,x_i))$. With L2 the minimizer is the Fréchet/Karcher mean. With L1 it is the geometric median. The manifold enters only through `Distance`, `LogMap`, `ExpMap`, `AddScaled`, `Norm` and `IsFlat`. The distance-valued constants are read in a unit λ, by default the data's spread σ ([below](#the-unit-of-the-constants-irlsoptionsscale)), so the flowchart writes them as τλ, ελ and θλ.
 
 ```mermaid
 flowchart TD
   A[start: p = destination] --> B{loss closed-form? L2}
   B -->|yes, flat| C[weighted average — done]
-  B -->|yes, curved| D["Karcher flow: p ← Exp_p(Σw Log_p x / Σw) until shift < tol"]
-  B -->|no, L1| E["weights: r_i = d(p,x_i); ω_i = 0 if r_i ≤ ε (coincident) else w_i/r_i; minDist includes coincident points"]
+  B -->|yes, curved| D["Karcher flow: p ← Exp_p(Σw Log_p x / Σw) until shift < τλ"]
+  B -->|no, L1| E["radii r_i (‖Log_p x_i‖ under Spread, d(p,x_i) under Data); λ; ω_i = 0 if r_i ≤ ελ (coincident) else w_i/r_i; minDist includes coincident points"]
   E --> F{"coincidence and policy = OptimalityCheck?"}
   F -->|check passes| G[return p — p is the optimal data point]
-  F -->|fails / not run| H{"SubgradientOnly, or Hybrid and minDist < SubgradientThreshold?"}
-  H -->|yes| I["subgradient step: p ← Exp_p(η_k Σ w_i Log_p x_i / r_i), skipping r_i < 1e-12"]
+  F -->|fails / not run| H{"SubgradientOnly, or Hybrid and minDist < θλ?"}
+  H -->|yes| I["subgradient step: p ← Exp_p(η_k Σ w_i Log_p x_i / r_i), skipping coincident points"]
   H -->|no| J["Weiszfeld step: p ← Exp_p(Σ ω_i Log_p x_i / Σ ω_i)"]
-  I --> K{"shift d(p_k, p_k+1) < tol?"}
+  I --> K{"shift < τλ, or the step left p unchanged?"}
   J --> K
   K -->|no| E
   K -->|yes| L[return p; final weights]
@@ -141,9 +141,9 @@ flowchart TD
 **How each step works.**
 
 - **Optimality check.** This is the Weiszfeld / Vardi–Zhang condition at a coincident data point c: $\big\|\sum_{j\ne c}\omega_j\mathrm{Log}_px_j\big\|\le w_c$. If it holds, p is optimal and the solver returns.
-- **Coincident points always trigger the subgradient step under `Hybrid`.** A coincident point counts toward `minDist`, which is then at most ε. That is below `SubgradientThreshold` whenever ε < threshold, as in `Default` (1e-10 < 1e-4). `WeiszfeldOnly` never takes a subgradient step; `SubgradientOnly` takes only subgradient steps and skips the optimality check. So whenever the optimality check does not return, the next step is a subgradient step.
-- **The subgradient step's skip radius is a fixed $10^{-12}$, not ε.** A point with $10^{-12}\le r\le\varepsilon$ is excluded from the Weiszfeld weights but receives weight $w/r$ in the subgradient direction. The step size is $\eta_k=\eta_0/\sqrt{k+1}$, where k is the global iteration count, and the step is not normalized by $\sum w$ or by the data scale.
-- **Convergence.** `Absolute` stops when shift < tol. `RelativeToNorm` stops when shift < tol·(1+‖p‖₂), using the ambient norm.
+- **Coincident points always trigger the subgradient step under `Hybrid`.** A coincident point counts toward `minDist`, which is then at most ελ. That is below θλ whenever ε < θ, as in `Default` (1e-10 < 1e-4). `WeiszfeldOnly` never takes a subgradient step; `SubgradientOnly` takes only subgradient steps and skips the optimality check. So whenever the optimality check does not return, the next step is a subgradient step.
+- **The subgradient step.** Under `Spread` it is $\eta_0\sigma/\sqrt{k+1}$ times the weighted mean $\sum_iw_i\,\mathrm{Log}_px_i/r_i\,/\sum_iw_i$ of the unit directions, over the points outside the coincidence radius ελ, where k is the global iteration count. Under `Data` it keeps its old form: the skip radius is a fixed $10^{-12}$, not ε (a point with $10^{-12}\le r\le\varepsilon$ is excluded from the Weiszfeld weights but receives weight $w/r$ in the subgradient direction), and the step, $\eta_0/\sqrt{k+1}$ times the sum, is normalized neither by $\sum w$ nor by the data scale.
+- **Convergence.** `Absolute` stops when shift < τλ. `RelativeToNorm` stops when shift < τ(λ + ‖p‖₂), using the ambient norm; under `Data` that is τ(1 + ‖p‖₂). Under `Spread` the shift is the norm of the tangent step, and the solver also stops when the step moves the iterate by at most $4\varepsilon_{\text{mach}}\|p\|_2$ in ambient coordinates. Under `Data` the shift is $d(p_k,p_{k+1})$.
 
 **Final weights** (`finalIrlsWeights`) depend on how the solver exits:
 
@@ -153,7 +153,38 @@ flowchart TD
 | L1, optimality-check exit | that iteration's weights, with $\omega_c=0$ |
 | L2 | the outer weights |
 
-**Cost per L1 iteration.** n distances, n Log maps and one Exp. When the optimality check runs, up to $2n-1$ Log maps. Subgradient steps add n norms.
+**Cost per L1 iteration.** Under `Spread`: n Log maps and n norms (the log vectors are kept, n·D doubles, and reused by the step), one sort of n radii, and one Exp. Under `Data`: n distances, n Log maps and one Exp; subgradient steps add n norms. When the optimality check runs, up to $2n-1$ more Log maps.
+
+#### The unit of the constants (`IrlsOptions.Scale`)
+
+The four distance-valued constants, `Tolerance` τ, `Epsilon` ε, `SubgradientThreshold` θ and `Eta0` η₀, are read in a unit λ:
+
+- **`Spread`** (the default, and the enum's zero value): λ = σ, the weighted lower median of the radii from the current iterate to the data, over the points of positive weight, recomputed each iteration. When half the weight or more sits on the iterate, σ is their weighted mean radius instead; when all of it does, the iterate is returned.
+- **`Data`**: λ = 1, the constants in the data's units. This is the solver as it was before the spread unit, reproduced bit for bit (pinned in `IrlsScaleTests`).
+
+**Why.** With λ = 1, the median of a cluster whose spread is below θ = 1e-4 takes a subgradient step of size up to η₀ = 1 at every iteration, runs to `MaxIterations` and lands about 5% of the spread off, on every manifold ([the Grassmann discussion's probe](../../issues/regression/discussion/grassmann-stiefel-subspaces-brief.md#report)). Under `Spread` every comparison the solver makes is between two quantities in the same unit, so the median and mean of c + s·u are c + s·(the estimate for u) to a relative accuracy that does not depend on s.
+
+**The choice of σ.** The scale has to resist outliers, since the median exists to resist them.
+
+| Scale | Cost | Robustness | Behaviour |
+|---|---|---|---|
+| Median radius from the iterate, each iteration (chosen) | one sort of n radii per iteration; the radii are computed anyway | ends as the median distance from the median (50% breakdown), whatever the warm start | the thresholds move with the iterate early on, while the shifts are still large |
+| Median radius from the warm start, once | one sort | inherits the warm start: a warm start pulled toward outliers, such as an arithmetic mean under contamination, inflates σ up to its distance from the bulk, and the relative accuracy loses that factor | stationary thresholds |
+| Median pairwise distance | O(n²) distances | about 29% breakdown, independent of the warm start | too costly for GMM's clusters, and the per-iteration median reaches the same robustness |
+| Data units (`Data`) | none | not a scale | not equivariant; kept as the option for the old semantics |
+
+**What else `Spread` changes, and why.**
+
+- **Radii from the Log map.** The Weiszfeld weights must resolve τσ. On the sphere and the Grassmannian `Distance` is an arccos, with relative error about $\varepsilon_{\text{mach}}/2\theta^2$ (5e-7 at θ = 1e-5), which stalls the median below a spread of 1e-4; $\|\mathrm{Log}_px\|$ holds to about 1e-10 down to 1e-7.
+- **The shift and the stall stop.** The shift is the norm of the tangent step. The sphere's and the Grassmannian's Exp maps drop tangent steps below 1e-12 (an absolute guard), and an iterate far from the origin cannot move by less than its own ulps; in both cases the step stays above τσ while the iterate stops moving, so the solver stops when the step moves it by at most $4\varepsilon_{\text{mach}}\|p\|_2$.
+- **Flat steps through the tangent round trip.** $p+\sum_i\omega_i(x_i-p)/\sum_i\omega_i$ instead of $\sum_i\omega_ix_i/\sum_i\omega_i$, so a centre far from the origin costs only the rounding of p, where the direct form carries n roundings of the centre. The flat mean takes the same form from the warm start.
+- **The subgradient step divided by Σw**, so it is invariant to the weights' scale as well as the data's.
+
+**Measured** (the seeded sweeps of `IrlsScaleTests`, and the chip's probe in [the brief's report](../../issues/geometry/irls-scale-brief.md#report)):
+
+- On ℝᵈ the median's relative error is below 1e-7 and the mean's below 1e-14, the same at every s from 1e-12 to 1e6, for centres at 0 or at 100s. A centre 10 from the origin limits the error to a few hundred ulps of the centre (8e-4 of the spread for the mean at s = 1e-12, where the data themselves are represented to 2e-3).
+- On S⁹, Gr(2, 10) and Gr(3, 20) the median holds about 1e-8 down to s = 1e-4 in 7 to 12 iterations, then about 1e-12/s, the Exp guard (1e-6 at s = 1e-6). Below about 1e-6 the arccos in the Log map drops principal angles under 1e-8 and the iteration counts are no longer bounded: that is the manifolds' own resolution, a separate item. The mean holds 1e-8 down to 1e-7.
+- Under `Data` the same curved cases run to 200 iterations below s = 1e-4 (1e-3 on S²) and miss by 2% to 11% of the spread.
 
 ### Location, scatter and consistency
 
@@ -163,8 +194,8 @@ flowchart TD
   - Gaussian reference: $c_D=D/(D-1)$.
   - Spherical Laplace reference: $c_D=1/(D-1)$.
   - Both apply to **L1 (Weiszfeld)** scatter.
-- **Ambient estimators.** `EuclideanMean` and `EuclideanMedian` take an index subset of a `double[][]`, so they are not drop-in replacements for the intrinsic estimators. `EuclideanMedian` also takes explicit `maxIterations`/`tolerance`/`epsilon`.
-  - `EuclideanMedian` is a regularized Weiszfeld, $\omega_i=w_i/\max(r_i,\varepsilon)$. It has no optimality check.
+- **Ambient estimators.** `EuclideanMean` and `EuclideanMedian` take an index subset of a `double[][]`, so they are not drop-in replacements for the intrinsic estimators. `EuclideanMedian` also takes explicit `maxIterations`/`tolerance`/`epsilon` and a `scale` (`IrlsScale.Spread` by default), read as in the [IRLS engine](#the-unit-of-the-constants-irlsoptionsscale).
+  - `EuclideanMedian` is a regularized Weiszfeld, $\omega_i=w_i/\max(r_i,\varepsilon\lambda)$. It has no optimality check. Under `Spread` it steps by the weighted mean of $x_i-p$ and stops when the step is below $\max(\tau\sigma,4\varepsilon_{\text{mach}}\|p\|_2)$; under `Data` it stops at τ(1 + ‖p‖₂) of the previous iterate, as before.
   - Unlike `IrlsOptions`, both validate finite, non-negative weights. `EuclideanMedian` also requires `maxIterations` ≥ 1 and a finite, positive tolerance and ε.
 
 ### Heat-kernel bandwidth calibration
@@ -198,7 +229,9 @@ On $S^m$ the result saturates at `BetaFloor` = 1e-6 when $\hat m_2$ exceeds what
 1. Split the data into K **contiguous** blocks (no shuffling) and run a local PCA on each, giving a mean $\mu_k$ and a frame $U_k$.
 2. Compute preliminary medians: a Euclidean median of the $\mu_k$ and a Grassmann median of the $U_k$, the latter warm-started at the medoid.
 3. Calibrate scales from the **square of the median** distances: $\hat\tau_\mu=(\mathrm{med}_k\|\mu_k-\tilde\mu\|)^2/p$ and $\hat\tau_U=(\mathrm{med}_kd_{Gr}(U_k,\tilde U))^2/[r(p-r)]$. Then set $\hat\alpha=\mathrm{clamp}(2\hat\tau_U/(\hat\tau_\mu+\hat\tau_U),10^{-6},2-10^{-6})$.
-4. Compute a joint geometric median on $\mathrm{Scaled}(\mathbb R^p,\alpha)\times\mathrm{Scaled}(Gr,2-\alpha)$. α scales every distance and norm, including the solver's convergence and switching thresholds. Only the *direction* of a Weiszfeld update depends on α through the weights alone.
+4. Compute a joint geometric median on $\mathrm{Scaled}(\mathbb R^p,\alpha)\times\mathrm{Scaled}(Gr,2-\alpha)$. α scales every distance and norm. Under the default `Spread` unit the solver's thresholds scale with them, so α moves only the joint median itself, through the balance of the two factors.
+
+**Rescaling the data.** The calibration keeps $\hat\alpha\hat\tau_\mu=(2-\hat\alpha)\hat\tau_U$, and rescaling the data by s multiplies $\hat\tau_\mu$ by s² while $\hat\tau_U$ (in radians) stays put, so the two calibrated metrics differ by a constant factor and MoMPCA is scale-equivariant, as long as the clamp $[10^{-6},2-10^{-6}]$ does not bind. It binds once $\hat\tau_U/\hat\tau_\mu$ leaves about $[5\times10^{-7},2\times10^6]$: on a fixture with $\hat\alpha\approx0.15$, s = 1e-3 and 1e2 reproduce the scale-1 result to 1e-14, while s = 1e-6 and 1e3 move the mean by about 1% and the subspace by about 0.01 rad.
 
 **Output (`PcaResult`).**
 
@@ -234,10 +267,11 @@ These compute the log of the **maximum pairwise Bayes factor** (Lee, You & Lin) 
 | Setting | Default | Meaning |
 |---|---|---|
 | `IrlsOptions.MaxIterations` | 200 | Iteration cap. **0 is a sentinel** that replaces the whole struct with `Default` |
-| `IrlsOptions.Tolerance` / `Epsilon` | 1e-8 / 1e-10 | Geodesic shift tolerance; coincidence radius |
-| `IrlsOptions.HybridMode` / `SubgradientThreshold` / `Eta0` | `Hybrid` / 1e-4 / 1.0 | Switch to subgradient near data |
+| `IrlsOptions.Scale` | `Spread` | The unit λ of the four constants below: the spread σ, or 1 under `Data`. Also the enum's zero value |
+| `IrlsOptions.Tolerance` / `Epsilon` | 1e-8 / 1e-10 | Shift tolerance; coincidence radius (in units of λ) |
+| `IrlsOptions.HybridMode` / `SubgradientThreshold` / `Eta0` | `Hybrid` / 1e-4 / 1.0 | Switch to subgradient near data (threshold and step in units of λ) |
 | `IrlsOptions.SingularityPolicy` / `ConvergenceCriterion` | `OptimalityCheck` / `Absolute` | In `Default`. The enum's zero value is `Regularise` |
-| `EuclideanMedian` maxIterations / tolerance / epsilon | 200 / 1e-8 / 1e-10 | — |
+| `EuclideanMedian` maxIterations / tolerance / epsilon / scale | 200 / 1e-8 / 1e-10 / `Spread` | tolerance and epsilon in units of λ |
 | `consistencyFactor` | 1.0 | Scatter multiplier |
 | Bandwidth reference population / grid / bisections | 32 / 1024 / 48 | — |
 | `SubspaceAnnealer` maxIters / seed | 1000 / null | A null seed uses OS entropy |
@@ -249,10 +283,11 @@ These compute the log of the **maximum pairwise Bayes factor** (Lee, You & Lin) 
 ## Status and caveats
 
 - **`SingularityPolicy.Regularise` does not do what its documentation says.** It is documented as flooring distances at ε. In practice, coincident points already get weight 0, so the floor never applies, and Regularise effectively means "drop coincident points".
-- **Partially set `IrlsOptions`.** If you set only some fields and leave `MaxIterations` nonzero, the others stay at zero. With `Tolerance = 0`, `Absolute` convergence never triggers. Start from `IrlsOptions.Default` instead.
+- **Partially set `IrlsOptions`.** If you set only some fields and leave `MaxIterations` nonzero, the others stay at zero, and `Scale` at `Spread`. With `Tolerance = 0`, `Absolute` convergence never triggers (under `Spread` the stall stop still ends the run). Start from `IrlsOptions.Default` instead.
 - **`StiefelManifold` is partial.** Its geometry depends only on the column span, not on orientation, and its Exp is a retraction.
 - **`MxPbf` is provisional.** The covariance test's prior constants `a0`/`b0` are provisional. Its pooled Gram is also centered incorrectly: it subtracts $n\bar z\bar z^\top$ from already group-centered Grams instead of adding the between-group terms $n_1(\bar x-\bar z)(\bar x-\bar z)^\top+n_2(\bar y-\bar z)(\bar y-\bar z)^\top$, so `TwoSampleCovariance` is biased unless both group means are zero.
-- **Precision near zero distance.** Sphere and Grassmann distances use arccos, which resolves only about 1e-8 near zero. That is also the default IRLS tolerance, so convergence on these manifolds sits at that noise floor.
+- **Precision near zero distance.** Sphere and Grassmann distances use arccos, which resolves only about 1e-8 near zero. Under `Spread` the solver reads its radii from the Log map, which in turn drops principal angles below about 1e-8, and the Exp maps drop tangent steps below 1e-12; together they bound the median's relative accuracy by about 1e-12/s and its range at about s = 1e-6 ([measured](#the-unit-of-the-constants-irlsoptionsscale)). Under `Data` the 1e-8 tolerance sits at the arccos floor.
+- **`MoMPCA` is scale-equivariant only inside its α̂ clamp** ([above](#median-of-means-pca-mompca)).
 
 ## Source map
 

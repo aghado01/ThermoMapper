@@ -1,4 +1,5 @@
 using System;
+using System.Linq;
 using Maths.LinAlg;
 using Maths.Geometry.DimReduction;
 using Xunit;
@@ -162,6 +163,39 @@ public sealed class MoMPCATests
         Assert.True(mom.Variances[1] < 0.01 * plain.Eigenvalues[0], $"robust {mom.Variances[1]:R} vs all-data {plain.Eigenvalues[0]:R}");
     }
 
+    /// <summary>
+    /// Rescaling the data rescales the robust mean and variances and keeps the subspace: the medians inside MoMPCA are
+    /// scale-equivariant. Eight blocks in R⁴ with jittered means and tilted frames, two of them corrupted; α̂ ≈ 0.15 at
+    /// scale 1, so the calibration stays inside its clamp [1e-6, 2 − 1e-6] at both scales tested, and the calibrated
+    /// metrics differ only by a constant factor. The solver with absolute constants missed the 1e-3 case by 0.012 in
+    /// the basis.
+    /// </summary>
+    [Theory]
+    [InlineData(1e-3)]
+    [InlineData(1e2)]
+    public void ComputeMoM_RescaledData_GivesTheRescaledMeanAndTheSameSubspace(double s)
+    {
+        double[][] data = TiltedBlocks();
+        double[][] scaled = data.Select(x => x.Select(v => s * v).ToArray()).ToArray();
+
+        MoMPcaResult reference = MoMPCA.ComputeMoM(data, kBlocks: 8, numComponents: 2);
+        MoMPcaResult rescaled = MoMPCA.ComputeMoM(scaled, kBlocks: 8, numComponents: 2);
+
+        Assert.InRange(rescaled.Alpha, 1e-6 * (1 + 1e-9), (2.0 - 1e-6) * (1 - 1e-12));
+        double balance = reference.Alpha / (2.0 - reference.Alpha);
+        double rescaledBalance = rescaled.Alpha * s * s / (2.0 - rescaled.Alpha);
+        Assert.True(Math.Abs(rescaledBalance / balance - 1.0) <= 1e-9, $"calibration balance {rescaledBalance:R} vs {balance:R}");
+        for (int j = 0; j < 4; j++)
+            Assert.True(Math.Abs(rescaled.Mean[j] / s - reference.Mean[j]) <= 1e-12 * Math.Abs(reference.Mean[j]) + 1e-12,
+                $"mean[{j}]: {rescaled.Mean[j] / s:R} vs {reference.Mean[j]:R}");
+        for (int c = 0; c < 2; c++)
+        {
+            for (int j = 0; j < 4; j++)
+                Assert.True(Math.Abs(rescaled.Basis[c][j] - reference.Basis[c][j]) <= 1e-12, $"basis[{c}][{j}]");
+            Assert.True(Math.Abs(rescaled.Variances[c] / (s * s) / reference.Variances[c] - 1.0) <= 1e-12, $"variance[{c}]");
+        }
+    }
+
     [Fact]
     public void ComputeMoM_SingleBlock_IsTheFullDataPca()
     {
@@ -177,6 +211,46 @@ public sealed class MoMPCATests
         Assert.Equal(pca.Components, mom.Basis);
         Assert.Equal(pca.Eigenvalues, mom.Variances);
         Assert.True(double.IsNaN(mom.Alpha));
+    }
+
+    // Eight blocks of 30 in R⁴: means jittered around (3, −2, 1, 5) by 0.3, frames tilted from span{e₁, e₂} by about
+    // 0.12; blocks 7 and 8 corrupted (means by 4, frames by 0.8). Within a block, axis scales 2 and 1, noise 0.05.
+    private static double[][] TiltedBlocks()
+    {
+        var rng = new Random(424242);
+        const int p = 4, r = 2, perBlock = 30, blocks = 8;
+        var grass = new GrassmannManifold(p, r);
+        var u0 = new double[p * r];
+        u0[0] = 1.0; u0[p + 1] = 1.0;
+        var data = new double[blocks * perBlock][];
+        for (int k = 0; k < blocks; k++)
+        {
+            bool corrupted = k >= 6;
+            double[] mean = [3.0, -2.0, 1.0, 5.0];
+            for (int j = 0; j < p; j++) mean[j] += (corrupted ? 4.0 : 0.3) * Gauss(rng);
+            var tangent = new double[p * r];
+            for (int t = 0; t < tangent.Length; t++) tangent[t] = (corrupted ? 0.8 : 0.12) * Gauss(rng);
+            for (int col = 0; col < r; col++)          // horizontal at u0: zero the rows inside span{e₁, e₂}
+                for (int row = 0; row < r; row++) tangent[col * p + row] = 0.0;
+            var frame = new double[p * r];
+            grass.ExpMap(u0, tangent, frame);
+            for (int i = 0; i < perBlock; i++)
+            {
+                double a = 2.0 * Gauss(rng), b = Gauss(rng), e = 0.05 * Gauss(rng), f = 0.05 * Gauss(rng);
+                var x = new double[p];
+                for (int j = 0; j < p; j++) x[j] = mean[j] + a * frame[j] + b * frame[p + j];
+                x[2] += e;
+                x[3] += f;
+                data[k * perBlock + i] = x;
+            }
+        }
+        return data;
+    }
+
+    private static double Gauss(Random rng)
+    {
+        double u1 = 1.0 - rng.NextDouble(), u2 = rng.NextDouble();
+        return Math.Sqrt(-2.0 * Math.Log(u1)) * Math.Cos(2.0 * Math.PI * u2);
     }
 
     private static double[] UnitX => [1.0, 0.0, 0.0];

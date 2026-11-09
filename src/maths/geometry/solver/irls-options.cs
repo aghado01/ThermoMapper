@@ -36,37 +36,62 @@ namespace Maths.Geometry.Solver
 
     public enum ConvergenceCriterion
     {
-        /// <summary>Converged when ||x_{k+1} - x_k|| &lt; Tolerance.</summary>
+        /// <summary>Converged when the shift is below Tolerance, read in the <see cref="IrlsScale"/> unit λ.</summary>
         Absolute,
 
-        /// <summary>Converged when ||x_{k+1} - x_k|| / ||x_k|| &lt; Tolerance.</summary>
+        /// <summary>Converged when the shift is below Tolerance·(λ + ||x_{k+1}||), with ||·|| the ambient norm.</summary>
         RelativeToNorm
+    }
+
+    /// <summary>
+    /// The unit λ in which the distance-valued constants (Tolerance, Epsilon, SubgradientThreshold, Eta0) are read.
+    /// </summary>
+    public enum IrlsScale
+    {
+        /// <summary>
+        /// λ = σ, the spread: the weighted median distance from the current iterate to the data, recomputed each
+        /// iteration (their weighted mean when half the weight sits on the iterate), so the median and mean are
+        /// equivariant under rescaling the data. The radii are read from the Log map, the shift is the norm of the
+        /// tangent step, flat steps accumulate the differences xᵢ − p, the subgradient step is also divided by Σw, and
+        /// the solver stops as well when a step no longer moves the iterate.
+        /// </summary>
+        Spread,
+
+        /// <summary>
+        /// λ = 1: the constants are in the data's own units, the solver's semantics before the spread unit.
+        /// </summary>
+        Data
     }
 
     public readonly struct IrlsOptions
     {
         public int MaxIterations { get; init; }
+
+        /// <summary>Stopping radius for the shift, in units of λ (see <see cref="Scale"/>).</summary>
         public double Tolerance { get; init; }
 
         /// <summary>
-        /// Distance floor used by the Regularise singularity policy and the
-        /// coincidence check in OptimalityCheck.
+        /// Coincidence radius, in units of λ: the distance floor used by the Regularise singularity
+        /// policy and the coincidence check in OptimalityCheck.
         /// </summary>
         public double Epsilon { get; init; }
 
         public HybridMode HybridMode { get; init; }
 
         /// <summary>
-        /// Distance below which the solver switches to subgradient steps
+        /// Distance below which the solver switches to subgradient steps, in units of λ
         /// (Hybrid mode only).
         /// </summary>
         public double SubgradientThreshold { get; init; }
 
-        /// <summary>Initial step size η₀ for the decaying subgradient schedule η_k = η₀/√k.</summary>
+        /// <summary>Initial step size η₀ for the decaying subgradient schedule η_k = λη₀/√(k+1).</summary>
         public double Eta0 { get; init; }
 
         public SingularityPolicy SingularityPolicy { get; init; }
         public ConvergenceCriterion ConvergenceCriterion { get; init; }
+
+        /// <summary>The unit of the distance-valued constants; <see cref="IrlsScale.Spread"/> by default.</summary>
+        public IrlsScale Scale { get; init; }
 
         public static IrlsOptions Default => new()
         {
@@ -78,6 +103,7 @@ namespace Maths.Geometry.Solver
             Eta0 = 1.0,
             SingularityPolicy = SingularityPolicy.OptimalityCheck,
             ConvergenceCriterion = ConvergenceCriterion.Absolute,
+            Scale = IrlsScale.Spread,
         };
     }
 }

@@ -1,5 +1,6 @@
 using System;
 using System.Buffers;
+using Maths.Geometry.Solver;
 
 namespace Maths.Geometry.Estimators.Ambient
 // ============================================================================
@@ -13,6 +14,9 @@ namespace Maths.Geometry.Estimators.Ambient
 //   ComputeWithScatter(...)  -> void, destination + scatterDestination mutated
 //
 // Warm-start: caller pre-populates destination (typically from EuclideanMean).
+// tolerance and epsilon are read in the unit that `scale` picks: by default the
+// spread σ, the weighted median distance from the iterate to the data, recomputed
+// each iteration (IrlsScale.Data keeps them in the data's units).
 // scatterDestination is a row-major D*D flat buffer (length D²),
 // identical layout to GeometricMedian.ComputeWithScatter.
 // ============================================================================
@@ -33,22 +37,25 @@ namespace Maths.Geometry.Estimators.Ambient
             Span<double> destination,
             int maxIterations = 200,
             double tolerance = 1e-8,
-            double epsilon = 1e-10)
+            double epsilon = 1e-10,
+            IrlsScale scale = IrlsScale.Spread)
         {
             EuclideanMean.ValidateInputs(
                 points, indices, weights, destination, out int dim);
-            ValidateIterationParams(maxIterations, tolerance, epsilon);
+            ValidateIterationParams(maxIterations, tolerance, epsilon, scale);
 
             double[] scratchArr = ArrayPool<double>.Shared.Rent(dim);
+            double[] spreadArr = ArrayPool<double>.Shared.Rent(3 * indices.Length);
             try
             {
                 IrlsLoop(points, indices, weights, destination,
-                         scratchArr.AsSpan(0, dim),
-                         dim, maxIterations, tolerance, epsilon);
+                         scratchArr.AsSpan(0, dim), spreadArr.AsSpan(0, 3 * indices.Length),
+                         dim, maxIterations, tolerance, epsilon, scale);
             }
             finally
             {
                 ArrayPool<double>.Shared.Return(scratchArr);
+                ArrayPool<double>.Shared.Return(spreadArr);
             }
         }
 
@@ -71,21 +78,24 @@ namespace Maths.Geometry.Estimators.Ambient
             int maxIterations = 200,
             double tolerance = 1e-8,
             double epsilon = 1e-10,
-            double consistencyFactor = 1.0)
+            double consistencyFactor = 1.0,
+            IrlsScale scale = IrlsScale.Spread)
         {
             EuclideanMean.ValidateInputs(
                 points, indices, weights, destination, out int dim);
-            ValidateIterationParams(maxIterations, tolerance, epsilon);
+            ValidateIterationParams(maxIterations, tolerance, epsilon, scale);
 
             double[] scratchArr = ArrayPool<double>.Shared.Rent(dim);
             double[] irlsWArr = ArrayPool<double>.Shared.Rent(indices.Length);
+            double[] spreadArr = ArrayPool<double>.Shared.Rent(3 * indices.Length);
             try
             {
                 Span<double> scratch = scratchArr.AsSpan(0, dim);
                 Span<double> irlsW = irlsWArr.AsSpan(0, indices.Length);
 
                 IrlsLoop(points, indices, weights, destination,
-                         scratch, dim, maxIterations, tolerance, epsilon,
+                         scratch, spreadArr.AsSpan(0, 3 * indices.Length),
+                         dim, maxIterations, tolerance, epsilon, scale,
                          finalIrlsWeights: irlsW);
 
                 AccumulateScatter(points, indices, irlsW, destination,
@@ -95,6 +105,7 @@ namespace Maths.Geometry.Estimators.Ambient
             {
                 ArrayPool<double>.Shared.Return(scratchArr);
                 ArrayPool<double>.Shared.Return(irlsWArr);
+                ArrayPool<double>.Shared.Return(spreadArr);
             }
         }
 
@@ -106,12 +117,21 @@ namespace Maths.Geometry.Estimators.Ambient
             ReadOnlySpan<double> weights,
             Span<double> destination,
             Span<double> scratch,
+            Span<double> spreadScratch,
             int dim,
             int maxIterations,
             double tolerance,
             double epsilon,
+            IrlsScale scale,
             Span<double> finalIrlsWeights = default)
         {
+            if (scale == IrlsScale.Spread)
+            {
+                SpreadLoop(points, indices, weights, destination, scratch, spreadScratch,
+                           dim, maxIterations, tolerance, epsilon, finalIrlsWeights);
+                return;
+            }
+
             for (int iter = 0; iter < maxIterations; iter++)
             {
                 scratch.Clear();
@@ -147,8 +167,8 @@ namespace Maths.Geometry.Estimators.Ambient
 
                 scratch.CopyTo(destination);
 
-                double scale = 1.0 + Math.Sqrt(pNormSq);
-                if (Math.Sqrt(shift) <= tolerance * scale) break;
+                double normScale = 1.0 + Math.Sqrt(pNormSq);
+                if (Math.Sqrt(shift) <= tolerance * normScale) break;
             }
 
             // Recompute weights at the converged location so scatter reflects
@@ -163,6 +183,93 @@ namespace Maths.Geometry.Estimators.Ambient
                     finalIrlsWeights[i] = w / Math.Max(r, epsilon);
                 }
             }
+        }
+
+        // IrlsScale.Spread: the floor is ε·σ and the stop τ·σ, with σ the spread
+        // (Irls.SpreadOf) at the current iterate. The step accumulates the differences
+        // xᵢ − p, so a centre far from the origin costs only the rounding of p, and the
+        // stopping radius never falls below Irls.RoundingFloor·‖p‖.
+        private static void SpreadLoop(
+            double[][] points,
+            ReadOnlySpan<int> indices,
+            ReadOnlySpan<double> weights,
+            Span<double> destination,
+            Span<double> step,
+            Span<double> spreadScratch,
+            int dim,
+            int maxIterations,
+            double tolerance,
+            double epsilon,
+            Span<double> finalIrlsWeights)
+        {
+            int n = indices.Length;
+            Span<double> radii = spreadScratch.Slice(0, n);
+            Span<double> keys = spreadScratch.Slice(n, n);
+            Span<double> keyW = spreadScratch.Slice(2 * n, n);
+
+            for (int iter = 0; iter < maxIterations; iter++)
+            {
+                double spread = Radii(points, indices, weights, destination, radii, keys, keyW, dim);
+                if (spread == 0) break;   // every weighted point sits on the iterate
+                double floor = epsilon * spread;
+
+                step.Clear();
+                double denominator = 0;
+                for (int i = 0; i < n; i++)
+                {
+                    double w = weights[i];
+                    if (w == 0) continue;
+
+                    double[] pt = points[indices[i]];
+                    double wi = w / Math.Max(radii[i], floor);
+                    denominator += wi;
+                    for (int d = 0; d < dim; d++) step[d] += wi * (pt[d] - destination[d]);
+                }
+
+                if (denominator <= 0) break;
+
+                double inv = 1.0 / denominator;
+                double shift = 0;
+                double pNormSq = 0;
+                for (int d = 0; d < dim; d++)
+                {
+                    double s = step[d] * inv;
+                    shift += s * s;
+                    destination[d] += s;
+                    pNormSq += destination[d] * destination[d];
+                }
+
+                double radius = Math.Max(tolerance * spread, Irls.RoundingFloor * Math.Sqrt(pNormSq));
+                if (Math.Sqrt(shift) <= radius) break;
+            }
+
+            if (!finalIrlsWeights.IsEmpty)
+            {
+                // With σ = 0 every weighted point sits on the location and any finite weights give a zero scatter.
+                double spread = Radii(points, indices, weights, destination, radii, keys, keyW, dim);
+                double floor = epsilon * spread;
+                for (int i = 0; i < n; i++)
+                {
+                    double w = weights[i];
+                    finalIrlsWeights[i] = w == 0 ? 0.0 : spread == 0 ? w : w / Math.Max(radii[i], floor);
+                }
+            }
+        }
+
+        // Distances from the iterate to the weighted points into radii; returns the spread.
+        private static double Radii(
+            double[][] points,
+            ReadOnlySpan<int> indices,
+            ReadOnlySpan<double> weights,
+            ReadOnlySpan<double> center,
+            Span<double> radii,
+            Span<double> keys,
+            Span<double> keyW,
+            int dim)
+        {
+            for (int i = 0; i < indices.Length; i++)
+                radii[i] = weights[i] == 0 ? 0.0 : EuclideanDistance(points[indices[i]], center, dim);
+            return Irls.SpreadOf(radii, weights, keys, keyW);
         }
 
         // ── Weiszfeld scatter accumulation ────────────────────────────────────
@@ -225,8 +332,10 @@ namespace Maths.Geometry.Estimators.Ambient
         }
 
         private static void ValidateIterationParams(
-            int maxIterations, double tolerance, double epsilon)
+            int maxIterations, double tolerance, double epsilon, IrlsScale scale)
         {
+            if (scale != IrlsScale.Spread && scale != IrlsScale.Data)
+                throw new ArgumentOutOfRangeException(nameof(scale));
             if (maxIterations < 1)
                 throw new ArgumentOutOfRangeException(nameof(maxIterations));
             if (!(tolerance > 0) || double.IsNaN(tolerance) || double.IsInfinity(tolerance))
