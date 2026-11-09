@@ -53,6 +53,52 @@ Work through where subspace geometry earns its place in the regression engine: p
 
 ## Report
 
+### 2026-11-08, where the subspace code should live (proposed)
+
+The user is weighing a specialized implementation under Regression, since Geometry was not meant to be imported by Bayesian code.
+- **Regression does not import Geometry today.** `Maths.Regression` references Samplers, Distributions, LinAlg and Rng.
+- **E8's default path is linear algebra only.** Each draw's subspace is a thin SVD of its gradient matrix, E[C] and P̄ (mixed ranks included) need a symmetric eigendecomposition, principal angles are two SVDs and an atan2, and the rank and containment split is a residual's norm. That is about a hundred lines on `ThinSvd` and `DenseEigen`, with no manifold interface and no IRLS. Rotate-and-refit's frame, a FAST-style polar frame and BPPR's power spherical proposal are also linear algebra or direct sampling.
+- **Geometry is needed only for the intrinsic options:** the Karcher mean, the median and their scatter, which the synthesis ranks as options, and whose solver needs the scale fix below.
+- **Proposed split** (the ownership the Astra notes recorded):
+  - The stable principal-angle primitive goes in LinAlg beside `ThinSvd`. `GrassmannManifold.Distance` and `LogMap` call it, and so does E8, so there is one implementation and Regression never imports Geometry.
+  - The posterior summaries go in Regression: P̄, the posterior over k, the readouts, and the Bayes-action reading.
+  - The manifold estimators stay in Geometry. Should E8 ever offer them, an orchestration layer above both modules passes the draws across.
+  - A manifold proposal for a future sampler, such as an envelope's Γ step or a Givens or Cayley move, belongs with that sampler, not with IRLS.
+
+### 2026-11-08, probe: the IRLS median and mean on tight clusters
+
+The probe ran at `d571dff`, built from a `git archive` snapshot. Its code is outside the repo, copied to the shared notes folder's `grassmann-probe/`.
+- **Setup.** Gr(2, 10) and Gr(3, 20), three seeds each, with 21 points exp_{W0}(s·u_i) for Gaussian horizontal u_i and spreads s from 1e-2 to 1e-9.
+- **Truth from outside the solver.** The median is exp_{W0}(s·m_u), where m_u is the Euclidean median of the u_i, found by plain Weiszfeld at scale 1. The mean is exp_{W0}(s·ū). Both are exact to O(s³), so the 1e-2 column's 3e-6 for Grassmann is that approximation.
+- **Comparisons.** A Euclidean control with points c + s·u_i, whose truth c + s·m_u is exact. A probe-only sine-based Grassmann beside the struct, with atan2 angles and Edelman–Arias–Smith's atan-form log.
+- **Warm start.** At each manifold's medoid, as `MoMPCA` does.
+
+The worst error over the six cases, as a fraction of s, with iteration counts where the solver hit `MaxIterations`:
+
+| | 1e-2 | 1e-4 | 1e-6 | 1e-7 | 1e-8 | 1e-9 |
+| --- | --- | --- | --- | --- | --- | --- |
+| Median, defaults, Euclidean | 2e-7 | 5e-2 (200 it.) | 5e-2 (200) | 5e-2 (200) | 5e-2 (200) | 5e-2 (200) |
+| Median, defaults, Grassmann (arccos) | 3e-6 | 5e-2 (200) | 5e-2 (200) | 5e-2 (200) | 0.92 | 1.1 |
+| Median, defaults, Grassmann (sine) | 3e-6 | 5e-2 (200) | 5e-2 (200) | 5e-2 (200) | 5e-2 (200) | 5e-2 (200) |
+| Median, Weiszfeld only, Euclidean and sine | 3e-6 | 6e-6 | 3e-4 | 3e-3 | 4e-2 | 4e-2 |
+| Median, Weiszfeld only, arccos | 3e-6 | 2e-5 | 2e-3 | 2e-2 | 0.92 | 1.1 |
+| Karcher mean, arccos | 3e-6 | 9e-10 | 7e-10 | 7e-9 | 0.91 | 1.1 |
+| Karcher mean, sine | 3e-6 | 9e-10 | 6e-10 | 7e-9 | 7e-8 | 5e-7 |
+
+- **The solver's absolute constants are the larger defect, and they act on every manifold.** `IrlsOptions.Default` switches the median to subgradient steps of size η₀/√k = 1/√k, absolute, whenever the iterate is within 1e-4 of a data point.
+  - Below a spread of 1e-4, the Euclidean median included, it runs to `MaxIterations` and returns an estimate about 5% of the spread away from the median.
+  - With Weiszfeld only, the absolute tolerance of 1e-8 stops the iteration early as the spread approaches it. So the solver is not scale-equivariant.
+  - Callers: `MoMPCA`'s four medians (its Euclidean factor is in the data's units) and `DistributedSpred`. `EuclideanMedian`, GMM's, has its own loop with the same absolute 1e-8 tolerance; it was not probed.
+  - The fix makes the threshold, the step and the tolerance relative to the data's scale, for instance to the warm start's median distance to the data.
+- **The arccos floor is real but smaller.**
+  - `Distance` loses accuracy as ε/θ²: a relative error of 1e-5 at 1e-5 rad, 4e-4 at 1e-6 and 5e-2 at 1e-7. At 1e-9 it reads up to ten times the true distance.
+  - `LogMap` holds to 1e-7, because its norm comes from the residual scaled by θ/sin θ, which barely depends on θ's error. From 1e-8 it reads zero.
+  - So the Karcher mean is accurate down to a spread of 1e-7 and below that returns its warm start. The sine reference holds at every spread, within 5e-7 of s at 1e-9.
+- **The decision.**
+  - Moving `Distance` and `LogMap` to the residual route is a fix below a spread of about 1e-7, and below 1e-5 for distances read directly. Above that it is only tidying.
+  - The solver's scale constants are a fix for every consumer at spreads below 1e-4, whatever the manifold.
+  - Neither touches P̄, E8's default.
+
 ### 2026-11-08, the manifold module and what it changes
 
 The module: `IRiemannianManifold` (`Distance`, `LogMap`, `ExpMap`, `AddScaled`, `Norm`, static `IsFlat`); the manifolds; the wrappers `ScaledManifold<T>` (a constant metric scale, with Log and Exp unchanged) and `ProductManifold<TA, TB>`; `Irls.Solve<TManifold, TLoss>`, which dispatches on three questions (a closed-form L² Karcher step or not, flat or curved, Weiszfeld or a projected subgradient); the losses `L2Loss` and `L1Loss`, the only two built, although the comments name Huber and Tukey; `GeometricMean` and `GeometricMedian`, each with its scatter and consistency factors; and `SubspaceAnnealer`, simulated annealing on Gr(k, d) with a black-box objective. `MoMPCA` composes them as a median on Scaled(ℝᵖ, α) × Scaled(Gr, 2 − α).
