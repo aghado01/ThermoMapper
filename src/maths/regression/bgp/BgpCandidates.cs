@@ -12,7 +12,8 @@ public sealed partial class BgpSampler
     /// f, the constant mean and s² are integrated against their posterior given the training data, never drawn.
     /// <para>The split form takes it (<see cref="Conformal.SplitConformal"/>, CB-2): a fit on the training split read at the calibration
     /// cases and the test cases. The full step refuses it, as it refuses the training density: a draw (t, η) leaves the units dependent
-    /// through f, so each term leaves its unit out rather than reading it in sample (CB-4).</para>
+    /// through f, so each term leaves its unit out rather than reading it in sample (CB-4). The seam names the split form alone
+    /// (<see cref="Maths.Regression.CandidateLogDensity.Forms"/>).</para>
     /// <para>At the run's own test points (<see cref="BgpResult.TestInputs"/>), each draw's fit's variance there was kept
     /// (<see cref="BgpDraw.FitVariance"/>), so the seam reads it and the mean at O(n) per case, the same numbers bit for bit. Elsewhere
     /// draws that repeat their predecessor's (t, η) reuse its row, and each accepted state costs one O(n³) refit.</para>
@@ -59,7 +60,13 @@ public sealed partial class BgpSampler
                 }
                 row++;
             }
-        return new CandidateLogDensity(values, grids, Latents(), strata, ChainLengths.Of(result.BandwidthDraws)) { LogCdf = logCdfs };
+        return new CandidateLogDensity(values, grids, Latents(), strata, ChainLengths.Of(result.BandwidthDraws))
+        {
+            LogCdf = logCdfs,
+            Forms = ConformalForms.Split,
+            FormsReason = "BGP integrates f and never draws it, so a draw (t, η) leaves the units dependent and its terms are leave-unit-out "
+                          + "predictives, not in sample (CB-4). The split form takes the fit's predictive at new cases.",
+        };
     }
 
     // Each case's row among the run's test points, where every draw kept its fit's variance; null if a case is not among them or a

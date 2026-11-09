@@ -3,6 +3,20 @@ using System.Collections.Generic;
 
 namespace Maths.Regression;
 
+/// <summary>The forms of the conformal layer a candidate seam serves (<see cref="CandidateLogDensity.Forms"/>), as flags.</summary>
+[Flags]
+public enum ConformalForms
+{
+    /// <summary>The full step, which ranks a candidate among the training units it is exchangeable with, every one scored in sample.</summary>
+    Full = 1,
+
+    /// <summary>The split form, and the inductive streams that score as it does: units ranked among calibration units scored by a fixed fit.</summary>
+    Split = 2,
+
+    /// <summary>Both, the default.</summary>
+    Both = Full | Split,
+}
+
 /// <summary>
 /// The candidate density seam (E16): log p(y | x_t, draw) for each retained draw and each value y on a test case t's grid,
 /// beside a training <see cref="PointwiseLogDensity"/> over the same draws in the same rows. An engine joins the conformal
@@ -97,6 +111,29 @@ public sealed record CandidateLogDensity
     {
         get;
         init => field = PointwiseLogDensity.CheckLogCdf(value, Values);
+    }
+
+    /// <summary>
+    /// The forms of the conformal layer this seam serves, both by default. An engine whose candidates break a form's premise names the
+    /// forms that remain, with the reason (<see cref="FormsReason"/>), and the layer refuses the seam in the form left out, quoting it.
+    /// </summary>
+    public ConformalForms Forms
+    {
+        get;
+        init => field = value is ConformalForms.Full or ConformalForms.Split or ConformalForms.Both
+            ? value
+            : throw new ArgumentOutOfRangeException(nameof(Forms), "A seam serves the full step, the split form or both.");
+    } = ConformalForms.Both;
+
+    /// <summary>Why a form is left out of <see cref="Forms"/>; null where the seam serves both.</summary>
+    public string? FormsReason { get; init; }
+
+    /// <summary>Refuses the seam in <paramref name="form"/> when it does not serve it, quoting the engine's reason.</summary>
+    internal void CheckServes(ConformalForms form, string parameter)
+    {
+        if ((Forms & form) != 0) return;
+        string name = form == ConformalForms.Full ? "the full step" : "the split form";
+        throw new ArgumentException($"This seam does not serve {name}: {FormsReason ?? "its engine gave no reason."}", parameter);
     }
 
     /// <summary>The number of draws S.</summary>

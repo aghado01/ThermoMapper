@@ -76,6 +76,7 @@ public sealed class EngineCandidateTests(ITestOutputHelper output)
         PointwiseLogDensity training = model.PointwiseLogDensity(r, cdf: true);
         CandidateLogDensity candidates = model.CandidateLogDensity(r, z, Singletons(y), cdf: true);
         AssertColumns(training, candidates);
+        Assert.Equal(ConformalForms.Both, candidates.Forms);
         Assert.Equal(50, ConformalBayes.FullStep(training, candidates).Sets.Count);
         Assert.Throws<ArgumentException>(() => model.CandidateLogDensity(r, new double[1, z.GetLength(1) - 1], [[0.0]]));
         Assert.Throws<ArgumentException>(() => model.PointwiseLogDensity(r, UnitPartition.ConsecutiveBlocks(25, 2), cdf: true));
@@ -142,6 +143,7 @@ public sealed class EngineCandidateTests(ITestOutputHelper output)
         PointwiseLogDensity training = ensemble.PointwiseLogDensity(r, x, y, quadrature: quadrature, cdf: cdf);
         CandidateLogDensity candidates = ensemble.CandidateLogDensity(r, x, Singletons(y), quadrature: quadrature, cdf: cdf);
         AssertColumns(training, candidates);
+        Assert.Equal(ConformalForms.Both, candidates.Forms);
         Assert.Equal(50, ConformalBayes.FullStep(training, candidates).Sets.Count);
     }
 
@@ -331,7 +333,10 @@ public sealed class EngineCandidateTests(ITestOutputHelper output)
         double f = Enumerable.Range(0, z.GetLength(1)).Sum(j => z[3, j] * first.Replicates![1][j]);
         Assert.Equal(Normal.StandardLogCdf((y[1][3] - f) / Math.Sqrt(first.NoiseVariance)), candidates.LogCdf![0, candidates.Offset(11)], 12);
 
-        // Whole-curve units integrate β_r, so they do not read a candidate that conditions on it.
+        // The seam names the split form alone, so the full step refuses it beside any units (the user's decision of 2026-11-09): a design
+        // shared by every replicate breaks the full step's exchangeability.
+        Assert.Equal(ConformalForms.Split, candidates.Forms);
+        Assert.Contains("one design for every replicate", Assert.Throws<ArgumentException>(() => ConformalBayes.FullStep(points, candidates)).Message);
         Assert.Throws<ArgumentException>(() => ConformalBayes.FullStep(model.PointwiseLogDensity(h, UnitPartition.ConsecutiveBlocks(2, 8)), candidates));
         // The split form takes it: calibration and test points on the seen curves.
         ConformalPrediction split = SplitConformal.Density(candidates, model.CandidateLogDensity(h, design, replicates, [.. Enumerable.Repeat(new[] { 1.0, 2.0 }, 16)]));
@@ -431,8 +436,36 @@ public sealed class EngineCandidateTests(ITestOutputHelper output)
         Assert.All(sets.Sets, s => Assert.Equal(30, s.Units));
         Assert.All(sets.Sets, s => Assert.True(s.Width > 0.0));
         Assert.Equal(2, SplitConformal.Distribution(calibration, test).Distributions.Count);
+        Assert.Equal(ConformalForms.Split, calibration.Forms);
         Assert.Contains("leave-unit-out", Assert.Throws<ArgumentException>(
             () => ConformalBayes.FullStep(sampler.PointwiseLogDensity(r), sampler.CandidateLogDensity(r, x, Singletons(y)))).Message);
+    }
+
+    [Fact]
+    public void TheLayer_HoldsEachSeamToTheFormsItNames()
+    {
+        // Every entry point reads the flag: the full step, its distribution and its scores take a seam that serves the full step; the split
+        // form, its distribution and an inductive stream's scores take one that serves the split form. A refusal quotes the engine's reason.
+        var training = new PointwiseLogDensity(new double[3, 2], UnitPartition.EachObservation(2), []);
+        CandidateLogDensity Seam(ConformalForms forms) => new(new double[3, 2], [[0.0], [1.0]], [])
+        {
+            LogCdf = new double[3, 2], Forms = forms, FormsReason = $"{forms} only, for the test",
+        };
+        CandidateLogDensity full = Seam(ConformalForms.Full), split = Seam(ConformalForms.Split), both = new(new double[3, 2], [[0.0], [1.0]], []);
+        Assert.Equal(ConformalForms.Both, both.Forms);
+        Assert.Null(both.FormsReason);
+        Assert.Contains("Split only, for the test", Assert.Throws<ArgumentException>(() => ConformalBayes.FullStep(training, split)).Message);
+        Assert.Throws<ArgumentException>(() => ConformalBayes.Distribution(training with { LogCdf = new double[3, 2] }, split));
+        Assert.Throws<ArgumentException>(() => ConformalBayes.Scores(training, split, 0));
+        Assert.Contains("Full only, for the test", Assert.Throws<ArgumentException>(() => SplitConformal.Density(full, split)).Message);
+        Assert.Throws<ArgumentException>(() => SplitConformal.Density(split, full));
+        Assert.Throws<ArgumentException>(() => SplitConformal.Distribution(full, split));
+        Assert.Throws<ArgumentException>(() => StreamScores.Density(full));
+        Assert.Throws<ArgumentException>(() => StreamScores.Centrality(full));
+        Assert.Equal(2, ConformalBayes.FullStep(training, full).Sets.Count);
+        Assert.Equal(2, SplitConformal.Density(split, both).Sets.Count);
+        Assert.Throws<ArgumentOutOfRangeException>(() => Seam(0));
+        Assert.Throws<ArgumentOutOfRangeException>(() => Seam((ConformalForms)4));
     }
 
     [Theory]

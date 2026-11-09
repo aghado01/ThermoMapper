@@ -114,6 +114,7 @@ public static class StreamScores
 
     private static void CheckResponses(CandidateLogDensity units)
     {
+        units.CheckServes(ConformalForms.Split, nameof(units));
         for (int i = 0; i < units.Cases; i++)
             if (units.Grids[i].Length != 1)
                 throw new ArgumentException($"Unit {i}'s grid holds {units.Grids[i].Length} values: each unit is read at its observed response.", nameof(units));

@@ -16,8 +16,9 @@ public sealed partial class HierarchicalPSpline
     /// each at an input drawn as the others are, are exchangeable with one another whatever the fit. <b>The full step's guarantee does not
     /// reach it.</b> The model takes one design for every replicate, so each training point's input is held by every curve, while a new
     /// point's input is held by none: the candidate is not exchangeable with the training points (CB-1's premise), and no partition
-    /// restores it. A point on a new curve would integrate that curve while the training units condition on theirs (CB-4), and a whole
-    /// new curve on the shared design, which is exchangeable with the training curves, is a vector, E17's.</para>
+    /// restores it, so the seam names the split form alone (<see cref="Maths.Regression.CandidateLogDensity.Forms"/>) and the full step
+    /// refuses it (the user's decision of 2026-11-09). A point on a new curve would integrate that curve while the training units condition
+    /// on theirs (CB-4), and a whole new curve on the shared design, which is exchangeable with the training curves, is a vector, E17's.</para>
     /// </summary>
     /// <param name="result">A run of this model with replicate draws retained (<c>retainReplicates: true</c>).</param>
     /// <param name="design">The new cases' design rows (cases × ν), of the basis the model was built on.</param>
@@ -68,8 +69,14 @@ public sealed partial class HierarchicalPSpline
         return new CandidateLogDensity(values, grids, Latents(LatentTreatment.Conditioned), strata, ChainLengths.Of(result.PosteriorDraws))
         {
             LogCdf = logCdfs,
+            Forms = ConformalForms.Split,
+            FormsReason = SplitOnly,
         };
     }
+
+    private const string SplitOnly = "the hierarchical P-spline takes one design for every replicate, so each training point's input is held by every "
+                                     + "curve and a new point's by none: the candidate is not exchangeable with the training points (CB-1's premise). "
+                                     + "Calibration and test points on the seen curves are exchangeable with one another: take the split form.";
 
     // z_iβ, summed in column order: the training terms' and the candidates' one arithmetic.
     private static double CurveAt(double[,] z, int i, double[] beta)

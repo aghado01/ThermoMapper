@@ -342,7 +342,8 @@ public sealed record ConformalScores(int[] Units, double[] Scores, double Candid
 /// <item><b>Refused</b> (CB-4): leave-unit-out terms (<see cref="PointwiseLogDensity.LeavesUnitsOut"/>, the collapsed
 /// predictive), whose rest excludes the candidate; a latent of one observation's term conditioned on or mixed, which reads
 /// the data units at their retained latents and the candidate otherwise and undercovers (<c>mixed_counterexample</c>); a
-/// candidate whose latents are treated otherwise than the training units'; draws that do not align.</item>
+/// candidate whose latents are treated otherwise than the training units'; draws that do not align; and a seam whose engine names it the
+/// split form's only (<see cref="CandidateLogDensity.Forms"/>), quoting the engine's reason.</item>
 /// </list>
 /// The guarantee is exact for exact posterior weights; from Monte Carlo draws it holds up to the estimates' error, which the
 /// margin reads. A candidate whose density is zero under every draw scores −∞ and takes π = 1/m. The full step's predictive
@@ -644,6 +645,7 @@ public static class ConformalBayes
     {
         ArgumentNullException.ThrowIfNull(training);
         ArgumentNullException.ThrowIfNull(candidates);
+        candidates.CheckServes(ConformalForms.Full, nameof(candidates));
         if (training.LeavesUnitsOut)
             throw new ArgumentException(
                 "The training terms are leave-unit-out predictives (the collapsed content): each leaves its unit out of a rest that "

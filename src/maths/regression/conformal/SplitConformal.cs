@@ -296,6 +296,8 @@ public static class SplitConformal
     {
         ArgumentNullException.ThrowIfNull(calibration);
         ArgumentNullException.ThrowIfNull(candidates);
+        calibration.CheckServes(ConformalForms.Split, nameof(calibration));
+        candidates.CheckServes(ConformalForms.Split, nameof(candidates));
         for (int i = 0; i < calibration.Cases; i++)
             if (calibration.Grids[i].Length != 1)
                 throw new ArgumentException($"Calibration case {i}'s grid holds {calibration.Grids[i].Length} values: each calibration unit is read at its "
