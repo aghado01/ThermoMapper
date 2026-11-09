@@ -2,6 +2,18 @@
 
 Written by the coordinating session (`local_b6732445`) for a new parent session to take over. It gathers what is in flight, what waits on the user, and where each record lives. The briefs are the records of truth; this file points at them and lists what crosses them.
 
+## Coordinating review on `69398e4` (2026-11-09)
+
+All three Codex workers delivered their handoffs directly to the coordinating chat. Completion and blocker reports for these workstreams return there; the user delegated the conformal Lean work to Claude. The earlier session table below records the state at the original handoff.
+
+On an independent archive of `69398e4`, the Release commit selection across the 22 changed source and test paths since `b360316` passed 1,883/1,883 with the pinned tier and qualification off. A separate qualification-enabled filter passed 11/11 with a measurement printed by every case. These were the four E34 Geweke seeds, two E21 Geweke seeds, four group-effect recovery cases and the conformal held-out PIT and coverage case. The workers' whole-assembly and cost runs are recorded in their briefs. [Commit receipt](../../artifacts/verify-regression-69398e4/receipts/commit.trx) · [Qualification receipt](../../artifacts/verify-regression-69398e4/receipts/qualification.trx)
+
+| Workstream | Review and next assignment |
+| --- | --- |
+| E21 ridge blocks | The drawn-scale implementation landed in `69398e4`. Both ordinary and tempered resume, all three held-scale pins and the powered-rung scale prior passed in the coordinating run. The ordinary hinge chain started from the structure prior still needs a diagnosis. The worker is comparing exits from the trapped pair at seeds 303/403 against the enumerated law before extending to crossed and nested groups. [Slice 1 report](bass/ridge-blocks-brief.md) |
+| E34 multi-output BASS | The fixed-structure conditional and independent-path invariance checks qualify the tested slice 1 law. The original uninterrupted run's lower-tail precision on seed 20261123 remains open. The worker has sign-off for slice 2, starting with rung laws and evidence by enumeration. [Slice 1 recheck](bass/multi-output-brief.md) |
+| E16 conformal | Slice 8 is signed off at `331f9e7` and `5151de3`. The held-out 90% interval covered 3,602 of 4,000 responses in the independent rerun. Refinement covers changes witnessed on the supplied grid. Slice 9 C# waits for Claude's theorem statements, rank and tie conventions, and Lean build receipt. [Slice 8 report](conformal-layer-brief.md) · [Slice 9 Lean assignment](../../lean/Protolemmata/Conformal/conformal-chip-brief.md) |
+
 ## How the coordination has run
 
 - **The parent coordinates chips (sessions) and verifies each slice before the next starts.** Verifying means reading the commits' diffs and rerunning the tests from a snapshot of HEAD.
