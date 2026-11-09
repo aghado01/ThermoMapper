@@ -169,6 +169,44 @@ Under "Reports" below, newest first, per slice: what landed by commit; the gates
 
 Newest first.
 
+### 2026-11-08 — Slice 6b, the bets and the capital (E35's M-2)
+
+Built after the main session verified 6·0 and 6a.
+
+**Landed** on `main`, nothing pushed (the docs and E16's line are in the log beside this report):
+- `206eca9` the following, with `BettingCapitalTests`:
+  - `IBettingFunction` and its four members: power, the power mixture, Simple Jumper and the plug-in;
+  - `BettingCapital`;
+  - `ConformalTestMartingale`, which joins the ranks and the capital, with each step's ln f, the path and the e-value.
+- The subsection on `ConformalPrediction.md`.
+
+**The gates M-2 sets, as enforced.**
+- *Each bet is placed before its p-value is seen:* `LogBet`, then `Observe`. The tests check that each member's curve is a function of the past alone.
+- *Each bet integrates to at most 1:* to 1 for power, the mixture and Simple Jumper, and to at most 1 for the plug-in, scaled down by 10⁻¹² past its rounding.
+- *The capital starts at 1:* ln S₀ = 0.
+- *Refused:* a p-value outside (0, 1], and a bet that is NaN or +∞.
+
+**Gates** (numbers on the page).
+- *Integrals,* after random histories, uniform and skewed: within 2.3·10⁻¹⁴ of 1, the plug-in at most 1 within 1.1·10⁻¹⁰.
+- *Past only:* each curve before pₙ is a fresh bet's fed p₁, …, pₙ₋₁.
+- *Against references:* Simple Jumper against Algorithm 1 to 10⁻¹² at four J; the mixture against its integral over ε to 10⁻¹¹; the plug-in against a rebuild from its counts.
+- *E S₂₀ = 1 end to end:* 0.9987 (se 0.0017) for power 0.9, 0.9997 (0.0025) for Simple Jumper and 0.898 (0.068) for the plug-in, over 100,000 streams.
+- *Broken bets:* a peeking bet and one integrating to 1.1 reach 10 in every one of 2,000 streams, where Simple Jumper reaches it in 0.0075 of them.
+- *After a change,* Simple Jumper and the plug-in rise from about −2 to 36 and 37 in ln S. The mixture and power 0.2 decay before the change, to −63 and −165, and do not recover: the reason for 6c's CUSUM and Shiryaev–Roberts.
+- *Cost:* 1.8 to 3.3 µs per arrival with its rank, under load.
+- *Per commit,* the selected classes and the pinned tier: 57 of 57. *At the slice's end,* the whole assembly at 206eca9: 2,576 of 2,576, nothing skipped.
+
+**Defects found:** none. Two of my test bounds were wrong and were corrected.
+- xUnit's 10-decimal rounding split two values that agree to 2·10⁻¹⁴; the comparison is now relative.
+- A rise of 100 in capital after the change, asked of every bet, failed for the bets that had decayed under the null. Only the adaptive bets are held to it now, and the fixed bets' decay is recorded instead.
+
+**Decided in building it.**
+- *Bets give ln f,* so a power bet at a tiny p stays exact.
+- *The plug-in's density is binned,* 100 bins by default, with its rows cached between refits, O(bins) per arrival. Fedorova et al.'s kernel density over every p-value would cost O(n).
+- *The plug-in's uniform floor is an option, 0 by default,* the paper's pure kernel bet.
+
+**Next:** 6c, the alarms and their readouts.
+
 ### 2026-11-08 — Slice 6a, the smoothed p-values of a stream (E35's M-1)
 
 Built at the user's go-ahead for E35, the main session having verified slice 5.

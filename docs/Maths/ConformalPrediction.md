@@ -688,6 +688,43 @@ Every guarantee on this page rests on exchangeability. A conformal test martinga
   - With three distinct values it costs 25 to 30 ns.
   - A Bayesian fit's score, S predictive densities, costs more than the rank.
 
+### The bets and the capital (slice 6b)
+
+**The capital** (`BettingCapital`, M-2) is Sₙ = Π fᵢ(pᵢ) with S₀ = 1, held in logs. Each bet fₙ is chosen from p₁, …, pₙ₋₁: a betting function gives ln fₙ(p) before pₙ is seen, then observes it (`IBettingFunction.LogBet`, `Observe`).
+- *Each bet is ≥ 0 and integrates to at most 1 on [0, 1].* Then under uniform p-values the capital is a supermartingale, and a martingale where each bet integrates to exactly 1 (`lintegral_capital`).
+- *Its value at a stopping time that reads only the past is an e-value* (`lintegral_stoppedCapital`).
+- *`ConformalTestMartingale` joins the two parts:* the ranks' p-values (6a) and the capital, with each step's ln fₙ(pₙ), the path ln S₁, …, ln Sₙ, and the e-value.
+
+**The bets.**
+- *Power,* f(p) = εp^(ε−1) (Vovk, Nouretdinov and Gammerman 2003). It bets on small p-values, more sharply as ε falls, and reads no history.
+- *The power mixture,* f(p) = ∫₀¹ εp^(ε−1) dε = (eˣ − 1 − x)/x² with x = −ln p, the 2003 paper's simple mixture. Below x = 1 it is summed as Σ xʲ/(j + 2)!, whose terms are all positive.
+- *Simple Jumper* (Vovk et al. 2021, Algorithm 1). Three bets 1 + ε(p − ½), ε ∈ {−1, 0, 1}, pass a share J (0.01) of their capital among themselves before each step. The step's bet is their mixture, 1 + (w₁ − w₋₁)(p − ½), between ½ and 3/2.
+- *The plug-in* (Fedorova, Gammerman, Nouretdinov and Vovk 2012). The bet is a kernel density of the earlier p-values: binned, Gaussian, reflected at 0 and 1, with Silverman's bandwidth refitted each time the count doubles.
+  - Between refits each p-value adds its bin's kernel row, O(bins).
+  - Its integral is exact for its piecewise-linear form, and the bet is scaled down by 10⁻¹², so rounding cannot lift the integral above 1. Ville needs only ∫ f ≤ 1.
+  - A uniform floor is an option, so a bet never reaches 0. Before its warm-up it bets 1.
+
+**Checks** (`BettingCapitalTests`).
+- *Each bet's integral* after random histories, uniform and piled toward 0, by quadrature in −ln p. The mass below e⁻⁷⁰⁰ is closed: a^ε for a power bet, (a − 1)/ln a for the mixture.
+  - Power, the mixture and Simple Jumper integrate to 1 within 2.3·10⁻¹⁴.
+  - The plug-in integrates to at most 1, within 1.1·10⁻¹⁰, where its kinks limit the quadrature.
+- *Each bet reads only the past:* its curve before pₙ is a fresh bet's fed p₁, …, pₙ₋₁, and reading it moves nothing.
+- *Against references:* Simple Jumper matches Algorithm 1's unnormalized capitals to 10⁻¹² at J of 0, 0.01, 0.3 and 1. The mixture matches its integral over ε to 10⁻¹¹ from p = 10⁻³⁰⁰ to 1. The plug-in's incremental density matches a rebuild from its counts.
+- *E S₂₀ = 1, end to end through the ranks,* over 100,000 exchangeable streams: power ε = 0.9 reads 0.9987 (se 0.0017), Simple Jumper 0.9997 (0.0025) and the plug-in 0.898 (0.068). The mixture's and the sharper power bets' S has infinite variance, so their integrals stand for this check.
+- *Broken bets break the bound* over 2,000 exchangeable streams of 40. Simple Jumper reaches 10 in 0.0075 of them, within Ville's 1/10. A bet that chooses its half after seeing pₙ reaches 10 in every stream, and so does one integrating to 1.1.
+- *After a change,* 200 exchangeable arrivals then 200 whose scores fall by 1.5 sds, the readings in ln S at the change and its peak after:
+
+| Bet | At the change | Peak after |
+|---|---|---|
+| Simple Jumper | −1.6 | 36.2 |
+| Plug-in | −3.2 | 37.4 |
+| Power, ε 0.9 | −1.5 | 17.3 |
+| Power mixture | −62.7 | −32.6 |
+| Power, ε 0.2 | −165.4 | −136.9 |
+
+  The fixed bets decay under the null before the change, by E[ln f] < 0 per step, and Ville's alarm cannot reach past that loss. CUSUM and Shiryaev–Roberts read past it (slice 6c). The adaptive bets lose little before the change.
+- *Cost per arrival,* with its rank, over 100,000 arrivals, on the cycle clock, indicative and under load: Simple Jumper 1.8 µs, power 2.1 µs, the mixture 2.5 µs, the plug-in 3.3 µs.
+
 ## API at a glance
 
 | Area | Types and members |
@@ -700,7 +737,7 @@ Every guarantee on this page rests on exchangeability. A conformal test martinga
 | CB-3's reading | `ConformalSet.Gap`, `SplitHalfMass`, `SplitHalfDisagreements`, `AcceptsPlain(g)`, `AcceptsInflated(g)`; `ConformalSet.Margin` → `ConformalMargin` (`Multiple`, `CandidateErrors`, `UniformErrors`, `CandidateCarriedErrors`, `CarriedUniformErrors`, `UnitCarriedErrors`, `Fragile`, `InflatedRanks`, `ParetoK`, `ParetoKThreshold`, `Bounds`, `Inflation`, `Computed`, `Count`, `Untrusted(k)`); `ConformalSet.Inflated`, `ErrorLevel`, `CoverageUnderError`, `FallBack`; `MarginBounds` (`Uniform`, `Carried`); `InflationBounds` (`PerPosition`, the default, `Uniform`); `ConformalScores.Errors`, `CandidateError` |
 | The split form | `SplitConformal.Density(calibration, candidates, alpha)` → `ConformalPrediction(Sets, Alpha, Form)`; `SplitConformal.Quantiles(QuantileReadings(Lower, Upper, StratumOf), response, test, alpha)` and `SplitConformal.Residuals(ResidualReadings(Center, Scale, StratumOf), response, test, alpha)` → `ConformalIntervals(Intervals, Alpha, Calibration)`; `ConformalInterval`: `Units`, `Level`, `Threshold`, `Lower`, `Upper`, `WholeSpace`, `Coverage`, `Empty`, `Width`, `Contains(y)`; `SplitConformal.Calibrate(scores, stratumOf, alpha)` → `SplitCalibration`: `Units(h)`, `Level(h)`, `Threshold(h)`, `Rank(h, s)`, `PValue(h, s)`, `Accepts(h, s)`; `ConformalForm` (`Full`, `Split`) |
 | The predictive distribution | `SplitConformal.Distribution(calibration, candidates)` (the default) and `ConformalBayes.Distribution(training, candidates)` (the opt-in) → `ConformalDistributions(Distributions, Form)` with `Flagged`; `ConformalDistribution`: `Units`, `Grid`, `Below`, `Tied`, `Form`, `Fall`, `ScoreFall`, `Monotone`, `Lower(g)`, `Upper(g)`, `At(g, τ)`, `Mid(g)`, `Level(α)`, `Coverage(α)`, `WholeSpace(α)`, `Accepts(g, α)`, `Intervals(α)`, `Width(α)`, `OpenBelow(α)`, `OpenAbove(α)`, `Quantile(p)`, `Crps(y)` |
-| Conformal test martingales (E35) | `SmoothedPValues(seed)`: `Add(score)` → `SmoothedPValue(Count, Score, Below, Tied, Theta, P)`, `AddRange`, `Count`; `StreamScores.Density(units)`, `Residuals(readings, response)`, `Centrality(units)`; `OrderStatisticTree<T>` (internal): `Add(key)` → (Below, Tied) before it, `Rank(key)`, `Count`, `Distinct`, `Height` |
+| Conformal test martingales (E35) | `ConformalTestMartingale(bet, seed)`: `Add(score)` → `MartingaleStep(PValue, LogBet, LogCapital)`, `LogCapital`, `EValue`, `LogPath`, `Count`; `IBettingFunction` (`LogBet(p)`, `Observe(p)`, `IntegratesToOne`): `PowerBet(ε)`, `PowerMixtureBet`, `SimpleJumperBet(jump)`, `PlugInBet(warmUp, bins, floor)` with `Bandwidth`; `BettingCapital(bet)`: `Add(p)` → `CapitalStep(Count, P, LogBet, LogCapital)`; `SmoothedPValues(seed)`: `Add(score)` → `SmoothedPValue(Count, Score, Below, Tied, Theta, P)`, `AddRange`, `Count`; `StreamScores.Density(units)`, `Residuals(readings, response)`, `Centrality(units)`; `OrderStatisticTree<T>` (internal): `Add(key)` → (Below, Tied) before it, `Rank(key)`, `Count`, `Distinct`, `Height` |
 | The product | `DenseProduct.Multiply`, `Pack`, `FusedDot`; `PackedColumns` |
 
 ## Not built yet
@@ -711,7 +748,7 @@ Every guarantee on this page rests on exchangeability. A conformal test martinga
 - BASS's candidate seam for a direct functional fit's curves, and a whole new curve for the hierarchical P-spline (E17).
 - A BGP content with f drawn at the training and candidate inputs per retained state, which the full step would take (slice 5's follow-up).
 - The changepoint posterior's seam, which no candidate exchangeable with its units admits (slice 5).
-- The conformal test martingale's bets and capital, and its alarms (E35, slices 6b and 6c).
+- The conformal test martingale's alarms and their readouts (E35, slice 6c).
 - CB-4's latent-posterior reading, and Hoff's leave-one-out score.
 - Refining a set's boundaries between grid values.
 
