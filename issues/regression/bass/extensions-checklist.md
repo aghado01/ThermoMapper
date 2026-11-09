@@ -8,8 +8,8 @@ Companion to [extensions-brief.md](extensions-brief.md). An item is ticked when 
 
 - [x] **E1** Generalized-hyperbolic noise (GBMARS), with OQ20's BARS side. Built ([brief](gbass-noise-brief.md)): slices 0–4 and the GIG's ratio-of-uniforms draw landed by 2026-11-06; slices 5 and 6, the engine's reach and OQ20's BARS side, 2026-11-07; slice 7, interweaving, and the move along β·v, 2026-11-08. Open: the flat histogram under a noise (the user's decision) and the reports' follow-ups.
 - [ ] **E2** Robust centring and bases (OQ16).
-- [ ] **E3** Free-knot tensor-product surfaces (ABMRS).
-- [ ] **E4** Additional proposal kernels. The Bernoulli-inclusion birth and both mutations are built, through F-X4, in KHAOS slice 1 ([brief](khaos-brief.md), 2026-11-07). Other kernels are open.
+- [ ] **E3** Free-knot tensor-product surfaces (ABMRS). Queued by the user on 2026-11-08: after the current queue, and possibly after some of the unordered entries.
+- [ ] **E4** Additional proposal kernels. The Bernoulli-inclusion birth and both mutations are built, through F-X4, in KHAOS slice 1 ([brief](khaos-brief.md), 2026-11-07). The history-based proposal (Nott and Kohn 2005) and residual-informed mixtures were queued to the KHAOS chip on 2026-11-08 at the user's request.
 - [x] **E5** KHAOS's modified g-prior. Built in KHAOS slice 2 (`f289af3`, 2026-11-08), through the prior-precision builder.
 - [ ] **E6** Basis-estimation uncertainty.
 - [ ] **E7** Moments for piecewise polynomials.
@@ -21,12 +21,12 @@ Companion to [extensions-brief.md](extensions-brief.md). An item is ticked when 
 - [ ] **E13** The free-energy curve over the ladder.
 - [ ] **E14** Semi-modular calibration.
 - [ ] **E15** Calibrated intervals for loss-based posteriors (BARS's Gibbs-loss route first).
-- [ ] **E16** Conformal Bayes, the consumer, with conformal predictive distributions. Building as an engine-wide layer ([brief](../conformal-layer-brief.md)). Landed: slices 0–2 on 2026-11-06; slices 3, 4, 4b (CB-3's per-unit bounds, the margin opt-in) and 5 (the other engines' seams) by 2026-11-08. Slice 6, E35, is under way.
+- [ ] **E16** Conformal Bayes, the consumer, with conformal predictive distributions. Building as an engine-wide layer ([brief](../conformal-layer-brief.md)). Landed: slices 0–2 on 2026-11-06; slices 3, 4, 4b (CB-3's per-unit bounds, the margin opt-in) and 5 (the other engines' seams) by 2026-11-08. Slice 6, E35, is under way. After it, the conformal chip completes E16's unbuilt items as slices 7 onward (the user, 2026-11-08).
 - [ ] **E17** Conformal bands for whole curves.
 - [ ] **E18** Posteriors for readouts by resampling units.
 - [x] **E19** Polynomial-chaos terms. Built ([brief](khaos-brief.md)): KHAOS's six slices, in the user's order 0, 1, 2, 5, 4, 3, landed and verified by 2026-11-08, with CRAN's `khaos` 2.1.1 pinned and SMC's two flags from slice 5's trap (`42739ac`).
 - [ ] **E20** Data-augmented observation models.
-- [ ] **E21** A prior-precision builder, with ridge blocks. The builder is built (KHAOS slice 2, `f289af3`). Random-effect intercepts are built for one grouping with s held (KHAOS slice 3, `0a2168c`), integrated out by whitening. Open: s drawn, several or nested groupings, random slopes, and the block under the noises and conformal prediction.
+- [ ] **E21** A prior-precision builder, with ridge blocks. The builder is built (KHAOS slice 2, `f289af3`). Random-effect intercepts are built for one grouping with s held (KHAOS slice 3, `0a2168c`), integrated out by whitening. Open: s drawn, several or nested groupings, random slopes, and the block under the noises and conformal prediction. These were sent to the GBASS chip on 2026-11-08 at the user's request, with a brief to come (`ridge-blocks-brief.md`).
 - [ ] **E22** Correlated outputs and coupling within a run.
 - [ ] **E23** Multi-fidelity emulation through the offset.
 - [ ] **E24** Guarded estimators.
