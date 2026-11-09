@@ -120,20 +120,53 @@ public sealed class IrlsScaleTests
     }
 
     /// <summary>
-    /// On S⁹ and the Grassmannians Gr(2, 10) and Gr(3, 20), whose angles are atan2-based, 21 points exp_{p₀}(s·uᵢ) with
-    /// spreads from 1e-1 down to 1e-12. The allowance holds the truth's O(s²) relative error, the 1e-6 accuracy of the
-    /// flat case, and floor/s = 1e-14/s for the rounding of the unit-length points themselves (measured about
-    /// 5e-16/s). No median takes more than 50 iterations.
+    /// On S⁹, the Grassmannians Gr(2, 10) and Gr(3, 20), the Poincaré ball H⁵ about its origin and the hyperboloid H⁵
+    /// about its apex, every one with atan2- or asinh-based distances, 21 points exp_{p₀}(s·uᵢ) with spreads from 1e-1
+    /// down to 1e-12. The allowance holds the truth's O(s²) relative error, the 1e-6 accuracy of the flat case, and
+    /// 1e-14/s for the rounding of the points themselves (measured about 5e-16/s). No median takes more than 50
+    /// iterations.
     /// </summary>
     [Theory]
-    [InlineData(10, 0, 12, 1e-14, 7001)]   // S⁹
-    [InlineData(10, 2, 12, 1e-14, 7002)]   // Gr(2, 10)
-    [InlineData(20, 3, 12, 1e-14, 7003)]   // Gr(3, 20)
-    public void CurvedMedianAndMean_AreScaleEquivariant_DownToTheManifoldResolution(int n, int r, int deepest, double floor, int seed)
+    [InlineData("sphere", 10, 0, 7001)]      // S⁹
+    [InlineData("grassmann", 10, 2, 7002)]   // Gr(2, 10)
+    [InlineData("grassmann", 20, 3, 7003)]   // Gr(3, 20)
+    [InlineData("poincare", 5, 0, 7004)]     // the Poincaré ball H⁵
+    [InlineData("lorentz", 6, 0, 7005)]      // the hyperboloid H⁵ in R⁶
+    public void CurvedMedianAndMean_AreScaleEquivariant_DownToTheManifoldResolution(string kind, int n, int r, int seed)
     {
         var rng = new Random(seed);
-        if (r == 0) CheckCurved(new SphericalManifold(n), n, 1, sphere: true, deepest, floor, rng);
-        else CheckCurved(new GrassmannManifold(n, r), n, r, sphere: false, deepest, floor, rng);
+        switch (kind)
+        {
+            case "sphere":
+                CheckCurved(new SphericalManifold(n), $"S^{n - 1}", rng,
+                    g => Scaled(Gaussian(g, n, 1.0), 1.0),
+                    (p0, g) => Horizontal(p0, Gaussian(g, n, 1.0 / Math.Sqrt(n)), n, 1),
+                    (estimate, truth) => Norm(Subtract(Scaled(estimate, 1.0 / Norm(estimate)), truth)),
+                    normalizeBase: true);
+                break;
+            case "grassmann":
+                CheckCurved(new GrassmannManifold(n, r), $"Gr({r}, {n})", rng,
+                    g => { double[] y = Gaussian(g, n * r, 1.0); MatrixOps.Orthonormalize(y, n, r); return y; },
+                    (p0, g) => Horizontal(p0, Gaussian(g, n * r, 1.0 / Math.Sqrt(n * r)), n, r),
+                    (estimate, truth) => Norm(Horizontal(truth, estimate, n, r)));
+                break;
+            case "poincare":
+                // At the origin λ = 2 and exp₀(v) = tanh(‖v‖)·v/‖v‖, so ambient coordinates are tangent coordinates.
+                CheckCurved(new PoincareBallManifold(n), $"Poincaré H^{n}", rng,
+                    g => new double[n],
+                    (p0, g) => Gaussian(g, n, 1.0 / Math.Sqrt(n)),
+                    (estimate, truth) => Norm(Subtract(estimate, truth)));
+                break;
+            case "lorentz":
+                // At the apex (0, …, 0, 1) the tangent space is the spatial coordinates, with the Euclidean metric.
+                CheckCurved(new LorentzHyperboloidManifold(n), $"Lorentz H^{n - 1}", rng,
+                    g => { var apex = new double[n]; apex[n - 1] = 1.0; return apex; },
+                    (p0, g) => { double[] v = Gaussian(g, n, 1.0 / Math.Sqrt(n - 1)); v[n - 1] = 0.0; return v; },
+                    (estimate, truth) => Norm(Subtract(estimate, truth)));
+                break;
+            default:
+                throw new ArgumentOutOfRangeException(nameof(kind));
+        }
     }
 
     /// <summary>
@@ -337,26 +370,30 @@ public sealed class IrlsScaleTests
 
     // ── Curved checks ────────────────────────────────────────────────────────
 
-    private static void CheckCurved<TM>(TM manifold, int n, int r, bool sphere, int deepest, double floor, Random rng)
+    // Data exp_{p₀}(s·uᵢ) about a base point from baseOf, with tangents from tangentOf, against the truths
+    // exp_{p₀}(s·m_u) and exp_{p₀}(s·ū); gap measures an estimate's distance from a truth, stably at small distances.
+    private static void CheckCurved<TM>(
+        TM manifold, string name, Random rng,
+        Func<Random, double[]> baseOf, Func<double[], Random, double[]> tangentOf, Func<double[], double[], double> gap,
+        bool normalizeBase = false)
         where TM : struct, IRiemannianManifold
     {
-        const int count = 21;
-        int dim = n * r;
+        const int count = 21, deepest = 12;
+        const double floor = 1e-14;
         double[] w = Enumerable.Repeat(1.0, count).ToArray();
         for (int draw = 0; draw < 3; draw++)
         {
-            double[] p0 = Gaussian(rng, dim, 1.0);
-            if (sphere) p0 = Scaled(p0, 1.0 / Norm(p0));
-            else MatrixOps.Orthonormalize(p0, n, r);
+            double[] p0 = baseOf(rng);
+            if (normalizeBase) p0 = Scaled(p0, 1.0 / Norm(p0));
             var u = new double[count][];
-            for (int i = 0; i < count; i++) u[i] = Horizontal(p0, Gaussian(rng, dim, 1.0 / Math.Sqrt(dim)), n, r);
+            for (int i = 0; i < count; i++) u[i] = tangentOf(p0, rng);
             double[] mu = WeightedWeiszfeld(u, w);
             double[] ubar = WeightedMean(u, w);
 
             for (int k = 1; k <= deepest; k++)
             {
                 double s = Math.Pow(10, -k);
-                string label = $"{(sphere ? $"S^{n - 1}" : $"Gr({r}, {n})")}, draw {draw}, s {s:G3}";
+                string label = $"{name}, draw {draw}, s {s:G3}";
                 double[][] x = u.Select(ui => Exp(manifold, p0, Scaled(ui, s))).ToArray();
                 double[] medianTruth = Exp(manifold, p0, Scaled(mu, s));
                 double[] meanTruth = Exp(manifold, p0, Scaled(ubar, s));
@@ -366,22 +403,15 @@ public sealed class IrlsScaleTests
                 double[] median = (double[])warm.Clone();
                 GeometricMedian.Compute(new Counting<TM>(manifold, counter), x, w, median);
                 Assert.True(counter.Steps < 50, $"{label}: median took {counter.Steps} iterations");
-                double medianError = CurvedGap(median, medianTruth, n, r, sphere) / s;
+                double medianError = gap(median, medianTruth) / s;
                 Assert.True(medianError <= 10 * s * s + 1e-6 + floor / s, $"{label}: median error {medianError:G3}");
 
                 double[] mean = (double[])warm.Clone();
                 GeometricMean.Compute(manifold, x, w, mean);
-                double meanError = CurvedGap(mean, meanTruth, n, r, sphere) / s;
+                double meanError = gap(mean, meanTruth) / s;
                 Assert.True(meanError <= 10 * s * s + 1e-6 + floor / s, $"{label}: mean error {meanError:G3}");
             }
         }
-    }
-
-    // Sphere: chordal gap of the normalized estimate. Grassmann: ‖(I − TTᵀ)E‖_F, stable at small angles.
-    private static double CurvedGap(double[] estimate, double[] truth, int n, int r, bool sphere)
-    {
-        if (sphere) return Norm(Subtract(Scaled(estimate, 1.0 / Norm(estimate)), truth));
-        return Norm(Horizontal(truth, estimate, n, r));
     }
 
     // The component of z (n×r, column-major) orthogonal to span(y); for r = 1 the projection off the unit vector y.

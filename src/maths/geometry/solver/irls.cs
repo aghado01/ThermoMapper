@@ -33,8 +33,9 @@ namespace Maths.Geometry.Solver
         // A Log map more than this fraction short of a distance above CutLocusFloor was cut at the cut locus.
         private const double CutLocusGap = 1e-3;
 
-        // Distances below this are within the arccos noise of zero (about 2e-8), so a Log short of them is not cut.
-        private const double CutLocusFloor = 1e-6;
+        // Below this a Log short of the distance is rounding, not the cut locus: every curved manifold reads its
+        // distances through atan2 or asinh, accurate to about √(n·r)·ε ≈ 2e-15, so at 1e-10 the 0.1% gap is clear of it.
+        private const double CutLocusFloor = 1e-10;
 
         /// <summary>
         /// Hot-path IRLS solver. <paramref name="destination"/> is mutated in place;

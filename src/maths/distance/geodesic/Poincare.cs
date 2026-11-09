@@ -44,11 +44,9 @@ public static class Poincare
         double denom = (1.0 - effA2) * (1.0 - effB2);
         if (denom <= 0.0) return 0.0;
 
-        double arg = 1.0 + 2.0 * diff2 / denom;
-        if (arg < 1.0) return 0.0;
-
-        double sqrtTerm = Math.Sqrt(arg * arg - 1.0);
-        return Math.Log(arg + sqrtTerm);
+        // arcosh(1 + 2x²) = 2·asinh(x), with x² = ‖a − b‖²/[(1 − ‖a‖²)(1 − ‖b‖²)]: asinh keeps a small distance's
+        // digits, where arcosh of a number near 1 resolves only about √(2ε) ≈ 2e-8.
+        return 2.0 * Math.Asinh(Math.Sqrt(diff2 / denom));
     }
 
     public static void ClampToBall(Span<double> point)

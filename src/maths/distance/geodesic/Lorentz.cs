@@ -31,20 +31,35 @@ public static class Lorentz
     public static double Distance(double[] a, double[] b)
         => Distance((ReadOnlySpan<double>)a, b);
 
+    /// <summary>
+    /// The geodesic distance between two points on the hyperboloid, 2·asinh(√⟨a − b, a − b⟩_L / 2). On the hyperboloid
+    /// ⟨a − b, a − b⟩_L = 2(cosh d − 1), so this equals arcosh(−⟨a, b⟩_L), but it reads the distance from the difference
+    /// of the points and keeps a small distance's digits, where arcosh of a number near 1 resolves only about
+    /// √(2ε) ≈ 2e-8.
+    /// </summary>
     public static double Distance(ReadOnlySpan<double> a, ReadOnlySpan<double> b)
     {
         if (a.Length != b.Length)
             throw new ArgumentException("Invalid feature vectors for Lorentz distance.");
 
-        double ip = InnerProduct(a, b);
-        double arg = -ip;
+        return 2.0 * Math.Asinh(0.5 * Math.Sqrt(Math.Max(0.0, DifferenceSquare(a, b))));
+    }
 
-        // Clamp to prevent numerical precision issues leading to arg < 1.0 (which would make arcosh NaN)
-        if (arg < 1.0)
-            return 0.0;
+    /// <summary>⟨a − b, a − b⟩_L, the Lorentzian square of the difference, which is 2(cosh d − 1) on the hyperboloid.</summary>
+    public static double DifferenceSquare(ReadOnlySpan<double> a, ReadOnlySpan<double> b)
+    {
+        if (a.Length != b.Length)
+            throw new ArgumentException("Vectors must have the same length.");
 
-        // arcosh(x) = ln(x + sqrt(x^2 - 1))
-        return Math.Log(arg + Math.Sqrt(arg * arg - 1.0));
+        int len = a.Length;
+        double sum = 0.0;
+        for (int i = 0; i < len - 1; i++)
+        {
+            double d = a[i] - b[i];
+            sum += d * d;
+        }
+        double t = a[len - 1] - b[len - 1];
+        return sum - t * t;
     }
 
     /// <summary>

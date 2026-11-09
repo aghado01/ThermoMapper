@@ -43,20 +43,21 @@ namespace Maths.Geometry
         {
             ValidateTriple(p, q, dst);
 
-            double alpha = -Lorentz.InnerProduct(p, q);
-            if (alpha <= 1.0 + 1e-12)
+            // From the difference of the points: x = ⟨q − p, q − p⟩_L = 2(α − 1) with α = −⟨p, q⟩_L = cosh d, so
+            // d = 2·asinh(√x/2) and the residual q − αp = (q − p) − (x/2)·p keep a small distance's digits.
+            double x = Math.Max(0.0, Lorentz.DifferenceSquare(q, p));
+            double dist = 2.0 * Math.Asinh(0.5 * Math.Sqrt(x));
+            if (dist == 0.0)
             {
                 dst.Clear(); // p == q
                 return;
             }
 
-            double dist = Math.Log(alpha + Math.Sqrt(alpha * alpha - 1.0));
-            double denom = Math.Sqrt(alpha * alpha - 1.0);
-            double scale = dist / denom;
-
+            double scale = dist / Math.Sinh(dist);   // ‖q − αp‖_L = sinh d
+            double half = 0.5 * x;
             for (int i = 0; i < Dimension; i++)
             {
-                dst[i] = scale * (q[i] - alpha * p[i]);
+                dst[i] = scale * ((q[i] - p[i]) - half * p[i]);
             }
         }
 
@@ -65,9 +66,9 @@ namespace Maths.Geometry
             ValidateTriple(p, v, dst);
 
             double tangentNorm = Norm(p, v);
-            if (tangentNorm < 1e-12)
+            if (tangentNorm == 0.0)
             {
-                p.CopyTo(dst); // exp_p(0) = p
+                p.CopyTo(dst); // exp_p(0) = p; a step of any size above 0 moves the point
                 return;
             }
 

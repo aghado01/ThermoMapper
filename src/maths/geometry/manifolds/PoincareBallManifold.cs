@@ -28,13 +28,13 @@ namespace Maths.Geometry
             NegatedMobiusAdd(p, q, delta);
 
             double deltaNorm = EuclideanNorm(delta);
-            if (deltaNorm < 1e-12)
+            if (deltaNorm == 0.0)
             {
-                dst.Clear();
+                dst.Clear();                 // p == q
                 return;
             }
 
-            double scale = (2.0 / ConformalFactor(p)) * Atanh(ClampUnitInterval(deltaNorm)) / deltaNorm;
+            double scale = (2.0 / ConformalFactor(p)) * Math.Atanh(ClampUnitInterval(deltaNorm)) / deltaNorm;
             for (int i = 0; i < Dimension; i++)
                 dst[i] = delta[i] * scale;
         }
@@ -44,9 +44,9 @@ namespace Maths.Geometry
             ValidatePointPair(p, v, dst);
 
             double tangentNorm = EuclideanNorm(v);
-            if (tangentNorm < 1e-12)
+            if (tangentNorm == 0.0)
             {
-                p.CopyTo(dst);
+                p.CopyTo(dst);               // exp_p(0) = p; a step of any size above 0 moves the point
                 return;
             }
 
@@ -133,9 +133,6 @@ namespace Maths.Geometry
                 sum += left[i] * right[i];
             return sum;
         }
-
-        private static double Atanh(double x)
-            => 0.5 * Math.Log((1.0 + x) / Math.Max(1e-12, 1.0 - x));
 
         private static double ClampUnitInterval(double x)
             => Math.Min(Math.Max(x, 0.0), 1.0 - 1e-12);
