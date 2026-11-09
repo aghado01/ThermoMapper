@@ -86,22 +86,30 @@ public sealed class PiecewisePolynomial
     /// Πᵢ ((sᵢ(x − tᵢ))₊^q − mᵢ), the product of hinges of degree <paramref name="degree"/> with signs and knots
     /// <paramref name="hinges"/>, each less its offset in <paramref name="offsets"/> (none: all 0). Breakpoints at the
     /// distinct knots; a hinge is its polynomial on the pieces it faces and 0 on the others. With offsets the hinges' means,
-    /// it is the integrand of their covariance, which then forms no difference of large moments.
+    /// it is the integrand of their covariance, which then forms no difference of large moments. A hinge marked in
+    /// <paramref name="slopes"/> enters as its derivative q·s·(s(x − t))₊^(q−1) (E8's derivative moments), of degree q − 1 on the
+    /// pieces it faces; at its knot a piece, closed on the right, holds the left limit.
     /// </summary>
-    public static PiecewisePolynomial HingeProduct(int degree, IReadOnlyList<(int Sign, double Knot)> hinges, IReadOnlyList<double>? offsets = null)
+    public static PiecewisePolynomial HingeProduct(int degree, IReadOnlyList<(int Sign, double Knot)> hinges, IReadOnlyList<double>? offsets = null,
+                                                   IReadOnlyList<bool>? slopes = null)
     {
         ArgumentNullException.ThrowIfNull(hinges);
         if (degree < 1) throw new ArgumentOutOfRangeException(nameof(degree), "A hinge's degree is a positive integer.");
         if (offsets is not null && offsets.Count != hinges.Count) throw new ArgumentException("One offset per hinge.", nameof(offsets));
+        if (slopes is not null && slopes.Count != hinges.Count) throw new ArgumentException("One slope flag per hinge.", nameof(slopes));
         var signs = new int[hinges.Count];
         var knots = new double[hinges.Count];
         var shift = new double[hinges.Count];
+        var slope = new bool[hinges.Count];
+        int total = 0;   // the product's degree
         for (int i = 0; i < hinges.Count; i++)
         {
             if (hinges[i].Sign is not (1 or -1)) throw new ArgumentOutOfRangeException(nameof(hinges), "A hinge's sign is +1 or −1.");
             signs[i] = hinges[i].Sign;
             knots[i] = hinges[i].Knot;
             shift[i] = offsets?[i] ?? 0.0;
+            slope[i] = slopes?[i] ?? false;
+            total += slope[i] ? degree - 1 : degree;
         }
         var breaks = new SortedSet<double>(knots);
         double[] b = [.. breaks];
@@ -121,14 +129,17 @@ public sealed class PiecewisePolynomial
                 if (faces)
                 {
                     double alpha = signs[i] * (centre - knots[i]), beta = signs[i];
+                    int power = slope[i] ? degree - 1 : degree;
                     factor[0] = 1.0;
-                    for (int r = 0; r < degree; r++)
+                    for (int r = 0; r < power; r++)
                     {
                         for (int k = r + 1; k > 0; k--) factor[k] = factor[k] * alpha + factor[k - 1] * beta;
                         factor[0] *= alpha;
                     }
+                    if (slope[i])
+                        for (int k = 0; k <= power; k++) factor[k] *= degree * signs[i];
                     factor[0] -= shift[i];
-                    width = degree;
+                    width = power;
                 }
                 else
                 {
@@ -146,6 +157,6 @@ public sealed class PiecewisePolynomial
             }
             return true;
         }
-        return new PiecewisePolynomial(b, degree * hinges.Count, Expand);
+        return new PiecewisePolynomial(b, total, Expand);
     }
 }

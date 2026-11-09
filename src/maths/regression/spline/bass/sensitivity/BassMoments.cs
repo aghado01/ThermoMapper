@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.Linq;
 
 namespace Maths.Regression.Spline.Bass.Sensitivity;
 
@@ -48,6 +49,12 @@ public sealed class TermPairMoments
 }
 
 /// <summary>
+/// Two terms' gradient moments E[∂ᵢB_a·∂ⱼB_b] (E8): i over <paramref name="Rows"/>, term a's continuous predictors, j over
+/// <paramref name="Columns"/>, term b's, both ascending in <see cref="ProductMeasure"/>'s numbering, in the fit's transformed units.
+/// </summary>
+public sealed record TermPairGradientMoments(int[] Rows, int[] Columns, double[,] Values);
+
+/// <summary>
 /// BASS's moment service (D08, O5): its terms' means E[B], cross moments E[B_a B_b] and their ANOVA structure under a
 /// <see cref="ProductMeasure"/>, for direct sensitivity and, unchanged, basis sensitivity's cross-component pairs. A term's
 /// moment is a product over its variables of one-variable moments: a hinge's or hinge product's by
@@ -60,6 +67,12 @@ public sealed class TermPairMoments
 /// their largest value on [0, 1], and the output side's likewise when the measure covers every output variable. Where it
 /// leaves some out, a term's moments are over the factors it covers, and the caller holds the others at a coordinate, with
 /// the output side's normalizer, which is one constant over the whole part.</para>
+/// <para><b>Gradient moments</b> (E8): a term's partial derivative in a continuous predictor i is its factor on i differentiated,
+/// ∂ᵢB = κ·φ′ᵢ·Π_{v≠i} φᵥ, so E[∂ᵢB_a·∂ⱼB_b] is again a product of one-variable integrals: E[φ′_aᵢφ′_bᵢ] at i = j, E[φ′_aᵢφ_bᵢ] at i
+/// and E[φ_aⱼφ′_bⱼ] at j otherwise (a slope's mean where the other term lacks the variable), and the cross moments or means on
+/// every other variable (<see cref="DesignFactor.SlopePair"/>). <see cref="GradientOuterProduct"/> sums them into C = E[∇f∇fᵀ] for a linear
+/// combination of terms, over the continuous predictors (<see cref="GradientVariables"/>): a categorical input has no derivative,
+/// and its factors enter as cross moments, and an output variable's factors, which the measure may cover, as values.</para>
 /// <para>Every factor, factor pair, term and term pair is computed once and cached, since draws repeat their structures.
 /// One caller at a time.</para>
 /// </summary>
@@ -69,7 +82,12 @@ public sealed class BassMoments
     private readonly Dictionary<(DesignFactor, DesignFactor), (double Cross, double Covariance)> _factorPairs = [];
     private readonly Dictionary<BassTerm, TermShape> _shapes = [];
     private readonly Dictionary<(BassTerm, BassTerm), TermPairMoments> _pairs = [];
+    private readonly Dictionary<DesignFactor, double> _slopeMeans = [];
+    private readonly Dictionary<(DesignFactor, DesignFactor), (double SlopeCross, double SlopeSlope)> _slopePairs = [];
+    private readonly Dictionary<(BassTerm, BassTerm), TermPairGradientMoments> _gradientPairs = [];
     private readonly DesignKernels _kernels;
+    private readonly int[] _gradientVariables;
+    private readonly int[] _gradientPosition;   // a variable's position among the gradient's, −1 for the others
 
     private BassMoments(BassInputs inputs, int degree, ProductMeasure measure)
     {
@@ -77,6 +95,10 @@ public sealed class BassMoments
         Degree = degree;
         Measure = measure;
         _kernels = new DesignKernels(inputs, degree);
+        _gradientVariables = [.. Enumerable.Range(0, inputs.Cases.ContinuousCount).Select(measure.OfContinuous).Order()];
+        _gradientPosition = new int[measure.Count];
+        Array.Fill(_gradientPosition, -1);
+        for (int k = 0; k < _gradientVariables.Length; k++) _gradientPosition[_gradientVariables[k]] = k;
     }
 
     /// <summary>The service for terms over <paramref name="inputs"/> at hinge degree <paramref name="degree"/>.</summary>
@@ -145,6 +167,53 @@ public sealed class BassMoments
     /// factor, whose variable is a level.
     /// </summary>
     public double FactorDerivative(BassTerm term, int position, double value) => Shape(term).Factors[position].Derivative(value);
+
+    /// <summary>The variables a gradient is taken in: the continuous predictors, ascending in the measure's numbering.</summary>
+    public IReadOnlyList<int> GradientVariables => _gradientVariables;
+
+    /// <summary>E[∂ᵢB_a·∂ⱼB_b] for i over <paramref name="a"/>'s continuous predictors and j over <paramref name="b"/>'s.</summary>
+    public TermPairGradientMoments GradientPair(BassTerm a, BassTerm b)
+    {
+        ArgumentNullException.ThrowIfNull(a);
+        ArgumentNullException.ThrowIfNull(b);
+        if (_gradientPairs.TryGetValue((a, b), out TermPairGradientMoments? pair)) return pair;
+        if (_gradientPairs.TryGetValue((b, a), out TermPairGradientMoments? turned))
+        {
+            var values = new double[turned.Columns.Length, turned.Rows.Length];
+            for (int i = 0; i < turned.Rows.Length; i++)
+                for (int j = 0; j < turned.Columns.Length; j++) values[j, i] = turned.Values[i, j];
+            return _gradientPairs[(a, b)] = new TermPairGradientMoments(turned.Columns, turned.Rows, values);
+        }
+        return _gradientPairs[(a, b)] = BuildGradient(Shape(a), Shape(b));
+    }
+
+    /// <summary>
+    /// C = E[∇f∇fᵀ] for f = Σₘ cₘBₘ over <paramref name="terms"/> with <paramref name="coefficients"/> (no intercept: a constant has
+    /// no gradient), in the fit's transformed units, over <see cref="GradientVariables"/> in their order: Σ_{m,n} cₘcₙ·E[∇Bₘ∇Bₙᵀ].
+    /// </summary>
+    public double[,] GradientOuterProduct(IReadOnlyList<BassTerm> terms, ReadOnlySpan<double> coefficients)
+    {
+        ArgumentNullException.ThrowIfNull(terms);
+        if (coefficients.Length != terms.Count) throw new ArgumentException("One coefficient per term.", nameof(coefficients));
+        int p = _gradientVariables.Length;
+        var c = new double[p, p];
+        for (int m = 0; m < terms.Count; m++)
+            for (int n = m; n < terms.Count; n++)
+            {
+                double w = coefficients[m] * coefficients[n];
+                if (w == 0.0) continue;
+                TermPairGradientMoments g = GradientPair(terms[m], terms[n]);
+                for (int i = 0; i < g.Rows.Length; i++)
+                    for (int j = 0; j < g.Columns.Length; j++)
+                    {
+                        int r = _gradientPosition[g.Rows[i]], s = _gradientPosition[g.Columns[j]];
+                        double v = w * g.Values[i, j];
+                        c[r, s] += v;
+                        if (m != n) c[s, r] += v;
+                    }
+            }
+        return c;
+    }
 
     private TermPairMoments Build(TermShape a, TermShape b)
     {
@@ -220,6 +289,66 @@ public sealed class BassMoments
             totals[k] = new VariableCovariance(shared[k], value);
         }
         return new TermPairMoments(crossMoment, product, [.. components], totals);
+    }
+
+    // E[∂ᵢB_a·∂ⱼB_b] over the pair's continuous predictors: per variable of either term, the integral the entry takes there.
+    private TermPairGradientMoments BuildGradient(TermShape a, TermShape b)
+    {
+        // The union of the terms' variables, each with the factor of a and of b on it (−1 where the term lacks it).
+        var union = new List<(int Variable, int A, int B)>();
+        int x = 0, y = 0;
+        while (x < a.Variables.Length || y < b.Variables.Length)
+        {
+            int va = x < a.Variables.Length ? a.Variables[x] : int.MaxValue, vb = y < b.Variables.Length ? b.Variables[y] : int.MaxValue;
+            if (va < vb) union.Add((va, x++, -1));
+            else if (vb < va) union.Add((vb, -1, y++));
+            else union.Add((va, x++, y++));
+        }
+        // Each variable's value integral: E[φ_a φ_b], or the one factor's mean.
+        var cross = new double[union.Count];
+        for (int u = 0; u < union.Count; u++)
+        {
+            (_, int ia, int ib) = union[u];
+            cross[u] = ia < 0 ? b.Means[ib] : ib < 0 ? a.Means[ia] : FactorPair(a.Factors[ia], b.Factors[ib], a.Means[ia], b.Means[ib]).Cross;
+        }
+        int[] rows = [.. Enumerable.Range(0, union.Count).Where(u => union[u].A >= 0 && _gradientPosition[union[u].Variable] >= 0)];
+        int[] columns = [.. Enumerable.Range(0, union.Count).Where(u => union[u].B >= 0 && _gradientPosition[union[u].Variable] >= 0)];
+        var values = new double[rows.Length, columns.Length];
+        double scale = a.Scale * b.Scale;
+        for (int r = 0; r < rows.Length; r++)
+            for (int s = 0; s < columns.Length; s++)
+            {
+                double v = scale;
+                for (int u = 0; u < union.Count; u++)
+                {
+                    (int variable, int ia, int ib) = union[u];
+                    ContinuousMeasure? m = Measure.Continuous(variable);
+                    if (u == rows[r] && u == columns[s]) v *= SlopePair(a.Factors[ia], b.Factors[ib], m!).SlopeSlope;
+                    else if (u == rows[r]) v *= ib < 0 ? SlopeMean(a.Factors[ia], m!) : SlopePair(a.Factors[ia], b.Factors[ib], m!).SlopeCross;
+                    else if (u == columns[s]) v *= ia < 0 ? SlopeMean(b.Factors[ib], m!) : SlopePair(b.Factors[ib], a.Factors[ia], m!).SlopeCross;
+                    else v *= cross[u];
+                }
+                values[r, s] = v;
+            }
+        return new TermPairGradientMoments([.. rows.Select(u => union[u].Variable)], [.. columns.Select(u => union[u].Variable)], values);
+    }
+
+    // E[φ′] for a factor on a continuous variable.
+    private double SlopeMean(DesignFactor f, ContinuousMeasure measure)
+    {
+        if (_slopeMeans.TryGetValue(f, out double mean)) return mean;
+        mean = f.SlopeMean(measure, out double error);
+        LargestError = Math.Max(LargestError, error);
+        return _slopeMeans[f] = mean;
+    }
+
+    // (E[φ′ψ], E[φ′ψ′]) for φ = a and ψ = b on one continuous variable; the order matters for the first.
+    private (double SlopeCross, double SlopeSlope) SlopePair(DesignFactor a, DesignFactor b, ContinuousMeasure measure)
+    {
+        if (_slopePairs.TryGetValue((a, b), out var cached)) return cached;
+        var pair = a.SlopePair(b, measure, out double error);
+        LargestError = Math.Max(LargestError, error);
+        return _slopePairs[(a, b)] = pair;
     }
 
     // (E[φ_a φ_b], Cov(φ_a, φ_b)) for two factors on one variable.

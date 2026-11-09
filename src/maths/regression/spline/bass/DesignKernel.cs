@@ -89,6 +89,20 @@ public abstract record DesignFactor(int Variable)
     /// <summary>E[φ·φ′] and Cov(φ, φ′) for this factor and <paramref name="other"/> on the same variable, given their means.</summary>
     public abstract (double Cross, double Covariance) Pair(DesignFactor other, double meanThis, double meanOther,
                                                            ProductMeasure measure, out double error);
+
+    /// <summary>
+    /// E[φ′] under the variable's own <paramref name="measure"/> (E8's derivative moments), with the error estimate as for
+    /// <see cref="Mean"/>. Only a continuous factor has a slope, so it takes the one-variable measure; a factor on a level index
+    /// refuses. Where an atom sits on a kink, the slope there is <see cref="Derivative"/>'s, the mean of its one-sided limits.
+    /// </summary>
+    public abstract double SlopeMean(ContinuousMeasure measure, out double error);
+
+    /// <summary>
+    /// E[φ′·ψ] and E[φ′·ψ′] for this factor φ and <paramref name="other"/>, ψ, on the same continuous variable, under its
+    /// <paramref name="measure"/>: the one-variable integrals a gradient's outer product reduces to (E[φ·ψ] is <see cref="Pair"/>'s,
+    /// and E[φ·ψ′] is <paramref name="other"/>'s SlopeCross with this). At an atom on a kink the slopes are <see cref="Derivative"/>'s.
+    /// </summary>
+    public abstract (double SlopeCross, double SlopeSlope) SlopePair(DesignFactor other, ContinuousMeasure measure, out double error);
 }
 
 /// <summary>A hinge (s(x − t))₊^q as a factor: the sign, the knot's index and value, and the degree.</summary>
@@ -127,6 +141,65 @@ public sealed record HingeDesignFactor(int Variable, int Sign, int Knot, double 
         error = Math.Max(ec, ev);
         return (cross, covariance);
     }
+
+    /// <inheritdoc/>
+    public override double SlopeMean(ContinuousMeasure measure, out double error)
+    {
+        ArgumentNullException.ThrowIfNull(measure);
+        (double mean, error) = PiecewisePolynomial.HingeProduct(Degree, [(Sign, KnotValue)], slopes: [true]).Expectation(measure.Measure, measure.Lower, measure.Upper);
+        return mean + Kinks(measure, [this], [true]);
+    }
+
+    /// <inheritdoc/>
+    public override (double SlopeCross, double SlopeSlope) SlopePair(DesignFactor other, ContinuousMeasure measure, out double error)
+    {
+        ArgumentNullException.ThrowIfNull(measure);
+        if (other is not HingeDesignFactor b || b.Variable != Variable) throw new ArgumentException("A hinge pairs with a hinge on its variable.", nameof(other));
+        if (b.Degree != Degree) throw new ArgumentException("A pair's hinges share the fit's degree.", nameof(other));
+        (int, double)[] hinges = [(Sign, KnotValue), (b.Sign, b.KnotValue)];
+        (double cross, double ec) = PiecewisePolynomial.HingeProduct(Degree, hinges, slopes: [true, false]).Expectation(measure.Measure, measure.Lower, measure.Upper);
+        (double slope, double es) = PiecewisePolynomial.HingeProduct(Degree, hinges, slopes: [true, true]).Expectation(measure.Measure, measure.Lower, measure.Upper);
+        error = Math.Max(ec, es);
+        return (cross + Kinks(measure, [this, b], [true, false]), slope + Kinks(measure, [this, b], [true, true]));
+    }
+
+    // At degree one a slope jumps at its knot, and the pieces, closed on the right, give an atom there the left limit. Under an
+    // empirical marginal, whose atoms sit on the knots, each such atom takes Derivative's value instead, the mean of the one-sided
+    // limits (F-X3's convention, which the gradient readout reads): its mass times the product at the knot, less the product the
+    // pieces gave it. Every other factor is continuous at the knot.
+    private static double Kinks(ContinuousMeasure measure, HingeDesignFactor[] factors, bool[] slopes)
+    {
+        if (measure.Measure is not Empirical atoms || factors[0].Degree != 1) return 0.0;
+        double correction = 0.0;
+        for (int k = 0; k < factors.Length; k++)
+        {
+            if (!slopes[k]) continue;
+            double t = factors[k].KnotValue;
+            bool seen = false;
+            for (int j = 0; j < k; j++) seen |= slopes[j] && factors[j].KnotValue == t;
+            if (seen) continue;
+            double mass = atoms.IntervalProbability(Math.BitDecrement(t), t);
+            if (mass == 0.0) continue;
+            double at = 1.0, left = 1.0;
+            for (int j = 0; j < factors.Length; j++)
+            {
+                HingeDesignFactor f = factors[j];
+                if (slopes[j])
+                {
+                    at *= f.Derivative(t);
+                    left *= f.KnotValue == t ? (f.Sign < 0 ? f.Sign : 0.0) : f.Derivative(t);
+                }
+                else
+                {
+                    double v = f.Value(t);
+                    at *= v;
+                    left *= v;
+                }
+            }
+            correction += mass * (at - left);
+        }
+        return correction;
+    }
 }
 
 /// <summary>
@@ -163,6 +236,25 @@ public sealed record LegendreDesignFactor(int Variable, int Degree) : DesignFact
         return (cross, covariance);
     }
 
+    /// <inheritdoc/>
+    public override double SlopeMean(ContinuousMeasure measure, out double error)
+    {
+        ArgumentNullException.ThrowIfNull(measure);
+        (double mean, error) = Slopes(Degree, true, 0, false).Expectation(measure.Measure, measure.Lower, measure.Upper);
+        return mean;
+    }
+
+    /// <inheritdoc/>
+    public override (double SlopeCross, double SlopeSlope) SlopePair(DesignFactor other, ContinuousMeasure measure, out double error)
+    {
+        ArgumentNullException.ThrowIfNull(measure);
+        if (other is not LegendreDesignFactor b || b.Variable != Variable) throw new ArgumentException("A Legendre factor pairs with a Legendre factor on its variable.", nameof(other));
+        (double cross, double ec) = Slopes(Degree, true, b.Degree, false).Expectation(measure.Measure, measure.Lower, measure.Upper);
+        (double slope, double es) = Slopes(Degree, true, b.Degree, true).Expectation(measure.Measure, measure.Lower, measure.Upper);
+        error = Math.Max(ec, es);
+        return (cross, slope);
+    }
+
     // (ψ_a − m_a)(ψ_b − m_b) as one piece, b = 0 standing for the constant 1 with no offset: a single factor's mean.
     private static PiecewisePolynomial Product(int a, int b, double offsetA, double offsetB)
         => new([], a + b, (piece, centre, coefficients) =>
@@ -176,6 +268,27 @@ public sealed record LegendreDesignFactor(int Variable, int Degree) : DesignFact
                 for (int j = 0; j <= b; j++) coefficients[i + j] += ca[i] * cb[j];
             return true;
         });
+
+    // ψ_a^(da)·ψ_b^(db), each the polynomial or its derivative, as one piece: the expansion about the centre differentiated term
+    // by term, (k + 1)·c_{k+1} for its kth coefficient. A slope of ψ_0 is zero, and b = 0 without a slope stands for the constant 1.
+    private static PiecewisePolynomial Slopes(int a, bool slopeA, int b, bool slopeB)
+    {
+        int degreeA = slopeA ? a - 1 : a, degreeB = slopeB ? b - 1 : b;
+        if (degreeA < 0 || degreeB < 0) return new([], 0, (piece, centre, coefficients) => false);
+        return new([], degreeA + degreeB, (piece, centre, coefficients) =>
+        {
+            Span<double> ca = stackalloc double[a + 1], cb = stackalloc double[b + 1];
+            ShiftedLegendre.Coefficients(a, centre, ca);
+            ShiftedLegendre.Coefficients(b, centre, cb);
+            if (slopeA)
+                for (int k = 0; k < a; k++) ca[k] = (k + 1) * ca[k + 1];
+            if (slopeB)
+                for (int k = 0; k < b; k++) cb[k] = (k + 1) * cb[k + 1];
+            for (int i = 0; i <= degreeA; i++)
+                for (int j = 0; j <= degreeB; j++) coefficients[i + j] += ca[i] * cb[j];
+            return true;
+        });
+    }
 }
 
 /// <summary>The indicator 1(z ∈ D) of a categorical subset as a factor, on a level index.</summary>
@@ -209,6 +322,13 @@ public sealed record SubsetDesignFactor(int Variable, CategoricalFactor Subset) 
             if (b.Subset.Contains(level)) both += p[level];
         return (both, both - meanThis * meanOther);
     }
+
+    /// <inheritdoc/>
+    public override double SlopeMean(ContinuousMeasure measure, out double error) => throw new NotSupportedException("A level index has no derivative.");
+
+    /// <inheritdoc/>
+    public override (double SlopeCross, double SlopeSlope) SlopePair(DesignFactor other, ContinuousMeasure measure, out double error)
+        => throw new NotSupportedException("A level index has no derivative.");
 }
 
 /// <summary>R's hinge arithmetic: the value of (s(x − t))₊^q, its derivative, and the peak that normalizes a product.</summary>
