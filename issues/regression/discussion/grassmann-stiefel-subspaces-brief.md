@@ -53,6 +53,18 @@ Work through where subspace geometry earns its place in the regression engine: p
 
 ## Report
 
+### 2026-11-08, the IRLS chip's outcome, and what it adds to the angle-primitive question
+
+The [IRLS chip](../../geometry/irls-scale-brief.md#report) landed `61a7fac` and `e70afaf`.
+- **What the solver now does.** It reads its constants in units of the data's spread, a weighted lower median of the radii, recomputed each iteration. The old absolute semantics stay reachable as `IrlsScale.Data`, pinned bit for bit. A median that is a data point is now returned exactly.
+- **The arccos item now weighs more.** In spread units the median still stalled below s = 1e-4, because `Distance`'s arccos error (about ε/2θ²) entered the radii, so the solver now reads its radii from ‖Log‖. The sphere has the same floor as the Grassmannian. The Exp maps' absolute 1e-12 guard bounds the median's relative accuracy at about 1e-12/s. The cut-locus fallback depends on `Distance` being right near π/2.
+- **This strengthens the case for the stable principal-angle routine** (synthesis item 2, and the chip's finding 4). Its placement in LinAlg still waits for the user.
+- **Outside this discussion, and also waiting for the user:**
+  - `MoMPCA`'s α̂ clamp breaks its equivariance beyond about 1e3 either way, so the 1e-6 case was not tested.
+  - Weiszfeld's slow rate near a nearly optimal data point.
+  - `EuclideanMedian` stalls when warm-started on a data point.
+  - GMM's robust initialization has no test.
+
 ### 2026-11-08, where the subspace code should live (proposed)
 
 The user is weighing a specialized implementation under Regression, since Geometry was not meant to be imported by Bayesian code.
