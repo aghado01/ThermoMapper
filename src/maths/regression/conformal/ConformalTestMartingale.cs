@@ -292,29 +292,127 @@ public sealed class BettingCapital
     }
 }
 
-/// <summary>One arrival of a conformal test martingale: its smoothed p-value, the bet's log at it, and the log capital after it.</summary>
-public readonly record struct MartingaleStep(SmoothedPValue PValue, double LogBet, double LogCapital);
+/// <summary>The procedure that reads a conformal test martingale's capital for an alarm (Vovk, <i>Statistical Science</i> 2021).</summary>
+public enum AlarmProcedure
+{
+    /// <summary>Ville's: Sₙ/S_τ ≥ c, the capital since the last alarm τ (0 at the start). Under exchangeability the probability of any
+    /// false alarm in a run is at most 1/c, proved (<c>ville</c>).</summary>
+    Ville,
+
+    /// <summary>CUSUM: max over τ ≤ i &lt; n of Sₙ/Sᵢ ≥ c, by Page's recursion γₙ = fₙ·max(γₙ₋₁, 1). It reads past a capital lost before a
+    /// change. The mean time to a false alarm is at least c, and, repeated, the long-run frequency of false alarms at most 1/c: posed
+    /// (Vovk 2021, Propositions 4.2 and 4.4), not proved.</summary>
+    Cusum,
+
+    /// <summary>Shiryaev–Roberts: the sum over τ ≤ i &lt; n of Sₙ/Sᵢ ≥ c, by Rₙ = fₙ·(Rₙ₋₁ + 1). Its guarantees are CUSUM's, posed, not
+    /// proved; CUSUM alarms no more often.</summary>
+    ShiryaevRoberts,
+}
+
+/// <summary>What an alarm guarantees under exchangeability, in its procedure's terms, and whether it is proved (M-2) or posed.</summary>
+public sealed record AlarmGuarantee(string Statement, bool Proved);
+
+/// <summary>
+/// An alarm on a conformal test martingale's capital: its procedure (<see cref="AlarmProcedure"/>) and threshold c &gt; 1, its statistic in
+/// logs, and the arrivals at which it fired. Each statistic reads only the capital so far. After each alarm it restarts from the capital
+/// then, so each alarm tests the stream since the last; its guarantee is per run. A capital lost to a zero bet stays lost for Ville's,
+/// and CUSUM and Shiryaev–Roberts read past it from the next step. Not thread-safe.
+/// </summary>
+public sealed class MartingaleAlarm
+{
+    private readonly double _logThreshold;
+    private readonly List<int> _times = [];
+    private int _count;
+
+    /// <param name="procedure">The procedure.</param>
+    /// <param name="threshold">c, above 1.</param>
+    public MartingaleAlarm(AlarmProcedure procedure, double threshold)
+    {
+        if (!(threshold > 1.0 && double.IsFinite(threshold))) throw new ArgumentOutOfRangeException(nameof(threshold), "The threshold c is finite and above 1.");
+        if (!Enum.IsDefined(procedure)) throw new ArgumentOutOfRangeException(nameof(procedure));
+        Procedure = procedure;
+        Threshold = threshold;
+        _logThreshold = Math.Log(threshold);
+        LogStatistic = Start;
+    }
+
+    /// <summary>The procedure.</summary>
+    public AlarmProcedure Procedure { get; }
+
+    /// <summary>c.</summary>
+    public double Threshold { get; }
+
+    /// <summary>The statistic's log after the latest step: ln(Sₙ/S_τ), ln γₙ or ln Rₙ.</summary>
+    public double LogStatistic { get; private set; }
+
+    /// <summary>The arrivals at which it fired, counted from 1.</summary>
+    public IReadOnlyList<int> AlarmTimes => _times;
+
+    /// <summary>Its guarantee under exchangeability, in its procedure's terms.</summary>
+    public AlarmGuarantee Guarantee => Procedure == AlarmProcedure.Ville
+        ? new AlarmGuarantee($"The probability of any false alarm in a run since the last alarm is at most 1/c = {1.0 / Threshold:G4} (Ville's inequality).", true)
+        : new AlarmGuarantee($"The mean time to a false alarm is at least c = {Threshold:G4}, and repeated, the long-run frequency of false alarms is at most 1/c "
+                             + $"= {1.0 / Threshold:G4} (Vovk 2021, Propositions 4.2 and 4.4): posed, not proved.", false);
+
+    // Ville's run starts at S/S = 1; CUSUM's and Shiryaev–Roberts's at γ₀ = R₀ = 0.
+    private double Start => Procedure == AlarmProcedure.Ville ? 0.0 : double.NegativeInfinity;
+
+    /// <summary>Advances by one step's ln fₙ(pₙ); true when the alarm fires at this step, after which it restarts.</summary>
+    public bool Step(double logBet)
+    {
+        if (double.IsNaN(logBet) || double.IsPositiveInfinity(logBet)) throw new ArgumentException("A bet's log is finite or −∞.", nameof(logBet));
+        _count++;
+        double previous = LogStatistic;
+        LogStatistic = Procedure switch
+        {
+            AlarmProcedure.Ville => previous + logBet,
+            AlarmProcedure.Cusum => logBet + Math.Max(previous, 0.0),
+            _ => logBet + SoftPlus(previous),
+        };
+        if (!(LogStatistic >= _logThreshold)) return false;
+        _times.Add(_count);
+        LogStatistic = Start;
+        return true;
+    }
+
+    // ln(1 + eˣ), with ln(1 + 0) = 0 at x = −∞.
+    private static double SoftPlus(double x) => x > 0.0 ? x + Math.Log(1.0 + Math.Exp(-x)) : Math.Log(1.0 + Math.Exp(x));
+}
+
+/// <summary>One arrival of a conformal test martingale: its smoothed p-value, the bet's log at it, the log capital after it, and the alarms
+/// that fired at it (empty when none did).</summary>
+public readonly record struct MartingaleStep(SmoothedPValue PValue, double LogBet, double LogCapital, IReadOnlyList<AlarmProcedure>? Fired = null);
 
 /// <summary>
 /// A conformal test martingale (E35; Vovk, Nouretdinov and Gammerman 2003; Vovk et al. 2021): each arrival's conformity score is ranked
 /// into its smoothed p-value (<see cref="SmoothedPValues"/>, M-1), and a betting function turns the p-values into capital
 /// (<see cref="BettingCapital"/>, M-2). Under exchangeability of the scored units the capital is a (super)martingale with expectation
 /// at most 1, so its value at any stopping time that reads only the past is an e-value (<see cref="EValue"/>), and growth is evidence
-/// against exchangeability. Not thread-safe: one per stream.
+/// against exchangeability. Alarms read the capital (<see cref="MartingaleAlarm"/>): Ville's, proved, and CUSUM and Shiryaev–Roberts, whose
+/// guarantees are posed. Not thread-safe: one per stream.
 /// </summary>
 public sealed class ConformalTestMartingale
 {
+    private static readonly AlarmProcedure[] None = [];
     private readonly SmoothedPValues _pValues;
     private readonly BettingCapital _capital;
     private readonly List<double> _path = [];
+    private readonly MartingaleAlarm[] _alarms;
 
     /// <param name="bet">The betting function, fresh for this stream.</param>
     /// <param name="seed">The tie-breaking draws' seed.</param>
-    public ConformalTestMartingale(IBettingFunction bet, int seed)
+    /// <param name="alarms">The alarms that read the capital, each fresh for this stream.</param>
+    public ConformalTestMartingale(IBettingFunction bet, int seed, params MartingaleAlarm[] alarms)
     {
         _capital = new BettingCapital(bet);
         _pValues = new SmoothedPValues(seed);
+        ArgumentNullException.ThrowIfNull(alarms);
+        _alarms = [.. alarms];
+        foreach (MartingaleAlarm alarm in _alarms) ArgumentNullException.ThrowIfNull(alarm, nameof(alarms));
     }
+
+    /// <summary>The alarms, with their statistics, times and guarantees.</summary>
+    public IReadOnlyList<MartingaleAlarm> Alarms => _alarms;
 
     /// <summary>The arrivals so far.</summary>
     public int Count => _capital.Count;
@@ -334,6 +432,9 @@ public sealed class ConformalTestMartingale
         SmoothedPValue p = _pValues.Add(score);
         CapitalStep step = _capital.Add(p.P);
         _path.Add(step.LogCapital);
-        return new MartingaleStep(p, step.LogBet, step.LogCapital);
+        List<AlarmProcedure>? fired = null;
+        foreach (MartingaleAlarm alarm in _alarms)
+            if (alarm.Step(step.LogBet)) (fired ??= []).Add(alarm.Procedure);
+        return new MartingaleStep(p, step.LogBet, step.LogCapital, fired is null ? None : fired);
     }
 }
