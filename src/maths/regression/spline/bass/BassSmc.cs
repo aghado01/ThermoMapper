@@ -180,6 +180,7 @@ public sealed class BassSmcKernel : ISmcKernel<BassParticle>
         _cancellation.ThrowIfCancellationRequested();
         BassStructureMoves moves = particle.Moves;
         if (_history is not null) moves.ShareHistory(_history);
+        moves.InverseTemperature = stage.Temperature.InverseTemperature;
         var chain = new ReversibleJumpChain<BassState>(moves.Moves, target, particle.State, rng, stage.Temperature);
         chain.Step();
         bool accepted = chain.Accepted > 0;

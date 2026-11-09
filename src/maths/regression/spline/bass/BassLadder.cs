@@ -126,6 +126,9 @@ public sealed class BassLadder
     /// state after them.</summary>
     public BassState Step()
     {
+        // Each rung's moves read its b, which an adaptive ladder moves in burn-in (E4's residual birth reads it).
+        IReadOnlyList<ReversibleJumpChain<BassState>> rungs = Tempering.Replicas;
+        for (int i = 0; i < _structures.Length && i < rungs.Count; i++) _structures[i].InverseTemperature = rungs[i].Temperature.InverseTemperature;
         Tempering.Step();
         FollowTargets();
         HandOver();

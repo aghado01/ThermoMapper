@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 using Maths.Distributions;
 using Maths.Rng;
 
@@ -34,6 +35,40 @@ public interface IBassProposalKernel
     /// <summary>A change of <paramref name="term"/>, a term of the structure <paramref name="counts"/> describes, with its
     /// within-move log ratio ln q(reverse)/q(forward).</summary>
     BassTermMove ProposeChange(Xoshiro256PlusPlus rng, BassTerm term, BassTermCounts counts);
+
+    /// <summary>A birth's term as <see cref="DrawBirth(Xoshiro256PlusPlus, BassTermCounts)"/> draws it, for a kernel that also
+    /// reads the structure <paramref name="at"/> (E4's residual birth); a kernel that reads only the counts ignores it.</summary>
+    BassTerm? DrawBirth(Xoshiro256PlusPlus rng, BassTermCounts counts, BassBirthContext? at) => DrawBirth(rng, counts);
+
+    /// <summary>A birth's within-move log ratio as <see cref="LogBirthRatio(BassTerm, BassTermCounts)"/> gives it, the birth
+    /// starting from <paramref name="at"/>.</summary>
+    double LogBirthRatio(BassTerm born, BassTermCounts counts, BassBirthContext? at) => LogBirthRatio(born, counts);
+
+    /// <summary>A death's within-move log ratio as <see cref="LogDeathRatio(BassTerm, BassTermCounts)"/> gives it, the reverse birth
+    /// starting from <paramref name="reduced"/>, the structure without the dying term.</summary>
+    double LogDeathRatio(BassTerm dying, BassTermCounts counts, BassBirthContext? reduced) => LogDeathRatio(dying, counts);
+}
+
+/// <summary>
+/// The structure a birth starts from, as a proposal kernel may read it beyond its counts (F-X4, E4's residual birth): its terms,
+/// and the inverse temperature b of the law the move targets, 1 for a chain, a rung's or an SMC stage's b otherwise.
+/// </summary>
+public sealed class BassBirthContext
+{
+    /// <summary>The structure <paramref name="terms"/> at inverse temperature <paramref name="inverseTemperature"/>.</summary>
+    public BassBirthContext(IReadOnlyList<BassTerm> terms, double inverseTemperature)
+    {
+        ArgumentNullException.ThrowIfNull(terms);
+        if (!(inverseTemperature >= 0.0 && inverseTemperature <= 1.0)) throw new ArgumentOutOfRangeException(nameof(inverseTemperature), "b lies in [0, 1].");
+        Terms = terms;
+        InverseTemperature = inverseTemperature;
+    }
+
+    /// <summary>The structure's terms.</summary>
+    public IReadOnlyList<BassTerm> Terms { get; }
+
+    /// <summary>b, the inverse temperature of the law the move targets.</summary>
+    public double InverseTemperature { get; }
 }
 
 /// <summary>

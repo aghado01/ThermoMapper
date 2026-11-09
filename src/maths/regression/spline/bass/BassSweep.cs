@@ -121,6 +121,13 @@ public sealed class BassStructureMoves
     /// <summary>The inclusion history E4's history birth reads (<see cref="BassInclusionHistory"/>); null without one.</summary>
     public BassInclusionHistory? History => (_kernel as BassBirthMixture)?.History;
 
+    /// <summary>b, the inverse temperature of the law these moves' chain targets: 1 by default; a ladder sets each rung's and SMC
+    /// each stage's. Only a kernel that reads a birth's context (E4's residual birth) reads it.</summary>
+    public double InverseTemperature { get; internal set; } = 1.0;
+
+    // A birth's context from `terms` for a kernel that reads it (E4's birth mixture); null for the model's own kernel.
+    private BassBirthContext? ContextOf(IReadOnlyList<BassTerm> terms) => _kernel is BassBirthMixture ? new BassBirthContext(terms, InverseTemperature) : null;
+
     /// <summary>Reads <paramref name="history"/> in place of this chain's own: a ladder's rungs share their b = 1 rung's, and an
     /// SMC stage's particles the stage's.</summary>
     internal void ShareHistory(BassInclusionHistory history)
@@ -542,13 +549,14 @@ public sealed class BassStructureMoves
         public Proposal<BassState>? Propose(BassState current, Xoshiro256PlusPlus rng)
         {
             owner.Sync(current);
-            if (owner._kernel.DrawBirth(rng, owner._counts) is not { } term)
+            BassBirthContext? at = owner.ContextOf(current.TermArray);
+            if (owner._kernel.DrawBirth(rng, owner._counts, at) is not { } term)
             {
                 owner.EmptyBirths++;
                 owner._candidate = null;
                 return null;
             }
-            double logRatio = owner._kernel.LogBirthRatio(term, owner._counts);
+            double logRatio = owner._kernel.LogBirthRatio(term, owner._counts, at);
             DesignProposal proposal = owner._design.ProposeBirth(term);
             BassTerm[] terms = [.. current.TermArray, term];
             return new Proposal<BassState>(owner.Candidate(current, terms, proposal, BassMoveKind.Birth, term, null), logRatio, 0.0);
@@ -567,9 +575,9 @@ public sealed class BassStructureMoves
             if (current.Count == 0) return null;
             int index = BassDraws.Below(rng, current.Count);
             BassTerm term = current.TermArray[index];
-            double logRatio = owner._kernel.LogDeathRatio(term, owner._counts);
-            DesignProposal proposal = owner._design.ProposeDeath(index);
             BassTerm[] terms = [.. current.TermArray[..index], .. current.TermArray[(index + 1)..]];
+            double logRatio = owner._kernel.LogDeathRatio(term, owner._counts, owner.ContextOf(terms));
+            DesignProposal proposal = owner._design.ProposeDeath(index);
             return new Proposal<BassState>(owner.Candidate(current, terms, proposal, BassMoveKind.Death, null, term), logRatio, 0.0);
         }
     }
