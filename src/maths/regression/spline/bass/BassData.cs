@@ -205,8 +205,85 @@ public abstract record BassResponse
     /// <summary>N = n_x · n_r, the observations D03's unit information counts.</summary>
     public int Observations => Cases * Locations;
 
-    /// <summary>Every value, case by case and, within a case, location by location.</summary>
+    /// <summary>K, the outputs each observation holds on one basis (E34): 1 but for a <see cref="MultiOutputResponse"/>.</summary>
+    public virtual int Outputs => 1;
+
+    /// <summary>Every value, case by case and, within a case, location by location, or output by output for several outputs.</summary>
     internal abstract ReadOnlySpan<double> Values { get; }
+}
+
+/// <summary>
+/// Several continuous outputs per case on one basis (E34): Y is n × K, every output observed at every case, which share one structure
+/// and a K × K noise covariance Σ, integrated out. K = 1 is allowed, the multi-output fit of one output, which equals the scalar fit.
+/// Refused: an empty Y; a missing or non-finite value, since missing outputs are refused at first (E34's decision 5); names that are not
+/// one per output, empty, or used twice.
+/// </summary>
+public sealed record MultiOutputResponse : BassResponse
+{
+    private readonly double[] _y;   // case by case, output by output
+    private readonly int _cases, _outputs;
+
+    /// <summary>The response <paramref name="y"/> (cases × outputs) with its outputs' <paramref name="names"/>, copied.</summary>
+    public MultiOutputResponse(double[,] y, IReadOnlyList<string> names)
+    {
+        ArgumentNullException.ThrowIfNull(y);
+        ArgumentNullException.ThrowIfNull(names);
+        _cases = y.GetLength(0);
+        _outputs = y.GetLength(1);
+        if (_cases == 0 || _outputs == 0) throw new ArgumentException("The response has no values.", nameof(y));
+        if ((long)_cases * _outputs > int.MaxValue) throw new ArgumentException("The response has too many values.", nameof(y));
+        if (names.Count != _outputs) throw new ArgumentException($"There are {names.Count} names for {_outputs} outputs.", nameof(names));
+        var seen = new HashSet<string>(StringComparer.Ordinal);
+        foreach (string name in names)
+        {
+            if (string.IsNullOrEmpty(name)) throw new ArgumentException("An output's name is empty.", nameof(names));
+            if (!seen.Add(name)) throw new ArgumentException($"The output name '{name}' is used twice.", nameof(names));
+        }
+        _y = new double[_cases * _outputs];
+        for (int i = 0; i < _cases; i++)
+            for (int k = 0; k < _outputs; k++)
+            {
+                double v = y[i, k];
+                if (!double.IsFinite(v))
+                    throw new ArgumentException($"Case {i} of output '{names[k]}' is missing or not finite; missing outputs are refused (E34's decision 5).", nameof(y));
+                _y[i * _outputs + k] = v;
+            }
+        Names = Array.AsReadOnly([.. names]);
+    }
+
+    /// <summary>The outputs' names, in column order.</summary>
+    public IReadOnlyList<string> Names { get; }
+
+    /// <summary>The value of case <paramref name="case"/> at output <paramref name="output"/>.</summary>
+    public double this[int @case, int output]
+    {
+        get
+        {
+            if ((uint)@case >= (uint)_cases) throw new ArgumentOutOfRangeException(nameof(@case));
+            if ((uint)output >= (uint)_outputs) throw new ArgumentOutOfRangeException(nameof(output));
+            return _y[@case * _outputs + output];
+        }
+    }
+
+    /// <summary>Output <paramref name="output"/>'s column, copied.</summary>
+    public double[] Column(int output)
+    {
+        if ((uint)output >= (uint)_outputs) throw new ArgumentOutOfRangeException(nameof(output));
+        var column = new double[_cases];
+        for (int i = 0; i < _cases; i++) column[i] = _y[i * _outputs + output];
+        return column;
+    }
+
+    /// <inheritdoc/>
+    public override int Cases => _cases;
+
+    /// <inheritdoc/>
+    public override int Locations => 1;
+
+    /// <inheritdoc/>
+    public override int Outputs => _outputs;
+
+    internal override ReadOnlySpan<double> Values => _y;
 }
 
 /// <summary>A scalar response, one value per case. Refused: no values, or a non-finite one.</summary>

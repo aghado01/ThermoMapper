@@ -16,20 +16,23 @@ namespace Maths.Regression.Spline.Bass;
 /// target's own.
 /// </summary>
 public readonly record struct BassStructureFit(int Terms, double LogTermPrior, double ResidualSquares, double FittedSquares,
-                                               BassRefusal? Refusal = null, RidgeColumns? Ridge = null, WorkingResponse? Working = null)
+                                               BassRefusal? Refusal = null, RidgeColumns? Ridge = null, WorkingResponse? Working = null,
+                                               OutputForms? Outputs = null)
 {
-    /// <summary>The design's current structure, whose terms' log prior is <paramref name="logTermPrior"/>.</summary>
+    /// <summary>The design's current structure, whose terms' log prior is <paramref name="logTermPrior"/>. Several outputs (E34) carry
+    /// their K × K forms in <see cref="Outputs"/>, the sums of squares then NaN.</summary>
     public static BassStructureFit Of(BassDesign design, double logTermPrior)
     {
         ArgumentNullException.ThrowIfNull(design);
-        return new(design.Count, logTermPrior, design.ResidualSquares, design.FittedSquares, null, design.PriorTerms, design.Working);
+        return new(design.Count, logTermPrior, design.ResidualSquares, design.FittedSquares, null, design.PriorTerms, design.Working,
+                   design.OutputForms);
     }
 
     /// <summary>A proposed structure, admitted or refused, whose terms' log prior is <paramref name="logTermPrior"/>, fitted on
     /// <paramref name="working"/>.</summary>
     public static BassStructureFit Of(DesignProposal proposal, double logTermPrior, WorkingResponse? working = null) => proposal.Refusal is { } reason
         ? Refused(reason)
-        : new(proposal.Columns, logTermPrior, proposal.ResidualSquares, proposal.FittedSquares, null, proposal.Ridge, working);
+        : new(proposal.Columns, logTermPrior, proposal.ResidualSquares, proposal.FittedSquares, null, proposal.Ridge, working, proposal.Outputs);
 
     /// <summary>A structure outside F for <paramref name="reason"/>.</summary>
     public static BassStructureFit Refused(BassRefusal reason) => new(-1, double.NaN, double.NaN, double.NaN, reason);
@@ -98,8 +101,9 @@ public sealed class BassTarget : ISamplingTarget<BassState>
         PriorLevel = resolved.PriorLevel;
         CoefficientConstant = resolved.CoefficientConstant;
         Sigma2Rate = resolved.Sigma2Rate;
+        Outputs = resolved.Outputs;
         _resolvedOn = working;
-        _exactFitSquares = Sigma2 is null && GivenSigma2 is null ? FloorSquared * Weighting.Mass * resolved.WeightedMeanSquare : double.NegativeInfinity;
+        _exactFitSquares = Sigma2 is null && GivenSigma2 is null && Outputs is null ? FloorSquared * Weighting.Mass * resolved.WeightedMeanSquare : double.NegativeInfinity;
     }
 
     // `source` given σ² = `sigma2`: every other part shared.
@@ -118,6 +122,7 @@ public sealed class BassTarget : ISamplingTarget<BassState>
         PriorLevel = source.PriorLevel;
         CoefficientConstant = source.CoefficientConstant;
         Sigma2Rate = source.Sigma2Rate;
+        Outputs = source.Outputs;
         _resolvedOn = source._resolvedOn;
         _exactFitSquares = double.NegativeInfinity;
     }
@@ -129,12 +134,29 @@ public sealed class BassTarget : ISamplingTarget<BassState>
     public BassTarget Given(double sigma2)
     {
         if (!(sigma2 > 0.0) || double.IsPositiveInfinity(sigma2)) throw new ArgumentOutOfRangeException(nameof(sigma2), "σ² must be positive and finite.");
+        if (Outputs is not null) throw new InvalidOperationException("Several outputs integrate Σ; a Σ given arrives with E34's noise (slice 4).");
         return new BassTarget(this, sigma2);
     }
 
-    /// <summary>Whether the values are complete: under proper σ² and intercept priors, or with σ² given and the intercept
+    /// <summary>Whether the values are complete: under proper σ² (or Σ) and intercept priors, or with σ² given and the intercept
     /// proper. τ's prior is a separate condition, for an evidence, since a ratio across b does not read it.</summary>
-    public bool HasCompleteValues => (Sigma2 is not null || GivenSigma2 is not null) && Intercept != GPriorCentre.Flat;
+    public bool HasCompleteValues => (Sigma2 is not null || GivenSigma2 is not null || Outputs is not null) && Intercept != GPriorCentre.Flat;
+
+    /// <summary>Several outputs' resolution (E34): their means, levels and Σ's prior, which the marginal reads; null for one response.</summary>
+    public BassResolvedOutputs? Outputs { get; }
+
+    /// <summary>
+    /// Several outputs' marginal for <paramref name="fit"/> at (<paramref name="tau"/>, <paramref name="inverseTemperature"/>): the g-form's
+    /// K × K closed form on the structure's forms (<see cref="OutputMarginal.CentredAt"/>), under the intercept's convention; Σ's posterior
+    /// reads it too (E34).
+    /// </summary>
+    public OutputMarginal OutputsMarginal(BassStructureFit fit, double tau, double inverseTemperature = 1.0)
+    {
+        if (Outputs is not { } outputs) throw new InvalidOperationException("The target holds one response; its marginal is Marginal's.");
+        if (Refusal(fit) is { } reason) throw new ArgumentException($"The structure lies outside F ({reason}).", nameof(fit));
+        OutputForms forms = fit.Outputs ?? throw new ArgumentException("A structure of several outputs carries their forms.", nameof(fit));
+        return OutputMarginal.CentredAt(fit.Terms, forms.Residual, forms.Fitted, Observations, outputs.Means, Intercept, tau / CoefficientConstant, inverseTemperature);
+    }
 
     /// <summary>The prior on structures.</summary>
     public BassStructurePrior Prior { get; }
@@ -231,6 +253,7 @@ public sealed class BassTarget : ISamplingTarget<BassState>
     /// <paramref name="inverseTemperature"/>), the integrated form's; σ²'s posterior reads it too.</summary>
     public GPriorMarginal Marginal(BassStructureFit fit, double tau, double inverseTemperature = 1.0)
     {
+        if (Outputs is not null) throw new InvalidOperationException("Several outputs' marginal is a K × K block's: read OutputsMarginal.");
         if (Refusal(fit) is { } reason) throw new ArgumentException($"The structure lies outside F ({reason}).", nameof(fit));
         double precision = tau / CoefficientConstant;
         GPriorWeights weighting = fit.Working?.Weighting ?? Weighting;
@@ -291,7 +314,17 @@ public sealed class BassTarget : ISamplingTarget<BassState>
     /// proper defaults; b &gt; 0 under Jeffreys; and under the flat intercept, whose α integral spends one observation,
     /// g₁ + (Nb − 1)/2 &gt; 0, or b &gt; 0 alone with σ² given. The linear form is defined on all of [0, 1].
     /// </summary>
-    public bool Defines(double inverseTemperature) => Defines(Form, Intercept, Sigma2, Weighting.Count, inverseTemperature, GivenSigma2 is not null);
+    public bool Defines(double inverseTemperature)
+    {
+        if (Outputs is not { } outputs) return Defines(Form, Intercept, Sigma2, Weighting.Count, inverseTemperature, GivenSigma2 is not null);
+        // Several outputs (E34's decision 3): Σ's posterior IW(ν₀ + ν_b, ·) is proper where ν₀ + ν_b > K − 1, ν_b = Nb, or Nb − 1 under the
+        // flat intercept, whose b = 0 diverges.
+        double b = inverseTemperature;
+        if (!(b >= 0.0 && b <= 1.0)) return false;
+        if (Form == TemperedForm.Linear) return true;
+        if (Intercept != GPriorCentre.Flat) return true;
+        return b > 0.0 && outputs.Prior.DegreesOfFreedom + Observations * b - 1.0 > outputs.Count - 1;
+    }
 
     /// <summary>
     /// <see cref="Defines(double)"/> for a target in <paramref name="form"/> under <paramref name="intercept"/> and σ²'s
@@ -403,6 +436,9 @@ public sealed class BassEvaluation : ITargetEvaluation
     /// <summary>The g-prior block's marginal at <paramref name="inverseTemperature"/>, for σ²'s posterior.</summary>
     public GPriorMarginal Marginal(double inverseTemperature = 1.0) => _target.Marginal(Fit, Tau, inverseTemperature);
 
+    /// <summary>Several outputs' K × K block's marginal at <paramref name="inverseTemperature"/>, for Σ's posterior (E34).</summary>
+    public OutputMarginal OutputsMarginal(double inverseTemperature = 1.0) => _target.OutputsMarginal(Fit, Tau, inverseTemperature);
+
     /// <inheritdoc/>
     public double LogLikelihood(double inverseTemperature)
     {
@@ -417,6 +453,7 @@ public sealed class BassEvaluation : ITargetEvaluation
     {
         double b = Check(inverseTemperature);
         if (OffSupport) throw new InvalidOperationException($"The state lies off the support ({Refusal?.ToString() ?? "τ"}); it has no likelihood.");
+        if (_target.Outputs is not null) throw new NotSupportedException("Several outputs' slope in b arrives with their samplers' evidence (E34's slice 2).");
         return _target.Form == TemperedForm.Linear
             ? LogMarginal
             : _target.LogSlope(_target.Marginal(Fit, Tau, b), Sigma2, _target.GivenAt(Fit));
@@ -425,6 +462,7 @@ public sealed class BassEvaluation : ITargetEvaluation
     // ln p_b at this state, with what a hierarchical prior's reading of r leaves out below the doubles. At b = 0 the marginal reads no r.
     private double LogValueAt(double b)
     {
+        if (_target.Outputs is { } outputs) return _target.OutputsMarginal(Fit, Tau, b).LogMarginal(outputs.Prior);
         double? given = _target.GivenAt(Fit);
         double value = _target.LogValue(_target.Marginal(Fit, Tau, b), Sigma2, given);
         return _target.Sigma2Rate is { } rate && b > 0.0 && given is null ? value + rate.LogRemainder(_logRate) : value;

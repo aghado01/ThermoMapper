@@ -33,7 +33,8 @@ public enum BassRefusal
 /// was on, which a chain may have moved from the model's.</summary>
 internal sealed record BassDesignSnapshot(BassTerm[] Terms, BorderedCholesky Factor, double[] Beta, double[] Residual,
                                           double ResidualSquares, double FittedSquares, BassDesignColumns? Columns = null,
-                                          RidgeSpectrum? Spectrum = null, PriorPencil? Pencil = null, BassDesignResponse? Response = null);
+                                          RidgeSpectrum? Spectrum = null, PriorPencil? Pencil = null, BassDesignResponse? Response = null,
+                                          DesignOutputsSnapshot? Outputs = null);
 
 /// <summary>What a design reads of one working response: the response itself, W^½ (null at unit weights), ỹ (whitened under weights),
 /// the level a prior apart from the Gram centres on, and ‖ỹ‖²_W. Immutable, so designs that hand a state over share it.</summary>
@@ -67,11 +68,12 @@ public sealed record BassAdmission(
 /// A proposed structure's account: admitted, or refused with its reason; and, when admitted, its column count, its
 /// residual and fitted sums of squares in the centred basis, its smallest leave-one-out angle (D06's gate), the new
 /// column's angle to the span of the others (NaN for a death), and under a prior the g-form's closed form does not serve
-/// its columns' terms at any (τ, b) (<see cref="RidgeColumns"/>; null under the g-form on the design's own Gram).
+/// its columns' terms at any (τ, b) (<see cref="RidgeColumns"/>; null under the g-form on the design's own Gram). Several outputs (E34)
+/// carry their K × K forms in <see cref="Outputs"/>, the sums of squares then NaN.
 /// </summary>
 public readonly record struct DesignProposal(
     BassRefusal? Refusal, int Columns, double ResidualSquares, double FittedSquares, double MinAngle, double NewestAngle,
-    RidgeColumns? Ridge = null)
+    RidgeColumns? Ridge = null, OutputForms? Outputs = null)
 {
     /// <summary>Whether the structure lies in F.</summary>
     public bool Admitted => Refusal is null;
@@ -139,7 +141,7 @@ public sealed class BassDesign
 
     private sealed record Pending(Move Kind, int Index, BassTerm? Term, double[]? Column, double[]? Output, double BEntry,
                                   double[,]? Strict, DesignProposal Account, RidgeSpectrum? Fresh = null, BassPriorColumn? Prior = null,
-                                  double[,]? PriorGram = null, PriorPencil? Pencil = null, Followed? Response = null);
+                                  double[,]? PriorGram = null, PriorPencil? Pencil = null, Followed? Response = null, double[]? OutputCross = null);
 
     // A move to another working response, pending: what it reads, and the current structure's fit on it. The columns and the factor
     // are null when only the offset moved, which keeps them.
@@ -172,6 +174,7 @@ public sealed class BassDesign
     private BorderedCholesky? _strict;
     private Pending? _pending;
     private RidgeSpectrum? _spectrum;   // the current structure's, under the ridge; null until read
+    private readonly DesignOutputs? _outputs;   // several outputs' statistics, in place of the scalar ones (E34); null for one response
 
     // Lever 1 of the efficiency pass: the cross products of a one-way hinge with the held columns, from prefix tables. A table is a pure
     // cache, per (column, variable, sign), built the first time a proposal needs it and dropped with its column; which proposals read tables
@@ -204,7 +207,7 @@ public sealed class BassDesign
     /// (<see cref="MaxTableVariables"/> continuous predictors at most, <see cref="MinTableCases"/> cases at least); <c>BASS_TABLES=off</c> refuses.</summary>
     internal void EnableTables()
     {
-        if (TablesSetting == "off") return;
+        if (TablesSetting == "off" || _outputs is not null) return;   // several outputs read exact borders (E34's slice 1)
         TablesOn = TablesSetting == "on" || (_basis.Inputs.Cases.ContinuousCount <= MaxTableVariables && _cases >= MinTableCases);
     }
 
@@ -318,7 +321,16 @@ public sealed class BassDesign
             }
             _priorGram = new double[0, 0];
         }
-        _response = Read(working);
+        if (data.Response is MultiOutputResponse outputs)
+        {
+            // Several outputs (E34's slice 1): the g-form on an unweighted scalar basis, without random intercepts. The K-output side
+            // holds the response's statistics in place of the scalar ones, which stay at the empty structure's and are never read.
+            if (_functional || _ridge || _priorColumns is not null || !ReferenceEquals(_precision, BassPriorPrecision.Gram) || working.Whitening is not null)
+                throw new NotSupportedException("Several outputs take the g-form on an unweighted design without random intercepts in E34's slice 1.");
+            _outputs = new DesignOutputs(outputs, working.OutputMeans);
+            _response = new BassDesignResponse(working, new double[_rows], null, 0.0, 0.0);
+        }
+        else _response = Read(working);
         _residual = (double[])_response.Y.Clone();
         ResidualSquares = _response.Squares;
         _factor = new BorderedCholesky(Math.Min(InitialCapacity, Math.Max(rules.MaxBasis, 1)));
@@ -385,6 +397,16 @@ public sealed class BassDesign
     /// <summary>The factor of G_c, in the terms' order.</summary>
     public ISpdFactor Factor => _factor;
 
+    /// <summary>The current structure's K × K forms for several outputs (E34); null for one response, whose sums of squares are
+    /// <see cref="ResidualSquares"/> and <see cref="FittedSquares"/>.</summary>
+    public OutputForms? OutputForms => _outputs?.Forms;
+
+    /// <summary>β̂ for several outputs, one row per term in the factor's order, one column per output; null for one response.</summary>
+    public double[,]? OutputCoefficients => _outputs?.Coefficients;
+
+    /// <summary>The K outputs' means, which the centred basis reads them about; empty for one response.</summary>
+    public ReadOnlySpan<double> OutputMeans => _response.Working.OutputMeans;
+
     /// <summary>Whether the coefficient prior's form is the normalized ridge.</summary>
     public bool IsRidge => _ridge;
 
@@ -439,8 +461,8 @@ public sealed class BassDesign
         EnsureCapacity(_terms.Count + 1);
         double[]? tabled = TableBorder(term, column, out double diagonal, out bool approximate);
         double[] border = tabled ?? Border(column, output, -1, out diagonal);
-        double bEntry = CrossResponse(column, output);
-        double crossResidual = CrossResidual(column, output);
+        double bEntry = _outputs is null ? CrossResponse(column, output) : 0.0;   // several outputs' crosses are Decide's
+        double crossResidual = _outputs is null ? CrossResidual(column, output) : 0.0;
         FactorProposal p = _factor.ProposeBirth(border, diagonal);
         DesignProposal? account = Decide(Move.Birth, _terms.Count, term, column, output, border, border, diagonal, bEntry, p,
                                          ResidualSquares, crossResidual, prior, approximate);
@@ -461,6 +483,20 @@ public sealed class BassDesign
         if ((uint)index >= (uint)_terms.Count) throw new ArgumentOutOfRangeException(nameof(index));
         _pending = null;
         FactorProposal p = _factor.ProposeDeath(index);
+        if (_outputs is { } outputs)
+        {
+            // Several outputs: R′ = R + β̂_m β̂_mᵀ/(G⁻¹)_mm, and F′ from the reduced factor's whitened crosses.
+            double inverseDiagonal = _factor.InverseDiagonal(index);
+            double[] beta = outputs.CoefficientsOf(index);
+            int k = outputs.Count;
+            var residual = (double[,])outputs.Residual.Clone();
+            for (int a = 0; a < k; a++)
+                for (int d = 0; d < k; d++) residual[a, d] += beta[a] * beta[d] / inverseDiagonal;
+            var forms = new OutputForms(residual, ProposedFitted(outputs.CandidateCross(index, null), null));
+            var several = new DesignProposal(null, _terms.Count - 1, double.NaN, double.NaN, p.MinLeaveOneOutPivot, double.NaN, null, forms);
+            _pending = new Pending(Move.Death, index, null, null, null, 0.0, null, several);
+            return several;
+        }
         double[] b = Without(_b, index);
         double q = _factor.ProposedInverseQuadraticForm(b);
         double rss = ResidualSquares + _beta[index] * _beta[index] / _factor.InverseDiagonal(index);
@@ -486,7 +522,9 @@ public sealed class BassDesign
         _pending = null;
         if (term.Equals(_terms[index]))   // the same state
         {
-            var same = new DesignProposal(null, _terms.Count, ResidualSquares, FittedSquares, MinAngle, _factor.LeaveOneOutPivot(index), PriorTerms);
+            var same = _outputs is null
+                ? new DesignProposal(null, _terms.Count, ResidualSquares, FittedSquares, MinAngle, _factor.LeaveOneOutPivot(index), PriorTerms)
+                : new DesignProposal(null, _terms.Count, double.NaN, double.NaN, MinAngle, _factor.LeaveOneOutPivot(index), null, _outputs.Forms);
             _pending = new Pending(Move.Change, index, term, null, null, 0.0, null, same);
             return same;
         }
@@ -494,14 +532,14 @@ public sealed class BassDesign
         if (Evaluate(term, _response) is not var (column, output, prior)) return DesignProposal.Refused(BassRefusal.Support);
         double[]? tabled = TableBorder(term, column, out double diagonal, out bool approximate);
         double[] full = tabled ?? Border(column, output, -1, out diagonal);
-        double bEntry = CrossResponse(column, output);
-        double crossResidual = CrossResidual(column, output);
+        double bEntry = _outputs is null ? CrossResponse(column, output) : 0.0;   // several outputs' crosses are Decide's
+        double crossResidual = _outputs is null ? CrossResidual(column, output) : 0.0;
 
         // The reduced model, term index removed: ‖r‖² gains β̂_m²/(G⁻¹)_mm, and zᵀr gains β̂_m·uᵀG⁻¹e_m/(G⁻¹)_mm.
         var unit = new double[_terms.Count];
         unit[index] = 1.0;
         _factor.SolveInPlace(unit);
-        double inverseDiagonal = unit[index], beta = _beta[index];
+        double inverseDiagonal = unit[index], beta = _outputs is null ? _beta[index] : 0.0;
         double rssReduced = ResidualSquares + beta * beta / inverseDiagonal;
 
         DesignProposal? account = ChangeAccount(index, term, column, output, prior, full, diagonal, bEntry, rssReduced, crossResidual, beta, inverseDiagonal, unit, approximate);
@@ -523,7 +561,7 @@ public sealed class BassDesign
         double zrReduced = crossResidual + beta * PairwiseSum.Dot(full, unit) / inverseDiagonal;
         double[] border = Without(full, index);
         FactorProposal p = _factor.ProposeChange(index, border, diagonal);
-        return Decide(Move.Change, index, term, column, output, border, full, diagonal, bEntry, p, rssReduced, zrReduced, prior, approximate);
+        return Decide(Move.Change, index, term, column, output, border, full, diagonal, bEntry, p, rssReduced, zrReduced, prior, approximate, unit, inverseDiagonal);
     }
 
     /// <summary>
@@ -537,6 +575,7 @@ public sealed class BassDesign
     public DesignProposal ProposeFollow(WorkingResponse working)
     {
         ArgumentNullException.ThrowIfNull(working);
+        if (_outputs is not null) throw new NotSupportedException("Several outputs read the response itself in E34's slice 1; it does not move.");
         _pending = null;
         bool reweighted = Reweights(working);
         BassDesignResponse response = Read(working, reweighted ? null : _response);
@@ -635,6 +674,7 @@ public sealed class BassDesign
             _b.Add(p.BEntry);
             if (p.Prior is { } prior) _priorColumns!.Add(prior);
         }
+        _outputs?.Accept(p.Kind is Move.Death or Move.Change ? p.Index : -1, p.Kind is Move.Birth or Move.Change ? p.OutputCross : null);
         if (_priorColumns is not null)
         {
             _priorGram = p.PriorGram;
@@ -721,6 +761,7 @@ public sealed class BassDesign
             _priorGram = priorGram;
             _pencil = pencil;
         }
+        _outputs?.Load(columns);
         Refit();
         return null;
     }
@@ -735,7 +776,7 @@ public sealed class BassDesign
     internal BassDesignSnapshot Snapshot(bool shareColumns = false)
         => new([.. _terms], _factor.Copy(), (double[])_beta.Clone(), (double[])_residual.Clone(), ResidualSquares, FittedSquares,
                shareColumns ? new BassDesignColumns([.. _a], _khatriRao ? [.. _h] : null, [.. _b], _priorColumns is null ? null : [.. _priorColumns]) : null,
-               _spectrum, _pencil, _response);
+               _spectrum, _pencil, _response, _outputs?.Snapshot());
 
     /// <summary>Replaces the structure with <paramref name="snapshot"/>'s, every statistic as the design it was taken from
     /// held it, so the two continue bit for bit; its columns shared when it carries them, else re-evaluated.</summary>
@@ -788,6 +829,7 @@ public sealed class BassDesign
         snapshot.Residual.CopyTo(_residual, 0);
         ResidualSquares = snapshot.ResidualSquares;
         FittedSquares = snapshot.FittedSquares;
+        _outputs?.Restore(snapshot.Outputs ?? throw new ArgumentException("The snapshot holds one response's statistics, and the design several outputs'.", nameof(snapshot)));
     }
 
     /// <summary>Refactors the Gram strictly and refits; returns the drift the rebuild removed.</summary>
@@ -805,10 +847,10 @@ public sealed class BassDesign
     // explanation passes the explicit threshold.
     private DesignProposal? Decide(Move kind, int index, BassTerm term, double[] column, double[]? output, double[] border,
                                    double[] full, double diagonal, double bEntry, FactorProposal p, double rssReduced, double zrReduced,
-                                   BassPriorColumn? prior = null, bool approximate = false)
+                                   BassPriorColumn? prior = null, bool approximate = false, double[]? unit = null, double inverseDiagonal = double.NaN)
     {
         double floor = _rules.AngleFloor;
-        if (approximate && !(p.PositiveDefinite && p.MinLeaveOneOutPivot >= NearGate * floor)) return null;
+        if (approximate && (_outputs is not null || !(p.PositiveDefinite && p.MinLeaveOneOutPivot >= NearGate * floor))) return null;
         double[] b = kind == Move.Change ? Without(_b, index) : [.. _b];
         Array.Resize(ref b, b.Length + 1);
         b[^1] = bEntry;
@@ -833,6 +875,14 @@ public sealed class BassDesign
             q = s.InverseQuadraticForm(b);
         }
         if (_rules.MaxVarianceInflation is { } cap && minAngle * cap < 1.0) return DesignProposal.Refused(BassRefusal.VarianceInflation);
+
+        if (_outputs is not null)
+        {
+            (OutputForms forms, double[] cross) = OutputsAccount(kind, index, column, full, newest * diagonal, strict, border, diagonal, unit, inverseDiagonal);
+            var several = new DesignProposal(null, kind == Move.Birth ? _terms.Count + 1 : _terms.Count, double.NaN, double.NaN, minAngle, newest, null, forms);
+            _pending = new Pending(kind, index, term, column, output, 0.0, strict, several, OutputCross: cross);
+            return several;
+        }
 
         double rss = rssReduced - zrReduced * zrReduced / (newest * diagonal);
         if (!(rss > ExplicitBelow * rssReduced))
@@ -863,6 +913,79 @@ public sealed class BassDesign
         var account = new DesignProposal(null, kind == Move.Birth ? _terms.Count + 1 : _terms.Count, Math.Max(rss, 0.0), q, minAngle, newest, ridge);
         _pending = new Pending(kind, index, term, column, output, bEntry, strict, account, fresh, prior, priorGram, pencil);
         return account;
+    }
+
+    // Several outputs' account of a birth or a change (E34): the new column's crosses with the centred outputs and with the residuals, then
+    // R′ by the scalar bordered update carried to K × K, R′_kl = R̃_kl − z̃_k z̃_l/(newest·δ) on the reduced model's R̃ and z̃ (a change's gain
+    // β̂_mβ̂_mᵀ/(G⁻¹)_mm and β̂_m·uᵀG⁻¹e_m/(G⁻¹)_mm), formed explicitly where a move explains nearly all of an output's residual; and F′ from
+    // the candidate factor's whitened crosses.
+    private (OutputForms Forms, double[] Cross) OutputsAccount(Move kind, int index, double[] column, double[] full, double pivot, double[,]? strict,
+                                                               double[] border, double diagonal, double[]? unit, double inverseDiagonal)
+    {
+        DesignOutputs outputs = _outputs!;
+        int k = outputs.Count;
+        double[] cross = DesignOutputs.Dot(column, outputs.Centred);
+        double[] zr = DesignOutputs.Dot(column, outputs.Residuals);
+        var reduced = (double[,])outputs.Residual.Clone();
+        if (kind == Move.Change)
+        {
+            double[] beta = outputs.CoefficientsOf(index);
+            double along = PairwiseSum.Dot(full, unit!);
+            for (int a = 0; a < k; a++)
+            {
+                zr[a] += beta[a] * along / inverseDiagonal;
+                for (int d = 0; d < k; d++) reduced[a, d] += beta[a] * beta[d] / inverseDiagonal;
+            }
+        }
+        var residual = new double[k, k];
+        for (int a = 0; a < k; a++)
+            for (int d = 0; d < k; d++) residual[a, d] = reduced[a, d] - zr[a] * zr[d] / pivot;
+        bool explicitly = false;
+        for (int a = 0; a < k && !explicitly; a++) explicitly = !(residual[a, a] > ExplicitBelow * reduced[a, a]);
+        int skip = kind == Move.Change ? index : -1;
+        double[][] b = outputs.CandidateCross(skip, cross);
+        if (explicitly) residual = ExplicitResidualForm(skip, column, strict ?? Candidate(skip, border, diagonal), b);
+        return (new OutputForms(residual, ProposedFitted(b, strict)), cross);
+    }
+
+    // F′_kl = b′_kᵀG′⁻¹b′_l from the candidate factor's whitened crosses: the bordered proposal's, or the strict factor's where it decided.
+    private double[,] ProposedFitted(double[][] b, double[,]? strict)
+    {
+        BorderedCholesky? s = strict is null ? null : StrictFactor(strict);
+        int k = b.Length;
+        var coordinates = new double[k][];
+        for (int l = 0; l < k; l++)
+        {
+            var c = new double[b[l].Length];
+            if (s is null) _factor.ProposedWhiten(b[l], c);
+            else
+            {
+                b[l].CopyTo(c, 0);
+                if (c.Length > 0) s.ForwardSolveInPlace(c);
+            }
+            coordinates[l] = c;
+        }
+        return DesignOutputs.Gram(coordinates);
+    }
+
+    // Several outputs' residual form from the candidate's explicit residuals, for a move that explains nearly all of one; zero where the
+    // candidate's strict factor fails, as the scalar's is.
+    private double[,] ExplicitResidualForm(int skip, double[] column, double[,] g, double[][] b)
+    {
+        BorderedCholesky s = StrictFactor(g);
+        int k = b.Length;
+        var columns = new List<double[]>();
+        for (int j = 0; j < _terms.Count; j++)
+            if (j != skip) columns.Add(_a[j]);
+        columns.Add(column);
+        var residuals = new double[k][];
+        for (int l = 0; l < k; l++)
+        {
+            var r = new double[_rows];
+            if (s.FailedAt < 0) Fit(columns, _h, s.Solve(b[l]), r, _outputs!.Centred[l]);
+            residuals[l] = r;
+        }
+        return DesignOutputs.Gram(residuals);
     }
 
     // The term's columns, or null when it falls short of the support threshold in a part. Scalar: the centred case
@@ -1230,6 +1353,13 @@ public sealed class BassDesign
 
     private void Refit()
     {
+        if (_outputs is not null)
+        {
+            // Several outputs refit their own side; the scalar statistics stay the empty response's, at the structure's length.
+            _outputs.Refit(_factor, _a);
+            _beta = new double[_terms.Count];
+            return;
+        }
         double[] b = [.. _b];
         _beta = _terms.Count == 0 ? [] : _factor.Solve(b);
         Fit(_a, _h, _beta, _residual, _response.Y);

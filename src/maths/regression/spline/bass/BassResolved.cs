@@ -119,6 +119,11 @@ public sealed record BassResolved
     /// <summary>Every auto-pick, with its reason.</summary>
     public required IReadOnlyList<BassAutoPick> AutoPicks { get; init; }
 
+    /// <summary>Several outputs' resolution (E34): their means, centre levels, S_Y and Σ's prior; null for one response. With several
+    /// outputs the scalar response's pieces (<see cref="ResponseMean"/>, <see cref="CentreLevel"/>, the mean squares) are NaN and
+    /// <see cref="Sigma2"/> is null, since nothing reads them.</summary>
+    public BassResolvedOutputs? Outputs { get; init; }
+
     /// <summary>
     /// <paramref name="config"/> resolved on <paramref name="data"/>, after <see cref="BassConfig.Validate"/>. Refused:
     /// a zero response under the zero centre, and a constant one under level centring or the flat intercept, which
@@ -169,54 +174,70 @@ public sealed record BassResolved
         if (!fitted.IsUnweighted)
             log.Add(new("Weights", $"{fitted.Meaning}, prior on the {fitted.PriorGram} columns",
                         $"Σwᵢ = {Text(weights.Mass)} over N = {n}; σ²'s shape counts {Text(weights.Count)}"));
-        bool constant = true, zero = y[0] == 0.0;
-        for (int i = 1; i < y.Length && constant; i++) constant = y[i] == y[0];
-        double mean = fitted.ResponseMean, level;
+        double mean, level, meanSquare, weightedMeanSquare;
         double? priorLevel = null;
-        if (config.Intercept == GPriorCentre.Zero)
+        InverseGamma? sigma2;
+        ResolvedSigma2Rate? rate;
+        BassResolvedOutputs? several = null;
+        if (response is MultiOutputResponse multi)
         {
-            if (reference?.Level is double stated && stated != 0.0) throw new ArgumentException($"The reference's level is {Text(stated)}, and the zero centre's is 0.", nameof(working));
-            if ((reference?.MeanSquare is double about ? about == 0.0 : constant && zero) && !held) throw new ArgumentException("The response is zero, which leaves σ no posterior (D03).", nameof(data));
-            if (constant && !config.Sigma2.IsProper)
-                throw new ArgumentException("Under the Jeffreys σ² prior a constant response is fitted exactly by the intercept, which leaves the posterior improper (D03).", nameof(data));
-            level = 0.0;
-            log.Add(new("CentreLevel", "0", "the zero centre"));
+            // Several outputs (E34): each output's level, S_Y and Σ's prior; the scalar σ² pieces are not read.
+            several = ResolveOutputs(config, multi, fitted, log);
+            mean = level = meanSquare = weightedMeanSquare = double.NaN;
+            sigma2 = null;
+            rate = null;
         }
         else
         {
-            if ((reference?.MeanSquare is double about ? about == 0.0 : constant) && !held) throw new ArgumentException("The response is constant, which the intercept absorbs whole, leaving no spread to fit (D03).", nameof(data));
-            if (constant && !config.Sigma2.IsProper)
-                throw new ArgumentException("Under the Jeffreys σ² prior a constant response is fitted exactly by the intercept, which leaves the posterior improper (D03).", nameof(data));
-            if (config.Intercept == GPriorCentre.Mean && reference is not null)
+            bool constant = true, zero = y[0] == 0.0;
+            for (int i = 1; i < y.Length && constant; i++) constant = y[i] == y[0];
+            mean = fitted.ResponseMean;
+            if (config.Intercept == GPriorCentre.Zero)
             {
-                level = reference.Level ?? throw new ArgumentException("The reference states no level, which level centring reads.", nameof(working));
-                priorLevel = level;
-                log.Add(new("CentreLevel", Text(level), "the reference's, frozen apart from the working response"));
+                if (reference?.Level is double stated && stated != 0.0) throw new ArgumentException($"The reference's level is {Text(stated)}, and the zero centre's is 0.", nameof(working));
+                if ((reference?.MeanSquare is double about ? about == 0.0 : constant && zero) && !held) throw new ArgumentException("The response is zero, which leaves σ no posterior (D03).", nameof(data));
+                if (constant && !config.Sigma2.IsProper)
+                    throw new ArgumentException("Under the Jeffreys σ² prior a constant response is fitted exactly by the intercept, which leaves the posterior improper (D03).", nameof(data));
+                level = 0.0;
+                log.Add(new("CentreLevel", "0", "the zero centre"));
             }
             else
             {
-                level = config.Intercept == GPriorCentre.Mean && fitted.PriorStandsApart ? PairwiseSum.Of(y) / n : mean;
-                log.Add(new("CentreLevel", Text(level), config.Intercept == GPriorCentre.Flat ? "the response's mean, the flat intercept's estimate" : "the response's mean, level centring"));
+                if ((reference?.MeanSquare is double about ? about == 0.0 : constant) && !held) throw new ArgumentException("The response is constant, which the intercept absorbs whole, leaving no spread to fit (D03).", nameof(data));
+                if (constant && !config.Sigma2.IsProper)
+                    throw new ArgumentException("Under the Jeffreys σ² prior a constant response is fitted exactly by the intercept, which leaves the posterior improper (D03).", nameof(data));
+                if (config.Intercept == GPriorCentre.Mean && reference is not null)
+                {
+                    level = reference.Level ?? throw new ArgumentException("The reference states no level, which level centring reads.", nameof(working));
+                    priorLevel = level;
+                    log.Add(new("CentreLevel", Text(level), "the reference's, frozen apart from the working response"));
+                }
+                else
+                {
+                    level = config.Intercept == GPriorCentre.Mean && fitted.PriorStandsApart ? PairwiseSum.Of(y) / n : mean;
+                    log.Add(new("CentreLevel", Text(level), config.Intercept == GPriorCentre.Flat ? "the response's mean, the flat intercept's estimate" : "the response's mean, level centring"));
+                }
             }
+            var squares = new double[n];
+            for (int i = 0; i < n; i++) squares[i] = (y[i] - level) * (y[i] - level);
+            meanSquare = PairwiseSum.Of(squares) / n;
+            weightedMeanSquare = meanSquare;
+            if (fitted.WeightArray is { } w)
+            {
+                weightedMeanSquare = PairwiseSum.Dot(w, squares) / weights.Mass;
+                if (!fitted.PriorStandsApart) meanSquare = weightedMeanSquare;
+            }
+            if (reference?.MeanSquare is double frozenSquare) meanSquare = weightedMeanSquare = frozenSquare;
+            else if (reference is not null && config.Sigma2.ReadsResponse) throw new ArgumentException($"The reference states no mean square, which {config.Sigma2} reads.", nameof(working));
+            sigma2 = config.Sigma2.For(meanSquare);
+            rate = config.Sigma2.RateFor(meanSquare);
+            if (held) log.Add(new("Sigma2", Text(config.Sigma2.Value!.Value), "held, so the structure step reads the marginal given σ²"));
+            if (config.Sigma2.ReadsResponse)
+                log.Add(new("ResponseMeanSquare", Text(meanSquare), reference is null
+                    ? "s², the response's mean square about the centre level, which the scaled σ² prior reads"
+                    : "s², the reference's, frozen apart from the working response"));
+            if (rate is not null) log.Add(new("Sigma2Rate", rate.ToString(), "the hierarchical prior's rate, its mean a·s²; the state carries it"));
         }
-        var squares = new double[n];
-        for (int i = 0; i < n; i++) squares[i] = (y[i] - level) * (y[i] - level);
-        double meanSquare = PairwiseSum.Of(squares) / n, weightedMeanSquare = meanSquare;
-        if (fitted.WeightArray is { } w)
-        {
-            weightedMeanSquare = PairwiseSum.Dot(w, squares) / weights.Mass;
-            if (!fitted.PriorStandsApart) meanSquare = weightedMeanSquare;
-        }
-        if (reference?.MeanSquare is double frozenSquare) meanSquare = weightedMeanSquare = frozenSquare;
-        else if (reference is not null && config.Sigma2.ReadsResponse) throw new ArgumentException($"The reference states no mean square, which {config.Sigma2} reads.", nameof(working));
-        InverseGamma? sigma2 = config.Sigma2.For(meanSquare);
-        ResolvedSigma2Rate? rate = config.Sigma2.RateFor(meanSquare);
-        if (held) log.Add(new("Sigma2", Text(config.Sigma2.Value!.Value), "held, so the structure step reads the marginal given σ²"));
-        if (config.Sigma2.ReadsResponse)
-            log.Add(new("ResponseMeanSquare", Text(meanSquare), reference is null
-                ? "s², the response's mean square about the centre level, which the scaled σ² prior reads"
-                : "s², the reference's, frozen apart from the working response"));
-        if (rate is not null) log.Add(new("Sigma2Rate", rate.ToString(), "the hierarchical prior's rate, its mean a·s²; the state carries it"));
         if (config.Noise is { SkewDrawn: true, SkewRescale: null } noise)
             log.Add(new("Noise.SkewRescale", noise.RescalesSkew ? "on" : "off", noise.SkewRescaleByDefault
                 ? "the skewed horseshoe's default (2026-11-08): the sweep without the move along β·v fails Geweke's test at b = 1, the move passes"
@@ -387,8 +408,80 @@ public sealed record BassResolved
             Weighting = weights, Sigma2 = sigma2, Sigma2Rate = rate, GivenSigma2 = config.Sigma2.Value, Scale = scale,
             StoppingGroups = BassDiagnostics.StoppingGroups(config.Sampling.StoppingScope),
             HotEnd = hotEnd, StepWindows = windows, FactorShares = shares, SplitThreshold = config.Sampling.Tempering?.Split?.Threshold,
-            AutoPicks = log.AsReadOnly(),
+            AutoPicks = log.AsReadOnly(), Outputs = several,
         };
+    }
+
+    // Several outputs on one basis (E34's slice 1): each output's mean and centre level, S_Y, Σ's prior carried from Sigma2's
+    // ScaledToResponse(c) as decision 2's IW(K − 1 + 2c, 2c·S_Y), and the refusals of what later slices bring.
+    private static BassResolvedOutputs ResolveOutputs(BassConfig config, MultiOutputResponse response, WorkingResponse fitted, List<BassAutoPick> log)
+    {
+        int k = response.Outputs, n = response.Cases;
+        if (config.Noise is not null) throw new ArgumentException("Several outputs take Gaussian noise in E34's slice 1; the noise by row (decision 6) arrives in slice 4.", "config");
+        if (config.RandomIntercept is not null) throw new ArgumentException("Several outputs' random intercepts (decision 7) arrive in E34's slice 4.", "config");
+        if (config.Sampling.Tempering is not null || config.Sampling.Smc is not null || config.Sampling.FlatHistogram is not null)
+            throw new ArgumentException("Several outputs run plain chains in E34's slice 1; the ladder, SMC and the flat histogram arrive in slice 2.", "config");
+        if (config.Coefficients.Form is not GForm)
+            throw new ArgumentException("Several outputs take the g-form in E34's slice 1; the normalized ridge and KHAOS's priors, which carry K cross products "
+                                        + "through their spectra and pencils, arrive later.", "config");
+        if (config.Sigma2.Kind != Sigma2PriorKind.ScaledToResponse)
+            throw new ArgumentException($"Several outputs carry Sigma2's ScaledToResponse(c) to Σ's prior (E34's decision 2), and Sigma2 is {config.Sigma2}; a declared "
+                                        + "or standardized Ψ₀ arrives with its config field, Huang and Wand's prior in slice 2.", "config");
+
+        ReadOnlySpan<double> means = fitted.OutputMeans;
+        var levels = new double[k];
+        for (int l = 0; l < k; l++) levels[l] = config.Intercept == GPriorCentre.Zero ? 0.0 : means[l];
+        // S_Y: scalar BASS's s² carried to K outputs, each entry by its arithmetic, the products about the levels over n.
+        ReadOnlySpan<double> values = response.Values;
+        var squares = new double[k, k];
+        var products = new double[n];
+        for (int a = 0; a < k; a++)
+            for (int d = 0; d <= a; d++)
+            {
+                for (int i = 0; i < n; i++) products[i] = (values[i * k + a] - levels[a]) * (values[i * k + d] - levels[d]);
+                squares[a, d] = squares[d, a] = PairwiseSum.Of(products) / n;
+            }
+        // Refused: an output with no spread about its level, and outputs whose S_Y is singular or nearly so (decision 2), read on the
+        // correlation scale: a Cholesky pivot 1 − R² of an output on the ones before it under 1e-10.
+        var unit = new double[k, k];
+        for (int a = 0; a < k; a++)
+        {
+            if (!(squares[a, a] > 0.0))
+                throw new ArgumentException(config.Intercept == GPriorCentre.Zero
+                    ? $"Output '{response.Names[a]}' is zero, which leaves Σ no posterior (D03)."
+                    : $"Output '{response.Names[a]}' is constant, which the intercept absorbs whole, leaving no spread to fit (D03).", nameof(response));
+            for (int d = 0; d <= a; d++) unit[a, d] = unit[d, a] = squares[a, d] / (Math.Sqrt(squares[a, a]) * Math.Sqrt(squares[d, d]));
+        }
+        var root = new double[k, k];
+        for (int a = 0; a < k; a++)
+            for (int d = 0; d <= a; d++)
+            {
+                double sum = unit[a, d];
+                for (int r = 0; r < d; r++) sum -= root[a, r] * root[d, r];
+                if (a != d) { root[a, d] = sum / root[d, d]; continue; }
+                if (!(sum >= 1e-10))
+                    throw new ArgumentException($"Output '{response.Names[a]}' is collinear with the outputs before it about their levels (1 − R² = {Text(Math.Max(sum, 0.0))}), "
+                                                + "so S_Y is singular or nearly so; collinear outputs need fewer outputs (E34's decision 2).", nameof(response));
+                root[a, a] = Math.Sqrt(sum);
+            }
+
+        double c = config.Sigma2.Shape!.Value;
+        var psi = new double[k, k];
+        for (int a = 0; a < k; a++)
+            for (int d = 0; d < k; d++) psi[a, d] = 2.0 * c * squares[a, d];
+        InverseWishart prior = InverseWishart.Of(k - 1 + 2.0 * c, psi);
+        log.Add(new("Outputs", $"K = {k} ({string.Join(", ", response.Names.Select(name => $"'{name}'"))})",
+                    "one basis and one Σ for every output, Σ integrated out (E34); the intercept and its convention per output"));
+        log.Add(new("CentreLevels", string.Join(", ", levels.Select(Text)), config.Intercept switch
+        {
+            GPriorCentre.Zero => "the zero centre",
+            GPriorCentre.Flat => "the outputs' means, the flat intercept's estimates",
+            _ => "the outputs' means, level centring",
+        }));
+        log.Add(new("SigmaPrior", $"IW({Text(prior.DegreesOfFreedom)}, 2c·S_Y), c = {Text(c)}",
+                    "E34's decision 2, Sigma2's ScaledToResponse(c) carried to K outputs: ν₀ = K − 1 + 2c, S_Y the outputs' mean squares and cross-products "
+                    + "about their levels; at K = 1 IG(c, c·s²)"));
+        return new BassResolvedOutputs(response.Names, [.. means], levels, squares, prior);
     }
 
     /// <summary>

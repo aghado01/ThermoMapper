@@ -50,6 +50,9 @@ public sealed class BassModel
         ArgumentNullException.ThrowIfNull(observation);
         if (config.Noise is { } declared && !(observation is VarianceMeanMixture mixture && mixture.Noise == declared))
             throw new ArgumentException("The config declares its noise, so the observation model is the config's.", nameof(observation));
+        if (data.Response is MultiOutputResponse && (observation is not GaussianObservation || config.RandomIntercept is not null))
+            throw new ArgumentException("Several outputs take Gaussian noise without random intercepts in E34's slice 1; the noise by row and the random "
+                                        + "intercepts (decisions 6 and 7) arrive in slice 4.", nameof(config));
         WorkingResponse working = observation.Working(data.Response);
         RandomInterceptBlock? block = null;
         if (config.RandomIntercept is { } intercepts)

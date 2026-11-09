@@ -191,6 +191,8 @@ public sealed class WorkingResponse
 {
     private readonly double[]? _shifted;
     private readonly double[]? _offset, _weights;
+    private readonly double _responseMean;
+    private readonly double[]? _outputMeans;   // several outputs' means; null for one response (E34)
     private double _responseSquares = double.NaN;   // ‖y − ȳ‖²_W, when first read; two readers compute the one value
 
     /// <summary>The working response of <paramref name="response"/> less <paramref name="offset"/> (one value per
@@ -253,7 +255,25 @@ public sealed class WorkingResponse
             Array.Fill(_weights, 1.0);
         }
         if (logJacobian != 0.0) Weighting = Weighting with { SumLogWeights = Weighting.SumLogWeights + logJacobian };
-        ResponseMean = MeanOf(_weights, Values, Weighting, n);
+        if (response is MultiOutputResponse outputs)
+        {
+            // Several outputs (E34) read the response itself in slice 1: an offset, weights, latents, a frozen reference and a log-Jacobian
+            // arrive with the noise and the random intercepts (slice 4).
+            if (!offset.IsEmpty || !weights.IsEmpty || latents is not null || reference is not null || logJacobian != 0.0 || priorGram != WeightedPriorGram.Unweighted)
+                throw new NotSupportedException("Several outputs read the response itself: offsets, weights, latents and a frozen reference arrive with E34's noise (slice 4).");
+            _outputMeans = new double[outputs.Outputs];
+            ReadOnlySpan<double> values = outputs.Values;
+            int k = outputs.Outputs;
+            var column = new double[n];
+            for (int l = 0; l < k; l++)
+            {
+                for (int i = 0; i < n; i++) column[i] = values[i * k + l];
+                _outputMeans[l] = PairwiseSum.Of(column) / n;
+            }
+            _responseMean = double.NaN;
+            return;
+        }
+        _responseMean = MeanOf(_weights, Values, Weighting, n);
     }
 
     // `source` at another offset with `latents`: its weights shared, every other part as it stands.
@@ -270,8 +290,10 @@ public sealed class WorkingResponse
         Output = source.Output;
         Whitening = source.Whitening;
         _weights = source._weights;
+        if (Response is MultiOutputResponse)
+            throw new NotSupportedException("Several outputs read the response itself: offsets and latents arrive with E34's noise (slice 4).");
         (_offset, _shifted) = Shifted(Response, offset);
-        ResponseMean = MeanOf(_weights, Values, Weighting, Response.Observations);
+        _responseMean = MeanOf(_weights, Values, Weighting, Response.Observations);
     }
 
     private static (double[]? Offset, double[]? Shifted) Shifted(BassResponse response, ReadOnlySpan<double> offset)
@@ -347,8 +369,16 @@ public sealed class WorkingResponse
     /// <summary>Whether a coefficient prior apart from the likelihood's Gram is needed: weights, with the prior free of them.</summary>
     public bool PriorStandsApart => _weights is not null && PriorGram != WeightedPriorGram.Weighted;
 
-    /// <summary>ȳ, the working response's mean under W over all N observations: Σwᵢyᵢ/Σwᵢ, the mean at unit weights.</summary>
-    public double ResponseMean { get; }
+    /// <summary>ȳ, the working response's mean under W over all N observations: Σwᵢyᵢ/Σwᵢ, the mean at unit weights. Several outputs
+    /// have one each (<see cref="OutputMeans"/>), and refuse this.</summary>
+    public double ResponseMean => _outputMeans is null ? _responseMean
+        : throw new InvalidOperationException("Several outputs have a mean each: read OutputMeans.");
+
+    /// <summary>K, the outputs (<see cref="BassResponse.Outputs"/>).</summary>
+    public int Outputs => Response.Outputs;
+
+    /// <summary>Each output's mean over the N observations, for several outputs (<see cref="MultiOutputResponse"/>); empty otherwise.</summary>
+    public ReadOnlySpan<double> OutputMeans => _outputMeans;
 
     /// <summary>Whether this is the response itself under unit weights: no offset, no weights.</summary>
     public bool IsResponseItself => _offset is null && _weights is null;

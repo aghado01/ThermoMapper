@@ -71,9 +71,13 @@ public readonly record struct BassStructure(int[] TermIds);
 /// (<see cref="IBassObservationModel.Rebuild"/>): the generative state, at N doubles where the working response holds up to 4N.
 /// <see cref="GroupEffects"/> are a random-intercept fit's u over its observed levels (E21; <see cref="RandomInterceptBlock"/>), drawn
 /// with the rest, so a case of level g reads f + u_g; null for a fit without the block.
+/// <para>A draw of several outputs (E34) holds Σ in <see cref="Sigma"/> and the coefficients in <see cref="OutputCoefficients"/>, one row
+/// as <see cref="Coefficients"/> orders them (the intercept, then the terms in the ids' order) and one column per output, so output k's
+/// function is f_k = a₀ₖ + Σⱼ aⱼₖBⱼ; its <see cref="Sigma2"/> is NaN and its <see cref="Coefficients"/> empty.</para>
 /// </summary>
 public sealed record BassDraw(BassStructure Structure, double Tau, double Sigma2, double[] Coefficients, double Lambda, double? Sigma2Rate = null,
-                              WorkingResponse? Working = null, ObservationLatents? Latents = null, double[]? GroupEffects = null)
+                              WorkingResponse? Working = null, ObservationLatents? Latents = null, double[]? GroupEffects = null,
+                              double[,]? Sigma = null, double[,]? OutputCoefficients = null)
 {
     /// <summary>The working response this draw reads on <paramref name="model"/>: its own when it was composed on that response, or rebuilt
     /// from its latents; the model's otherwise, since a draw read on other data has no offset or weights there.</summary>

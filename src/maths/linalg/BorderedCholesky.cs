@@ -204,6 +204,29 @@ namespace Maths.LinAlg
             return q + t * t / _pivot;
         }
 
+        /// <summary>
+        /// L′⁻¹b for the proposed factor L′, into <paramref name="coordinates"/>, with <paramref name="b"/> in its order: the whitened
+        /// coordinates whose dots are the bilinear forms aᵀA′⁻¹b of the proposed matrix, as <see cref="ProposedInverseQuadraticForm"/>
+        /// is their square norm. Several right-hand sides on one proposal (E34's outputs) read their cross forms from these.
+        /// </summary>
+        public void ProposedWhiten(ReadOnlySpan<double> b, Span<double> coordinates)
+        {
+            if (_pending is not FactorProposal p) throw new InvalidOperationException("Nothing is proposed.");
+            if (!p.PositiveDefinite) throw new InvalidOperationException("The proposal is not positive definite.");
+            State beneath = p.Change == FactorChange.Birth ? _accepted : _staged;
+            int n = beneath.N;
+            int expected = p.Change == FactorChange.Death ? n : n + 1;
+            if (b.Length != expected || coordinates.Length != expected)
+                throw new ArgumentException($"Expected length {expected}, got {b.Length} and {coordinates.Length}.", nameof(b));
+            Span<double> y = coordinates[..n];
+            b[..n].CopyTo(y);
+            ForwardSolve(beneath, y);
+            if (p.Change == FactorChange.Death) return;
+            double t = b[n];
+            for (int k = 0; k < n; k++) t -= _row[k] * y[k];
+            coordinates[n] = t / Math.Sqrt(_pivot);
+        }
+
         /// <summary>Commits the pending proposal. Every <see cref="RebuildInterval"/> accepted updates, a strict
         /// rebuild follows.</summary>
         public void Accept()
