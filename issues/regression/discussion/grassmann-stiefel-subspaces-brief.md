@@ -53,6 +53,18 @@ Work through where subspace geometry earns its place in the regression engine: p
 
 ## Report
 
+### 2026-11-08, BPPR read: its directions are sparse points on the sphere, not lines
+
+Read: arXiv 2210.09181v1 (`gauntlet/bayesian/2210.09181v1`, main text §2.3 to §2.4 and §2.7) and the manual of the R package BayesPPR 0.2.0 (`PDFs/Bayesian/BayesPPR.pdf`).
+- **The ridge is one-sided, so a direction's sign carries information.** Each ridge is β′b(xᵀθ | t), a modified natural spline whose first basis function is (u − t₀)₊, so the ridge is zero below t₀ (eq. spline_expansion). The prior probability that t₀ falls inside the data's projections, which makes the ridge local, is p₀ = 2/3 (the package's `prob_relu`). θ and −θ therefore place the ridge at opposite ends of the projection, and the prior on θ is uniform on the whole sphere, not on a half-sphere.
+  - This corrects synthesis point 3 and the orientation's "each direction is a line": the (w, t, s) ↔ (−w, −t, −s) symmetry needs a ridge family closed under reflection, such as a hinge with a sign parameter, which BPPR's is not.
+  - Only global ridges, those with t₀ below every projection, are close to sign-symmetric.
+- **The directions are not a frame, which confirms the orientation.** Each θ_m has an independent uniform prior on the unit sphere, with at most A = min(3, p) nonzero coordinates, a set 𝒥_m drawn as BMARS draws variables. No orthogonality is imposed. A draw is a variable-size collection of sparse points on coordinate subspheres, and M moves by reversible jump.
+- **The sampler is plain spherical Metropolis–Hastings.** A change step proposes the active coordinates from a power spherical distribution (De Cao and Aziz, cited in the paper) centred on the current direction, with κ = 1000 in the paper and `scale_proj_dir_prop` ≈ 0.002 in the package. Neither matrix Bingham–von Mises–Fisher nor geodesic Monte Carlo is needed: synthesis point 3's candidate samplers belong to frames, not to BPPR. `SphericalManifold` covers its geometry.
+- **The direction prior has the input-metric question that E8's decision 2 settles.** The paper standardizes the inputs to mean 0 and variance 1, so that the uniform prior gives every input an equal chance. That makes the prior depend on the input metric, just as C's eigenspace does. Under dependent inputs, standardizing and whitening differ.
+- **The multivariate mode is D07's separate-fit setting, without the truncation residual.** `bppr_pca` fits each principal component independently, with `prop_var` = 0.99 by default, and the paper drops the truncation error r_i "under the assumption that D⁻ is large enough". D07's leave-one-case-out residuals already go further.
+- **E8 on a BPPR fit.** A ridge is not separable, so C runs on E8's sampled route. C = Σ_{m,l} θ_m θ_lᵀ E[g_m′ g_l′] lies in span{θ_m}, of rank at most M. Comparing draws' directions directly would meet label switching across ridges as well as a varying M, so E8's subspace summaries are the natural readout of a BPPR posterior.
+
 ### 2026-11-08, synthesis: what is worth doing (proposed, not yet settled by the user)
 
 E8's build brief (`e31d7dd`) has already taken the orientation's corrections: the declared input metric (its decision 2), both posterior summaries with P̄'s eigenvalues read as mean squared cosines (4), the SVD of the gradient matrix and shared points (5), and `StiefelManifold` set aside. E34's entry took the removal of the frame and the envelope's scope (`6e5e53e`). What remains, in order of worth:
@@ -76,7 +88,7 @@ E8's build brief (`e31d7dd`) has already taken the orientation's corrections: th
 Later, and only under the stated condition:
 - **Rotate-and-refit, after slice 4,** can take its frame from the ordered eigenvectors of P̄ or E[C]. BASS ignores an input's sign and the inputs' order, so that frame fully specifies the refit, and no Stiefel code is needed. Stiefel enters only if a rotation is optimized for a simplicity criterion, the role varimax plays in factor analysis. The refit treats the subspace as fixed, the same plug-in the PCA basis is.
 - **A Bayesian PCA frame** (FAST), only if the stability ratio shows an unsettled basis on real cases. E34's joint fit is the cheaper way to remove the frame.
-- **Projected BGP and BPPR,** later engines. BGP with an isotropic projected kernel needs only Grassmann geometry, and BPPR's directions are lines.
+- **Projected BGP and BPPR,** later engines. BGP with an isotropic projected kernel needs only Grassmann geometry. BPPR's directions are sparse points on the sphere, with a meaningful sign (the BPPR reading above).
 
 Not worth doing now:
 - the Stiefel rewrite, which has no consumer;
