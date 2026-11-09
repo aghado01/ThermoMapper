@@ -1,6 +1,6 @@
 # Active subspaces on the BASS core: E8's build (chip brief)
 
-Date: 2026-11-08. Status: commissioned by the user on 2026-11-08 ("kick off e8"), after KHAOS's last slice; slice 0 verified by the coordinating session; slice 1 landed (`9dfcc6d`) and waits for its verification. Written by the main session from [E8's entry](extensions-brief.md#active-subspace-analysis), [gap G3](lineage-gaps-register.md#g3-sobol-indices-and-active-subspaces-have-different-standing), [the lineage review's separability question](lineage-review.md#separability-is-what-the-closed-forms-rest-on), the [Astra notes](../discussion/astra-grassman-stiefel-pca-extensions.md), and the [Grassmann discussion](../discussion/grassmann-stiefel-subspaces-brief.md)'s report so far. Reports go under "Reports" below, newest first.
+Date: 2026-11-08. Status: commissioned by the user on 2026-11-08 ("kick off e8"), after KHAOS's last slice; slices 0 and 1 verified by the coordinating session; slice 2 landed (`8c7db77`) and waits for its verification. Written by the main session from [E8's entry](extensions-brief.md#active-subspace-analysis), [gap G3](lineage-gaps-register.md#g3-sobol-indices-and-active-subspaces-have-different-standing), [the lineage review's separability question](lineage-review.md#separability-is-what-the-closed-forms-rest-on), the [Astra notes](../discussion/astra-grassman-stiefel-pca-extensions.md), and the [Grassmann discussion](../discussion/grassmann-stiefel-subspaces-brief.md)'s report so far. Reports go under "Reports" below, newest first.
 
 ## Why
 
@@ -97,6 +97,57 @@ One commit per concern; tests with the code they test; each slice ends with its 
 Under "Reports" below, newest first, per slice: what landed by commit; the gates' numbers; decisions taken beyond this brief; what was left unbuilt and why; follow-ups with the decision each would change.
 
 ## Reports
+
+### Slice 2: the readout (2026-11-08)
+
+**Landed** on `main`, nothing pushed:
+- `8c7db77`, the readout, the summary, the gates and the cost row.
+- The docs commit carrying this report: the active-subspace page's slice-2 section, with decisions 4 to 6 marked built.
+
+The Grassmann discussion's report was read first. Its settled readings are taken: P̄'s eigenvalues as mean squared cosines, the projection mean as the Bayes action under chordal loss, and its eigenvectors in order as the nested estimates for every k. Its proposals, not yet settled by the user, are treated as follows. Item 1, a per-draw k, was asked of the coordinating session on 2026-11-08 and is not built; the readout's shape allows it. Item 2, a sine-based angle primitive in LinAlg, is not built either; decision 5's arccos stands. The proposed home for the code, posterior summaries in `Maths.Regression` with no Geometry import, is taken (decision 1 below).
+
+**What was built:**
+- **`BassFit.ActiveSubspace(data, spec)`** with **`ActiveSubspaceSpec`**: the laws, the metric (`InputMetric`: box by default, raw, whitened), the dimension k (1 by default), the route (`Auto`, `Exact`, `Sampled`), the sampled route's points (4,096 by default) and seed, and the draws. It returns **`ActiveSubspaceAnalysis`**: the inputs, the excluded categorical predictors, the route that ran, the metric and its map L, the law, the posterior, the sampled route's per-entry standard errors, and the checks.
+- **The routes.**
+  - *Exact:* the moment service, per draw.
+  - *Sampled:* N points drawn once from the product law and shared by every draw, the gradient readout in batches of 64 draws, and each draw's subspace from the thin SVD of its gradient factor F with C = FᵀF.
+- **The metric:** C = LᵀC_boxL with L diagonal under a product law: 1 for the box, 1/width for raw units, the law's sd from its interval moments for whitening.
+- **`Maths.Regression.Subspaces.SubspacePosterior`**, engine-neutral and needing only LinAlg: E[C] and its eigensystem; P̄, its spectrum and its eigenvectors; each draw's C, eigenvalues, top-k basis and gap; each draw's principal angles to the mean subspace; and the angles between E[C]'s subspace and the mean subspace. `DrawSubspace` reads a draw's subspace from C (`FromC`) or from a factor (`FromFactor`).
+- **`PoincareCheck`** (decision 6): totals from the moment route under the same law and draws.
+  - *Poincaré* for each input under a uniform law;
+  - *SG-4(b)* when every term is a Legendre product and every law uniform on its box;
+  - the violations, counted against rounding, or against three standard errors on the sampled route.
+
+**Gates:**
+
+| Gate | Result |
+| --- | --- |
+| SG-5's three-draw example: the Lean's rational matrices exactly; the summaries' leading directions against the closed forms | 37.99° (rational) and 54.29° (1.2 rad) apart, each to 10⁻¹² |
+| Weighted draws against replicated ones: the summary; a fit with `DrawWeights` against `Draws` repeated | 1.9·10⁻¹⁴; 2.1·10⁻¹⁵ |
+| Exact against sampled, 8,192 points, on a hinge fit with a categorical input, under the uniform law, a mixture and x0's empirical marginal: 180 entries each | worst 1.30, 1.14 and 1.30 standard errors |
+| LᵀC_boxL under raw units and whitening (truncated normal and uniform laws) on a fit whose box is [−3, 5] | 5.4·10⁻¹⁵ |
+| Decision 6 on hinge (degree 2) and Legendre (degree 5) draws; SG-4(b)'s equality on a degree-one Legendre fit | no violation, worst ratios 0.81 (Poincaré, hinge), 0.21 (Poincaré, Legendre), 0.38 (SG-4(b)); equality to 3.3·10⁻¹⁶ on 88 draw-inputs |
+| Recovery at N = 100, 300, 900 from outside the model: sin(2.5wᵀx) on [0, 1]³, and two sin ridges on [0, 1]⁴ with one inert input; E[C]'s subspace, the mean subspace and E[C]'s relative error | ridge: 0.046, 0.016, 0.010 rad (E[C]'s error 8.3%, 3.6%, 2.4%); two ridges: 0.026, 0.024, 0.0105 rad (6.0%, 5.8%, 2.0%); the mean subspace within 0.001 rad of E[C]'s; within the Davis–Kahan bound at every N; the falls registered in `ComparativeSweep` |
+| Fitting untouched | whole regression assembly 2,461/2,461 on `3063af9` plus the slice |
+
+**The cost row** (thread cycles, indicative): the exact readout at 3,000 draws, 15 µs per draw with its checks and 3.9 µs for the summary alone; the sampled readout, 0.63 ms per draw at 4,096 points. Slice 1's row reran beside it: C per draw warm, 5.7 to 6.7 µs.
+
+**Decisions beyond the brief**, each with its alternative:
+1. *The posterior over subspaces is engine-neutral,* in `Maths.Regression.Subspaces`, parallel to `Maths.Regression.Conformal`, on LinAlg alone, as the Grassmann discussion proposes. Co-active pairs (slice 3), BGP and BPPR read it too. Alternative: under BASS's sensitivity folder, closer to its one consumer today.
+2. *Defaults:* k = 1; `Auto` takes the exact route, which every product law allows today; 4,096 points; seed 1. Alternative: no default k, which would refuse until one is declared.
+3. *P̄ takes every draw, rank-deficient ones included,* each with its gap reported. Where a draw's C has rank below k, its k-subspace holds arbitrary directions. Alternative: leave those draws out of P̄, which drops posterior mass; per-draw k (item 1) is the principled answer.
+4. *The checks' totals come from the moment route even on the sampled route,* so only the bound carries Monte Carlo error, and the slack is three of its standard errors.
+5. *The recovery gate's bound is Davis–Kahan's* (Yu, Wang and Samworth's variant, cited from memory), from E[C]'s own error and the truth's gap, not a fixed angle. Its rank-two function changed from a polynomial of two forms, whose relative gap of 0.0045 makes any subspace gate vacuous, to two ridges with a gap of 0.37.
+
+**Left unbuilt:** per-draw k (asked); the Karcher mean, the median and their scatter, which need Geometry and an orchestration layer; the LinAlg angle primitive (the user's call); functional outputs (slice 3); joint samples and full whitening (slice 4).
+
+**Follow-ups:**
+- *Per-draw k* waits for the user to settle it in the Grassmann discussion (the coordinating session, 2026-11-08). The decision is whether the readout reports k_s by a declared rule beside the fixed k. If yes, P̄ over mixed ranks keeps its formula and its trace becomes the mean rank; if no, the gaps stay the signal. The shape it would join:
+  - each `DrawSubspace` already holds all p eigenvalues, so a rule reads k_s from them with no second pass;
+  - `DrawSubspace.FromC` and `FromFactor` already take a dimension per call;
+  - `SubspacePosterior.Of` sums W_sW_sᵀ draw by draw, so mixed ranks change only its shared-k check and the angles to the mean, which become min(k_s, k̄) angles plus a containment defect;
+  - `ActiveSubspaceSpec` gains a rule beside `Dimension`.
+- *The LinAlg principal-angle primitive.* If the user adopts it, `SubspacePosterior.PrincipalAngles` delegates to it. If not, arccos stands; it is accurate to about 1.5·10⁻⁸ rad, below any posterior spread the gates met (the tightest, 0.01 rad).
 
 ### Slice 1: derivative moments and C on the exact route (2026-11-08)
 
