@@ -124,8 +124,9 @@ public sealed class BassParticleTarget : ISamplingTarget<BassParticle>
 /// <list type="bullet">
 /// <item><b>Streams.</b> A sweep runs on the stream SMC hands its particle, through a reversible-jump chain over the
 /// particle's own moves, so it reads no other particle's state.</item>
-/// <item><b>No adaptation</b> (D10's policy): the kernel reads nothing from the population, so the default
-/// <see cref="ISmcKernel{TState}.Prepare"/> stands.</item>
+/// <item><b>Adaptation</b> (D10's policy): none, unless the fit declares E4's history birth. Then
+/// <see cref="Prepare"/> sets its weights from the stage's weighted population, and every particle's birth reads them
+/// through the stage, so each stage's kernel is fixed and leaves its π_b invariant.</item>
 /// <item><b>The account.</b> After each sweep the particle's tallies, its accepted candidate committed first, join the
 /// kernel's <see cref="Account"/> and restart, so a particle that resampling drops loses none of them. The account holds
 /// integer counts, whose sums do not depend on the order particles move in.</item>
@@ -138,6 +139,7 @@ public sealed class BassSmcKernel : ISmcKernel<BassParticle>
     private readonly IReadOnlyList<IBlock<ReversibleJumpChain<BassState>>> _blocks;
     private readonly CancellationToken _cancellation;
     private readonly Lock _gate = new();
+    private readonly BassInclusionHistory? _history;   // E4's history birth's weights for the stage; null without it
 
     /// <summary>The kernel of <paramref name="model"/>, its account continued from <paramref name="account"/> (a resumed
     /// run's) or empty; <paramref name="cancellation"/> stops it before a sweep.</summary>
@@ -148,6 +150,21 @@ public sealed class BassSmcKernel : ISmcKernel<BassParticle>
         _blocks = BassSweepSlots.Blocks(model, BassSweepSlot.Tau);
         _cancellation = cancellation;
         Account = account?.Copy() ?? new BassSmcAccount(model.Prior);
+        if (model.Config.Sampling.Births?.History is { } spec) _history = new BassInclusionHistory(model.Prior, spec);
+    }
+
+    /// <summary>The stage's inclusion history (E4's history birth), set by <see cref="Prepare"/>; null without it.</summary>
+    public BassInclusionHistory? History => _history;
+
+    /// <summary>With E4's history birth, its weights from the population's structures under their normalized weights:
+    /// the stage's ĥ.</summary>
+    public void Prepare(SmcStage<BassParticle> stage, IReadOnlyList<BassParticle> particles, ReadOnlySpan<double> weights)
+    {
+        if (_history is null) return;
+        ArgumentNullException.ThrowIfNull(particles);
+        var structures = new IReadOnlyList<BassTerm>[particles.Count];
+        for (int i = 0; i < structures.Length; i++) structures[i] = particles[i].State.Terms;
+        _history.SetFromPopulation(structures, weights);
     }
 
     /// <summary>The sweeps' account so far; read it between stages, not while particles move.</summary>
@@ -162,6 +179,7 @@ public sealed class BassSmcKernel : ISmcKernel<BassParticle>
             throw new ArgumentException("The stage's target is not this kernel's model's.", nameof(stage));
         _cancellation.ThrowIfCancellationRequested();
         BassStructureMoves moves = particle.Moves;
+        if (_history is not null) moves.ShareHistory(_history);
         var chain = new ReversibleJumpChain<BassState>(moves.Moves, target, particle.State, rng, stage.Temperature);
         chain.Step();
         bool accepted = chain.Accepted > 0;

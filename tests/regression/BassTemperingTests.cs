@@ -569,7 +569,14 @@ public sealed class BassTemperingTests
         {
             BassState start = sampler.DrawState(new Xoshiro256PlusPlus(100 + l)).State;
             var ladder = new BassLadder(model, spec, rungs, start.Terms, start.LogTau, seed: 200 + l);
-            for (int t = 0; t < burn; t++) ladder.Step();
+            // E4's history birth, when the config declares it, learns from the b = 1 state through the burn-in and freezes, as a run's does.
+            ladder.Structure.History?.Learn();
+            for (int t = 0; t < burn; t++)
+            {
+                ladder.Step();
+                ladder.Structure.History?.Record(ladder.Current.Terms);
+            }
+            ladder.Structure.History?.Freeze();
             for (int t = 0; t < scans; t++)
             {
                 ladder.Step();

@@ -78,12 +78,12 @@ public sealed class KhaosChainTests(ITestOutputHelper output)
     internal const string DegreeGroup = "degree mutation", SwapGroup = "variable swap";
 
     // ln D(d | q) as the settings state it: (d − q + 1)^(−s_d) normalized over {q, …, d_max}.
-    private static double LogDegree(LegendreBasis settings, int q, int d)
+    internal static double LogDegree(LegendreBasis settings, int q, int d)
         => -settings.DegreePenalty * Math.Log(d - q + 1)
            - Math.Log(Enumerable.Range(q, settings.MaxDegree - q + 1).Sum(e => Math.Pow(e - q + 1, -settings.DegreePenalty)));
 
     // Σ over valid χ′ of P(χ′ | η): the validity by enumeration, no Poisson-binomial.
-    private static double Validity(double[] eta, int top)
+    internal static double Validity(double[] eta, int top)
     {
         double total = 0.0;
         for (int mask = 1; mask < 1 << eta.Length; mask++)

@@ -219,7 +219,7 @@ internal sealed class BassEnsemble : IEnsembleModel<BassState>
                 blocks = counted;
             }
             accounts[c] = new BassChainAccount(run.Start, sampling, structure.Kinds.Copy(), structure.Refusals.Copy(), structure.EmptyBirths,
-                                               structure.Support.Copy(), (double)chainAtCap / run.Draws.Count, blocks);
+                                               structure.Support.Copy(), (double)chainAtCap / run.Draws.Count, blocks, structure.History?.Reading());
             kinds.MergeFrom(structure.Kinds);
             refusals.MergeFrom(structure.Refusals);
             emptyBirths += structure.EmptyBirths;
@@ -286,12 +286,13 @@ internal sealed class BassEnsemble : IEnsembleModel<BassState>
     }
 
     // One sweep of a chain: the moves, then τ; a ladder's scan of every replica, then the swaps. Cancellation is checked
-    // before it, and progress counted after.
+    // before it, and progress counted after. A learning history (E4's history birth) records the b = 1 state after it.
     private void Sweep(BassChainRun run)
     {
         _options.Cancellation.ThrowIfCancellationRequested();
         if (run.Ladder is { } ladder) ladder.Step();
         else run.Chain!.Step();
+        if (run.Structure.History is { Learning: true } history) history.Record(run.Current.Terms);
         long done = Interlocked.Increment(ref _sweeps);
         if (_options.Progress is { } progress && done % _options.ProgressInterval == 0)
             progress.Report(new BassProgress(done, _plannedSweeps));
@@ -370,10 +371,12 @@ internal sealed class BassEnsemble : IEnsembleModel<BassState>
         }
 
         // The burn-in's sweeps, an adaptive ladder re-spaced after each round of 1, 2, 4, … while the burn-in lasts, a
-        // self-sizing one sized after every round but the last, which equalizes the count it settled on; then the ladder
-        // freezes, the tallies restart and the move counts are kept, so the account covers sampling.
+        // self-sizing one sized after every round but the last, which equalizes the count it settled on; then E4's history,
+        // which learned through the burn-in, freezes, the ladder freezes, the tallies restart and the move counts are kept,
+        // so the account covers sampling.
         public void Burn(int steps)
         {
+            Structure.History?.Learn();
             int done = 0;
             if (Ladder is { } adaptive && adaptive.Spec.Adapts())
                 for (int round = 1; done + round <= steps; round *= 2)
@@ -384,6 +387,7 @@ internal sealed class BassEnsemble : IEnsembleModel<BassState>
                     else adaptive.Adapt();
                 }
             for (; done < steps; done++) owner.Sweep(this);
+            Structure.History?.Freeze();
             if (Ladder is { } ladder) ladder.EndBurnIn(owner.ReportsEvidence);
             else Chain!.Structure.ResetTallies();
             BurnMoves = Moves.MoveStats();

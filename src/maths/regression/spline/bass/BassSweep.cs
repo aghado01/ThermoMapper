@@ -48,6 +48,7 @@ public sealed class BassStructureMoves
 
     private readonly BassModel _model;
     private readonly BassDesign _design;
+    private readonly IBassProposalKernel _kernel;   // the model's, or E4's birth mixture over it with this chain's history
     private BassTermCounts _counts;
     private BassState _committed;
     private Pending? _candidate;
@@ -80,6 +81,7 @@ public sealed class BassStructureMoves
         Kinds = new BassMoveTally();
         _shares = model.Resolved.FactorShares;
         _columnMeansWeights = model.Working.WeightArray;
+        _kernel = KernelOf(model, null);
         Moves = Palette();
     }
 
@@ -103,7 +105,29 @@ public sealed class BassStructureMoves
         Kinds = snapshot.Kinds.Copy();
         _shares = model.Resolved.FactorShares;
         _columnMeansWeights = _design.Working.WeightArray;
+        _kernel = KernelOf(model, snapshot.History);
         Moves = Palette();
+    }
+
+    // The model's kernel, or with E4's history birth declared, the mixture over it with a history of this chain's own:
+    // empty, or as `history` left it.
+    private static IBassProposalKernel KernelOf(BassModel model, BassInclusionHistorySnapshot? history)
+    {
+        if (model.Config.Sampling.Births?.History is not { } spec) return model.Kernel;
+        BassInclusionHistory own = history is null ? new BassInclusionHistory(model.Prior, spec) : BassInclusionHistory.Restore(model.Prior, spec, history);
+        return new BassBirthMixture(model.Kernel, spec, own);
+    }
+
+    /// <summary>The inclusion history E4's history birth reads (<see cref="BassInclusionHistory"/>); null without one.</summary>
+    public BassInclusionHistory? History => (_kernel as BassBirthMixture)?.History;
+
+    /// <summary>Reads <paramref name="history"/> in place of this chain's own: a ladder's rungs share their b = 1 rung's, and an
+    /// SMC stage's particles the stage's.</summary>
+    internal void ShareHistory(BassInclusionHistory history)
+    {
+        ArgumentNullException.ThrowIfNull(history);
+        if (_kernel is not BassBirthMixture mixture) throw new InvalidOperationException("The fit declares no history birth.");
+        mixture.History = history;
     }
 
     /// <summary>The structure moves <paramref name="chain"/> runs, which a block in the sweep reaches them by.</summary>
@@ -156,7 +180,7 @@ public sealed class BassStructureMoves
     internal BassMovesSnapshot Snapshot(BassState current)
     {
         Sync(current);
-        return new BassMovesSnapshot(_design.Snapshot(), Refusals.Copy(), EmptyBirths, Support.Copy(), Kinds.Copy());
+        return new BassMovesSnapshot(_design.Snapshot(), Refusals.Copy(), EmptyBirths, Support.Copy(), Kinds.Copy(), History?.Snapshot());
     }
 
     // Asks for prefix tables on the design: a plain chain's lives long enough to read them back (BassDesign.EnableTables).
@@ -486,13 +510,13 @@ public sealed class BassStructureMoves
         public Proposal<BassState>? Propose(BassState current, Xoshiro256PlusPlus rng)
         {
             owner.Sync(current);
-            if (owner._model.Kernel.DrawBirth(rng, owner._counts) is not { } term)
+            if (owner._kernel.DrawBirth(rng, owner._counts) is not { } term)
             {
                 owner.EmptyBirths++;
                 owner._candidate = null;
                 return null;
             }
-            double logRatio = owner._model.Kernel.LogBirthRatio(term, owner._counts);
+            double logRatio = owner._kernel.LogBirthRatio(term, owner._counts);
             DesignProposal proposal = owner._design.ProposeBirth(term);
             BassTerm[] terms = [.. current.TermArray, term];
             return new Proposal<BassState>(owner.Candidate(current, terms, proposal, BassMoveKind.Birth, term, null), logRatio, 0.0);
@@ -511,7 +535,7 @@ public sealed class BassStructureMoves
             if (current.Count == 0) return null;
             int index = BassDraws.Below(rng, current.Count);
             BassTerm term = current.TermArray[index];
-            double logRatio = owner._model.Kernel.LogDeathRatio(term, owner._counts);
+            double logRatio = owner._kernel.LogDeathRatio(term, owner._counts);
             DesignProposal proposal = owner._design.ProposeDeath(index);
             BassTerm[] terms = [.. current.TermArray[..index], .. current.TermArray[(index + 1)..]];
             return new Proposal<BassState>(owner.Candidate(current, terms, proposal, BassMoveKind.Death, null, term), logRatio, 0.0);
@@ -530,7 +554,7 @@ public sealed class BassStructureMoves
             if (current.Count == 0) return null;
             int index = BassDraws.Below(rng, current.Count);
             BassTerm old = current.TermArray[index];
-            return owner.Replace(current, index, owner._model.Kernel.ProposeChange(rng, old, owner._counts));
+            return owner.Replace(current, index, owner._kernel.ProposeChange(rng, old, owner._counts));
         }
     }
 
@@ -736,7 +760,7 @@ public sealed class BassChain
 
 /// <summary>A chain's structure moves' restart state: the design's, and the tallies.</summary>
 internal sealed record BassMovesSnapshot(BassDesignSnapshot Design, Tally<BassRefusal> Refusals, long EmptyBirths, BassSupportTally Support,
-                                         BassMoveTally Kinds);
+                                         BassMoveTally Kinds, BassInclusionHistorySnapshot? History = null);
 
 /// <summary>A <see cref="BassChain"/>'s restart state: the reversible-jump chain's snapshot, the moves', and the scan's
 /// stream (τ's block), step count and block counters.</summary>

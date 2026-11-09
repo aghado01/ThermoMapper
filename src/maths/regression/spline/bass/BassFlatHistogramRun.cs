@@ -237,7 +237,7 @@ internal static class BassFlatHistogramFit
             }
             massAtCap += atCap;
             accounts[c] = new BassChainAccount(run.Start, counted, structure.Kinds.Copy(), structure.Refusals.Copy(), structure.EmptyBirths,
-                                               structure.Support.Copy(), mass > 0.0 ? atCap / mass : double.NaN);
+                                               structure.Support.Copy(), mass > 0.0 ? atCap / mass : double.NaN, Inclusion: structure.History?.Reading());
             kinds.MergeFrom(structure.Kinds);
             refusals.MergeFrom(structure.Refusals);
             emptyBirths += structure.EmptyBirths;

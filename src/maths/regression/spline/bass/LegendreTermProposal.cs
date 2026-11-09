@@ -55,7 +55,7 @@ public interface IBassProposalKernel
 /// </list>
 /// Immutable, with no scratch state, so one serves every chain of a fit.
 /// </summary>
-public sealed class LegendreTermProposal : IBassProposalKernel
+public sealed class LegendreTermProposal : IBassProposalKernel, IBassWeightedBirth
 {
     private const int StackLimit = 256;
 
@@ -105,6 +105,23 @@ public sealed class LegendreTermProposal : IBassProposalKernel
     {
         int p = appearances.Length;
         if (eta.Length != p) throw new ArgumentException("One probability per variable.", nameof(eta));
+        for (int j = 0; j < p; j++) eta[j] = Math.Pow(appearances[j], Settings.InclusionExponent) + Settings.InclusionPseudoCount;
+        InclusionFromRaw(q0, eta);
+    }
+
+    /// <summary><c>make_weights</c>' passes from raw weights <paramref name="raw"/> in place of (aⱼ^α + ε): E4's history birth
+    /// gives max(ĥⱼ, δ). The weights must be positive.</summary>
+    public void InclusionProbabilities(ReadOnlySpan<double> raw, int q0, Span<double> eta)
+    {
+        if (eta.Length != raw.Length) throw new ArgumentException("One probability per variable.", nameof(eta));
+        raw.CopyTo(eta);
+        InclusionFromRaw(q0, eta);
+    }
+
+    // make_weights from the raw weights in `eta`, in place: v = raw/Σraw·q₀/p, then the passes.
+    private void InclusionFromRaw(int q0, Span<double> eta)
+    {
+        int p = eta.Length;
         if (q0 < 1 || q0 > p) throw new ArgumentOutOfRangeException(nameof(q0));
         if (p == 1)
         {
@@ -112,11 +129,7 @@ public sealed class LegendreTermProposal : IBassProposalKernel
             return;
         }
         double total = 0.0;
-        for (int j = 0; j < p; j++)
-        {
-            eta[j] = Math.Pow(appearances[j], Settings.InclusionExponent) + Settings.InclusionPseudoCount;
-            total += eta[j];
-        }
+        for (int j = 0; j < p; j++) total += eta[j];
         for (int j = 0; j < p; j++) eta[j] = eta[j] / total * q0 / p;
         double delta = 0.0, beta = 1.0, logP = Math.Log(p);
         Span<double> v = p <= StackLimit ? stackalloc double[p] : new double[p];
@@ -135,14 +148,39 @@ public sealed class LegendreTermProposal : IBassProposalKernel
     }
 
     /// <inheritdoc/>
-    public BassTerm? DrawBirth(Xoshiro256PlusPlus rng, BassTermCounts counts)
+    public BassTerm? DrawBirth(Xoshiro256PlusPlus rng, BassTermCounts counts) => Draw(rng, counts, null);
+
+    /// <summary>The birth under <paramref name="weights"/> (E4's history birth): η from <c>make_weights</c>' passes over the weights
+    /// in place of (aⱼ^α + ε); the rest as <see cref="DrawBirth(Xoshiro256PlusPlus, BassTermCounts)"/> draws it.</summary>
+    BassTerm? IBassWeightedBirth.DrawBirth(Xoshiro256PlusPlus rng, BassTermCounts counts, BassVariableWeights weights)
+    {
+        ArgumentNullException.ThrowIfNull(weights);
+        return Draw(rng, counts, weights);
+    }
+
+    /// <summary>ln q_b(term) under <paramref name="weights"/>; the counts do not enter, since the weights replace them.</summary>
+    double IBassWeightedBirth.LogBirth(BassTerm term, BassTermCounts counts, int shift, BassVariableWeights weights)
+    {
+        ArgumentNullException.ThrowIfNull(weights);
+        Check(counts);
+        Prior.Validate(term);
+        if (counts.Terms - shift < 0) throw new ArgumentException("The counts hold no such term.", nameof(term));
+        int p = Space.Variables;
+        Span<bool> included = p <= StackLimit ? stackalloc bool[p] : new bool[p];
+        foreach (LegendreFactor f in term.Legendre) included[f.Variable] = true;
+        int q = term.Legendre.Count, d = term.LegendreDegree;
+        return LogInclusion(weights[BassPart.Legendre], included) + _logDegree[q][d] + LegendreTermSpace.LogComposition(d, q);
+    }
+
+    private BassTerm? Draw(Xoshiro256PlusPlus rng, BassTermCounts counts, BassVariableWeights? weights)
     {
         ArgumentNullException.ThrowIfNull(rng);
         Check(counts);
         int p = Space.Variables, top = Space.MaxOrder;
         int q0 = DrawFrom(rng, _logOrder, 1, top);
         Span<double> eta = p <= StackLimit ? stackalloc double[p] : new double[p];
-        InclusionProbabilities(counts.AppearanceCounts(BassPart.Legendre), q0, eta);
+        if (weights is null) InclusionProbabilities(counts.AppearanceCounts(BassPart.Legendre), q0, eta);
+        else InclusionProbabilities(weights[BassPart.Legendre], q0, eta);
         Span<bool> chi = p <= StackLimit ? stackalloc bool[p] : new bool[p];
         int q;
         do
@@ -175,13 +213,24 @@ public sealed class LegendreTermProposal : IBassProposalKernel
     /// counts <paramref name="appearances"/>, for the variables <paramref name="included"/> mark.</summary>
     public double LogInclusion(ReadOnlySpan<int> appearances, ReadOnlySpan<bool> included)
     {
-        int p = Space.Variables, top = Space.MaxOrder;
+        int p = Space.Variables;
         if (appearances.Length != p || included.Length != p) throw new ArgumentException("One entry per variable.", nameof(included));
+        Span<double> raw = p <= StackLimit ? stackalloc double[p] : new double[p];
+        for (int j = 0; j < p; j++) raw[j] = Math.Pow(appearances[j], Settings.InclusionExponent) + Settings.InclusionPseudoCount;
+        return LogInclusion(raw, included);
+    }
+
+    /// <summary>ln P(χ) as <see cref="LogInclusion(ReadOnlySpan{int}, ReadOnlySpan{bool})"/> reads it, from raw weights
+    /// <paramref name="raw"/> in place of (aⱼ^α + ε).</summary>
+    public double LogInclusion(ReadOnlySpan<double> raw, ReadOnlySpan<bool> included)
+    {
+        int p = Space.Variables, top = Space.MaxOrder;
+        if (raw.Length != p || included.Length != p) throw new ArgumentException("One entry per variable.", nameof(included));
         Span<double> eta = p <= StackLimit ? stackalloc double[p] : new double[p];
         Span<double> terms = stackalloc double[top];
         for (int q0 = 1; q0 <= top; q0++)
         {
-            InclusionProbabilities(appearances, q0, eta);
+            InclusionProbabilities(raw, q0, eta);
             double log = 0.0;
             for (int j = 0; j < p; j++) log += included[j] ? Math.Log(eta[j]) : SpecialFunctions.Log1p(-eta[j]);
             terms[q0 - 1] = _logOrder[q0] + log - Math.Log(PoissonBinomial.Probability(eta, 1, top));

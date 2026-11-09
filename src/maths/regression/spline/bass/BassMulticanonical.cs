@@ -102,6 +102,7 @@ internal sealed class BassMulticanonicalModel : IMulticanonicalModel<BassState>
         var sampler = new BassPriorSampler(Model);
         BassState start = sampler.DrawState(new Xoshiro256PlusPlus(seeds[0])).State;
         var chain = new BassChain(Model, start.Terms, start.LogTau, new Xoshiro256PlusPlus(seeds[1]), new Xoshiro256PlusPlus(seeds[2]), target, start.StartLogRate);
+        chain.Structure.History?.Learn();   // E4's history birth learns with the weights, and freezes with them
         return new BassMulticanonicalChain(this, chain, target, new Xoshiro256PlusPlus(readoutSeed), new BassTermTable(), new DrawStore<BassDraw>(),
                                            new BassStart(start.Terms, Model.Target.HeldTau ?? start.Tau, sampler.Attempts), null);
     }
@@ -176,11 +177,12 @@ internal sealed class BassMulticanonicalChain : IMulticanonicalChain<BassState>
     public MulticanonicalEvaluation CurrentEvaluation => (MulticanonicalEvaluation)Chain.Moves.CurrentEvaluation;
 
     /// <summary>One step on π_w: <see cref="BassMulticanonicalModel.Thin"/> sweeps. The first production step restarts the
-    /// tallies first.</summary>
+    /// tallies first and freezes E4's history, which recorded each learning sweep.</summary>
     public BassState Step()
     {
         if (LearningMoves is null && Chain.Scan.Steps == _owner.LearningIterations * _owner.Thin)
         {
+            Chain.Structure.History?.Freeze();
             Chain.Structure.ResetTallies();
             LearningMoves = Chain.Moves.MoveStats();
         }
@@ -188,6 +190,7 @@ internal sealed class BassMulticanonicalChain : IMulticanonicalChain<BassState>
         {
             _owner.Sweeps.Cancellation.ThrowIfCancellationRequested();
             Chain.Step();
+            if (Chain.Structure.History is { Learning: true } history) history.Record(Chain.Current.Terms);
             _owner.Sweeps.Add(1);
         }
         return Chain.Current;

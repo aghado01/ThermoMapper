@@ -72,7 +72,7 @@ public sealed class BassLadder
         // Every replica starts on the cold one's state and a copy of its design, so the start is one structure throughout.
         // Sharing its term array is safe only because the start was itself loaded whole: a replica that reloads it whole
         // gets its design bit for bit. No mid-run array is shared (Resize).
-        IReadOnlyList<IRjMove<BassState>> ReplicaMoves(int i) => (_structures[i] ??= new BassStructureMoves(model, cold.Start, copy)).Moves;
+        IReadOnlyList<IRjMove<BassState>> ReplicaMoves(int i) => (_structures[i] ??= Shared(new BassStructureMoves(model, cold.Start, copy), cold)).Moves;
         Reference = spec.ReferenceRung ? new BassPriorSampler(model) : null;
         Tempering = new ParallelTempering<BassState>(ReplicaMoves, model.Target, cold.Start, inverseTemperatures, spec.Path, seed, spec.Schedule, Reference,
                                                      Blocks(model));
@@ -182,7 +182,7 @@ public sealed class BassLadder
         int[] kept = Tempering.Resize(inverseTemperatures, sources, Fork, k =>
         {
             int s = sources[k];
-            built[k] = new BassStructureMoves(Model, states[s], new BassMovesSnapshot(DesignOf(s), new Tally<BassRefusal>(), 0, new BassSupportTally(Model.Prior), new BassMoveTally()));
+            built[k] = Shared(new BassStructureMoves(Model, states[s], new BassMovesSnapshot(DesignOf(s), new Tally<BassRefusal>(), 0, new BassSupportTally(Model.Prior), new BassMoveTally())), old[0]);
             return built[k].Moves;
         }, Blocks(Model));
         var structures = new BassStructureMoves[levels];
@@ -198,6 +198,14 @@ public sealed class BassLadder
         }
         _structures = structures;
         return barrier;
+    }
+
+    // `moves` reading the b = 1 rung's inclusion history (E4's history birth), which every rung shares: the rungs learn from the
+    // b = 1 state and freeze with it, and a frozen kernel leaves each rung's tempered law invariant.
+    private static BassStructureMoves Shared(BassStructureMoves moves, BassStructureMoves cold)
+    {
+        if (cold.History is { } history) moves.ShareHistory(history);
+        return moves;
     }
 
     /// <summary>
@@ -255,6 +263,7 @@ public sealed class BassLadder
             throw new ArgumentException("The ladder ran " + (spec.ReferenceRung ? "without" : "with") + " a reference rung.", nameof(snapshot));
         var structures = new BassStructureMoves[levels];
         for (int i = 0; i < levels; i++) structures[i] = new BassStructureMoves(model, ladder.Replicas[i].Current, snapshot.Structures[i]);
+        for (int i = 1; i < levels; i++) Shared(structures[i], structures[0]);
         BassPriorSampler? reference = null;
         if (snapshot.Reference is { } counts)
         {

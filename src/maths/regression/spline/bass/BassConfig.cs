@@ -222,6 +222,15 @@ public sealed record BassConfig
             if (run.LocalSteps is not null && !(family.Change > 0.0))
                 throw Bad("Sampling.FactorMoves.Change", "must be positive with local steps, which run inside the change");
         }
+        if (run.Births is { } births)
+        {
+            if (births.History is not { } history) throw Bad("Sampling.Births", "must declare a component; null turns the mixture off");
+            if (!(history.Share > 0.0 && history.Share < 1.0))
+                throw Bad("Sampling.Births.History.Share", "must lie in (0, 1), so the fit's own birth keeps a positive share");
+            if (!(history.Floor > 0.0 && history.Floor <= 1.0))
+                throw Bad("Sampling.Births.History.Floor", "must lie in (0, 1], so every variable keeps a positive weight");
+            if (history.Refresh < 1) throw Bad("Sampling.Births.History.Refresh", "must be at least 1 sweep");
+        }
         if (s.Legendre is not null)
         {
             if (run.LocalSteps is not null) throw Bad("Sampling.LocalSteps", "steps D01's hinge knots, which a Legendre basis has none of; its changes are KHAOS's mutations");
@@ -519,6 +528,13 @@ public sealed record BassSampling
     /// alone.</summary>
     public FactorMoves? FactorMoves { get; init; }
 
+    /// <summary>
+    /// A mixture on the births (E4; <see cref="BirthMixture"/>): components beside the fit's own birth, which keeps a
+    /// positive share, so every structure it reaches stays reachable. Null, the default, runs the fit's own birth alone.
+    /// </summary>
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public BirthMixture? Births { get; init; }
+
     /// <summary>Parallel tempering within each chain; null, the default, runs untempered (D05).</summary>
     public TemperingSpec? Tempering { get; init; }
 
@@ -814,6 +830,29 @@ public sealed record LocalSteps(double Probability = 0.5, double WindowFraction 
 /// exchanged for one the part does not use. The births' and deaths' shares are the schedule's alone.
 /// </summary>
 public sealed record FactorMoves(double Change = 1, double PruneOrGrow = 1, double VariableChange = 1);
+
+/// <summary>
+/// A mixture on the births (E4; the proposal-kernels brief): q = (1 − ω_H)·q_base + ω_H·q_H, the fit's own birth q_base
+/// keeping the rest of the share. Each component's probability is exact, so the mixture's is, and the target is unchanged.
+/// Deaths stay uniform, and changes and mutations stay the fit's own.
+/// </summary>
+public sealed record BirthMixture
+{
+    /// <summary>The history-based birth (<see cref="HistoryBirth"/>); null leaves it out.</summary>
+    public HistoryBirth? History { get; init; }
+}
+
+/// <summary>
+/// The history-based birth (E4; Nott and Kohn 2005, <i>Biometrika</i> 92): the fit's own birth with each variable weighted
+/// by max(ĥ_u, <see cref="Floor"/>), ĥ_u the share of the chain's past states in which some term uses u, in place of the
+/// current terms' counts (a hinge birth's z_u at every order, one included; a Legendre birth's (aⱼ^α + ε) in
+/// <c>make_weights</c>). D10's policy: ĥ is refreshed every <see cref="Refresh"/> sweeps of burn-in, from the past only, and
+/// frozen at its end, so production runs a fixed kernel. Under SMC each stage reads it from its weighted population.
+/// </summary>
+/// <param name="Share">ω_H, the component's share of the births, in (0, 1).</param>
+/// <param name="Floor">δ, each weight's floor, in (0, 1]: Nott and Kohn's truncation.</param>
+/// <param name="Refresh">Sweeps between refreshes in burn-in, at least 1.</param>
+public sealed record HistoryBirth(double Share = 0.25, double Floor = 0.01, int Refresh = 100);
 
 /// <summary>
 /// A self-sizing ladder's split rule (F-M2's lever 4b, decided 2026-10-29): each adaptation round, every adjacent pair

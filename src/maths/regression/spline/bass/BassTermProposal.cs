@@ -30,7 +30,7 @@ namespace Maths.Regression.Spline.Bass;
 /// with no scratch state, so one serves every chain of a fit. It is the hinge member of F-X4's contract
 /// (<see cref="IBassProposalKernel"/>), its draws unchanged.
 /// </summary>
-public sealed class BassTermProposal : IBassProposalKernel
+public sealed class BassTermProposal : IBassProposalKernel, IBassWeightedBirth
 {
     private const int StackLimit = 256;
 
@@ -89,7 +89,7 @@ public sealed class BassTermProposal : IBassProposalKernel
 
     /// <summary>ln q_b(term | counts): the log probability that a birth into the structure <paramref name="counts"/>
     /// describes draws <paramref name="term"/>.</summary>
-    public double LogBirth(BassTerm term, BassTermCounts counts) => LogBirth(term, counts, 0);
+    public double LogBirth(BassTerm term, BassTermCounts counts) => LogBirth(term, counts, 0, null);
 
     /// <summary>The log probability that a birth draws every part empty, the intercept; −∞ for a fit of one part.</summary>
     public double LogEmptyBirth(BassTermCounts counts)
@@ -111,20 +111,38 @@ public sealed class BassTermProposal : IBassProposalKernel
     /// describes, M terms: ln[1/(M + 1)] − ln q_b(born | counts), the reverse death's pick over the birth's draw.
     /// </summary>
     public double LogBirthRatio(BassTerm born, BassTermCounts counts)
-        => -Math.Log(counts.Terms + 1.0) - LogBirth(born, counts, 0);
+        => -Math.Log(counts.Terms + 1.0) - LogBirth(born, counts, 0, null);
 
     /// <summary>
     /// The within-move log ratio of a death of <paramref name="dying"/> from the structure <paramref name="counts"/>
     /// describes, M terms with it among them: ln q_b(dying | the counts without it) − ln(1/M).
     /// </summary>
     public double LogDeathRatio(BassTerm dying, BassTermCounts counts)
-        => LogBirth(dying, counts, 1) + Math.Log(counts.Terms);
+        => LogBirth(dying, counts, 1, null) + Math.Log(counts.Terms);
 
     /// <summary>D01's change (<see cref="ProposeChange(Xoshiro256PlusPlus, BassTerm)"/>), which reads no counts.</summary>
     BassTermMove IBassProposalKernel.ProposeChange(Xoshiro256PlusPlus rng, BassTerm term, BassTermCounts counts) => ProposeChange(rng, term);
 
     /// <summary>A birth's term, or null for the empty draw (the intercept, a failed birth).</summary>
-    public BassTerm? DrawBirth(Xoshiro256PlusPlus rng, BassTermCounts counts)
+    public BassTerm? DrawBirth(Xoshiro256PlusPlus rng, BassTermCounts counts) => Draw(rng, counts, null);
+
+    /// <summary>The birth under <paramref name="weights"/> (E4's history birth): each part's variables by Wallenius' sampling with
+    /// those weights at every order, one included, in place of z_u ∝ w₂ + (terms using u); the order and the factors as
+    /// <see cref="DrawBirth(Xoshiro256PlusPlus, BassTermCounts)"/> draws them.</summary>
+    BassTerm? IBassWeightedBirth.DrawBirth(Xoshiro256PlusPlus rng, BassTermCounts counts, BassVariableWeights weights)
+    {
+        ArgumentNullException.ThrowIfNull(weights);
+        return Draw(rng, counts, weights);
+    }
+
+    /// <summary>ln q_b(term) under <paramref name="weights"/>, under the counts less <paramref name="shift"/> copies of the term.</summary>
+    double IBassWeightedBirth.LogBirth(BassTerm term, BassTermCounts counts, int shift, BassVariableWeights weights)
+    {
+        ArgumentNullException.ThrowIfNull(weights);
+        return LogBirth(term, counts, shift, weights);
+    }
+
+    private BassTerm? Draw(Xoshiro256PlusPlus rng, BassTermCounts counts, BassVariableWeights? weights)
     {
         ArgumentNullException.ThrowIfNull(rng);
         Check(counts);
@@ -147,7 +165,7 @@ public sealed class BassTermProposal : IBassProposalKernel
             int k = orders[index];
             if (k == 0) continue;
             BassStructurePrior.Part part = Prior[kind]!;
-            int[] variables = DrawVariables(rng, part, counts.AppearanceCounts(kind), k);
+            int[] variables = weights is null ? DrawVariables(rng, part, counts.AppearanceCounts(kind), k) : DrawWeighted(rng, weights[kind], k);
             if (kind == BassPart.Categorical)
             {
                 categorical = new CategoricalFactor[k];
@@ -479,8 +497,8 @@ public sealed class BassTermProposal : IBassProposalKernel
     }
 
     // ln q_b(term) under the counts less `shift` copies of the term itself: 0 for a birth into them, 1 for the reverse
-    // of a death from them.
-    private double LogBirth(BassTerm term, BassTermCounts counts, int shift)
+    // of a death from them; under `weights`, the variables' probability is Wallenius' with them at every order.
+    private double LogBirth(BassTerm term, BassTermCounts counts, int shift, BassVariableWeights? weights)
     {
         Check(counts);
         Prior.Validate(term);
@@ -496,7 +514,7 @@ public sealed class BassTermProposal : IBassProposalKernel
             if (count < 0) throw new ArgumentException("The counts hold no such term.", nameof(term));
             lq += LogOrder(part, count, terms);
             if (k == 0) continue;
-            lq += LogVariables(term, kind, part, counts.AppearanceCounts(kind), shift);
+            lq += weights is null ? LogVariables(term, kind, part, counts.AppearanceCounts(kind), shift) : LogWeighted(term, kind, weights[kind]);
             lq += part.LogFactors(term);
         }
         return lq;
@@ -547,6 +565,24 @@ public sealed class BassTermProposal : IBassProposalKernel
         var set = new int[k];
         Wallenius.Sample(rng, z, set);
         return set;
+    }
+
+    // k variables by Wallenius' sampling with the weights z, at every order: a history birth's.
+    private static int[] DrawWeighted(Xoshiro256PlusPlus rng, ReadOnlySpan<double> z, int k)
+    {
+        var set = new int[k];
+        Wallenius.Sample(rng, z, set);
+        return set;
+    }
+
+    // The term's variable set's log probability under Wallenius' sampling with the weights z, one variable included.
+    private static double LogWeighted(BassTerm term, BassPart kind, ReadOnlySpan<double> z)
+    {
+        int k = BassStructurePrior.Order(term, kind);
+        Span<int> set = k <= StackLimit ? stackalloc int[k] : new int[k];
+        int f = 0;
+        foreach (int v in BassTermCounts.Variables(term, kind)) set[f++] = v;
+        return Wallenius.LogProbability(z, set);
     }
 
     private static HingeFactor DrawHinge(Xoshiro256PlusPlus rng, BassStructurePrior.Part part, int variable)

@@ -431,10 +431,22 @@ public sealed record BassStart(IReadOnlyList<BassTerm> Terms, double Tau, long A
 /// <summary>One chain's account over the sampling phase, with its start: moves, by type and by kind, refusals, empty
 /// births, support by order and its share of draws at the cap; and the sweep's blocks after the structure moves, each block's attempts
 /// and acceptances in scan order (τ's, and an observation model's, whose latent block refuses a draw that puts the structure outside F),
-/// for a lone chain; null for a ladder's and for the other samplers.</summary>
+/// for a lone chain; null for a ladder's and for the other samplers. With E4's history birth, <paramref name="Inclusion"/> is the
+/// frozen history's reading.</summary>
 public sealed record BassChainAccount(
     BassStart Start, IReadOnlyList<MoveStat> Moves, BassMoveTally MoveKinds, Tally<BassRefusal> Refusals, long EmptyBirths,
-    BassSupportTally Support, double MassAtCap, IReadOnlyList<MoveStat>? Blocks = null);
+    BassSupportTally Support, double MassAtCap, IReadOnlyList<MoveStat>? Blocks = null, BassInclusionReading? Inclusion = null);
+
+/// <summary>
+/// E4's history birth's reading for one chain (<see cref="BassInclusionHistory"/>): the states it learned from, and ĥ per
+/// part, the share of those states in which some term uses each variable, null for a part the fit lacks. It is Nott and
+/// Kohn's estimate of each variable's marginal inclusion probability, the weights' source before their floor.
+/// </summary>
+public sealed record BassInclusionReading(long Recorded, IReadOnlyList<IReadOnlyList<double>?> ByPart)
+{
+    /// <summary>ĥ over <paramref name="part"/>'s variables; null for a part the fit lacks.</summary>
+    public IReadOnlyList<double>? this[BassPart part] => ByPart[(int)part];
+}
 
 /// <summary>One move kind's account: its proposals attempted, accepted, null and refused; the rest were rejected on their
 /// ratio.</summary>
