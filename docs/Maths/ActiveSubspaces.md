@@ -201,7 +201,8 @@ The user settled the [Grassmann discussion](../../issues/regression/discussion/g
 
 **The matrix Poincaré check** (`ActiveSubspaceAnalysis.MatrixPoincare`). Under a product law, Efron–Stein and each input's Poincaré inequality give Cov_ρ(f) ≼ E[J D Jᵀ], with D the inputs' constants, (b − a)²/π² for a uniform input.
 - Per draw it reads the largest generalized eigenvalue of the covariance against the bound, both under the output metric's root, from the moment route: Cov = H·Σ_B·Hᵀ with Σ_B the terms' covariances (`CovarianceGram`), and the bound H·K_D·Hᵀ.
-- At most 1 holds; above 1 + 10⁻⁹ is a violation. It is read when every input is continuous with a uniform law. It is null under a categorical input, a law that is not uniform, or a joint sample, which has no such bound. It is decision 6's check in matrix form, and it makes "low gradient energy, low variance" exact per draw.
+- At most 1 holds; above 1 + 10⁻⁹ is a violation. It is decision 6's check in matrix form, and it makes "low gradient energy, low variance" exact per draw.
+- *Opt-in* (`ActiveSubspaceSpec.MatrixPoincare`, off by default): it multiplies the exact readout's cost per draw by 1.3 to 3.1 on scalar, functional and basis fits alike. `MatrixPoincareStatus` says whether it was read, not asked, or not applicable: asked under a categorical input, a law that is not uniform, or a joint sample, which has no such bound. Slice 2's per-input check stays on.
 
 **Basis adequacy** (`BassBasisFit.Adequacy`). Beside a direct-mode fit of the same cases, it reads the share of the direct fit's G outside the basis's span, tr((I − P)G)/tr G with the span diag(y_s)K under S, and the containment defect of G's leading patterns in that span, per draw and for E[G]. A basis fit's own G lies in its span by construction, so the direct fit answers D07's question: did the truncation drop structure that moves with the inputs? E37 asks it from the truncation residuals instead.
 
@@ -218,24 +219,24 @@ The user settled the [Grassmann discussion](../../issues/regression/discussion/g
 | tr G = tr C under the same metrics: direct and basis fits, box, raw and whitened, W_y = I and full, both routes, 96 draws | 5.5·10⁻¹⁴ |
 | G against quadrature of the Jacobian: a basis fit's reconstructed J by each component's gradient readout, a direct fit's by its own; E[G]'s spectrum | 7.0·10⁻¹⁵ |
 | The matrix check on (cos πx₁, cos πx₂), the extremal case; D halved; a mixed field; covariance outside the bound's range | 1 to 10⁻¹⁵; 2; 0.94; ∞ |
-| The matrix check on fitted draws: a scalar fit, a direct functional fit under a full W_y, a basis fit, 280 draws | no violation, worst 0.867; null under a categorical input, a normal law and a sample |
+| The matrix check on fitted draws, asked: a scalar fit, a direct functional fit under a full W_y, a basis fit, 280 draws; by default; asked where it does not apply | no violation, worst 0.867; not asked; not applicable under a categorical input, a normal law and a sample |
 | Adequacy on chosen factors: inside the span; F = [2e₁, 0.7e₄] against span(e₁, e₂); a non-orthonormal basis of the span | 0; b²/(a² + b²) to 10⁻¹⁵, the leading pattern contained, the second's defect 1; the same |
 | Adequacy on fits: curves a(x)φ₁ + b(x)φ₂ + noise, a direct fit beside PCA bases of rank 1 and 2, against the truth's share for each fitted basis's own span | 0.2251 against 0.2251 (span(φ₁) itself: 0.2296); 0.0011 against 0.0001 |
 | The angles against slice 2's arccos on 300 random pairs of mixed ranks, above 10⁻⁶ rad; rotations by 10⁻¹² to 10⁻⁶ rad | within 0.11 of arccos's own error; 2·10⁻¹⁶ relative, where arccos returns 0 below 10⁻⁸ |
 
 **Cost** (`ActiveSubspaceCostTests.SettledItemsCostRow`, thread cycles, indicative), per draw at 3,000 draws:
-- a scalar fit's exact readout with the matrix check, 8.8 µs; per-draw ranks add 0.3 µs;
+- the exact readout with the matrix check and without it: scalar 20.4 and 8.6 µs, functional 35.9 and 22.9 µs, basis 59.2 and 19.1 µs (a third reading: 13.4 and 7.1, 28.9 and 15.6, 58.2 and 31.6; a fourth, on the wall clock with the final code: 16.6 and 12.9, 28.4 and 14.1, 65.2 and 30.0); per-draw ranks add less than the readings resolve (0.3 µs in the first row, −2.8 µs in the fourth);
 - a functional fit's exact readout, 25 µs, and 43 µs with two output patterns;
 - the sampled output side's own cost, 2.9 ms at 4,096 points, the thin SVD of the m × Np stacked Jacobians;
 - basis adequacy, 0.16 ms per direct draw at 12 locations.
 
-The matrix check runs by default where it applies, so the default functional and basis readouts cost about twice slice 4's.
+The matrix check is therefore off by default: it multiplies the exact readout's cost by 1.3 to 3.1 over four readings.
 
 **Slice 5's choices,** beyond the brief:
 - *The gap rule against λ₁.* *Alternatives:* against λ_k, or on a log scale, which read a trailing zero eigenvalue as the largest gap.
 - *G's output metric by its symmetric root,* so patterns stay over the locations. *Alternative:* slice 3's eigen-root, whose rows are W_y's eigenvectors.
 - *Output patterns opt-in,* the count given. *Alternative:* always computed, which costs every functional readout a thin SVD per draw.
-- *The matrix check computed whenever it applies,* as slice 2's checks are. *Alternative:* opt-in.
+- *The matrix check opt-in,* off by default, since it about doubles the exact readout on every fit kind: the user's standing rule that a payload which makes a path expensive becomes opt-in for that path and keeps its output. *Alternatives:* on by default, as slice 2's per-input check stays; caching its term-pair Grams per structure, which would cut its cost and is a follow-up.
 - *The checks read from the moment route even on the sampled route,* as slice 2's do, so they carry no Monte Carlo error.
 
 ## The decisions (the brief's, taken in commissioning)
