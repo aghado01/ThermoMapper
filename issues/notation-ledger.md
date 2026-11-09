@@ -11,6 +11,17 @@ Splits in the module's language (symbols, identifiers, terms), logged as session
 
 ## Entries
 
+### W for an output metric and for eigenvectors; the co-active matrices' indices; the output functionals (2026-11-08)
+
+- **Kind:** one name for several concepts, and one concept under several names.
+- **Readings:**
+  - The output metric of C = E[JᵀW_yJ]: W_y in the active-subspace brief and `docs/Maths/ActiveSubspaces.md` ("Functional outputs and co-active pairs"), `OutputMetric` and `ActiveSubspaceSpec.OutputMetric` in `src/maths/regression/spline/bass/sensitivity/ActiveSubspaces.cs`, the local `w` in `BassActiveSubspaces.Of`, and Q in F-X6.
+  - W for eigenvectors: W_s, a draw's top-k eigenvectors in decision 4's P̄ = Σ w_s W_s W_sᵀ (`DrawSubspace.Basis`), and 2311.18146's W_kℓ, V_kℓ's eigenvectors (eq. Vdecomp), here `CoActivePosterior.Directions`; the paper's columns w_i^(kℓ) sit beside the module's w_s for draw weights.
+  - The co-active matrices: the paper's C_kℓ, V_kℓ and t_kℓ, indexed by model, against the module's C_fg, V and t_fg (`CoActivePair`, `CoActivePosterior` in `src/maths/regression/subspaces/CoActivePosterior.cs`); coactivity calls C its "Constantine matrix".
+  - The output functionals: a_f and a_g in the docs and XML comments, `CoActiveSpec.Output` and `OtherOutput`, the locals `a`, `b` (two fits) and `a`, `c` (one fit) in `BassActiveSubspaces.CoActive`.
+- **Found:** 2026-11-08, E8's slice 3.
+- **Note:** b stays a draw's coefficients, so the output functionals are not a and b in writing; W_y is the brief's own symbol, taken because the page already had W_s.
+
 ### "Slope" and "derivative" for φ′, "gradient" for ∇f and for C, and the paper's h, γ, I₁–I₃ (2026-11-08)
 
 - **Kind:** one concept under several names, and one name for several concepts.

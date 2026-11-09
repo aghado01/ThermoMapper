@@ -98,6 +98,82 @@ Under "Reports" below, newest first, per slice: what landed by commit; the gates
 
 ## Reports
 
+### Slice 3: functional outputs and co-active pairs (2026-11-08)
+
+**Landed** on `main`, nothing pushed:
+- `84fe230`, the readouts, the posterior, the gates, the oracle's sections and the cost row.
+- The docs commit carrying this report: the active-subspace page's slice-3 section, four rows in BayesianRegression's corrections, the notation ledger's entry and the R README's oracle row.
+
+The papers and the oracle were read as slice 0 read them. 2311.18146 v2 was read from its TeX source; `coactivity` at `35e4573` was read and run for every comparison below; `concordance` at `b34e7c6` was read for the paper's script and not run. Neither paper defines a functional output's C: 2307.11241 is scalar, and 2311.18146 pairs scalar functions, so C = E[JᵀW_yJ] follows the brief and F-X6. Zahm et al.'s vector-valued form (1801.07922) is not held, and nothing here cites it.
+
+**What was built:**
+- **Every readout reads a draw as its terms and H,** each term's coefficient at each output location: one row for a scalar fit; c_a·h_a(t_ℓ) for a direct functional fit, its output-side factors and normalizer at the training output locations; G_ℓk·c_ka for a basis fit over its joint draws, G = diag(y_s)K. Each quantity below is then a quadratic form in the term pairs' gradient moments, summed by the new **`BassMoments.GradientCross`** for two term lists and a weight matrix.
+- **Functional C:** `ActiveSubspaceSpec.OutputMetric`, an **`OutputMetric`** W_y over the training output locations (`OutputMetric.Diagonal` for weights), the identity by default. C = Σ M_ab E[∇B_a∇B_bᵀ], M = HᵀW_yH. W_y is refused unless m × m, finite, symmetric and positive semidefinite, on either route. `BassFit.ActiveSubspace` now reads a direct functional fit; the sampled route maps each point's Jacobian by W_y's root. **`BassBasisFit.ActiveSubspace(spec)`** reads a basis fit on the exact route; its sampled route is refused until slice 4.
+- **The checks** take their totals as Σ M_ab·T_ab(v), the scalar readout included (M = bbᵀ), in place of slice 2's call to the Sobol readout.
+- **Co-active pairs:** **`BassFit.CoActiveSubspace(data, other, otherData, spec)`** for two fits on the same inputs at one degree, scalar or functional, draws paired by position with product weights; **`BassFit.CoActiveSubspace(data, spec)`** and **`BassBasisFit.CoActiveSubspace(spec)`** for two outputs of one fit, each draw paired with itself. **`CoActiveSpec`** carries the law, metric, route, points, seed, both draw selections, and the output functionals `Output` and `OtherOutput` (a_f, a_g) for functional sides. **`CoActiveAnalysis`** returns the pairs' posterior and, on the sampled route, every entry's standard error (**`CoActiveError`**).
+- **`Maths.Regression.Subspaces.CoActivePosterior`**, fit-agnostic beside `SubspacePosterior`. It holds E[C_f], E[C_g], E[C_fg] and V, with V's eigenpairs ordered by |λ|; the contributions, summing to the concordance of the means; each pair's concordance; and the signed and unsigned co-activity scores. **`CoActivePair`** holds one pair's matrices, traces, concordance and discordance.
+- **The oracle's sections** (`active_subspace_oracle.R`): `Cfg_bass` on draw pairs as written, with slice 0's corrections patched into a copy of `Cfg_bass_univariate`, and the quadrature reference; `Cfg_bass`'s default and dispatch; a functional draw read per location through `bassfunc2bass_fixed_t` and corrected `C_bass_univariate`, beside the quadrature of the draw folded at t; the functional converters' readings. Row 3's last column now says what a draw is for, so draws sent only within pairs skip the single-draw section and the run stays inside the oracle's two minutes.
+
+**Gates:**
+
+| Gate | Result |
+| --- | --- |
+| The brief's: a basis fit's C (2 components, 15 locations) against the direct computation on its reconstructed outputs, J = G·J_w by each component's gradient readout, Σ w·JᵀW_yJ by tensor quadrature split at the knots; identity and full W_y | 6.9·10⁻¹⁶, 9.4·10⁻¹⁶ |
+| A direct functional fit's C (7 locations) against quadrature of the gradient readout's Jacobian: identity, trapezoid weights, full W_y | 4.6·10⁻¹⁵, 2.0·10⁻¹⁵, 1.6·10⁻¹⁵ |
+| W_y's readings: e_ℓe_ℓᵀ against that location's quadrature; linearity; no W_y as the identity | 5.4·10⁻¹⁶ |
+| The direct fit's exact and sampled routes under a full W_y, 8,192 points, 12 draws | within 1.22 standard errors |
+| The brief's: C_fg's symmetry, two fits swapped; its reduction to C at f = g, a fit paired with itself draw for draw, concordance 1 | 3.8·10⁻¹⁶; 2.0·10⁻¹⁶ |
+| Two fits against quadrature of both gradient readouts; exact against sampled (C_f, C_g, C_fg, 10 pairs) | 6.1·10⁻¹⁵; within 2.12 standard errors |
+| Two outputs of a direct fit: swapped; a_f = a_g against C under W_y = a_fa_fᵀ; quadrature; the two-fit route with the fit paired with itself; the routes | 2.4·10⁻¹⁶; 6.0·10⁻¹⁶; 8.1·10⁻¹⁵; equal; within 1.82 standard errors |
+| A functional fit through a_fᵀy paired with a scalar fit on its inputs, against quadrature | 5.5·10⁻¹⁵ |
+| Two outputs of a basis fit: a_f = a_g against C under a_fa_fᵀ; quadrature of the reconstructed a_fᵀJ, a_gᵀJ | 7.8·10⁻¹⁶; 1.1·10⁻¹⁵ |
+| The brief's: 2311.18146's examples. The simple polynomial example (§3.1.1) in closed form at β = 0, ½, 3, −12: C₁, C₂, C₁₂ against the paper's matrices and quadrature, the traces, the concordance, π summing to it, the \|λ\| order, the scores | 10⁻¹⁴; every formula holds |
+| Its quoted readings | 0.944 (β = ½), 0.551 (β = 3), w₁⁽¹⁾ and w₁⁽²⁾ hold; three slips, below |
+| Its estimate (§3.2): BASS fits of f₁, f₂ at β = 3 from n = 200 and 1,000 Latin hypercube points, E[C₁₂]'s Frobenius distance from the closed form | 0.061 and 0.015, 0.87% and 0.22% of ‖C₁₂‖_F; the paper's single fits through `concordance`: 0.050 and 0.0086; the concordance of the means 0.548 and 0.551 (truth 0.551) |
+| Oracle (`CoActiveParityTests`): two engine fits' C_fg against `Cfg_bass` on the same 6 draw pairs, and the mode's quadrature | uniform law: as written, 1.2·10⁻¹⁵; a truncated normal on x0: corrected, 1.5·10⁻¹⁵, and 27% from it as written; quadrature 3.3·10⁻¹⁴, 2.3·10⁻¹⁴ |
+| Oracle: a direct functional fit's C at a training location (W_y = e_ℓe_ℓᵀ) against `bassfunc2bass_fixed_t` then corrected `C_bass_univariate`, and the quadrature of the draw folded at t_ℓ; 4 draws at 4 of 9 locations | 3.5·10⁻¹⁵; 2.8·10⁻¹⁴ |
+| Oracle: `Cfg_bass`'s default and dispatch; the converters' readings and stops | as read, below |
+| Slice 1's and slice 0's oracle classes, rerun on the extended mode | 7/7, unchanged; with the co-active class, 10/10 |
+| The checks on functional draws (direct and basis, identity and full W_y) and the sampled route | no violation; worst Poincaré ratio 0.85 |
+| Slice 2's gates, rerun (the readout's totals now come through M) | unchanged: routes within 1.30, 1.14, 1.30 standard errors; ratios 0.81, 0.21, 0.38 |
+| Fitting untouched | whole regression assembly 2,484/2,484 on `e70afaf` plus the slice; the E8 oracle classes 10/10 |
+
+The paper's application (§4, PBX 9501) reads data from its authors' repository (github.com/knrumsey/PBX9501), which is not under `packages` or `codex-scientiae`, so it was not run.
+
+**The cost row** (thread cycles, indicative), per draw at 3,000 draws: a direct functional fit's C over 7 locations, 39 µs (identity) and 44 µs (full W_y); a basis fit's over 15 locations and 2 components, 43 µs; two outputs, 48 µs; per pair, two scalar fits, 15 µs exact and 0.93 ms sampled at 4,096 points. Slice 2's readout in the same run: 10 µs exact, 0.98 ms sampled. Slice 3's first cost run read the sampled route at 2.6 ms: it allocated each point's Jacobian, its W_y-mapped copy and a Gram matrix. It now reuses one buffer and streams the sums, as the co-active pair does. Against slice 2's build (`git archive 3cdc2e8`), interleaved twice under one load, the sampled readout reads the same (1.33 and 1.19 ms against 1.27 and 0.93) and the exact one about a quarter slower (34.7 and 32.5 µs against 27.5 and 25.8). Its checks' totals now run over every term pair through M, where slice 2 read them from the Sobol readout. That is about 7 µs a draw, and it stays. The oracle's reference gradient now takes its factor products vectorized, bit for bit the same; the functional section ran past the runner's two minutes without it.
+
+**The paper's slips,** each against its own definitions; the tests assert the definitions' values and pin each quoted one to what it reads:
+- *−0.131 "for β = −12"* is the concordance at β = −15; at −12 it is −0.1095.
+- *w₁⁽¹²⁾ ≈ (0.907, 0.422) at β = ½* is V's leading eigenvector at β = 0.4; at ½ it is (0.8971, 0.4418).
+- *π⁽¹²⁾ = (0.9518, −0.0077) at β = ½* are the unsymmetrized C₁₂'s eigenvalues over √(t₁t₂). V's, which its eq. (contrib) defines, give (0.9684, −0.0242). Both pairs sum to the concordance, since tr V = tr C₁₂.
+
+Its script (`concordance`'s `inst/CoASM/simple_poly_concordance.R`, read) symmetrizes as the text says, so the quoted values did not come from it as it stands.
+
+**`coactivity`'s readings,** each run or counted in the pinned body:
+- *`Cfg_bass_univariate`* shares `C_bass_univariate`'s integrals and prior handling, so its pairs carry slice 0's second-moment and weight defects and read degree one only. With both patched in, it meets the engine.
+- *Defaults:* `Cfg_bass` without `mcmc.use` reads one pair, `min(length(s2), length(s2′))`: the shorter chain's last draw with the same index of the other (run).
+- *List dispatch:* its third branch tests `class(mod1)` where mod2 is meant, so a list in mod2 alone is refused as not a model (run). Its recursive calls pass `func.use[i], pca_method, verbose` positionally into `func.use, func.true, pca_method` (read; a scalar model ignores them).
+- *Functional models* are read per location only, with no output metric. `bassfunc2bass_fixed_t` folds the hinges of variable `pdes + pfunc` alone, the last functional variable (counted). It stops on a one-draw model, since `beta[, 1:(1 + maxBasis)]` drops a one-row matrix to a vector (run). It also stops when the largest model loses no term at t: it trims beta to max(nbasis) + 1 columns, then tests column max(nbasis after merging) + 2 (run, "subscript out of bounds"). With one basis function, `knotInds[i, 1:1, ]` drops to a vector before the duplicate search (read).
+- *Basis models:* `bassPCA2bass_fixed_t` and `get_u` place the basis rows at `seq(0, 1, length.out = nt)`, equispaced whatever the output locations are (counted: three and one). `func.true`, documented as the output locations, appears nowhere in the body (counted). `C_bass_pca_v2` defaults to nt points strictly between that grid's, so its default C is read between the training locations; for nt = 15 only ½ falls on the grid (counted and evaluated). `C_bass_pca_v1` and `Cfg_bass_pca_v1` return TRUE (run). `basslc2bass` takes each model's structure at `mcmc.use[mm]` and its coefficients at row `mm` (lines 145 and 231), so a subset `mcmc.use` pairs one draw's terms with another's coefficients (read). `bassPCA2bass_fixed_t` calls it without `mcmc.use`, so the per-location reading is untouched.
+
+The rows in BayesianRegression's corrections take the paper's slips, `Cfg_bass`'s inheritance, the basis converters and `bassfunc2bass_fixed_t`. The defaults and the dispatch are readings, as `C_bass`'s default was in slice 0.
+
+**Decisions beyond the brief,** each with its alternatives:
+1. *A functional side is read through an output functional,* f = a_fᵀy, which holds both coactivity's per-location reading (a = e_ℓ) and integrated outputs. Two fits take one each, so two functional fits, or a functional and a scalar fit, pair as two scalar fits do. *Alternative:* per-location matrices only, as coactivity returns them.
+2. *Two fits pair draws by position with product weights,* which samples the posteriors' product. coactivity pairs its `mcmc.use` rows the same way. *Alternatives:* every pair of draws, the exact product expectation at quadratic cost; random pairing, which adds noise.
+3. *W_y is declared and checked on both routes,* the identity by default (F-X6's Q). *Alternatives:* diagonal weights only, which loses the outputs' correlations; a W_y built from the output grid, which would choose the units for the user.
+4. *The co-active sampled route carries standard errors* for every entry of C_f, C_g and C_fg, as slice 2's readout does for C.
+5. *The co-active posterior is E[C_f], E[C_g], E[C_fg] and V's eigensystem,* with each pair's concordance beside the concordance of the means. *Not built:* a projection mean over the pairs' co-active subspaces, decision 4's second summary carried over. V's eigenvalues are signed, so a top-q subspace per pair needs the |λ| order to hold across pairs. The question is open below.
+6. *The readout reads at the training output locations,* as the gradient readout and the conditioned Sobol form do; a basis fit exists only there.
+7. *Notation:* W_y for the output metric, the brief's own symbol, since the page already writes W_s for a draw's basis; a_f and a_g for the output functionals, since b is a draw's coefficients. The splits are logged in the notation ledger.
+
+**Left unbuilt:** a basis fit paired with another fit; a direct fit's output locations beyond the training ones; the basis fits' sampled route (slice 4); the co-active projection mean (decision 5 above); the PBX application (data not on disk).
+
+**Follow-ups:**
+- *A basis fit paired with another fit.* Each is a new H in the same terms-and-H form: the pair's draws by position, the basis side over its joint draws. If wanted, it lands as one overload on each class. If not, two outputs of one basis fit and every direct pairing stand.
+- *The co-active projection mean.* If the user wants decision 4's second summary for pairs, it needs a rule for q and for signed eigenvalues: top-q by |λ| per pair, P̄ over the pairs, with the concordance's sign reported beside it. If not, E[C_fg]'s eigensystem and the per-pair concordances are the summary.
+- *Output locations beyond the training ones for a direct fit.* Its output-side factors are hinges in the output variables, defined across their box, so H can be read at any location. The decision is whether W_y may span new locations. If yes, `OutputMetric` gains its locations; if no, the training locations stand.
+
 ### Slice 2: the readout (2026-11-08)
 
 **Landed** on `main`, nothing pushed:
