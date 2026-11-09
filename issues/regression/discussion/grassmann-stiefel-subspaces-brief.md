@@ -53,6 +53,26 @@ Work through where subspace geometry earns its place in the regression engine: p
 
 ## Report
 
+### 2026-11-08, the manifold module and what it changes
+
+The module: `IRiemannianManifold` (`Distance`, `LogMap`, `ExpMap`, `AddScaled`, `Norm`, static `IsFlat`); the manifolds; the wrappers `ScaledManifold<T>` (a constant metric scale, with Log and Exp unchanged) and `ProductManifold<TA, TB>`; `Irls.Solve<TManifold, TLoss>`, which dispatches on three questions (a closed-form L² Karcher step or not, flat or curved, Weiszfeld or a projected subgradient); the losses `L2Loss` and `L1Loss`, the only two built, although the comments name Huber and Tukey; `GeometricMean` and `GeometricMedian`, each with its scatter and consistency factors; and `SubspaceAnnealer`, simulated annealing on Gr(k, d) with a black-box objective. `MoMPCA` composes them as a median on Scaled(ℝᵖ, α) × Scaled(Gr, 2 − α).
+- **E8's summaries are three losses on one interface.**
+  - P̄ is the chordal one, in closed form.
+  - `GeometricMean` on `GrassmannManifold(p, k)` gives the Karcher mean, for squared geodesic loss, and `GeometricMedian` gives the median, for geodesic loss. Both take the draw weights as their `weights`.
+  - The intrinsic two need every draw inside the injectivity radius of the iterate, all principal angles below π/2, which a multimodal posterior breaks. That is one more reason for P̄ as the default and the other two as options.
+- **The Karcher scatter is a readout that is already built.** At the mean it is the tangent covariance of the draws' subspaces, principal geodesic analysis (Fletcher et al. 2004, cited from memory). Its top eigenvectors are the coupled ways the subspace moves across draws, such as direction i tilting toward complement direction j, which P̄'s spectrum does not show. It is D × D on the n·k buffer, of rank at most k(p − k).
+- **Mixed ranks enter through the flat embedding, not through a new manifold.** One instance has a fixed `Dimension`, and no geodesic joins subspaces of different ranks. Each P_s as a vector on `EuclideanVectorManifold(p²)` does admit mixed ranks:
+  - the flat mean is P̄;
+  - the flat median is a robust extrinsic summary;
+  - the flat distance divided by √2 is the projection distance.
+
+  That shrinks synthesis item 2 to the stable principal-angle routine, with `Distance` and `LogMap` moved onto it, plus the split readout (rank term and containment defect).
+- **The solver's defaults sit at the arccos floor, which corrects the orientation's "costs nothing".** `IrlsOptions.Default` has Tolerance = 1e-8 and Epsilon = 1e-10, while `GrassmannManifold` resolves angles only to about 1.5e-8. A Grassmann mean or median therefore runs its convergence test and its coincidence check at or below the resolution of the angles it reads.
+  - This does not touch P̄, E8's default, but it does touch `MoMPCA`, `DistributedSpred` and SPRED, which run the median today.
+  - The decision it changes: whether the residual-route `Distance` and `LogMap` are a fix or only tidying. A seeded test decides it, a Grassmann median on tight clusters with spreads from 1e-6 down to 1e-9, checking termination and accuracy against a known centre.
+- **Products and wrappers.** E8 could summarize (subspace, log eigenvalues) jointly on Gr(k, p) × ℝᵏ with MoMPCA's α calibration, and co-active pairs on Gr × Gr. The Astra notes' robust fixed PCA basis for D07 already composes: `MoMPCA`'s centre and basis enter through `BassDecomposition.FromBasis`, with the truncation residuals supplied.
+- **`SubspaceAnnealer` covers span objectives only.** It fits a predictor-aware output basis posed as an objective on the span. Separate fits' sparsity depends on the frame, so that objective cannot be posed on it, and rotate-and-refit's frame choice cannot either.
+
 ### 2026-11-08, BPPR read: its directions are sparse points on the sphere, not lines
 
 Read: arXiv 2210.09181v1 (`gauntlet/bayesian/2210.09181v1`, main text §2.3 to §2.4 and §2.7) and the manual of the R package BayesPPR 0.2.0 (`PDFs/Bayesian/BayesPPR.pdf`).
