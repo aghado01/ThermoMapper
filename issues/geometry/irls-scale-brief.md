@@ -60,6 +60,26 @@ Date: 2026-11-08. Status: commissioned by the user ("chip off for that fix"), fr
 
 ## Report
 
+### 2026-11-08: test-select's two defects (findings 8 and 9, at the user's go-ahead), and E8's delegation
+
+**Commit.** `e36330f` fixes `scripts/test-select.ps1`. This entry is its own commit.
+
+**Finding 9: every class selected ran no test.**
+- With every class selected and no slow list, the routine filter is the empty string, which selects every test. The commit scope read it as no selection and kept only `Tier=Pinned`. A commit run of `TDA.DimReduction.Tests` (8 of 8 classes) therefore ran nothing, and the script still exited 0.
+- The routine now tells no selection (`$null`) apart from every test (`''`).
+- The same commit run now executes the whole assembly, 83 of 83.
+
+**Finding 8: default compile items.**
+- The closure read only explicit `<Compile Include>` items. An SDK project that keeps its default items therefore contributed none of its own files, and VizCore.Tests read as having no test classes.
+- A csproj with an `Sdk` gets every `.cs` file under its folder, outside bin, obj and hidden folders, unless `EnableDefaultCompileItems` or `EnableDefaultItems` is false. The script checks the project first, then the nearest Directory.Build.props.
+- Across the 25 test projects, closure and class counts before and after differ only where default items apply:
+  - VizCore.Tests goes from 514 files and 0 classes to 598 files and 82 classes; the sphere and hyperbolic changes now select 30 of them.
+  - Five console smoke projects gain their own `Program.cs`: HdbScanSmoke, BlattAnalyze, BlattSmoke, HyperbolicSmoke, and VizCoreSmoke with two files.
+  - The commit message says four smoke projects; the count is five.
+- Checked by `-ListOnly` runs against the committed script, since test-select has no tests of its own.
+
+**E8's delegation landed.** `SubspacePosterior.PrincipalAngles` returns `Maths.LinAlg.PrincipalAngles.Between(a, b)` in `def59f3` (E8 slice 5). Its page note follows in `95d2900`. Every planned consumer of the routine now uses it.
+
 ### 2026-11-08: the hyperbolic models through asinh (finding 7, at the user's go-ahead)
 
 **Commit.** `ae0af75`. This entry is its own commit.
