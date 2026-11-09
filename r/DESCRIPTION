@@ -5,10 +5,12 @@ Version: 0.0.0
 Description: Project-local dependency manifest for ThermoMapper's R validation
     oracles.
 Imports:
+    coactivity,
     GBASS,
     hypergeo,
     jsonlite,
     khaos,
+    lhs,
     loo,
     maotai,
     posterior,
@@ -19,4 +21,5 @@ Imports:
     T4transport,
     TDAkit,
     TDAstats,
-    truncdist
+    truncdist,
+    zipfR

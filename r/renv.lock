@@ -1300,6 +1300,26 @@
       "Author": "Martin Maechler [aut, cre] (ORCID: <https://orcid.org/0000-0002-8685-9910>), Peter Rousseeuw [aut] (Fortran original, ORCID: <https://orcid.org/0000-0002-3807-5353>), Anja Struyf [aut] (S original), Mia Hubert [aut] (S original, ORCID: <https://orcid.org/0000-0001-6398-4850>), Kurt Hornik [trl, ctb] (port to R; maintenance(1999-2000), ORCID: <https://orcid.org/0000-0003-4198-9911>), Matthias Studer [ctb], Pierre Roudier [ctb], Juan Gonzalez [ctb], Kamil Kozlowski [ctb], Erich Schubert [ctb] (fastpam options for pam(), ORCID: <https://orcid.org/0000-0001-9143-4880>), Keefe Murphy [ctb] (volume.ellipsoid({d >= 3}))",
       "Repository": "CRAN"
     },
+    "coactivity": {
+      "Package": "coactivity",
+      "Version": "0.1.0",
+      "Source": "GitHub",
+      "Type": "Package",
+      "Title": "What the Package Does (Title Case)",
+      "Author": "Who wrote it",
+      "Maintainer": "The package maintainer <yourself@somewhere.net>",
+      "Description": "More about what it does (maybe more than one line) Use four spaces when indenting paragraphs within the Description.",
+      "License": "What license is it under?",
+      "Encoding": "UTF-8",
+      "LazyData": "true",
+      "RoxygenNote": "7.3.2",
+      "RemoteType": "github",
+      "RemoteHost": "api.github.com",
+      "RemoteUsername": "knrumsey",
+      "RemoteRepo": "coactivity",
+      "RemoteRef": "35e45739e81a49e49212ad859de1fa2110347835",
+      "RemoteSha": "35e45739e81a49e49212ad859de1fa2110347835"
+    },
     "codetools": {
       "Package": "codetools",
       "Version": "0.2-20",
@@ -2607,6 +2627,39 @@
       "Maintainer": "Deepayan Sarkar <deepayan.sarkar@r-project.org>",
       "Repository": "CRAN"
     },
+    "lhs": {
+      "Package": "lhs",
+      "Version": "1.3.0",
+      "Source": "Repository",
+      "Title": "Latin Hypercube Samples",
+      "Authors@R": "person(given = \"Rob\", family = \"Carnell\", role = c(\"aut\", \"cre\"), email = \"bertcarnell@gmail.com\", comment = c(ORCID = \"0009-0009-0465-7564\") )",
+      "Description": "Provides a number of methods for creating and augmenting Latin Hypercube Samples and Orthogonal Array Latin Hypercube Samples.",
+      "License": "GPL-3",
+      "Encoding": "UTF-8",
+      "Depends": [
+        "R (>= 4.1.0)"
+      ],
+      "LinkingTo": [
+        "Rcpp"
+      ],
+      "Imports": [
+        "Rcpp"
+      ],
+      "Suggests": [
+        "testthat",
+        "DoE.base",
+        "knitr",
+        "rmarkdown"
+      ],
+      "URL": "https://github.com/bertcarnell/lhs",
+      "BugReports": "https://github.com/bertcarnell/lhs/issues",
+      "RoxygenNote": "7.3.3",
+      "VignetteBuilder": "knitr",
+      "NeedsCompilation": "yes",
+      "Author": "Rob Carnell [aut, cre] (ORCID: <https://orcid.org/0009-0009-0465-7564>)",
+      "Maintainer": "Rob Carnell <bertcarnell@gmail.com>",
+      "Repository": "CRAN"
+    },
     "lifecycle": {
       "Package": "lifecycle",
       "Version": "1.0.5",
@@ -3870,6 +3923,33 @@
       "NeedsCompilation": "no",
       "Author": "Jim Hester [aut], Lionel Henry [aut, cre], Kirill Müller [aut], Kevin Ushey [aut], Hadley Wickham [aut], Winston Chang [aut], Jennifer Bryan [ctb], Richard Cotton [ctb], Posit Software, PBC [cph, fnd]",
       "Maintainer": "Lionel Henry <lionel@posit.co>",
+      "Repository": "CRAN"
+    },
+    "zipfR": {
+      "Package": "zipfR",
+      "Version": "0.6-70",
+      "Source": "Repository",
+      "Type": "Package",
+      "Title": "Statistical Models for Word Frequency Distributions",
+      "Depends": [
+        "R (>= 3.0.0)"
+      ],
+      "Imports": [
+        "methods",
+        "utils",
+        "stats",
+        "graphics",
+        "grDevices",
+        "parallel"
+      ],
+      "Date": "2020-10-10",
+      "Author": "Stefan Evert <stefan.evert@fau.de>, Marco Baroni <marco.baroni@unitn.it>",
+      "Maintainer": "Stefan Evert <stefan.evert@fau.de>",
+      "Description": "Statistical models and utilities for the analysis of word frequency distributions. The utilities include functions for loading, manipulating and visualizing word frequency data and vocabulary growth curves.  The package also implements several statistical  models for the distribution of word frequencies in a population.  (The name of this package  derives from the most famous word frequency distribution, Zipf's law.)",
+      "License": "GPL-3",
+      "URL": "https://zipfR.R-Forge.R-project.org/",
+      "LazyData": "yes",
+      "NeedsCompilation": "no",
       "Repository": "CRAN"
     }
   }
