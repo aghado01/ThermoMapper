@@ -60,7 +60,7 @@ One commit per concern; tests with the code they test; each slice ends with its 
 | --- | --- | --- |
 | 0. References | The matrix-t marginal in closed form; the sources read once supplied | Against the dense vec form with an asymmetric Σ at K = 2, so Σ ⊗ S₀ and S₀ ⊗ Σ cannot pass for each other under the code's vec order; against quadrature over Σ at K = 2 and Monte Carlo at K = 3; at K = 1 against the scalar marginal under decision 2's reduction |
 | 1. The core | A multi-output response; Σ's prior (decision 2) and its validation; the collapse in the structure step and τ's step through `PriorPencil`; per draw Σ | Y and A | Σ; level-centred intercepts | K = 1 equal to scalar BASS to rounding, with scalar BASS's pinned hashes unmoved; the law by enumeration on small structure spaces; Geweke; equivariance Y → YL; recovery of a known Σ and of surfaces from outside the model |
-| 2. Samplers and evidence | The ladder under decision 3, SMC with its flags, the flat histogram, resume; Huang and Wand's prior (decision 2's option), its K rates through the sweep and every sampler | Each rung's law and the evidence against the enumeration; resume bit for bit; a refusal only where decision 3's condition fails; Huang and Wand's prior by enumeration with its rates integrated, and Geweke |
+| 2. Samplers and evidence | The ladder under decision 3, SMC with its flags, the flat histogram, resume; Huang and Wand's prior (decision 2's option), its K rates through the sweep and every sampler; the normalized ridge and KHAOS's two coefficient forms for several outputs, their spectra and pencils carrying K cross products (moved from slice 1, 2026-11-09) | Each rung's law and the evidence against the enumeration; resume bit for bit; a refusal only where decision 3's condition fails; Huang and Wand's prior by enumeration with its rates integrated, and Geweke; each coefficient form's target against the matrix-t reference under its prior covariance, and at K = 1 against scalar BASS |
 | 3. Readouts | The matrix-t predictive; joint bands; the predictions' cross-output correlation; P(every output in its specification); E[Σ] and its correlation matrix; Sobol per output and for declared linear combinations; co-active pairs across outputs through E8 | Against Monte Carlo over the draws; the joint probability against counting; Sobol per output against single-output fits on the same structure. *Decision 2's measurement:* the coverage of the correlations and of the joint predictive at n/K from 3 to 30, decision 2 against Huang and Wand at ν = 2. If decision 2 undercovers where Huang and Wand does not, the default goes to the user with the numbers; otherwise decision 2 stands |
 | 4. Noise and random intercepts | Decisions 6 and 7 | Geweke under each noise and with the block; the γ·v move on a frozen state against its orbit's law; recovery from outside the model |
 | 5. The PCA mode's joint option | Decision 8 | Against separate component fits on data whose scores are independent; the equivariance gate on the scores |
@@ -97,6 +97,53 @@ One commit per concern; tests with the code they test; each slice ends with its 
 Under "Reports" below, newest first, per slice: what landed by commit; the gates' numbers; decisions taken beyond this brief; what was left unbuilt and why; follow-ups with the decision each would change.
 
 ## Reports
+
+### Slice 1: the core (chip, 2026-11-09)
+
+**Landed:**
+- `ad72e2f`: `InverseWishart` (Maths.Distributions) and `OutputMarginal` (gprior), the K × K closed form.
+- `19dda31`: the K-output core. `MultiOutputResponse`; the outputs' means on `WorkingResponse`; S_Y and Σ's prior in `BassResolved`; the design's K-output side (`DesignOutputs`, `BorderedCholesky.ProposedWhiten`); the forms on `BassStructureFit`; the target's branch; the draw (`BassOutputDraws`).
+- `2b907aa`: fits of several outputs (`Compose`, the run's functionals, the draws' rows across chains, the fingerprint, the readers' refusal) and Σ's prior options (`BassConfig.OutputCovariance`, `OutputCovariancePrior`).
+- `878fd19`: the laws, Geweke, recovery and the cost row.
+- `b03d926`: the refusal gate names KHAOS's two forms beside the ridge (they move to slice 2, below).
+- The docs commit with this report: [Several outputs](../../../docs/Maths/MultiOutput.md), a pointer from BayesianRegression.md, and the notation ledger's entry.
+
+**Gates:**
+
+| Gate | Result |
+| --- | --- |
+| The inverse Wishart's density against slice 0's reference; its draws against the inverse gamma's at K = 1 on one stream | 8·10⁻¹⁵; 10⁻¹⁴ |
+| `OutputMarginal` against the matrix-t reference: 548 cases, K to 4, the three conventions and a frozen level, τ over seven decades, b to 0, units 10^±6 | 3.4·10⁻¹³; 52 refused by both, none by one |
+| The design against one scalar design per output and per pair of outputs, by polarization: 232 proposals, 149 acceptances | 7.5·10⁻¹⁵ |
+| The target against the matrix-t reference at random structures, τ and b, each convention | 1.3·10⁻¹⁵ |
+| K = 1 against scalar BASS | S_Y and the forms to the bit; the target to 3.6·10⁻¹⁶; the draw to 6·10⁻¹⁶; a fit draw for draw, 500 draws, structures and τ equal, σ², coefficients and λ to 2.5·10⁻¹⁴ |
+| Scalar BASS untouched | each commit's selection with the pinned tier passed (1,896 of 1,896 at `19dda31`, 1,892 of 1,892 at `2b907aa`); the whole assembly below |
+| The law by enumeration: count law, E[ln τ] and six likeliest structures, small F, 200,000 steps | worst \|z\| 3.01 (K = 2), 2.64 (K = 3) |
+| Geweke (qualification): zero centre, declared IW(6, Ψ₀), τ sampled, n = 12, K = 2, 100,000 and 150,000 | worst \|z\| 3.38 (ln τ) and 1.78 on two seeds |
+| Equivariance Y → YL under decision 2, every convention | −(N − f) ln\|det L\| to 10⁻¹⁵ |
+| Recovery: three surfaces outside the model, Σ with correlations 0.3, −0.2, 0, n = 300 | each E[Σ] entry within 1.3 posterior sd; surfaces' RMSE 0.04 to 0.06 against noise sds 0.15 to 0.3 |
+| Σ's prior options | each kind resolved, round-tripped through JSON, refused where it does not fit; the target under a declared prior against the reference to 10⁻¹² |
+| The refusals | a noise, the ladder, SMC, the normalized ridge, KHAOS's raw ridge and modified g-prior, Sigma2's other kinds, a constant output and collinear outputs, each refused at `BassModel.Create` with its reason |
+| The cost row (wall clock, indicative): a sweep on n = 1000, p = 4, M_max = 20, each on its own chain | scalar 30.3 µs; K = 1, 2, 5, 10 at 1.06, 1.26, 1.62, 2.79× |
+
+The whole regression assembly (Slice scope, slow tier included) on a snapshot of `878fd19`: 2,699 of 2,699 in 11 min 21 s.
+
+**Decisions beyond the brief, with their alternatives:**
+- *Where K enters the design: a K-output side beside the scalar statistics,* which every K-output path is gated on, so scalar BASS's arithmetic is unchanged by construction. Alternatives: generalize the scalar fields to K columns in place, which reshapes snapshots, pencils and the follow records and puts scalar bits at risk; or a separate design class, which duplicates admission, the gate and the tables.
+- *The g-form alone in slice 1.* The main session's call (2026-11-09): the g-form first, the normalized ridge and KHAOS's two forms as a second commit if they come cleanly, else in slice 2. They do not come cleanly, so they move to slice 2. They need the spectrum's bordered candidates and the pencil to carry K cross vectors, and the K × K shrinkage Σⱼ h_j w_j w_jᵀ/λ_j from them; the g-form's τ step is the closed form S(τ) = b(R + τ/(τ + b)F), a pencil whose eigenvalues are equal. Until slice 2 each is refused with its reason, a gate of this slice's.
+- *Σ's prior in config:* `BassConfig.OutputCovariance`, null carrying `Sigma2`'s ScaledToResponse(c) and refusing Sigma2's other kinds. Its kinds are decision 2's, Standardized (Ψ₀ = 2c·diag S_Y) and a declared IW. The alternative, carrying every kind from `Sigma2`, cannot state a K × K Ψ₀. The field is left out of the JSON when null, so every existing fingerprint holds.
+- *Huang and Wand in slice 2,* with the samplers its K rates thread through (the main session left the slice to the chip).
+- *The run's functionals:* ln|Σ| in σ²'s place, which reads the correlations and whose R̂ no rescaling or mixing moves; the monitored points (case, output) pairs. The alternative is Σ's lower triangle, K(K + 1)/2 functionals and another shape for the diagnostics.
+- *The draw's stream order* follows the scalar draw's, so K = 1 draws equal scalar BASS's to rounding. `BassDraw` holds `Sigma` and `OutputCoefficients`, its σ² NaN and its coefficients empty, and the readers of one response refuse it with the reason.
+- *The hinge prefix tables stand aside for several outputs* (exact borders), a cost the row above includes.
+- *The collinearity refusal* reads the correlation matrix's Cholesky pivot 1 − R² against 10⁻¹⁰, under decision 2's form alone; a constant output is refused under every form, as scalar BASS refuses a constant response.
+- *Noise and random intercepts are refused at `BassModel.Create`,* with the reason, before the observation model builds a working response that several outputs refuse.
+
+**Unbuilt, and why:** the normalized ridge and KHAOS's priors for several outputs (slice 2, above); the improper |Σ|^(−(K + 1)/2) in config, which `OutputMarginal` supports but whose exact-fit support rule for K outputs is not built; the slope in b (slice 2's evidence); the samplers (slice 2); the readouts (slice 3); noise and random intercepts (slice 4).
+
+**Follow-ups, with the decision each would change:**
+- *Σ's lower triangle in the run's diagnostics,* if a run's correlations converge more slowly than ln|Σ| shows. That would change the diagnostics record's shape; nothing has shown the need.
+- *Geweke's ln τ at z = −3.38 on one seed,* the same sign on the other (−0.72). It is inside the bound the scalar Geweke gates use. A third seed would decide whether it is chance or a slow τ in the successive chain; if it recurs past 4, τ's step for K outputs gets a closer look.
 
 ### Slice 0, addendum: the sources read (chip, 2026-11-08)
 

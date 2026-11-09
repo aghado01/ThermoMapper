@@ -11,6 +11,18 @@ Splits in the module's language (symbols, identifiers, terms), logged as session
 
 ## Entries
 
+### E34's K, F, R, S_Y and ν beside the module's; Dawid's δ and Huang and Wand's ν in the sources (2026-11-09)
+
+- **Kind:** one name for several concepts.
+- **Readings:**
+  - K, the outputs of a fit of several outputs (`MultiOutputResponse.Outputs`; `docs/Maths/MultiOutput.md`), beside K, the coefficients inside the prior that a σ² drawn apart reads (`GPriorConditional.PriorEnergy`).
+  - F, the K × K fitted form F = B_cᵀG_c⁻¹B_c (`OutputForms.Fitted`; "The model and its collapse"), beside F, the admissible structures (D06), which E34's page also reads ("a small F").
+  - R, the K × K residual form (`OutputForms.Residual`), beside R, E22's correlation matrix (the extensions brief), and R², the multiple correlation the collinearity refusal reads (`BassResolved.ResolveOutputs`).
+  - S_Y, the outputs' mean squares and cross-products (`BassResolvedOutputs.MeanSquares`), beside S, the scale σ²'s and Σ's posteriors add (`GPriorMarginal.S`, `OutputMarginal.S`).
+  - ν, ν₀, the inverse Wishart's conventional degrees of freedom (`InverseWishart.DegreesOfFreedom`), beside ν, Huang and Wand's shape, whose inverse Wishart has ν + K − 1 degrees of freedom (`OutputCovariancePrior`; "Σ's prior").
+- **Found:** 2026-11-09, E34's slice 1.
+- **Note:** Brown, Vannucci and Fearn (1998) write IW(δ; Q) in Dawid's shape, δ = ν − K + 1, with q for K; the δ there is neither the factor border's nor the history birth's (the 2026-11-08 entry).
+
 ### ω_H beside the local steps' ω; δ for the history birth's floor beside the factor border's δ; ĥ_u beside h₁, h₂ and ĉ (2026-11-08)
 
 - **Kind:** one name for several concepts.
