@@ -53,6 +53,38 @@ Work through where subspace geometry earns its place in the regression engine: p
 
 ## Report
 
+### 2026-11-08, synthesis: what is worth doing (proposed, not yet settled by the user)
+
+E8's build brief (`e31d7dd`) has already taken the orientation's corrections: the declared input metric (its decision 2), both posterior summaries with P̄'s eigenvalues read as mean squared cosines (4), the SVD of the gradient matrix and shared points (5), and `StiefelManifold` set aside. E34's entry took the removal of the frame and the envelope's scope (`6e5e53e`). What remains, in order of worth:
+
+1. **The active dimension as a posterior quantity (E8 slice 2).** Each draw gets its own k by a declared rule, either an eigengap ratio or a share of tr C, and the readout reports the distribution of k_s beside a fixed k.
+   - The cheapest form needs no new geometry: apply the rule per draw and give the histogram.
+   - With mixed ranks, P̄ = Σ w_s P_s stays defined and its trace is the mean rank. Its ordered eigenvectors are the flag mean for subspaces of mixed dimensions (Draper et al. 2014, cited from memory).
+2. **Comparing subspaces across ranks, in Geometry, with `GrassmannManifold` moved onto the same routine.**
+   - The routine: principal angles from the cosines and the residual's sines, combined by atan2; the projection distance split into its rank term and its containment defect; and the containment alone.
+   - `Distance` and `LogMap` move to the residual route. Nothing needs to lose the arccos floor today, but once the routine exists the move costs nothing.
+   - Its consumers in the plan: item 1's mixed ranks, item 3's basis adequacy, and co-active comparisons between fits whose active dimensions differ. It lands before slice 2.
+3. **The output side, in slice 3.** G = E[J W_x Jᵀ], computed from the thin SVD of the stacked, metric-weighted Jacobians (m × Np) without forming the m × m matrix. E8's brief names "reading which output patterns move with the inputs" in its Why, but no slice delivers it. Two readouts follow:
+   - *A matrix Poincaré check (derived here).* Under a product law, Efron–Stein and the one-variable Poincaré inequality give Cov_ρ(f) ≼ E[J D Jᵀ], where D is the diagonal of the inputs' Poincaré constants: (b − a)²/π² for a uniform input, so Cov_ρ(f) ≼ G/π² under the box metric. It is the matrix form of decision 6's check, and it makes "low gradient energy implies low variance" exact, per draw.
+   - *Basis adequacy.* The containment defect of G's top-k eigenspace in the PCA basis's span measures how much input-driven output structure the truncation dropped. It needs G from a direct-mode fit, because a basis fit's own G lies inside span(K) by construction.
+4. **A predictor-aware output basis needs no new decomposition.** G's top eigenvectors enter through `BassDecomposition.FromBasis`, with the truncation residuals supplied. Whether that basis beats PCA is an experiment for problems with functional outputs, gated by item 3's adequacy readout.
+5. **The truncation-residual check (D07).** It asks whether the leave-one-case-out residuals are predictable from x, against a permutation of the cases as the null. The decision it changes is D07's rank rule:
+   - If it fires on real cases, a rank rule by predictability joins variance share. That rule keeps components while their fits carry signal.
+   - If it does not fire, variance share stands.
+   - Gavish and Donoho's threshold (cited from memory) is a third rule, for noisy outputs only.
+
+Later, and only under the stated condition:
+- **Rotate-and-refit, after slice 4,** can take its frame from the ordered eigenvectors of P̄ or E[C]. BASS ignores an input's sign and the inputs' order, so that frame fully specifies the refit, and no Stiefel code is needed. Stiefel enters only if a rotation is optimized for a simplicity criterion, the role varimax plays in factor analysis. The refit treats the subspace as fixed, the same plug-in the PCA basis is.
+- **A Bayesian PCA frame** (FAST), only if the stability ratio shows an unsettled basis on real cases. E34's joint fit is the cheaper way to remove the frame.
+- **Projected BGP and BPPR,** later engines. BGP with an isotropic projected kernel needs only Grassmann geometry, and BPPR's directions are lines.
+
+Not worth doing now:
+- the Stiefel rewrite, which has no consumer;
+- flag-manifold code, since the flag mean is P̄'s eigenvectors;
+- Davis–Kahan bounds as a readout, since the draws give the angles directly;
+- manifold samplers, which are needed only with a Bayesian frame or learned directions;
+- a robust median as the default summary.
+
 ### 2026-11-08, what the AbliteraLUS comparison note offers this brief
 
 The note (`issues/geometry/gemini-abliteralus-thermomapper.md`, a comparison Gemini wrote) proposes five ports. Its Grassmann claims were checked against `abliteralus/analysis/grassmann.py`.
