@@ -1,6 +1,6 @@
 # Active subspaces on the BASS core: E8's build (chip brief)
 
-Date: 2026-11-08. Status: commissioned by the user on 2026-11-08 ("kick off e8"), after KHAOS's last slice; slice 0 landed (`15fb495`, `9e3028d`) and waits for the coordinating session's verification. Written by the main session from [E8's entry](extensions-brief.md#active-subspace-analysis), [gap G3](lineage-gaps-register.md#g3-sobol-indices-and-active-subspaces-have-different-standing), [the lineage review's separability question](lineage-review.md#separability-is-what-the-closed-forms-rest-on), the [Astra notes](../discussion/astra-grassman-stiefel-pca-extensions.md), and the [Grassmann discussion](../discussion/grassmann-stiefel-subspaces-brief.md)'s report so far. Reports go under "Reports" below, newest first.
+Date: 2026-11-08. Status: commissioned by the user on 2026-11-08 ("kick off e8"), after KHAOS's last slice; slice 0 verified by the coordinating session; slice 1 landed (`9dfcc6d`) and waits for its verification. Written by the main session from [E8's entry](extensions-brief.md#active-subspace-analysis), [gap G3](lineage-gaps-register.md#g3-sobol-indices-and-active-subspaces-have-different-standing), [the lineage review's separability question](lineage-review.md#separability-is-what-the-closed-forms-rest-on), the [Astra notes](../discussion/astra-grassman-stiefel-pca-extensions.md), and the [Grassmann discussion](../discussion/grassmann-stiefel-subspaces-brief.md)'s report so far. Reports go under "Reports" below, newest first.
 
 ## Why
 
@@ -97,6 +97,61 @@ One commit per concern; tests with the code they test; each slice ends with its 
 Under "Reports" below, newest first, per slice: what landed by commit; the gates' numbers; decisions taken beyond this brief; what was left unbuilt and why; follow-ups with the decision each would change.
 
 ## Reports
+
+### Slice 1: derivative moments and C on the exact route (2026-11-08)
+
+**Landed** on `main`, nothing pushed:
+- `95294f8`, slice 0's two `coactivity` corrections recorded as matched expressions, as the coordinating session asked. `replace_lang`, `patch_body` and `patch` move into `_common.R`; `khaos_helpers.R` keeps identical copies, whose removal is a cleanup for later.
+- `9dfcc6d`, the derivative moments, C, the gates, the oracle parity and the cost row.
+- The docs commit carrying this report: `docs/Maths/ActiveSubspaces.md` (new), a pointer from BayesianRegression.md's sensitivity section, and a notation-ledger entry.
+
+**What was built:**
+- **Factor level:** `DesignFactor.SlopeMean` (E[φ′]) and `SlopePair` (E[φ′ψ], E[φ′ψ′]) for hinge and Legendre factors, under the variable's own `ContinuousMeasure`. A categorical factor refuses.
+  - *Hinges:* the slopes come through `PiecewisePolynomial.HingeProduct`'s new slope flags. The value path keeps its bits.
+  - *Legendre:* the slopes differentiate the expansion about each piece's centre.
+  - *The kink convention:* under an empirical marginal, an atom on a degree-one knot takes the derivative's mean of one-sided limits, s/2, as the readout does (F-X3, G3). The pieces, closed on the right, would give it the left limit.
+- **Term level:** `BassMoments.GradientPair` gives E[∂ᵢB_a·∂ⱼB_b] over each term's continuous predictors (`TermPairGradientMoments`). `BassMoments.GradientOuterProduct(terms, coefficients)` gives C over `GradientVariables`, the continuous predictors, in transformed units.
+  - Slope means, slope pairs and term pairs are cached as the value moments are.
+  - Categorical and output factors enter as values (decision 3).
+
+**Gates:**
+
+| Gate | Result |
+| --- | --- |
+| Hinge factor pairs, degrees one to three, every sign pair, knots in, at the ends of and outside the support, against one-variable quadrature of the factors' own values and derivatives; uniform, normal–Student mixture, and empirical with atoms on the knots | ≤ 2.4·10⁻¹⁵ of the integrand's size |
+| Legendre factor pairs to degree ten, same laws, and on [0, 1] against the closed forms of slice 0's reference | ≤ 4·10⁻¹⁴ to degree six, ≤ 7·10⁻¹² to ten (the expansion's cancellation, as the value moments document) |
+| Seeded sweep, 400 hinge pairs: knots in [−1, 2], mixture components up to 40 scales outside the interval, knots on empirical atoms | ≤ 2.7·10⁻¹⁴ |
+| Term pairs against a tensor quadrature of `BassBasis.CaseDerivative`, categorical factors included, degrees one to three | ≤ 5.1·10⁻¹⁴ |
+| C on fitted draws against the gradient readout averaged over the law (rules exact for the integrand): hinge degrees one and two with a categorical input, 60 draws, under the uniform law, a mixture and x0's empirical marginal; a Legendre fit, 80 draws, uniform and empirical | ≤ 8.1·10⁻¹⁴ of C's largest entry |
+| SG-4(b) through the slope moments under the Jacobi weight 6x(1 − x): factor pairs; E[x_v(1 − x_v)(∂_v f)²] on the Legendre fit's draws against `PolynomialChaosSensitivity.Jacobi` | ≤ 6.9·10⁻¹⁴ to degree six (2.8·10⁻¹¹ to ten); 5·10⁻¹⁴ on the draws |
+| Oracle: an engine fit's draws (degree one, two inputs, up to 9 terms) against `C_bass` on the same draws | uniform law: as written, 8.6·10⁻¹⁶; truncated normal: corrected, 1.1·10⁻¹⁵, and 6.7% from it as written |
+| Fitting untouched | whole regression assembly 2,449/2,449 on `95294f8` plus the slice, pinned tier included |
+
+**The cost row** (`ActiveSubspaceCostTests`, behind `BASS_QUALIFICATION`, thread cycles, indicative):
+
+| Law | Factor pair, value moments | Factor pair, slope moments | Term pair, cold | C per draw, cold | C per draw, warm |
+| --- | --- | --- | --- | --- | --- |
+| Uniform | 2.9 µs | 2.9 µs | 5.0 µs | 21 µs | 7.0 µs |
+| Normal–Student mixture | 81 µs | 15 µs | 10 µs | 44 µs | 9.2 µs |
+| Empirical, 60 atoms | 1.9 µs | 2.0 µs | 4.8 µs | 23 µs | 8.4 µs |
+
+The value moments under the mixture pay for the Student component's quadrature twice, once for the cross and once for the covariance.
+
+**Decisions beyond the brief**, each with its alternative:
+1. *The slope moments take the variable's `ContinuousMeasure`,* not the `ProductMeasure` the value moments take, because only a continuous factor has a slope. This is what lets SG-4(b)'s gate pass the Jacobi weight as a law. Alternative: the `ProductMeasure`, for one shape across the factor API, at the cost of that gate.
+2. *Names:*
+   - `GradientOuterProduct` for C, the field's term for E[∇f∇fᵀ], where "gradient" alone already names the pointwise readout `BassGradient`;
+   - `TermPairGradientMoments` beside `TermPairMoments`;
+   - "slope" for the derivative moments, beside the pointwise `Derivative`.
+   The splits are in the notation ledger.
+3. *The empirical kink correction* matches the readout's convention exactly. Alternative: leave the left limit, and the exact and sampled routes would then disagree on empirical laws by half each knot atom's slope.
+4. *A functional fit's output factors* enter C as values over whatever the measure covers, as the value moments treat them. The output metric W_y is slice 3's.
+
+**Left unbuilt:** slice 2's readout (`BassFit.ActiveSubspace`, the sampled route, metrics, summaries). Directional hinges and other non-separable kernels, which have no factors, are still the sampled route's.
+
+**Follow-ups:**
+- *Legendre moments at high degree.* The monomial expansion about each piece's centre loses about five digits by degree ten, for the value moments as for the slopes. The decision is whether to expand in the Legendre basis itself under a uniform law, where the integrals are exact rationals. If yes, KHAOS fits of high degree keep 10⁻¹⁴; if not, the documented loss stands and the gates stay banded by degree.
+- *`khaos_helpers.R`'s copies* of the patch helpers. The decision is the cleanup: remove them now that `_common.R` holds them. Nothing is lost, since they are identical.
 
 ### Slice 0: sources, references and the oracle (2026-11-08)
 

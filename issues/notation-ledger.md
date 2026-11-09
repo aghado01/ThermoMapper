@@ -11,6 +11,16 @@ Splits in the module's language (symbols, identifiers, terms), logged as session
 
 ## Entries
 
+### "Slope" and "derivative" for φ′, "gradient" for ∇f and for C, and the paper's h, γ, I₁–I₃ (2026-11-08)
+
+- **Kind:** one concept under several names, and one name for several concepts.
+- **Readings:**
+  - φ′, a factor's derivative: `DesignFactor.Derivative` at a point, `FactorDerivative`, `BassBasis.CaseDerivative`, against its moments `DesignFactor.SlopeMean` and `SlopePair` (`src/maths/regression/spline/bass/DesignKernel.cs`) and the slope flags of `PiecewisePolynomial.HingeProduct`; `ShiftedLegendre` names it `Derivative`.
+  - "Gradient": ∇f pointwise (`BassGradient`, `BassFit.Gradient`), against C = E[∇f∇fᵀ] (`BassMoments.GradientOuterProduct`) and a term pair's E[∂ᵢB_a∂ⱼB_b] (`BassMoments.GradientPair`, `TermPairGradientMoments`), `src/maths/regression/spline/bass/sensitivity/BassMoments.cs`.
+  - Rumsey et al.'s h_{im}, γ_m and I₁, I₂, I₃ (arXiv 2307.11241, eq. Cij), against the module's φ, b and the factor-pair moments E[φ′ψ], E[φψ], E[φ′ψ′] (`docs/Maths/ActiveSubspaces.md`, "C on the exact route").
+- **Found:** 2026-11-08, E8's slice 1.
+- **Note:** "slope" was taken for the moments because `Derivative` already names the pointwise value on the same type.
+
 ### V, D and s in the random-intercept block beside the ridge's spectrum and σ²'s scaled prior (2026-11-08)
 
 - **Kind:** one name for several concepts.

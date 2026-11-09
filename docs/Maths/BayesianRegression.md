@@ -1410,6 +1410,8 @@ Stage 5 (2026-10-29, D07) adds R's `bassPCA`, `bassBasis` and `predict`. The cod
 
 Stage 6 (2026-10-29, D08) adds R's `sobol` for direct fits and `sobolBasis` for basis fits, under `spline/bass/sensitivity/`.
 
+The same moment service carries E8's derivative moments and C = E[∇f∇fᵀ], the active-subspace matrix, on its own page: [Active subspaces](./ActiveSubspaces.md).
+
 **What is decomposed.** For each posterior draw, the variance of the latent mean surface under a declared product measure over the inputs, with observation noise outside it. That gives each index a posterior distribution. The surface is a declared input (`DecomposedSurface`); only the mean is built.
 
 **Measures** (`SensitivitySpec.Measures`), by predictor name and in each input's own units, as R declares them.
