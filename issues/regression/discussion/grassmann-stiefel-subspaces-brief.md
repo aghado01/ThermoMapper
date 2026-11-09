@@ -53,6 +53,27 @@ Work through where subspace geometry earns its place in the regression engine: p
 
 ## Report
 
+### 2026-11-08, E36's direction prior: repel the columns, not the directions (proposed, open for the user)
+
+Read for it: gcbeck's `zellner.h` (the birth's prior term and the `_projesky` factor's doc), `projection.h` (`cos`), its README; BPPR's `main.tex` (the count prior, the Friedman fit); `BassDesign.cs`'s admission doc (D06); `docs/Maths/BayesianRegression.md` on the support F and the count prior.
+
+- **What gcbeck's term is.** `_projesky` factors the k × k Gram ΘᵀΘ of every ridge's direction, and a birth adds ln(det Θ′ᵀΘ′ / det ΘᵀΘ). For unit directions that ratio is sin² of the new direction's angle to the existing directions' span. A birth whose ratio is −∞ is aborted.
+- **Four consequences, none softened by a power γ, since 0^γ = 0:**
+  - *A hard cap.* No more than r directions can share any r-dimensional subspace, so M ≤ p overall.
+  - *Sign-blind.* θ and −θ span one line, so the pair has determinant zero. BPPR's one-sided ridges make that pair a natural one, the left and right halves of one projection (the BPPR read above).
+  - *It penalizes generic configurations, not only near-duplicates.* For uniform dense directions, E[det ΘᵀΘ] = Π_{j<M} (p − j)/p = p!/((p − M)! p^M), since each new direction's expected squared distance to a j-dimensional span is (p − j)/p (derived here; a Monte Carlo of 40,000 draws agrees within about one standard error at (p, M) = (10, 5), (10, 10), (5, 3) and (3, 3)). At p = 10 that is 0.30 at M = 5 and 3.6·10⁻⁴ at M = 10. It is the size of the missing normalizer c_M, and so of the tilt on the count prior. Sparse directions need E36's Monte Carlo.
+  - *It works against projection pursuit's mechanism.* A sum of ridges builds a function of r variables from more than r directions in their r-plane. x₁x₂ needs two, and richer functions need more (Logan and Shepp 1975; Lin and Pinkus 1993, cited from memory). The paper's Friedman fit puts three ridges on J = {1, 2, 5}, at the limit; a fourth there would be forbidden. The model's belief is few directions with many ridges along them; the determinant's is many directions, spread out.
+- **Where it fits.** The README targets millions of signals with at most 127 sparse ridges. There the determinant rarely binds and near-duplicates are the main risk. The engine serves both regimes, so it cannot be the default.
+- **The concern behind it is real, and it lives in the columns.** Near-duplicate ridges give near-collinear columns. Under a g-prior, whose covariance follows (BᵀB)⁻¹ and so leaves collinear contrasts unshrunk, those columns give wild predictions off the data, the README's complaint.
+  - *D06's admission gate measures the same quantity on the columns over the data:* s_j = 1/(G_jj (G⁻¹)_jj) = sin² of column j's angle to the others' span. gcbeck's birth factor is that sine on the directions.
+  - *The column space is the right one.* Its gate admits ±θ pairs, one direction at several t₀, and more than r directions in an r-plane, since each gives a distinct nonlinear column. It refuses the true duplicate, θ ≈ θ′ with t₀ ≈ t₀′.
+  - *A ridge term enters through the design-kernel contract,* so it meets D06 like any term; E36's brief confirms it. Its tilt on M follows the engine's convention: the prior is restricted to F and normalized there, and the tilt is reported (the support F and the count prior, D01, D02, D06).
+  - *The coefficient side's answer* to collinearity is E21's ridge blocks, at the prior that causes it.
+- **If a soft repulsion is still wanted,** for mixing or for reading ridges one by one: a local, sign-aware kernel, K(θ, θ′) = exp(κ(θᵀθ′ − 1)) in a determinant or pairwise. It is positive definite for any M and repels only nearby directions of the same sign, with c_M(κ) tabulated by Monte Carlo or its tilt reported. It is still blind to t₀, which is why the column gate dominates it.
+- **The belief projection pursuit holds is attraction.** Directions concentrated in a low-dimensional span would be θ_m = W φ_m with W on Gr(k, p): a Bayesian multi-index model, the joint form of rotate-and-refit. That is where Grassmann geometry would enter BPPR's sampler. It is a different model from BPPR's coordinate sparsity (A ≤ 3), and E8 already reads the span from independent directions. It is worth building only if pooling across ridges matters, at small n with large p.
+- **Proposed for E36:** the paper's independent directions, D06's gate on the ridge columns, and E21 for the coefficients. The determinant stays a labelled option for the many-signals regime, with c_M stated. Removing it from E36's options is the user's question.
+- **Not read:** the README's source for its measure, "Joint Generalized Cosine Similarity" (arXiv 2505.03532).
+
 ### 2026-11-08, settled by the user: where each item went
 
 The user, on 2026-11-08: "ill take as recommended. irls session is already working on the stable angle routine. lets add missing items to briefs and message the corresponding threads as necessary. ill go with per-draw k per your recommendation". The briefs took them in `c5859ad`.
