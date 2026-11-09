@@ -10,8 +10,9 @@ Extensions beyond the port's completion contract, collected from the [full port 
 | Additional proposal kernels | KHAOS, arXiv 2510.25036; Nott and Kohn 2005 | Fitting: the proposal-kernel contract. Numerics: D10's policy | Candidate |
 | KHAOS's modified g-prior | Rumsey, Francom et al., arXiv 2510.25036 | Fitting: the coefficient-prior set | Candidate |
 | Basis-estimation uncertainty | Sartini et al., arXiv 2412.11340 | Outputs: the basis contract's uncertainty slot | Candidate |
+| Predictability of the truncation residual (E37) | [The Grassmann discussion](../discussion/grassmann-stiefel-subspaces-brief.md); Gavish and Donoho 2014, cited from memory | Outputs: D07's leave-one-case-out truncation residuals. A cheap fit on cases; E8's slice 5 for the gradient view | Candidate |
 | Moments for piecewise polynomials | Derivations review §7, item 7 | Outputs: the moment service | Candidate |
-| Active-subspace analysis | arXiv 2307.11241, via the PCA-extensions discussion | Outputs: term derivatives | Built ([brief](active-subspace-brief.md), slices 0–4, 2026-11-08) |
+| Active-subspace analysis | arXiv 2307.11241, via the PCA-extensions discussion | Outputs: term derivatives | Built ([brief](active-subspace-brief.md), slices 0–4, 2026-11-08); slice 5, the Grassmann discussion's settled items, commissioned 2026-11-08 |
 | Projection-pursuit ridges on the BASS core (BPPR, E36) | Collins, Francom and Rumsey, arXiv 2210.09181; `BayesPPR`; `github.com/gcbeck/bppr` | Fitting: a ridge term type through F-X3; a direction prior. Outputs: E8's sampled route | Candidate, after E8 |
 | Cross-engine evidence | Derivations review §7, item 8; Gneiting and Raftery 2007 for held-out scores; Liang et al. 2008 and Farhi et al. 2013 for Bayes factors under the improper options | D03's proper defaults and D05's ladder evidence; D03's evidence rule. Outputs: D07's joint draws | Candidate |
 | The free-energy curve over the ladder | Farhi et al. 2013; Watanabe 2013; Bissiri, Holmes and Walker 2016 | D05's ladder with the reference rung, its rungs' draws kept; the integrated form's per-draw slope | Candidate |
@@ -180,6 +181,19 @@ An n-component g-prior that shrinks each term by its complexity: per-term factor
 
 D07 keeps the output basis fixed, so its estimation uncertainty is not integrated out. Fast Bayesian FPCA (Sartini, Zhou, Selvin, Zeger and Crainiceanu, arXiv 2412.11340) is one route to modelling it, through the outputs segment's basis contract.
 
+## Predictability of the truncation residual (E37)
+
+Recorded 2026-11-08 from the [Grassmann discussion](../discussion/grassmann-stiefel-subspaces-brief.md), on the user's go-ahead ("ill take as recommended").
+- **Why.** D07 truncates the PCA basis by variance share. A Poincaré bound links gradient energy to variance one way only: low gradient energy implies low variance, not the converse. So variance share can drop a small-amplitude mode that moves fast with the inputs. The fit cannot see a truncated mode, but the leave-one-case-out residuals can. If they are predictable from x, the basis predictive, which adds them as independent of x, is locally miscalibrated.
+- **The check.** Each case's leave-one-out residual (a PCA decomposition's; a supplied basis has none) is reduced to its leading components. Each score is regressed on x by a declared cheap fit, and its held-out skill is compared with the same fit's skill under permutations of the cases, the null of no dependence on x.
+- **The decision it changes: D07's rank rule.**
+  - If it fires on real cases, a rank rule by predictability joins variance share. That rule keeps components while their fits carry signal beyond the null.
+  - If it does not fire, variance share stands.
+  - Gavish and Donoho's hard threshold (cited from memory) is a third rule, for noisy outputs only. It ranks components by noise, not by predictability.
+- **Its gradient twin.** E8's slice 5 asks the same question as basis adequacy, G's mass outside the basis's span, but needs a direct-mode fit. This check needs none. Where both run, they should agree.
+- **What follows a positive.** A predictor-aware basis, G's top eigenvectors through `BassDecomposition.FromBasis` with the truncation residuals supplied, becomes an experiment for functional-output problems, not a default.
+- **Not the stability ratio.** `StabilityRatio` (leave-one-out RMS over in-sample RMS) reads how unsettled the basis is, not whether its residual depends on x.
+
 ## Moments for piecewise polynomials
 
 A moment service written over piecewise polynomials rather than hinges only gives BAPS's tensor and anisotropic splines, and ABMRS's B-splines, variance decompositions from the same code as BASS's (derivations review §7, item 7).
@@ -197,6 +211,7 @@ This entry is larger than its first form.
 - **The sequence the lineage implies.** A posterior active subspace, then rotating the inputs and refitting, then BPPR ([E36](#projection-pursuit-ridges-on-the-bass-core-bppr-e36)), which learns directions during fitting. F-X3's test already implements a directional hinge, and Zhang et al. 2003 is the frequentist precursor.
 - **Dependent inputs.** The first consumer that cannot assume a product measure, so the [lineage review's open question](lineage-review.md#separability-is-what-the-closed-forms-rest-on) is settled here, and [E25](#sensitivity-under-dependent-inputs) follows it.
 - **Building:** commissioned 2026-11-08 ([build brief](active-subspace-brief.md)).
+- **Slice 5** (commissioned 2026-11-08) takes the [Grassmann discussion](../discussion/grassmann-stiefel-subspaces-brief.md)'s items the user settled: per-draw k by a declared rule, the output side G = E[J W_x Jᵀ] with a matrix Poincaré check and basis adequacy, and the angles through LinAlg's principal-angle routine. [E37](#predictability-of-the-truncation-residual-e37) asks basis adequacy's question from the truncation residuals.
 
 ## Projection-pursuit ridges on the BASS core (BPPR, E36)
 

@@ -1,6 +1,6 @@
 # Active subspaces on the BASS core: E8's build (chip brief)
 
-Date: 2026-11-08. Status: complete. Commissioned by the user on 2026-11-08 ("kick off e8"), after KHAOS's last slice; every slice landed and was verified by the coordinating session on 2026-11-08: slice 0 (`15fb495`, `9e3028d`, `aa62879`), slice 1 (`95294f8`, `9dfcc6d`, `1385b86`), slice 2 (`8c7db77`, `3cdc2e8`), slice 3 (`84fe230`, `1049055`) and slice 4 (`20aeb06`, `bc72014`). Rotate-and-refit, E36 (BPPR) and the reports' open follow-ups wait for the user. Written by the main session from [E8's entry](extensions-brief.md#active-subspace-analysis), [gap G3](lineage-gaps-register.md#g3-sobol-indices-and-active-subspaces-have-different-standing), [the lineage review's separability question](lineage-review.md#separability-is-what-the-closed-forms-rest-on), the [Astra notes](../discussion/astra-grassman-stiefel-pca-extensions.md), and the [Grassmann discussion](../discussion/grassmann-stiefel-subspaces-brief.md)'s report so far. Reports go under "Reports" below, newest first.
+Date: 2026-11-08. Status: slices 0–4 complete; slice 5, the Grassmann discussion's items the user settled, commissioned 2026-11-08 ("ill take as recommended"). Commissioned by the user on 2026-11-08 ("kick off e8"), after KHAOS's last slice; slices 0–4 landed and were verified by the coordinating session on 2026-11-08: slice 0 (`15fb495`, `9e3028d`, `aa62879`), slice 1 (`95294f8`, `9dfcc6d`, `1385b86`), slice 2 (`8c7db77`, `3cdc2e8`), slice 3 (`84fe230`, `1049055`) and slice 4 (`20aeb06`, `bc72014`). Rotate-and-refit, E36 (BPPR) and the reports' open follow-ups wait for the user. Written by the main session from [E8's entry](extensions-brief.md#active-subspace-analysis), [gap G3](lineage-gaps-register.md#g3-sobol-indices-and-active-subspaces-have-different-standing), [the lineage review's separability question](lineage-review.md#separability-is-what-the-closed-forms-rest-on), the [Astra notes](../discussion/astra-grassman-stiefel-pca-extensions.md), and the [Grassmann discussion](../discussion/grassmann-stiefel-subspaces-brief.md)'s report so far. Reports go under "Reports" below, newest first.
 
 ## Why
 
@@ -47,7 +47,7 @@ These are the main session's, taken in commissioning. Each goes on the page with
 5. **Numerics.**
    - *Each draw's subspace* comes from the thin SVD of its N × p (square-root-weighted) gradient matrix, not from forming C, which squares the gaps.
    - *On the sampled route, the draws share the measure's points,* so their spread is the posterior's and not Monte Carlo's.
-   - *The arccos floor* (about 1.5·10⁻⁸ rad) is below any posterior spread that matters. A sine-based angle is needed only where angles are differenced.
+   - *The arccos floor* (about 1.5·10⁻⁸ rad) is below any posterior spread that matters. A sine-based angle is needed only where angles are differenced. Slice 5 moves the angles to LinAlg's stable routine, by the user's settlement of 2026-11-08.
 6. **Per-draw consistency checks, reported, not enforced.** For a uniform input on [a, b], total(v) ≤ ((b − a)²/π²)·C_vv (Poincaré). Under a Legendre fit there is also SG-4(b)'s weighted bound with ½. A violation beyond Monte Carlo error is a defect.
 
 ## The slices
@@ -61,6 +61,27 @@ One commit per concern; tests with the code they test; each slice ends with its 
 | 2. The readout | `BassFit.ActiveSubspace` (or the module's name for it) with its spec: measure, metric, k, route; per-draw C and subspaces, E[C], the projection mean, P̄'s spectrum, the principal angles and gaps, the Poincaré check, all under draw weights | Recovery at growing N on functions from outside the model (G3), with E[C] and the mean subspace apart; SG-5's three-draw example reproduced; the exact and sampled routes agree within Monte Carlo error; LᵀCL under a declared change of metric; weighted draws against replicated ones |
 | 3. Functional outputs and co-active pairs | C = E[Jᵀ W_y J] with a declared output metric W_y (F-X6's Q), for direct and basis fits; C_fg = E[∇f ∇gᵀ] for two fits on the same inputs, and for two outputs of one | The basis fit's C against the direct computation on its reconstructed outputs; C_fg's symmetry and its reduction to C at f = g; 2311.18146's examples where they can be run |
 | 4. Dependent inputs | The sampled route on a joint sample of points, with the whitened metric; a measure that says it is a joint sample | Against a product measure the route already gives exactly; equivariance under affine input maps with whitening; a dependent example where the box metric and whitening differ, both reported |
+| 5. The Grassmann discussion's settled items | Per-draw k by a declared rule, opt-in; the output side G = E[J W_x Jᵀ]; the matrix Poincaré check; basis adequacy beside a direct-mode fit; the angles through LinAlg's routine (below) | Without a rule, the fixed-k readout bit for bit as before, apart from the angles; sums of r ridges recover r; tr P̄ against the weighted mean of k_s; the rank summary unbeaten by random projections of every rank, on seeded sweeps; tr G = tr C under the same metrics at W_y = I; a basis fit's G against the direct computation on its reconstructed outputs; the matrix check with equality on cos(πx), failing a deliberately mis-scaled D; adequacy zero on outputs inside the span, the known share outside it; slice 2's angles within arccos's error of the new ones above 10⁻⁶ rad |
+
+### Slice 5: the Grassmann discussion's settled items
+
+The user settled the [discussion](../discussion/grassmann-stiefel-subspaces-brief.md)'s open items on 2026-11-08 ("ill take as recommended"; "ill go with per-draw k per your recommendation"). Slice 3 had closed without the output side, so they form a slice of their own. The discussion's report has the derivations.
+
+- **Per-draw k, opt-in.** The spec takes a declared rule for each draw's k_s and has no default: a share of tr C_s, or the largest relative eigengap up to a declared k_max.
+  - *Without a rule,* the readout is unchanged but for the angles' new routine.
+  - *With one,* it reports each draw's k_s and their weighted distribution beside the fixed-k readout. P̄ = Σ w_s P_s keeps its formula over mixed ranks, and tr P̄ is the mean rank. A rank-deficient draw (decision 3) enters at its own rank.
+  - *A draw's distance to the mean subspace across ranks* is the projection distance, d² = |k_s − k|/2 + Σ sin²θ_i over the min(k_s, k) angles: a rank term plus a containment defect (Ye and Lim 2016, cited from memory). Both terms are reported.
+  - *A rank summary, derived in the discussion and checked here.* Over projections of every rank, Σ_s w_s ‖P − P_s‖²_F = tr P + E[k_s] − 2 tr(P P̄). It is least when P keeps P̄'s eigenvectors whose eigenvalue exceeds ½. For coordinate subspaces that is the median probability model (Barbieri and Berger 2004, cited from memory). It is reported beside the mean rank, not used as a default k.
+- **The output side.** G = E[J W_x Jᵀ] for direct and basis fits, in the declared input metric W_x, with the output metric W_y entering by its root as slice 3 takes it. It comes from the thin SVD of the stacked, metric-weighted Jacobians (m × Np), without forming G when m is large. The readout gives G's spectrum and top eigenvectors under draw weights: the output patterns that move with the inputs, which the Why names and slices 0–4 did not deliver.
+- **The matrix Poincaré check.** Under a product law, Efron–Stein and each input's one-variable Poincaré inequality give Cov_ρ(f) ≼ E[J D Jᵀ], with D the diagonal of the inputs' Poincaré constants: (b − a)²/π² for a uniform input, so Cov_ρ(f) ≼ G/π² under the box metric.
+  - Per draw, the readout gives the largest generalized eigenvalue of Cov_ρ(f) against E[J D Jᵀ], at most 1 up to Monte Carlo error.
+  - It is decision 6's check in matrix form: reported, not enforced, and for the marginals decision 6 covers. A joint sample has no such bound and is not checked.
+- **Basis adequacy.** For a basis fit beside a direct-mode fit of the same cases, it reports the share of the direct fit's G outside the basis's span, tr((I − P_K) G)/tr G, and the containment defect of G's top-k eigenspace in span(K).
+  - A basis fit's own G lies inside span(K) by construction, so it needs the direct fit.
+  - It asks D07's question: did truncation drop structure that moves with the inputs? [E37](extensions-brief.md#predictability-of-the-truncation-residual-e37) asks it from the truncation residuals, without a direct fit.
+- **The angles through LinAlg.** `SubspacePosterior.PrincipalAngles` delegates to LinAlg's `PrincipalAngles`, and the mixed-rank distances read it.
+  - That routine is the stable one (atan2 of cosines and residual sines) that the IRLS scale session is landing on main, under the user's settlement of 2026-11-08.
+  - If it has not landed when the slice reaches this step, the rest proceeds and this step waits. Regression keeps no copy of it.
 
 ## Gates common to every slice
 
@@ -72,7 +93,7 @@ One commit per concern; tests with the code they test; each slice ends with its 
 
 ## Not in this brief
 
-- **Rotate-and-refit, BPPR and a directional hinge.** They change the model, not a readout. They wait for the user after slice 4, and for the Grassmann discussion: rotate-and-refit's frame is a Stiefel choice.
+- **Rotate-and-refit, BPPR and a directional hinge.** They change the model, not a readout. They wait for the user. Rotate-and-refit can take its frame from the ordered eigenvectors of P̄ or E[C], which needs no Stiefel code; Stiefel enters only if a rotation within the span is optimized for a simplicity criterion, as varimax is (the Grassmann discussion, settled 2026-11-08). BPPR's direction prior is still open there.
 - **A robust median of subspaces as the default,** per decision 4.
 - **C for BGP** in closed form (Wycoff et al., not held). BGP's gradients are a later consumer.
 - **G4's joint mixture of products** and E25's readouts (ALE, Shapley).
