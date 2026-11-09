@@ -125,3 +125,32 @@ Each slice reports here and to the main session:
 ## Reports
 
 Newest first.
+
+### Slice 0: the whitening on the working response (chip, 2026-11-08)
+
+**Landed** in `7cf1761` (the change and its gates) and the commit that carries this report (`docs/Maths/RandomEffects.md`, begun, with one pointer line in `BayesianRegression.md`). The main session approved the plan on 2026-11-08; E34's chip had the change's shape before `BassDesign` was edited (no reply yet, its files clean).
+
+**What changed.**
+- `WorkingResponse.Whitening`: the block whose V^(−½) the reading's offset applies, its ln|V| in the log-Jacobian as before. `RandomInterceptBlock.Whitened` sets it; a reading moved to another offset keeps it.
+- `BassDesign` drops its own block and its constructor's `block` parameter, which `BassModel.NewDesign` alone passed. It whitens each column by the reading it is on; whether its columns are whitened is its layout, fixed when it is built.
+- `ProposeFollow` treats a reading at another scale as it treats moved weights: every column evaluated and whitened afresh, the Gram factored strictly. Gaining or losing a whitening is refused as another layout.
+
+**A defect found and fixed with it: the hinge prefix tables under a block.**
+- They give a one-way hinge's border by summing each held column against the raw hinge. Under a block the held columns are whitened, so they read xⱼᵀV^(−½)h where the border is xⱼᵀV⁻¹h.
+- `WarmTables` already refused to build them under a block; `TableBorder` read them anyway. They switch on at 500 cases and up to 16 continuous predictors, past KHAOS's gates' n 246, so nothing caught it.
+- On HEAD the new gate failed: with the tables asked for, a proposal the dots admitted came back refused as numerical. A design with whitened columns now reads every border by the dots.
+
+**Gates.**
+- *Held-s fits bit for bit:* a hinge chain, a Legendre chain and a tempered hinge fit with its reference rung, pinned by hash on HEAD before the change (`b9b95aee57ef459c`, `a1f4528886afa5f7`, `05122582e8f56f75`) and met after.
+- *Following the whitening:* a design loaded at s = 1.3 and followed to a reading at s = 0.4, against a design built at 0.4 with the same terms: the residual and fitted squares and the coefficients equal to the bit (gated at 10⁻¹²). Followed back to 1.3, its first fit within 10⁻¹². A reading without a whitening is refused.
+- *The tables under a block:* 600 cases, 1,500 proposals with the tables asked for, each equal to the dots' to the bit, the tables reading 0 entries.
+- *KHAOS's gates* (`RandomInterceptTests`) and the prefix-table tests pass unchanged.
+- *Fingerprints* do not move: nothing serialized changed.
+- *Per commit,* the selection with the pinned tier: 1,845 of 1,845. *At the slice's end,* the whole assembly: 2,640 of 2,640.
+
+**Decisions beyond the brief.**
+- *The sweep's draw of the effects still reads the model's block.* Under a held s it is the reading's own object, and `BassSweep.cs` held the KHAOS chip's uncommitted birth-and-death edit, which I left alone. Slice 1 moves that read to the reading's block, which a drawn s needs.
+
+**Noted for slice 1.** Under level centring the model's priors read the working response (`BassModel.PriorsReadResponse`), and `BassStructureMoves.ProposeFollow` refuses a chain of such a model to move. ȳ is unmoved by the whitening (V1 = 1), but s², which a scaled σ² prior reads, is the whitened response's. A drawn s therefore needs the priors to read the data, not the reading at s: a frozen reference of the unwhitened response's level and mean square, so the σ² prior does not move with s.
+
+**Follow-ups.** None new.

@@ -1930,7 +1930,7 @@ GBASS's noise on this core, a normal variance-mean mixture whose working respons
 
 ### BASS: random-effect intercepts (E21)
 
-Built 2026-11-08 as KHAOS's slice 3 ([the report](../../issues/regression/bass/khaos-brief.md#reports)), as a capability of the core: any grouping, any coefficient form, hinge and Legendre terms alike. KHAOS is one consumer.
+Built 2026-11-08 as KHAOS's slice 3 ([the report](../../issues/regression/bass/khaos-brief.md#reports)), as a capability of the core: any grouping, any coefficient form, hinge and Legendre terms alike. KHAOS is one consumer. Its extensions, a drawn s, several groupings, slopes, the block under GBASS's noises and its conformal reading, are on [RandomEffects.md](./RandomEffects.md).
 
 **The model.** `BassConfig.RandomIntercept = new BassRandomIntercept(s)`, on data that hold a grouping, `new BassData(predictors, response, grouping)`. The grouping is a `CategoricalPredictor` beside the predictors, and no term reads it.
 
