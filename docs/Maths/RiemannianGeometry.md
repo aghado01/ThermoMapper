@@ -229,10 +229,14 @@ On $S^m$ the result saturates at `BetaFloor` = 1e-6 when $\hat m_2$ exceeds what
 
 1. Split the data into K **contiguous** blocks (no shuffling) and run a local PCA on each, giving a mean $\mu_k$ and a frame $U_k$.
 2. Compute preliminary medians: a Euclidean median of the $\mu_k$ and a Grassmann median of the $U_k$, the latter warm-started at the medoid.
-3. Calibrate scales from the **square of the median** distances: $\hat\tau_\mu=(\mathrm{med}_k\|\mu_k-\tilde\mu\|)^2/p$ and $\hat\tau_U=(\mathrm{med}_kd_{Gr}(U_k,\tilde U))^2/[r(p-r)]$. Then set $\hat\alpha=\mathrm{clamp}(2\hat\tau_U/(\hat\tau_\mu+\hat\tau_U),10^{-6},2-10^{-6})$.
+3. Calibrate scales from the **square of the median** distances: $\hat\tau_\mu=(\mathrm{med}_k\|\mu_k-\tilde\mu\|)^2/p$ and $\hat\tau_U=(\mathrm{med}_kd_{Gr}(U_k,\tilde U))^2/[r(p-r)]$, each floored at its factor's resolution: $(\varepsilon\max_i\|x_i\|)^2/p$, the rounding of the block means, and $2\varepsilon/[r(p-r)]$, the arccos resolution $\sqrt{2\varepsilon}$ of a Grassmann distance. Then set $\hat\alpha=2\hat\tau_U/(\hat\tau_\mu+\hat\tau_U)$ and $2-\hat\alpha=2\hat\tau_\mu/(\hat\tau_\mu+\hat\tau_U)$, each computed directly, so the smaller keeps its digits.
 4. Compute a joint geometric median on $\mathrm{Scaled}(\mathbb R^p,\alpha)\times\mathrm{Scaled}(Gr,2-\alpha)$. α scales every distance and norm. Under the default `Spread` unit the solver's thresholds scale with them, so α moves only the joint median itself, through the balance of the two factors.
 
-**Rescaling the data.** The calibration keeps $\hat\alpha\hat\tau_\mu=(2-\hat\alpha)\hat\tau_U$, and rescaling the data by s multiplies $\hat\tau_\mu$ by s² while $\hat\tau_U$ (in radians) stays put, so the two calibrated metrics differ by a constant factor and MoMPCA is scale-equivariant, as long as the clamp $[10^{-6},2-10^{-6}]$ does not bind. It binds once $\hat\tau_U/\hat\tau_\mu$ leaves about $[5\times10^{-7},2\times10^6]$: on a fixture with $\hat\alpha\approx0.15$, s = 1e-3 and 1e2 reproduce the scale-1 result to 1e-14, while s = 1e-6 and 1e3 move the mean by about 1% and the subspace by about 0.01 rad.
+**Rescaling the data.** The calibration keeps $\hat\alpha\hat\tau_\mu=(2-\hat\alpha)\hat\tau_U$. Rescaling the data by s multiplies $\hat\tau_\mu$ and its floor by s², while $\hat\tau_U$ and its floor (in radians) stay put, so the two calibrated metrics differ by a constant factor and MoMPCA is scale-equivariant: from s = 1e-12 to 1e6 two fixtures reproduce the scale-1 mean, basis and variances to 1e-10, and α̂ follows $2/(1+s^2(2-\hat\alpha_1)/\hat\alpha_1)$.
+
+- **The clamp it replaces.** Earlier the code clamped α̂ to $[10^{-6},2-10^{-6}]$ and computed the subspace weight as 2 − α̂. The clamp bound once $\hat\tau_U/\hat\tau_\mu$ left about $[5\times10^{-7},2\times10^6]$, a ratio in data units, so rescaling the data by 1e-6 or 1e3 moved the mean by 0.6% to 2.6% and the subspace by 0.002 to 0.03 rad. The subtraction also lost the subspace weight's digits as α̂ neared 2.
+- **The floors.** A majority of blocks can agree exactly, as identical frames from clean blocks do, and then a τ̂ is 0. The floors take its place at the resolution below which the factor's distances are rounding.
+- **What α̂ reports.** When the means' calibrated spread is below ε of the subspaces', the reported α̂ rounds to 2, while the metric still gets the subspace weight 2 − α̂, computed directly.
 
 **Output (`PcaResult`).**
 
@@ -288,7 +292,6 @@ These compute the log of the **maximum pairwise Bayes factor** (Lee, You & Lin) 
 - **`StiefelManifold` is partial.** Its geometry depends only on the column span, not on orientation, and its Exp is a retraction.
 - **`MxPbf` is provisional.** The covariance test's prior constants `a0`/`b0` are provisional. Its pooled Gram is also centered incorrectly: it subtracts $n\bar z\bar z^\top$ from already group-centered Grams instead of adding the between-group terms $n_1(\bar x-\bar z)(\bar x-\bar z)^\top+n_2(\bar y-\bar z)(\bar y-\bar z)^\top$, so `TwoSampleCovariance` is biased unless both group means are zero.
 - **Precision near zero distance.** Sphere and Grassmann distances use arccos, which resolves only about 1e-8 near zero. Under `Spread` the solver reads its radii from the Log map, which in turn drops principal angles below about 1e-8, and the Exp maps drop tangent steps below 1e-12; together they bound the median's relative accuracy by about 1e-12/s and its range at about s = 1e-6 ([measured](#the-unit-of-the-constants-irlsoptionsscale)). Under `Data` the 1e-8 tolerance sits at the arccos floor.
-- **`MoMPCA` is scale-equivariant only inside its α̂ clamp** ([above](#median-of-means-pca-mompca)).
 
 ## Source map
 

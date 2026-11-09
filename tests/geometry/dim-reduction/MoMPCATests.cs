@@ -17,16 +17,7 @@ public sealed class MoMPCATests
     [Fact]
     public void ComputeMoM_CorruptedBlocks_RecoverCleanMeanAndSubspace()
     {
-        const int perBlock = 12;
-        double[][] data = new double[5 * perBlock][];
-        int idx = 0;
-        idx = AddBlock(data, idx, perBlock, 5.0, 0.0, 0.0);    // clean
-        idx = AddBlock(data, idx, perBlock, 5.2, 0.3, 0.04);   // clean
-        idx = AddBlock(data, idx, perBlock, 4.8, -0.3, -0.04); // clean
-        idx = AddBlock(data, idx, perBlock, 5.0, 20.0, 1.0);   // corrupted node
-        idx = AddBlock(data, idx, perBlock, 5.0, 20.0, 1.0);   // corrupted node
-
-        MoMPcaResult mom = MoMPCA.ComputeMoM(data, kBlocks: 5, numComponents: 1);
+        MoMPcaResult mom = MoMPCA.ComputeMoM(CorruptedBlocks(), kBlocks: 5, numComponents: 1);
 
         double[] axis = mom.Basis[0];
         Assert.True(
@@ -121,7 +112,7 @@ public sealed class MoMPCATests
                 for (int t = 0; t < 3; t++) dot += mom.Basis[i][t] * mom.Basis[j][t];
                 Assert.True(Math.Abs(dot - (i == j ? 1.0 : 0.0)) <= 1e-12, $"basis[{i}]·basis[{j}] = {dot:R}");
             }
-        Assert.InRange(mom.Alpha, 1e-6, 2.0 - 1e-6);
+        Assert.InRange(mom.Alpha, 0.0, 2.0);
         Assert.Equal(2, mom.Variances.Length);
         Assert.True(mom.Variances[0] >= mom.Variances[1] && mom.Variances[1] >= 0.0);
         foreach (double[] axis in mom.Basis)
@@ -164,35 +155,47 @@ public sealed class MoMPCATests
     }
 
     /// <summary>
-    /// Rescaling the data rescales the robust mean and variances and keeps the subspace: the medians inside MoMPCA are
-    /// scale-equivariant. Eight blocks in R⁴ with jittered means and tilted frames, two of them corrupted; α̂ ≈ 0.15 at
-    /// scale 1, so the calibration stays inside its clamp [1e-6, 2 − 1e-6] at both scales tested, and the calibrated
-    /// metrics differ only by a constant factor. The solver with absolute constants missed the 1e-3 case by 0.012 in
-    /// the basis.
+    /// Rescaling the data rescales the robust mean and variances and keeps the subspace, from 1e-12 to 1e6: the
+    /// calibration keeps α̂τ̂_μ = (2 − α̂)τ̂_U, τ̂_μ rescales by s² and τ̂_U (in radians) does not, so the calibrated
+    /// metrics differ only by a constant factor, and the medians are scale-equivariant. α̂ follows as
+    /// 2/(1 + s²(2 − α̂₁)/α̂₁). Two fixtures: eight blocks in R⁴ with jittered means and tilted frames (α̂₁ ≈ 0.15), and
+    /// the corrupted blocks in R² (α̂₁ ≈ 0.05). The solver with absolute constants missed the first at 1e-3 by 0.012 in
+    /// the basis; the clamp α̂ ∈ [1e-6, 2 − 1e-6] that preceded the floored scales moved both at 1e-6 and 1e3, by 0.6% to
+    /// 2.6% in the mean and 0.002 to 0.03 rad in the subspace.
     /// </summary>
     [Theory]
+    [InlineData(1e-12)]
+    [InlineData(1e-9)]
+    [InlineData(1e-6)]
     [InlineData(1e-3)]
     [InlineData(1e2)]
+    [InlineData(1e3)]
+    [InlineData(1e6)]
     public void ComputeMoM_RescaledData_GivesTheRescaledMeanAndTheSameSubspace(double s)
     {
-        double[][] data = TiltedBlocks();
-        double[][] scaled = data.Select(x => x.Select(v => s * v).ToArray()).ToArray();
-
-        MoMPcaResult reference = MoMPCA.ComputeMoM(data, kBlocks: 8, numComponents: 2);
-        MoMPcaResult rescaled = MoMPCA.ComputeMoM(scaled, kBlocks: 8, numComponents: 2);
-
-        Assert.InRange(rescaled.Alpha, 1e-6 * (1 + 1e-9), (2.0 - 1e-6) * (1 - 1e-12));
-        double balance = reference.Alpha / (2.0 - reference.Alpha);
-        double rescaledBalance = rescaled.Alpha * s * s / (2.0 - rescaled.Alpha);
-        Assert.True(Math.Abs(rescaledBalance / balance - 1.0) <= 1e-9, $"calibration balance {rescaledBalance:R} vs {balance:R}");
-        for (int j = 0; j < 4; j++)
-            Assert.True(Math.Abs(rescaled.Mean[j] / s - reference.Mean[j]) <= 1e-12 * Math.Abs(reference.Mean[j]) + 1e-12,
-                $"mean[{j}]: {rescaled.Mean[j] / s:R} vs {reference.Mean[j]:R}");
-        for (int c = 0; c < 2; c++)
+        foreach ((string name, double[][] data, int blocks, int r) in new[]
+                 { ("tilted blocks", TiltedBlocks(), 8, 2), ("corrupted blocks", CorruptedBlocks(), 5, 1) })
         {
-            for (int j = 0; j < 4; j++)
-                Assert.True(Math.Abs(rescaled.Basis[c][j] - reference.Basis[c][j]) <= 1e-12, $"basis[{c}][{j}]");
-            Assert.True(Math.Abs(rescaled.Variances[c] / (s * s) / reference.Variances[c] - 1.0) <= 1e-12, $"variance[{c}]");
+            double[][] scaled = data.Select(x => x.Select(v => s * v).ToArray()).ToArray();
+            MoMPcaResult reference = MoMPCA.ComputeMoM(data, kBlocks: blocks, numComponents: r);
+            MoMPcaResult rescaled = MoMPCA.ComputeMoM(scaled, kBlocks: blocks, numComponents: r);
+            int p = data[0].Length;
+
+            double expectedAlpha = 2.0 / (1.0 + s * s * (2.0 - reference.Alpha) / reference.Alpha);
+            Assert.True(Math.Abs(rescaled.Alpha / expectedAlpha - 1.0) <= 1e-9,
+                $"{name}, s {s:G3}: alpha {rescaled.Alpha:R}, expected {expectedAlpha:R}");
+            double meanScale = reference.Mean.Max(Math.Abs);
+            for (int j = 0; j < p; j++)
+                Assert.True(Math.Abs(rescaled.Mean[j] / s - reference.Mean[j]) <= 1e-10 * meanScale,
+                    $"{name}, s {s:G3}: mean[{j}] {rescaled.Mean[j] / s:R} vs {reference.Mean[j]:R}");
+            for (int c = 0; c < r; c++)
+            {
+                for (int j = 0; j < p; j++)
+                    Assert.True(Math.Abs(rescaled.Basis[c][j] - reference.Basis[c][j]) <= 1e-10,
+                        $"{name}, s {s:G3}: basis[{c}][{j}] {rescaled.Basis[c][j]:R} vs {reference.Basis[c][j]:R}");
+                Assert.True(Math.Abs(rescaled.Variances[c] / (s * s) / reference.Variances[c] - 1.0) <= 1e-10,
+                    $"{name}, s {s:G3}: variance[{c}]");
+            }
         }
     }
 
@@ -295,6 +298,20 @@ public sealed class MoMPCATests
         for (int c = 0; c < rows.Length; c++)
             Array.Copy(rows[c], 0, frame, c * 3, 3);
         return frame;
+    }
+
+    // Three clean blocks with means near (5, 0) along about (1, 0), and two corrupted ones at (5, 20) along (1, 1).
+    private static double[][] CorruptedBlocks()
+    {
+        const int perBlock = 12;
+        double[][] data = new double[5 * perBlock][];
+        int idx = 0;
+        idx = AddBlock(data, idx, perBlock, 5.0, 0.0, 0.0);    // clean
+        idx = AddBlock(data, idx, perBlock, 5.2, 0.3, 0.04);   // clean
+        idx = AddBlock(data, idx, perBlock, 4.8, -0.3, -0.04); // clean
+        idx = AddBlock(data, idx, perBlock, 5.0, 20.0, 1.0);   // corrupted node
+        AddBlock(data, idx, perBlock, 5.0, 20.0, 1.0);         // corrupted node
+        return data;
     }
 
     // A contiguous block of `count` points with mean (meanX, meanY), spread along (1, slope).

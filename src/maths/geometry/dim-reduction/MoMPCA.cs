@@ -74,14 +74,16 @@ namespace Maths.Geometry.DimReduction
             double[] framePrelim = (double[])blockFrames[GeometricMedian.MedoidIndex(grass, blockFrames)].Clone();
             GeometricMedian.Compute(grass, blockFrames, weights, framePrelim);
 
-            // 3. Scale calibration α̂ = 2·τ̂_U/(τ̂_μ + τ̂_U) from the per-tangent-dimension block scales.
-            double alpha = CalibrateScale(blockMeans, meanPrelim, blockFrames, framePrelim, grass, d, r);
+            // 3. Scale calibration α̂ = 2·τ̂_U/(τ̂_μ + τ̂_U) from the per-tangent-dimension block scales, and the
+            //    subspace factor's 2 − α̂, each computed directly.
+            (double alpha, double subspaceScale) = CalibrateScale(
+                data, blockMeans, meanPrelim, blockFrames, framePrelim, grass, d, r);
 
             // 4. Calibrated joint median on the scaled product Rᵖ × Gr(r, p). Metric scaling leaves
             //    Log/Exp unchanged (You 2601.10992); ScaledManifold only reweights the factor distances.
             var product = new ProductManifold<ScaledManifold<EuclideanVectorManifold>, ScaledManifold<GrassmannManifold>>(
                 new ScaledManifold<EuclideanVectorManifold>(euclid, alpha),
-                new ScaledManifold<GrassmannManifold>(grass, 2.0 - alpha));
+                new ScaledManifold<GrassmannManifold>(grass, subspaceScale));
 
             int frameDim = d * r;
             int prodDim = d + frameDim;
@@ -119,10 +121,16 @@ namespace Maths.Geometry.DimReduction
             double[] covarianceMedian = ArithmeticMean(projected, r * r);
             GeometricMedian.Compute(new EuclideanVectorManifold(r * r), projected, weights, covarianceMedian);
             var median = new double[r, r];
+            double largest = 0.0;
             for (int a = 0; a < r; a++)
                 for (int b = 0; b < r; b++)
+                {
                     median[a, b] = 0.5 * (covarianceMedian[a * r + b] + covarianceMedian[b * r + a]);
-            EigenResult eig = DenseEigen.DecomposeSymmetric(median);
+                    largest = Math.Max(largest, Math.Abs(median[a, b]));
+                }
+            // The Jacobi tolerance relative to the matrix, which scales with the data's units squared: an absolute
+            // 1e-12 would skip every rotation once the variances fall to about 1e-12.
+            EigenResult eig = DenseEigen.DecomposeSymmetric(median, tol: largest > 0 ? 1e-12 * largest : 1e-12);
 
             var order = new int[r];
             for (int i = 0; i < r; i++) order[i] = i;
@@ -182,15 +190,20 @@ namespace Maths.Geometry.DimReduction
             return mean;
         }
 
-        // α̂ = 2·τ̂_U/(τ̂_μ + τ̂_U), with τ̂_μ = median_k‖μ_k − μ̃‖² / p and
-        // τ̂_U = median_k d_Gr(U_k, Ũ)² / [r(p−r)] (the √b block-size standardizer cancels in the ratio).
-        private static double CalibrateScale(
+        // α̂ = 2·τ̂_U/(τ̂_μ + τ̂_U) and 2 − α̂ = 2·τ̂_μ/(τ̂_μ + τ̂_U), each computed directly so the smaller keeps its
+        // digits, with τ̂_μ = median_k‖μ_k − μ̃‖² / p and τ̂_U = median_k d_Gr(U_k, Ũ)² / [r(p−r)] (the √b block-size
+        // standardizer cancels in the ratio). Each τ̂ is floored at its factor's resolution, which keeps both scales
+        // positive when a majority of blocks agree exactly: (ε·max‖xᵢ‖)²/p, the rounding of the block means, and
+        // 2ε/[r(p−r)], the arccos resolution √(2ε) of a Grassmann distance. The first floor rescales with the data and
+        // the second is in radians, so α̂ is invariant to the data's units.
+        private static (double Alpha, double SubspaceScale) CalibrateScale(
+            double[][] data,
             double[][] blockMeans, double[] meanCenter,
             double[][] blockFrames, double[] frameCenter,
             GrassmannManifold grass, int p, int r)
         {
             int gIntrinsic = r * (p - r);
-            if (gIntrinsic <= 0) return 1.0;   // full subspace: no Grassmann variation, stay balanced
+            if (gIntrinsic <= 0) return (1.0, 1.0);   // full subspace: no Grassmann variation, stay balanced
 
             int k = blockMeans.Length;
             var dMu = new double[k];
@@ -203,14 +216,25 @@ namespace Maths.Geometry.DimReduction
                 dU[i] = grass.Distance(blockFrames[i], frameCenter);
             }
 
+            double magnitude = 0;
+            foreach (double[] x in data)
+            {
+                double s = 0;
+                for (int j = 0; j < p; j++) s += x[j] * x[j];
+                magnitude = Math.Max(magnitude, s);
+            }
+            double meanResolution = MachineEpsilon * MachineEpsilon * magnitude;   // (ε·max‖xᵢ‖)²
+
             double mMu = Median(dMu);
             double mU = Median(dU);
-            double tauMu = mMu * mMu / p;
-            double tauU = mU * mU / gIntrinsic;
+            double tauMu = Math.Max(mMu * mMu, meanResolution) / p;
+            double tauU = Math.Max(mU * mU, 2.0 * MachineEpsilon) / gIntrinsic;
+            if (!(tauMu > 0)) return (1.0, 1.0);   // all-zero data: nothing to calibrate
             double denom = tauMu + tauU;
-            if (denom <= 0) return 1.0;
-            return Math.Clamp(2.0 * tauU / denom, 1e-6, 2.0 - 1e-6);
+            return (2.0 * tauU / denom, 2.0 * tauMu / denom);
         }
+
+        private const double MachineEpsilon = 2.220446049250313e-16;
 
         private static double Median(double[] values)
         {
@@ -233,7 +257,8 @@ namespace Maths.Geometry.DimReduction
     /// signs its components).</param>
     /// <param name="Variances">The eigenvalues of the median projected block covariance, descending: each axis's
     /// variance, with the n denominator, robust to a minority of blocks.</param>
-    /// <param name="Alpha">The calibrated scale α̂ ∈ (0, 2) of the product metric (§5.3); NaN for a single block,
-    /// where there is nothing to aggregate and the estimate is the full-data PCA.</param>
+    /// <param name="Alpha">The calibrated scale α̂ ∈ (0, 2) of the product metric (§5.3), which rounds to 2 when the means'
+    /// calibrated spread is below ε of the subspaces' (the metric takes the subspace factor's 2 − α̂ directly); NaN for
+    /// a single block, where there is nothing to aggregate and the estimate is the full-data PCA.</param>
     public sealed record MoMPcaResult(double[] Mean, double[][] Basis, double[] Variances, double Alpha);
 }
