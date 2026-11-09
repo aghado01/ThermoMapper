@@ -316,8 +316,11 @@ internal static class BassDirectPrediction
                 for (int i = 0; i < n; i++)
                     for (int l = 0; l < m; l++) predictive[d, i, l] = latent[d, i, l] + sd * Normal.SampleStandard(rng);
                 if (groups is not null)   // a population case's own group effect, after every case's noise
+                {
+                    double scale = pooled[selected[d]].GroupScale ?? model.RandomIntercept!.Spec.Scale;
                     for (int i = 0; i < n; i++)
-                        if (groups[i] < 0) predictive[d, i, 0] += sd * model.RandomIntercept!.Spec.Scale * Normal.SampleStandard(rng);
+                        if (groups[i] < 0) predictive[d, i, 0] += sd * scale * Normal.SampleStandard(rng);
+                }
             }
         }
 
@@ -333,7 +336,7 @@ internal static class BassDirectPrediction
                 surface.Evaluate(draw.Structure.TermIds, a, f);
                 if (groups is not null)   // E[u | S, τ, y], linear in α and β: the effects' conditional mean at their conditional means
                 {
-                    RandomInterceptBlock intercepts = model.RandomIntercept!;
+                    RandomInterceptBlock intercepts = model.BlockAt(draw)!;   // at the draw's s
                     var structure = new BassTerm[draw.Structure.TermIds.Length];
                     for (int j = 0; j < structure.Length; j++) structure[j] = terms[draw.Structure.TermIds[j]];
                     double[] u = intercepts.EffectMean(intercepts.ResidualSums(model, structure, a));

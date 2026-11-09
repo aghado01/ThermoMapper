@@ -63,9 +63,10 @@ public sealed class BassParticles : ISmcParticles<BassParticle>
     {
         ArgumentNullException.ThrowIfNull(rng);
         var sampler = new BassPriorSampler(_model);
-        if (_model.Observation is VarianceMeanMixture)
+        if (_model.ReadingMoves)
         {
-            // The latents ride the state's working response, which the sampler's design was loaded on: the particle adopts that design.
+            // The latents, or a drawn group scale's whitening, ride the state's working response, which the sampler's design was loaded on:
+            // the particle adopts that design.
             BassState drawn = sampler.DrawPrior(rng).State;
             Interlocked.Add(ref _attempts, sampler.Attempts);
             var held = new BassStructureMoves(_model, drawn, new BassMovesSnapshot(sampler.LastDesign(), new Tally<BassRefusal>(), 0,

@@ -37,6 +37,9 @@ public sealed class BassState
     /// <summary>τ = eᵘ.</summary>
     public double Tau => Math.Exp(LogTau);
 
+    /// <summary>The group scale on this state's fitted reading, or null without a random-intercept block.</summary>
+    public double? GroupScale => Fit.Working?.Whitening?.Spec.Scale;
+
     /// <summary>v = ln r, σ²'s rate under a hierarchical prior; NaN under every other, which has no such coordinate.</summary>
     public double LogRate { get; }
 
@@ -70,21 +73,28 @@ public readonly record struct BassStructure(int[] TermIds);
 /// <see cref="Latents"/> are the observation model's latents, kept alone by a model that rebuilds its working response from them
 /// (<see cref="IBassObservationModel.Rebuild"/>): the generative state, at N doubles where the working response holds up to 4N.
 /// <see cref="GroupEffects"/> are a random-intercept fit's u over its observed levels (E21; <see cref="RandomInterceptBlock"/>), drawn
-/// with the rest, so a case of level g reads f + u_g; null for a fit without the block.
+/// with the rest, so a case of level g reads f + u_g; null for a fit without the block. <see cref="GroupScale"/> is the block's s at the
+/// draw, its generative state where s is drawn, from which its reading is rebuilt (<see cref="WorkingOn"/>); null without the block.
 /// <para>A draw of several outputs (E34) holds Σ in <see cref="Sigma"/> and the coefficients in <see cref="OutputCoefficients"/>, one row
 /// as <see cref="Coefficients"/> orders them (the intercept, then the terms in the ids' order) and one column per output, so output k's
 /// function is f_k = a₀ₖ + Σⱼ aⱼₖBⱼ; its <see cref="Sigma2"/> is NaN and its <see cref="Coefficients"/> empty.</para>
 /// </summary>
 public sealed record BassDraw(BassStructure Structure, double Tau, double Sigma2, double[] Coefficients, double Lambda, double? Sigma2Rate = null,
                               WorkingResponse? Working = null, ObservationLatents? Latents = null, double[]? GroupEffects = null,
-                              double[,]? Sigma = null, double[,]? OutputCoefficients = null)
+                              double[,]? Sigma = null, double[,]? OutputCoefficients = null, double? GroupScale = null)
 {
     /// <summary>The working response this draw reads on <paramref name="model"/>: its own when it was composed on that response, or rebuilt
     /// from its latents; the model's otherwise, since a draw read on other data has no offset or weights there.</summary>
     internal WorkingResponse WorkingOn(BassModel model)
     {
         if (Working is not { } own)
-            return Latents is { } latents && model.Observation.Rebuild(model.Working, latents) is { } rebuilt ? rebuilt : model.Working;
+        {
+            if (Latents is { } latents && model.Observation.Rebuild(model.Working, latents) is { } rebuilt) return rebuilt;
+            // A drawn group scale's reading, whitened at the draw's s (E21).
+            if (model.ScaleDrawn && GroupScale is { } s && model.RandomIntercept is { } block && s != block.Spec.Scale)
+                return block.At(s).Whitened(model.BaseReading);
+            return model.Working;
+        }
         BassResponse response = model.Data.Response;
         return ReferenceEquals(own.Response, response) || own.Response.Values.SequenceEqual(response.Values) ? own : model.Working;
     }

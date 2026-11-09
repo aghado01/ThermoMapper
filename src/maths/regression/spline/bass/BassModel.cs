@@ -13,12 +13,13 @@ public sealed class BassModel
 {
     private BassModel(BassConfig config, BassData data, BassResolved resolved, BassInputTransform transform, BassInputs inputs,
                       BassBasis basis, BassAdmission admission, BassStructurePrior prior, BassTermProposal? proposal, IBassProposalKernel kernel,
-                      BassTarget target, IBassObservationModel observation, WorkingResponse working, RandomInterceptBlock? block)
+                      BassTarget target, IBassObservationModel observation, WorkingResponse working, WorkingResponse baseReading, RandomInterceptBlock? block)
     {
         RandomIntercept = block;
         Config = config;
         Observation = observation;
         Working = working;
+        BaseReading = baseReading;
         Data = data;
         Resolved = resolved;
         Transform = transform;
@@ -60,6 +61,7 @@ public sealed class BassModel
             throw new ArgumentException("E4's residual birth (Sampling.Births.Residual) adds continuous factors, and the data hold no continuous "
                                         + "predictor.", nameof(config));
         WorkingResponse working = observation.Working(data.Response);
+        WorkingResponse baseReading = working;
         RandomInterceptBlock? block = null;
         if (config.RandomIntercept is { } intercepts)
         {
@@ -67,7 +69,14 @@ public sealed class BassModel
             CategoricalPredictor grouping = data.Grouping
                 ?? throw new ArgumentException("The config declares random intercepts (RandomIntercept), and the data hold no grouping.", nameof(data));
             block = RandomInterceptBlock.Of(grouping, intercepts);
-            working = block.Whitened(working);
+            // A drawn s moves the whitened reading, so the priors read the response's own moments, frozen, as a fit without the block
+            // reads them: a prior that read the reading at s would read a parameter (PriorsReadResponse).
+            if (intercepts.ScalePrior is not null && working.Reference is null && working.IsResponseItself && working.Latents is null)
+                baseReading = new WorkingResponse(working.Response, output: working.Output, meaning: working.Meaning, priorGram: working.PriorGram,
+                    reference: config.Intercept == GPriorCentre.Zero
+                    ? BassPriorReference.About(working.Values, 0.0)
+                    : BassPriorReference.Moments(working.Values));
+            working = block.Whitened(baseReading);
         }
         BassResolved resolved = BassResolved.Resolve(config, data, working);
         BassInputTransform transform = BassInputTransform.Fit(data);
@@ -78,12 +87,25 @@ public sealed class BassModel
         BassTermProposal? proposal = config.Structure.Legendre is null ? BassTermProposal.From(config, prior) : null;
         IBassProposalKernel kernel = proposal ?? (IBassProposalKernel)new LegendreTermProposal(prior, config.Structure.Legendre!);
         var target = new BassTarget(config, resolved, prior, form ?? config.Sampling.Tempering?.Form ?? config.Sampling.Smc?.Form ?? TemperedForm.Integrated, working);
-        return new(config, data, resolved, transform, inputs, basis, admission, prior, proposal, kernel, target, observation, working, block);
+        return new(config, data, resolved, transform, inputs, basis, admission, prior, proposal, kernel, target, observation, working, baseReading, block);
     }
 
     /// <summary>The random-intercept block (E21) the config declares, integrated out of every marginal by whitening, which the working
-    /// response carries (<see cref="WorkingResponse.Whitening"/>); null for a config without one.</summary>
+    /// response carries (<see cref="WorkingResponse.Whitening"/>); null for a config without one. Under a drawn s it is the block at the
+    /// chain's start, and a state's reading carries the block at its own s.</summary>
     public RandomInterceptBlock? RandomIntercept { get; }
+
+    /// <summary>Whether the random-intercept block's scale is drawn (<see cref="BassRandomIntercept.ScalePrior"/>).</summary>
+    public bool ScaleDrawn => RandomIntercept?.Spec.ScalePrior is not null;
+
+    // Whether a state's reading moves with it: a noise's latents, or a drawn scale's whitening.
+    internal bool ReadingMoves => Observation is VarianceMeanMixture || ScaleDrawn;
+
+    // The reading before the block's whitening, with the priors' frozen reference: what each scale's whitening takes.
+    internal WorkingResponse BaseReading { get; }
+
+    // The block at a draw's scale: the model's at a held s, or at the s the draw carries.
+    internal RandomInterceptBlock? BlockAt(BassDraw draw) => RandomIntercept is { } block && draw.GroupScale is { } s ? block.At(s) : RandomIntercept;
 
     /// <summary>The config.</summary>
     public BassConfig Config { get; }

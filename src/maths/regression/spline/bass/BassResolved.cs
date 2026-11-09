@@ -156,7 +156,8 @@ public sealed record BassResolved
             var counts = new int[grouping.Levels.Count];
             foreach (int code in grouping.Codes.Span) counts[code]++;
             int[] observed = [.. counts.Where(c => c > 0)];
-            log.Add(new("RandomIntercept", $"{observed.Length} levels of '{grouping.Name}', s = {Text(block.Scale)}",
+            string scaleText = block.ScalePrior is { } scalePrior ? $"s drawn from C⁺(0, {Text(scalePrior.Scale)}), from {Text(block.Scale)}" : $"s = {Text(block.Scale)}";
+            log.Add(new("RandomIntercept", $"{observed.Length} levels of '{grouping.Name}', {scaleText}",
                         $"observation-centred, Σ n_g u_g = 0, {observed.Min()} to {observed.Max()} cases a level; integrated out by whitening the response and every column, which each coefficient form reads as its design"));
         }
         IEnumerable<ContinuousPredictor> columns = data.Predictors.OfType<ContinuousPredictor>();

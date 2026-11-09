@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 using System.Diagnostics;
 using System.Linq;
 using Maths.Regression.Spline.Bass;
@@ -73,12 +74,14 @@ public sealed class RandomInterceptQualificationTests(ITestOutputHelper output)
         : KhaosReachQualificationTests.Config(null, cases, seed);
 
     [Theory]
-    [InlineData("hinge")]
-    [InlineData("legendre")]
-    public void GroupEffects_AreRecovered_UnderTheConvention(string basis)
+    [InlineData("hinge", false)]
+    [InlineData("legendre", false)]
+    [InlineData("hinge", true)]
+    [InlineData("legendre", true)]
+    public void GroupEffects_AreRecovered_UnderTheConvention(string basis, bool drawScale)
     {
         if (!BassQualification.Enabled) return;
-        int covered = 0, intervals = 0;
+        int covered = 0, intervals = 0, scaleCovered = 0, sigmaCovered = 0;
         double z2 = 0.0, levelGap = 0.0, alternativeGap = 0.0;
         TimeSpan withTime = TimeSpan.Zero, withoutTime = TimeSpan.Zero;   // the cost row's wall clock, indicative
         for (int k = 0; k < Datasets; k++)
@@ -86,11 +89,23 @@ public sealed class RandomInterceptQualificationTests(ITestOutputHelper output)
             Generated g = Generate(9100 + k, declared: basis == "legendre");
             BassData data = g.Data;
             int n = data.Response.Cases;
-            BassConfig plain = Config(basis, 300 + k, n), block = plain with { RandomIntercept = new BassRandomIntercept(Scale) };
+            BassConfig plain = Config(basis, 300 + k, n), block = plain with
+            {
+                RandomIntercept = new BassRandomIntercept(Scale, ScalePrior: drawScale ? new BassGroupScalePrior() : null),
+            };
             var watch = Stopwatch.StartNew();
             BassFit fit = Bass.Fit(block, data, new BassRunOptions { MaxDegreeOfParallelism = 2 });
             withTime += watch.Elapsed;
             BassDraw[] draws = [.. fit.Draws.SelectMany(c => c)];
+            if (drawScale)
+            {
+                (double lo, double hi) = Interval(draws.Select(d => d.GroupScale!.Value));
+                // The generator's population sd is 0.8, irrespective of its realized sample of twelve levels.
+                if (lo <= 0.8 / Sigma && 0.8 / Sigma <= hi) scaleCovered++;
+                (double lowNoise, double highNoise) = Interval(draws.Select(d => Math.Sqrt(d.Sigma2)));
+                if (lowNoise <= Sigma && Sigma <= highNoise) sigmaCovered++;
+                output.WriteLine($"dataset {k}: 90% s interval [{lo:F3}, {hi:F3}], σ interval [{lowNoise:F3}, {highNoise:F3}]");
+            }
 
             // The convention's target: the true effects less their observation-weighted mean, which the level takes.
             int[] codes = data.Grouping!.Codes.ToArray();
@@ -113,7 +128,11 @@ public sealed class RandomInterceptQualificationTests(ITestOutputHelper output)
                 intervals++;
             }
             foreach (BassDraw d in draws)
-                worstCentre = Math.Max(worstCentre, Math.Abs(Enumerable.Range(0, Levels).Sum(l => counts[l] * d.GroupEffects![fitted.ObservedOf(l)])));
+            {
+                double centre = Math.Abs(Enumerable.Range(0, Levels).Sum(l => counts[l] * d.GroupEffects![fitted.ObservedOf(l)]));
+                worstCentre = Math.Max(worstCentre, centre);
+                if (drawScale) Assert.InRange(centre / n, 0, 1e-12);
+            }
             double rmse = Math.Sqrt(squares / Levels), correlation = Correlation(mean, target);
 
             // The level over the training cases: the population fit's mean there, draw by draw.
@@ -140,7 +159,7 @@ public sealed class RandomInterceptQualificationTests(ITestOutputHelper output)
                              $"the population surface {surfaceWith:F4} (without {surfaceWithout:F4})");
             Assert.True(correlation > 0.9, $"dataset {k}: correlation {correlation:F4}");
             Assert.True(worstCentre < 1e-9, $"dataset {k}: Σ n_g u_g = {worstCentre:E2}");
-            Assert.True(Math.Abs(level - levelTarget) < 4 * levelSd, $"dataset {k}: level {level:F4} ± {levelSd:F4} against {levelTarget:F4}");
+            Assert.True(Math.Abs(level - levelTarget) < (drawScale ? 2 : 4) * levelSd, $"dataset {k}: level {level:F4} ± {levelSd:F4} against {levelTarget:F4}");
             Assert.True(Math.Abs(sigmaWith / Sigma - 1.0) < 0.15, $"dataset {k}: σ {sigmaWith:F3}");
             Assert.True(groupedWith < 0.5 * groupedWithout, $"dataset {k}: held-out RMSE {groupedWith:F4} with the block, {groupedWithout:F4} without");
             Assert.True(surfaceWith < 1.1 * surfaceWithout, $"dataset {k}: the surface's RMSE {surfaceWith:F4} with the block, {surfaceWithout:F4} without");
@@ -152,6 +171,18 @@ public sealed class RandomInterceptQualificationTests(ITestOutputHelper output)
         Assert.True(coverage >= 0.8, $"coverage {coverage:F3}");
         Assert.True(z2 / intervals < 2.0, $"the standardized errors' mean square {z2 / intervals:F3}");
         Assert.True(levelGap < alternativeGap, $"{levelGap:F5} against {alternativeGap:F5}");
+        if (drawScale)
+        {
+            output.WriteLine($"90% intervals covering the generating s = {0.8 / Sigma:F3}: {scaleCovered}/{Datasets}; σ = {Sigma}: {sigmaCovered}/{Datasets}");
+            Assert.InRange(scaleCovered, 3, Datasets);
+            Assert.InRange(sigmaCovered, 3, Datasets);
+        }
+    }
+
+    private static (double Lo, double Hi) Interval(IEnumerable<double> values)
+    {
+        double[] sorted = [.. values.Order()];
+        return (sorted[(int)Math.Floor(0.05 * (sorted.Length - 1))], sorted[(int)Math.Ceiling(0.95 * (sorted.Length - 1))]);
     }
 
     // The predictive mean's RMSE at held-out cases against their true mean plus the level the convention adds to it.

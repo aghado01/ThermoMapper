@@ -1,8 +1,12 @@
 using System;
 using System.Collections.Generic;
+using System.Text.Json.Serialization;
 using Maths.Distributions;
 using Maths.LinAlg;
 using Maths.Rng;
+using Maths.Samplers;
+using Maths.Samplers.Blocks;
+using Maths.Samplers.Rjmcmc;
 
 namespace Maths.Regression.Spline.Bass;
 
@@ -18,15 +22,55 @@ public enum RandomInterceptConvention
 }
 
 /// <summary>
+/// s's prior when it is drawn (E21's slice 1; <c>ridge-blocks-brief.md</c>, decision 2): the half-Cauchy C⁺(0, A) on s, A =
+/// <paramref name="Scale"/> in units of σ, 1 by default, a group effect about as large as the noise (Gelman 2006; Polson and Scott 2012).
+/// It is proper, so a reference rung and SMC's start draw s from it.
+/// </summary>
+/// <param name="Scale">A, the half-Cauchy's scale, positive and finite.</param>
+public sealed record BassGroupScalePrior(double Scale = 1.0)
+{
+    /// <summary>ln p(s) for s &gt; 0: ln(2/(πA)) − ln(1 + (s/A)²); −∞ elsewhere.</summary>
+    public double LogDensity(double s)
+    {
+        if (!(s > 0.0) || !double.IsFinite(s)) return double.NegativeInfinity;
+        double r = s <= Scale ? s / Scale : Scale / s;
+        double logScale = Math.Log(Scale);
+        return Math.Log(2.0 / Math.PI) + (s <= Scale ? -logScale : logScale - 2.0 * Math.Log(s)) - SpecialFunctions.Log1p(r * r);
+    }
+
+    /// <summary>A draw of s: A·tan(πu/2), u uniform on (0, 1).</summary>
+    public double Sample(Xoshiro256PlusPlus rng)
+    {
+        ArgumentNullException.ThrowIfNull(rng);
+        if (!(Scale > 0.0) || !double.IsFinite(Scale)) throw new ArgumentOutOfRangeException(nameof(Scale));
+        double s;
+        do s = Scale * Math.Tan(0.5 * Math.PI * rng.NextDouble()); while (!(s > 0.0) || !double.IsFinite(s));
+        return s;
+    }
+
+    // −∂²/∂t² ln p(eᵗ) at t = ln s: 4r/(1 + r)², r = (s/A)².
+    internal double CurvatureInLog(double s)
+    {
+        double ratio = s <= Scale ? s / Scale : Scale / s;
+        double r = ratio * ratio;
+        return 4.0 * r / ((1.0 + r) * (1.0 + r));
+    }
+}
+
+/// <summary>
 /// Random-effect intercepts on the data's grouping (E21; <see cref="BassData.Grouping"/>): y = α + Σⱼ βⱼBⱼ(x) + u_g + ε, with
 /// u | σ² ~ N(0, σ²s²Π) on the observed levels, Π the projector onto {u : Σ_g n_g u_g = 0} (<see cref="Convention"/>), so
-/// <paramref name="Scale"/> s is the group effects' standard deviation in units of σ, held. No term reads the grouping, and the coefficient
-/// prior is the config's, of any form. The block is integrated out of every structure's marginal (<see cref="RandomInterceptBlock"/>), and
-/// each retained draw carries its group effects (<see cref="BassDraw.GroupEffects"/>).
+/// <paramref name="Scale"/> s is the group effects' standard deviation in units of σ: held, or drawn under <paramref name="ScalePrior"/>
+/// (<see cref="BassGroupScaleBlock"/>). No term reads the grouping, and the coefficient prior is the config's, of any form. The block is
+/// integrated out of every structure's marginal (<see cref="RandomInterceptBlock"/>), and each retained draw carries its group effects
+/// (<see cref="BassDraw.GroupEffects"/>) and its s (<see cref="BassDraw.GroupScale"/>).
 /// </summary>
-/// <param name="Scale">s: the group effects' standard deviation over σ, positive and finite.</param>
+/// <param name="Scale">s: the group effects' standard deviation over σ, positive and finite; held, or the chain's start when it is drawn.</param>
 /// <param name="Convention">The identifiability convention; the observation-centred one, the default and the only one built.</param>
-public sealed record BassRandomIntercept(double Scale, RandomInterceptConvention Convention = RandomInterceptConvention.ObservationCentred);
+/// <param name="ScalePrior">s's prior, which draws it (E21's slice 1); null, the default, holds s. Left out of the serialized form when
+/// null, so a config written before serializes and fingerprints as it did.</param>
+public sealed record BassRandomIntercept(double Scale, RandomInterceptConvention Convention = RandomInterceptConvention.ObservationCentred,
+                                         [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] BassGroupScalePrior? ScalePrior = null);
 
 /// <summary>
 /// A random-intercept block on one data set (E21), integrated out. With Z the cases' level indicators over the L observed levels, D = ZᵀZ
@@ -48,19 +92,39 @@ public sealed class RandomInterceptBlock
     private readonly int[] _group;          // each case's observed-level index
     private readonly int[] _observedOf;     // each declared level's observed index, −1 for a level no case takes
     private readonly double[] _counts;      // n_g over the observed levels
+    private readonly double[,] _he;         // HE, L × (L − 1): HᵀDH's eigenvectors carried back to the levels, free of s
+    private readonly double[] _eigenvalues; // Λ, HᵀDH's spectrum, free of s
     private readonly double[,] _whiten;     // M, L × L
     private readonly double[,] _mean;       // HE·diag(1/(λ + 1/s²))·EᵀHᵀ, L × L
     private readonly double[,] _spread;     // HE·diag((λ + 1/s²)^(−½)), L × (L − 1)
 
-    private RandomInterceptBlock(BassRandomIntercept spec, int[] group, int[] observedOf, double[] counts, double[,] whiten, double[,] mean,
-                                 double[,] spread, double logDeterminant)
+    // The block at spec's s on the grouping's basis and spectrum, which do not depend on s.
+    private RandomInterceptBlock(BassRandomIntercept spec, int[] group, int[] observedOf, double[] counts, double[,] he, double[] eigenvalues)
     {
         Spec = spec;
+        LogScalePrior = spec.ScalePrior is { } prior ? prior.LogDensity(spec.Scale) + Math.Log(spec.Scale) : 0.0;
         _group = group;
         _observedOf = observedOf;
         _counts = counts;
-        _whiten = whiten;
-        _mean = mean;
+        _he = he;
+        _eigenvalues = eigenvalues;
+        int levels = counts.Length, q = eigenvalues.Length;
+        double s2 = spec.Scale * spec.Scale, logDeterminant = 0.0;
+        var whitenScale = new double[q];
+        var meanScale = new double[q];
+        var spread = new double[levels, q];
+        for (int k = 0; k < q; k++)
+        {
+            double lambda = eigenvalues[k];
+            logDeterminant += double.IsPositiveInfinity(s2 * lambda)
+                ? 2.0 * Math.Log(spec.Scale) + Math.Log(lambda) : Math.Log(1.0 + s2 * lambda);
+            whitenScale[k] = (1.0 / Math.Sqrt(1.0 + s2 * lambda) - 1.0) / lambda;
+            double precision = lambda + 1.0 / s2;
+            meanScale[k] = 1.0 / precision;
+            for (int g = 0; g < levels; g++) spread[g, k] = he[g, k] / Math.Sqrt(precision);
+        }
+        _whiten = Outer(he, whitenScale);
+        _mean = Outer(he, meanScale);
         _spread = spread;
         LogDeterminant = logDeterminant;
     }
@@ -117,7 +181,6 @@ public sealed class RandomInterceptBlock
                 gram[a, b] = gram[b, a] = sum;
             }
         EigenResult eigen = DenseEigen.DecomposeSymmetric(gram, tol: 1e-15);
-        double s2 = spec.Scale * spec.Scale, logDeterminant = 0.0;
         // HE: each eigenvector carried back to the levels.
         var he = new double[levels, q];
         for (int k = 0; k < q; k++)
@@ -127,20 +190,38 @@ public sealed class RandomInterceptBlock
                 for (int a = 0; a < q; a++) sum += basis[a][g] * eigen.Eigenvectors[k][a];
                 he[g, k] = sum;
             }
-        var whitenScale = new double[q];
-        var meanScale = new double[q];
-        var spread = new double[levels, q];
+        var eigenvalues = new double[q];
         for (int k = 0; k < q; k++)
         {
-            double lambda = eigen.Eigenvalues[k];
-            if (!(lambda > 0.0)) throw new InvalidOperationException("The groups' Gram on n's complement is not positive definite.");
-            logDeterminant += Math.Log(1.0 + s2 * lambda);
-            whitenScale[k] = (1.0 / Math.Sqrt(1.0 + s2 * lambda) - 1.0) / lambda;
-            double precision = lambda + 1.0 / s2;
-            meanScale[k] = 1.0 / precision;
-            for (int g = 0; g < levels; g++) spread[g, k] = he[g, k] / Math.Sqrt(precision);
+            eigenvalues[k] = eigen.Eigenvalues[k];
+            if (!(eigenvalues[k] > 0.0)) throw new InvalidOperationException("The groups' Gram on n's complement is not positive definite.");
         }
-        return new RandomInterceptBlock(spec, group, observedOf, counts, Outer(he, whitenScale), Outer(he, meanScale), spread, logDeterminant);
+        return new RandomInterceptBlock(spec, group, observedOf, counts, he, eigenvalues);
+    }
+
+    /// <summary>This block at scale <paramref name="scale"/>: the grouping's basis and spectrum shared, its whitening, its effects'
+    /// conditional and ln|V| at s = <paramref name="scale"/>; this block itself at its own s. O(L²·(L − 1)).</summary>
+    public RandomInterceptBlock At(double scale)
+    {
+        if (!(scale > 0.0) || !double.IsFinite(scale)) throw new ArgumentOutOfRangeException(nameof(scale), "The scale is positive and finite.");
+        return scale == Spec.Scale ? this : new RandomInterceptBlock(Spec with { Scale = scale }, _group, _observedOf, _counts, _he, _eigenvalues);
+    }
+
+    /// <summary>The expected information about ln s at this block's scale, ½tr((V⁻¹∂V/∂ln s)²) = 2Σ_k (s²λ_k/(1 + s²λ_k))², λ the levels'
+    /// spectrum on n's complement: what the scale's step reads for its proposal (<see cref="BassGroupScaleBlock"/>).</summary>
+    internal double LogScaleInformation
+    {
+        get
+        {
+            double s2 = Spec.Scale * Spec.Scale, sum = 0.0;
+            foreach (double lambda in _eigenvalues)
+            {
+                double x = s2 * lambda;
+                double share = double.IsPositiveInfinity(x) ? 1.0 : x / (1.0 + x);
+                sum += share * share;
+            }
+            return 2.0 * sum;
+        }
     }
 
     private static void Remove(double[] v, double[] direction, double length)
@@ -173,6 +254,9 @@ public sealed class RandomInterceptBlock
 
     /// <summary>The declaration.</summary>
     public BassRandomIntercept Spec { get; }
+
+    // Density in the sampled coordinate ln s, including its Jacobian. Held s contributes no prior factor.
+    internal double LogScalePrior { get; }
 
     /// <summary>L, the observed levels.</summary>
     public int Levels => _counts.Length;
@@ -223,12 +307,20 @@ public sealed class RandomInterceptBlock
         ArgumentNullException.ThrowIfNull(working);
         if (!working.IsUnweighted || working.Latents is not null || !working.Offset.IsEmpty || working.Response is FunctionalResponse)
             throw new ArgumentException("Random intercepts whiten a scalar response under unit weights, with no offset or latents.", nameof(working));
+        return WhitenResponse(working);
+    }
+
+    // Always transform the raw observations. A scale proposal replaces the previous whitening, keeping the
+    // design's response and reference identities even after a checkpoint restore or replica hand-over.
+    internal WorkingResponse WhitenResponse(WorkingResponse working)
+    {
         ReadOnlySpan<double> y = working.Response.Values;
         double[] white = y.ToArray();
         Whiten(white);
         var offset = new double[y.Length];
         for (int i = 0; i < y.Length; i++) offset[i] = y[i] - white[i];
-        return new WorkingResponse(working.Response, offset, reference: working.Reference, logJacobian: -LogDeterminant) { Whitening = this };
+        return new WorkingResponse(working.Response, offset, output: working.Output, meaning: working.Meaning, priorGram: working.PriorGram,
+                                   reference: working.Reference, logJacobian: -LogDeterminant) { Whitening = this };
     }
 
     /// <summary>
@@ -284,5 +376,73 @@ public sealed class RandomInterceptBlock
         for (int g = 0; g < l; g++)
             for (int h = 0; h < l; h++) u[g] += _mean[g, h] * residualSums[h];
         return u;
+    }
+}
+
+/// <summary>
+/// s's step when it is drawn (E21's slice 1; <see cref="BassRandomIntercept.ScalePrior"/>), in τ's slot after τ's: a Metropolis step on
+/// t = ln s against the marginal with a, σ² and u integrated, at the chain's temperature, by a refit at the proposal
+/// (<see cref="BassStructureMoves.ProposeFollow"/>) on the reading whitened at s′ = s·eᵗ.
+/// The joint target includes the half-Cauchy's density and Jacobian in ln s.
+/// <para>ln A = Δ ln π_b + ln q(−t | x′) − ln q(t | x),</para>
+/// <para>t ~ N(0, h(x)²), h = 2.4/√C(x), C the expected information about ln s (<see cref="RandomInterceptBlock.LogScaleInformation"/>) plus
+/// the prior's curvature in ln s, at least 1. It reads the state's s and the levels alone, so its Hastings ratio is in A and the step is
+/// exact. Nothing reads the group effects between this step and their draw at composition, which takes the draw's s. A move whose
+/// structure leaves F is declined, as π is 0 there.</para>
+/// </summary>
+public sealed class BassGroupScaleBlock : IBlock<ReversibleJumpChain<BassState>>
+{
+    private const double Step = 2.4;   // the random walk's scale over the target's sd along t
+    private readonly BassGroupScalePrior _prior;
+
+    internal BassGroupScaleBlock(BassModel model)
+    {
+        ArgumentNullException.ThrowIfNull(model);
+        _prior = model.RandomIntercept?.Spec.ScalePrior
+                 ?? throw new ArgumentException("The group scale's step needs a drawn scale (RandomIntercept.ScalePrior).", nameof(model));
+    }
+
+    /// <inheritdoc/>
+    public string Name => "group scale";
+
+    /// <inheritdoc/>
+    public bool Update(ReversibleJumpChain<BassState> state, Xoshiro256PlusPlus rng)
+    {
+        ArgumentNullException.ThrowIfNull(state);
+        ArgumentNullException.ThrowIfNull(rng);
+        RandomInterceptBlock block = Reading(state).Whitening ?? throw new InvalidOperationException("The chain's reading carries no block.");
+        double h = Scale(block), t = h * Normal.SampleStandard(rng);
+        if (Propose(state, block, h, t) is not { } move) return false;
+        if (!(Math.Log(1.0 - rng.NextDouble()) < move.LogAcceptance)) return false;
+        state.SetState(move.Candidate, move.Evaluation);
+        return true;
+    }
+
+    /// <summary>A proposed step: the candidate state on the reading at s′, its evaluation, and ln A.</summary>
+    internal readonly record struct Move(BassState Candidate, ITargetEvaluation Evaluation, double LogAcceptance);
+
+    // The reading the chain's state is on.
+    internal static WorkingResponse Reading(ReversibleJumpChain<BassState> state) => BassStructureMoves.Of(state).DesignAt(state.Current).Working;
+
+    // h = Step/√C at the block's s.
+    internal double Scale(RandomInterceptBlock block)
+    {
+        double c = block.LogScaleInformation + _prior.CurvatureInLog(block.Spec.Scale);
+        return Step / Math.Sqrt(double.IsFinite(c) ? Math.Max(c, 1.0) : 1.0);
+    }
+
+    // The step by t from the block's s, or null when s′ is not a scale or the structure leaves F there.
+    internal Move? Propose(ReversibleJumpChain<BassState> state, RandomInterceptBlock block, double h, double t)
+    {
+        double s = block.Spec.Scale, moved = s * Math.Exp(t);
+        if (!(moved > 0.0) || !double.IsFinite(moved)) return null;
+        RandomInterceptBlock at = block.At(moved);
+        double reverse = Scale(at);
+        double proposalRatio = Math.Log(h) - Math.Log(reverse) - t * t / (2.0 * reverse * reverse) + t * t / (2.0 * h * h);
+        BassState candidate = BassStructureMoves.Of(state).ProposeFollow(state.Current, at.WhitenResponse(Reading(state)));
+        if ((state.Target as BassTarget ?? throw new InvalidOperationException("The chain's target is BASS's.")).Refusal(candidate.Fit) is not null) return null;
+        ITargetEvaluation evaluation = state.Target.Evaluate(candidate);
+        double target = state.Temperature.LogDensity(evaluation) - state.CurrentLogDensity;
+        return new Move(candidate, evaluation, target + proposalRatio);
     }
 }

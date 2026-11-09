@@ -324,11 +324,13 @@ public sealed class BassStructureMoves
         // A model that rebuilds its working response from its latents keeps the latents alone on the draw (the brief's retention lever).
         WorkingResponse working = _design.Working;
         bool rebuilds = working.Latents is not null && _model.Observation.Rebuilds;
-        double[]? effects = _model.RandomIntercept is { } block
-            ? block.DrawEffects(block.ResidualSums(_model, [.. order.Select(k => state.Terms[k])], coefficients), sigma2, rng)
-            : null;   // drawn last, so a fit without the block draws as it did
+        // The group effects at the block the reading carries, the chain's s, drawn last, so a fit without the block draws as it did. A
+        // drawn s is the draw's generative state, and its reading a view rebuilt from it (BassDraw.WorkingOn).
+        RandomInterceptBlock? block = working.Whitening;
+        double[]? effects = block?.DrawEffects(block.ResidualSums(_model, [.. order.Select(k => state.Terms[k])], coefficients), sigma2, rng);
         return new BassDraw(new BassStructure(sorted), tau, sigma2, coefficients, lambda, target.Sigma2Rate?.RateAt(state.LogRate),
-                            working.IsResponseItself || rebuilds ? null : working, rebuilds ? working.Latents : null, effects);
+                            working.IsResponseItself || rebuilds || _model.ScaleDrawn ? null : working, rebuilds ? working.Latents : null, effects,
+                            GroupScale: block?.Spec.Scale);
     }
 
     // Several outputs' retained draw (E34): Σ, then the coefficients given Σ (BassOutputDraws), then λ, the coefficients in the uncentred

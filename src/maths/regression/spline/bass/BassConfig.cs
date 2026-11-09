@@ -185,6 +185,13 @@ public sealed record BassConfig
             if (block.Convention != RandomInterceptConvention.ObservationCentred) throw Bad("RandomIntercept.Convention", "is not a known convention");
             if (Noise is not null)
                 throw Bad("RandomIntercept", "takes no Noise: the block is integrated by whitening the response under unit weights, and a noise's latent weights move each sweep; not built");
+            if (block.ScalePrior is { } scalePrior)
+            {
+                if (!(scalePrior.Scale > 0.0) || !double.IsFinite(scalePrior.Scale))
+                    throw Bad("RandomIntercept.ScalePrior.Scale", "must be positive and finite: the half-Cauchy's scale on s, in units of σ");
+                if (Sampling?.FlatHistogram is not null)
+                    throw Bad("RandomIntercept.ScalePrior", "takes no Sampling.FlatHistogram: its weights and WHAM read the rung laws of a marginal that the drawn s moves, which is not gated; take Sampling.Tempering or Sampling.Smc, or hold s");
+            }
         }
 
         BassSampling run = Sampling ?? throw Bad("Sampling", "is missing");

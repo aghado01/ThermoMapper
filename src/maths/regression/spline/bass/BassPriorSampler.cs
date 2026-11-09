@@ -106,10 +106,20 @@ public sealed class BassPriorSampler : IReferenceSampler<BassState>
         return (state, evaluation);
     }
 
-    /// <summary>One exact draw from the whole prior on F, the likelihood path's b = 0 member: (structure, τ), and under a noise its latents
-    /// with them (<see cref="DrawState"/> where the model has none).</summary>
+    /// <summary>One exact draw from the whole prior on F, the likelihood path's b = 0 member: (structure, τ), under a noise its latents with
+    /// them, and under a drawn group scale its s, the structure loaded on the reading whitened there (<see cref="DrawState"/> where the
+    /// model has neither).</summary>
     public (BassState State, BassEvaluation Evaluation) DrawPrior(Xoshiro256PlusPlus rng)
-        => _model.Observation is VarianceMeanMixture mixture ? DrawWithLatents(mixture, rng) : DrawState(rng);
+    {
+        if (_model.Observation is VarianceMeanMixture mixture) return DrawWithLatents(mixture, rng);
+        if (_model.ScaleDrawn)
+        {
+            RandomInterceptBlock block = _model.RandomIntercept!;
+            BassGroupScalePrior scalePrior = block.Spec.ScalePrior!;
+            return DrawOn(rng, () => block.At(scalePrior.Sample(rng)).Whitened(_model.BaseReading));
+        }
+        return DrawState(rng);
+    }
 
     /// <summary>An exact copy of this sampler's design at its last draw, for the holder of that state to adopt as its own (SMC's particle,
     /// a ladder's replica under a noise).</summary>
@@ -120,7 +130,10 @@ public sealed class BassPriorSampler : IReferenceSampler<BassState>
 
     /// <summary>One exact draw of (structure, τ) from the prior on F on the model's working response, with its evaluation under the model's
     /// target: a chain's start, and the whole prior's draw where the model holds no latents.</summary>
-    public (BassState State, BassEvaluation Evaluation) DrawState(Xoshiro256PlusPlus rng)
+    public (BassState State, BassEvaluation Evaluation) DrawState(Xoshiro256PlusPlus rng) => DrawOn(rng, null);
+
+    // DrawState's attempts, each structure loaded on `reading`'s draw, made after the structure's, or on the model's working response.
+    private (BassState State, BassEvaluation Evaluation) DrawOn(Xoshiro256PlusPlus rng, Func<WorkingResponse>? reading)
     {
         ArgumentNullException.ThrowIfNull(rng);
         BassStructurePrior prior = _model.Prior;
@@ -147,8 +160,8 @@ public sealed class BassPriorSampler : IReferenceSampler<BassState>
                 InterceptTerms++;
                 continue;
             }
-            // On the model's working response, which a draw with latents (DrawPrior) may have moved this design off.
-            if (_design.Load(terms, _model.Working) is { } refusal)
+            // On the model's working response, which a draw with latents (DrawPrior) may have moved this design off, or on a drawn scale's.
+            if (_design.Load(terms, reading?.Invoke() ?? _model.Working) is { } refusal)
             {
                 Refusals.Add(refusal);
                 continue;
