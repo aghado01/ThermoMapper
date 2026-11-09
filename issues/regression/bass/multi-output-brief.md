@@ -13,7 +13,7 @@ It serves any multi-response surrogate or regression, and E22 (coupled outcomes)
 
 ## Sources
 
-- **The model** is multivariate Bayesian regression with a matrix-normal prior scaled by Σ and an inverse-Wishart on Σ. Brown, Vannucci and Fearn (JRSS B, 1998) select variables in it with inclusion shared across responses; Huang and Wand (*Bayesian Analysis*, 2013) give the scale-mixture alternative to the inverse-Wishart. **Neither is on disk.** Ask the main session for them in slice 0. Until then, cite them from memory and say so.
+- **The model** is multivariate Bayesian regression with a matrix-normal prior scaled by Σ and an inverse-Wishart on Σ. Brown, Vannucci and Fearn (JRSS B, 1998) select variables in it with inclusion shared across responses; Huang and Wand (*Bayesian Analysis*, 2013) give the scale-mixture alternative to the inverse-Wishart. Both are in `supellex-private\PDFs\Bayesian\` (`jrssb98.pdf`, `HuangWand2013.pdf`), added by the user on 2026-11-08 and read in slice 0 (its addendum below). BVF write Σ ∼ IW(δ; Q) in Dawid's shape, δ = ν₀ − K + 1.
 - **No oracle** is known in CRAN's lineage. The checks are internal and against closed forms, as the entry lists.
 
 ## What is already built
@@ -95,6 +95,29 @@ Under "Reports" below, newest first, per slice: what landed by commit; the gates
 
 ## Reports
 
+### Slice 0, addendum: the sources read (chip, 2026-11-08)
+
+**Landed:** `b55a827`, two gates against the sources and the reference's citations. The selected classes with the pinned tier: 59 of 59.
+
+**Brown, Vannucci and Fearn (1998)**, read through a decoding of the PDF's math fonts, since the text layer drops the Greek.
+- *Their model*, (4)–(7): Y − 1αᵀ − XB ∼ N(I_n, Σ) on centred X and Y, with B ∼ N(H_γ, Σ) by rows (vec(B) ∼ N(·, Σ ⊗ H_γ), the reference's order) and Σ ∼ IW(δ; Q). γ indexes B's rows, so inclusion is shared across the responses, as the brief cites them.
+- *Their shape:* δ follows Dawid (1981), with δ = ν − q + 1 against the conventional degrees of freedom. Their default δ = 3 is ν₀ = q + 2, with Q = kI and E(Σ) = Q/(δ − 2).
+- *Their intercept:* α ∼ N(α₀, hΣ) with h → ∞. Its |Σ|^(−1/2) cancels in α's integral, so their (20) reads |Q_γ|^(−(n + δ + q − 1)/2): a count of n, as under level centring. This confirms item 1 of slice 0's findings from the source: n − 1 is neither BVF's count nor scalar BASS's.
+- *Gate:* over every subset of five columns, under their H = v₁I and their g-prior (22), the reference differs from their ln g(γ) by one constant, to 2.8·10⁻¹⁴. Their Q_γ (21) is Ψ₀ + R to 2·10⁻¹⁵, and (22)'s shortcuts hold: |H_γ||K_γ| = (c + 1)^(p_γ), and Q_γ = Q + c/(c + 1)·RSS + YᵀY/(c + 1).
+- *Read for later slices:* their g-prior with c from 10 to 100 (Smith and Kohn) is the g-form at τ = 1/c. Their sampler is Gibbs on γ componentwise, and Metropolis with add, delete and swap moves in Brown et al. (1998). Their §8's matrix-T predictive is slice 3's.
+
+**Huang and Wand (2013).**
+- *Their prior*, (2): Σ | a ∼ IW(ν + K − 1, 2ν diag(1/a)) with a_k ∼ IG(½, 1/A_k²), and their IW(κ, B) conventional.
+- *Its properties:* σ_k ∼ Half-t(ν, A_k) (Property 2), and each correlation has density ∝ (1 − ρ²)^(ν/2 − 1), uniform at ν = 2 (Properties 3 and 4). Σ and the a_k are conditionally conjugate: a_k | rest ∼ IG((ν + K)/2, ν(Σ⁻¹)_kk + 1/A_k²).
+- *Gate:* inverse Wishart draws with a diagonal scale give that correlation law at K = 2 and 3, for ν 0.5, 2 and 6, within 1.7 se on E[ρ²] and E[ρ⁴]. It holds at each a, since a correlation is unchanged by a diagonal rescaling.
+- *At K = 1* their prior is the engine's `Sigma2Prior.Hierarchical(ν/2, ½)` with A = s: σ² | r ∼ IG(ν/2, r), with r = ν/a ∼ Gamma(½, rate 1/(νA²)). The engine's half-Cauchy is their ν = 1. Built for E34, their prior would be the hierarchical prior carried to K outputs: the state carries K rates, each moved as r is, and given them the collapse stays matrix-t. That is what the entry's "its scales would take a slice step as τ does" comes to.
+
+**Found, for the main session (decision 2):** decision 2's ν₀ = K − 1 + 2c is Huang and Wand's inverse Wishart at their ν = 2c. Under a diagonal S_Y, each prior correlation then has density ∝ (1 − ρ²)^(c − 1); at c = 10⁻³ nearly all its mass sits at ±1. This is Gelman's (2006) objection to IG(ε, ε), which Huang and Wand take up. The data overrule it once n is large against K, as they overrule the scalar IG(c, c·s²).
+- *The decision it bears on:* decision 2's default against Huang and Wand's prior at ν = 2, which the brief leaves out. For few cases per output, or for correlations read as a result, their prior gives uniform correlations at the cost of K more coordinates in the state.
+- *A measurement that would decide it:* the posterior correlation's coverage on a small-n fixture (n ≈ 2K to 4K) under both priors. If the default's coverage holds, nothing changes; if it fails, Huang and Wand's prior becomes the default candidate.
+
+**Notation:** BVF's IW(δ; Q) and the conventional IW(ν, Ψ) of the reference and of Huang and Wand differ by δ = ν − K + 1. That crossing goes in `issues/notation-ledger.md` with slice 1's docs, whose ledger another session is editing now.
+
 ### Slice 0: the references (chip, 2026-11-08)
 
 **Landed:** `d5b5dc6`, test-side as E8's slice 0 put its references; no engine code.
@@ -132,7 +155,7 @@ Whole regression assembly on `15eb151` and the slice: 2,573 of 2,573.
 - *The quadrature in Bartlett coordinates of Σ⁻¹, with a second pass on the first pass's moments.* A box over the Cholesky factor of Σ missed the tails: its off-diagonal coordinate spreads as e^(ln L₁₁). The Jacobian is gated by the normalization.
 - *Monte Carlo through the collapse at each draw.* The dense form checks the first 100 draws to 10⁻¹¹; at 3·10⁵ draws it cost more than the test's budget. Nothing of Γ₃ enters the draws' side.
 
-**Unbuilt:** the reading of Brown, Vannucci and Fearn (1998) and Huang and Wand (2013), not on disk; asked of the main session on 2026-11-08. Nothing here depends on them. The matrix-t is cited from Dickey (1967) and Gupta and Nagar (2000), from memory, and derived in the reference's comments.
+**Unbuilt:** the reading of Brown, Vannucci and Fearn (1998) and Huang and Wand (2013), not on disk; asked of the main session on 2026-11-08 (read since; the addendum above). Nothing here depends on them. The matrix-t is cited from Dickey (1967) and Gupta and Nagar (2000), from memory, and derived in the reference's comments.
 
 **Follow-ups:**
 - *Items 1 to 3:* slice 1 builds level centring with ν = nb, S_Y about the centre levels with divisor n, and decision 3's condition with f, unless the main session or the user decides otherwise. Another choice changes the count, and with it the K = 1 gate.

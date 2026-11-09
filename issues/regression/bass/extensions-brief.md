@@ -538,7 +538,7 @@ For several outputs from one run, or several outcomes for one case. Means do not
 The user asked for this on 2026-11-08, after the Kimi review raised it under ABMRS's name ([lineage review](lineage-review.md#against-the-notes-in-issuesregression)). It is for K continuous outputs per case that share one structure, unordered or few enough that a free covariance is affordable.
 - **The model.** Y (n × K) = BA + E, with each row of E ~ N(0, Σ).
   - The coefficients take a matrix-normal prior scaled by Σ, A | Σ, τ ~ MN(0, S₀(τ), Σ), and Σ ~ IW(ν₀, Ψ₀). The scaling by Σ is what keeps the model conjugate, as in BASS's g-prior (Zellner's form).
-  - Brown, Vannucci and Fearn (JRSS B, 1998) select variables in this model, with inclusion shared across the responses (cited from memory).
+  - Brown, Vannucci and Fearn (JRSS B, 1998) select variables in this model, with inclusion shared across the responses. Their Σ ∼ IW(δ; Q) is in Dawid's shape, δ = ν₀ − K + 1, and their vague intercept, α ∼ N(α₀, hΣ) with h → ∞, counts n observations, as level centring does (read 2026-11-08; [E34's build brief](multi-output-brief.md), slice 0's addendum).
 - **The collapse carries over.** With A and Σ integrated, p(Y | structure, τ) is matrix-t.
   - Where BASS reads a scalar residual sum, the structure step reads a K × K quadratic form, Ψ₀ + Yᵀ(I − BΣ_nBᵀ)Y in the g-prior's or the ridge's form, and its log-determinant. That costs O(nMK + M²K + MK² + K³) a move.
   - So D04's integrated σ² becomes an integrated Σ. The structure chain, its moves and every sampler are unchanged, and `PriorPencil` serves both priors' τ steps as it does for one output.
@@ -561,7 +561,7 @@ The user asked for this on 2026-11-08, after the Kimi review raised it under ABM
   - *Co-active subspaces across the outputs.* Each output's gradient readout gives C_kl = E[∇f_k ∇f_lᵀ], E8's co-active pairs, read from one fit with shared inclusion.
   - *Ordered outputs,* such as a functional response on a grid, stay with the direct and PCA modes and E12's output-side inner product. A free K × K Σ is for small or unordered K.
 - **Choices for its brief.**
-  - *Σ's prior.* The IW keeps the collapse. Huang and Wand's (2013) scale-mixture form gives marginally uniform correlations, but it is only conditionally conjugate, so its scales would take a slice step as τ does.
+  - *Σ's prior.* The IW keeps the collapse. Huang and Wand's (2013) scale-mixture form gives marginally uniform correlations, but it is only conditionally conjugate, so its scales would take a slice step as τ does. Read on 2026-11-08: Σ | a ∼ IW(ν + K − 1, 2ν diag(1/a)) with a_k ∼ IG(½, 1/A_k²), uniform correlations at ν = 2. At K = 1 it is the engine's hierarchical σ² prior at hyper-shape ½, so built for E34 it is that prior carried to K rates. Decision 2's default is its inverse Wishart at ν = 2c, whose correlations follow (1 − ρ²)^(c − 1).
   - *Inclusion* is shared across outputs, as the collapse needs. Inclusion specific to each output would need an indicator per (term, output) and loses the matrix-t.
   - *Missing outputs* are refused at first. A case missing some outputs breaks the matrix-normal form, and its missing entries can be drawn as latents.
   - *Output units.* With a fixed Ψ₀, rescaling one output changes which terms the posterior selects. The options are to standardize the outputs, set Ψ₀ from the data's scale (an empirical prior, stated as one), or have the user declare Ψ₀ in the outputs' units.
