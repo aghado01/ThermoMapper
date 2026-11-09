@@ -168,6 +168,8 @@ public sealed class PriorPencil : RidgeColumns
     /// <summary>The pencil's eigenvalues λⱼ, descending: each column's information under the likelihood against the prior's.</summary>
     public ReadOnlySpan<double> Eigenvalues => _lambda;
 
+    internal ReadOnlySpan<double> TransformedCross => _w;
+
     private protected override RidgeTerms Evaluate(double tau, double b) => SpectralTerms(_lambda, _q, tau, b);
 
     // Eigenbasis coordinates to the pencil's own, L⁻ᵀV·x.

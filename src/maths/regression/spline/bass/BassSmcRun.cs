@@ -165,6 +165,18 @@ internal static class BassSmcFit
                 f[k++] = d.Structure.TermIds.Length;
                 if (model.Target.SamplesTau) f[k++] = d.Tau;
                 f[k++] = Temperature.LogPosterior(model.Target.Evaluate(runs[c].Result.Particles[i].State));
+                if (d.Sigma is not null)
+                {
+                    double[] Column(int id)
+                    {
+                        if (!pointValues.TryGetValue(id, out double[]? values))
+                            pointValues.Add(id, values = inputs.Values(terms[id]));
+                        return values;
+                    }
+                    BassOutputFunctionals.Fill(d, inputs.Points, f.AsSpan(k), Column);
+                    functionals[c][i] = f;
+                    continue;
+                }
                 f[k++] = d.Sigma2;
                 for (int p = k; p < f.Length; p++) f[p] = d.Coefficients[0];
                 int[] ids = d.Structure.TermIds;
@@ -228,7 +240,7 @@ internal static class BassSmcFit
             : null;
         return new BassFit(config, model.Resolved, model.Transform, identity, terms, stores, weights, diagnostics,
                            evidence ? BassEvidence.OfSmc(model, [.. runs.Select(x => x.Result)]) : null,
-                           posterior ? BassResidualDependence.Of(model, terms, stores, weights: weights) : null, restart);
+                           posterior && model.Data.Response is not MultiOutputResponse ? BassResidualDependence.Of(model, terms, stores, weights: weights) : null, restart);
     }
 
     // Quantity q's between-run reading: each replicate's weighted mean, the pooled posterior's mean and sd (each replicate

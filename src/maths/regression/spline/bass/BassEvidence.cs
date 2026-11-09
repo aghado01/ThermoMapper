@@ -231,7 +231,8 @@ public sealed record BassEvidencePriors(
     BassCountPrior Count, int MaxBasis,
     CategoricalSubsetMeasure CategoricalSubsets, int MaxInteraction, int MaxCategoricalInteraction, int MaxFunctionalInteraction,
     SupportRule Support, double SupportMinimum, double? SupportMinimumFunctional, double AngleFloor, double? MaxVarianceInflation,
-    GPriorCentre Centre, double CentreLevel, Sigma2Prior Sigma2Prior, InverseGamma? Sigma2, ResolvedSigma2Rate? Sigma2Rate)
+    GPriorCentre Centre, double CentreLevel, Sigma2Prior Sigma2Prior, InverseGamma? Sigma2, ResolvedSigma2Rate? Sigma2Rate,
+    OutputCovariancePrior? OutputCovariance = null, BassResolvedOutputs? Outputs = null)
 {
     /// <summary>The record for <paramref name="config"/> as <paramref name="resolved"/> on its data, which must carry
     /// proper σ² and τ priors; a held σ² has no inverse gamma, and the declared prior states it.</summary>
@@ -242,11 +243,11 @@ public sealed record BassEvidencePriors(
         BassStructureSpec s = config.Structure;
         if (!resolved.Scale.IsProper)
             throw new ArgumentException($"τ's prior, {resolved.Scale.Declared}, is improper, which leaves the evidence undefined.", nameof(resolved));
-        if (resolved.Sigma2 is null && resolved.GivenSigma2 is null)
+        if (resolved.Sigma2 is null && resolved.GivenSigma2 is null && resolved.Outputs is null)
             throw new ArgumentException("The Jeffreys σ² prior leaves the evidence undefined (D03).", nameof(resolved));
         return new BassEvidencePriors(config.Coefficients, resolved.Scale, config.Count, resolved.MaxBasis,
             s.CategoricalSubsets, resolved.MaxInteraction, resolved.MaxCategoricalInteraction, resolved.MaxFunctionalInteraction,
             s.Support, resolved.SupportMinimum, resolved.SupportMinimumFunctional, s.AngleFloor, s.MaxVarianceInflation,
-            config.Intercept, resolved.CentreLevel, config.Sigma2, resolved.Sigma2, resolved.Sigma2Rate);
+            config.Intercept, resolved.CentreLevel, config.Sigma2, resolved.Sigma2, resolved.Sigma2Rate, config.OutputCovariance, resolved.Outputs);
     }
 }

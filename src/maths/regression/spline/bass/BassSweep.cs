@@ -64,7 +64,7 @@ public sealed class BassStructureMoves
     /// <summary>The moves of a chain started at <paramref name="terms"/>, which must lie in F, with u =
     /// <paramref name="logTau"/> (the held τ's log when τ is held), and under a hierarchical σ² prior v =
     /// <paramref name="logRate"/>, NaN being the rate's mean.</summary>
-    public BassStructureMoves(BassModel model, IReadOnlyList<BassTerm> terms, double logTau, double logRate = double.NaN)
+    public BassStructureMoves(BassModel model, IReadOnlyList<BassTerm> terms, double logTau, double logRate = double.NaN, double[]? logOutputRates = null)
     {
         ArgumentNullException.ThrowIfNull(model);
         ArgumentNullException.ThrowIfNull(terms);
@@ -73,7 +73,8 @@ public sealed class BassStructureMoves
         if (_design.Load(terms) is { } refusal) throw new ArgumentException($"The start lies outside F ({refusal}).", nameof(terms));
         BassTerm[] loaded = [.. _design.Terms];
         double startRate = model.Target.Sigma2Rate is not { } rate ? double.NaN : double.IsNaN(logRate) ? rate.CentreLogRate : logRate;
-        Start = new BassState(loaded, Fit(loaded), model.Target.SamplesTau ? logTau : Math.Log(model.Target.HeldTau!.Value), startRate);
+        double[]? outputRates = logOutputRates is null ? model.Target.Outputs?.Rates?.Centre() : (double[])logOutputRates.Clone();
+        Start = new BassState(loaded, Fit(loaded), model.Target.SamplesTau ? logTau : Math.Log(model.Target.HeldTau!.Value), startRate, outputRates);
         if (model.Target.Refusal(Start.Fit) is { } exact) throw new ArgumentException($"The start lies outside F ({exact}).", nameof(terms));
         _counts = CountsOf(loaded);
         _committed = Start;
@@ -235,7 +236,7 @@ public sealed class BassStructureMoves
         Sync(current);
         _candidate = null;
         BassStructureFit fit = BassStructureFit.Of(_design.ProposeFollow(working), current.Fit.LogTermPrior, working);
-        var candidate = new BassState(current.TermArray, fit, current.LogTau, current.LogRate);
+        var candidate = new BassState(current.TermArray, fit, current.LogTau, current.LogRate, current.OutputRateArray);
         if (_model.Target.Refusal(fit) is null) _candidate = new Pending(candidate, default, null, null, false);
         return candidate;
     }
@@ -337,7 +338,7 @@ public sealed class BassStructureMoves
     // basis in the ids' order, one column per output, each output's intercept uncentred as the scalar one is.
     private BassDraw ComposeOutputs(BassState state, Xoshiro256PlusPlus rng, BassTermTable terms, BassTarget target, double tau)
     {
-        (double[,] sigma, double[,] centred) = BassOutputDraws.Sample(target, _design, state.Fit, tau, rng);
+        (double[,] sigma, double[,] centred) = BassOutputDraws.Sample(target, _design, state.Fit, tau, rng, target.Evaluate(state).OutputPrior);
         BassCountPrior count = _model.Prior.Count;
         double lambda = Gamma.ShapeRate(count.Shape + state.Count, count.Rate + 1.0).Sample(rng);
         int m = state.Count, k = sigma.GetLength(0);
@@ -361,7 +362,8 @@ public sealed class BassStructureMoves
             }
             coefficients[0, l] = intercept;
         }
-        return new BassDraw(new BassStructure(sorted), tau, double.NaN, [], lambda, Sigma: sigma, OutputCoefficients: coefficients);
+        double[]? rates = state.OutputRateArray is null ? null : [.. state.OutputRateArray.Select(Math.Exp)];
+        return new BassDraw(new BassStructure(sorted), tau, double.NaN, [], lambda, Sigma: sigma, OutputCoefficients: coefficients, OutputRates: rates);
     }
 
     /// <summary>The coefficients' block's draw in this sweep (<see cref="BassCoefficientsBlock"/>), which the blocks after it read; null
@@ -503,7 +505,7 @@ public sealed class BassStructureMoves
     {
         BassStructureFit fit = BassStructureFit.Of(proposal, proposal.Admitted ? LogTermPrior(terms) : double.NaN, current.Fit.Working);
         if (added is not null) Support.Add(added, proposal.Refusal == BassRefusal.Support);
-        var candidate = new BassState(terms, fit, current.LogTau, current.LogRate);
+        var candidate = new BassState(terms, fit, current.LogTau, current.LogRate, current.OutputRateArray);
         Kinds.Attempted(kind);
         if (_model.Target.Refusal(fit) is { } reason)
         {
@@ -718,6 +720,27 @@ public sealed class BassSigma2RateBlock : IBlock<ReversibleJumpChain<BassState>>
     }
 }
 
+/// <summary>Slice updates of Huang and Wand's covariance rates on ln r, against the replica's own target.</summary>
+public sealed class BassOutputRatesBlock : IBlock<ReversibleJumpChain<BassState>>
+{
+    public string Name => "output covariance rates";
+
+    public bool Update(ReversibleJumpChain<BassState> state, Xoshiro256PlusPlus rng)
+    {
+        for (int k = 0; k < state.Current.LogOutputRates.Length; k++)
+        {
+            int output = k;
+            BassState current = state.Current;
+            double rate = current.LogOutputRates[k], density = state.CurrentLogDensity;
+            SliceSampler.Step(ref rate, ref density, BassTauBlock.Width, BassTauBlock.MaxSteps,
+                              v => state.Temperature.LogDensity(state.Target.Evaluate(current.WithOutputLogRate(output, v))), rng);
+            var next = current.WithOutputLogRate(output, rate);
+            state.SetState(next, state.Target.Evaluate(next));
+        }
+        return true;
+    }
+}
+
 /// <summary>
 /// One untempered chain (D04's sweep): each step is a structure move on D01's schedule, then τ's slice step when
 /// τ is sampled and the observation model's later slots (<see cref="BassSweepSlots"/>, empty for Gaussian BASS), run as a
@@ -730,10 +753,10 @@ public sealed class BassChain
     /// sampling <paramref name="target"/> (the model's by default), and under a hierarchical σ² prior from v =
     /// <paramref name="logRate"/>, NaN being the rate's mean.</summary>
     public BassChain(BassModel model, IReadOnlyList<BassTerm> start, double logTau, Xoshiro256PlusPlus moveRng,
-                     Xoshiro256PlusPlus blockRng, ISamplingTarget<BassState>? target = null, double logRate = double.NaN)
+                     Xoshiro256PlusPlus blockRng, ISamplingTarget<BassState>? target = null, double logRate = double.NaN, double[]? logOutputRates = null)
     {
         ArgumentNullException.ThrowIfNull(model);
-        Structure = new BassStructureMoves(model, start, logTau, logRate);
+        Structure = new BassStructureMoves(model, start, logTau, logRate, logOutputRates);
         Structure.UseTables();
         Moves = new ReversibleJumpChain<BassState>(Structure.Moves, target ?? model.Target, Structure.Start, moveRng);
         Scan = new BlockScan<ReversibleJumpChain<BassState>>(BassSweepSlots.Blocks(model), Moves, blockRng, chain => chain);

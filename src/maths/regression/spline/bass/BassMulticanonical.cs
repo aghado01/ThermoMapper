@@ -101,7 +101,8 @@ internal sealed class BassMulticanonicalModel : IMulticanonicalModel<BassState>
         int[] seeds = SeedTree.Derive(chainSeed, 3);   // the start's draws, the moves, τ's block
         var sampler = new BassPriorSampler(Model);
         BassState start = sampler.DrawState(new Xoshiro256PlusPlus(seeds[0])).State;
-        var chain = new BassChain(Model, start.Terms, start.LogTau, new Xoshiro256PlusPlus(seeds[1]), new Xoshiro256PlusPlus(seeds[2]), target, start.StartLogRate);
+        var chain = new BassChain(Model, start.Terms, start.LogTau, new Xoshiro256PlusPlus(seeds[1]), new Xoshiro256PlusPlus(seeds[2]),
+                                  target, start.StartLogRate, start.OutputRateArray);
         chain.Structure.History?.Learn();   // E4's history birth learns with the weights, and freezes with them
         return new BassMulticanonicalChain(this, chain, target, new Xoshiro256PlusPlus(readoutSeed), new BassTermTable(), new DrawStore<BassDraw>(),
                                            new BassStart(start.Terms, Model.Target.HeldTau ?? start.Tau, sampler.Attempts), null);
@@ -213,6 +214,11 @@ internal sealed class BassMulticanonicalChain : IMulticanonicalChain<BassState>
         functionals[f++] = draw.Count;
         if (_owner.Model.Target.SamplesTau) functionals[f++] = composed.Tau;
         functionals[f++] = evaluation.LogPrior + evaluation.UntemperedLogLikelihood;
+        if (composed.Sigma is not null)
+        {
+            BassOutputFunctionals.Fill(composed, _owner.PointInputs.Points, functionals[f..], PointValues);
+            return;
+        }
         functionals[f++] = composed.Sigma2;
         Span<double> fitted = functionals[f..];
         fitted.Fill(composed.Coefficients[0]);

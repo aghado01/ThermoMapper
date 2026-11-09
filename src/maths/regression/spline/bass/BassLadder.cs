@@ -52,20 +52,22 @@ public sealed class BassLadder
     /// draw; its streams derive from <paramref name="seed"/>. The model's target must be in the spec's form. Under a hierarchical σ²
     /// prior the replicas start at v = <paramref name="logRate"/>, NaN being the rate's mean.
     /// </summary>
-    public BassLadder(BassModel model, TemperingSpec spec, IReadOnlyList<BassTerm> start, double logTau, int seed, double logRate = double.NaN)
-        : this(model, spec, Rungs(model, spec), start, logTau, seed, logRate)
+    public BassLadder(BassModel model, TemperingSpec spec, IReadOnlyList<BassTerm> start, double logTau, int seed, double logRate = double.NaN,
+                      double[]? logOutputRates = null)
+        : this(model, spec, Rungs(model, spec), start, logTau, seed, logRate, logOutputRates)
     {
     }
 
     // A ladder on the declared rungs `inverseTemperatures` (cold first, b = 0 last with the reference rung), for tests that place them.
-    internal BassLadder(BassModel model, TemperingSpec spec, double[] inverseTemperatures, IReadOnlyList<BassTerm> start, double logTau, int seed, double logRate = double.NaN)
+    internal BassLadder(BassModel model, TemperingSpec spec, double[] inverseTemperatures, IReadOnlyList<BassTerm> start, double logTau, int seed, double logRate = double.NaN,
+                        double[]? logOutputRates = null)
     {
         Check(model, spec);
         ArgumentNullException.ThrowIfNull(inverseTemperatures);
         CheckCount(spec, inverseTemperatures.Length, nameof(inverseTemperatures));
         Model = model;
         Spec = spec;
-        var cold = new BassStructureMoves(model, start, logTau, logRate);
+        var cold = new BassStructureMoves(model, start, logTau, logRate, logOutputRates);
         BassMovesSnapshot copy = cold.Snapshot(cold.Start);
         _structures = new BassStructureMoves[inverseTemperatures.Length];
         _structures[0] = cold;
@@ -332,7 +334,7 @@ public sealed class BassLadder
     }
 
     // A resize's new replica's state: the source's, on its own copy of the term array (clone-safe replicas).
-    private static BassState Fork(BassState state) => new((BassTerm[])state.TermArray.Clone(), state.Fit, state.LogTau, state.LogRate);
+    private static BassState Fork(BassState state) => new((BassTerm[])state.TermArray.Clone(), state.Fit, state.LogTau, state.LogRate, state.OutputRateArray);
 
     // Each replica's blocks after its moves, the sweep's slots from τ's on: τ's block when τ is sampled, the observation
     // model's latent slots and σ²'s rate; none when there are none.

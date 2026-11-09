@@ -16,6 +16,9 @@ public enum OutputCovariancePriorKind
 
     /// <summary>IW(ν₀, Ψ₀) declared in the outputs' own units.</summary>
     InverseWishart,
+
+    /// <summary>Huang and Wand's half-t marginal scales with conditional inverse-Wishart rates.</summary>
+    HuangWand,
 }
 
 /// <summary>
@@ -31,6 +34,7 @@ public enum OutputCovariancePriorKind
 /// rescaling the outputs, not to mixing them, and centred on uncorrelated outputs.</item>
 /// <item><see cref="InverseWishart"/>: IW(ν₀, Ψ₀) in the outputs' own units, ν₀ &gt; K − 1, for an analysis that fixes it; free of the
 /// data, as Geweke's test needs.</item>
+/// <item><see cref="HuangWand"/>: half-t marginal standard deviations, represented by K gamma rates and their conditional inverse Wishart.</item>
 /// </list>
 /// A value, compared by value and serialized as it stands, Ψ₀ as rows; the constructor checks the parameters against the kind, so a prior
 /// read back from JSON is checked as a built one is.
@@ -41,8 +45,10 @@ public sealed record OutputCovariancePrior
     /// The prior of kind <paramref name="kind"/>: <see cref="OutputCovariancePriorKind.ScaledToResponse"/> and
     /// <see cref="OutputCovariancePriorKind.Standardized"/> take a shape c, positive and finite; <see cref="OutputCovariancePriorKind.InverseWishart"/>
     /// takes the degrees of freedom ν₀ and the scale Ψ₀ as rows, symmetric positive definite, ν₀ &gt; K − 1.
+    /// Huang and Wand's prior takes positive ν and optional positive marginal scales.
     /// </summary>
-    public OutputCovariancePrior(OutputCovariancePriorKind kind, double? shape = null, double? degreesOfFreedom = null, double[][]? scale = null)
+    public OutputCovariancePrior(OutputCovariancePriorKind kind, double? shape = null, double? degreesOfFreedom = null, double[][]? scale = null,
+                                 double[]? outputScales = null)
     {
         switch (kind)
         {
@@ -55,13 +61,22 @@ public sealed record OutputCovariancePrior
                 if (degreesOfFreedom is not { } nu || scale is null) throw new ArgumentException("A declared inverse Wishart takes ν₀ and Ψ₀.");
                 _ = Distributions.InverseWishart.Of(nu, Matrix(scale));   // validates both
                 break;
+            case OutputCovariancePriorKind.HuangWand:
+                if (shape is not null || scale is not null) throw new ArgumentException("Huang and Wand's prior takes ν and the marginal scales.");
+                if (degreesOfFreedom is not (> 0 and < double.PositiveInfinity)) throw new ArgumentOutOfRangeException(nameof(degreesOfFreedom));
+                if (outputScales is not null && (outputScales.Length == 0 || outputScales.Any(s => !(s > 0 && double.IsFinite(s)))))
+                    throw new ArgumentException("The marginal scales must be positive and finite.", nameof(outputScales));
+                break;
             default:
                 throw new ArgumentOutOfRangeException(nameof(kind));
         }
+        if (kind != OutputCovariancePriorKind.HuangWand && outputScales is not null)
+            throw new ArgumentException("Marginal scales belong to Huang and Wand's prior.", nameof(outputScales));
         Kind = kind;
         Shape = shape;
         DegreesOfFreedom = degreesOfFreedom;
         Scale = scale is null ? null : [.. scale.Select(row => (double[])row.Clone())];
+        OutputScales = outputScales is null ? null : (double[])outputScales.Clone();
     }
 
     /// <summary>Decision 2's IW(K − 1 + 2c, 2c·S_Y), c = <paramref name="shape"/>.</summary>
@@ -69,6 +84,11 @@ public sealed record OutputCovariancePrior
 
     /// <summary>IW(K − 1 + 2c, 2c·diag S_Y), c = <paramref name="shape"/>.</summary>
     public static OutputCovariancePrior Standardized(double shape = 1e-3) => new(OutputCovariancePriorKind.Standardized, shape);
+
+    /// <summary>Half-t(ν, Aₖ) marginal standard deviations, with uniform correlations at ν = 2.
+    /// Null scales take each output's root mean square about its prior level.</summary>
+    public static OutputCovariancePrior HuangWand(double nu = 2, double[]? scales = null)
+        => new(OutputCovariancePriorKind.HuangWand, degreesOfFreedom: nu, outputScales: scales);
 
     /// <summary>IW(<paramref name="degreesOfFreedom"/>, <paramref name="scale"/>) in the outputs' own units.</summary>
     public static OutputCovariancePrior InverseWishart(double degreesOfFreedom, double[,] scale)
@@ -90,26 +110,33 @@ public sealed record OutputCovariancePrior
     /// <summary>The shape c of the priors scaled to the response; null for a declared one.</summary>
     public double? Shape { get; }
 
-    /// <summary>A declared prior's ν₀; null otherwise.</summary>
+    /// <summary>A declared inverse Wishart's ν₀ or Huang and Wand's marginal degrees of freedom ν.</summary>
     public double? DegreesOfFreedom { get; }
 
     /// <summary>A declared prior's Ψ₀, as rows; null otherwise. Not to be written.</summary>
     public double[][]? Scale { get; }
 
+    /// <summary>Huang and Wand's declared marginal scales, or null for response root mean squares. Not to be written.</summary>
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public double[]? OutputScales { get; }
+
     /// <summary>Whether <see cref="For"/> reads the response's mean squares; read from the kind, so not serialized.</summary>
     [JsonIgnore]
-    public bool ReadsResponse => Kind != OutputCovariancePriorKind.InverseWishart;
+    public bool ReadsResponse => Kind != OutputCovariancePriorKind.InverseWishart &&
+                                 (Kind != OutputCovariancePriorKind.HuangWand || OutputScales is null);
 
     /// <summary>
     /// The prior on K outputs whose mean squares and cross-products about their levels are <paramref name="meanSquares"/> (K × K, positive
     /// definite for <see cref="OutputCovariancePriorKind.ScaledToResponse"/>, a positive diagonal for
     /// <see cref="OutputCovariancePriorKind.Standardized"/>); a declared prior refuses another K.
+    /// For Huang and Wand's mixture this is the conditional inverse Wishart at the rates' prior means.
     /// </summary>
     public Distributions.InverseWishart For(double[,] meanSquares)
     {
         ArgumentNullException.ThrowIfNull(meanSquares);
         int k = meanSquares.GetLength(0);
         if (meanSquares.GetLength(1) != k) throw new ArgumentException("The mean squares are a square matrix.", nameof(meanSquares));
+        if (ResolveRates(meanSquares) is { } rates) return rates.PriorAt(rates.Centre());
         if (Kind == OutputCovariancePriorKind.InverseWishart)
         {
             double[,] declared = Matrix(Scale!);
@@ -124,12 +151,22 @@ public sealed record OutputCovariancePrior
         return Distributions.InverseWishart.Of(k - 1 + 2.0 * c, psi);
     }
 
+    internal ResolvedOutputRates? ResolveRates(double[,] meanSquares)
+    {
+        if (Kind != OutputCovariancePriorKind.HuangWand) return null;
+        int k = meanSquares.GetLength(0);
+        if (OutputScales is not null && OutputScales.Length != k) throw new ArgumentException("One marginal scale per output is required.");
+        double[] scales = OutputScales ?? [.. Enumerable.Range(0, k).Select(i => Math.Sqrt(meanSquares[i, i]))];
+        return new ResolvedOutputRates(DegreesOfFreedom!.Value, scales);
+    }
+
     /// <inheritdoc/>
     public bool Equals(OutputCovariancePrior? other)
     {
         if (other is null) return false;
         if (ReferenceEquals(this, other)) return true;
         if (Kind != other.Kind || Shape != other.Shape || DegreesOfFreedom != other.DegreesOfFreedom) return false;
+        if (!(OutputScales ?? []).AsSpan().SequenceEqual(other.OutputScales ?? [])) return false;
         if (Scale is null || other.Scale is null) return Scale is null && other.Scale is null;
         return Scale.Length == other.Scale.Length && Scale.Zip(other.Scale).All(rows => rows.First.AsSpan().SequenceEqual(rows.Second));
     }
@@ -141,6 +178,8 @@ public sealed record OutputCovariancePrior
         hash.Add(Kind);
         hash.Add(Shape);
         hash.Add(DegreesOfFreedom);
+        if (OutputScales is not null)
+            foreach (double s in OutputScales) hash.Add(s);
         if (Scale is not null)
             foreach (double[] row in Scale)
                 foreach (double v in row) hash.Add(v);
@@ -152,6 +191,7 @@ public sealed record OutputCovariancePrior
     {
         OutputCovariancePriorKind.ScaledToResponse => FormattableString.Invariant($"ScaledToResponse({Shape:R})"),
         OutputCovariancePriorKind.Standardized => FormattableString.Invariant($"Standardized({Shape:R})"),
+        OutputCovariancePriorKind.HuangWand => FormattableString.Invariant($"HuangWand({DegreesOfFreedom:R})"),
         _ => FormattableString.Invariant($"InverseWishart({DegreesOfFreedom:R}, {Scale!.Length} × {Scale.Length})"),
     };
 

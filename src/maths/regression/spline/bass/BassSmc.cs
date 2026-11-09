@@ -75,7 +75,7 @@ public sealed class BassParticles : ISmcParticles<BassParticle>
         }
         BassState start = sampler.DrawState(rng).State;
         Interlocked.Add(ref _attempts, sampler.Attempts);
-        var moves = new BassStructureMoves(_model, start.Terms, start.LogTau, start.LogRate);
+        var moves = new BassStructureMoves(_model, start.Terms, start.LogTau, start.LogRate, start.OutputRateArray);
         return new BassParticle(moves, moves.Start);
     }
 
@@ -85,7 +85,7 @@ public sealed class BassParticles : ISmcParticles<BassParticle>
         ArgumentNullException.ThrowIfNull(particle);
         BassState state = particle.State;
         BassDesignSnapshot design = particle.Moves.DesignFor(state);
-        var copy = new BassState((BassTerm[])state.TermArray.Clone(), state.Fit, state.LogTau, state.LogRate);
+        var copy = new BassState((BassTerm[])state.TermArray.Clone(), state.Fit, state.LogTau, state.LogRate, state.OutputRateArray);
         var moves = new BassStructureMoves(_model, copy, new BassMovesSnapshot(design, new Tally<BassRefusal>(), 0, new BassSupportTally(_model.Prior),
                                                                                new BassMoveTally()));
         return new BassParticle(moves, copy);

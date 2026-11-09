@@ -353,14 +353,17 @@ public sealed record BassResolved
             if (tempering.Path == TemperingPath.Likelihood)
             {
                 string improper = config.Intercept == GPriorCentre.Flat ? "the flat intercept" : "the Jeffreys σ² prior";
+                string boundary = several is { } matrix
+                    ? $"Σ's posterior needs ν₀ + Nb − 1 > K − 1, so b > {Text((matrix.Count - matrix.Prior.DegreesOfFreedom) / weights.Count)}"
+                    : $"b > (1 − 2c)/N = {Text((1.0 - 2.0 * (sigma2?.Shape ?? 0.0)) / weights.Count)}";
                 bool setHotEnd = tempering.DeclaredHotEnd() is not null;
                 string reading = tempering.InverseTemperatures is not null ? "InverseTemperatures reaches" : setHotEnd ? "HotEnd is" : "HotEnd auto-picks";
-                if (!BassTarget.Defines(tempering.Form, config.Intercept, sigma2, weights.Count, hotEnd.Value, held))
+                if (!BassTarget.Defines(tempering.Form, config.Intercept, sigma2, weights.Count, hotEnd.Value, held, several?.Prior))
                     throw new ArgumentException(
                         $"Sampling.Tempering.{reading} {Text(hotEnd.Value)}, where the integrated form is undefined under " +
-                        $"{improper}, which needs b > (1 − 2c)/N = {Text((1.0 - 2.0 * (sigma2?.Shape ?? 0.0)) / weights.Count)}; " +
+                        $"{improper}, which needs {boundary}; " +
                         $"{(setHotEnd ? "raise it" : "set it above")}, or take the linear form (D05).", "config");
-                if (tempering.ReferenceRung && !BassTarget.Defines(tempering.Form, config.Intercept, sigma2, weights.Count, 0.0, held))
+                if (tempering.ReferenceRung && !BassTarget.Defines(tempering.Form, config.Intercept, sigma2, weights.Count, 0.0, held, several?.Prior))
                     throw new ArgumentException(
                         $"Sampling.Tempering.ReferenceRung needs b = 0, where the integrated form is undefined under {improper}; the linear form reaches it (D05).", "config");
             }
@@ -369,7 +372,7 @@ public sealed record BassResolved
         if (config.Sampling.Smc is { } smc)
         {
             // SMC starts from the prior at b = 0, where the integrated form exists under the proper priors alone (D05).
-            if (!BassTarget.Defines(smc.Form, config.Intercept, sigma2, weights.Count, 0.0, held))
+            if (!BassTarget.Defines(smc.Form, config.Intercept, sigma2, weights.Count, 0.0, held, several?.Prior))
                 throw new ArgumentException(
                     $"Sampling.Smc.Form is integrated, which has no b = 0 member under {(config.Intercept == GPriorCentre.Flat ? "the flat intercept" : "the Jeffreys σ² prior")}, " +
                     "where SMC starts from the prior; the linear form reaches it (D05).", "config");
@@ -424,11 +427,6 @@ public sealed record BassResolved
         int k = response.Outputs, n = response.Cases;
         if (config.Noise is not null) throw new ArgumentException("Several outputs take Gaussian noise in E34's slice 1; the noise by row (decision 6) arrives in slice 4.", "config");
         if (config.RandomIntercept is not null) throw new ArgumentException("Several outputs' random intercepts (decision 7) arrive in E34's slice 4.", "config");
-        if (config.Sampling.Tempering is not null || config.Sampling.Smc is not null || config.Sampling.FlatHistogram is not null)
-            throw new ArgumentException("Several outputs run plain chains in E34's slice 1; the ladder, SMC and the flat histogram arrive in slice 2.", "config");
-        if (config.Coefficients.Form is not GForm)
-            throw new ArgumentException("Several outputs take the g-form in E34's slice 1; the normalized ridge and KHAOS's priors, which carry K cross products "
-                                        + "through their spectra and pencils, arrive later.", "config");
         // Σ's prior: the declared one, or Sigma2's ScaledToResponse(c) carried to K outputs.
         OutputCovariancePrior chosen = config.OutputCovariance
             ?? (config.Sigma2.Kind == Sigma2PriorKind.ScaledToResponse
@@ -489,9 +487,10 @@ public sealed record BassResolved
             OutputCovariancePriorKind.ScaledToResponse => (config.OutputCovariance is null ? "Sigma2's ScaledToResponse(c) carried to K outputs, " : "")
                 + "E34's decision 2: ν₀ = K − 1 + 2c, Ψ₀ = 2c·S_Y, S_Y the outputs' mean squares and cross-products about their levels; at K = 1 IG(c, c·s²)",
             OutputCovariancePriorKind.Standardized => "ν₀ = K − 1 + 2c, Ψ₀ = 2c·diag S_Y: invariant to rescaling the outputs, not to mixing them",
+            OutputCovariancePriorKind.HuangWand => "conditional IW with one gamma rate per output; the marginal standard deviations have half-t laws",
             _ => "declared in the outputs' own units",
         }));
-        return new BassResolvedOutputs(response.Names, [.. means], levels, squares, prior);
+        return new BassResolvedOutputs(response.Names, [.. means], levels, squares, prior, chosen.ResolveRates(squares));
     }
 
     /// <summary>

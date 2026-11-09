@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.Linq;
 using Maths.Distributions;
 using Maths.Regression.GPrior;
+using Maths.Regression.Spline.Bars;
 using Maths.Regression.Spline.Bass;
 
 namespace Maths.Regression.Tests;
@@ -17,13 +18,20 @@ internal static class MultiOutputTemperingReference
     internal static BassData Data()
     {
         double[] x = [.. Enumerable.Range(0, Cases).Select(i => i / (Cases - 1.0))];
+        double[,] y = Response();
+        return new BassData([new ContinuousPredictor("x", x)], new MultiOutputResponse(y, ["a", "b"]));
+    }
+
+    internal static double[,] Response()
+    {
         var y = new double[Cases, 2];
         for (int i = 0; i < Cases; i++)
         {
-            y[i, 0] = 0.4 + Math.Sin(2.5 * x[i]) + 0.12 * Math.Cos(7 * i);
-            y[i, 1] = -0.3 + 0.8 * Math.Abs(x[i] - 0.4) + 0.15 * Math.Sin(5 * i);
+            double x = i / (Cases - 1.0);
+            y[i, 0] = 0.4 + Math.Sin(2.5 * x) + 0.12 * Math.Cos(7 * i);
+            y[i, 1] = -0.3 + 0.8 * Math.Abs(x - 0.4) + 0.15 * Math.Sin(5 * i);
         }
-        return new BassData([new ContinuousPredictor("x", x)], new MultiOutputResponse(y, ["a", "b"]));
+        return y;
     }
 
     internal static BassConfig Config(GPriorCentre centre = GPriorCentre.Zero, double nu = 6.0) => new()
@@ -57,8 +65,10 @@ internal static class MultiOutputTemperingReference
                 for (int j = 0; j < nodes.Length; j++)
                 {
                     var (u, weight) = nodes[j];
-                    var c = MultiOutputCase.GForm(y, xc, model.Target.Intercept, Math.Exp(u), rungs[r]);
+                    bool linear = model.Target.Form == TemperedForm.Linear;
+                    var c = MultiOutputCase.GForm(y, xc, model.Target.Intercept, Math.Exp(u), linear ? 1 : rungs[r]);
                     double likelihood = MatrixTReference.LogMarginal(MatrixTReference.Collapse(c), prior);
+                    if (linear) likelihood *= rungs[r];
                     double logPrior = 0.5 * (logRate + u) - SpecialFunctions.LogGamma(0.5) - Cases / 2.0 * Math.Exp(u);
                     values[j] = Math.Log(weight) + logPrior + likelihood;
                 }

@@ -155,7 +155,8 @@ public sealed class BassModel
     /// joint, and a chain of this model refuses to move (<see cref="BassStructureMoves.ProposeFollow"/>). The routes that read nothing
     /// are a flat or zero intercept with a σ² prior that reads no s² (Jeffreys, a declared inverse gamma, a held σ²).
     /// </summary>
-    public bool PriorsReadResponse => Working.Reference is null && (Config.Intercept == GPriorCentre.Mean || Config.Sigma2.ReadsResponse);
+    public bool PriorsReadResponse => Working.Reference is null && (Config.Intercept == GPriorCentre.Mean ||
+        (Data.Response is MultiOutputResponse ? Config.OutputCovariance?.ReadsResponse ?? true : Config.Sigma2.ReadsResponse));
 
     /// <summary>M_max, the basis cap.</summary>
     public int MaxBasis => Resolved.MaxBasis;

@@ -120,10 +120,11 @@ internal sealed class BassEnsemble : IEnsembleModel<BassState>
         BassLadder? ladder = null;
         if (_tempering is { } spec)
         {
-            ladder = new BassLadder(_model, spec, start.Terms, start.LogTau, seeds[3], start.StartLogRate);
+            ladder = new BassLadder(_model, spec, start.Terms, start.LogTau, seeds[3], start.StartLogRate, start.OutputRateArray);
             ladder.Tempering.MaxDegreeOfParallelism = _rungWorkers;
         }
-        else chain = new BassChain(_model, start.Terms, start.LogTau, new Xoshiro256PlusPlus(seeds[1]), new Xoshiro256PlusPlus(seeds[2]), logRate: start.StartLogRate);
+        else chain = new BassChain(_model, start.Terms, start.LogTau, new Xoshiro256PlusPlus(seeds[1]), new Xoshiro256PlusPlus(seeds[2]),
+                                   logRate: start.StartLogRate, logOutputRates: start.OutputRateArray);
         return new BassChainRun(this, chain, ladder, new Xoshiro256PlusPlus(readoutSeed), new BassTermTable(), new DrawStore<BassDraw>(),
                                 new BassStart(start.Terms, _model.Target.HeldTau ?? start.Tau, sampler.Attempts));
     }

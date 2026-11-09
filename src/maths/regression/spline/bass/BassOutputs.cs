@@ -2,6 +2,7 @@ using System;
 using System.Collections.Generic;
 using Maths.Distributions;
 using Maths.LinAlg;
+using Maths.Regression.GPrior;
 
 namespace Maths.Regression.Spline.Bass;
 
@@ -10,7 +11,8 @@ namespace Maths.Regression.Spline.Bass;
 /// flat intercept, 0 under the zero centre), S_Y, their mean squares and cross-products about the levels with scalar BASS's divisor n,
 /// and Σ's prior, decision 2's IW(K − 1 + 2c, 2c·S_Y). The arrays are the resolution's own, not to be written.
 /// </summary>
-public sealed record BassResolvedOutputs(IReadOnlyList<string> Names, double[] Means, double[] Levels, double[,] MeanSquares, InverseWishart Prior)
+public sealed record BassResolvedOutputs(IReadOnlyList<string> Names, double[] Means, double[] Levels, double[,] MeanSquares, InverseWishart Prior,
+                                        ResolvedOutputRates? Rates = null)
 {
     /// <summary>K, the outputs.</summary>
     public int Count => Means.Length;
@@ -21,7 +23,7 @@ public sealed record BassResolvedOutputs(IReadOnlyList<string> Names, double[] M
 /// residuals or their bordered updates, and the fitted form F = B_cᵀG_c⁻¹B_c, the scalar ‖r‖² and Q_c carried to K outputs. The arrays
 /// are not to be written: one structure's forms are shared by every state that holds it.
 /// </summary>
-public sealed record OutputForms(double[,] Residual, double[,] Fitted)
+public sealed record OutputForms(double[,] Residual, double[,] Fitted, OutputPencil? Prior = null)
 {
     /// <summary>K, the outputs.</summary>
     public int Outputs => Residual.GetLength(0);

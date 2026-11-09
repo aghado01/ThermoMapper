@@ -525,6 +525,7 @@ public static class BassSweepSlots
                 case BassSweepSlot.Scale:
                     blocks.AddRange(model.Observation.Blocks(slot));
                     if (model.Target.Sigma2Rate is not null) blocks.Add(new BassSigma2RateBlock());
+                    if (model.Target.Outputs?.Rates is not null) blocks.Add(new BassOutputRatesBlock());
                     break;
                 default:
                     blocks.AddRange(model.Observation.Blocks(slot));

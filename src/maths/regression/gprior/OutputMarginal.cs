@@ -1,5 +1,6 @@
 using System;
 using Maths.Distributions;
+using Maths.LinAlg;
 
 namespace Maths.Regression.GPrior;
 
@@ -18,11 +19,16 @@ public sealed class OutputMarginal
     private static readonly double LogPi = Math.Log(Math.PI), LogTwoPi = Math.Log(2.0 * Math.PI);
 
     private readonly double[,] _s;
+    private readonly double[,] _slope;
+    private readonly double _determinantSlope;
     private readonly int _spent;   // observations a flat intercept's integral spends: 0 or 1
 
-    private OutputMarginal(double[,] s, double logDeterminantTerm, int rows, double tau, double inverseTemperature, int spent)
+    private OutputMarginal(double[,] s, double[,] slope, double logDeterminantTerm, double determinantSlope,
+                           int rows, double tau, double inverseTemperature, int spent)
     {
         _s = s;
+        _slope = slope;
+        _determinantSlope = determinantSlope;
         LogDeterminantTerm = logDeterminantTerm;
         Rows = rows;
         Tau = tau;
@@ -77,22 +83,27 @@ public sealed class OutputMarginal
         }
         double shrink = tau / (tau + b);
         var s = new double[k, k];
+        var slope = new double[k, k];
         for (int a = 0; a < k; a++)
             for (int d = 0; d <= a; d++)
             {
                 double r = residualForm[a, d], f = centredFittedForm[a, d];
                 if (r != residualForm[d, a] || f != centredFittedForm[d, a]) throw new ArgumentException("The forms are symmetric.", nameof(residualForm));
                 s[a, d] = s[d, a] = b * (r + shrink * (f + rows * gap[a] * gap[d]));
+                slope[a, d] = slope[d, a] = r + shrink * shrink * (f + rows * gap[a] * gap[d]);
             }
         for (int a = 0; a < k; a++)
             if (!(residualForm[a, a] >= 0.0) || !(centredFittedForm[a, a] >= 0.0)) throw new ArgumentOutOfRangeException(nameof(residualForm), "A form's diagonal is not negative.");
 
-        if (intercept != GPriorCentre.Flat) return new OutputMarginal(s, k * (0.5 * (centredColumns + 1) * Math.Log(shrink)), rows, tau, b, 0);
+        if (intercept != GPriorCentre.Flat)
+            return new OutputMarginal(s, slope, k * (0.5 * (centredColumns + 1) * Math.Log(shrink)),
+                                      -0.5 * k * (centredColumns + 1) / (tau + b), rows, tau, b, 0);
         // The flat intercept's integral (2π)^(K/2)|Σ|^(½)(Nb)^(−K/2): ½ln 2π moves into the count's 2π term, −½ln(Nb) stays here.
         if (!(b > 0.0))
             throw new ArgumentOutOfRangeException(nameof(inverseTemperature),
                 "b = 0 is out of reach on the flat intercept's integrated form, whose (2π|Σ|/(Nb))^(K/2) diverges there.");
-        return new OutputMarginal(s, k * (0.5 * centredColumns * Math.Log(shrink) - 0.5 * Math.Log(rows * b)), rows, tau, b, 1);
+        return new OutputMarginal(s, slope, k * (0.5 * centredColumns * Math.Log(shrink) - 0.5 * Math.Log(rows * b)),
+                                  -0.5 * k * (centredColumns / (tau + b) + 1.0 / b), rows, tau, b, 1);
     }
 
     /// <summary>K, the outputs.</summary>
@@ -116,6 +127,41 @@ public sealed class OutputMarginal
     /// <summary>The coefficients' integral: K·(k/2)·ln(τ/(τ + b)) with k the g-prior's columns, the intercept's among them inside it; under
     /// the flat intercept K·(M/2)·ln(τ/(τ + b)) − (K/2)·ln(Nb).</summary>
     public double LogDeterminantTerm { get; }
+
+    internal static OutputMarginal FromPencil(double[,] residual, PriorPencil[] pencils, int rows, double tau, double b)
+    {
+        int k = pencils.Length, p = pencils[0].Eigenvalues.Length;
+        bool flat = !pencils[0].InterceptInside;
+        if (!(tau > 0 && double.IsFinite(tau)) || !(b >= 0 && double.IsFinite(b)) || (flat && b == 0))
+            throw new ArgumentOutOfRangeException(nameof(b), "The coefficient precision and temperature must define the block.");
+        var s = new double[k, k];
+        var slope = new double[k, k];
+        double determinant = flat ? -0.5 * k * Math.Log(rows * b) : 0;
+        double determinantSlope = flat ? -0.5 * k / b : 0;
+        for (int a = 0; a < k; a++)
+            for (int d = 0; d < k; d++)
+            {
+                s[a, d] = b * residual[a, d];
+                slope[a, d] = residual[a, d];
+            }
+        for (int j = 0; j < p; j++)
+        {
+            double lambda = pencils[0].Eigenvalues[j];
+            double shrink = tau / (tau + b * lambda);
+            determinant += 0.5 * k * Math.Log(shrink);
+            determinantSlope -= 0.5 * k * lambda / (tau + b * lambda);
+            for (int a = 0; a < k; a++)
+                for (int d = 0; d <= a; d++)
+                {
+                    double energy = pencils[a].TransformedCross[j] * pencils[d].TransformedCross[j] / lambda;
+                    s[a, d] += b * shrink * energy;
+                    slope[a, d] += shrink * shrink * energy;
+                    s[d, a] = s[a, d];
+                    slope[d, a] = slope[a, d];
+                }
+        }
+        return new OutputMarginal(s, slope, determinant, determinantSlope, rows, tau, b, flat ? 1 : 0);
+    }
 
     /// <summary>
     /// Σ | Y ∼ IW(ν₀ + ν, Ψ₀ + S) under <paramref name="prior"/> IW(ν₀, Ψ₀), or IW(ν, S) under the improper |Σ|^(−(K + 1)/2) (null).
@@ -166,6 +212,31 @@ public sealed class OutputMarginal
         if (double.IsNaN(logDetTotal)) throw new InvalidOperationException("Ψ₀ + S is not positive definite.");
         return -0.5 * nu * k * LogPi + LogDeterminantTerm + 0.5 * nu0 * prior.LogDeterminantScale - SpecialFunctions.LogMultivariateGamma(k, 0.5 * nu0)
                + SpecialFunctions.LogMultivariateGamma(k, 0.5 * posterior) - 0.5 * posterior * logDetTotal;
+    }
+
+    /// <summary>The derivative of the integrated log likelihood with respect to b, for path diagnostics.</summary>
+    public double LogLikelihoodSlope(InverseWishart? prior)
+    {
+        CheckPrior(prior);
+        int k = Outputs;
+        double posterior = (prior?.DegreesOfFreedom ?? 0) + DegreesOfFreedom;
+        if (!(posterior > k - 1)) throw new InvalidOperationException("Σ's posterior is improper.");
+        double[,] total = prior?.Scale ?? new double[k, k];
+        for (int a = 0; a < k; a++)
+            for (int d = 0; d < k; d++) total[a, d] += _s[a, d];
+        var factor = new DenseCholesky(k);
+        factor.Decompose(total);
+        if (factor.FailedAt >= 0) throw new InvalidOperationException("Σ's posterior scale is not positive definite.");
+        double digamma = 0, trace = 0;
+        var column = new double[k];
+        for (int a = 0; a < k; a++)
+        {
+            digamma += SpecialFunctions.Digamma(0.5 * (posterior - a));
+            for (int d = 0; d < k; d++) column[d] = _slope[d, a];
+            factor.SolveInPlace(column);
+            trace += column[a];
+        }
+        return _determinantSlope + 0.5 * Rows * (digamma - k * LogPi - factor.LogDet) - 0.5 * posterior * trace;
     }
 
     // ln|A| by Cholesky, its lower triangle read; NaN when A is not positive definite.

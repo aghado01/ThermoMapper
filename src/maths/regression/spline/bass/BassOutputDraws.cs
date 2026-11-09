@@ -19,13 +19,18 @@ internal static class BassOutputDraws
 {
     /// <summary>Σ and the centred coefficients at <paramref name="design"/>'s structure and τ = <paramref name="tau"/>: row 0 the
     /// intercepts, then one row per term in the design's order, one column per output.</summary>
-    internal static (double[,] Sigma, double[,] Centred) Sample(BassTarget target, BassDesign design, BassStructureFit fit, double tau, Xoshiro256PlusPlus rng)
+    internal static (double[,] Sigma, double[,] Centred) Sample(BassTarget target, BassDesign design, BassStructureFit fit, double tau, Xoshiro256PlusPlus rng,
+                                                              InverseWishart? prior = null)
     {
         BassResolvedOutputs outputs = target.Outputs ?? throw new InvalidOperationException("The target holds one response.");
+        if (outputs.Rates is not null && prior is null)
+            throw new ArgumentException("A draw under Huang and Wand's prior needs the conditional inverse Wishart at its state's rates.", nameof(prior));
         int k = outputs.Count, m = design.Count, n = design.Observations;
         double precision = tau / target.CoefficientConstant;
-        double[,] sigma = target.OutputsMarginal(fit, tau).SigmaPosterior(outputs.Prior).Sample(rng);
+        double[,] sigma = target.OutputsMarginal(fit, tau).SigmaPosterior(prior ?? outputs.Prior).Sample(rng);
         double[,] root = Root(sigma);
+        if (fit.Outputs?.Prior is { } pencil)
+            return (sigma, SamplePencil(pencil, outputs, root, precision, n, m, rng));
         double shrink = 1.0 / (precision + 1.0), scale = Math.Sqrt(shrink);
         double[,] beta = design.OutputCoefficients ?? throw new InvalidOperationException("The design holds one response.");
         ISpdFactor factor = design.Factor;
@@ -64,6 +69,41 @@ internal static class BassOutputDraws
             centred[0, a] = centre + interceptScale * mixed;
         }
         return (sigma, centred);
+    }
+
+    private static double[,] SamplePencil(OutputPencil pencil, BassResolvedOutputs outputs, double[,] root, double tau,
+                                          int rows, int terms, Xoshiro256PlusPlus rng)
+    {
+        var (factor, mean) = pencil.Conditional(tau, 1);
+        int p = factor.Dimension, k = outputs.Count, offset = p == terms ? 0 : 1;
+        var innovations = new double[k][];
+        var z = new double[p];
+        for (int l = 0; l < k; l++)
+        {
+            for (int j = 0; j < p; j++) z[j] = Normal.SampleStandard(rng);
+            innovations[l] = new double[p];
+            factor.SampleInnovation(z, innovations[l]);
+        }
+        var centred = new double[terms + 1, k];
+        for (int j = 0; j < p; j++)
+            for (int a = 0; a < k; a++)
+            {
+                double value = mean[j, a];
+                for (int l = 0; l <= a; l++) value += root[a, l] * innovations[l][j];
+                centred[j + 1 - offset, a] = value;
+            }
+        if (offset == 0)
+        {
+            var intercept = new double[k];
+            for (int l = 0; l < k; l++) intercept[l] = Normal.SampleStandard(rng);
+            for (int a = 0; a < k; a++)
+            {
+                double value = outputs.Means[a];
+                for (int l = 0; l <= a; l++) value += root[a, l] * intercept[l] / Math.Sqrt(rows);
+                centred[0, a] = value;
+            }
+        }
+        return centred;
     }
 
     // The lower Cholesky factor of a draw of Σ, positive definite by construction.

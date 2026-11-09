@@ -13,13 +13,15 @@ namespace Maths.Regression.Spline.Bass;
 public sealed class BassState
 {
     private readonly BassTerm[] _terms;
+    private readonly double[]? _outputRates;
 
-    internal BassState(BassTerm[] terms, BassStructureFit fit, double logTau, double logRate = double.NaN)
+    internal BassState(BassTerm[] terms, BassStructureFit fit, double logTau, double logRate = double.NaN, double[]? logOutputRates = null)
     {
         _terms = terms;
         Fit = fit;
         LogTau = logTau;
         LogRate = logRate;
+        _outputRates = logOutputRates;
     }
 
     /// <summary>The terms, in the design's column order.</summary>
@@ -43,15 +45,27 @@ public sealed class BassState
     /// <summary>v = ln r, σ²'s rate under a hierarchical prior; NaN under every other, which has no such coordinate.</summary>
     public double LogRate { get; }
 
+    /// <summary>The conditional covariance rates on ln r under Huang and Wand's prior.</summary>
+    public ReadOnlySpan<double> LogOutputRates => _outputRates;
+
+    internal double[]? OutputRateArray => _outputRates;
+
     /// <summary>v for a chain started from this prior draw: a draw far below the doubles starts at their end, since from there it would
     /// take the rate's step long to climb, and burn-in forgets a start. A prior rung and SMC's particles keep the draw itself.</summary>
     internal double StartLogRate => Math.Max(LogRate, ResolvedSigma2Rate.LogSmallestRate);
 
     /// <summary>This structure at another τ.</summary>
-    public BassState WithLogTau(double logTau) => new(_terms, Fit, logTau, LogRate);
+    public BassState WithLogTau(double logTau) => new(_terms, Fit, logTau, LogRate, _outputRates);
 
     /// <summary>This structure at another rate.</summary>
-    public BassState WithLogRate(double logRate) => new(_terms, Fit, LogTau, logRate);
+    public BassState WithLogRate(double logRate) => new(_terms, Fit, LogTau, logRate, _outputRates);
+
+    public BassState WithOutputLogRate(int output, double logRate)
+    {
+        var rates = (double[])(_outputRates ?? throw new InvalidOperationException("The state has no conditional covariance rates.")).Clone();
+        rates[output] = logRate;
+        return new BassState(_terms, Fit, LogTau, LogRate, rates);
+    }
 
     internal BassTerm[] TermArray => _terms;
 
@@ -81,7 +95,7 @@ public readonly record struct BassStructure(int[] TermIds);
 /// </summary>
 public sealed record BassDraw(BassStructure Structure, double Tau, double Sigma2, double[] Coefficients, double Lambda, double? Sigma2Rate = null,
                               WorkingResponse? Working = null, ObservationLatents? Latents = null, double[]? GroupEffects = null,
-                              double[,]? Sigma = null, double[,]? OutputCoefficients = null, double? GroupScale = null)
+                              double[,]? Sigma = null, double[,]? OutputCoefficients = null, double? GroupScale = null, double[]? OutputRates = null)
 {
     /// <summary>The working response this draw reads on <paramref name="model"/>: its own when it was composed on that response, or rebuilt
     /// from its latents; the model's otherwise, since a draw read on other data has no offset or weights there.</summary>

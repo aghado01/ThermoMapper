@@ -108,7 +108,7 @@ internal static class BassFlatHistogramFit
         {
             int[] streams = SeedTree.Derive(seeds[c], 2);   // the start's draws, the ladder's
             BassState start = new BassPriorSampler(linear).DrawState(new Xoshiro256PlusPlus(streams[0])).State;
-            var ladder = new BassLadder(linear, spec.Tempering, start.Terms, start.LogTau, streams[1], start.StartLogRate);
+            var ladder = new BassLadder(linear, spec.Tempering, start.Terms, start.LogTau, streams[1], start.StartLogRate, start.OutputRateArray);
             ladder.Tempering.MaxDegreeOfParallelism = rungWorkers;
             void Scan()
             {
@@ -281,7 +281,8 @@ internal static class BassFlatHistogramFit
                                      [new ChainCheckpoint(new BassFlatHistogramState(result.Checkpoint!, pilot), [], new ChainTrace(0), 0, 0)])
             : null;
         return new BassFit(config, model.Resolved, model.Transform, new RunIdentity(sampling.MasterSeed, chains, fingerprint), terms, stores, weights,
-                           diagnostics, evidence, complete ? BassResidualDependence.Of(model, terms, stores, weights: weights) : null, restart);
+                           diagnostics, evidence, complete && model.Data.Response is not MultiOutputResponse
+                               ? BassResidualDependence.Of(model, terms, stores, weights: weights) : null, restart);
     }
 
     // Each chain's production visits: its occupancy over the window from its own levels, its round trips the run's.

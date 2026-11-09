@@ -155,6 +155,7 @@ public sealed class BassTarget : ISamplingTarget<BassState>
         if (Outputs is not { } outputs) throw new InvalidOperationException("The target holds one response; its marginal is Marginal's.");
         if (Refusal(fit) is { } reason) throw new ArgumentException($"The structure lies outside F ({reason}).", nameof(fit));
         OutputForms forms = fit.Outputs ?? throw new ArgumentException("A structure of several outputs carries their forms.", nameof(fit));
+        if (forms.Prior is { } pencil) return pencil.At(forms.Residual, Observations, tau / CoefficientConstant, inverseTemperature);
         return OutputMarginal.CentredAt(fit.Terms, forms.Residual, forms.Fitted, Observations, outputs.Means, Intercept, tau / CoefficientConstant, inverseTemperature);
     }
 
@@ -319,16 +320,7 @@ public sealed class BassTarget : ISamplingTarget<BassState>
     /// g₁ + (Nb − 1)/2 &gt; 0, or b &gt; 0 alone with σ² given. The linear form is defined on all of [0, 1].
     /// </summary>
     public bool Defines(double inverseTemperature)
-    {
-        if (Outputs is not { } outputs) return Defines(Form, Intercept, Sigma2, Weighting.Count, inverseTemperature, GivenSigma2 is not null);
-        // Several outputs (E34's decision 3): Σ's posterior IW(ν₀ + ν_b, ·) is proper where ν₀ + ν_b > K − 1, ν_b = Nb, or Nb − 1 under the
-        // flat intercept, whose b = 0 diverges.
-        double b = inverseTemperature;
-        if (!(b >= 0.0 && b <= 1.0)) return false;
-        if (Form == TemperedForm.Linear) return true;
-        if (Intercept != GPriorCentre.Flat) return true;
-        return b > 0.0 && outputs.Prior.DegreesOfFreedom + Observations * b - 1.0 > outputs.Count - 1;
-    }
+        => Defines(Form, Intercept, Sigma2, Weighting.Count, inverseTemperature, GivenSigma2 is not null, Outputs?.Prior);
 
     /// <summary>
     /// <see cref="Defines(double)"/> for a target in <paramref name="form"/> under <paramref name="intercept"/> and σ²'s
@@ -337,11 +329,14 @@ public sealed class BassTarget : ISamplingTarget<BassState>
     /// ladder's rungs by.
     /// </summary>
     public static bool Defines(TemperedForm form, GPriorCentre intercept, InverseGamma? sigma2, double observations, double inverseTemperature,
-                               bool givenSigma2 = false)
+                               bool givenSigma2 = false, InverseWishart? outputsPrior = null)
     {
         double b = inverseTemperature;
         if (!(b >= 0.0 && b <= 1.0)) return false;
         if (form == TemperedForm.Linear) return true;
+        if (outputsPrior is { } iw)
+            return (intercept != GPriorCentre.Flat || b > 0) &&
+                   iw.DegreesOfFreedom + observations * b - (intercept == GPriorCentre.Flat ? 1 : 0) > iw.Dimension - 1;
         if (givenSigma2) return intercept != GPriorCentre.Flat || b > 0.0;
         double shape = sigma2?.Shape ?? 0.0;
         if (intercept == GPriorCentre.Flat) return b > 0.0 && shape + 0.5 * (observations * b - 1) > 0.0;
@@ -374,6 +369,14 @@ public sealed class BassTarget : ISamplingTarget<BassState>
     public BassEvaluation Evaluate(BassState state)
     {
         ArgumentNullException.ThrowIfNull(state);
+        if (Outputs?.Rates is { } outputRates)
+        {
+            double logPrior = LogStructurePrior(state.Fit) + outputRates.LogDensity(state.LogOutputRates);
+            if (SamplesTau) logPrior += LogTauDensity(state.LogTau);
+            var priorAtState = double.IsNegativeInfinity(logPrior) ? null : outputRates.PriorAt(state.LogOutputRates);
+            return new BassEvaluation(this, state.Fit, SamplesTau ? state.Tau : HeldTau!.Value, logPrior, Refusal(state.Fit),
+                                      outputPrior: priorAtState);
+        }
         if (Sigma2Rate is not { } rate) return SamplesTau ? Evaluate(state.Fit, state.LogTau) : Evaluate(state.Fit);
         BassStructureFit fit = state.Fit;
         double prior = LogStructurePrior(fit);
@@ -385,7 +388,8 @@ public sealed class BassTarget : ISamplingTarget<BassState>
 
     private void RefuseSampledRate()
     {
-        if (Sigma2Rate is not null) throw new InvalidOperationException("σ²'s rate is sampled; evaluate the state, which holds it.");
+        if (Sigma2Rate is not null || Outputs?.Rates is not null)
+            throw new InvalidOperationException("The covariance prior's rates are sampled; evaluate the state, which holds them.");
     }
 
     ITargetEvaluation ISamplingTarget<BassState>.Evaluate(BassState state) => Evaluate(state);
@@ -399,12 +403,15 @@ public sealed class BassEvaluation : ITargetEvaluation
 {
     private readonly BassTarget _target;
     private readonly double _logRate;   // σ²'s rate under a hierarchical prior
+    private readonly InverseWishart? _outputPrior;
     private double? _untempered;
 
-    internal BassEvaluation(BassTarget target, BassStructureFit fit, double tau, double logPrior, BassRefusal? refusal, double logRate = double.NaN)
+    internal BassEvaluation(BassTarget target, BassStructureFit fit, double tau, double logPrior, BassRefusal? refusal, double logRate = double.NaN,
+                            InverseWishart? outputPrior = null)
     {
         _target = target;
         _logRate = logRate;
+        _outputPrior = outputPrior ?? target.Outputs?.Prior;
         Fit = fit;
         Tau = tau;
         LogPrior = target.WithGroupScalePrior(logPrior, fit);
@@ -440,6 +447,8 @@ public sealed class BassEvaluation : ITargetEvaluation
     /// <summary>The g-prior block's marginal at <paramref name="inverseTemperature"/>, for σ²'s posterior.</summary>
     public GPriorMarginal Marginal(double inverseTemperature = 1.0) => _target.Marginal(Fit, Tau, inverseTemperature);
 
+    internal InverseWishart? OutputPrior => _outputPrior;
+
     /// <summary>Several outputs' K × K block's marginal at <paramref name="inverseTemperature"/>, for Σ's posterior (E34).</summary>
     public OutputMarginal OutputsMarginal(double inverseTemperature = 1.0) => _target.OutputsMarginal(Fit, Tau, inverseTemperature);
 
@@ -457,7 +466,8 @@ public sealed class BassEvaluation : ITargetEvaluation
     {
         double b = Check(inverseTemperature);
         if (OffSupport) throw new InvalidOperationException($"The state lies off the support ({Refusal?.ToString() ?? "τ"}); it has no likelihood.");
-        if (_target.Outputs is not null) throw new NotSupportedException("Several outputs' slope in b arrives with their samplers' evidence (E34's slice 2).");
+        if (_target.Outputs is { } outputs)
+            return _target.Form == TemperedForm.Linear ? LogMarginal : OutputsMarginal(b).LogLikelihoodSlope(_outputPrior);
         return _target.Form == TemperedForm.Linear
             ? LogMarginal
             : _target.LogSlope(_target.Marginal(Fit, Tau, b), Sigma2, _target.GivenAt(Fit));
@@ -466,7 +476,7 @@ public sealed class BassEvaluation : ITargetEvaluation
     // ln p_b at this state, with what a hierarchical prior's reading of r leaves out below the doubles. At b = 0 the marginal reads no r.
     private double LogValueAt(double b)
     {
-        if (_target.Outputs is { } outputs) return _target.OutputsMarginal(Fit, Tau, b).LogMarginal(outputs.Prior);
+        if (_target.Outputs is not null) return _target.OutputsMarginal(Fit, Tau, b).LogMarginal(_outputPrior);
         double? given = _target.GivenAt(Fit);
         double value = _target.LogValue(_target.Marginal(Fit, Tau, b), Sigma2, given);
         return _target.Sigma2Rate is { } rate && b > 0.0 && given is null ? value + rate.LogRemainder(_logRate) : value;
