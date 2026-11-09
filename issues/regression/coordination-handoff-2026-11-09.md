@@ -16,6 +16,8 @@ On an independent archive of `69398e4`, the Release commit selection across the 
 
 On an independent archive of `e5183dc`, all eight E21 diagnostic bodies passed with qualification enabled, and the flag-off Commit selection passed 44/44. From the trapped pair at fixed s = 1.3, ln τ = −4 and b = 1, the mean time to either one-term linear representation was 1,114,442 structure steps under the default moves and 20.49 with the existing factor moves. Passage times with moving nuisance coordinates remain open. [Diagnostic receipt](../../artifacts/verify-e21-cold-start-e5183dc/receipts/diagnostics.trx) · [Commit receipt](../../artifacts/verify-e21-cold-start-e5183dc/receipts/commit.trx)
 
+**Slice 9 rounding erratum for the Lean owner.** The C# worker found this while qualifying `3fbe41b`. With m equal to calibration size plus one, the asymmetric CQR lower bound is 1 − 2⌊αm/2⌋/m. It exceeds the nominal 1 − α by less than 2/m. Its excess over the symmetric finite-rank bound 1 − ⌊αm⌋/m is either zero or 1/m. At α = 0.1 and m = 31 these three bounds are 29/31, 9/10 and 28/31, respectively. `cqrAsym_coverage_half` and the C# rank formula stand. The outstanding correction is to the rounding prose in the [proof handoff](../../lean/Protolemmata/Conformal/conformal-chip-brief.md), [lemma ledger](../../lean/Protolemmata/Conformal/conformal-lemmas.md) and comment beside `rows9` in the [enumeration checks](../../lean/Protolemmata/Conformal/conformal-checks.py).
+
 ## How the coordination has run
 
 - **The parent coordinates chips (sessions) and verifies each slice before the next starts.** Verifying means reading the commits' diffs and rerunning the tests from a snapshot of HEAD.
