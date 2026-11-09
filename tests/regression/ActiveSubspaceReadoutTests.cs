@@ -304,7 +304,8 @@ public sealed class ActiveSubspaceReadoutTests(ITestOutputHelper output)
         return worst;
     }
 
-    /// <summary>The readout refuses what it does not read: k outside 1 to p, a functional response.</summary>
+    /// <summary>The readout refuses what it does not read: k outside 1 to p. (A functional response is read since slice 3:
+    /// FunctionalActiveSubspaceTests.)</summary>
     [Fact]
     public void Readout_RefusesWhatItDoesNotRead()
     {
@@ -312,7 +313,6 @@ public sealed class ActiveSubspaceReadoutTests(ITestOutputHelper output)
         BassFit fit = SensitivityFixture.FitScalar(1);
         Assert.Throws<ArgumentOutOfRangeException>(() => fit.ActiveSubspace(data, new ActiveSubspaceSpec { Dimension = 3 }));
         Assert.Throws<ArgumentOutOfRangeException>(() => fit.ActiveSubspace(data, new ActiveSubspaceSpec { Dimension = 0 }));
-        Assert.Throws<ArgumentException>(() => SensitivityFixture.FitFunctional().ActiveSubspace(SensitivityFixture.Functional()));
     }
 
     // ── Recovery (G3) ────────────────────────────────────────────────────────────────────────────────────────────────

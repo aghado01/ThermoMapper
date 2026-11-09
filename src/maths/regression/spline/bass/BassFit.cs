@@ -144,12 +144,37 @@ public sealed record BassFit(
     /// summaries apart: E[C] and the subspaces' projection mean, with each draw's principal angles to that mean and decision 6's
     /// consistency checks, all under the draw weights. C comes from the moment service where the law is a product over terms with
     /// factors, or from the gradient readout averaged over points the draws share, with its Monte Carlo error. Categorical inputs take
-    /// no part in C. A functional response is refused here (E8's slice 3). <paramref name="data"/> must be the data the fit was run on.
+    /// no part in C. A functional response reads C = E[JᵀW_yJ] over the training output locations under the spec's output metric W_y, the
+    /// identity by default (E8's slice 3). <paramref name="data"/> must be the data the fit was run on.
     /// </summary>
     public ActiveSubspaceAnalysis ActiveSubspace(BassData data, ActiveSubspaceSpec? spec = null)
     {
         RequirePosterior();
         return BassActiveSubspaces.Of(this, data, spec ?? new ActiveSubspaceSpec());
+    }
+
+    /// <summary>
+    /// The co-active subspaces of this fit and <paramref name="other"/> (E8's slice 3; Rumsey et al., arXiv 2311.18146): per draw pair,
+    /// C_f, C_g and C_fg = E_ρ[∇f∇gᵀ] under <paramref name="spec"/>'s law and metric, and their posterior. The two fits are on the same
+    /// inputs (the same predictors, boxes and training values) at one hinge degree, and their draws pair by position; a functional fit is
+    /// read through the spec's output functional for its side.
+    /// </summary>
+    public CoActiveAnalysis CoActiveSubspace(BassData data, BassFit other, BassData otherData, CoActiveSpec? spec = null)
+    {
+        RequirePosterior();
+        other?.RequirePosterior();
+        return BassActiveSubspaces.CoActive(this, data, other!, otherData, spec ?? new CoActiveSpec());
+    }
+
+    /// <summary>
+    /// The co-active subspaces of two outputs of this functional fit (E8's slice 3): f = a_fᵀy and g = a_gᵀy for the spec's output functionals
+    /// <see cref="CoActiveSpec.Output"/> and <see cref="CoActiveSpec.OtherOutput"/>, one weight per training output location; each draw
+    /// pairs with itself.
+    /// </summary>
+    public CoActiveAnalysis CoActiveSubspace(BassData data, CoActiveSpec spec)
+    {
+        RequirePosterior();
+        return BassActiveSubspaces.CoActive(this, data, spec);
     }
 
     /// <summary>

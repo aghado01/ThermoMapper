@@ -78,6 +78,20 @@ public sealed class BassBasisFit
     public BasisSobolAnalysis Sensitivity(SensitivitySpec? spec = null) => BassBasisSensitivity.Of(this, spec);
 
     /// <summary>
+    /// The active subspaces of the reconstructed output over the joint draws (E8's slice 3; <see cref="BassFit.ActiveSubspace"/>):
+    /// C = E[JᵀW_yJ] with J the Jacobian of y = y_m + y_s∘(Kw), so C = Σ_kk′ (GᵀW_yG)_kk′ E[∇w_k∇w_k′ᵀ] with G = diag(y_s)K, under the
+    /// spec's output metric W_y, the identity by default. The exact route only, for now: the sampled route waits for joint samples.
+    /// </summary>
+    public ActiveSubspaceAnalysis ActiveSubspace(ActiveSubspaceSpec? spec = null) => BassActiveSubspaces.Of(this, spec ?? new ActiveSubspaceSpec());
+
+    /// <summary>
+    /// The co-active subspaces of two outputs of the reconstruction (E8's slice 3), f = a_fᵀy and g = a_gᵀy for the spec's output functionals
+    /// <see cref="CoActiveSpec.Output"/> and <see cref="CoActiveSpec.OtherOutput"/> over the training output locations, over the joint
+    /// draws, on the exact route.
+    /// </summary>
+    public CoActiveAnalysis CoActiveSubspace(CoActiveSpec spec) => BassActiveSubspaces.CoActive(this, spec);
+
+    /// <summary>
     /// The main and two-way effect functions of the reconstructed output over the joint draws (O8 for basis fits;
     /// <see cref="BassBasisEffects.Of"/>) under <paramref name="spec"/>'s measure: per output location and integrated over
     /// the locations, in output units.

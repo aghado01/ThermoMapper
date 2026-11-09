@@ -407,6 +407,45 @@ internal sealed class PolynomialReference : ReferenceFunction
         return c;
     }
 
+    /// <summary>
+    /// C_fg = E[∇f∇gᵀ] with f this polynomial and g <paramref name="other"/>, both about one origin, under the product uniform law on a
+    /// box: C's sum with f's monomials on the left and g's on the right, C_fg[i, k] = Σ_{t,s} c_t d_s e_ti e_sk Π_j E[y_j^{γ_j}]. Null
+    /// under another law.
+    /// </summary>
+    public double[,]? Cross(PolynomialReference other, ReferenceMeasure measure)
+    {
+        if (measure.Dimension != Dimension || other.Dimension != Dimension) throw new ArgumentException("The law and the two functions share their inputs.");
+        if (!_origin.SequenceEqual(other._origin)) throw new ArgumentException("The two polynomials are expanded about one origin.");
+        if (measure is not ReferenceBox box) return null;
+        int p = Dimension;
+        var moments = new double[p][];
+        for (int j = 0; j < p; j++)
+            moments[j] = UniformMoments(box.Center[j] - _origin[j], box.HalfWidths[j], _terms.Max(t => t.Exponents[j]) + other._terms.Max(t => t.Exponents[j]));
+        var c = new double[p, p];
+        var gamma = new int[p];
+        for (int i = 0; i < p; i++)
+            for (int k = 0; k < p; k++)
+            {
+                double s = 0.0;
+                foreach (Monomial t in _terms)
+                {
+                    if (t.Exponents[i] == 0) continue;
+                    foreach (Monomial u in other._terms)
+                    {
+                        if (u.Exponents[k] == 0) continue;
+                        for (int j = 0; j < p; j++) gamma[j] = t.Exponents[j] + u.Exponents[j];
+                        gamma[i]--;
+                        gamma[k]--;
+                        double v = t.Coefficient * u.Coefficient * t.Exponents[i] * u.Exponents[k];
+                        for (int j = 0; j < p; j++) v *= moments[j][gamma[j]];
+                        s += v;
+                    }
+                }
+                c[i, k] = s;
+            }
+        return c;
+    }
+
     // E[(d + h·u)^n] for n ≤ top, u uniform on [−1, 1].
     private static double[] UniformMoments(double d, double h, int top)
     {
@@ -633,6 +672,41 @@ internal static class GradientQuadrature
         var c = new double[p, p];
         for (int a = 0; a < p; a++)
             for (int b = a; b < p; b++) c[a, b] = c[b, a] = sum[a * p + b] + carry[a * p + b];
+        return c;
+    }
+
+    /// <summary>C_fg = E[∇f∇gᵀ] for two gradient fields by the same tensor product, every entry its own compensated sum.</summary>
+    public static double[,] Cross(GradientField f, GradientField g, IReadOnlyList<QuadratureRule> rules)
+    {
+        int p = rules.Count;
+        var index = new int[p];
+        var x = new double[p];
+        var gf = new double[p];
+        var gg = new double[p];
+        var sum = new double[p * p];
+        var carry = new double[p * p];
+        while (true)
+        {
+            double w = 1.0;
+            for (int j = 0; j < p; j++)
+            {
+                x[j] = rules[j].Nodes[index[j]];
+                w *= rules[j].Weights[index[j]];
+            }
+            f(x, gf);
+            g(x, gg);
+            for (int a = 0; a < p; a++)
+            {
+                double wa = w * gf[a];
+                for (int b = 0; b < p; b++) Add(ref sum[a * p + b], ref carry[a * p + b], wa * gg[b]);
+            }
+            int k = p - 1;
+            while (k >= 0 && ++index[k] == rules[k].Nodes.Length) index[k--] = 0;
+            if (k < 0) break;
+        }
+        var c = new double[p, p];
+        for (int a = 0; a < p; a++)
+            for (int b = 0; b < p; b++) c[a, b] = sum[a * p + b] + carry[a * p + b];
         return c;
     }
 

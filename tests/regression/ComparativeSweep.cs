@@ -121,6 +121,11 @@ public sealed class ComparativeSweep
                     new("the mean subspace's angle: N 900 < N 100", r[^1].ProjectionAngle, r[0].ProjectionAngle),
                     new("E[C]'s relative error: N 900 < N 100", r[^1].MeanCError, r[0].MeanCError)];
         }),
+        new("CoActiveSubspaceTests.SimpleExample_FromBassFits", DataSeed: 20231130, ChainSeeds: [23], (d, c) =>
+        {
+            var r = CoActiveSubspaceTests.SimpleExampleFromFits(d, c[0]);
+            return [new("E[C₁₂]'s Frobenius distance from the closed form: n 1000 < n 200", r.Distances[1], r.Distances[0])];
+        }),
     ];
 
     [Fact]

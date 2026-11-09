@@ -19,6 +19,8 @@ namespace Maths.Regression.Tests;
 /// 60 draws;</item>
 /// <item>the readout (<see cref="BassFit.ActiveSubspace"/>, slice 2) per draw: the exact route at 3,000 draws (the fit's 60, cycled),
 /// with its consistency checks and without them as the summary alone; the sampled route at 256 draws and 4,096 points.</item>
+/// <item>slice 3, per draw or pair: a direct functional fit's C over its 7 locations under the identity and a full W, a basis fit's over
+/// its joint draws, two scalar fits' co-active pairs on both routes, and two outputs of the functional fit.</item>
 /// </list>
 /// Indicative: the best of five on a shared machine.
 /// </summary>
@@ -44,6 +46,35 @@ public sealed class ActiveSubspaceCostTests(ITestOutputHelper output)
         double sampled = Best(() => fit.ActiveSubspace(data, spec with { Draws = some, Route = ActiveSubspaceRoute.Sampled }), some.Length);
         output.WriteLine($"clock: {(BassCost.Cycles ? "thread cycles" : "wall")}; per draw: exact readout at {many.Length} draws {readout:F1} µs " +
                          $"(the summary alone {summary:F1} µs), sampled readout at {some.Length} draws and 4,096 points {sampled:F0} µs");
+    }
+
+    [Fact]
+    public void FunctionalAndCoActiveCostRow()
+    {
+        if (!BassQualification.Enabled) return;
+        BassData functional = SensitivityFixture.Functional();
+        BassFit fit = SensitivityFixture.FitFunctional();
+        int m = functional.Response.Locations, pooled = fit.Draws.Sum(c => c.Count);
+        int[] many = [.. Enumerable.Range(0, 3000).Select(d => d % pooled)];
+        var spec = new ActiveSubspaceSpec { Draws = many };
+        double identity = Best(() => fit.ActiveSubspace(functional, spec), many.Length);
+        double full = Best(() => fit.ActiveSubspace(functional, spec with { OutputMetric = new OutputMetric(FunctionalActiveSubspaceTests.RandomMetric(m, 3)) }), many.Length);
+        double[] a = [.. Enumerable.Range(0, m).Select(l => 1.0 + 0.1 * l)], b = [.. Enumerable.Range(0, m).Select(l => l % 2 == 0 ? 1.0 : -0.5)];
+        double outputs = Best(() => fit.CoActiveSubspace(functional, new CoActiveSpec { Draws = many, Output = a, OtherOutput = b }), many.Length);
+
+        BassBasisFit basis = BassOutputComponentsTests.FitOf();
+        int[] joint = [.. Enumerable.Range(0, 3000).Select(d => d % basis.JointDraws.Count)];
+        double basisC = Best(() => basis.ActiveSubspace(new ActiveSubspaceSpec { Draws = joint }), joint.Length);
+
+        (BassData df, BassData dg) = CoActiveFixture.Data();
+        (BassFit f, BassFit g) = CoActiveFixture.Fits();
+        int[] pairs = [.. Enumerable.Range(0, 3000).Select(d => d % f.Draws.Sum(c => c.Count))];
+        double exact = Best(() => f.CoActiveSubspace(df, g, dg, new CoActiveSpec { Draws = pairs, OtherDraws = pairs }), pairs.Length);
+        int[] some = pairs[..256];
+        double sampled = Best(() => f.CoActiveSubspace(df, g, dg, new CoActiveSpec { Draws = some, OtherDraws = some, Route = ActiveSubspaceRoute.Sampled }), some.Length);
+        output.WriteLine($"clock: {(BassCost.Cycles ? "thread cycles" : "wall")}; per draw at 3,000 draws: functional C over {m} locations {identity:F1} µs " +
+                         $"(identity W), {full:F1} µs (full W); two outputs {outputs:F1} µs; basis C over {basis.Decomposition.Locations} locations and " +
+                         $"{basis.Components.Count} components {basisC:F1} µs; per pair: two scalar fits exact {exact:F1} µs, sampled at 4,096 points {sampled:F0} µs");
     }
 
     private static double Best(Action call, int calls)

@@ -215,6 +215,51 @@ public sealed class BassMoments
         return c;
     }
 
+    /// <summary>
+    /// E[∇f∇gᵀ] for f = Σₘ cₘ·<paramref name="left"/>[m] and g = Σₙ dₙ·<paramref name="right"/>[n] (co-active pairs, E8): two fits on
+    /// these inputs, or two outputs of one. Not symmetric in general; at f = g it is <see cref="GradientOuterProduct"/>.
+    /// </summary>
+    public double[,] GradientCross(IReadOnlyList<BassTerm> left, ReadOnlySpan<double> leftCoefficients,
+                                   IReadOnlyList<BassTerm> right, ReadOnlySpan<double> rightCoefficients)
+    {
+        ArgumentNullException.ThrowIfNull(left);
+        ArgumentNullException.ThrowIfNull(right);
+        if (leftCoefficients.Length != left.Count || rightCoefficients.Length != right.Count)
+            throw new ArgumentException("One coefficient per term.", nameof(leftCoefficients));
+        var weights = new double[left.Count, right.Count];
+        for (int m = 0; m < left.Count; m++)
+            for (int n = 0; n < right.Count; n++) weights[m, n] = leftCoefficients[m] * rightCoefficients[n];
+        return GradientCross(left, right, weights);
+    }
+
+    /// <summary>
+    /// Σ_{m,n} M_mn·E[∇B_m∇B_nᵀ] for terms B_m of <paramref name="left"/> and B_n of <paramref name="right"/> with
+    /// <paramref name="weights"/> M: the bilinear form a vector or functional output reduces to. A direct functional fit's
+    /// E[JᵀW_yJ] takes M_mn = c_m c_n·h_mᵀW_yh_n with h a term's output-side values over the locations; a basis fit's takes the
+    /// components' terms with M = c c'·(GᵀW_yG)_kk′.
+    /// </summary>
+    public double[,] GradientCross(IReadOnlyList<BassTerm> left, IReadOnlyList<BassTerm> right, double[,] weights)
+    {
+        ArgumentNullException.ThrowIfNull(left);
+        ArgumentNullException.ThrowIfNull(right);
+        ArgumentNullException.ThrowIfNull(weights);
+        if (weights.GetLength(0) != left.Count || weights.GetLength(1) != right.Count)
+            throw new ArgumentException("One weight per pair of terms.", nameof(weights));
+        int p = _gradientVariables.Length;
+        var c = new double[p, p];
+        for (int m = 0; m < left.Count; m++)
+            for (int n = 0; n < right.Count; n++)
+            {
+                double w = weights[m, n];
+                if (w == 0.0) continue;
+                TermPairGradientMoments g = GradientPair(left[m], right[n]);
+                for (int i = 0; i < g.Rows.Length; i++)
+                    for (int j = 0; j < g.Columns.Length; j++)
+                        c[_gradientPosition[g.Rows[i]], _gradientPosition[g.Columns[j]]] += w * g.Values[i, j];
+            }
+        return c;
+    }
+
     private TermPairMoments Build(TermShape a, TermShape b)
     {
         // Per variable of either term: E[φ_a φ_b] (a factor alone where the other term lacks the variable), and the
