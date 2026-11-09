@@ -60,6 +60,33 @@ Date: 2026-11-08. Status: commissioned by the user ("chip off for that fix"), fr
 
 ## Report
 
+### 2026-11-08: the hyperbolic models through asinh (finding 7, at the user's go-ahead)
+
+**Commit.** `ae0af75`. This entry is its own commit.
+
+**What changed.** Each hyperbolic floor named in finding 7 goes, the same way the sphere's did:
+- **Distances.** `Poincare.Distance` takes 2·asinh(‖a − b‖/√((1 − ‖a‖²)(1 − ‖b‖²))). `Lorentz.Distance` takes 2·asinh(√⟨a − b, a − b⟩_L / 2), through a new `Lorentz.DifferenceSquare`. These are the arcosh distances, read from the difference of the points: a small distance keeps its digits, where arcosh of a number near 1 resolved only about 2e-8. `Lorentz.Distance` assumes points on the hyperboloid, as the arcosh form did. Its only caller is the manifold, whose Exp re-projects.
+- **The hyperboloid's Log map.** It takes the same distance, and the residual (q − p) − (⟨q − p, q − p⟩_L / 2)·p in place of q − αp. It returns 0 only at distance 0; it used to return 0 below α = 1 + 1e-12, a distance of about 1.4e-6.
+- **The ball's Log map.** It uses `Math.Atanh` instead of the hand-written ½·log((1 + x)/(1 − x)), which lost digits near 0. It returns 0 only for δ = 0.
+- **Both Exp maps** move the point for a step of any size.
+- **The solver's cut-locus floor** drops from 1e-6 to 1e-10. The old floor covered arccos and arcosh noise, and every curved distance is now atan2- or asinh-based, accurate to about √(n·r)·ε.
+
+**Gates.**
+- `HyperbolicManifoldTests` checks both models against closed forms: 2·atanh‖x‖ from the ball's origin, and d for (sinh d·û, cosh d) from the apex. It covers distances from 1e-15 to 3 in distance and Log, and steps of 1e-14 through Exp and back.
+- The curved sweep adds the ball about its origin and the hyperboloid about its apex, down to 1e-12, within the 1e-14/s allowance and under 50 iterations.
+
+**Runs.**
+- Whole assemblies: Geometry 90 of 90, DimReduction 83 of 83.
+- Selected classes: Mapper's `HyperbolicHierarchyMapperFacts` (1 of 1), Synthetic's 3 classes (11 of 11).
+- VizCore's geodesic, geometry-fidelity, hyperbolic-bandwidth and graph-builder classes by filter (34 of 34).
+
+**Also in `ae0af75`.** The Grassmann row of the manifold table had `\|` norms from `0b4ed4e`, which a GitHub table reads as an escaped cell pipe. They are `\Vert` now, as in the other rows.
+
+**Finding 9.**
+- **test-select drops the selected classes when every class is selected.** For DimReduction, with 8 of 8 classes selected at commit scope, the run settings held only `TestCaseFilter = Tier=Pinned`, so no test ran ("No test matches … Tier=Pinned"), and the script still exited 0.
+- The whole-assembly run covered it here.
+- With finding 8 (VizCore.Tests read as having no classes), these are two test-select defects. They are flagged as AGENTS.md asks, and the fix belongs in `scripts/test-select.ps1`.
+
 ### 2026-11-08: stable angles on the Grassmannian and the sphere (finding 4, at the user's go-ahead)
 
 **Commits.** `0b4ed4e` adds the LinAlg principal-angle routine and moves the Grassmann maps onto it. `db0d13f` gives the sphere atan2 angles. This entry is its own commit. The Grassmann discussion proposed the routine and its LinAlg placement, and the user approved both here. The user asked for the sphere as the step after.
