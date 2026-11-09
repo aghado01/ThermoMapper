@@ -120,14 +120,13 @@ public sealed class IrlsScaleTests
     }
 
     /// <summary>
-    /// On S⁹ and the Grassmannians Gr(2, 10) and Gr(3, 20), 21 points exp_{p₀}(s·uᵢ) with spreads from 1e-1 down to
-    /// 1e-12 on the Grassmannians, whose angles are atan2-based, and 1e-6 on the sphere, whose are still arccos-based.
-    /// The allowance holds the truth's O(s²) relative error, the 1e-6 accuracy of the flat case, and floor/s: 1e-14/s on
-    /// the Grassmannians for the rounding of the unit-length points themselves (measured about 5e-16/s), 1e-10/s on the
-    /// sphere, whose Exp drops tangent steps below 1e-12. No median takes more than 50 iterations.
+    /// On S⁹ and the Grassmannians Gr(2, 10) and Gr(3, 20), whose angles are atan2-based, 21 points exp_{p₀}(s·uᵢ) with
+    /// spreads from 1e-1 down to 1e-12. The allowance holds the truth's O(s²) relative error, the 1e-6 accuracy of the
+    /// flat case, and floor/s = 1e-14/s for the rounding of the unit-length points themselves (measured about
+    /// 5e-16/s). No median takes more than 50 iterations.
     /// </summary>
     [Theory]
-    [InlineData(10, 0, 6, 1e-10, 7001)]    // S⁹
+    [InlineData(10, 0, 12, 1e-14, 7001)]   // S⁹
     [InlineData(10, 2, 12, 1e-14, 7002)]   // Gr(2, 10)
     [InlineData(20, 3, 12, 1e-14, 7003)]   // Gr(3, 20)
     public void CurvedMedianAndMean_AreScaleEquivariant_DownToTheManifoldResolution(int n, int r, int deepest, double floor, int seed)

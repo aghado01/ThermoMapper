@@ -56,17 +56,23 @@ namespace Maths.Geometry
             Normalize(p, pu);
             Normalize(q, qu);
 
-            double dot = Math.Clamp(Dot(pu, qu), -1.0, 1.0);
-            double theta = Math.Acos(dot);
+            // θ by Kahan's 2·atan2(‖p − q‖, ‖p + q‖), accurate at every angle; the direction is the residual
+            // w = q − ⟨p,q⟩p, whose norm is sin θ.
+            double dot = Dot(pu, qu), difference = 0.0, sum = 0.0;
+            for (int i = 0; i < Dimension; i++)
+            {
+                difference += (pu[i] - qu[i]) * (pu[i] - qu[i]);
+                sum += (pu[i] + qu[i]) * (pu[i] + qu[i]);
+            }
+            double theta = 2.0 * Math.Atan2(Math.Sqrt(difference), Math.Sqrt(sum));
 
-            if (theta < 1e-12)
+            if (theta == 0.0)
             {
                 dst.Clear();                 // p == q
                 return;
             }
 
-            double sinTheta = Math.Sin(theta);
-            if (sinTheta < 1e-12)
+            if (Math.PI - theta < 1e-12)
             {
                 // p ~= -q : antipode / first conjugate point (the caustic). The geodesic
                 // direction is undefined here; refuse to fabricate one. Callers flag
@@ -75,10 +81,23 @@ namespace Maths.Geometry
                 return;
             }
 
-            // log_p(q) = (theta / sin theta) * (q - <p,q> p); ||result||_2 = theta.
-            double scale = theta / sinTheta;
+            // log_p(q) = θ · w/‖w‖; ||result||_2 = θ.
+            double wNorm = 0.0;
             for (int i = 0; i < Dimension; i++)
-                dst[i] = (qu[i] - dot * pu[i]) * scale;
+            {
+                double wi = qu[i] - dot * pu[i];
+                dst[i] = wi;
+                wNorm += wi * wi;
+            }
+            wNorm = Math.Sqrt(wNorm);
+            if (wNorm == 0.0)
+            {
+                dst.Clear();
+                return;
+            }
+            double scale = theta / wNorm;
+            for (int i = 0; i < Dimension; i++)
+                dst[i] *= scale;
         }
 
         public void ExpMap(ReadOnlySpan<double> p, ReadOnlySpan<double> v, Span<double> dst)
@@ -89,9 +108,9 @@ namespace Maths.Geometry
             Normalize(p, pu);
 
             double theta = EuclideanNorm(v);
-            if (theta < 1e-12)
+            if (theta == 0.0)
             {
-                pu.CopyTo(dst);              // exp_p(0) = p
+                pu.CopyTo(dst);              // exp_p(0) = p; a step of any size above 0 moves the point
                 return;
             }
 

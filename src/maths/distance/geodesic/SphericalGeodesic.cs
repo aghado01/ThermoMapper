@@ -5,7 +5,8 @@ namespace Maths.Distance.Geodesic;
 /// <summary>
 /// Geodesic spherical distance on S^(d-1): the angular arc length in radians.
 /// Inputs are treated as raw vectors and normalized internally; zero vectors
-/// return π/2 by convention.
+/// return π/2 by convention. The angle is Kahan's 2·atan2(‖â − b̂‖, ‖â + b̂‖), accurate at every angle to a few
+/// ε, where the arccos of the cosine resolves only about √(2ε) ≈ 2e-8 near zero.
 /// </summary>
 public static class SphericalGeodesic
 {
@@ -40,8 +41,14 @@ public static class SphericalGeodesic
         if (normA2 <= Epsilon || normB2 <= Epsilon)
             return Math.PI / 2.0;
 
-        double cos = dot / Math.Sqrt(normA2 * normB2);
-        cos = Math.Clamp(cos, -1.0, 1.0);
-        return Math.Acos(cos);
+        double invA = 1.0 / Math.Sqrt(normA2), invB = 1.0 / Math.Sqrt(normB2);
+        double difference = 0.0, sum = 0.0;
+        for (int i = 0; i < a.Length; i++)
+        {
+            double ai = a[i] * invA, bi = b[i] * invB;
+            difference += (ai - bi) * (ai - bi);
+            sum += (ai + bi) * (ai + bi);
+        }
+        return 2.0 * Math.Atan2(Math.Sqrt(difference), Math.Sqrt(sum));
     }
 }
