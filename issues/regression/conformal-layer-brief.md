@@ -169,6 +169,25 @@ Under "Reports" below, newest first, per slice: what landed by commit; the gates
 
 Newest first.
 
+### 2026-11-08 — Slice 6·0, BGP's seam at the run's test points
+
+Built at the main session's note of 2026-11-08, slice 5's first follow-up, as slice 6's prelude.
+
+**Landed** on `main`, nothing pushed:
+- `4dd1dfb`: the run keeps each draw's fit variance of f, unscaled, beside the draw, as a reference shared by the draws of one fit with no copy (`BgpDraw.FitVariance`). It keeps its test inputs on the result (`BgpResult.TestInputs`).
+- At those inputs, any subset in any order, the seam reads the kept variance and the mean instead of refitting. Elsewhere it refits as before.
+- The page's BGP lines and cost row are updated in the docs commit beside this report.
+
+**Gates** (`EngineCandidateTests`).
+- *Bit for bit the refit path's,* for a known σ² and an unknown scale, the log CDF included, on a reordered subset of the test points with one point twice.
+- *It reads what was kept:* doubling the kept variance moves the density. A case off the test points refits.
+- *Cost* at n 400, S 1,000, one grid of 200, cycle clock, indicative: 3.5 ms per grid against 16.0 s per call by refitting in the same run (20.1 s in slice 5's row).
+- *Per commit,* the selected classes and the pinned tier: 155 of 156, the one skipped the GBP test.
+
+**Decided in building it.**
+- *An unscaled copy is kept,* not the scaled one divided by s², whose quotient would differ from the refit in the last bit.
+- *Cases match the test points on their values exactly.* A resumed run cannot change its test points: they are in its fingerprint.
+
 ### 2026-11-08 — Slice 5, the other engines' candidate seams
 
 Built at the user's go-ahead of 2026-11-08 ("Yes, start it", relayed by the main session).

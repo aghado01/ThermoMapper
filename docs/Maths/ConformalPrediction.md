@@ -414,7 +414,7 @@ Each engine joins as BASS does: log p(y | x_t, θ_s) at new cases, in its pointw
 - *BGP.* Its content is the collapsed one: f, the constant mean and s² are integrated against their posterior given the training data, never drawn.
   - A known σ² gives N(f̂(x), v + σ²), with v the variance of f, the mean's uncertainty included. An unknown scale under 1/s² gives a Student t on n − 1 degrees of freedom with scale² Q(v + η)/(n − 1). Either is the evidence ratio ln p(Y, y | t, η) − ln p(Y | t, η) (`GpRegression.PredictiveLogDensities`).
   - The full step refuses it, as it refuses the training density: a draw (t, η) leaves the units dependent through f, so each term leaves its unit out (`LeavesUnitsOut`). The split form takes it.
-  - Draws that repeat their predecessor's (t, η) reuse its row, one O(n³) refit per accepted state.
+  - At the run's own test points, in any order, the seam reads each draw's kept variance of f (`BgpDraw.FitVariance`, `BgpResult.TestInputs`) and the mean, O(n) per case and bit for bit the refit path's (slice 6's prelude). Elsewhere, draws that repeat their predecessor's (t, η) reuse its row, one O(n³) refit per accepted state.
 - *The changepoint posterior* has no seam. Its posterior is over segmentations of the n positions it was given, one observation at each. A candidate at another position, a held-out one included, falls outside every segmentation, and a second value at a seen position is not a unit of that sequence. No candidate is exchangeable with the units.
 
 **The log CDFs.**
@@ -458,10 +458,11 @@ Each engine joins as BASS does: log p(y | x_t, θ_s) at new cases, in its pointw
 | BAPS | 1,000 | 2.1 ms | 10 µs | 204 ms, the full step |
 | BARS (Gaussian) | 1,000 | 3.3 ms | 17 µs | 196 ms, the full step |
 | The hierarchical P-spline (10 curves of 100) | 1,000 | 1.9 ms | 10 µs | 3.6 ms, the split form's |
-| BGP (unknown scale) | 400 | 20.1 s per call, whatever its cases | | 3.2 ms, the split form's |
+| BGP (unknown scale), refitting | 400 | 20.1 s per call, whatever its cases | | 3.2 ms, the split form's |
+| BGP (unknown scale), at the run's test points (slice 6's prelude) | 400 | 3.5 ms | 17 µs | 2.8 ms, the split form's |
 
   - The full step's 200 ms is its default step at S 1,000, as the margin's opt-in report measured it, the training side included.
-  - BGP's seam is its refits: one O(n³) refit per accepted state, as its pointwise density pays, shared by every case in the call. The run already holds each draw's variance at its own test points, a cheaper path recorded as a follow-up in the brief.
+  - BGP's seam off the run's test points is its refits: one O(n³) refit per accepted state, as its pointwise density pays, shared by every case in the call. At the run's test points it reads the kept variance instead, 3.5 ms per grid against 16.0 s per call by refitting in the same run (slice 6's prelude).
 
 **Found and handed on, not fixed here.**
 - *The defect.* Under GBP mixing with a drift, `NormalVarianceMeanMixture`'s table reads ln F about 10⁻³ off near x = 0, while the density there is right to 12 digits.
