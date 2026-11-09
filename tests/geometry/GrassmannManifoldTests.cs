@@ -26,9 +26,9 @@ public sealed class GrassmannManifoldTests
         var y = MatrixOps.RandomOrthonormal(n, r, 11);
         var z = Perturb(y, n, r, 0.05, 22);
 
-        // Self-distance floor is ~1e-8, not 0: principal angles are arccos(σ), and arccos has
-        // infinite slope at 1, so machine-eps in the Gram eigenvalues amplifies to √(2·eps).
-        Assert.InRange(g.Distance(y, y), 0.0, 1e-5);
+        // Principal angles are atan2 of sines and cosines, so the self-distance is rounding, about ε, where an
+        // arccos of the cosines alone would leave about √(2ε) ≈ 2e-8.
+        Assert.InRange(g.Distance(y, y), 0.0, 1e-14);
         Assert.Equal(g.Distance(y, z), g.Distance(z, y), 9);
         Assert.True(g.Distance(y, z) > 1e-4);
     }
@@ -43,7 +43,7 @@ public sealed class GrassmannManifoldTests
 
         var t = new double[n * r];
         g.LogMap(y, z, t);
-        Assert.Equal(g.Distance(y, z), g.Norm(y, t), 6);
+        Assert.Equal(g.Distance(y, z), g.Norm(y, t), 12);
     }
 
     [Fact]
@@ -83,6 +83,39 @@ public sealed class GrassmannManifoldTests
                 double expected = a == b ? 1.0 : 0.0;
                 Assert.InRange(dot, expected - 1e-9, expected + 1e-9);
             }
+    }
+
+    /// <summary>
+    /// Angles far below the arccos resolution (about 2e-8): a frame turned by known angles 1e-13 and 4e-12 in two
+    /// planes reads its distance to within a few ε, the Log map's norm agrees, and Exp of a tangent of norm 1e-13
+    /// moves the frame by that step, which the Log map reads back.
+    /// </summary>
+    [Fact]
+    public void SmallAngles_AreResolved_InDistanceLogAndExp()
+    {
+        const int n = 6, r = 2;
+        const double a = 1e-13, b = 4e-12;
+        var g = new GrassmannManifold(n, r);
+        var y = new double[n * r];
+        y[0] = 1.0; y[n + 1] = 1.0;                                   // span{e₀, e₁}
+        var z = new double[n * r];
+        z[0] = Math.Cos(a); z[4] = Math.Sin(a);                       // e₀ turned toward e₄ by a
+        z[n + 1] = Math.Cos(b); z[n + 5] = Math.Sin(b);               // e₁ turned toward e₅ by b
+        double expected = Math.Sqrt(a * a + b * b);
+
+        Assert.InRange(g.Distance(y, z), expected - 1e-15, expected + 1e-15);
+        var t = new double[n * r];
+        g.LogMap(y, z, t);
+        Assert.InRange(g.Norm(y, t), expected - 1e-15, expected + 1e-15);
+
+        var step = new double[n * r];
+        step[3] = 1e-13;                                              // e₀ toward e₃
+        var moved = new double[n * r];
+        g.ExpMap(y, step, moved);
+        Assert.InRange(g.Distance(y, moved), 1e-13 - 1e-15, 1e-13 + 1e-15);
+        var back = new double[n * r];
+        g.LogMap(y, moved, back);
+        for (int i = 0; i < n * r; i++) Assert.InRange(back[i] - step[i], -1e-15, 1e-15);
     }
 
     [Fact]

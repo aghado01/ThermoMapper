@@ -194,8 +194,8 @@ namespace Maths.Geometry.DimReduction
         // digits, with τ̂_μ = median_k‖μ_k − μ̃‖² / p and τ̂_U = median_k d_Gr(U_k, Ũ)² / [r(p−r)] (the √b block-size
         // standardizer cancels in the ratio). Each τ̂ is floored at its factor's resolution, which keeps both scales
         // positive when a majority of blocks agree exactly: (ε·max‖xᵢ‖)²/p, the rounding of the block means, and
-        // 2ε/[r(p−r)], the arccos resolution √(2ε) of a Grassmann distance. The first floor rescales with the data and
-        // the second is in radians, so α̂ is invariant to the data's units.
+        // p·r·ε²/[r(p−r)], the rounding √(p·r)·ε of a Grassmann distance's atan2 angles. The first floor rescales with
+        // the data and the second is in radians, so α̂ is invariant to the data's units.
         private static (double Alpha, double SubspaceScale) CalibrateScale(
             double[][] data,
             double[][] blockMeans, double[] meanCenter,
@@ -228,7 +228,7 @@ namespace Maths.Geometry.DimReduction
             double mMu = Median(dMu);
             double mU = Median(dU);
             double tauMu = Math.Max(mMu * mMu, meanResolution) / p;
-            double tauU = Math.Max(mU * mU, 2.0 * MachineEpsilon) / gIntrinsic;
+            double tauU = Math.Max(mU * mU, p * r * MachineEpsilon * MachineEpsilon) / gIntrinsic;
             if (!(tauMu > 0)) return (1.0, 1.0);   // all-zero data: nothing to calibrate
             double denom = tauMu + tauU;
             return (2.0 * tauU / denom, 2.0 * tauMu / denom);

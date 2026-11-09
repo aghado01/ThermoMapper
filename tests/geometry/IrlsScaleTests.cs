@@ -120,19 +120,21 @@ public sealed class IrlsScaleTests
     }
 
     /// <summary>
-    /// On S⁹ and the Grassmannians Gr(2, 10) and Gr(3, 20), 21 points exp_{p₀}(s·uᵢ) with spreads 1e-1 to 1e-6. The
-    /// allowance holds the truth's O(s²) relative error, the 1e-6 accuracy of the flat case, and 1e-10/s for the
-    /// manifolds' Exp, which drops tangent steps below 1e-12. No median takes more than 50 iterations.
+    /// On S⁹ and the Grassmannians Gr(2, 10) and Gr(3, 20), 21 points exp_{p₀}(s·uᵢ) with spreads from 1e-1 down to
+    /// 1e-12 on the Grassmannians, whose angles are atan2-based, and 1e-6 on the sphere, whose are still arccos-based.
+    /// The allowance holds the truth's O(s²) relative error, the 1e-6 accuracy of the flat case, and floor/s: 1e-14/s on
+    /// the Grassmannians for the rounding of the unit-length points themselves (measured about 5e-16/s), 1e-10/s on the
+    /// sphere, whose Exp drops tangent steps below 1e-12. No median takes more than 50 iterations.
     /// </summary>
     [Theory]
-    [InlineData(10, 0, 7001)]   // S⁹
-    [InlineData(10, 2, 7002)]   // Gr(2, 10)
-    [InlineData(20, 3, 7003)]   // Gr(3, 20)
-    public void CurvedMedianAndMean_AreScaleEquivariant_DownToTheManifoldResolution(int n, int r, int seed)
+    [InlineData(10, 0, 6, 1e-10, 7001)]    // S⁹
+    [InlineData(10, 2, 12, 1e-14, 7002)]   // Gr(2, 10)
+    [InlineData(20, 3, 12, 1e-14, 7003)]   // Gr(3, 20)
+    public void CurvedMedianAndMean_AreScaleEquivariant_DownToTheManifoldResolution(int n, int r, int deepest, double floor, int seed)
     {
         var rng = new Random(seed);
-        if (r == 0) CheckCurved(new SphericalManifold(n), n, 1, sphere: true, rng);
-        else CheckCurved(new GrassmannManifold(n, r), n, r, sphere: false, rng);
+        if (r == 0) CheckCurved(new SphericalManifold(n), n, 1, sphere: true, deepest, floor, rng);
+        else CheckCurved(new GrassmannManifold(n, r), n, r, sphere: false, deepest, floor, rng);
     }
 
     /// <summary>
@@ -183,10 +185,11 @@ public sealed class IrlsScaleTests
 
     /// <summary>
     /// <see cref="IrlsScale.Data"/> reads the constants in the data's units and reproduces the solver as it was before
-    /// the spread unit (afc814d) bit for bit: a Euclidean median, a Grassmann median and mean, and
-    /// <see cref="EuclideanMedian"/> with its scatter. One more Grassmann median, of seven frames, has a data point for
-    /// its median: frame 0, where ‖G‖ ≈ 0.90 ≤ 1. The optimality check at the nearest data point returns it exactly;
-    /// before that check the solver stopped about 2e-4 from it.
+    /// the spread unit (afc814d) bit for bit on a Euclidean median and on <see cref="EuclideanMedian"/> with its scatter.
+    /// The Grassmann median and mean are pinned at the Grassmannian's atan2 angles: they moved by up to 7e-11 from
+    /// afc814d's arccos angles, under the same 1e-8 absolute tolerance. One more Grassmann median, of seven frames, has a
+    /// data point for its median: frame 0, where ‖G‖ ≈ 0.90 ≤ 1. The optimality check at the nearest data point returns
+    /// it exactly; before that check the solver stopped about 2e-4 from it.
     /// </summary>
     [Fact]
     [Trait("Tier", "Pinned")]
@@ -240,9 +243,9 @@ public sealed class IrlsScaleTests
         Assert.Equal(
             new[]
             {
-                0.999982658280556, 4.4339780776558875E-05, 0.0008525784818853006, -0.0003014630579408993,
-                -0.005819226932661999, -1.938797079838948E-06, 0.9999190836164834, 0.009274686438366184,
-                0.0015753814001971938, 0.008562977328425259,
+                0.9999826582733471, 4.4339852850683335E-05, 0.0008525723808938266, -0.00030146060784903004,
+                -0.005819229191660574, -1.9387987999012176E-06, 0.9999190835745473, 0.009274690978703464,
+                0.0015753784497430084, 0.008562977850508,
             },
             innerMedian);
 
@@ -251,9 +254,9 @@ public sealed class IrlsScaleTests
         Assert.Equal(
             new[]
             {
-                0.9999827000026962, 2.3985945202253938E-08, 0.004271230080841782, -0.0028580817189473025,
-                -0.0028614083598075533, 1.2148160713673067E-05, 0.9999692246700764, 0.002891358423609038,
-                0.0014173379524098605, 0.007154073297315209,
+                0.9999827000029012, 2.3985892716460462E-08, 0.004271230044846536, -0.0028580817238377633,
+                -0.002861408336970325, 1.2148160770930532E-05, 0.999969224670312, 0.00289135840541956,
+                0.001417337975397572, 0.007154073267174528,
             },
             gMean);
 
@@ -335,7 +338,7 @@ public sealed class IrlsScaleTests
 
     // ── Curved checks ────────────────────────────────────────────────────────
 
-    private static void CheckCurved<TM>(TM manifold, int n, int r, bool sphere, Random rng)
+    private static void CheckCurved<TM>(TM manifold, int n, int r, bool sphere, int deepest, double floor, Random rng)
         where TM : struct, IRiemannianManifold
     {
         const int count = 21;
@@ -351,8 +354,7 @@ public sealed class IrlsScaleTests
             double[] mu = WeightedWeiszfeld(u, w);
             double[] ubar = WeightedMean(u, w);
 
-            // Below 1e-6 the arccos in Grassmann's Log drops principal angles under about 1e-8 (out of this test's scope).
-            for (int k = 1; k <= 6; k++)
+            for (int k = 1; k <= deepest; k++)
             {
                 double s = Math.Pow(10, -k);
                 string label = $"{(sphere ? $"S^{n - 1}" : $"Gr({r}, {n})")}, draw {draw}, s {s:G3}";
@@ -366,12 +368,12 @@ public sealed class IrlsScaleTests
                 GeometricMedian.Compute(new Counting<TM>(manifold, counter), x, w, median);
                 Assert.True(counter.Steps < 50, $"{label}: median took {counter.Steps} iterations");
                 double medianError = CurvedGap(median, medianTruth, n, r, sphere) / s;
-                Assert.True(medianError <= 10 * s * s + 1e-6 + 1e-10 / s, $"{label}: median error {medianError:G3}");
+                Assert.True(medianError <= 10 * s * s + 1e-6 + floor / s, $"{label}: median error {medianError:G3}");
 
                 double[] mean = (double[])warm.Clone();
                 GeometricMean.Compute(manifold, x, w, mean);
                 double meanError = CurvedGap(mean, meanTruth, n, r, sphere) / s;
-                Assert.True(meanError <= 10 * s * s + 1e-6, $"{label}: mean error {meanError:G3}");
+                Assert.True(meanError <= 10 * s * s + 1e-6 + floor / s, $"{label}: mean error {meanError:G3}");
             }
         }
     }

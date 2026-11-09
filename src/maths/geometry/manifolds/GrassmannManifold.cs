@@ -11,9 +11,10 @@ namespace Maths.Geometry
     /// the same point for any r×r orthogonal Q.
     ///
     /// <para>Geometry follows Edelman, Arias &amp; Smith (1998) and Bendokat–Zimmermann–Absil
-    /// (2020). The geodesic distance is the 2-norm of the principal angles; Log/Exp use the thin
-    /// SVD of <see cref="ThinSvd"/>, which never forms the r×r Gram matrix. The canonical metric gives ‖log_Y(Z)‖_F = d(Y, Z), mirroring
-    /// the embedded <see cref="SphericalManifold"/>.</para>
+    /// (2020). The geodesic distance is the 2-norm of the principal angles, from <see cref="PrincipalAngles"/>; Log/Exp
+    /// use the thin SVD of <see cref="ThinSvd"/>, which never forms the r×r Gram matrix. Every angle is read through
+    /// atan2 of a sine and a cosine, never an arccos, so small angles keep their digits down to about √(n·r)·ε. The
+    /// canonical metric gives ‖log_Y(Z)‖_F = d(Y, Z), mirroring the embedded <see cref="SphericalManifold"/>.</para>
     ///
     /// <para><b>Domain.</b> Log is defined inside the injectivity radius — principal angles &lt; π/2
     /// (YᵀZ nonsingular). For the geometric-median / Karcher use case the data subspaces sit near
@@ -43,30 +44,25 @@ namespace Maths.Geometry
             Dimension = ambientN * subspaceR;
         }
 
-        /// <summary>d(Y,Z) = ‖Θ‖₂, principal angles θ_i = arccos(σ_i(YᵀZ)).</summary>
+        /// <summary>d(Y,Z) = ‖Θ‖₂, with the principal angles Θ of <see cref="PrincipalAngles"/>.</summary>
         public double Distance(ReadOnlySpan<double> p, ReadOnlySpan<double> q)
         {
-            int n = _n, r = _r;
-            double[] m = MulAtB(p, n, r, q, r);            // M = YᵀZ  (r×r)
-            double[] cos = SingularValues(m, r);           // σ_i(M) = cos θ_i (descending)
+            double[] theta = PrincipalAngles.Between(p, _r, q, _r, _n);
             double sumSq = 0.0;
-            for (int i = 0; i < r; i++)
-            {
-                double theta = Math.Acos(Math.Clamp(cos[i], -1.0, 1.0));
-                sumSq += theta * theta;
-            }
+            foreach (double t in theta) sumSq += t * t;
             return Math.Sqrt(sumSq);
         }
 
         /// <summary>
-        /// log_Y(Z) = U₂ Θ U₁ᵀ, where M = YᵀZ = U₁ cosΘ V₁ᵀ and the orthogonal-complement
-        /// directions are u_i = ((Z V₁)_i − cosθ_i (Y U₁)_i)/sinθ_i.
+        /// log_Y(Z) = U₂ Θ U₁ᵀ, where M = YᵀZ = U₁ cosΘ V₁ᵀ and the orthogonal-complement directions are
+        /// u_i = w_i/‖w_i‖ for the residuals w_i = (Z V₁)_i − cosθ_i (Y U₁)_i = (I − YYᵀ) Z v_i. Since ‖Z v_i‖ = 1,
+        /// ‖w_i‖ is sin θ_i, so θ_i = atan2(‖w_i‖, cos θ_i) keeps a small angle's digits.
         /// </summary>
         public void LogMap(ReadOnlySpan<double> p, ReadOnlySpan<double> q, Span<double> dst)
         {
             int n = _n, r = _r;
             double[] m = MulAtB(p, n, r, q, r);            // M = YᵀZ (r×r)
-            Svd(m, r, r, out double[] u1, out double[] c, out double[] v1);  // M = U₁ diag(c) V₁ᵀ
+            Svd(m, r, r, out double[] u1, out double[] c, out double[] v1, CutLocusCosine);  // M = U₁ diag(c) V₁ᵀ
 
             double[] zv1 = Mul(q, n, r, v1, r);            // Z V₁ (n×r) → b_i
             double[] yu1 = Mul(p, n, r, u1, r);            // Y U₁ (n×r) → a_i
@@ -74,14 +70,19 @@ namespace Maths.Geometry
             double[] u2theta = new double[n * r];
             for (int i = 0; i < r; i++)
             {
-                double ci = Math.Clamp(c[i], -1.0, 1.0);
-                double th = Math.Acos(ci);
-                double sin = Math.Sin(th);
+                double ci = Math.Clamp(c[i], 0.0, 1.0);
                 int col = i * n;
-                if (sin < 1e-12) continue;                 // θ_i ≈ 0: no motion, u_i = 0
-                double scale = th / sin;                   // fold Θ into U₂ directly
+                double sumSq = 0.0;
                 for (int row = 0; row < n; row++)
-                    u2theta[col + row] = (zv1[col + row] - ci * yu1[col + row]) * scale;
+                {
+                    double w = zv1[col + row] - ci * yu1[col + row];
+                    u2theta[col + row] = w;
+                    sumSq += w * w;
+                }
+                double sin = Math.Sqrt(sumSq);
+                if (sin == 0.0) continue;                  // θ_i = 0: no motion, u_i = 0
+                double scale = Math.Atan2(sin, ci) / sin;  // fold Θ into U₂ directly
+                for (int row = 0; row < n; row++) u2theta[col + row] *= scale;
             }
 
             double[] logm = MulABt(u2theta, n, r, u1, r);  // (U₂ diagΘ) U₁ᵀ → n×r
@@ -92,7 +93,9 @@ namespace Maths.Geometry
         public void ExpMap(ReadOnlySpan<double> p, ReadOnlySpan<double> v, Span<double> dst)
         {
             int n = _n, r = _r;
-            Svd(v, n, r, out double[] u, out double[] sig, out double[] vmat);  // Δ = U diag(sig) Vᵀ
+            // Every left vector is kept: a small step's direction matters, and a direction ThinSvd completes for a
+            // negligible σ is multiplied by sin σ ≈ 0.
+            Svd(v, n, r, out double[] u, out double[] sig, out double[] vmat, zeroBelow: 0.0);  // Δ = U diag(sig) Vᵀ
 
             double[] yv = Mul(p, n, r, vmat, r);           // Y V (n×r)
             double[] term = new double[n * r];
@@ -169,19 +172,16 @@ namespace Maths.Geometry
             return c;
         }
 
-        // Singular values (descending) of a column-major r×r matrix.
-        private static double[] SingularValues(ReadOnlySpan<double> a, int r)
-        {
-            Svd(a, r, r, out _, out double[] s, out _);
-            return s;
-        }
+        // A cosine below this is a principal angle at the cut locus (π/2 within 1e-12 rad).
+        private const double CutLocusCosine = 1e-12;
 
         // Thin SVD A = U diag(S) Vᵀ of a column-major rows×r A by Maths.LinAlg's ThinSvd, never forming AᵀA.
         // S descending; V (r×r) right vectors as columns; U (rows×r) left vectors as columns, left zero where
-        // S_i < 1e-12. At the cut locus (a principal angle of π/2) that direction's sign is arbitrary, and a zero
-        // column makes the log map's two choices cancel instead of picking one.
+        // S_i < zeroBelow. For the log map's M = YᵀZ that is CutLocusCosine: at the cut locus (a principal angle of
+        // π/2) that direction's sign is arbitrary, and a zero column makes the log map's two choices cancel instead
+        // of picking one.
         private static void Svd(ReadOnlySpan<double> a, int rows, int r,
-            out double[] u, out double[] s, out double[] v)
+            out double[] u, out double[] s, out double[] v, double zeroBelow)
         {
             var m = new double[rows, r];
             for (int j = 0; j < r; j++)
@@ -192,7 +192,7 @@ namespace Maths.Geometry
             v = new double[r * r];
             for (int k = 0; k < r; k++)
             {
-                if (s[k] >= 1e-12) svd.LeftVectors[k].CopyTo(u, k * rows);
+                if (s[k] >= zeroBelow) svd.LeftVectors[k].CopyTo(u, k * rows);
                 svd.RightVectors[k].CopyTo(v, k * r);
             }
         }

@@ -91,6 +91,7 @@ For a slightly asymmetric input, the two dense eigen routes therefore decompose 
 | Dense eigen | `DenseEigen.DecomposeSymmetric` (`double[,]` or column-major span) → `EigenResult`; `EigenFast.DecomposeSymmetricInPlace` (allocation-free core); `Eigen.DecomposeSymmetric`; `SpectralMath.BottomK`, `SpectralMath.SelectBottomK` → `IReadOnlyList<EigenPair>` |
 | Iterative eigen | `LOBPCG.Solve(op, k, Options?)` → `Result(Eigenpairs, Iterations, ResidualNorm, Converged)`; `LOBPCG.BottomK` / `TopK` (dense convenience); `DenseSymmetricOperator`; `ILinearOperator`, `IPreconditioner` |
 | Thin SVD | `ThinSvd.Decompose(a)` → `ThinSvdResult` (`SingularValues`, `LeftVectors`, `RightVectors`, `NumericalRank`, `RankTolerance`) |
+| Principal angles | `PrincipalAngles.Between(a, b)` (`double[,]`, p × k) or `Between(a, ka, b, kb, p)` (column-major spans) → `double[]`, min(k_A, k_B) angles ascending |
 | Factorizations | `CholeskyDecomposition` (`Decompose`, `LogDet`, `Status`, `Solve`, `WriteInverseTo`, `WriteLTo`, `Sample`); `BandCholesky` (`Decompose`, `DecomposeBanded`, `Solve`, `SolveInPlace`, `SampleInnovation`, `LogDet`, `Status`, `Strict`, `FailedAt`, `Dimension`, `Bandwidth`, `Factorization`); `BandFactorization` (`Cholesky`, `Ldlt`); `DenseCholesky` (`Decompose`, `Status`, `FailedAt`, `LogDet`, `Solve`, `SolveInPlace`, `ForwardSolveInPlace`, `BackSolveInPlace`, `InverseQuadraticForm`, `SampleInnovation`, `Factor`, `RelativePivot`, `Dimension`, `Capacity`); `BorderedCholesky(capacity, rebuildInterval = 100)` (`ProposeBirth`, `ProposeDeath`, `ProposeChange`, `ProposedInverseQuadraticForm`, `Pending`, `Accept`, `Rebuild`, `LastDrift`, `UpdatesSinceRebuild`, `RebuildInterval`, `Copy`, `Clear`, `Decompose`, `Entry`, `Factor`, `RelativePivot`, `InverseDiagonal`, `LeaveOneOutPivot`, `MinLeaveOneOutPivot`, `Status`, `FailedAt`, `LogDet`, `Solve`, `SolveInPlace`, `ForwardSolveInPlace`, `BackSolveInPlace`, `InverseQuadraticForm`, `SampleInnovation`, `EquilibratedCondition`, `Dimension`, `Capacity`) → `FactorProposal` (`FactorChange`), `FactorDrift`; `WideBandCholesky(dimension, bandwidth)` (`Decompose`, `Status`, `FailedAt`, `LogDet`, `Solve`, `SolveInPlace`, `ForwardSolveInPlace`, `BackSolveInPlace`, `InverseQuadraticForm`, `SampleInnovation`, `EquilibratedCondition`, `Factor`, `RelativePivot`, `Dimension`, `Bandwidth`), `SpdFactors` (`UsesWideBand`, `ForBand`, `MinimumOrder`); `ISpdFactor` (`Dimension`, `Status`, `LogDet`, `Solve`, `SolveInPlace`, `SampleInnovation`, `EquilibratedCondition`; implemented by `BandCholesky`, `DenseCholesky`, `BorderedCholesky` and `WideBandCholesky`), `SpdFactorExtensions.InverseQuadraticForms`; `FactorStatus`; `DiagonalPlusLowRank(diagonal, factor, weights)` (`Dimension`, `LogDet`, `Solve`, `SolveInPlace`, `InverseQuadraticForm`, `Sample`, `SampleInnovation`) |
 | Contractions | `KhatriRao` (`Gram`, `Border`, `CrossProducts`, `CentredGram`, `CentredBorder`, `CentredCrossProducts`, `ScatteredGram`, `ScatteredCrossProducts`, `FaceSplittingGram`, `FaceSplittingCrossProducts`, `FaceSplittingHalfBandwidth`, `KroneckerGram`); `IInnerProduct` (`IsIdentity`, `Dimension`, `LogDeterminant`, `Dot`), `IdentityInnerProduct` |
 | Transforms and statistics | `Fft` (1-D, 3-D, N-D; `IsPowerOfTwo`); `Pca.Compute` → `PcaResult`; `FastIca.Compute` → `IcaResult`; `OnlineMahalanobis` (`Update`, `Distance` to the mean or between two points, `IsReady`, `GetMean`, `GetVariances`, `Reset`) |
@@ -162,13 +163,32 @@ All projections are two passes of **modified** Gram–Schmidt (MGS with re-ortho
 
 **The same bits on every machine.** Rotations are elementwise, so vector width does not change the bits, and inner products are [pairwise sums](#pairwise-summation-pairwisesum).
 
-**Callers.** `Pca.Compute`; the Stiefel and Grassmann manifolds; BASS's PCA basis, whose rank is `NumericalRank`; calibration's compression of its residual set; and [`DiagonalPlusLowRank`](#diagonal-plus-low-rank-diagonalpluslowrank).
+**Callers.** `Pca.Compute`; [`PrincipalAngles`](#principal-angles-principalangles); the Stiefel and Grassmann manifolds; BASS's PCA basis, whose rank is `NumericalRank`; calibration's compression of its residual set; and [`DiagonalPlusLowRank`](#diagonal-plus-low-rank-diagonalpluslowrank).
 
 **Checked** (`ThinSvdTests`).
 - From 1 × 1 to 200 × 5, tall and wide: each entry reconstructs within 10·max(m, n)·ε·σ₁, U and V are orthonormal to 10⁻¹³, and σ is descending and nonnegative.
 - A constructed spectrum from 1 down to 10⁻¹¹ is recovered within 10·m·ε absolute, and read at full rank.
 - A product of known rank 7 reads 7, with a gap above 10⁶ times the tolerance. Five centred curves on 200 locations lose exactly one rank. A zero matrix reads rank 0 with orthonormal factors, and a zero column is completed in the middle.
 - Two parallel columns of norms 1.8·10⁻¹⁶¹ and 0.115, the Grassmann exp map's input that stalled the first version, converge with σ₁ to 2ε relative. Columns scaled by 10¹⁵⁰ and 10⁻¹⁵⁰ stay finite.
+
+### Principal angles (`PrincipalAngles`)
+
+`PrincipalAngles.Between` gives the principal angles between the column spans of two orthonormal bases A (p × k_A) and B (p × k_B): min(k_A, k_B) angles, ascending. It takes `double[,]` bases or column-major spans. Orthonormality is not checked.
+
+**The method** (Björck and Golub 1973; Knyazev and Argentati 2002).
+- The cosines are the singular values of AᵀB. The sines are those of the residual (I − LLᵀ)S of the basis S with fewer columns off the span of the other basis, L.
+- The i-th smallest angle pairs the i-th largest cosine with the i-th smallest sine, θ_i = atan2(sin, cos). Both SVDs are [`ThinSvd`](#thin-svd-thinsvd)'s.
+
+**Why not the arccos of the cosines.** Near zero a cosine is 1 − θ²/2, so its rounding of ε leaves θ only to about √(2ε) ≈ 2·10⁻⁸. The sine of a small angle, read from the residual, keeps its digits, and the cosine of a large one does. Through atan2 every angle is accurate to about √(p·k)·ε radians.
+
+**Mixed ranks.** With k_A ≠ k_B the angles are those of the smaller span against the larger. Readouts built on them belong to their callers: the containment defect Σ sin²θ_i, and the projection distance k_A + k_B − 2Σ cos²θ_i.
+
+**Callers.** `GrassmannManifold.Distance` ([RiemannianGeometry](./RiemannianGeometry.md#manifold-catalog)).
+
+**Checked** (`PrincipalAnglesTests`).
+- Known angles from 0 and 10⁻¹⁴ through π/4 to π/2, a cluster of three at 10⁻¹³ among them, under a random rotation of ℝᵖ and random rotations within each span: each is recovered within 20·√(p·k)·ε.
+- Mixed ranks 2 and 4 give the two angles (3·10⁻¹¹ and 0.7) within 10⁻¹⁵, and the same bits in either order.
+- Swapping the bases, rotating them within their spans, and passing `double[,]` instead of spans leave the angles unchanged.
 
 ### Dense Cholesky (`CholeskyDecomposition`)
 
@@ -454,6 +474,7 @@ Dimensions with zero variance are skipped, which makes this a *pseudometric* (a 
 | Dense eigen | `DenseEigen.cs`, `EigenFast.cs`, `Eigen.cs`, `SpectralMath.cs` |
 | Iterative eigen | `Lobpcg.cs`, `DenseSymmetricOperator.cs` |
 | Thin SVD | `ThinSvd.cs` |
+| Principal angles | `PrincipalAngles.cs` |
 | Factorizations | `Cholesky.cs`, `DenseCholesky.cs`, `BandCholesky.cs`, `BorderedCholesky.cs`, `FactorProposal.cs`, `WideBandCholesky.cs` (with `SpdFactors`), `FactorStatus.cs`, `ISpdFactor.cs`, `ConditionEstimate.cs`, `DiagonalPlusLowRank.cs` |
 | Contractions | `KhatriRao.cs`, `InnerProduct.cs` |
 | Transforms and statistics | `Fft.cs`, `PCA.cs` (`Pca`), `ICA.cs` (`FastIca`), `WelfordMahal.cs` (`OnlineMahalanobis`) |
