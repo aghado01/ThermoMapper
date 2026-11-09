@@ -13,7 +13,7 @@ Companion to [extensions-brief.md](extensions-brief.md). An item is ticked when 
 - [ ] **E5** KHAOS's modified g-prior. Briefed with KHAOS ([brief](khaos-brief.md), 2026-11-07).
 - [ ] **E6** Basis-estimation uncertainty.
 - [ ] **E7** Moments for piecewise polynomials.
-- [ ] **E8** Active-subspace analysis.
+- [ ] **E8** Active-subspace analysis. Commissioned 2026-11-08 ([build brief](active-subspace-brief.md)).
 - [ ] **E9** Cross-engine evidence.
 - [ ] **E10** Direct-functional BASS for families of SPC sweeps.
 - [ ] **E11** Elastic emulation of misaligned functional outputs.
