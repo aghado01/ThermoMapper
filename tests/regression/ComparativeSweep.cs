@@ -107,6 +107,20 @@ public sealed class ComparativeSweep
                     new("warm start's 8000 < flat start's 16000", far.WarmCurve[1], far.FlatCurve[1]),
                     new("warm start's 16000 < flat start's 32000", far.WarmCurve[2], far.FlatCurve[2])];
         }),
+        new("ActiveSubspaceReadoutTests.Recovery_AtGrowingN_FromOutsideTheModel(ridge)", DataSeed: 20261108, ChainSeeds: [13], (d, c) =>
+        {
+            var r = ActiveSubspaceReadoutTests.Recovery("ridge", d, c[0], [100, 300, 900]);
+            return [new("E[C]'s angle to the truth: N 900 < N 100", r[^1].MeanCAngle, r[0].MeanCAngle),
+                    new("the mean subspace's angle: N 900 < N 100", r[^1].ProjectionAngle, r[0].ProjectionAngle),
+                    new("E[C]'s relative error: N 900 < N 100", r[^1].MeanCError, r[0].MeanCError)];
+        }),
+        new("ActiveSubspaceReadoutTests.Recovery_AtGrowingN_FromOutsideTheModel(two ridges)", DataSeed: 20261108, ChainSeeds: [13], (d, c) =>
+        {
+            var r = ActiveSubspaceReadoutTests.Recovery("two ridges", d, c[0], [100, 300, 900]);
+            return [new("E[C]'s angle to the truth: N 900 < N 100", r[^1].MeanCAngle, r[0].MeanCAngle),
+                    new("the mean subspace's angle: N 900 < N 100", r[^1].ProjectionAngle, r[0].ProjectionAngle),
+                    new("E[C]'s relative error: N 900 < N 100", r[^1].MeanCError, r[0].MeanCError)];
+        }),
     ];
 
     [Fact]

@@ -16,13 +16,35 @@ namespace Maths.Regression.Tests;
 /// (<see cref="DesignFactor.Pair"/>), under the uniform law, a normal–Student mixture and the empirical marginal of 60 atoms;</item>
 /// <item>per term pair, <see cref="BassMoments.GradientPair"/> from a cold service;</item>
 /// <item>per draw, C on the exact route (<see cref="BassMoments.GradientOuterProduct"/>) cold and with the caches warm, on the degree-one fit's
-/// 60 draws.</item>
+/// 60 draws;</item>
+/// <item>the readout (<see cref="BassFit.ActiveSubspace"/>, slice 2) per draw: the exact route at 3,000 draws (the fit's 60, cycled),
+/// with its consistency checks and without them as the summary alone; the sampled route at 256 draws and 4,096 points.</item>
 /// </list>
 /// Indicative: the best of five on a shared machine.
 /// </summary>
 public sealed class ActiveSubspaceCostTests(ITestOutputHelper output)
 {
     private const int Repeats = 5;
+
+    [Fact]
+    public void ReadoutCostRow()
+    {
+        if (!BassQualification.Enabled) return;
+        BassData data = SensitivityFixture.Scalar();
+        BassFit fit = SensitivityFixture.FitScalar(1);
+        int pooled = fit.Draws.Sum(c => c.Count);
+        int[] many = [.. Enumerable.Range(0, 3000).Select(d => d % pooled)];
+        var spec = new ActiveSubspaceSpec { Dimension = 2, Draws = many };
+        double readout = Best(() => fit.ActiveSubspace(data, spec), many.Length);
+        ActiveSubspaceAnalysis a = fit.ActiveSubspace(data, spec);
+        double[][,] c = [.. a.Posterior.Draws.Select(d => d.C)];
+        double[] w = [.. a.Posterior.Weights];
+        double summary = Best(() => Maths.Regression.Subspaces.SubspacePosterior.Of(c, w, 2), many.Length);
+        int[] some = [.. Enumerable.Range(0, 256).Select(d => d % pooled)];
+        double sampled = Best(() => fit.ActiveSubspace(data, spec with { Draws = some, Route = ActiveSubspaceRoute.Sampled }), some.Length);
+        output.WriteLine($"clock: {(BassCost.Cycles ? "thread cycles" : "wall")}; per draw: exact readout at {many.Length} draws {readout:F1} µs " +
+                         $"(the summary alone {summary:F1} µs), sampled readout at {some.Length} draws and 4,096 points {sampled:F0} µs");
+    }
 
     private static double Best(Action call, int calls)
     {

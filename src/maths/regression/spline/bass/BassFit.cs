@@ -139,6 +139,20 @@ public sealed record BassFit(
     }
 
     /// <summary>
+    /// The draws' active subspaces (E8; <see cref="ActiveSubspaceAnalysis"/>): each draw's C = E_ρ[∇f∇fᵀ] under <paramref name="spec"/>'s
+    /// law, by default the uniform law on each input's box, in its declared metric, its top-k eigenspace and gap, and the posterior's two
+    /// summaries apart: E[C] and the subspaces' projection mean, with each draw's principal angles to that mean and decision 6's
+    /// consistency checks, all under the draw weights. C comes from the moment service where the law is a product over terms with
+    /// factors, or from the gradient readout averaged over points the draws share, with its Monte Carlo error. Categorical inputs take
+    /// no part in C. A functional response is refused here (E8's slice 3). <paramref name="data"/> must be the data the fit was run on.
+    /// </summary>
+    public ActiveSubspaceAnalysis ActiveSubspace(BassData data, ActiveSubspaceSpec? spec = null)
+    {
+        RequirePosterior();
+        return BassActiveSubspaces.Of(this, data, spec ?? new ActiveSubspaceSpec());
+    }
+
+    /// <summary>
     /// The main and two-way effect functions of the draws (D08, stage 6; <see cref="BassSensitivity.Effects"/>) under
     /// <paramref name="spec"/>'s measure, on the data the fit was run on; data with another fingerprint are refused.
     /// </summary>
