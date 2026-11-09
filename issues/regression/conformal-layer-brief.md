@@ -1,6 +1,6 @@
 # The conformal layer: E16's build (chip brief)
 
-Date: 2026-11-06. Status: slices 0, 1 and 2 built 2026-11-06, the fallback signal read from the inflated set on 2026-11-07 at the user's call, with a split-half comparator measured beside it; on 2026-11-07 both became diagnostics on every set, with no trigger, at the user's decision; slice 3, the split form, built 2026-11-07 at the user's go-ahead (reports below); slice 4 read on 2026-11-07 (the in-sample predictive CDF is not monotone in y where the draws' predictives separate) and built on 2026-11-08 at the user's decision: the split form's predictive distribution by default, the full step's as an opt-in with its flag; CB-3's per-unit bounds built on 2026-11-08 at the user's order, a slice between 4 and 5, and the margin made opt-in the same day at the user's decision; the next wave approved by the user on 2026-11-08 ("Yes, start it", relayed by the main session): slice 5, the other engines' candidate seams, built the same day (report below), then E35 as slice 6 once the main session has verified slice 5. Written at the user's request from [E16](bass/extensions-brief.md#conformal-bayes-the-consumer) and the [conformal Lean contract](../../lean/Protolemmata/Conformal/conformal-lemmas.md).
+Date: 2026-11-06. Status: slices 0, 1 and 2 built 2026-11-06, the fallback signal read from the inflated set on 2026-11-07 at the user's call, with a split-half comparator measured beside it; on 2026-11-07 both became diagnostics on every set, with no trigger, at the user's decision; slice 3, the split form, built 2026-11-07 at the user's go-ahead (reports below); slice 4 read on 2026-11-07 (the in-sample predictive CDF is not monotone in y where the draws' predictives separate) and built on 2026-11-08 at the user's decision: the split form's predictive distribution by default, the full step's as an opt-in with its flag; CB-3's per-unit bounds built on 2026-11-08 at the user's order, a slice between 4 and 5, and the margin made opt-in the same day at the user's decision; the next wave approved by the user on 2026-11-08 ("Yes, start it", relayed by the main session): slice 5, the other engines' candidate seams, built the same day (report below) and verified by the main session; E35 as slice 6, its plan below, started the same day. Written at the user's request from [E16](bass/extensions-brief.md#conformal-bayes-the-consumer) and the [conformal Lean contract](../../lean/Protolemmata/Conformal/conformal-lemmas.md).
 
 ## Why
 
@@ -95,7 +95,43 @@ One commit per concern; tests with the code they test; each slice ends with its 
 | 4. The predictive distribution | π(y) as a CDF under a score monotone in y, PIT and CRPS | Slice 0; each draw's CDF at the candidate (`IBassNoiseLaw.At`) | The in-sample predictive CDF is the natural score; whether it stays monotone in y under the add-one-in weights is read first, and the score is adopted only if it does. PIT uniform on held-out data |
 | 4b. CB-3's per-unit bounds | The inflated rule on per-position bounds; the margin on bounds carried by the units, falling back to the uniform bound where no unit stands apart; the uniform forms kept as options. Ordered by the user on 2026-11-08 | Slice 2; the Lean chip's per-unit CB-3 (80a1993) | Coverage at 1 − α on the existing fixtures; no set wider than the uniform rule's; a fixture with a unit in a tail, where the margin gains; slice 2's readings beside the new ones |
 | 5. The other engines | BARS's, BAPS's, the hierarchical P-spline's, BGP's and the changepoint posterior's candidate seams | Slice 1's shape | Each one's candidate density equal to its pointwise column at training cases; coverage on one fit each |
-| 6. Conformal test martingales | Exchangeability checked online, as [E35](bass/extensions-brief.md#conformal-test-martingales-exchangeability-checked-online-e35) sets out: each new score ranked against every earlier one with the randomized tie, a betting function, and an alarm with its guarantee. Ordered by the user on 2026-11-08 to follow slice 5 | Slice 3's fixed-fit scores; slice 4's log CDF and its rank code | E35's, set when its brief is written |
+| 6. Conformal test martingales | Exchangeability checked online, as [E35](bass/extensions-brief.md#conformal-test-martingales-exchangeability-checked-online-e35) sets out: each new score ranked against every earlier one with the randomized tie, a betting function, and an alarm with its guarantee. Ordered by the user on 2026-11-08 to follow slice 5 | Slice 3's fixed-fit scores; slice 4's log CDF and its rank code | [Slice 6's plan](#slice-6-the-plan-conformal-test-martingales-e35), below |
+
+## Slice 6, the plan: conformal test martingales (E35)
+
+Written on 2026-11-08 from [E35's entry](bass/extensions-brief.md#conformal-test-martingales-exchangeability-checked-online-e35) and its Lean (`82d3dc6`; M-1 and M-2 in `ConformalValidity.lean`, with the record in `conformal-lemmas.md`), after the main session verified slice 5.
+
+**What it delivers.** Exchangeability checked as the data arrive. Each new observation's score is ranked among every score so far with a randomized tie. A betting function that reads only the past turns the p-values into capital, and an alarm fires on the capital with its guarantee: a false-alarm rate fixed in advance, with no stopping rule. Like the layer, it is engine-free. It reads scores, and a fixed fit's scores come through the seams.
+
+**The six gates, as the code enforces them.**
+1. *The monitored sequence is exchangeable.* That is the caller's premise, stated on the type. In the inductive form the score is fixed by a training set proper that is not in the stream (CB-2's conditioning). The tests break it with a change in the stream and require an alarm.
+2. *Each new score is ranked against every score so far, itself included.* One order-statistic structure holds the whole stream's scores. There is no calibration-set entry point.
+3. *A fresh θₙ breaks each step's ties,* pₙ = (L + θₙT)/n, with T counting the newest unit itself. θ is drawn from the monitor's own seeded stream, in (0, 1], so p never reads 0, and independently of the scores.
+4. *Every score is recomputed at every time.* The inductive form's score is a fixed function, so the monitor takes each score once and keeps no score from an earlier fit. The full form is not in this plan (below).
+5. *Each bet is ≥ 0, reads only the past and integrates to at most 1.* The betting function gives fₙ before pₙ is seen, then observes pₙ. Each member's integral is checked by quadrature, and the plug-in's is renormalized by quadrature and scaled down by its rounding.
+6. *The capital starts at 1, and alarms read only the past.* ln S₀ = 0, and each alarm reads S₁, …, Sₙ.
+
+**The pieces, by name.**
+- `OrderStatisticTree<T>`: an insert-and-rank structure, O(log n) per arrival, returning (Below, Tied) as the split calibration's and the CDF scores' ranks do. It holds doubles or `CdfScore`s.
+- `ConformalTestMartingale`: the monitor. It takes each score, ranks it, draws θ and bets, reports the step, and alarms.
+- `IBettingFunction` and its members: power, the power mixture, Simple Jumper and the plug-in.
+- The scores of a fixed fit, each higher conforming better:
+  - the predictive density through the candidate seam;
+  - the standardized residual;
+  - the PIT's centrality, min(F̂, 1 − F̂), from the log CDF seams.
+
+**The slices.**
+
+| Slice | Delivers | Its own gates |
+|---|---|---|
+| 6·0. BGP's seam at the run's test points | The main session's follow-up from slice 5. The run keeps each draw's variance of f, unscaled, beside the draw (a shared reference, no copy) and its test inputs on the result. The seam reads them at those inputs instead of refitting | Bit for bit the refit path's; the cost row against slice 5's 20 s |
+| 6a. The online p-values (M-1) | The order-statistic tree, the smoothed p-value with its θ, and the fixed fit's three scores | M-1's finite core by enumeration, ties included: each rank sequence 1/n! over the orderings. p-values i.i.d. uniform on exchangeable streams. Each premise broken, with the failure it causes: a fixed calibration set (dependence), CB-1's tie rule (not uniform), scores kept from earlier fits (drift). The tree's ranks against a brute-force count, a seeded sweep with ties and far values. The cost per arrival |
+| 6b. Bets and the capital (M-2) | Power, the power mixture, Simple Jumper (Vovk et al. 2021, Algorithm 1) and the plug-in (a kernel density of the earlier p-values); the capital in logs; each step's ln f; the e-value | Each bet's integral by quadrature: 1, or at most 1 for the plug-in. E[Sₙ \| history] = Sₙ₋₁ exactly, on a grid enumeration. A bet that reads the current p, or integrates above 1, breaks it. E S_N = 1 within Monte Carlo error |
+| 6c. Alarms and readouts | Ville's alarm, proved. CUSUM and Shiryaev–Roberts as options, their guarantees stated as posed, not proved. The path, the alarm time and procedure, and the guarantee in its terms | Ville's false alarms at most 1/c on exchangeable streams: uniform p-values, and a fixed BASS and BARS fit's scores. CUSUM's and Shiryaev–Roberts's mean time to a false alarm at least c, measured and marked unproven. The delay to an alarm after a change in the noise or the mean, per bet. The cost row |
+
+**Not in this plan, each with the decision it would change.**
+- *The full form.* Every score would be recomputed at every arrival under the posterior given the stream so far, the held draws reweighted by the whole stream. That costs n scores and a re-sort per arrival, and the weights degenerate as the stream grows. It decides whether the monitor gains a second score source; until then the inductive form serves.
+- *Strata.* A Mondrian martingale is one monitor per stratum. It decides whether the monitor routes by stratum or the caller runs one per stratum.
 
 ## Gates common to every slice
 
