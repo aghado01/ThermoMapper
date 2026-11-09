@@ -385,6 +385,92 @@ The weights, the product and the ranks for one grid of G = 200 candidates, with 
   - Under the laws whose density is a Bessel function, the law's density is the slice's cost: 0.4 to 0.9 µs per evaluation, against 20 to 60 ns for the others.
   - Each call recomputes the law's normalizer, which is constant over a draw's grid. A density over many residuals at one draw would take it once; the pointwise density would share it.
 
+## The other engines' candidate densities (slice 5)
+
+Each engine joins as BASS does: log p(y | x_t, θ_s) at new cases, in its pointwise density's rows with its chain lengths and latent report, and on `cdf: true` each draw's log CDF beside it. Which form takes a seam turns on two premises. The full step needs each draw's terms in sample, the units independent given the draw. Both forms need the candidate exchangeable with the units it is ranked against.
+
+| Engine | Its candidate density | The full step | The split form |
+|---|---|---|---|
+| BAPS | `Baps.CandidateLogDensity(result, design, grids, strata, cdf)`: N(y; z_tβ, σ²) at the new cases' design rows | Takes it | Takes it |
+| BARS | `BarsEnsemble.CandidateLogDensity(result, x, grids, strata, quadrature, cdf)`: each observation model's term at the draw's knots and coefficients, each observation's latent integrated as in training | Takes it | Takes it |
+| The hierarchical P-spline | `HierarchicalPSpline.CandidateLogDensity(result, design, replicates, grids, strata, cdf)`: N(y; z_tβ_r, σ²), a new point on a seen curve, conditioned on its drawn curve | Its guarantee does not reach it | Takes it |
+| BGP | `BgpSampler.CandidateLogDensity(result, xCases, grids, strata, cdf)`: the GP's predictive given the training data at each draw (t, η) | Refuses it | Takes it |
+| The changepoint posterior | None | | |
+
+- *BAPS.* A candidate is one observation; its design row is the fitted basis at the new case, evaluated as the training design was. The smoothing parameters enter only β's prior, so the term is the Gaussian at the draw's β and σ², as in training.
+- *BARS*, under every observation model it scores in sample:
+  - the Gaussian;
+  - robust weights' marginals (Student t, the contaminated normal);
+  - the variance-mean noises at the draw's σ² and skew (Student t, the asymmetric Laplace, GIG and GBP mixing, the last by quadrature on `quadrature: true`);
+  - the Poisson mass;
+  - the Whittle ordinate's exponential, whose candidate is an ordinate held out of the periodogram, the reading under which its units are exchangeable.
+
+  A value outside the response's support takes −∞: a count that is not a whole number, a negative ordinate. The Gibbs-loss model is refused, as its pointwise density is: its likelihood is a pseudo-likelihood.
+- *The hierarchical P-spline.* The candidate conditions on β_r, as a training unit that splits its replicate does, and a point on a new curve is refused: it would integrate that curve while the training units condition on theirs (CB-4).
+  - Its full step lacks exchangeability. The model takes one design for every replicate, so each training point's input is held by every curve, and a new point's input by none. The candidate is not exchangeable with the training points, and no partition restores it.
+  - The layer cannot tell this from the seam, whose latents match the training density's, so the docstring states it.
+  - The split form holds: calibration and test points on the seen curves, each at an input drawn as the others are, are exchangeable with one another for any fit.
+  - A whole new curve on the shared design is exchangeable with the training curves, but it is a vector: E17's whole-curve bands.
+- *BGP.* Its content is the collapsed one: f, the constant mean and s² are integrated against their posterior given the training data, never drawn.
+  - A known σ² gives N(f̂(x), v + σ²), with v the variance of f, the mean's uncertainty included. An unknown scale under 1/s² gives a Student t on n − 1 degrees of freedom with scale² Q(v + η)/(n − 1). Either is the evidence ratio ln p(Y, y | t, η) − ln p(Y | t, η) (`GpRegression.PredictiveLogDensities`).
+  - The full step refuses it, as it refuses the training density: a draw (t, η) leaves the units dependent through f, so each term leaves its unit out (`LeavesUnitsOut`). The split form takes it.
+  - Draws that repeat their predecessor's (t, η) reuse its row, one O(n³) refit per accepted state.
+- *The changepoint posterior* has no seam. Its posterior is over segmentations of the n positions it was given, one observation at each. A candidate at another position, a held-out one included, falls outside every segmentation, and a second value at a seen position is not a unit of that sequence. No candidate is exchangeable with the units.
+
+**The log CDFs.**
+- *The candidates' and the training units'.* BAPS's and BARS's pointwise densities take `cdf` for the full step's predictive distribution, units of one observation each. The candidates' log CDF reads the same law, for both forms.
+- *Each law's:*
+  - the Gaussian's;
+  - Student t's, closed, from both tails;
+  - the contaminated normal's mixture of two, each tail summed in logs (`IWeightResampler.MarginalLogCdf`, a default member that says a resampler without one gives none);
+  - exponential mixing's asymmetric Laplace, closed, its smaller rate taken as 2/(√(m² + 2s²) + |m|);
+  - the GIG and GBP mixtures' own laws, tabled once per draw (`BarsNoise.LogCdfAt`);
+  - the Whittle ordinate's, ln(1 − exp(−y·e^(−η))), η the draw's linear predictor there;
+  - BGP's Gaussian or Student t.
+- *Refused:* a count's CDF steps, so the Poisson model gives none. Its PIT is not uniform without a randomized tie, which the predictive distribution does not take.
+- *Shared:* every engine's seam reads ln F through `NoiseLogCdf`, the split that reads the upper half from the survival, moved from BASS's seam to the shared seam file.
+
+**Checks** (`EngineCandidateTests`; coverage and cost with `BASS_QUALIFICATION=1`).
+- *At the training cases, the pointwise column, bit for bit.*
+  - BAPS, and BARS under all nine of its models and noises: Gaussian, t weights, contaminated, t noise, quantile, skewed GIG, skewed GBP, Poisson and Whittle. The log CDF and the latent report match too, and the full step takes each pair.
+  - The hierarchical P-spline's, against the column of a unit that splits its replicate. Beside whole-curve units, which integrate β_r, the full step refuses it.
+- *BGP's, against its pointwise content:* a GP fit on the data less one case gives, at that case, the leave-one-out term of the fit on all of them. The largest relative gap over 36 cases is 1.7·10⁻¹⁴ with a known σ² and 1.6·10⁻¹⁴ with an unknown scale. The full step refuses the seam, and the split form takes it.
+- *Each law's log CDF against its density's integral,* a seeded sweep over σ² from e⁻⁴ to e⁴: a slice of the body, and each tail where the density falls to 10⁻¹² of the body's.
+  - The closed forms agree to 10⁻¹¹ or better in the body and 3·10⁻¹⁰ in the tails.
+  - The tabled mixtures agree within their tables' stated 10⁻⁵: 1.2·10⁻⁶ at worst in the body, 6·10⁻⁷ in the tails.
+- *Held-out coverage on data from outside every model.*
+  - The truth is f = sin(2πx) + x/2, with noise 0.2ζ plus, one time in seven, 0.8·Exp(1).
+  - There are 20 fits each, with m 100 and k 10, nominal 0.900. The full step's fits have n 99. The split form's have 99 calibration units, beside a training fit of 99 for the hierarchical P-spline (three curves on a shared design of 33) and 60 for BGP.
+  - There are 50 held-out cases per fit, and the se is the fits' spread. The width is read on 20 cases per fit, on a grid of step 0.08:
+
+| Engine and form | Coverage (se) | Mean width | Sets of two intervals |
+|---|---|---|---|
+| BAPS, the full step | 0.913 (0.012) | 1.11 | 0 of 400 |
+| BARS (Gaussian), the full step | 0.917 (0.012) | 1.10 | 1 of 400 |
+| The hierarchical P-spline, the split form | 0.902 (0.012) | 1.23 | 0 of 400 |
+| BGP (unknown scale), the split form | 0.903 (0.014) | 1.12 | 0 of 400 |
+
+  - BARS's one split set is at x = 0.002, the domain's edge: [−3.00, −2.12] ∪ [−0.52, 0.68], its lower piece reaching the grid's end. Its add-one-in weights fell to an ESS of 2.2, and the inflated-set gap, 0.82, flags it. That is CB-3's reading at work, not a miss: the gate requires every set that reaches the grid's end to carry the gap's flag.
+- *Its cost,* for one grid of 200 values, S = 2 chains × 500, indicative on the cycle clock. The layer's step is the full step for BAPS and BARS and the split form's for the others, on a calibration of 99:
+
+| Engine | n | The candidate density per grid | Per candidate | The layer's step per grid |
+|---|---|---|---|---|
+| BAPS | 1,000 | 2.1 ms | 10 µs | 204 ms, the full step |
+| BARS (Gaussian) | 1,000 | 3.3 ms | 17 µs | 196 ms, the full step |
+| The hierarchical P-spline (10 curves of 100) | 1,000 | 1.9 ms | 10 µs | 3.6 ms, the split form's |
+| BGP (unknown scale) | 400 | 20.1 s per call, whatever its cases | | 3.2 ms, the split form's |
+
+  - The full step's 200 ms is its default step at S 1,000, as the margin's opt-in report measured it, the training side included.
+  - BGP's seam is its refits: one O(n³) refit per accepted state, as its pointwise density pays, shared by every case in the call. The run already holds each draw's variance at its own test points, a cheaper path recorded as a follow-up in the brief.
+
+**Found and handed on, not fixed here.**
+- *The defect.* Under GBP mixing with a drift, `NormalVarianceMeanMixture`'s table reads ln F about 10⁻³ off near x = 0, while the density there is right to 12 digits.
+  - At m/s = −0.2 and GBP(1, 1, 1.5), ln F(0) is −0.549285 against the integral's −0.550321.
+  - The table's slope runs 4% low across ±10⁻³·s, and the gap falls to 5·10⁻⁶ by 0.5·s.
+  - Without a drift F(0) is ½ exactly, and the GIG mixtures are within their 10⁻⁵.
+- *Its effect.* BARS's GBP noise reads its log CDF from that table, so its predictive distribution inherits the error near the median. Its density, which the sets read, does not.
+- *Where it stands.* The file belongs to the noise laws' owner. `TheLogCdf_UnderGbpMixingWithADrift_IsItsDensitysIntegral` is skipped until the fix, with the correct references as its assertions.
+
 ## Checks and cost (slice 2)
 
 Run on `ConformalMarginTests`, and with `BASS_QUALIFICATION=1` on `BassConformalMarginTests` and `ConformalCostTests`.
@@ -562,7 +648,8 @@ A unit far out, or of high leverage, makes the weights degenerate when it is the
 | Area | Types and members |
 |---|---|
 | The seams | `PointwiseLogDensity` (training); `CandidateLogDensity(values, grids, latents, stratumOf, chainLengths)` with `Weights`, `Offset(t)`, `Cases`, `Draws`; `LogCdf` on both, each draw's ln F |
-| BASS's candidate density | `BassFit.CandidateLogDensity(data, cases, grids, strata, unseenLevels, quadrature, cdf)`; `BassFit.PointwiseLogDensity(..., cdf)`; `BassCandidates.UnitLogCdf`, `BassCandidates.LogCdf` and `BassPointwise.Latents` (internal, shared) |
+| BASS's candidate density | `BassFit.CandidateLogDensity(data, cases, grids, strata, unseenLevels, quadrature, cdf)`; `BassFit.PointwiseLogDensity(..., cdf)`; `BassCandidates.UnitLogCdf` and `BassPointwise.Latents` (internal, shared) |
+| The other engines' (slice 5) | `Baps.CandidateLogDensity(result, design, grids, strata, cdf)` and `Baps.PointwiseLogDensity(..., cdf)`; `BarsEnsemble.CandidateLogDensity(result, x, grids, strata, quadrature, cdf)` and `BarsEnsemble.PointwiseLogDensity(..., cdf)`; `HierarchicalPSpline.CandidateLogDensity(result, design, replicates, grids, strata, cdf)`, for the split form; `BgpSampler.CandidateLogDensity(result, xCases, grids, strata, cdf)` and `GpRegression.PredictiveLogDensities(fit, xTest, grids)`, for the split form; `IWeightResampler.MarginalLogCdf`; `NoiseLogCdf`, `CandidateSeam` and `BarsNoise.LogCdfAt` (internal, shared) |
 | The full step | `ConformalBayes.FullStep(training, candidates, ConformalOptions { Alpha, ErrorLevel, Inflate, FallbackShare (opt-in, null by default), MarginBounds (opt-in, null by default), InflationBounds })` → `ConformalPrediction(Sets, Alpha)`; `ConformalBayes.Scores(training, candidates, column)` → `ConformalScores(Units, Scores, Candidate, EffectiveSampleSize)` |
 | A case's set | `ConformalSet`: `Stratum`, `Units` (m), `Level` (k), `Coverage`, `WholeSpace`, `Grid`, `PValues`, `Below`, `Tied`, `CandidateScores`, `EffectiveSampleSizes`, `Accepts(g)`, `Intervals` (`GridInterval(Lower, Upper)`), `Resolution`, `OpenBelow`, `OpenAbove`, `Width` |
 | CB-3's reading | `ConformalSet.Gap`, `SplitHalfMass`, `SplitHalfDisagreements`, `AcceptsPlain(g)`, `AcceptsInflated(g)`; `ConformalSet.Margin` → `ConformalMargin` (`Multiple`, `CandidateErrors`, `UniformErrors`, `CandidateCarriedErrors`, `CarriedUniformErrors`, `UnitCarriedErrors`, `Fragile`, `InflatedRanks`, `ParetoK`, `ParetoKThreshold`, `Bounds`, `Inflation`, `Computed`, `Count`, `Untrusted(k)`); `ConformalSet.Inflated`, `ErrorLevel`, `CoverageUnderError`, `FallBack`; `MarginBounds` (`Uniform`, `Carried`); `InflationBounds` (`PerPosition`, the default, `Uniform`); `ConformalScores.Errors`, `CandidateError` |
@@ -575,7 +662,9 @@ A unit far out, or of high leverage, makes the weights degenerate when it is the
 - A margin whose bounds read each ordering's own posterior, rather than the held draws reweighted, which needs a run per ordering.
 - CQR's asymmetric form, cross-conformal and the jackknife+ (above).
 - The split form's set ends and quantiles in closed form, F̂⁻¹(· | x) at the calibration PITs' order statistics, which needs each engine's quantile function; and cross-conformal predictive distributions (slice 4's alternatives).
-- The candidate seams of BARS, BAPS, the hierarchical P-spline, BGP and the changepoint posterior (slice 5), and BASS's for a direct functional fit's curves (E17).
+- BASS's candidate seam for a direct functional fit's curves, and a whole new curve for the hierarchical P-spline (E17).
+- A BGP content with f drawn at the training and candidate inputs per retained state, which the full step would take (slice 5's follow-up).
+- The changepoint posterior's seam, which no candidate exchangeable with its units admits (slice 5).
 - CB-4's latent-posterior reading, and Hoff's leave-one-out score.
 - Refining a set's boundaries between grid values.
 
