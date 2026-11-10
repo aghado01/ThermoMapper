@@ -24,9 +24,15 @@ public static class BassSensitivity
     /// reads its values.
     /// </summary>
     public static SobolAnalysis Of(BassFit fit, BassData data, SensitivitySpec? spec = null)
+        => OfCore(fit, data, spec, null);
+
+    internal static SobolAnalysis Projected(BassFit fit, BassData data, double[] output, SensitivitySpec? spec)
+        => OfCore(fit, data, spec, output);
+
+    private static SobolAnalysis OfCore(BassFit fit, BassData data, SensitivitySpec? spec, double[]? output)
     {
         spec ??= new SensitivitySpec();
-        Setup s = Setup.Of(fit, data, spec);
+        Setup s = Setup.Of(fit, data, spec, output);
         int maxOrder = spec.MaxOrder ?? Math.Max(1, s.TermIds.Select(id => s.Moments.Variables(fit.Terms[id]).Count).DefaultIfEmpty(0).Max());
         int[][] subsets = Subsets(s.TermIds.Select(id => s.Moments.Variables(fit.Terms[id])), maxOrder, spec.SubsetBudget);
         var index = new Dictionary<int[], int>(subsets.Length, SubsetComparer.Instance);
@@ -374,6 +380,7 @@ public static class BassSensitivity
     private sealed class Setup
     {
         private double[][]? _outputSide;   // conditioned form: per term id, its normalizer and held factors at each coordinate
+        private double[]? _projection;
 
         public required BassFit Fit { get; init; }
         public required BassMoments Moments { get; init; }
@@ -401,6 +408,12 @@ public static class BassSensitivity
         // the terms with no factor left on an input folded into b₀.
         public void Coefficients(int surface, BassDraw draw, double[] b)
         {
+            if (_projection is { } projection)
+            {
+                double[] values = BassMultiOutput.Project(draw, projection);
+                values.CopyTo(b, 0);
+                return;
+            }
             double[] a = draw.Coefficients;
             int[] ids = draw.Structure.TermIds;
             if (_outputSide is null)
@@ -421,11 +434,13 @@ public static class BassSensitivity
             }
         }
 
-        public static Setup Of(BassFit fit, BassData data, SensitivitySpec spec)
+        public static Setup Of(BassFit fit, BassData data, SensitivitySpec spec, double[]? projection = null)
         {
             ArgumentNullException.ThrowIfNull(fit);
             ArgumentNullException.ThrowIfNull(data);
             ArgumentNullException.ThrowIfNull(spec);
+            if (data.Response is MultiOutputResponse && projection is null)
+                throw new ArgumentException("Several outputs need a declared output functional; use BassMultiOutput.Sensitivity.", nameof(data));
             string fingerprint = Bass.Fingerprint(fit.Config, data);
             if (fingerprint != fit.Identity.Fingerprint)
                 throw new ArgumentException($"The fit was run on other data: its fingerprint is {fit.Identity.Fingerprint}, theirs {fingerprint}.", nameof(data));
@@ -465,6 +480,7 @@ public static class BassSensitivity
                 TermIds = ids, MaxTerms = draws.Length == 0 ? 0 : draws.Max(d => d.Structure.TermIds.Length), Form = form,
                 Coordinates = null, CoordinatesOutside = null, CoordinateVariables = null,
             };
+            setup._projection = projection;
             if (form != FunctionalForm.Condition) return setup;
 
             // The conditioned form's coordinates, in their own units, scaled; each term's normalizer and held factors at them.

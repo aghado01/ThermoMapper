@@ -26,7 +26,7 @@ namespace Maths.Regression.Spline.Bass.Sensitivity;
 /// coordinates, C = LᵀC_boxL: diagonal under a product law (1 for the box, 1/width for raw units, the law's standard deviation in box
 /// units for whitening), and the symmetric root of the sample's covariance for whitening under a joint sample.
 /// </summary>
-internal static class BassActiveSubspaces
+internal static partial class BassActiveSubspaces
 {
     private const int Batch = 64;                  // a scalar fit's draws read from the gradient readout at once
     private const long BatchValues = 1L << 22;     // a functional or basis fit's batch: about this many partials at once
