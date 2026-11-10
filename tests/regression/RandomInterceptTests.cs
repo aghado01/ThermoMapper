@@ -43,7 +43,7 @@ public sealed class RandomInterceptTests(ITestOutputHelper output)
         return new CategoricalPredictor(name, [.. order.Select(i => codes[i])], [.. Enumerable.Range(0, levels).Select(l => $"L{l}")]);
     }
 
-    internal static BassData Grouped(BassData data, int levels, int seed = 3) => new(data.Predictors, data.Response, Grouping(data.Response.Cases, levels, seed));
+    internal static BassData Grouped(BassData data, int levels, int seed = 3) => new(data.Predictors, data.Response, [Grouping(data.Response.Cases, levels, seed)]);
 
     // Z (cases × observed levels), the counts and V = I + s²ZΠZᵀ, Π the projector onto nᵀu = 0, written out.
     private static (double[,] Z, double[] Counts, double[,] Pi, double[,] V) Dense(CategoricalPredictor grouping, double s)
@@ -109,7 +109,7 @@ public sealed class RandomInterceptTests(ITestOutputHelper output)
     {
         const double s = 1.7;
         CategoricalPredictor grouping = Grouping(30, 6, 11);
-        RandomInterceptBlock block = RandomInterceptBlock.Of(grouping, new BassRandomIntercept(s));
+        RandomInterceptBlock block = RandomInterceptBlock.Of(grouping, new BassRandomIntercept("g", s));
         (_, _, _, double[,] v) = Dense(grouping, s);
         int n = 30;
         var w = new double[n, n];
@@ -142,7 +142,7 @@ public sealed class RandomInterceptTests(ITestOutputHelper output)
     {
         const double s = 0.8, sigma2 = 0.7;
         CategoricalPredictor grouping = Grouping(30, 6, 12);
-        RandomInterceptBlock block = RandomInterceptBlock.Of(grouping, new BassRandomIntercept(s));
+        RandomInterceptBlock block = RandomInterceptBlock.Of(grouping, new BassRandomIntercept("g", s));
         (double[,] z, double[] counts, double[,] pi, double[,] v) = Dense(grouping, s);
         int n = 30, l = counts.Length;
         var rng = new Xoshiro256PlusPlus(5);
@@ -213,11 +213,11 @@ public sealed class RandomInterceptTests(ITestOutputHelper output)
         const double s = 1.3, a = 2.0, b = 0.5;
         BassData data = Grouped(KhaosChainTests.Data(), 6);
         if (!block) data = new BassData(data.Predictors, data.Response);
-        BassConfig config = KhaosReachTests.Config(prior) with { RandomIntercept = block ? new BassRandomIntercept(s) : null };
+        BassConfig config = KhaosReachTests.Config(prior) with { RandomIntercepts = block ? [new BassRandomIntercept("g", s)] : null };
         BassModel model = BassModel.Create(config, data);
         double[] y = data.Response.Values.ToArray();
         int n = y.Length;
-        double[,] v = block ? Dense(data.Grouping!, s).V : Identity(n);
+        double[,] v = block ? Dense(data.Groupings[0], s).V : Identity(n);
         var form = config.Coefficients.Form as ModifiedGForm;
         List<BassTerm> terms = [.. model.Prior.Legendre!.Terms()];
         BassTerm[][] structures = [[], [terms[0]], [terms[3], terms[9]], [terms[5], terms[20]]];
@@ -249,7 +249,7 @@ public sealed class RandomInterceptTests(ITestOutputHelper output)
             }
         }
         output.WriteLine($"{prior}, {(block ? $"a block of s = {s}" : "no block")}: the target's ln p(y | S, τ) against the dense t, worst absolute gap {worst:E2}" +
-                         (block ? $"; the block's −½ln|V| = {-0.5 * model.RandomIntercept!.LogDeterminant:F4}" : ""));
+                         (block ? $"; the block's −½ln|V| = {-0.5 * model.RandomEffects!.LogDeterminant:F4}" : ""));
         Assert.True(worst < 1e-8, $"{worst:E2}");
     }
 
@@ -300,10 +300,10 @@ public sealed class RandomInterceptTests(ITestOutputHelper output)
     {
         if (basis == "hinge")
         {
-            BassConfig hinge = BassTemperingTests.Config(spec) with { RandomIntercept = new BassRandomIntercept(1.3) };
+            BassConfig hinge = BassTemperingTests.Config(spec) with { RandomIntercepts = [new BassRandomIntercept("g", 1.3)] };
             return (BassModel.Create(hinge, Grouped(BassSweepTests.Data(), 4)), hinge);
         }
-        BassConfig legendre = KhaosReachTests.Config("modified g") with { RandomIntercept = new BassRandomIntercept(1.3) };
+        BassConfig legendre = KhaosReachTests.Config("modified g") with { RandomIntercepts = [new BassRandomIntercept("g", 1.3)] };
         if (spec is not null) legendre = legendre with { Sampling = legendre.Sampling with { Tempering = spec } };
         return (BassModel.Create(legendre, Grouped(KhaosChainTests.Data(), 6)), legendre);
     }
@@ -352,12 +352,12 @@ public sealed class RandomInterceptTests(ITestOutputHelper output)
         Assert.True(Math.Abs(evidence.LogEvidence - exact) <= 4 * evidence.MonteCarloError + 0.01, $"{evidence.LogEvidence:F4} against {exact:F4}");
         if (fit.Diagnostics.Smc is { } readout) Assert.Empty(readout.Flags);
         // Every retained draw carries its group effects, centred on the observations.
-        RandomInterceptBlock block = model.RandomIntercept!;
+        RandomEffectGrouping block = model.RandomEffects!.Layout(0);
         foreach (BassDraw d in fit.Draws.SelectMany(c => c))
         {
-            Assert.Equal(block.Levels, d.GroupEffects!.Length);
+            Assert.Equal(block.Levels, d.Groups![0].Effects.Length);
             double centre = 0.0;
-            for (int g = 0; g < block.Levels; g++) centre += block.Counts[g] * d.GroupEffects[g];
+            for (int g = 0; g < block.Levels; g++) centre += block.Counts[g] * d.Groups![0].Effects[g];
             Assert.True(Math.Abs(centre) < 1e-9, $"Σ n_g u_g = {centre:E2}");
         }
     }
@@ -379,13 +379,13 @@ public sealed class RandomInterceptTests(ITestOutputHelper output)
         PointwiseLogDensity retained = fit.PointwiseLogDensity(model.Data);
         BassDraw[] pooled = [.. fit.Draws.SelectMany(c => c)];
         double[] y = model.Data.Response.Values.ToArray();
-        RandomInterceptBlock block = model.RandomIntercept!;
+        RandomEffectGrouping block = model.RandomEffects!.Layout(0);
         double worst = 0.0;
         for (int s = 0; s < pooled.Length; s++)
         {
             for (int i = 0; i < y.Length; i++)
             {
-                double mu = DenseFit(model, fit.Terms, pooled[s], i) + pooled[s].GroupEffects![block.GroupOf(i)];
+                double mu = DenseFit(model, fit.Terms, pooled[s], i) + pooled[s].Groups![0].Effects[block.GroupOf(i)];
                 double expected = Normal.MeanVariance(mu, pooled[s].Sigma2).LogPdf(y[i]);
                 worst = Math.Max(worst, Math.Abs(expected - retained.Values[s, i]) / Math.Max(1.0, Math.Abs(expected)));
             }
@@ -419,8 +419,8 @@ public sealed class RandomInterceptTests(ITestOutputHelper output)
         (BassModel model, BassConfig config) = Fixture("hinge");
         BassData data = model.Data;
         BassFit fit = Bass.Fit(config with { Sampling = config.Sampling with { Chains = 2, BurnIn = 300, Samples = 400, Thin = 3 } }, data);
-        CategoricalPredictor grouping = data.Grouping!;
-        RandomInterceptBlock block = model.RandomIntercept!;
+        CategoricalPredictor grouping = data.Groupings[0];
+        RandomEffectGrouping block = model.RandomEffects!.Layout(0);
         var options = new BassPredictOptions { Predictive = true, Seed = 9 };
         BassPrediction grouped = fit.Predict(data, PredictionCases.Of(data), options);
         BassPrediction population = fit.Predict(data, PredictionCases.Of(data.Predictors), options);
@@ -428,7 +428,7 @@ public sealed class RandomInterceptTests(ITestOutputHelper output)
         double worst = 0.0;
         for (int d = 0; d < pooled.Length; d++)
             for (int i = 0; i < data.Response.Cases; i++)
-                worst = Math.Max(worst, Math.Abs(grouped.Latent[d, i, 0] - population.Latent[d, i, 0] - pooled[d].GroupEffects![block.GroupOf(i)]));
+                worst = Math.Max(worst, Math.Abs(grouped.Latent[d, i, 0] - population.Latent[d, i, 0] - pooled[d].Groups![0].Effects[block.GroupOf(i)]));
         Assert.True(worst < 1e-12, $"{worst:E2}");
         // A population case's predictive draw carries its own effect: its spread about f is σ√(1 + s²) where a grouped case's is σ.
         double grouping2 = 0.0, population2 = 0.0, sigma2 = 0.0;
@@ -479,7 +479,7 @@ public sealed class RandomInterceptTests(ITestOutputHelper output)
         // E[u] = s²ΠZᵀC⁻¹y, neither reading σ². The engine's goes through the whitened design and the block's mean instead.
         const double s = 1.3, tau = 0.1;
         BassData data = Grouped(KhaosChainTests.Data(), 6);
-        BassConfig config = KhaosReachTests.Config("raw ridge") with { RandomIntercept = new BassRandomIntercept(s) };
+        BassConfig config = KhaosReachTests.Config("raw ridge") with { RandomIntercepts = [new BassRandomIntercept("g", s)] };
         config = config with { Sampling = config.Sampling with { Chains = 2, BurnIn = 200, Samples = 15, Thin = 4 } };
         BassFit fit = Bass.Fit(config, data);
         BassModel model = BassModel.Create(config, data);
@@ -487,7 +487,7 @@ public sealed class RandomInterceptTests(ITestOutputHelper output)
         BassDraw[] pooled = [.. fit.Draws.SelectMany(c => c)];
         double[] y = data.Response.Values.ToArray();
         int n = y.Length;
-        (double[,] z, _, double[,] pi, double[,] v) = Dense(data.Grouping!, s);
+        (double[,] z, _, double[,] pi, double[,] v) = Dense(data.Groupings[0], s);
         int l = pi.GetLength(0);
         var dense = new double[n];
         for (int d = 0; d < prediction.DrawCount; d++)
@@ -538,7 +538,7 @@ public sealed class RandomInterceptTests(ITestOutputHelper output)
         BassConfig half = config with { Sampling = config.Sampling with { Samples = 200 } };
         BassFit first = Bass.Fit(half, model.Data, new BassRunOptions { Checkpoint = true });
         BassRunTests.AssertSameFit(whole, Bass.Resume(first.Checkpoint!, half, model.Data));
-        Assert.All(whole.Draws.SelectMany(c => c), d => Assert.Equal(model.RandomIntercept!.Levels, d.GroupEffects!.Length));
+        Assert.All(whole.Draws.SelectMany(c => c), d => Assert.Equal(model.RandomEffects!.Layout(0).Levels, d.Groups![0].Effects.Length));
     }
 
     // ---- the config and data ---------------------------------------------------------------------------------------------------------
@@ -548,20 +548,20 @@ public sealed class RandomInterceptTests(ITestOutputHelper output)
     {
         BassData data = BassSweepTests.Data();
         BassData grouped = Grouped(data, 4);
-        BassConfig plain = BassSweepTests.Config(), block = plain with { RandomIntercept = new BassRandomIntercept(1.0) };
+        BassConfig plain = BassSweepTests.Config(), block = plain with { RandomIntercepts = [new BassRandomIntercept("g", 1.0)] };
         Assert.DoesNotContain("RandomIntercept", plain.ToJson());
-        Assert.Contains("\"RandomIntercept\":{\"Scale\":1", block.ToJson());
-        Assert.Equal(block, BassConfig.FromJson(block.ToJson()));
+        Assert.Contains("\"RandomIntercepts\":[{\"Grouping\":\"g\",\"Scale\":1", block.ToJson());
+        Assert.Equal(block.ToJson(), BassConfig.FromJson(block.ToJson()).ToJson());
         Assert.NotEqual(Bass.Fingerprint(plain, data), Bass.Fingerprint(block, grouped));
         Assert.Contains("only random intercepts read", Assert.Throws<ArgumentException>(() => BassModel.Create(plain, grouped)).Message);
-        Assert.Contains("hold no grouping", Assert.Throws<ArgumentException>(() => BassModel.Create(block, data)).Message);
-        Assert.Contains("RandomIntercept.Scale", Assert.Throws<ArgumentException>(() => (block with { RandomIntercept = new BassRandomIntercept(0.0) }).Validate()).Message);
-        Assert.Contains("takes no Noise", Assert.Throws<ArgumentException>(() => (block with { Noise = BassNoise.StudentT(5) }).Validate()).Message);
+        Assert.Contains("has no data grouping", Assert.Throws<ArgumentException>(() => BassModel.Create(block, data)).Message);
+        Assert.Contains("RandomIntercepts[0].Scale", Assert.Throws<ArgumentException>(() => (block with { RandomIntercepts = [new BassRandomIntercept("g", 0.0)] }).Validate()).Message);
+        Assert.Contains("take no Noise", Assert.Throws<ArgumentException>(() => (block with { Noise = BassNoise.StudentT(5) }).Validate()).Message);
         Assert.Contains("used twice", Assert.Throws<ArgumentException>(() =>
-            new BassData(data.Predictors, data.Response, new CategoricalPredictor(data.Predictors[0].Name,
-                                                                                [.. Enumerable.Range(0, data.Response.Cases).Select(i => i % 2)], ["a", "b"]))).Message);
+            new BassData(data.Predictors, data.Response, [new CategoricalPredictor(data.Predictors[0].Name,
+                                                                                [.. Enumerable.Range(0, data.Response.Cases).Select(i => i % 2)], ["a", "b"])])).Message);
         BassData functional = BassPointwiseTests.Data(BassPointwiseTests.Kind.Functional);
-        var functionalGrouped = new BassData(functional.Predictors, functional.Response, Grouping(functional.Response.Cases, 3, 1));
+        var functionalGrouped = new BassData(functional.Predictors, functional.Response, [Grouping(functional.Response.Cases, 3, 1)]);
         Assert.Throws<ArgumentException>(() => BassModel.Create(block, functionalGrouped));
         var curves = new double[12, 5];
         for (int i = 0; i < 12; i++)
@@ -570,6 +570,6 @@ public sealed class RandomInterceptTests(ITestOutputHelper output)
         Assert.Contains("random intercepts", Assert.Throws<ArgumentException>(() => BassComponents.Fit(decomposition,
             [new ContinuousPredictor("x", [.. Enumerable.Range(0, 12).Select(i => i / 11.0)])], [.. Enumerable.Repeat(block, decomposition.Rank)], 1)).Message);
         // Without the block, a fit's draws carry no group effects and its config's form stands.
-        Assert.Null(Bass.Fit(plain with { Sampling = plain.Sampling with { Chains = 1, BurnIn = 10, Samples = 3 } }, data).Draws[0][0].GroupEffects);
+        Assert.Null(Bass.Fit(plain with { Sampling = plain.Sampling with { Chains = 1, BurnIn = 10, Samples = 3 } }, data).Draws[0][0].Groups);
     }
 }

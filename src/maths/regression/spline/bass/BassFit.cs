@@ -87,7 +87,7 @@ public sealed record BassFit(
                                                    UnseenLevel unseenLevels = UnseenLevel.Refuse, bool quadrature = false, bool cdf = false)
     {
         BassModel model = ModelOn(data);
-        if (model.RandomIntercept is not null)
+        if (model.RandomEffects is not null)
             throw new NotSupportedException("A random-intercept fit's candidate density is not built: a new case's group effect, and the exchangeability across groups the conformal layer reads, need a reading of their own (E21).");
         return BassCandidates.LogDensity(model, Terms, Draws, DrawWeights, cases, grids, strata, unseenLevels, quadrature, cdf);
     }

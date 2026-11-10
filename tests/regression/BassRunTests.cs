@@ -270,7 +270,13 @@ public sealed class BassRunTests
                 Assert.Equal(x.Sigma2, y.Sigma2);
                 Assert.Equal(x.Coefficients, y.Coefficients);
                 Assert.Equal(x.Lambda, y.Lambda);
-                Assert.Equal(x.GroupEffects, y.GroupEffects);
+                Assert.Equal(x.Groups?.Count, y.Groups?.Count);
+                if (x.Groups is { } groups) for (int g = 0; g < groups.Count; g++)
+                {
+                    Assert.Equal(groups[g].Grouping, y.Groups![g].Grouping);
+                    Assert.Equal(groups[g].Scale, y.Groups![g].Scale);
+                    Assert.Equal(groups[g].Effects, y.Groups![g].Effects);
+                }
             }
         }
         AssertSameDiagnostics(a.Diagnostics, b.Diagnostics);

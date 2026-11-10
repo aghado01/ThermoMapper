@@ -1,4 +1,5 @@
 using System;
+using System.Linq;
 using Maths.Regression.GPrior;
 using Maths.Regression.Spline.Bars;
 
@@ -13,9 +14,9 @@ public sealed class BassModel
 {
     private BassModel(BassConfig config, BassData data, BassResolved resolved, BassInputTransform transform, BassInputs inputs,
                       BassBasis basis, BassAdmission admission, BassStructurePrior prior, BassTermProposal? proposal, IBassProposalKernel kernel,
-                      BassTarget target, IBassObservationModel observation, WorkingResponse working, WorkingResponse baseReading, RandomInterceptBlock? block)
+                      BassTarget target, IBassObservationModel observation, WorkingResponse working, WorkingResponse baseReading, RandomEffectsBlock? block)
     {
-        RandomIntercept = block;
+        RandomEffects = block;
         Config = config;
         Observation = observation;
         Working = working;
@@ -51,7 +52,7 @@ public sealed class BassModel
         ArgumentNullException.ThrowIfNull(observation);
         if (config.Noise is { } declared && !(observation is VarianceMeanMixture mixture && mixture.Noise == declared))
             throw new ArgumentException("The config declares its noise, so the observation model is the config's.", nameof(observation));
-        if (data.Response is MultiOutputResponse && (observation is not GaussianObservation || config.RandomIntercept is not null))
+        if (data.Response is MultiOutputResponse && (observation is not GaussianObservation || config.RandomIntercepts is { Count: > 0 }))
             throw new ArgumentException("Several outputs take Gaussian noise without random intercepts in E34's slice 1; the noise by row and the random "
                                         + "intercepts (decisions 6 and 7) arrive in slice 4.", nameof(config));
         if (config.Sampling.Births?.Residual is not null && data.Response is not ScalarResponse)
@@ -62,16 +63,16 @@ public sealed class BassModel
                                         + "predictor.", nameof(config));
         WorkingResponse working = observation.Working(data.Response);
         WorkingResponse baseReading = working;
-        RandomInterceptBlock? block = null;
-        if (config.RandomIntercept is { } intercepts)
+        RandomEffectsBlock? block = null;
+        if (config.RandomIntercepts is { Count: > 0 } intercepts)
         {
             config.Validate();
-            CategoricalPredictor grouping = data.Grouping
-                ?? throw new ArgumentException("The config declares random intercepts (RandomIntercept), and the data hold no grouping.", nameof(data));
-            block = RandomInterceptBlock.Of(grouping, intercepts);
+            if (observation is not GaussianObservation)
+                throw new ArgumentException("Random intercepts currently take scalar Gaussian noise; moving row weights arrive in slice 4.", nameof(observation));
+            block = RandomEffectsBlock.Of(data.Groupings, intercepts);
             // A drawn s moves the whitened reading, so the priors read the response's own moments, frozen, as a fit without the block
             // reads them: a prior that read the reading at s would read a parameter (PriorsReadResponse).
-            if (intercepts.ScalePrior is not null && working.Reference is null && working.IsResponseItself && working.Latents is null)
+            if (intercepts.Any(s => s.ScalePrior is not null) && working.Reference is null && working.IsResponseItself && working.Latents is null)
                 baseReading = new WorkingResponse(working.Response, output: working.Output, meaning: working.Meaning, priorGram: working.PriorGram,
                     reference: config.Intercept == GPriorCentre.Zero
                     ? BassPriorReference.About(working.Values, 0.0)
@@ -93,10 +94,10 @@ public sealed class BassModel
     /// <summary>The random-intercept block (E21) the config declares, integrated out of every marginal by whitening, which the working
     /// response carries (<see cref="WorkingResponse.Whitening"/>); null for a config without one. Under a drawn s it is the block at the
     /// chain's start, and a state's reading carries the block at its own s.</summary>
-    public RandomInterceptBlock? RandomIntercept { get; }
+    public RandomEffectsBlock? RandomEffects { get; }
 
     /// <summary>Whether the random-intercept block's scale is drawn (<see cref="BassRandomIntercept.ScalePrior"/>).</summary>
-    public bool ScaleDrawn => RandomIntercept?.Spec.ScalePrior is not null;
+    public bool ScaleDrawn => RandomEffects?.Specifications.Any(s => s.ScalePrior is not null) ?? false;
 
     // Whether a state's reading moves with it: a noise's latents, or a drawn scale's whitening.
     internal bool ReadingMoves => Observation is VarianceMeanMixture || ScaleDrawn;
@@ -105,7 +106,8 @@ public sealed class BassModel
     internal WorkingResponse BaseReading { get; }
 
     // The block at a draw's scale: the model's at a held s, or at the s the draw carries.
-    internal RandomInterceptBlock? BlockAt(BassDraw draw) => RandomIntercept is { } block && draw.GroupScale is { } s ? block.At(s) : RandomIntercept;
+    internal RandomEffectsBlock? BlockAt(BassDraw draw) => RandomEffects is { } block
+        ? block.At(draw.Groups ?? throw new ArgumentException("A random-intercept draw carries its named groups.", nameof(draw))) : null;
 
     /// <summary>The config.</summary>
     public BassConfig Config { get; }

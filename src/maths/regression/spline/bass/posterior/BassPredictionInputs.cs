@@ -112,12 +112,14 @@ public sealed record PredictionCases
     /// extrapolate linearly. An unseen level is refused or placed outside every subset, as <paramref name="unseen"/> says.
     /// Refused: a predictor with no column, a column of the wrong kind, and a column that names no predictor.
     /// </summary>
-    internal (CaseInputs Inputs, bool[] OutsideRange) Prepare(BassInputTransform transform, BassInputs inputs, UnseenLevel unseen, string? grouping = null)
+    internal (CaseInputs Inputs, bool[] OutsideRange) Prepare(BassInputTransform transform, BassInputs inputs, UnseenLevel unseen,
+                                                           IReadOnlyList<CategoricalPredictor>? groupings = null)
     {
         if (unseen is not (UnseenLevel.Refuse or UnseenLevel.OutsideEverySubset)) throw new ArgumentOutOfRangeException(nameof(unseen));
         var byName = new Dictionary<string, PredictionColumn>(StringComparer.Ordinal);
         foreach (PredictionColumn c in _columns) byName.Add(c.Name, c);
-        if (grouping is not null) byName.Remove(grouping);   // random intercepts read it (GroupsOf), no term does
+        if (groupings is not null)
+            foreach (CategoricalPredictor grouping in groupings) byName.Remove(grouping.Name);   // GroupsOf reads it, no term does
         var continuous = new double[inputs.Cases.ContinuousCount][];
         var categorical = new int[inputs.Cases.CategoricalCount][];
         var outside = new bool[Cases];
@@ -201,8 +203,9 @@ public sealed record PredictionCases
     public static PredictionCases Of(BassData data)
     {
         ArgumentNullException.ThrowIfNull(data);
-        if (data.Grouping is not { } grouping) return Of(data.Predictors);
-        return new PredictionCases([.. Of(data.Predictors).Columns, Column(grouping)]);
+        var columns = new List<PredictionColumn>(Of(data.Predictors).Columns);
+        foreach (CategoricalPredictor grouping in data.Groupings) columns.Add(Column(grouping));
+        return new PredictionCases(columns);
     }
 
     // A categorical column's cases by level name.
@@ -213,7 +216,7 @@ public sealed record PredictionCases
     /// (E21), or −1 for the population: every case when no column gives the grouping, and a level no training case took when
     /// <paramref name="unseen"/> places it outside every subset; refused otherwise, naming the level.
     /// </summary>
-    internal int[] GroupsOf(RandomInterceptBlock block, CategoricalPredictor grouping, UnseenLevel unseen)
+    internal int[] GroupsOf(RandomEffectGrouping block, CategoricalPredictor grouping, UnseenLevel unseen)
     {
         ArgumentNullException.ThrowIfNull(block);
         ArgumentNullException.ThrowIfNull(grouping);

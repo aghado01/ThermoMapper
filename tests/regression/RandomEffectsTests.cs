@@ -36,7 +36,7 @@ public sealed class RandomEffectsTests(ITestOutputHelper output)
     {
         var hash = new RunFingerprint().Add(BassBitIdentityTests.Hash(fit));
         foreach (DrawStore<BassDraw> chain in fit.Draws)
-            foreach (BassDraw d in chain) hash.Add(d.GroupEffects ?? []);
+            foreach (BassDraw d in chain) hash.Add(d.Groups?[0].Effects ?? []);
         return hash.ToString();
     }
 
@@ -74,7 +74,7 @@ public sealed class RandomEffectsTests(ITestOutputHelper output)
     public void TheDesign_FollowsTheWhitening_ToAnotherScale()
     {
         (BassModel model, _) = RandomInterceptTests.Fixture("hinge");
-        WorkingResponse At(double s) => RandomInterceptBlock.Of(model.Data.Grouping!, new BassRandomIntercept(s)).Whitened(new WorkingResponse(model.Data.Response));
+        WorkingResponse At(double s) => model.RandomEffects!.At(0, s).Whitened(new WorkingResponse(model.Data.Response));
         BassDesign moving = model.NewDesign();
         var rng = new Xoshiro256PlusPlus(seed: 41);
         for (int k = 0; k < 200 && moving.Count < 4; k++)
@@ -121,8 +121,8 @@ public sealed class RandomEffectsTests(ITestOutputHelper output)
     {
         var point = BassCost.Base with { N = 600, P = 6, Cap = 15 };
         BassData plain = BassCost.Data(point);
-        var data = new BassData(plain.Predictors, plain.Response, RandomInterceptTests.Grouping(point.N, 8, seed: 11));
-        BassModel model = BassModel.Create(BassCost.Config(point) with { RandomIntercept = new BassRandomIntercept(1.3) }, data);
+        var data = new BassData(plain.Predictors, plain.Response, [RandomInterceptTests.Grouping(point.N, 8, seed: 11)]);
+        BassModel model = BassModel.Create(BassCost.Config(point) with { RandomIntercepts = [new BassRandomIntercept("g", 1.3)] }, data);
         BassDesign off = model.NewDesign(), on = model.NewDesign();
         off.TablesOn = false;
         on.TablesOn = true;
@@ -168,7 +168,7 @@ public sealed class RandomEffectsTests(ITestOutputHelper output)
     private static (BassModel Model, BassConfig Config) Drawn(string fit, TemperingSpec? spec = null)
     {
         (BassModel held, BassConfig config) = RandomInterceptTests.Fixture(fit, spec);
-        BassConfig drawn = config with { RandomIntercept = config.RandomIntercept! with { ScalePrior = new BassGroupScalePrior() } };
+        BassConfig drawn = config with { RandomIntercepts = [config.RandomIntercepts![0] with { ScalePrior = new BassGroupScalePrior() }] };
         return (BassModel.Create(drawn, held.Data), drawn);
     }
 
@@ -179,7 +179,7 @@ public sealed class RandomEffectsTests(ITestOutputHelper output)
         (BassModel model, BassConfig drawn) = Drawn("hinge");
         Assert.DoesNotContain("ScalePrior", config.ToJson());
         Assert.Contains("\"ScalePrior\"", drawn.ToJson());
-        Assert.Equal(drawn, BassConfig.FromJson(drawn.ToJson()));
+        Assert.Equal(drawn.ToJson(), BassConfig.FromJson(drawn.ToJson()).ToJson());
         Assert.NotEqual(Bass.Fingerprint(config, held.Data), Bass.Fingerprint(drawn, held.Data));
         // The reading carries the priors' frozen reference, the response's own moments, so a chain may follow it to another s.
         Assert.True(model.ScaleDrawn && !held.ScaleDrawn);
@@ -187,9 +187,9 @@ public sealed class RandomEffectsTests(ITestOutputHelper output)
         Assert.False(model.PriorsReadResponse);
         Assert.Equal(model.Data.Response.Values.ToArray().Average(), model.Working.Reference!.Level!.Value, 12);
         Assert.Equal(["tau", "group scale"], BassSweepSlots.Blocks(model, BassSweepSlot.Tau).Select(b => b.Name));
-        Assert.Contains(model.Resolved.AutoPicks, p => p.Setting == "RandomIntercept" && p.Value.Contains("s drawn"));
-        Assert.Contains("RandomIntercept.ScalePrior.Scale", Assert.ThrowsAny<ArgumentException>(
-            () => (drawn with { RandomIntercept = drawn.RandomIntercept! with { ScalePrior = new BassGroupScalePrior(0.0) } }).Validate()).Message);
+        Assert.Contains(model.Resolved.AutoPicks, p => p.Setting == "RandomIntercepts[g]" && p.Value.Contains("s drawn"));
+        Assert.Contains("RandomIntercepts[0].ScalePrior.Scale", Assert.ThrowsAny<ArgumentException>(
+            () => (drawn with { RandomIntercepts = [drawn.RandomIntercepts![0] with { ScalePrior = new BassGroupScalePrior(0.0) }] }).Validate()).Message);
         BassConfig flat = drawn with
         {
             Sampling = drawn.Sampling with
@@ -197,7 +197,7 @@ public sealed class RandomEffectsTests(ITestOutputHelper output)
                 FlatHistogram = new BassFlatHistogramSpec { Run = new FlatHistogramSpec { LearningIterations = 3_000, ProductionDraws = 500, Nodes = 20 } },
             },
         };
-        Assert.Contains("RandomIntercept.ScalePrior", Assert.ThrowsAny<ArgumentException>(() => flat.Validate()).Message);
+        Assert.Contains("RandomIntercepts[0].ScalePrior", Assert.ThrowsAny<ArgumentException>(() => flat.Validate()).Message);
 
         // The half-Cauchy: its density's mass and its draws' median, A.
         var prior = new BassGroupScalePrior(0.7);
@@ -228,12 +228,12 @@ public sealed class RandomEffectsTests(ITestOutputHelper output)
         var chain = new ReversibleJumpChain<BassState>(moves.Moves, model.Target, moves.Start, new Xoshiro256PlusPlus(3),
                                                        new Temperature(1.0, TemperingPath.Likelihood));
         var block = new BassGroupScaleBlock(model);
-        RandomInterceptBlock at0 = BassGroupScaleBlock.Reading(chain).Whitening!;
-        BassGroupScalePrior prior = model.RandomIntercept!.Spec.ScalePrior!;
+        RandomEffectsBlock at0 = BassGroupScaleBlock.Reading(chain).Whitening!;
+        BassGroupScalePrior prior = model.RandomEffects!.Specifications[0].ScalePrior!;
         double LogLaw(double u)
         {
             double s = Math.Exp(u);
-            BassState candidate = moves.ProposeFollow(chain.Current, at0.At(s).Whitened(model.BaseReading));
+            BassState candidate = moves.ProposeFollow(chain.Current, at0.At(0, s).Whitened(model.BaseReading));
             return chain.Target.Evaluate(candidate).LogLikelihood(1.0) + prior.LogDensity(s) + u;
         }
         (double Mean, double Square) Moments(int radius, double step)
@@ -259,7 +259,7 @@ public sealed class RandomEffectsTests(ITestOutputHelper output)
         for (int k = 0; k < steps; k++)
         {
             if (block.Update(chain, rng)) accepted++;
-            us[k] = Math.Log(BassGroupScaleBlock.Reading(chain).Whitening!.Spec.Scale);
+            us[k] = Math.Log(BassGroupScaleBlock.Reading(chain).Whitening!.Scales.Span[0]);
         }
         Assert.Equal(chain.Current.Terms.Select(t => t.ToString()), start.Current.Terms.Select(t => t.ToString()));
         double Z(Func<double, double> g, double expected)
@@ -283,8 +283,8 @@ public sealed class RandomEffectsTests(ITestOutputHelper output)
         config = config with { Sampling = new BassSampling { Chains = 2, MasterSeed = 7, BurnIn = 300, Samples = 300 } };
         BassFit fit = Bass.Fit(config, model.Data);
         BassDraw[] draws = [.. fit.Draws.SelectMany(c => c)];
-        Assert.All(draws, d => Assert.NotNull(d.GroupScale));
-        int distinct = draws.Select(d => d.GroupScale).Distinct().Count();
+        Assert.All(draws, d => Assert.Single(d.Groups!));
+        int distinct = draws.Select(d => d.Groups![0].Scale).Distinct().Count();
         MoveStat step = fit.Diagnostics.Chains[0].Blocks!.Single(k => k.Key == "group scale");
         output.WriteLine($"{distinct} distinct s among {draws.Length} draws; the step accepted {step.Accepted} of {step.Attempts}");
         Assert.True(distinct > draws.Length / 10, "s moves");
@@ -294,7 +294,7 @@ public sealed class RandomEffectsTests(ITestOutputHelper output)
         for (int d = 0; d < prediction.DrawCount; d++)
         {
             BassDraw draw = draws[prediction.Draws[d]];
-            double variance = draw.Sigma2 * (1 + Math.Pow(draw.GroupScale!.Value, 2));
+            double variance = draw.Sigma2 * (1 + Math.Pow(draw.Groups![0].Scale, 2));
             for (int i = 0; i < model.Data.Response.Cases; i++)
                 secondMoment += Math.Pow(prediction.Predictive![d, i, 0] - prediction.Latent[d, i, 0], 2) / variance;
         }
@@ -303,13 +303,13 @@ public sealed class RandomEffectsTests(ITestOutputHelper output)
         {
             // The draw keeps its s, and its reading is rebuilt at it; its effects keep the convention there.
             Assert.Null(d.Working);
-            RandomInterceptBlock at = d.WorkingOn(model).Whitening!;
-            Assert.Equal(d.GroupScale!.Value, at.Spec.Scale);
+            RandomEffectsBlock at = d.WorkingOn(model).Whitening!;
+            Assert.Equal(d.Groups![0].Scale, at.Scales.Span[0]);
             double centred = 0.0, spread = 0.0;
-            for (int g = 0; g < at.Levels; g++)
+            for (int g = 0; g < at.Layout(0).Levels; g++)
             {
-                centred += at.Counts[g] * d.GroupEffects![g];
-                spread += at.Counts[g] * Math.Abs(d.GroupEffects[g]);
+                centred += at.Layout(0).Counts[g] * d.Groups![0].Effects[g];
+                spread += at.Layout(0).Counts[g] * Math.Abs(d.Groups![0].Effects[g]);
             }
             Assert.True(Math.Abs(centred) <= 1e-12 * spread, $"Σ n_g u_g = {centred:E2}");
         }
@@ -329,11 +329,11 @@ public sealed class RandomEffectsTests(ITestOutputHelper output)
         BassConfig half = whole with { Sampling = whole.Sampling with { Samples = 60 } };
         BassFit full = Bass.Fit(whole, model.Data);
         BassFit first = Bass.Fit(half, model.Data, new BassRunOptions { Checkpoint = true });
-        BassFit resumed = Bass.Resume(first.Checkpoint!, half, new BassData(model.Data.Predictors, new ScalarResponse(model.Data.Response.Values.ToArray()), model.Data.Grouping));
+        BassFit resumed = Bass.Resume(first.Checkpoint!, half, new BassData(model.Data.Predictors, new ScalarResponse(model.Data.Response.Values.ToArray()), model.Data.Groupings));
         BassRunTests.AssertSameFit(full, resumed);
         for (int c = 0; c < full.Draws.Count; c++)
-            for (int d = 0; d < full.Draws[c].Count; d++) Assert.Equal(full.Draws[c][d].GroupScale, resumed.Draws[c][d].GroupScale);
-        Assert.True(full.Draws.SelectMany(c => c).Select(d => d.GroupScale).Distinct().Count() > 1, "s moves");
+            for (int d = 0; d < full.Draws[c].Count; d++) Assert.Equal(full.Draws[c][d].Groups![0].Scale, resumed.Draws[c][d].Groups![0].Scale);
+        Assert.True(full.Draws.SelectMany(c => c).Select(d => d.Groups![0].Scale).Distinct().Count() > 1, "s moves");
     }
 
     [Fact]
@@ -343,14 +343,14 @@ public sealed class RandomEffectsTests(ITestOutputHelper output)
         var moves = new BassStructureMoves(model, [], 0.0);
         var temperature = new Temperature(0.4, TemperingPath.Powered);
         var chain = new ReversibleJumpChain<BassState>(moves.Moves, model.Target, moves.Start, new Xoshiro256PlusPlus(7), temperature);
-        RandomInterceptBlock at = BassGroupScaleBlock.Reading(chain).Whitening!;
+        RandomEffectsBlock at = BassGroupScaleBlock.Reading(chain).Whitening!;
         var update = new BassGroupScaleBlock(model);
         double t = Math.Log(2.0), h = update.Scale(at);
         var proposed = update.Propose(chain, at, h, t)!.Value;
         var next = proposed.Candidate.Fit.Working!.Whitening!;
         double reverse = update.Scale(next);
         // For C+(0,1), p(ln s) ∝ s/(1+s²).
-        double logPriorRatio = t + Math.Log((1 + at.Spec.Scale * at.Spec.Scale) / (1 + next.Spec.Scale * next.Spec.Scale));
+        double logPriorRatio = t + Math.Log((1 + at.Scales.Span[0] * at.Scales.Span[0]) / (1 + next.Scales.Span[0] * next.Scales.Span[0]));
         ITargetEvaluation old = model.Target.Evaluate(chain.Current);
         Assert.Equal(logPriorRatio, proposed.Evaluation.LogPrior - old.LogPrior, 12);
         double powered = 0.4 * (logPriorRatio + proposed.Evaluation.LogLikelihood(1.0) - old.LogLikelihood(1.0));
@@ -382,8 +382,8 @@ public sealed class RandomEffectsTests(ITestOutputHelper output)
     {
         BassTarget target = model.Target;
         List<(BassTerm[] Terms, double LogPrior)> states = SmallStructures(model);
-        RandomInterceptBlock block = model.RandomIntercept!;
-        BassGroupScalePrior prior = block.Spec.ScalePrior!;
+        RandomEffectsBlock block = model.RandomEffects!;
+        BassGroupScalePrior prior = block.Specifications[0].ScalePrior!;
         double[] taus = target.SamplesTau ? [.. Enumerable.Range(0, (int)(68 / step) + 1).Select(i => -60 + step * i)] : [Math.Log(target.HeldTau!.Value)];
         double[] tauPrior = [.. taus.Select(u => target.SamplesTau ? target.LogTauDensity(u) : 0.0)];
         double[] scales = [.. Enumerable.Range(0, (int)(2 * radius / step) + 1).Select(i => -radius + step * i + Math.Log(prior.Scale))];
@@ -399,7 +399,7 @@ public sealed class RandomEffectsTests(ITestOutputHelper output)
         {
             double s = Math.Exp(scales[v]), logScalePrior = prior.LogDensity(s) + scales[v];
             if (v == 0 || v == scales.Length - 1) logScalePrior -= Math.Log(2.0);
-            BassDesign design = model.NewDesign(block.At(s).Whitened(model.BaseReading));
+            BassDesign design = model.NewDesign(block.At(0, s).Whitened(model.BaseReading));
             for (int k = 0; k < states.Count; k++)
             {
                 BassTerm[] terms = states[k].Terms;
@@ -485,7 +485,7 @@ public sealed class RandomEffectsTests(ITestOutputHelper output)
                 count[r][replica.Current.Count, batch] += 1.0 / size;
                 structures[r][indices[BassPriorSamplerTests.Key(replica.Current.Terms)], batch] += 1.0 / size;
                 logTau[r][batch] += replica.Current.LogTau / size;
-                logScale[r][batch] += Math.Log(replica.Current.GroupScale!.Value) / size;
+                logScale[r][batch] += Math.Log(replica.Current.GroupScales.Span[0]) / size;
             }
             for (int t = 0; t < scans; t++)
             {
@@ -575,13 +575,13 @@ public sealed class RandomEffectsTests(ITestOutputHelper output)
         const int n = 18, levels = 4, pairs = 24_000;
         BassConfig config = KhaosGPriorTests.Config(scale: TauPrior.Gamma(2, 2), cases: n, sigma2: Sigma2Prior.InverseGamma(3, 2)) with
         {
-            RandomIntercept = new BassRandomIntercept(1.0, ScalePrior: new BassGroupScalePrior()),
+            RandomIntercepts = [new BassRandomIntercept("g", 1.0, ScalePrior: new BassGroupScalePrior())],
         };
         BassData template = RandomInterceptTests.Grouped(KhaosBasisTests.UnitData(n, 3, 77), levels);
         BassModel prior = BassModel.Create(config, template);
         var rng = new Xoshiro256PlusPlus(seed);
         var sampler = new BassPriorSampler(prior);
-        double[] counts = prior.RandomIntercept!.Counts.ToArray();
+        double[] counts = prior.RandomEffects!.Layout(0).Counts.ToArray();
         double norm = counts.Sum(x => x * x);
         string[] names = ["ln s", "ln RMS(u)", "M", "ln τ", "ln σ²"];
         double[][] diff = [.. names.Select(_ => new double[pairs])];
@@ -594,8 +594,8 @@ public sealed class RandomEffectsTests(ITestOutputHelper output)
         for (int j = 0; j < pairs; j++)
         {
             BassState state = sampler.DrawPrior(rng).State;
-            RandomInterceptBlock block = state.Fit.Working!.Whitening!;
-            double scale = block.Spec.Scale;
+            RandomEffectsBlock block = state.Fit.Working!.Whitening!;
+            double scale = block.Scales.Span[0];
             var start = new BassChain(prior, [], state.LogTau, rng, rng);
             start.Structure.Adopt(state, sampler.LastDesign());
             start.Moves.SetState(state, prior.Target.Evaluate(state));
@@ -604,14 +604,14 @@ public sealed class RandomEffectsTests(ITestOutputHelper output)
             double along = counts.Zip(z, (a, b) => a * b).Sum() / norm;
             double sd = Math.Sqrt(fit.Sigma2);
             double[] u = [.. z.Select((v, g) => sd * scale * (v - along * counts[g]))];
-            double[] y = [.. fit.Fitted.Select((f, i) => f + u[block.GroupOf(i)] + sd * Normal.SampleStandard(rng))];
+            double[] y = [.. fit.Fitted.Select((f, i) => f + u[block.Layout(0).GroupOf(i)] + sd * Normal.SampleStandard(rng))];
             double[] before = Values(scale, u, state.Count, state.LogTau, fit.Sigma2);
-            var atScale = config with { RandomIntercept = config.RandomIntercept! with { Scale = scale } };
-            BassModel model = BassModel.Create(atScale, new BassData(template.Predictors, new ScalarResponse(y), template.Grouping));
+            var atScale = config with { RandomIntercepts = [config.RandomIntercepts![0] with { Scale = scale }] };
+            BassModel model = BassModel.Create(atScale, new BassData(template.Predictors, new ScalarResponse(y), template.Groupings));
             var chain = new BassChain(model, state.Terms, state.LogTau, rng, rng);
             for (int t = 0; t < 4; t++) chain.Step();
             BassDraw draw = chain.Compose(rng, new BassTermTable());
-            double[] after = Values(draw.GroupScale!.Value, draw.GroupEffects!, chain.Current.Count, chain.Current.LogTau, draw.Sigma2);
+            double[] after = Values(draw.Groups![0].Scale, draw.Groups![0].Effects, chain.Current.Count, chain.Current.LogTau, draw.Sigma2);
             for (int k = 0; k < names.Length; k++) diff[k][j] = after[k] - before[k];
         }
         double worst = 0.0;
@@ -650,7 +650,7 @@ public sealed class RandomEffectsTests(ITestOutputHelper output)
             if (k % 2 == 1) heldTimes[k] = Time(held, 500 + k);
         }
         double baseline = heldTimes.Order().ElementAt(1), sampled = drawnTimes.Order().ElementAt(1);
-        output.WriteLine($"{basis}, n={held.Data.Response.Cases}, L={held.RandomIntercept!.Levels}, cap={held.MaxBasis}: " +
+        output.WriteLine($"{basis}, n={held.Data.Response.Cases}, L={held.RandomEffects!.Layout(0).Levels}, cap={held.MaxBasis}: " +
                          $"median of 3 × {sweeps} sweeps: held {baseline:F2} µs, drawn {sampled:F2} µs, ratio {sampled / baseline:F2}");
     }
 }

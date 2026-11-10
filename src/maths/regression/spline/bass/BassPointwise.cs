@@ -80,7 +80,7 @@ public static class BassPointwise
         {
             if (model.Observation.Law is not null)
                 throw new NotSupportedException("The collapsed predictive integrates a Gaussian noise; under a noise law it waits for a check of its own. Take the retained content, which integrates each observation's latent.");
-            if (model.RandomIntercept is not null)
+            if (model.RandomEffects is not null)
                 throw new NotSupportedException("The collapsed predictive under random intercepts would leave a unit out of the block as well, whose whitening couples every case of its level; not built (E21). Take the retained content, which reads each draw's group effects.");
             if (model.Working is { IsUnweighted: false, Meaning: WeightMeaning.Replication })
                 throw new NotSupportedException("The collapsed predictive leaves a row out whole; under weights that count rows it would leave out all its copies at once. Take the retained content.");
@@ -115,7 +115,7 @@ public static class BassPointwise
         var latents = new List<LatentReport> { new("structure", LatentScope.Global, LatentTreatment.Conditioned) };
         if (model.Target.SamplesTau) latents.Add(new LatentReport("prior precision τ", LatentScope.Global, LatentTreatment.Conditioned));
         if (model.Target.Sigma2Rate is not null) latents.Add(new LatentReport("σ²'s rate", LatentScope.Global, LatentTreatment.Conditioned));
-        if (model.RandomIntercept is not null)   // the whitening is the block's integral, not an offset conditioned on
+        if (model.RandomEffects is not null)   // the whitening is the block's integral, not an offset conditioned on
             latents.Add(new LatentReport("the group effects u_g", LatentScope.Group, LatentTreatment.Conditioned));
         else if (model.Observation.Law is not null)
             latents.Add(new LatentReport("the noise's latent per observation", LatentScope.Observation, LatentTreatment.Integrated));
@@ -150,7 +150,7 @@ public static class BassPointwise
             }
             WorkingResponse working = draw.WorkingOn(model);
             // Under random intercepts the working response is the whitened one, and the fit reads f + u_g at the observations (E21).
-            ReadOnlySpan<double> y = model.RandomIntercept is null ? working.Values : model.Data.Response.Values;
+            ReadOnlySpan<double> y = model.RandomEffects is null ? working.Values : model.Data.Response.Values;
             double[]? weights = working.WeightArray;
             bool counts = working.Meaning == WeightMeaning.Replication;
             fit.Evaluate(draw, f);
@@ -263,7 +263,7 @@ internal sealed class BassDrawFit
 
     public BassDrawFit(BassModel model, BassTermTable terms)
     {
-        _block = model.RandomIntercept;
+        _block = model.RandomEffects;
         _model = model;
         _terms = terms;
         _cases = model.Data.Response.Cases;
@@ -351,7 +351,7 @@ internal sealed class BassDrawFit
         return (a, h);
     }
 
-    private readonly RandomInterceptBlock? _block;
+    private readonly RandomEffectsBlock? _block;
 
     /// <summary>The draw's fit at every observation, into <paramref name="fit"/>: f, and under random intercepts f + u_g, each case reading
     /// its level's effect (E21).</summary>
@@ -359,8 +359,9 @@ internal sealed class BassDrawFit
     {
         EvaluateTerms(draw, fit);
         if (_block is null) return;
-        double[] u = draw.GroupEffects ?? throw new ArgumentException("A random-intercept fit's draw carries its group effects.", nameof(draw));
-        for (int i = 0; i < _cases; i++) fit[i] += u[_block.GroupOf(i)];
+        BassGroupDraw[] groups = _block.Ordered(draw.Groups ?? throw new ArgumentException("A random-intercept fit's draw carries its named groups.", nameof(draw)));
+        for (int k = 0; k < groups.Length; k++)
+            for (int i = 0; i < _cases; i++) fit[i] += groups[k].Effects[_block.Layout(k).GroupOf(i)];
     }
 
     private void EvaluateTerms(BassDraw draw, Span<double> fit)

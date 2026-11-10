@@ -61,12 +61,12 @@ public sealed record BassConfig
     public BassNoise? Noise { get; init; }
 
     /// <summary>
-    /// Random-effect intercepts on the data's grouping (E21; <see cref="BassRandomIntercept"/>): null, the default, holds none. Left out of
+    /// Named random-effect intercept blocks (E21; <see cref="BassRandomIntercept"/>): null, the default, holds none. Left out of
     /// the serialized form when null, so a config without them keeps its form and fingerprint. Refused beside a noise, whose latent weights
     /// move each sweep while the block is integrated under unit weights.
     /// </summary>
     [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
-    public BassRandomIntercept? RandomIntercept { get; init; }
+    public IReadOnlyList<BassRandomIntercept>? RandomIntercepts { get; init; }
 
     /// <summary>The run: chains or SMC's replicates, seeds, lengths, the R̂ stop and the move schedule.</summary>
     public BassSampling Sampling { get; init; } = new();
@@ -178,20 +178,13 @@ public sealed record BassConfig
                 throw Bad("Noise.Reference", "is None, while the intercept's level or σ²'s prior reads the response; state Moments or Robust, or take priors that read nothing");
         }
 
-        if (RandomIntercept is { } block)
+        CheckRandomIntercepts(RandomIntercepts);
+        if (RandomIntercepts is { Count: > 0 } && Noise is not null)
+            throw Bad("RandomIntercepts", "take no Noise: blocks are integrated by whitening under unit weights, and a noise's latent weights move each sweep; not built");
+        for (int k = 0; k < (RandomIntercepts?.Count ?? 0); k++)
         {
-            if (!(block.Scale > 0.0) || !double.IsFinite(block.Scale))
-                throw Bad("RandomIntercept.Scale", "must be positive and finite: the group effects' standard deviation in units of σ");
-            if (block.Convention != RandomInterceptConvention.ObservationCentred) throw Bad("RandomIntercept.Convention", "is not a known convention");
-            if (Noise is not null)
-                throw Bad("RandomIntercept", "takes no Noise: the block is integrated by whitening the response under unit weights, and a noise's latent weights move each sweep; not built");
-            if (block.ScalePrior is { } scalePrior)
-            {
-                if (!(scalePrior.Scale > 0.0) || !double.IsFinite(scalePrior.Scale))
-                    throw Bad("RandomIntercept.ScalePrior.Scale", "must be positive and finite: the half-Cauchy's scale on s, in units of σ");
-                if (Sampling?.FlatHistogram is not null)
-                    throw Bad("RandomIntercept.ScalePrior", "takes no Sampling.FlatHistogram: its weights and WHAM read the rung laws of a marginal that the drawn s moves, which is not gated; take Sampling.Tempering or Sampling.Smc, or hold s");
-            }
+            if (RandomIntercepts![k].ScalePrior is not null && Sampling?.FlatHistogram is not null)
+                throw Bad($"RandomIntercepts[{k}].ScalePrior", "takes no Sampling.FlatHistogram: its weights and WHAM read the rung laws of a marginal that the drawn s moves, which is not gated; take Sampling.Tempering or Sampling.Smc, or hold s");
         }
 
         BassSampling run = Sampling ?? throw Bad("Sampling", "is missing");
@@ -326,6 +319,40 @@ public sealed record BassConfig
     }
 
     // A ladder's declaration, its fields named under `field`.
+    internal static void CheckRandomIntercepts(IReadOnlyList<BassRandomIntercept>? blocks)
+    {
+        if (blocks is null) return;
+        var names = new HashSet<string>(StringComparer.Ordinal);
+        for (int k = 0; k < blocks.Count; k++)
+        {
+            string field = $"RandomIntercepts[{k}]";
+            BassRandomIntercept block = blocks[k] ?? throw Bad(field, "is null");
+            if (string.IsNullOrWhiteSpace(block.Grouping)) throw Bad($"{field}.Grouping", "must name a grouping");
+            if (!names.Add(block.Grouping)) throw Bad($"{field}.Grouping", $"duplicates grouping '{block.Grouping}'");
+            if (!(block.Scale > 0) || !double.IsFinite(block.Scale)) throw Bad($"{field}.Scale", "must be positive and finite");
+            if (block.Convention is not (RandomInterceptConvention.ObservationCentred or RandomInterceptConvention.WithinParent))
+                throw Bad($"{field}.Convention", "is not a known convention");
+            if (block.Convention == RandomInterceptConvention.WithinParent && string.IsNullOrWhiteSpace(block.ParentGrouping))
+                throw Bad($"{field}.ParentGrouping", "must name the parent of a WithinParent block");
+            if (block.Convention == RandomInterceptConvention.ObservationCentred && block.ParentGrouping is not null)
+                throw Bad($"{field}.ParentGrouping", "is only defined for the WithinParent convention");
+            if (block.ParentGrouping == block.Grouping) throw Bad($"{field}.ParentGrouping", "cannot name the block's own grouping");
+            if (block.ScalePrior is { } prior && (!(prior.Scale > 0) || !double.IsFinite(prior.Scale)))
+                throw Bad($"{field}.ScalePrior.Scale", "must be positive and finite");
+        }
+        var parents = blocks.ToDictionary(block => block.Grouping, block => block.ParentGrouping, StringComparer.Ordinal);
+        foreach (BassRandomIntercept block in blocks)
+        {
+            var path = new HashSet<string>(StringComparer.Ordinal);
+            string? next = block.Grouping;
+            while (next is not null && parents.TryGetValue(next, out string? parent))
+            {
+                if (!path.Add(next)) throw Bad("RandomIntercepts", $"parent groupings form a cycle at '{next}'");
+                next = parent;
+            }
+        }
+    }
+
     private static void CheckTempering(TemperingSpec t, string field, TauPrior scale)
     {
         if (t.Path is not (TemperingPath.Likelihood or TemperingPath.Powered)) throw Bad($"{field}.Path", "is not a known path");

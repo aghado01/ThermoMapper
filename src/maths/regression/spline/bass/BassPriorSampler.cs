@@ -114,9 +114,14 @@ public sealed class BassPriorSampler : IReferenceSampler<BassState>
         if (_model.Observation is VarianceMeanMixture mixture) return DrawWithLatents(mixture, rng);
         if (_model.ScaleDrawn)
         {
-            RandomInterceptBlock block = _model.RandomIntercept!;
-            BassGroupScalePrior scalePrior = block.Spec.ScalePrior!;
-            return DrawOn(rng, () => block.At(scalePrior.Sample(rng)).Whitened(_model.BaseReading));
+            RandomEffectsBlock block = _model.RandomEffects!;
+            return DrawOn(rng, () =>
+            {
+                double[] scales = block.Scales.ToArray();
+                for (int k = 0; k < scales.Length; k++)
+                    if (block.Specifications[k].ScalePrior is { } prior) scales[k] = prior.Sample(rng);
+                return block.At(scales).Whitened(_model.BaseReading);
+            });
         }
         return DrawState(rng);
     }

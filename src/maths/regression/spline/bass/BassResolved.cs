@@ -146,19 +146,31 @@ public sealed record BassResolved
         int cases = response.Cases, locations = response.Locations, n = response.Observations;
         bool functional = response is FunctionalResponse;
         log.Add(new("Observations", Text(n), functional ? $"N = n_x · n_r = {cases} · {locations}" : "N = n_x, a scalar response"));
-        if (config.RandomIntercept is null && data.Grouping is { } unread)
-            throw new ArgumentException($"The data hold a grouping ('{unread.Name}'), which only random intercepts read; declare RandomIntercept or leave the grouping out.", nameof(data));
-        if (config.RandomIntercept is { } block)
+        if (config.RandomIntercepts is not { Count: > 0 } && data.Groupings.Count > 0)
+            throw new ArgumentException("The data hold groupings, which only random intercepts read; declare RandomIntercepts or leave the groupings out.", nameof(data));
+        if (config.RandomIntercepts is { Count: > 0 } blocks)
         {
-            CategoricalPredictor grouping = data.Grouping
-                ?? throw new ArgumentException("The config declares random intercepts (RandomIntercept), and the data hold no grouping.", nameof(data));
-            if (functional) throw new ArgumentException("Random intercepts serve a scalar response; a direct functional response's block is not built.", nameof(data));
-            var counts = new int[grouping.Levels.Count];
-            foreach (int code in grouping.Codes.Span) counts[code]++;
-            int[] observed = [.. counts.Where(c => c > 0)];
-            string scaleText = block.ScalePrior is { } scalePrior ? $"s drawn from C⁺(0, {Text(scalePrior.Scale)}), from {Text(block.Scale)}" : $"s = {Text(block.Scale)}";
-            log.Add(new("RandomIntercept", $"{observed.Length} levels of '{grouping.Name}', {scaleText}",
-                        $"observation-centred, Σ n_g u_g = 0, {observed.Min()} to {observed.Max()} cases a level; integrated out by whitening the response and every column, which each coefficient form reads as its design"));
+            if (response is not ScalarResponse) throw new ArgumentException("Random intercepts currently serve a scalar Gaussian response.", nameof(data));
+            RandomEffectsBlock effects = working?.Whitening ?? RandomEffectsBlock.Of(data.Groupings, blocks);
+            foreach (CategoricalPredictor grouping in data.Groupings)
+                if (!blocks.Any(b => b.Grouping == grouping.Name || b.ParentGrouping == grouping.Name))
+                    throw new ArgumentException($"Grouping '{grouping.Name}' is not read by any random-intercept block or parent convention.", nameof(data));
+            for (int k = 0; k < effects.Count; k++)
+            {
+                BassRandomIntercept block = blocks[k];
+                RandomEffectGrouping grouping = effects.Layout(k);
+                double[] observed = grouping.Counts.ToArray();
+                string convention = grouping.ParentName is { } parent
+                    ? $"centred within '{parent}', Σ_{{g in p}} n_g u_g = 0 for each parent level"
+                    : "observation-centred, Σ n_g u_g = 0";
+                string scaleText = block.ScalePrior is { } scalePrior ? $"s drawn from C⁺(0, {Text(scalePrior.Scale)}), from {Text(block.Scale)}" : $"s = {Text(block.Scale)}";
+                log.Add(new($"RandomIntercepts[{block.Grouping}]", $"{observed.Length} levels, {scaleText}",
+                    $"{convention}, {Text(observed.Min())} to {Text(observed.Max())} cases a level; jointly integrated by whitening the response and every column"));
+            }
+            log.Add(new("RandomEffectsRank", Text(effects.Rank), "rank of the constrained joint case design; scale updates factor only this reduced covariance"));
+            foreach (RandomEffectAlias alias in effects.Aliases)
+                log.Add(new("RandomEffectsAlias", $"'{alias.FirstGrouping}:{alias.FirstLevel}' and '{alias.SecondGrouping}:{alias.SecondLevel}'",
+                    "identical case sets; separate proper variance components retain the latent uncertainty, with no additional constraint"));
         }
         IEnumerable<ContinuousPredictor> columns = data.Predictors.OfType<ContinuousPredictor>();
         if (response is FunctionalResponse withOutputs) columns = columns.Concat(withOutputs.OutputVariables);
@@ -426,7 +438,7 @@ public sealed record BassResolved
     {
         int k = response.Outputs, n = response.Cases;
         if (config.Noise is not null) throw new ArgumentException("Several outputs take Gaussian noise in E34's slice 1; the noise by row (decision 6) arrives in slice 4.", "config");
-        if (config.RandomIntercept is not null) throw new ArgumentException("Several outputs' random intercepts (decision 7) arrive in E34's slice 4.", "config");
+        if (config.RandomIntercepts is { Count: > 0 }) throw new ArgumentException("Several outputs' random intercepts (decision 7) arrive in E34's slice 4.", "config");
         // Σ's prior: the declared one, or Sigma2's ScaledToResponse(c) carried to K outputs.
         OutputCovariancePrior chosen = config.OutputCovariance
             ?? (config.Sigma2.Kind == Sigma2PriorKind.ScaledToResponse

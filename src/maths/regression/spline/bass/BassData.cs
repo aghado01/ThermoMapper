@@ -14,9 +14,9 @@ namespace Maths.Regression.Spline.Bass;
 /// </summary>
 public sealed record BassData
 {
-    /// <summary>The predictors, in the caller's order, the response, and the cases' <paramref name="grouping"/> when random intercepts read
-    /// one (E21; <see cref="BassConfig.RandomIntercept"/>): a categorical column beside the predictors, which no term reads.</summary>
-    public BassData(IReadOnlyList<BassPredictor> predictors, BassResponse response, CategoricalPredictor? grouping = null)
+    /// <summary>The predictors, response and named groupings read by random intercepts (E21). Groupings are categorical columns
+    /// beside the predictors, and terms read only the predictors. Each collection is copied in the caller's order.</summary>
+    public BassData(IReadOnlyList<BassPredictor> predictors, BassResponse response, IReadOnlyList<CategoricalPredictor>? groupings = null)
     {
         ArgumentNullException.ThrowIfNull(predictors);
         ArgumentNullException.ThrowIfNull(response);
@@ -34,22 +34,25 @@ public sealed record BassData
         if (response is FunctionalResponse functional)
             foreach (ContinuousPredictor v in functional.OutputVariables)
                 if (!names.Add(v.Name)) throw new ArgumentException($"The name '{v.Name}' is used twice.", nameof(response));
-        if (grouping is not null)
+        var groupCopy = new CategoricalPredictor[groupings?.Count ?? 0];
+        for (int k = 0; k < groupCopy.Length; k++)
         {
+            CategoricalPredictor grouping = groupings![k] ?? throw new ArgumentException($"Grouping {k} is null.", nameof(groupings));
             if (grouping.Length != response.Cases)
-                throw new ArgumentException($"The grouping '{grouping.Name}' has {grouping.Length} values for {response.Cases} cases.", nameof(grouping));
-            if (!names.Add(grouping.Name)) throw new ArgumentException($"The name '{grouping.Name}' is used twice.", nameof(grouping));
+                throw new ArgumentException($"The grouping '{grouping.Name}' has {grouping.Length} values for {response.Cases} cases.", nameof(groupings));
+            if (!names.Add(grouping.Name)) throw new ArgumentException($"The name '{grouping.Name}' is used twice.", nameof(groupings));
+            groupCopy[k] = grouping;
         }
         Predictors = Array.AsReadOnly(copy);
         Response = response;
-        Grouping = grouping;
+        Groupings = Array.AsReadOnly(groupCopy);
     }
 
     /// <summary>The predictors, in the caller's order.</summary>
     public IReadOnlyList<BassPredictor> Predictors { get; }
 
-    /// <summary>The cases' grouping, which random intercepts read (E21); null when the data hold none.</summary>
-    public CategoricalPredictor? Grouping { get; }
+    /// <summary>The named case groupings, in declaration order. The collection is empty when none are supplied.</summary>
+    public IReadOnlyList<CategoricalPredictor> Groupings { get; }
 
     /// <summary>The response.</summary>
     public BassResponse Response { get; }

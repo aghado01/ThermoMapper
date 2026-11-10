@@ -43,7 +43,7 @@ y = α + Σⱼ βⱼBⱼ(x) + Σₖ Z̃ₖuₖ + ε, ε ~ N(0, σ²W⁻¹) (W = 
 2. **s's prior: half-Cauchy on s, C⁺(0, A),** with A declared and 1 by default, since s is in units of σ: a group effect about as large as the noise (Gelman 2006; Polson and Scott 2012). It is proper, so the reference rung and SMC's start draw s from it. Held s stays the default, so every config written before declares it as before.
    - *Alternatives:* an inverse gamma on s², conjugate only for the latent scheme, whose small shape and scale put mass near 0 that Gelman shows the posterior inherits; a half-normal, with a lighter tail that lets the data move s less when the groups disagree with the prior.
 3. **The whitening rides the working response,** not the design. V depends on s and, under a noise, on W, both of which move with the state. So the block's whitening (V^(−½) and ln|V|) is carried by the working response at its state, as the weights are, and the design reads it from the response it is on, through the `Followed` move that already re-evaluates columns when the weights move. Held s and unit weights give the arithmetic of today, bit for bit.
-4. **Several groupings: the general whitening by a thin factorization, with one grouping's closed form kept.** With Z̃ (n × q, q = Σₖ qₖ) factored once as QR (rank-revealing, Q n × r), V = I + Q·(RS²Rᵀ)·Qᵀ, so V^(−½) = I + Q·E((1 + Λ)^(−½) − I)Eᵀ·Qᵀ from an r × r eigendecomposition per value of S. That is O(r³) per s and O(nr) a column.
+4. **Several groupings: the general whitening by a thin factorization, with one grouping's closed form kept.** With Z̃ (n × q, q = Σₖ qₖ) factored once into Q·R (rank-revealing, Q n × r), V = I + Q·(RS²Rᵀ)·Qᵀ, so V^(−½) = I + Q·E((1 + Λ)^(−½) − I)Eᵀ·Qᵀ. The scale-free factor uses the existing thin SVD. A reduced SVD of R·S obtains E and Λ at each scale vector without explicitly forming the covariance Gram: the latter lost the small component at scales (10⁶, 0.6) in an independent two-contrast reference. Work is O(qr²+r³) per scale vector and O(nr+r²) per column, independent of n for the scale factorization. Effects use the reduced factor's right vectors in their conditional gain and retain all q latent coordinates under aliases.
    - One intercept grouping keeps its closed form, O(n + L²) a column, so its fits stay bit for bit; the general form agrees with it to 10⁻¹² (gate).
    - *Alternative:* the per-grouping closed forms composed, which is exact only when the groupings' spans are orthogonal in the case metric, as nested groupings under the within-parent convention are, and wrong for crossed ones.
 5. **Each grouping's convention, declared.**
@@ -127,6 +127,10 @@ Each slice reports here and to the main session:
 ## Reports
 
 Newest first.
+
+### Slice 2 — named crossed and nested Gaussian intercepts (2026-11-09)
+
+The scoped commit `feat(bass): support named crossed and nested intercept blocks` carries the named data, configuration and retained-effect collections, both centring conventions, joint whitening and per-group scale steps. The [report](ridge-multiple-groupings-report.md) records the E34 reconciliation, API and checkpoint migration, dense references, nonlinear recovery and rank-cost rows. The independent unequal-scale review led to the reduced weighted-factor SVD and stable gain in decision 4. Combined qualification passed 66/66, including deterministic covariance and actual draws at scales differing by 10⁶, one-group hash pins, grouped resume and E34 output-rate resume. Commit passed 2,037/2,037 and full Slice passed 2,874/2,874, with no skips. The current-main test assembly also compiled with zero errors. [Receipts](../../../artifacts/e21-ridge-s2-qualification/) retain the baseline, source hashes, settings and TRXs.
 
 ### Slice 1 — drawn scale on one Gaussian intercept grouping (2026-11-09)
 

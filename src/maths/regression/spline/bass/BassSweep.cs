@@ -327,11 +327,10 @@ public sealed class BassStructureMoves
         bool rebuilds = working.Latents is not null && _model.Observation.Rebuilds;
         // The group effects at the block the reading carries, the chain's s, drawn last, so a fit without the block draws as it did. A
         // drawn s is the draw's generative state, and its reading a view rebuilt from it (BassDraw.WorkingOn).
-        RandomInterceptBlock? block = working.Whitening;
-        double[]? effects = block?.DrawEffects(block.ResidualSums(_model, [.. order.Select(k => state.Terms[k])], coefficients), sigma2, rng);
+        RandomEffectsBlock? block = working.Whitening;
+        BassGroupDraw[]? groups = block?.DrawGroups(_model, [.. order.Select(k => state.Terms[k])], coefficients, sigma2, rng);
         return new BassDraw(new BassStructure(sorted), tau, sigma2, coefficients, lambda, target.Sigma2Rate?.RateAt(state.LogRate),
-                            working.IsResponseItself || rebuilds || _model.ScaleDrawn ? null : working, rebuilds ? working.Latents : null, effects,
-                            GroupScale: block?.Spec.Scale);
+                            working.IsResponseItself || rebuilds || _model.ScaleDrawn ? null : working, rebuilds ? working.Latents : null, groups);
     }
 
     // Several outputs' retained draw (E34): Σ, then the coefficients given Σ (BassOutputDraws), then λ, the coefficients in the uncentred

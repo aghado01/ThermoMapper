@@ -19,6 +19,9 @@ public enum RandomInterceptConvention
     /// keeps a nonzero mean, which is the overlap with the level-centred intercept the convention exists to remove.
     /// </summary>
     ObservationCentred,
+
+    /// <summary>The observation-weighted effect mean is zero separately in each parent level.</summary>
+    WithinParent,
 }
 
 /// <summary>
@@ -58,19 +61,22 @@ public sealed record BassGroupScalePrior(double Scale = 1.0)
 }
 
 /// <summary>
-/// Random-effect intercepts on the data's grouping (E21; <see cref="BassData.Grouping"/>): y = α + Σⱼ βⱼBⱼ(x) + u_g + ε, with
-/// u | σ² ~ N(0, σ²s²Π) on the observed levels, Π the projector onto {u : Σ_g n_g u_g = 0} (<see cref="Convention"/>), so
+/// Random-effect intercepts on a named data grouping (E21; <see cref="BassData.Groupings"/>): y = α + Σⱼ βⱼBⱼ(x) + Σ_k u_kg + ε, with
+/// each u_k | σ² ~ N(0, σ²s_k²Π_k) on its observed levels, Π_k the projector onto its declared constraints (<see cref="Convention"/>), so
 /// <paramref name="Scale"/> s is the group effects' standard deviation in units of σ: held, or drawn under <paramref name="ScalePrior"/>
 /// (<see cref="BassGroupScaleBlock"/>). No term reads the grouping, and the coefficient prior is the config's, of any form. The block is
-/// integrated out of every structure's marginal (<see cref="RandomInterceptBlock"/>), and each retained draw carries its group effects
-/// (<see cref="BassDraw.GroupEffects"/>) and its s (<see cref="BassDraw.GroupScale"/>).
+/// jointly integrated out of every structure's marginal (<see cref="RandomEffectsBlock"/>), and each retained draw carries its named
+/// groups' scales and effects (<see cref="BassDraw.Groups"/>).
 /// </summary>
+/// <param name="Grouping">The data grouping's unique name.</param>
 /// <param name="Scale">s: the group effects' standard deviation over σ, positive and finite; held, or the chain's start when it is drawn.</param>
-/// <param name="Convention">The identifiability convention; the observation-centred one, the default and the only one built.</param>
+/// <param name="Convention">Observation centring, or centring within each level of a declared parent.</param>
 /// <param name="ScalePrior">s's prior, which draws it (E21's slice 1); null, the default, holds s. Left out of the serialized form when
-/// null, so a config written before serializes and fingerprints as it did.</param>
-public sealed record BassRandomIntercept(double Scale, RandomInterceptConvention Convention = RandomInterceptConvention.ObservationCentred,
-                                         [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] BassGroupScalePrior? ScalePrior = null);
+/// null.</param>
+/// <param name="ParentGrouping">Within-parent centring's parent data grouping; absent under observation centring.</param>
+public sealed record BassRandomIntercept(string Grouping, double Scale, RandomInterceptConvention Convention = RandomInterceptConvention.ObservationCentred,
+                                         [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] BassGroupScalePrior? ScalePrior = null,
+                                         [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] string? ParentGrouping = null);
 
 /// <summary>
 /// A random-intercept block on one data set (E21), integrated out. With Z the cases' level indicators over the L observed levels, D = ZᵀZ
@@ -134,6 +140,7 @@ public sealed class RandomInterceptBlock
     {
         ArgumentNullException.ThrowIfNull(grouping);
         ArgumentNullException.ThrowIfNull(spec);
+        if (spec.Grouping != grouping.Name) throw new ArgumentException("The declaration must name this grouping.", nameof(spec));
         if (!(spec.Scale > 0.0) || !double.IsFinite(spec.Scale)) throw new ArgumentOutOfRangeException(nameof(spec), "The scale is positive and finite.");
         if (spec.Convention != RandomInterceptConvention.ObservationCentred) throw new ArgumentOutOfRangeException(nameof(spec), "The convention is not built.");
         ReadOnlySpan<int> codes = grouping.Codes.Span;
@@ -298,32 +305,6 @@ public sealed class RandomInterceptBlock
     }
 
     /// <summary>
-    /// The working response of <paramref name="working"/> whitened: V^(−½)y, as an offset y − V^(−½)y, its weighting carrying −ln|V|, and
-    /// this block its <see cref="WorkingResponse.Whitening"/>, by which the design whitens each column. Unit weights and no latents only: a
-    /// weighted or latent working response would need V^(−½) under W, which is not built.
-    /// </summary>
-    public WorkingResponse Whitened(WorkingResponse working)
-    {
-        ArgumentNullException.ThrowIfNull(working);
-        if (!working.IsUnweighted || working.Latents is not null || !working.Offset.IsEmpty || working.Response is FunctionalResponse)
-            throw new ArgumentException("Random intercepts whiten a scalar response under unit weights, with no offset or latents.", nameof(working));
-        return WhitenResponse(working);
-    }
-
-    // Always transform the raw observations. A scale proposal replaces the previous whitening, keeping the
-    // design's response and reference identities even after a checkpoint restore or replica hand-over.
-    internal WorkingResponse WhitenResponse(WorkingResponse working)
-    {
-        ReadOnlySpan<double> y = working.Response.Values;
-        double[] white = y.ToArray();
-        Whiten(white);
-        var offset = new double[y.Length];
-        for (int i = 0; i < y.Length; i++) offset[i] = y[i] - white[i];
-        return new WorkingResponse(working.Response, offset, output: working.Output, meaning: working.Meaning, priorGram: working.PriorGram,
-                                   reference: working.Reference, logJacobian: -LogDeterminant) { Whitening = this };
-    }
-
-    /// <summary>
     /// The group effects u over the observed levels from their conditional given α, β and σ² (<paramref name="sigma2"/>), with
     /// <paramref name="residualSums"/> = Zᵀ(y − α − Xβ) on the unwhitened columns: u = H·γ, γ's mean and spread as the block holds them.
     /// Σ_g n_g u_g = 0.
@@ -394,23 +375,30 @@ public sealed class BassGroupScaleBlock : IBlock<ReversibleJumpChain<BassState>>
 {
     private const double Step = 2.4;   // the random walk's scale over the target's sd along t
     private readonly BassGroupScalePrior _prior;
+    private readonly int _group;
+    private readonly string _name;
 
-    internal BassGroupScaleBlock(BassModel model)
+    internal BassGroupScaleBlock(BassModel model, int group = 0)
     {
         ArgumentNullException.ThrowIfNull(model);
-        _prior = model.RandomIntercept?.Spec.ScalePrior
-                 ?? throw new ArgumentException("The group scale's step needs a drawn scale (RandomIntercept.ScalePrior).", nameof(model));
+        RandomEffectsBlock blocks = model.RandomEffects
+            ?? throw new ArgumentException("The group scale's step needs random intercepts.", nameof(model));
+        if ((uint)group >= (uint)blocks.Count) throw new ArgumentOutOfRangeException(nameof(group));
+        _group = group;
+        _prior = blocks.Specifications[group].ScalePrior
+                 ?? throw new ArgumentException("The group scale's step needs a drawn scale (RandomIntercepts[].ScalePrior).", nameof(model));
+        _name = blocks.Count == 1 ? "group scale" : $"group scale {blocks.Specifications[group].Grouping}";
     }
 
     /// <inheritdoc/>
-    public string Name => "group scale";
+    public string Name => _name;
 
     /// <inheritdoc/>
     public bool Update(ReversibleJumpChain<BassState> state, Xoshiro256PlusPlus rng)
     {
         ArgumentNullException.ThrowIfNull(state);
         ArgumentNullException.ThrowIfNull(rng);
-        RandomInterceptBlock block = Reading(state).Whitening ?? throw new InvalidOperationException("The chain's reading carries no block.");
+        RandomEffectsBlock block = Reading(state).Whitening ?? throw new InvalidOperationException("The chain's reading carries no block.");
         double h = Scale(block), t = h * Normal.SampleStandard(rng);
         if (Propose(state, block, h, t) is not { } move) return false;
         if (!(Math.Log(1.0 - rng.NextDouble()) < move.LogAcceptance)) return false;
@@ -425,18 +413,18 @@ public sealed class BassGroupScaleBlock : IBlock<ReversibleJumpChain<BassState>>
     internal static WorkingResponse Reading(ReversibleJumpChain<BassState> state) => BassStructureMoves.Of(state).DesignAt(state.Current).Working;
 
     // h = Step/√C at the block's s.
-    internal double Scale(RandomInterceptBlock block)
+    internal double Scale(RandomEffectsBlock block)
     {
-        double c = block.LogScaleInformation + _prior.CurvatureInLog(block.Spec.Scale);
+        double c = block.ScaleInformation(_group) + _prior.CurvatureInLog(block.Scales.Span[_group]);
         return Step / Math.Sqrt(double.IsFinite(c) ? Math.Max(c, 1.0) : 1.0);
     }
 
     // The step by t from the block's s, or null when s′ is not a scale or the structure leaves F there.
-    internal Move? Propose(ReversibleJumpChain<BassState> state, RandomInterceptBlock block, double h, double t)
+    internal Move? Propose(ReversibleJumpChain<BassState> state, RandomEffectsBlock block, double h, double t)
     {
-        double s = block.Spec.Scale, moved = s * Math.Exp(t);
+        double s = block.Scales.Span[_group], moved = s * Math.Exp(t);
         if (!(moved > 0.0) || !double.IsFinite(moved)) return null;
-        RandomInterceptBlock at = block.At(moved);
+        RandomEffectsBlock at = block.At(_group, moved);
         double reverse = Scale(at);
         double proposalRatio = Math.Log(h) - Math.Log(reverse) - t * t / (2.0 * reverse * reverse) + t * t / (2.0 * h * h);
         BassState candidate = BassStructureMoves.Of(state).ProposeFollow(state.Current, at.WhitenResponse(Reading(state)));

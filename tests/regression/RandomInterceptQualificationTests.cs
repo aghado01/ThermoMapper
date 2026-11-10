@@ -59,7 +59,7 @@ public sealed class RandomInterceptQualificationTests(ITestOutputHelper output)
         string[] names = [.. Enumerable.Range(0, Levels).Select(g => $"G{g}")];
         InputDomain? domain = declared ? new InputDomain(0.0, 1.0) : null;
         var data = new BassData([new ContinuousPredictor("x0", x0, domain), new ContinuousPredictor("x1", x1, domain)], new ScalarResponse(y),
-                                new CategoricalPredictor("level", codes, names));
+                                [new CategoricalPredictor("level", codes, names)]);
         // Held-out cases, each level equally likely, so the small levels count as much as the large.
         double[] t0 = [.. Enumerable.Range(0, Held).Select(_ => rng.NextDouble())], t1 = [.. Enumerable.Range(0, Held).Select(_ => rng.NextDouble())];
         int[] t = [.. Enumerable.Range(0, Held).Select(_ => (int)(rng.NextDouble() * Levels))];
@@ -91,7 +91,7 @@ public sealed class RandomInterceptQualificationTests(ITestOutputHelper output)
             int n = data.Response.Cases;
             BassConfig plain = Config(basis, 300 + k, n), block = plain with
             {
-                RandomIntercept = new BassRandomIntercept(Scale, ScalePrior: drawScale ? new BassGroupScalePrior() : null),
+                RandomIntercepts = [new BassRandomIntercept("level", Scale, ScalePrior: drawScale ? new BassGroupScalePrior() : null)],
             };
             var watch = Stopwatch.StartNew();
             BassFit fit = Bass.Fit(block, data, new BassRunOptions { MaxDegreeOfParallelism = 2 });
@@ -99,7 +99,7 @@ public sealed class RandomInterceptQualificationTests(ITestOutputHelper output)
             BassDraw[] draws = [.. fit.Draws.SelectMany(c => c)];
             if (drawScale)
             {
-                (double lo, double hi) = Interval(draws.Select(d => d.GroupScale!.Value));
+                (double lo, double hi) = Interval(draws.Select(d => d.Groups![0].Scale));
                 // The generator's population sd is 0.8, irrespective of its realized sample of twelve levels.
                 if (lo <= 0.8 / Sigma && 0.8 / Sigma <= hi) scaleCovered++;
                 (double lowNoise, double highNoise) = Interval(draws.Select(d => Math.Sqrt(d.Sigma2)));
@@ -108,17 +108,17 @@ public sealed class RandomInterceptQualificationTests(ITestOutputHelper output)
             }
 
             // The convention's target: the true effects less their observation-weighted mean, which the level takes.
-            int[] codes = data.Grouping!.Codes.ToArray();
+            int[] codes = data.Groupings[0].Codes.ToArray();
             double[] counts = [.. Enumerable.Range(0, Levels).Select(l => (double)codes.Count(c => c == l))];
             double weighted = Enumerable.Range(0, Levels).Sum(l => counts[l] * g.Effects[l]) / n, unweighted = g.Effects.Average();
             double[] target = [.. g.Effects.Select(u => u - weighted)];
-            RandomInterceptBlock fitted = BassModel.Create(block, data).RandomIntercept!;
+            RandomEffectGrouping fitted = BassModel.Create(block, data).RandomEffects!.Layout(0);
             var mean = new double[Levels];
             double worstCentre = 0.0, squares = 0.0;
             for (int l = 0; l < Levels; l++)
             {
                 int observed = fitted.ObservedOf(l);
-                double[] u = [.. draws.Select(d => d.GroupEffects![observed]).Order()];
+                double[] u = [.. draws.Select(d => d.Groups![0].Effects[observed]).Order()];
                 mean[l] = u.Average();
                 double sd = Math.Sqrt(u.Sum(v => (v - mean[l]) * (v - mean[l])) / (u.Length - 1));
                 z2 += Math.Pow((mean[l] - target[l]) / sd, 2);
@@ -129,7 +129,7 @@ public sealed class RandomInterceptQualificationTests(ITestOutputHelper output)
             }
             foreach (BassDraw d in draws)
             {
-                double centre = Math.Abs(Enumerable.Range(0, Levels).Sum(l => counts[l] * d.GroupEffects![fitted.ObservedOf(l)]));
+                double centre = Math.Abs(Enumerable.Range(0, Levels).Sum(l => counts[l] * d.Groups![0].Effects[fitted.ObservedOf(l)]));
                 worstCentre = Math.Max(worstCentre, centre);
                 if (drawScale) Assert.InRange(centre / n, 0, 1e-12);
             }

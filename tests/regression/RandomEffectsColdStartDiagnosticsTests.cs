@@ -29,7 +29,7 @@ public sealed class RandomEffectsColdStartDiagnosticsTests(ITestOutputHelper out
         config = config with
         {
             Coefficients = holdTau ? config.Coefficients with { Scale = TauPrior.Held(Math.Exp(logTau)) } : config.Coefficients,
-            RandomIntercept = grouping ? new BassRandomIntercept(scale, ScalePrior: new BassGroupScalePrior()) : null,
+            RandomIntercepts = grouping ? [new BassRandomIntercept("g", scale, ScalePrior: new BassGroupScalePrior())] : null,
             Sampling = config.Sampling with { FactorMoves = factors ? new FactorMoves(1, 1, 0) : null },
         };
         BassData data = grouping ? held.Data : new BassData(held.Data.Predictors, held.Data.Response);
@@ -277,7 +277,7 @@ public sealed class RandomEffectsColdStartDiagnosticsTests(ITestOutputHelper out
         double[] shifts = [.. rungs.Select(b => pivotValue.LogPrior + pivotValue.LogLikelihood(b))];
         for (int v = 0; v < scales.Length; v++)
         {
-            WorkingResponse working = model.RandomIntercept!.At(Math.Exp(scales[v])).Whitened(model.BaseReading);
+            WorkingResponse working = model.RandomEffects!.At(0, Math.Exp(scales[v])).Whitened(model.BaseReading);
             BassDesign design = model.NewDesign(working);
             Assert.Null(design.Load(Trap));
             BassStructureFit source = BassStructureFit.Of(design, Trap.Sum(model.Prior.LogPrior));

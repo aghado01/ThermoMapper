@@ -204,7 +204,7 @@ public sealed class WorkingResponse
     /// does; with no weights of its own it reads unit weights. <paramref name="latents"/> are the observation model's latents at this
     /// reading (one value per observation), none for a model with none. <paramref name="logJacobian"/> is the log-Jacobian of a linear map
     /// the offset applied to the response, which the likelihood carries beside the weights' Σ ln wᵢ: a random-intercept block's −ln|V| for
-    /// its whitening (<see cref="RandomInterceptBlock.Whitened"/>), 0 otherwise. The arrays are copied.</summary>
+    /// its whitening (<see cref="RandomEffectsBlock.Whitened"/>), 0 otherwise. The arrays are copied.</summary>
     public WorkingResponse(BassResponse response, ReadOnlySpan<double> offset = default, ReadOnlySpan<double> weights = default,
                            IInnerProduct? output = null, WeightMeaning meaning = WeightMeaning.Precision,
                            WeightedPriorGram priorGram = WeightedPriorGram.Unweighted, BassPriorReference? reference = null,
@@ -334,10 +334,10 @@ public sealed class WorkingResponse
 
     /// <summary>
     /// The random-effect block whose whitening V^(−½) this reading's offset applies, its ln|V| in the log-Jacobian
-    /// (<see cref="RandomInterceptBlock.Whitened"/>); null where none does. The design whitens each column by the block of the reading it
+    /// (<see cref="RandomEffectsBlock.Whitened"/>); null where none does. The design whitens each column by the block of the reading it
     /// is on, so a reading at another scale moves every column as moved weights do (E21).
     /// </summary>
-    public RandomInterceptBlock? Whitening { get; internal init; }
+    public RandomEffectsBlock? Whitening { get; internal init; }
 
     /// <summary>y − offset, case by case and location by location; the response itself when there is no offset.</summary>
     public ReadOnlySpan<double> Values => _shifted ?? Response.Values;
@@ -520,7 +520,9 @@ public static class BassSweepSlots
                     break;
                 case BassSweepSlot.Tau:
                     if (model.Target.SamplesTau) blocks.Add(new BassTauBlock());
-                    if (model.ScaleDrawn) blocks.Add(new BassGroupScaleBlock(model));   // a drawn group scale's step on the marginal (E21)
+                    if (model.RandomEffects is { } groups)
+                        for (int group = 0; group < groups.Count; group++)
+                            if (groups.Specifications[group].ScalePrior is not null) blocks.Add(new BassGroupScaleBlock(model, group));
                     break;
                 case BassSweepSlot.Scale:
                     blocks.AddRange(model.Observation.Blocks(slot));

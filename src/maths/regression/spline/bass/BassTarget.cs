@@ -233,7 +233,7 @@ public sealed class BassTarget : ISamplingTarget<BassState>
 
     // ln s is a coordinate of the joint target, like ln τ. Replicas need the same prior as the scale step for powered swaps.
     internal double WithGroupScalePrior(double logPrior, BassStructureFit fit)
-        => (fit.Working ?? _resolvedOn)?.Whitening is { Spec.ScalePrior: not null } block ? logPrior + block.LogScalePrior : logPrior;
+        => (fit.Working ?? _resolvedOn)?.Whitening is { } block ? logPrior + block.LogScalePrior : logPrior;
 
     /// <summary>Why <paramref name="fit"/> lies outside F, or null: the design's refusal, or an exact fit under the
     /// Jeffreys σ² prior.</summary>

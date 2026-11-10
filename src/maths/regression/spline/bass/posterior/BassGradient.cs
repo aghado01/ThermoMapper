@@ -39,7 +39,7 @@ internal static class BassGradients
         ArgumentNullException.ThrowIfNull(cases);
         (List<BassDraw> pooled, _) = BassDrawFit.Pool(draws, terms, false, nameof(draws));
         (int[] selected, double[] weights) = Draws3.Select(selection, pooled.Count, drawWeights, nameof(selection));
-        (CaseInputs caseInputs, bool[] caseOutside) = cases.Prepare(model.Transform, model.Inputs, UnseenLevel.Refuse, model.Data.Grouping?.Name);   // u_g is flat in x
+        (CaseInputs caseInputs, bool[] caseOutside) = cases.Prepare(model.Transform, model.Inputs, UnseenLevel.Refuse, model.Data.Groupings);   // u_g is flat in x
         OutputInputs? locations = null;
         if (model.Data.Response is FunctionalResponse functional)
         {

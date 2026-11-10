@@ -135,7 +135,7 @@ public static class Bass
                     foreach (int code in k.Codes.Span) f.Add(code);
                     break;
             }
-        if (data.Grouping is { } grouping)
+        foreach (CategoricalPredictor grouping in data.Groupings)
         {
             f.Add("grouping").Add(grouping.Name).Add(grouping.Levels.Count);
             foreach (string level in grouping.Levels) f.Add(level);

@@ -2082,7 +2082,7 @@ GBASS's noise on this core, a normal variance-mean mixture whose working respons
 
 Built 2026-11-08 as KHAOS's slice 3 ([the report](../../issues/regression/bass/khaos-brief.md#reports)), as a capability of the core: any grouping, any coefficient form, hinge and Legendre terms alike. KHAOS is one consumer. Its extensions, a drawn s, several groupings, slopes, the block under GBASS's noises and its conformal reading, are on [RandomEffects.md](./RandomEffects.md).
 
-**The model.** `BassConfig.RandomIntercept = new BassRandomIntercept(s)`, on data that hold a grouping, `new BassData(predictors, response, grouping)`. The grouping is a `CategoricalPredictor` beside the predictors, and no term reads it.
+**The one-group model.** `BassConfig.RandomIntercepts = [new BassRandomIntercept("site", s)]`, on data that hold the named grouping, `new BassData(predictors, response, [site])`. The grouping is a `CategoricalPredictor` beside the predictors, and no term reads it. Named crossed and nested collections extend this form in [RandomEffects.md](./RandomEffects.md#named-crossed-and-nested-intercepts-slice-2).
 
 $$y_i=\alpha+\sum_j\beta_jB_j(x_i)+u_{g(i)}+\varepsilon_i,\qquad u\mid\sigma^2\sim N(0,\ \sigma^2s^2\Pi)\ \text{on the }L\text{ observed levels}.$$
 
@@ -2107,7 +2107,7 @@ $$y_i=\alpha+\sum_j\beta_jB_j(x_i)+u_{g(i)}+\varepsilon_i,\qquad u\mid\sigma^2\s
   - This was decided in slice 3, beyond the brief.
 - *The group effects* are drawn last in each composed draw, from their exact conditional given α, β and σ²:
   - γ ~ N((HᵀDH + I/s²)⁻¹HᵀZᵀr, σ²(HᵀDH + I/s²)⁻¹) and u = Hγ, with r = y − α − Xβ on the raw columns. The pair is a joint draw.
-  - `BassDraw.GroupEffects` holds u over the observed levels.
+  - `BassDraw.Groups` holds each named grouping's scale and u over its observed levels.
   - A fit without the block draws as it did, and its hashes hold.
 
 **Readouts.**
@@ -2578,7 +2578,7 @@ The draws give what the marginals cannot: which breaks occur together, per-draw 
 | `BassStructureSpec` CategoricalSubsets / OrderWeight / VariableWeight | `SizeUniform` / 5 / 5 | R's subset measure (`Uniform` is the paper's); w₁ and w₂, validated positive |
 | `BassConfig` Count / Coefficients | `BassCountPrior(10, 10)` / `BassCoefficientPrior.G()` | λ ~ Gamma(h₁, rate h₂), integrated out; the g-form with τ ~ Gamma(½, rate N/2), Zellner–Siow. `G(TauPrior.Held())` holds τ at 1/N; hyper-g and hyper-g/n are selectable; `Ridge(scale)` is the normalized ridge, its held τ declared |
 | `BassConfig` Sigma2 / Intercept | `Sigma2Prior.ScaledToResponse(1e-3)` / `GPriorCentre.Mean` | IG(c, c·s²) and level centring; Jeffreys, a declared inverse gamma, a held σ², `Flat` and `Zero` selectable, `Median` refused |
-| `BassConfig` RandomIntercept | null | Random-effect intercepts on the data's grouping ([E21](#bass-random-effect-intercepts-e21)): `BassRandomIntercept(s)`, s the effects' sd over σ, held, observation-centred |
+| `BassConfig` RandomIntercepts | null | Named random-effect intercept blocks ([E21](./RandomEffects.md)): `BassRandomIntercept("site", s)`, s the effects' sd over σ, held or drawn; observation-centred or centred within a named parent |
 | `BassSampling` Chains / MasterSeed / BurnIn / Samples / Thin | 4 / 0 / 9000 / 1000 / 1 | R's split of 10,000, provisional; read by the run (S7) |
 | `BassSampling` RHatTarget / BatchSize / MinEssPerChain / ReportEvidence | 0 / 0 / 100 / true | No early stop; read by the run (S7) and the ladder (S8) |
 | `BassSampling` StoppingScope | `All` | The groups an R̂ target gates: every group, or `Predictive` alone (D10, decided 2026-10-29) |
