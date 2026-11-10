@@ -649,7 +649,8 @@ public sealed class ResidualBirthTests(ITestOutputHelper output)
         BassConfig good = WithResidual(new BassConfig());
         good.Validate();
         BassConfig With(ResidualBirth? r, HistoryBirth? h) => good with { Sampling = good.Sampling with { Births = new BirthMixture { Residual = r, History = h } } };
-        Assert.Throws<ArgumentException>(() => With(null, null).Validate());
+        With(null, null).Validate();   // empty: the fit's own birth alone, a default turned off
+        Assert.Contains("\"Births\":{}", With(null, null).ToJson());
         Assert.Throws<ArgumentException>(() => With(new ResidualBirth(0.0), null).Validate());
         Assert.Throws<ArgumentException>(() => With(new ResidualBirth(1.0), null).Validate());
         Assert.Throws<ArgumentException>(() => With(new ResidualBirth(0.6), new HistoryBirth(Share: 0.4)).Validate());   // no share left
@@ -670,5 +671,39 @@ public sealed class ResidualBirthTests(ITestOutputHelper output)
             BassModel model = Fixture("continuous");
             new BassBirthMixture(model.Kernel, null, null, new BassResidualBirth(model), Spec).LogBirth(AllTerms(model)[0], BassMixing.Counts(model, Array.Empty<BassTerm>()));
         });
+    }
+
+    // ---- the default (the user's decision, 2026-11-09) ------------------------------------------------------------------------------
+
+    // KHAOS's raw-ridge fits of a scalar response take the residual birth at ω_R = ¼ when they declare no mixture, logged as an auto-pick:
+    // their draws are a declared residual birth's, bit for bit, and not the fit's own birth's. An empty mixture turns it off; a declared
+    // one runs as declared; the modified g-prior, the normalized ridge and hinge fits keep the fit's own birth.
+    [Fact]
+    public void KhaosRawRidgeFits_TakeTheResidualBirthByDefault_AndAnEmptyMixtureTurnsItOff()
+    {
+        BassData data = KhaosChainTests.Data();
+        BassConfig raw = KhaosChainTests.Config(raw: true) with { Sampling = new BassSampling { Chains = 2, MasterSeed = 61, BurnIn = 200, Samples = 150 } };
+        BassConfig With(BirthMixture? births) => raw with { Sampling = raw.Sampling with { Births = births } };
+
+        BassResolved resolved = BassModel.Create(raw, data).Resolved;
+        Assert.Equal(new BirthMixture { Residual = BassResolved.DefaultResidualBirth }, resolved.Births);
+        Assert.Equal(0.25, BassResolved.DefaultResidualBirth.Share);
+        Assert.Contains(resolved.AutoPicks, p => p.Setting == "Births");
+        Assert.Null(BassModel.Create(With(new BirthMixture()), data).Resolved.Births);
+        Assert.DoesNotContain(BassModel.Create(With(new BirthMixture()), data).Resolved.AutoPicks, p => p.Setting == "Births");
+        var historyOnly = new BirthMixture { History = new HistoryBirth() };
+        Assert.Equal(historyOnly, BassModel.Create(With(historyOnly), data).Resolved.Births);
+        Assert.Null(BassModel.Create(KhaosReachTests.Config("modified g"), data).Resolved.Births);
+        Assert.Null(BassModel.Create(KhaosChainTests.Config(raw: false), data).Resolved.Births);
+        Assert.Null(BassModel.Create(BassSweepTests.Config(), BassSweepTests.Data()).Resolved.Births);
+        Assert.Null(BassModel.Create(BassSweepTests.Config() with { Coefficients = BassCoefficientPrior.RawRidge(TauPrior.Held(0.1)) }, BassSweepTests.Data()).Resolved.Births);
+
+        string byDefault = BassBitIdentityTests.Hash(Bass.Fit(raw, data));
+        string declared = BassBitIdentityTests.Hash(Bass.Fit(With(new BirthMixture { Residual = new ResidualBirth(0.25) }), data));
+        string own = BassBitIdentityTests.Hash(Bass.Fit(With(new BirthMixture()), data));
+        output.WriteLine($"by default {byDefault}, declared {declared}, the fit's own birth {own}");
+        Assert.Equal(declared, byDefault);
+        Assert.NotEqual(own, byDefault);
+        Assert.DoesNotContain("Births", raw.ToJson());
     }
 }

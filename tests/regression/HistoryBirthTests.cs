@@ -664,7 +664,7 @@ public sealed class HistoryBirthTests(ITestOutputHelper output)
         BassConfig good = WithBirths(new BassConfig());
         good.Validate();
         BassConfig With(HistoryBirth h) => good with { Sampling = good.Sampling with { Births = new BirthMixture { History = h } } };
-        Assert.Throws<ArgumentException>(() => (good with { Sampling = good.Sampling with { Births = new BirthMixture() } }).Validate());
+        (good with { Sampling = good.Sampling with { Births = new BirthMixture() } }).Validate();   // empty: the fit's own birth alone
         Assert.Throws<ArgumentException>(() => With(Spec with { Share = 0.0 }).Validate());
         Assert.Throws<ArgumentException>(() => With(Spec with { Share = 1.0 }).Validate());
         Assert.Throws<ArgumentException>(() => With(Spec with { Floor = 0.0 }).Validate());

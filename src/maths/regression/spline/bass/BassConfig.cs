@@ -275,7 +275,6 @@ public sealed record BassConfig
         }
         if (run.Births is { } births)
         {
-            if (births.History is null && births.Residual is null) throw Bad("Sampling.Births", "must declare a component; null turns the mixture off");
             double shares = 0.0;
             if (births.History is { } history)
             {
@@ -647,7 +646,14 @@ public sealed record BassSampling
 
     /// <summary>
     /// A mixture on the births (E4; <see cref="BirthMixture"/>): components beside the fit's own birth, which keeps a
-    /// positive share, so every structure it reaches stays reachable. Null, the default, runs the fit's own birth alone.
+    /// positive share, so every structure it reaches stays reachable.
+    /// <list type="bullet">
+    /// <item>Null, the default, takes the fit's default (<see cref="BassResolved.Births"/>): E4's residual birth at ω_R = ¼ for KHAOS's
+    /// raw-ridge fits on a scalar response (decided 2026-11-09 on five fixtures, logged as an auto-pick), the fit's own birth
+    /// alone otherwise.</item>
+    /// <item>An empty mixture, <c>new BirthMixture()</c>, runs the fit's own birth alone, a default turned off.</item>
+    /// <item>A declared component runs as declared, and nothing is added to it.</item>
+    /// </list>
     /// </summary>
     [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
     public BirthMixture? Births { get; init; }

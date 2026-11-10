@@ -110,11 +110,12 @@ public sealed class BassStructureMoves
         Moves = Palette();
     }
 
-    // The model's kernel, or with E4's birth mixture declared, the mixture over it: a history birth with a history of this chain's
-    // own (empty, or as `history` left it), and a residual birth with caches of its own.
+    // The model's kernel, or with E4's birth mixture as the fit resolved it (BassResolved.Births: declared, or KHAOS's raw-ridge
+    // default), the mixture over it: a history birth with a history of this chain's own (empty, or as `history` left it), and a
+    // residual birth with caches of its own.
     private static IBassProposalKernel KernelOf(BassModel model, BassInclusionHistorySnapshot? history)
     {
-        if (model.Config.Sampling.Births is not { } births) return model.Kernel;
+        if (model.Resolved.Births is not { } births) return model.Kernel;
         BassInclusionHistory? own = births.History is not { } spec ? null
             : history is null ? new BassInclusionHistory(model.Prior, spec) : BassInclusionHistory.Restore(model.Prior, spec, history);
         BassResidualBirth? residual = births.Residual is null ? null : new BassResidualBirth(model);

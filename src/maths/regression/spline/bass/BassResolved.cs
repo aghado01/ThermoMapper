@@ -113,6 +113,14 @@ public sealed record BassResolved
     /// <summary>The fixed-M factor moves' shares of the change's slot; null when the family is off.</summary>
     public required BassFactorShares? FactorShares { get; init; }
 
+    /// <summary>E4's birth mixture as the fit runs it (<see cref="BassSampling.Births"/>): the declared one; null for an empty one, the
+    /// fit's own birth alone; and for a config that declares none, the residual birth at ω_R = ¼ on KHAOS's raw-ridge fits of a scalar
+    /// response (decided 2026-11-09, logged as an auto-pick), null otherwise.</summary>
+    public BirthMixture? Births { get; init; }
+
+    /// <summary>The residual birth KHAOS's raw-ridge fits take by default (<see cref="Births"/>).</summary>
+    public static ResidualBirth DefaultResidualBirth { get; } = new(Share: 0.25);
+
     /// <summary>A tempered run's split threshold (<see cref="SplitRule"/>); null when the rule is off or the run untempered.</summary>
     public required double? SplitThreshold { get; init; }
 
@@ -420,6 +428,7 @@ public sealed record BassResolved
             log.Add(new("LocalSteps windows", windows.ToString(), $"max(1, ⌈ω·n_v⌉) over each hinge variable's n_v knots, ω = {Text(steps.WindowFraction)}"));
         }
         BassFactorShares? shares = config.Sampling.FactorMoves is { } family ? BassFactorShares.Of(family) : null;
+        BirthMixture? births = ResolveBirths(config, data, log);
 
         return new BassResolved
         {
@@ -430,9 +439,21 @@ public sealed record BassResolved
             ResponseMeanSquare = meanSquare, WeightedMeanSquare = weightedMeanSquare,
             Weighting = weights, Sigma2 = sigma2, Sigma2Rate = rate, GivenSigma2 = config.Sigma2.Value, Scale = scale,
             StoppingGroups = BassDiagnostics.StoppingGroups(config.Sampling.StoppingScope),
-            HotEnd = hotEnd, StepWindows = windows, FactorShares = shares, SplitThreshold = config.Sampling.Tempering?.Split?.Threshold,
+            HotEnd = hotEnd, StepWindows = windows, FactorShares = shares, Births = births, SplitThreshold = config.Sampling.Tempering?.Split?.Threshold,
             AutoPicks = log.AsReadOnly(), Outputs = several,
         };
+    }
+
+    // E4's birth mixture as the fit runs it: the declared one, an empty one meaning the fit's own birth alone, or for a config that declares
+    // none, the residual birth on KHAOS's raw-ridge fits of a scalar response, the class it was measured on (the proposal-kernels brief's
+    // addendum, 2026-11-09: four gains in five fixtures, no loss), logged as an auto-pick.
+    private static BirthMixture? ResolveBirths(BassConfig config, BassData data, List<BassAutoPick> log)
+    {
+        if (config.Sampling.Births is { } declared) return declared.History is null && declared.Residual is null ? null : declared;
+        if (config.Structure.Legendre is null || config.Coefficients.Form is not RawRidgeForm || data.Response is not ScalarResponse) return null;
+        log.Add(new("Births", $"ResidualBirth(Share = {Text(DefaultResidualBirth.Share)})",
+                    "E4's residual birth, KHAOS's default under the raw ridge on a scalar response (decided 2026-11-09); an empty BirthMixture turns it off"));
+        return new BirthMixture { Residual = DefaultResidualBirth };
     }
 
     // Several outputs on one basis (E34's slice 1): each output's mean and centre level, S_Y, Σ's prior carried from Sigma2's

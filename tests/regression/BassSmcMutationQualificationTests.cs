@@ -115,7 +115,9 @@ public sealed class BassSmcMutationQualificationTests(ITestOutputHelper output)
             Coefficients = BassCoefficientPrior.RawRidge(TauPrior.Held(1e-5)),
             Intercept = GPriorCentre.Zero,
             Sigma2 = Sigma2Prior.InverseGamma(3.0, 0.5),
-            Sampling = new BassSampling { Chains = 1, MasterSeed = 1 },
+            // The fit's own birth, declared: every measurement on this fixture ran with it before E4's residual birth became KHAOS's
+            // raw-ridge default (2026-11-09), and declaring it keeps them as they ran.
+            Sampling = new BassSampling { Chains = 1, MasterSeed = 1, Births = new BirthMixture() },
         };
         return new Fixture("KHAOS Ishigami", config, data);
     }

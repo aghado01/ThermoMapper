@@ -151,7 +151,7 @@ public sealed class BassSmcKernel : ISmcKernel<BassParticle>
         _blocks = BassSweepSlots.Blocks(model, BassSweepSlot.Tau);
         _cancellation = cancellation;
         Account = account?.Copy() ?? new BassSmcAccount(model.Prior);
-        if (model.Config.Sampling.Births?.History is { } spec) _history = new BassInclusionHistory(model.Prior, spec);
+        if (model.Resolved.Births?.History is { } spec) _history = new BassInclusionHistory(model.Prior, spec);
     }
 
     /// <summary>The stage's inclusion history (E4's history birth), set by <see cref="Prepare"/>; null without it.</summary>

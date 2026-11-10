@@ -122,7 +122,7 @@ public sealed class ProposalKernelMeasurementTests(ITestOutputHelper output)
     {
         BirthMixture? births = arm switch
         {
-            "base" => null,
+            "base" => new BirthMixture(),   // the fit's own birth, declared, since a KHAOS raw-ridge fit's default is now the residual birth
             "history" => new BirthMixture { History = History },
             "residual" => new BirthMixture { Residual = Residual },
             _ => throw new ArgumentOutOfRangeException(nameof(arm)),
