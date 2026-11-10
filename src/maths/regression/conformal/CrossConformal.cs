@@ -7,7 +7,8 @@ namespace Maths.Regression.Conformal;
 public sealed record LeaveOneOutReadings(IReadOnlyList<double> Response, IReadOnlyList<double> HeldOut, double[,] Predictions);
 
 /// <summary>A jackknife+ interval, including its attainable finite-sample lower bound (<c>jackknifePlus_coverage</c>).
-/// The bound assumes exchangeable units and leave-out fits symmetric under relabeling, including their randomness.</summary>
+/// Exchangeable units suffice with symmetric fits, including their randomness, or compact order-reading fits
+/// that see no original positions, held-out mask or row-keyed randomness (<c>jackknifePlus_orderReading</c>).</summary>
 public sealed record JackknifePlusInterval(int Case, int Units, int Level, double Lower, double Upper)
 {
     public bool WholeSpace => Level == 0;
@@ -19,11 +20,13 @@ public sealed record JackknifePlusInterval(int Case, int Units, int Level, doubl
 
 public sealed record JackknifePlusIntervals(IReadOnlyList<JackknifePlusInterval> Intervals, double Alpha);
 
-/// <summary>Reduce leave-one-out readings to jackknife+ intervals or n-fold pairwise sets.
-/// The guarantees (<c>crossFit_coverage</c>, <c>jackknifePlus_coverage</c>) require exchangeability of all n + 1 units.
-/// Each fit must read its training set symmetrically, possibly under a relabeling of its randomness. An order-reading sampler
-/// can use one uniform random order shared by all leave-out fits, or randomness attached to the units.</summary>
-public static class CrossConformal
+/// <summary>Reduce leave-out readings to conformal sets. The n-fold guarantees
+/// (<c>crossFit_coverage</c>, <c>jackknifePlus_coverage</c>) require exchangeability of all n + 1 units.
+/// Fits can be symmetric under relabeling, including their randomness, or read compact ordered training rows with the
+/// held-out place closed up and no original indices, held-out mask or row-keyed randomness. Ordered sweeps sharing a fixed seed
+/// can qualify by this second route. Position-aware fits do not receive that guarantee.
+/// <see cref="CvPlus"/> exposes the K-fold bounds under their own assumptions.</summary>
+public static partial class CrossConformal
 {
     internal static double Coverage(int units, int level)
         => level == 0 ? 1.0 : Math.Max(0.0, 1.0 - (2.0 * level - 1) / units);
@@ -40,13 +43,7 @@ public static class CrossConformal
         int n = readings.Response.Count, m = checked(n + 1), k = (int)Math.Floor(alpha * m);
         if (readings.HeldOut.Count != n || readings.Predictions.GetLength(0) != n)
             throw new ArgumentException("One held-out response and one prediction row per leave-one-out fit are required.", nameof(readings));
-        var residuals = new double[n];
-        for (int i = 0; i < n; i++)
-        {
-            if (!double.IsFinite(readings.Response[i]) || !double.IsFinite(readings.HeldOut[i]))
-                throw new ArgumentException("Responses and predictions must be finite.", nameof(readings));
-            residuals[i] = Math.Abs(readings.Response[i] - readings.HeldOut[i]);
-        }
+        double[] residuals = AbsoluteResiduals(readings.Response, readings.HeldOut);
         foreach (double v in readings.Predictions)
             if (!double.IsFinite(v)) throw new ArgumentException("Predictions must be finite.", nameof(readings));
         int cases = readings.Predictions.GetLength(1);
@@ -65,11 +62,31 @@ public static class CrossConformal
                 lower[i] = readings.Predictions[i, t] - residuals[i];
                 upper[i] = readings.Predictions[i, t] + residuals[i];
             }
-            Array.Sort(lower);
-            Array.Sort(upper);
-            intervals[t] = new(t, m, k, lower[k - 1], upper[n - k]);
+            GridInterval ends = OrderedEnds(lower, upper, k);
+            intervals[t] = new(t, m, k, ends.Lower, ends.Upper);
         }
         return new(intervals, alpha);
+    }
+
+    private static double[] AbsoluteResiduals(IReadOnlyList<double> response, IReadOnlyList<double> heldOut)
+    {
+        if (heldOut.Count != response.Count)
+            throw new ArgumentException("One held-out prediction per response is required.", nameof(heldOut));
+        var residuals = new double[response.Count];
+        for (int i = 0; i < residuals.Length; i++)
+        {
+            if (!double.IsFinite(response[i]) || !double.IsFinite(heldOut[i]))
+                throw new ArgumentException("Responses and predictions must be finite.", "readings");
+            residuals[i] = Math.Abs(response[i] - heldOut[i]);
+        }
+        return residuals;
+    }
+
+    private static GridInterval OrderedEnds(double[] lower, double[] upper, int level)
+    {
+        Array.Sort(lower);
+        Array.Sort(upper);
+        return new(lower[level - 1], upper[upper.Length - level]);
     }
 
     /// <summary>The n-fold pairwise rule (<c>AcceptsPairwise</c>): candidate score [i,g] and held-out score [i] use the same
