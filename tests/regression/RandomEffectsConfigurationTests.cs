@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 using System.Linq;
 using Maths.Regression.Spline.Bass;
 using Xunit;
@@ -47,8 +48,48 @@ public sealed class RandomEffectsConfigurationTests
         var config = new BassConfig { RandomIntercepts = specs };
         string json = config.ToJson();
         Assert.Contains("\"RandomIntercepts\"", json);
+        Assert.Equal(config, BassConfig.FromJson(json));
         Assert.Equal(json, BassConfig.FromJson(json).ToJson());
         Assert.Throws<System.Text.Json.JsonException>(() => BassConfig.FromJson("{\"RandomIntercept\":{\"Scale\":1.3}}"));
+    }
+
+    [Fact]
+    public void ConfigCollections_HaveOrderedValueEqualityAndHashes()
+    {
+        BassRandomIntercept[] first = [new("first", 0.7, ScalePrior: new BassGroupScalePrior(0.8)), new("second", 1.2)];
+        var a = new BassConfig { RandomIntercepts = first };
+        var b = new BassConfig { RandomIntercepts = new List<BassRandomIntercept>
+            { new("first", 0.7, ScalePrior: new BassGroupScalePrior(0.8)), new("second", 1.2) } };
+        Assert.Equal(a, b);
+        Assert.True(a.Equals(b) && b.Equals(a));
+        Assert.Equal(a.GetHashCode(), b.GetHashCode());
+        Assert.Equal(a, BassConfig.FromJson(a.ToJson()));
+        Assert.Equal(a.GetHashCode(), BassConfig.FromJson(a.ToJson()).GetHashCode());
+        Assert.NotEqual(a, a with { RandomIntercepts = first.Reverse().ToArray() });
+        Assert.NotEqual(a, a with { RandomIntercepts = [first[0] with { Scale = 0.9 }, first[1]] });
+        Assert.Equal(a, a with { });
+        var empty = new BassConfig { RandomIntercepts = Array.Empty<BassRandomIntercept>() };
+        Assert.Equal(empty, new BassConfig { RandomIntercepts = new List<BassRandomIntercept>() });
+        Assert.NotEqual(new BassConfig(), empty);
+        Assert.Equal(empty.ToJson(), BassConfig.FromJson(empty.ToJson()).ToJson());
+    }
+
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public void ConfigCollections_DefensivelyOwnTheSource(bool list)
+    {
+        BassRandomIntercept original = new("first", 0.7, ScalePrior: new BassGroupScalePrior(0.8));
+        IList<BassRandomIntercept> source = list ? new List<BassRandomIntercept> { original } : new[] { original };
+        var config = new BassConfig { RandomIntercepts = (IReadOnlyList<BassRandomIntercept>)source };
+        string json = config.ToJson(); int hash = config.GetHashCode();
+        source[0] = new BassRandomIntercept("changed", 1.8);
+        if (list) source.Add(new BassRandomIntercept("extra", 0.9));
+        Assert.Equal(json, config.ToJson());
+        Assert.Equal(hash, config.GetHashCode());
+        Assert.Single(config.RandomIntercepts!);
+        Assert.Equal(original, config.RandomIntercepts![0]);
+        Assert.False(config.RandomIntercepts is IList<BassRandomIntercept>);
     }
 
     [Fact]

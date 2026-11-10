@@ -215,6 +215,7 @@ public sealed record PredictionCases
     /// Each case's observed level of the fit's random-intercept <paramref name="block"/> on <paramref name="grouping"/>, the training data's
     /// (E21), or −1 for the population: every case when no column gives the grouping, and a level no training case took when
     /// <paramref name="unseen"/> places it outside every subset; refused otherwise, naming the level.
+    /// Explicit observed parent/child pairs must match the fitted nesting relation, including a parent with no effect block.
     /// </summary>
     internal int[] GroupsOf(RandomEffectGrouping block, CategoricalPredictor grouping, UnseenLevel unseen)
     {
@@ -227,6 +228,12 @@ public sealed record PredictionCases
             if (c.Name == grouping.Name) given = c;
         if (given is null) return groups;
         if (given is not CategoricalColumn levels) throw new ArgumentException($"The grouping '{grouping.Name}' is categorical; its column gives no levels.", "cases");
+        CategoricalColumn? parent = null;
+        if (block.ParentName is { } parentName)
+            foreach (PredictionColumn column in _columns)
+                if (column.Name == parentName)
+                    parent = column as CategoricalColumn
+                        ?? throw new ArgumentException($"The parent grouping '{parentName}' is categorical; its column gives no levels.", "cases");
         var codeOf = new Dictionary<string, int>(StringComparer.Ordinal);
         for (int l = 0; l < grouping.Levels.Count; l++) codeOf.Add(grouping.Levels[l], l);
         for (int i = 0; i < Cases; i++)
@@ -234,6 +241,10 @@ public sealed record PredictionCases
             int observed = codeOf.TryGetValue(levels.Levels[i], out int code) ? block.ObservedOf(code) : -1;
             if (observed < 0 && unseen == UnseenLevel.Refuse)
                 throw new ArgumentException($"The grouping '{grouping.Name}' has no training case at level '{levels.Levels[i]}'; place it at the population (UnseenLevel.OutsideEverySubset) or leave it out.", "cases");
+            if (observed >= 0 && parent is not null && block.IsObservedParentLevel(parent.Levels[i])
+                && parent.Levels[i] != block.ParentLevelOf(observed))
+                throw new ArgumentException($"Level '{levels.Levels[i]}' of '{grouping.Name}' belongs to parent level '{block.ParentLevelOf(observed)}' "
+                    + $"of '{block.ParentName}', but case {i} gives '{parent.Levels[i]}'.", "cases");
             groups[i] = observed;
         }
         return groups;

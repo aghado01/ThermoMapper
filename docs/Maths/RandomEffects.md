@@ -30,7 +30,7 @@ Reference rungs and SMC particles draw s from its proper prior along with the st
 
 ## Named crossed and nested intercepts (slice 2)
 
-`BassData.Groupings` is a collection of named categorical columns beside the predictors. `BassConfig.RandomIntercepts` names the columns it reads, in the order of the scale coordinates. Data columns, declarations and retained records resolve by name. A grouping used only as a parent need not have its own intercept block. Unknown names, duplicate names and unused data groupings are refused.
+`BassData.Groupings` is a collection of named categorical columns beside the predictors. `BassConfig.RandomIntercepts` names the columns it reads, in the order of the scale coordinates. The config owns an immutable copy of that ordered collection, with value equality and hashing; its JSON remains an array. Data columns, declarations and retained records resolve by name. A grouping used only as a parent need not have its own intercept block. Unknown names, duplicate names and unused data groupings are refused.
 
 ```csharp
 var data = new BassData(predictors, response, [site, classroom]);
@@ -57,6 +57,8 @@ Separate group whitenings cannot be composed for crossed groupings. Under the wi
 An exact alias between levels of crossed groupings is reported in the resolution log, including a crossed grouping that aliases a within-parent child. It adds no constraint. The conditional simulation retains every original contrast coordinate, including latent directions lost from the row rank. With R·S = U·diag(d)·Vᵀ, the mean uses S·V·diag(d/(1+d²))·UᵀQᵀr; the standardized covariance square root is I + V·diag((1+d²)^(−½)−1)·Vᵀ. This retains the full latent complement without a subtraction of large prior effects. Unequal proper scales determine how the effects share the signal and its uncertainty.
 
 The sweep updates each drawn ln s_k separately after τ. Its information is ½ tr[(V⁻¹ ∂V/∂ln s_k)²], with the same prior curvature and Hastings correction as the single-group step. The joint target sums each drawn scale's log density and log-coordinate Jacobian. `BassState.GroupScales` reads the fitted whitening's scale vector. `BassDraw.Groups` contains named `BassGroupDraw` records with `Scale` and `Effects`; effects follow the observed levels' declaration order. Prediction adds every known effect, and each missing grouping contributes its draw's population spread. These blocks currently take a scalar Gaussian response; moving noise weights, slopes and the conformal candidate density belong to later slices.
+
+When prediction explicitly supplies observed parent and child labels, their pair must agree with the fitted nesting relation. This check also applies to mean surfaces and parents used only for centring. Omitted group columns and levels placed at the population keep their existing readings; crossed groupings impose no pairing restriction.
 
 ## Migrating a saved one-group configuration
 

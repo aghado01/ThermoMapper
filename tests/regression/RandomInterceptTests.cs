@@ -552,6 +552,7 @@ public sealed class RandomInterceptTests(ITestOutputHelper output)
         Assert.DoesNotContain("RandomIntercept", plain.ToJson());
         Assert.Contains("\"RandomIntercepts\":[{\"Grouping\":\"g\",\"Scale\":1", block.ToJson());
         Assert.Equal(block.ToJson(), BassConfig.FromJson(block.ToJson()).ToJson());
+        Assert.Equal(block, BassConfig.FromJson(block.ToJson()));
         Assert.NotEqual(Bass.Fingerprint(plain, data), Bass.Fingerprint(block, grouped));
         Assert.Contains("only random intercepts read", Assert.Throws<ArgumentException>(() => BassModel.Create(plain, grouped)).Message);
         Assert.Contains("has no data grouping", Assert.Throws<ArgumentException>(() => BassModel.Create(block, data)).Message);

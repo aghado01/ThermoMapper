@@ -180,6 +180,7 @@ public sealed class RandomEffectsTests(ITestOutputHelper output)
         Assert.DoesNotContain("ScalePrior", config.ToJson());
         Assert.Contains("\"ScalePrior\"", drawn.ToJson());
         Assert.Equal(drawn.ToJson(), BassConfig.FromJson(drawn.ToJson()).ToJson());
+        Assert.Equal(drawn, BassConfig.FromJson(drawn.ToJson()));
         Assert.NotEqual(Bass.Fingerprint(config, held.Data), Bass.Fingerprint(drawn, held.Data));
         // The reading carries the priors' frozen reference, the response's own moments, so a chain may follow it to another s.
         Assert.True(model.ScaleDrawn && !held.ScaleDrawn);

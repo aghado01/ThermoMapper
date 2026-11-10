@@ -63,10 +63,35 @@ public sealed record BassConfig
     /// <summary>
     /// Named random-effect intercept blocks (E21; <see cref="BassRandomIntercept"/>): null, the default, holds none. Left out of
     /// the serialized form when null, so a config without them keeps its form and fingerprint. Refused beside a noise, whose latent weights
-    /// move each sweep while the block is integrated under unit weights.
+    /// move each sweep while the block is integrated under unit weights. The ordered collection is copied and compared by value.
     /// </summary>
     [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
-    public IReadOnlyList<BassRandomIntercept>? RandomIntercepts { get; init; }
+    public IReadOnlyList<BassRandomIntercept>? RandomIntercepts
+    {
+        get => _randomIntercepts;
+        init => _randomIntercepts = value is null ? null : new InterceptCollection(value);
+    }
+
+    private readonly InterceptCollection? _randomIntercepts;
+
+    private sealed class InterceptCollection(IReadOnlyList<BassRandomIntercept> source)
+        : IReadOnlyList<BassRandomIntercept>, IEquatable<InterceptCollection>
+    {
+        private readonly BassRandomIntercept[] _items = source.ToArray();
+        public int Count => _items.Length;
+        public BassRandomIntercept this[int index] => _items[index];
+        public IEnumerator<BassRandomIntercept> GetEnumerator() => ((IEnumerable<BassRandomIntercept>)_items).GetEnumerator();
+        System.Collections.IEnumerator System.Collections.IEnumerable.GetEnumerator() => GetEnumerator();
+        public bool Equals(InterceptCollection? other) => ReferenceEquals(this, other) || other is not null && _items.SequenceEqual(other._items);
+        public override bool Equals(object? other) => other is InterceptCollection collection && Equals(collection);
+        public override int GetHashCode()
+        {
+            var hash = new HashCode();
+            hash.Add(Count);
+            foreach (BassRandomIntercept item in _items) hash.Add(item);
+            return hash.ToHashCode();
+        }
+    }
 
     /// <summary>The run: chains or SMC's replicates, seeds, lengths, the R̂ stop and the move schedule.</summary>
     public BassSampling Sampling { get; init; } = new();

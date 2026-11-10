@@ -78,3 +78,12 @@ The [receipts](../../../artifacts/e21-ridge-s2-qualification/) include the basel
 | Fresh review | Unequal-scale and mixed-alias defects corrected; deterministic covariance and actual-draw checks passed | `unequal-scales.trx`, `stable-whitening.trx`, `combined-qualified.trx` |
 
 Early failed receipts preserve test-assertion corrections and the actual unequal-scale numerical failure; they are not substituted for the final gates. The prior cold-start investigation remains [its own bounded result](ridge-cold-start-investigation.md).
+
+## Coordinating-review follow-up
+
+Review of `eeda1fd` found two contracts absent from the original slice's checks:
+
+- Prediction resolved nested group columns independently. Explicit observed labels `parent=B, child=A0`, with A0 observed only under A, were accepted. The layout now retains the child-to-parent label map, and group resolution rejects a contradictory observed pair before the draw, predictive and mean-surface branches. The check includes parents with no effect block. Tests retain omitted/population behavior and allow arbitrary crossed combinations, including unused declared levels and declaration order differing from encounter order.
+- `RandomIntercepts` retained its caller's list and used reference equality. The init accessor now copies into an internally owned ordered value collection, preserving the public `IReadOnlyList` and JSON array shape. Equality and hashes compare the ordered records. The original object-equality assertions are restored alongside JSON equality, with separate equal allocations, array/list mutation, ordering, cloning and empty/null cases checked.
+
+On an isolated archive of `eeda1fd`, the new tests reproduced 14 failures (10 pairing refusals, four config contracts); nine controls passed. After both fixes, all 32 focused checks passed, including all three held-scale hashes, both ungrouped fingerprints and two-group plain/ladder resume. The required Commit tier then passed 2,051/2,051 tests with no skips. Follow-up receipts are in [e21-ridge-s2-parent-pairs](../../../artifacts/e21-ridge-s2-parent-pairs/): `before.trx`, `after.trx`, `Commit.trx`, their settings/logs and the tested source hashes. The original slice's broad receipts above describe its original source, and do not substitute for this follow-up's evidence.

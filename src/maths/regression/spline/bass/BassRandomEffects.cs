@@ -195,6 +195,8 @@ internal sealed class RandomEffectGrouping
     private readonly double[] _counts;
     private readonly double[,] _contrast;
     private readonly string[] _levels;
+    private readonly string[]? _parentLevels;
+    private readonly HashSet<string>? _observedParents;
 
     private RandomEffectGrouping(CategoricalPredictor grouping, CategoricalPredictor? parent)
     {
@@ -229,6 +231,12 @@ internal sealed class RandomEffectGrouping
             }
         }
         else Array.Fill(parents, 0);
+
+        if (parent is not null)
+        {
+            _parentLevels = [.. parents.Select(p => parent.Levels[p])];
+            _observedParents = new HashSet<string>(_parentLevels, StringComparer.Ordinal);
+        }
 
         // The constraint rows have disjoint supports. Build the Euclidean complement of each count vector separately.
         var basis = new List<double[]>();
@@ -286,6 +294,8 @@ internal sealed class RandomEffectGrouping
     public int GroupOf(int i) => _group[i];
     public int ObservedOf(int declared) => (uint)declared < (uint)_observed.Length ? _observed[declared] : -1;
     public string LevelName(int g) => _levels[g];
+    public string? ParentLevelOf(int g) => _parentLevels?[g];
+    public bool IsObservedParentLevel(string level) => _observedParents?.Contains(level) ?? false;
     public double Contrast(int g, int k) => _contrast[g, k];
 
     public double[] Effects(ReadOnlySpan<double> coordinates)
