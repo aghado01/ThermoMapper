@@ -11,6 +11,14 @@ Splits in the module's language (symbols, identifiers, terms), logged as session
 
 ## Entries
 
+### E34's covariance rates rₖ and scales Aₖ; A for coefficients and a likelihood Gram (2026-11-09)
+
+- **Kind:** one name for several concepts.
+- **Readings:**
+  - rₖ = ν/aₖ, the conditional inverse-Wishart rate of output k, carried on vₖ = ln rₖ (`ResolvedOutputRates`; `BassState.LogOutputRates`; `docs/Maths/MultiOutput.md`, “Σ's prior”), beside r, the scalar hierarchical σ² rate (`ResolvedSigma2Rate`) and r, the design's least-squares residual (`BassDesign.Residual`).
+  - Aₖ, Huang and Wand's marginal standard-deviation scale (`OutputCovariancePrior.OutputScales`; “Σ's prior”), beside A, the matrix of coefficients in Y = 1μᵀ + Z_cA + E (“The model and its collapse”), and A, the likelihood Gram in the generalized pencil (`PriorPencil.cs:8`; “Coefficient forms and samplers”).
+- **Found:** 2026-11-09, E34's slice 2. The hierarchy's aₖ is Huang and Wand's source coordinate; the engine uses its reciprocal rₖ scaled by ν.
+
 ### r(S), the residual birth's residual, beside the design's r; Δℓ beside ℓ₁; ω_R beside ω (2026-11-09)
 
 - **Kind:** one name for several concepts.

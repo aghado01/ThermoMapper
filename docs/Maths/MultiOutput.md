@@ -23,11 +23,33 @@ Y (N × K) = 1μᵀ + Z_cA + E, each row of E ∼ N(0, Σ), with the intercept �
 **The options** (`BassConfig.OutputCovariance`, `OutputCovariancePrior`; null carries `Sigma2`'s ScaledToResponse(c), and Sigma2's other kinds are refused with the reason):
 - *Standardized(c):* Ψ₀ = 2c·diag S_Y, the default on outputs standardized to unit mean square: invariant to rescaling the outputs, not to mixing them, and centred on uncorrelated outputs. Collinear outputs pass.
 - *A declared IW(ν₀, Ψ₀)* in the outputs' own units: free of the data, as Geweke's test needs.
-- *Huang and Wand's prior at ν = 2* (slice 2): Σ | a ∼ IW(ν + K − 1, 2ν diag(1/a)), a_k ∼ IG(½, 1/A_k²) with A_k each output's root mean square about its level. It gives uniform correlations and half-t standard deviations; at K = 1 it is the engine's hierarchical σ² prior at hyper-shape ½ (`Sigma2Prior.Hierarchical(ν/2, ½)`, A = s), so built it is that prior carried to K rates, each moved by a slice step as τ is, the collapse holding given them. Equivariant under rescaling and permuting the outputs, not under mixing them.
+- *Huang and Wand's prior* (`OutputCovariancePrior.HuangWand`, slice 2) uses Σ | a ∼ IW(ν + K − 1, 2ν diag(1/a)), a_k ∼ IG(½, 1/A_k²). A_k defaults to each output's root mean square about its level. Explicit positive scales declare the prior independently of the responses. The default ν = 2 gives uniform correlations, and σ_k has the half-t(ν, A_k) marginal. At K = 1 it is the engine's hierarchical σ² prior at hyper-shape ½ (`Sigma2Prior.Hierarchical(ν/2, ½)`, A = s).
+
+The sampler carries r_k = ν/a_k on v_k = ln r_k. Its hyperprior is Gamma(½, rate 1/(νA_k²)) and its conditional covariance prior is IW(ν + K − 1, 2 diag r). The matrix-t collapse holds at fixed r. Each rate takes a slice step against its replica's own target, including the log-coordinate Jacobian in the hyperprior. Exact reference draws sample the rates independently of the admitted structure. Replicas, particles, checkpoints and retained draws carry the rates. Choosing this option is independent of the default-prior coverage comparison commissioned for slice 3.
 
 ## Properness under tempering (decision 3)
 
-At rung b, Σ's conditional is IW(ν₀ + ν_b, Ψ₀ + S_b), proper where ν₀ + ν_b > K − 1. With the intercept inside a proper prior that holds at every b ≥ 0, the reference rung included. Under the flat intercept it fails at Nb ≤ K − ν₀ under a proper prior too (Nb ≤ 1 − 2c under decision 2), and b = 0 diverges, as scalar BASS's flat pole does (`BassTarget.Defines`). The entry's first condition, ν₀ − N(1 − b) > K − 1, asked the tilted prior IW(ν₀ + N(b − 1)) alone to be proper, which integrating Σ against that tilted prior needs but integrating the tempered likelihood directly does not. The samplers that read it arrive in slice 2.
+At rung b, Σ's conditional is IW(ν₀ + ν_b, Ψ₀ + S_b), proper where ν₀ + ν_b > K − 1. With the intercept inside a proper prior that holds at every b ≥ 0, the reference rung included. Under the flat intercept it fails at Nb ≤ K − ν₀ under a proper prior too (Nb ≤ 1 − 2c under decision 2), and b = 0 diverges, as scalar BASS's flat pole does (`BassTarget.Defines`). Resolution checks this condition for the ladder's hottest rung and for any requested reference rung. Integrated SMC needs the b = 0 member. The linear form reads b·ln p₁ and reaches b = 0 with a proper structure/scale prior. A flat intercept's unspecified prior constant still leaves absolute evidence unavailable.
+
+The entry's first condition, ν₀ − N(1 − b) > K − 1, asked the tilted prior IW(ν₀ + N(b − 1)) alone to be proper, which integrating Σ against that tilted prior needs but integrating the tempered likelihood directly does not.
+
+## Coefficient forms and samplers (slice 2)
+
+The normalized ridge and KHAOS's raw ridge and modified g-prior use the same prior-precision builders as scalar BASS. On the centred design coordinates, let A be the likelihood Gram and D the prior precision per unit τ. Factoring D = LLᵀ and L⁻¹AL⁻ᵀ = VΛVᵀ gives one generalized spectrum per structure. Each output contributes its own cross products w_k = VᵀL⁻¹c_k. The `OutputPencil` shares the eigenvectors and keeps these K projections through `PriorPencil.WithCross`.
+
+With H_j,kl = w_jk w_jl / λ_j, the integrated scale is
+
+`S_b = bR + Σ_j [bτ/(τ + bλ_j)] H_j`.
+
+Its determinant term is `(K/2) Σ_j ln[τ/(τ + bλ_j)]`, plus `−(K/2) ln(Nb)` for the flat intercept. The eigenbasis includes the intercept when its prior is proper. This representation keeps the residual form explicit at small τ. The current implementation uses a fresh full-spectrum decomposition for each proposed structure, O(M³), followed by O(KM²) for the K cross-product projections. Acceptance retains the already-scored immutable pencil and its projections. A repeated temperature or τ evaluation builds the shrinkage form in O(MK²), then factors the K × K posterior scale in O(K³) for its log determinant; the analytic slope also uses K SPD solves. These costs are separate from the design's Gram, cross products and explicit residuals. The g-form retains its closed form, and the scalar ridge retains its bordered spectrum. The posterior matrix-normal draw uses the same pencil's precision and K means, then mixes independent coefficient innovations across the outputs through Σ's Cholesky factor.
+
+Plain chains, the parallel-tempering ladder, SMC and the flat histogram consume these target values through their existing sampler interfaces. The ladder and SMC evidence use normalized prior draws on the admissible structure space F. SMC's stage-budget, collapse and between-replicate flags retain their existing meanings. The histogram samples the joint state with its learned weight as a function of the conditional collapsed log likelihood, then reweights to b = 1. Their monitored predictive functionals are ln|Σ| and the fitted value at each (case, output) point. Evidence metadata records the declared covariance prior and the resolved output scales.
+
+For the integrated form, let T = Ψ₀ + S_b and t = ν₀ + Nb − f. Its derivative is
+
+`d ln p_b/db = d(det term)/db + (N/2)[Σ_i ψ((t−i)/2) − K ln π − ln|T|] − (t/2) tr(T⁻¹ dS_b/db)`,
+
+where i runs from 0 to K−1. For the pencil, `dS_b/db = R + Σ_j [τ/(τ+bλ_j)]² H_j`. The implementation evaluates the trace by SPD solves. The linear form's derivative is the untempered log marginal.
 
 ## The design's K-output side (slice 1)
 
@@ -45,9 +67,9 @@ A retained draw is exact given (structure, τ): Σ | Y from its inverse Wishart 
 
 A run of several outputs monitors ln|Σ| in σ²'s place, and each monitored case's fitted value at every output: the monitored points are (case, output) pairs, a declared case without an output filling in every output. ln|Σ| reads the correlations as well as the scales, and its rank-normalized R̂ is moved by no rescaling or mixing of the outputs. The alternative, Σ's whole lower triangle, reads each entry apart at the cost of K(K + 1)/2 functionals and another shape for the diagnostics; it is a follow-up if a run's correlations converge more slowly than ln|Σ| shows.
 
-## What slice 1 refuses, with its reason
+## The remaining boundaries
 
-Noises and random intercepts (decisions 6 and 7, slice 4); a working response that moves; the ladder, SMC and the flat histogram (slice 2); the normalized ridge and KHAOS's priors, whose spectra and pencils would carry K cross products (slice 2); a direct functional response; missing outputs (decision 5); and the readers of one response (prediction, the pointwise density, sensitivity, the conformal candidates), which refuse a draw of several outputs until the readouts (slice 3).
+Noises and random intercepts (decisions 6 and 7, slice 4), a working response that moves, a direct functional response, missing outputs (decision 5), and the readers of one response (prediction, the pointwise density, sensitivity, the conformal candidates) retain their explicit refusals. Joint readouts belong to slice 3.
 
 ## Checked
 
@@ -56,7 +78,8 @@ Noises and random intercepts (decisions 6 and 7, slice 4); a working response th
 - **The core** (`MultiOutputCoreTests`): the design against one scalar design per output and per pair of outputs, by polarization, over 232 proposals and 149 acceptances (7.5·10⁻¹⁵); the target against the matrix-t reference under each convention (1.3·10⁻¹⁵); K = 1 against scalar BASS, the forms to the bit, the target to 3.6·10⁻¹⁶ and the draw to 6·10⁻¹⁶; equivariance to 10⁻¹⁵.
 - **Fits** (`MultiOutputFitTests`, `OutputCovariancePriorTests`): at K = 1 a fit is scalar BASS's, 500 draws, structures and τ equal, σ², coefficients and λ to 2.5·10⁻¹⁴; each prior kind resolved and round-tripped through JSON, the target under a declared prior against the reference (10⁻¹²).
 - **Laws** (`MultiOutputLawTests`): the chain's count law, E[ln τ] and six likeliest structures against the enumeration of F with τ integrated, K = 2 and 3, 200,000 steps (worst |z| 3.0 and 2.6); the recovery of a known, correlated Σ and of three surfaces outside the model (each Σ entry within 1.3 posterior sd; the surfaces' RMSE 0.04 to 0.06 against noise sds 0.15 to 0.3). Geweke's joint test and the cost row run under qualification; their numbers are in the brief's report.
+- **Slice 2** (`MultiOutputSamplerTests`, `MultiOutputSamplerQualificationTests`, `HuangWandTests`, `MultiOutputCoefficientTests`): normalized enumerated rung laws and evidence, with τ or both covariance rates integrated; exact resume across all four samplers and parallel draw identity; 324 generalized-form dense cases and the K = 1 scalar reduction; coefficient draws standardized against a separate dense precision; accepted-pencil reuse; Huang–Wand prior draws and the joint Geweke test including both rates. Analytic slopes are checked by finite differences under every coefficient form and intercept convention. The [slice 2 report](../../issues/regression/bass/multi-output-brief.md#slice-2-samplers-covariance-rates-and-coefficient-forms-chip-2026-11-09) holds the receipts, precision and separate setup, projection and repeated-evaluation costs.
 
 ## Notation
 
-Σ is the K × K noise covariance and ν, ν₀ the inverse Wishart's conventional degrees of freedom; Brown, Vannucci and Fearn write IW(δ; Q) in Dawid's shape, δ = ν − K + 1, and their q is this page's K. R and F are the K × K forms of the scalar ‖r‖² and Q_c, and S the K × K scale of the scalar S. Where K, F, R, S_Y and ν cross the module's own names is logged in [the notation ledger](../../issues/notation-ledger.md) (2026-11-09).
+Σ is the K × K noise covariance and ν, ν₀ the inverse Wishart's conventional degrees of freedom; Brown, Vannucci and Fearn write IW(δ; Q) in Dawid's shape, δ = ν − K + 1, and their q is this page's K. R and F are the K × K forms of the scalar ‖r‖² and Q_c, and S the K × K scale of the scalar S. Where K, F, R, S_Y, ν, the covariance rates rₖ, marginal scales Aₖ and the pencil's Gram A cross the module's own names is logged in [the notation ledger](../../issues/notation-ledger.md) (2026-11-09).

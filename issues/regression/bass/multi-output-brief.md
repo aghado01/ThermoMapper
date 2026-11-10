@@ -98,6 +98,46 @@ Under "Reports" below, newest first, per slice: what landed by commit; the gates
 
 ## Reports
 
+### Slice 2: samplers, covariance rates and coefficient forms (chip, 2026-11-09)
+
+**Landed:** `4f3f210` adds the normalized test-side rung and evidence references and the properness boundaries. `41727ac` adds the ladder, SMC, flat histogram and exact resume for several outputs; optional Huang and Wand rates in the state, sweep and every sampler; and the normalized ridge, raw ridge and modified g-form through a shared `OutputPencil`. The math and implementation choices are on [the several-output page](../../../docs/Maths/MultiOutput.md).
+
+**Reference and law gates.** The enumeration normalizes the structural prior on the admitted space F and integrates on ln τ with its Jacobian. The Huang–Wand fixture holds τ = 0.1 and instead integrates both log rates. Its two-dimensional quadrature halves its panel width from 2 to 1 on [−30, 8]; ln Z changes by 2.4·10⁻¹⁴. Neither calculation uses the production likelihood's collapse.
+
+| Gate | Result |
+| --- | --- |
+| Integrated and linear rung laws under a declared IW, with τ integrated | Count law and mean ln τ agree at four rungs, including the normalized prior rung. Exact ln Z = −6.25269935; ladder estimates −6.23311960 ± 0.00687 and −6.24719222 ± 0.00785 (Monte Carlo errors) |
+| SMC under both forms, declared IW and Huang–Wand | All four evidence and final count comparisons pass. IW estimates −6.27682162 ± 0.0157 and −6.26675872 ± 0.00946; Huang–Wand estimates −6.14495274 ± 0.0288 and −6.13978315 ± 0.0137 |
+| Huang–Wand count and rates, independent dense quadrature | ln Z = −6.1574765353; P(M = 1) = 0.32862039; E r₀ = 0.36002664, E r₁ = 0.043636699. The plain chain and three ladder rungs meet their integrated references; ladder ln Z = −6.157579796 ± 0.00996 |
+| Flat histogram, reweighted count and evidence | IW P(M = 1) = 0.11543239 versus 0.11392457, ln Z = −6.260378266 ± 0.0121; Huang–Wand P(M = 1) = 0.32966483 versus 0.32862039, ln Z = −6.147181961 ± 0.0102 |
+| Tempered properness | Accepted and refused sides of ν₀ + Nb − f > K − 1 agree with the dense reference, including the flat boundary exactly; the linear form and requested reference rung keep their own meanings |
+| Coefficient forms, dense matrix-t and K = 1 reduction | 108 dense cases per form, K = 1, 2, 3 and all three intercept conventions, τ from 10⁻⁸ to 10⁴ and b from 10⁻⁶ to 1. Maximum relative errors 1.08·10⁻¹⁴ ridge, 1.07·10⁻¹⁴ raw ridge, 9.28·10⁻¹⁵ modified g; K = 1 agrees with scalar BASS |
+| Proposed generalized forms and accepted projection reuse | 1,345 admitted proposal rows meet fresh dense fits, maximum relative error 3.03·10⁻¹³. All 1,287 changed pending acceptances reuse the scored pencil: 441 ridge, 441 raw, 405 modified |
+| Conditional coefficient draws | 20,000 draws per form, standardized by the independently built dense precision and each sampled Σ. Worst moment absolute z = 2.77 |
+| Huang–Wand's prior | JSON and explicit-scale independence, the scalar conditional hierarchy, and 100,000 prior draws checking the half-t scales and uniform-correlation moments; worst absolute z = 0.64 |
+| Resume and parallel execution | Twelve resume cases cover all four samplers, both covariance priors, and generalized coefficient forms; structures, τ, Σ, coefficients, rates, weights and evidence resume exactly. SMC's overdispersion and collapse flags agree. Raw-ridge Huang–Wand ladder and SMC draws agree with one and two workers |
+
+The flagged qualification bodies passed 46/46, including 36 pins, four declared-IW and two Huang–Wand Geweke seeds, the two histograms, the integrated-rate ladder and the g-form cost row. Each Geweke case compares 400,000 independent draws with 12,000 independent paths of 50 consecutive sweeps, using path means for its standard error. The largest absolute z was 1.86 for the declared IW and 2.33 for Huang–Wand, whose two log rates are also checked. This qualification snapshot predates the generalized proposal's prior-column handoff fix and accepted-pencil cache retention. These g-form bodies have no coefficient-prior pencil; neither fix changes their numerical path. The source difference is retained with the receipts. The final fast run passed 49/49 with the flag enabled, including the pins, generalized cache assertions, parallel draws and cycle-clock costs. The original uninterrupted seed-20261123 tail finding remains open as reported in the slice 1 recheck below.
+
+[Sampler and generalized-form results](../../../artifacts/e34-slice2/results/generalized-entrypoints.trx) · [Flagged qualification](../../../artifacts/e34-slice2/results/qualification.trx) · [Final cache, draw and cost checks](../../../artifacts/e34-slice2/results/cache-and-cost.trx) · [Qualification provenance](../../../artifacts/e34-slice2/results/provenance.json)
+
+**Clean-commit verification.** A clean archive of `41727ac` builds in Release. The Commit selection passes 2,225/2,225, zero skips, with `BASS_QUALIFICATION` unset (8 min 57 s test duration). The whole regression assembly, Slice scope with the slow tier, passes 2,831/2,831, zero skips, on those same binaries (32 min 11 s test duration, flag unset). All runs use below-normal priority, `DOTNET_PROCESSOR_COUNT=2`, MSBuild node reuse off and at most two xUnit threads. The receipts, settings, source hashes and qualification difference are retained under `artifacts/e34-slice2/results/`; the temporary source snapshots and build trees are removed after verification. [Commit receipt](../../../artifacts/e34-slice2/results/commit.trx) · [Commit settings](../../../artifacts/e34-slice2/results/commit.runsettings) · [Full assembly](../../../artifacts/e34-slice2/results/slice.trx) · [Slice settings](../../../artifacts/e34-slice2/results/slice.runsettings)
+
+**Cost and implementation choice.** The accepted baseline uses one fresh full-spectrum generalized decomposition per proposed structure, O(M³), and O(KM²) for the K cross projections, with the same production `DenseEigen` selector. Repeated evaluations use O(MK²) shrinkage followed by O(K³) to factor the posterior output scale; the slope also solves K systems. An accepted proposal keeps its already-scored immutable `OutputPencil`. Scalar ridge still uses its bordered spectrum. A bordered multi-output generalized update is a possible later optimization, requiring the same dense-value, acceptance-cache and resume gates.
+
+Cycle-clock medians below are indicative µs per call on N = 256 and four predictors, over five interleaved batches of 200 calls. They separate the decomposition and K projections from a full design load and proposal. No other test host was reported. The full marginal includes the output-scale determinant and normalization; the shrinkage row does not. IQRs and the clock's load record are in the TRX.
+
+| M, K | Form | Load and setup | Change proposal | Decomposition | K projections | Cached shrinkage | Full marginal | Full slope |
+| --- | --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: |
+| 8, 2 | g | 43.3 | 5.31 | — | — | 0.320 | 1.16 | 1.48 |
+| 8, 2 | normalized ridge | 105.4 | 56.5 | 48.4 | 0.846 | 1.60 | 2.39 | 2.93 |
+| 24, 5 | g | 170.6 | 14.4 | — | — | 0.496 | 1.35 | 4.85 |
+| 24, 5 | normalized ridge | 460.7 | 331.9 | 313.5 | 5.96 | 4.05 | 4.90 | 5.10 |
+
+Reading accepted ridge forms costs 0.260 and 0.267 µs at the two sizes, with object identity gated separately. The whole-sweep row, N = 1000, p = 4, M_max = 20 on separate chains, reads scalar 34.2 µs; K = 1, 2, 5, 10 read 41.4, 49.7, 86.4, 127.0 µs (1.21, 1.45, 2.53, 3.71×). These measurements price this implementation on these fixtures; they do not establish an asymptotic crossover.
+
+**Remaining scope.** Covariance-default coverage and joint readouts stay in slice 3. The optional Huang–Wand prior does not settle that comparison. Row noise, moving working responses and random effects stay in slice 4; the PCA option stays in slice 5. All shared runtime files were released after `41727ac`; E21's pending named-grouping work was excluded from these snapshots and this commit.
+
 ### Slice 1 Geweke recheck (2026-11-09)
 
 The original uninterrupted run reproduced on `b360316`. With 400,000 independent draws, 600,000 successive sweeps, 50 batches and the original bound of 4, seed 20261123 gave mean ln τ of −3.75481 on the independent side and −3.46080 on the successive side. Its 1% quantiles were −11.254 and −8.475. The original probe agreed with the dense matrix-t marginal on all 600,000 visited states (maximum relative error 2.84·10⁻¹³). The qualification change is test-side in `ac9726b`.
