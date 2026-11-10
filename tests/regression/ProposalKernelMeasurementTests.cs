@@ -68,7 +68,54 @@ public sealed class ProposalKernelMeasurementTests(ITestOutputHelper output)
             new("friedman p50", new BassConfig(), Friedman(40)),
             new("ishigami raw ridge", khaos.Config, khaos.Data),
             new("ishigami modified g", khaos.Config with { Coefficients = BassCoefficientPrior.ModifiedG(TauPrior.Gamma(0.001, 1000.0)) }, khaos.Data),
+            // The residual birth on more KHAOS raw-ridge fixtures (the proposal-kernels brief's addendum plan, pre-registered 2026-11-09).
+            KhaosFixture("ishigami n500", 500, [.. Enumerable.Repeat((-Math.PI, Math.PI), 4)], x => BassDeterministicProfileTests.Ishigami(x), 0.5, false, 31001),
+            KhaosFixture("ishigami 7 inert", 200, [.. Enumerable.Repeat((-Math.PI, Math.PI), 10)], x => BassDeterministicProfileTests.Ishigami(x), 0.5, false, 31002),
+            KhaosFixture("g-function", 200, [.. Enumerable.Repeat((0.0, 1.0), 8)], GFunction, 0.1, false, 31003),
+            KhaosFixture("borehole", 200, Borehole, x => BassDeterministicProfileTests.Borehole(x), 0.1, true, 31004),
         ];
+    }
+
+    // Sobol's g-function on [0, 1]⁸, a = (0, 1, 4.5, 9, 99, 99, 99, 99): Π_j (|4x_j − 2| + a_j)/(1 + a_j).
+    private static readonly double[] GA = [0, 1, 4.5, 9, 99, 99, 99, 99];
+
+    private static double GFunction(double[] x)
+    {
+        double g = 1.0;
+        for (int j = 0; j < GA.Length; j++) g *= (Math.Abs(4 * x[j] - 2) + GA[j]) / (1 + GA[j]);
+        return g;
+    }
+
+    // The borehole's inputs, r_w, r, T_u, H_u, T_l, H_l, L, K_w, on Morris, Mitchell and Ylvisaker's ranges.
+    private static readonly (double, double)[] Borehole =
+        [(0.05, 0.15), (100, 50_000), (63_070, 115_600), (990, 1110), (63.1, 116), (700, 820), (1120, 1680), (9855, 12_045)];
+
+    // A KHAOS raw-ridge fixture as the trap's is built (BassSmcMutationQualificationTests.Khaos: d_max 8, q_max 3, τ held at 10⁻⁵, the zero
+    // centre, σ² ~ IG(3, 0.5)), h₂ = 40/n: inputs uniform on their declared domains, the response f(x), standardized on the sample when
+    // asked, plus Gaussian noise of sd `noise`.
+    private static Fixture KhaosFixture(string name, int n, (double Low, double High)[] ranges, Func<double[], double> f, double noise, bool standardize, int seed)
+    {
+        BassSmcMutationQualificationTests.Fixture template = BassSmcMutationQualificationTests.Khaos();
+        var rng = new Xoshiro256PlusPlus(seed);
+        int p = ranges.Length;
+        var x = new double[p][];
+        for (int j = 0; j < p; j++) x[j] = new double[n];
+        var y = new double[n];
+        var point = new double[p];
+        for (int i = 0; i < n; i++)
+        {
+            for (int j = 0; j < p; j++) point[j] = x[j][i] = ranges[j].Low + (ranges[j].High - ranges[j].Low) * rng.NextDouble();
+            y[i] = f(point);
+        }
+        if (standardize)
+        {
+            double mean = y.Average(), sd = Math.Sqrt(y.Sum(v => (v - mean) * (v - mean)) / (n - 1));
+            for (int i = 0; i < n; i++) y[i] = (y[i] - mean) / sd;
+        }
+        for (int i = 0; i < n; i++) y[i] += noise * BassQualification.Gaussian(rng);
+        BassData data = new([.. Enumerable.Range(0, p).Select(j => (BassPredictor)new ContinuousPredictor($"x{j}", x[j], new InputDomain(ranges[j].Low, ranges[j].High)))],
+                            new ScalarResponse(y));
+        return new Fixture(name, template.Config with { Count = new BassCountPrior(4, 40.0 / n) }, data);
     }
 
     private static BassConfig Arm(Fixture f, string arm, int seed, int burn, int samples)
@@ -118,7 +165,7 @@ public sealed class ProposalKernelMeasurementTests(ITestOutputHelper output)
             for (int k = 0; k < seeds; k++)
                 foreach (string arm in k % 2 == 0 ? arms : reversed)   // the order alternates by seed
                 {
-                    int seed = 101 + k;
+                    int seed = Setting("BASS_KERNEL_SEED_BASE", 101) + k;
                     if (done.Contains($"{f.Name}|{arm}|{seed}")) continue;
                     BassConfig config = Arm(f, arm, seed, burn, samples);
                     TimeSpan cpu0 = Process.GetCurrentProcess().TotalProcessorTime;
@@ -154,9 +201,18 @@ public sealed class ProposalKernelMeasurementTests(ITestOutputHelper output)
     public void ResidualBirth_ClimbFromEmpty()
     {
         if (!Enabled) return;
-        BassSmcMutationQualificationTests.Fixture khaos = BassSmcMutationQualificationTests.Khaos();
-        BassModel baseModel = BassModel.Create(khaos.Config, khaos.Data);
-        BassModel residualModel = BassModel.Create(khaos.Config with { Sampling = khaos.Config.Sampling with { Births = new BirthMixture { Residual = Residual } } }, khaos.Data);
+        string[] wanted = (Environment.GetEnvironmentVariable("BASS_KERNEL_CLIMB_FIXTURES") ?? "ishigami raw ridge").Split(',', StringSplitOptions.RemoveEmptyEntries);
+        ArtifactRun artifacts = HarnessArtifacts.Create("test-runs", "ProposalKernelClimbs", "Maths.Regression.Tests", new Dictionary<string, object?> { ["Fixtures"] = string.Join(",", wanted) });
+        string csv = Path.Combine(artifacts.RunDirectory, "proposal-kernels-climbs.csv");
+        File.WriteAllText(csv, "fixture,arm,seed,floor,sweeps,reached,cpu_s,m,births_attempted,births_accepted" + Environment.NewLine);
+        output.WriteLine($"table: {csv}");
+        foreach (Fixture f in Fixtures().Where(f => wanted.Contains(f.Name))) Climb(f, csv);
+    }
+
+    private void Climb(Fixture f, string csv)
+    {
+        BassModel baseModel = BassModel.Create(f.Config, f.Data);
+        BassModel residualModel = BassModel.Create(f.Config with { Sampling = f.Config.Sampling with { Births = new BirthMixture { Residual = Residual } } }, f.Data);
         double logTau = Math.Log(baseModel.Target.HeldTau!.Value);
         var reference = new BassChain(baseModel, [], logTau, new Xoshiro256PlusPlus(7001), new Xoshiro256PlusPlus(7002));
         var tail = new List<double>();
@@ -166,7 +222,7 @@ public sealed class ProposalKernelMeasurementTests(ITestOutputHelper output)
             if (t >= 30_000) tail.Add(BassMixing.LogPosterior(baseModel, s));
         }
         double floor = BassMixing.Quantile([.. tail], 0.05);
-        output.WriteLine($"the band's floor: ln π {floor:F2} (the reference's last 30,000 sweeps: median {BassMixing.Quantile([.. tail], 0.5):F2}, M {reference.Current.Count})");
+        output.WriteLine($"{f.Name}: the band's floor ln π {floor:F2} (the reference's last 30,000 sweeps: median {BassMixing.Quantile([.. tail], 0.5):F2}, M {reference.Current.Count})");
         foreach ((string arm, BassModel model) in new[] { ("base", baseModel), ("residual", residualModel) })
         {
             var reached = new List<(int Sweeps, double Seconds, int M)>();
@@ -180,10 +236,10 @@ public sealed class ProposalKernelMeasurementTests(ITestOutputHelper output)
                 double seconds = (Process.GetCurrentProcess().TotalProcessorTime - cpu0).TotalSeconds;
                 reached.Add((sweep + 1, seconds, chain.Current.Count));
                 BassKindCount births = chain.Structure.Kinds[BassMoveKind.Birth];
-                output.WriteLine($"{arm}, seed {seed}: {(sweep < 20_000 ? $"reached in {sweep + 1} sweeps" : "not within 20,000 sweeps")}, {seconds:F2} CPU s, " +
-                                 $"M {chain.Current.Count}; births {births.Accepted}/{births.Attempts}");
+                File.AppendAllText(csv, string.Join(",", f.Name, arm, seed, floor.ToString("R", CultureInfo.InvariantCulture), sweep + 1, sweep < 20_000 ? 1 : 0,
+                                                    seconds.ToString("R", CultureInfo.InvariantCulture), chain.Current.Count, births.Attempts, births.Accepted) + Environment.NewLine);
             }
-            output.WriteLine($"{arm}: median sweeps {BassMixing.Quantile([.. reached.Select(r => (double)r.Sweeps)], 0.5):F0}, " +
+            output.WriteLine($"{f.Name}, {arm}: median sweeps {BassMixing.Quantile([.. reached.Select(r => (double)r.Sweeps)], 0.5):F0}, " +
                              $"median CPU s {BassMixing.Quantile([.. reached.Select(r => r.Seconds)], 0.5):F2}, reached {reached.Count(r => r.Sweeps <= 20_000)}/8");
         }
     }

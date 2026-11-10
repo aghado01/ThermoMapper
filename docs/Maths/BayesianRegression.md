@@ -1110,7 +1110,10 @@ $$q(t\mid S)=(1-\omega_H-\omega_R)\,q_{\text{base}}+\omega_H\,q_H+\omega_R\,q_R 
 *MCMC's climb from empty* on the same fixture, at b = 1, eight seeds each: to the long chain's band, the 5% quantile of its ln π, in a median 356 sweeps (139–615) against 4,384 (2,241–7,557). That is 12 times fewer.
 
 **The decisions they change,** each the user's:
-- *On KHAOS under the raw ridge,* the residual birth is reported as a candidate for that class: ESS per CPU second about 2× on five of six functionals at the same cost, and the climb from empty 12× shorter. No default is proposed from one fixture.
+- *On KHAOS under the raw ridge,* the residual birth was first reported as a candidate for that class: ESS per CPU second about 2× on five of six functionals at the same cost, and the climb from empty 12× shorter.
+  - Then measured on five fixtures by a rule fixed before the run (the proposal-kernels brief's addendum, 2026-11-09): Ishigami at n 120 and 500, Ishigami with seven inert inputs, Sobol's g-function and the borehole, eight seeds each.
+  - Four gains (median ratios 1.49–8.65), no loss, and the borehole neutral: its log posterior, which mixes poorly under both births, read 0.50 while every other functional gained. The climbs were 8–39× shorter, at 26–100% more CPU per fit.
+  - By that rule it goes to the user as a recommended default for the class. It stays opt-in until the user decides.
 - *For SMC's trap,* the pair of the 1.25 cap and the residual birth reaches the posterior in every replicate, and the evidence stays dispersed. The remedy table's third row, a reference nearer the posterior, is what the evidence would need.
 - *On hinge fits* it stays opt-in: no per-sweep gain on Friedman, at 19–88× the CPU.
 

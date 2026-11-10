@@ -1,6 +1,6 @@
 # Proposal kernels: E4's history-based and residual-informed births
 
-Date: 2026-11-08. Status: slices 1 and 2 landed and verified (`b1df14e`; `599115d`, `ff2ec0d`). Slice 2's first call, SMC's step cap, built opt-in 2026-11-09 at the user's word (`0ffc0e0`). Its second, the residual birth as a candidate for KHAOS's raw-ridge fits, waits on the user.
+Date: 2026-11-08. Status: slices 1 and 2 landed and verified (`b1df14e`; `599115d`, `ff2ec0d`). SMC's step cap built opt-in (`0ffc0e0`). The residual birth measured on five KHAOS raw-ridge fixtures by the pre-registered rule: four gains, no loss, so it goes to the user as a recommended default for that class; the user decides.
 
 ## Why
 
@@ -214,6 +214,32 @@ Under "Reports" below, newest first, per slice:
 - what was left unbuilt, and why.
 
 ## Reports
+
+### Addendum: the residual birth on five KHAOS raw-ridge fixtures (chip, 2026-11-09)
+
+At the user's word ("Measure more fixtures"), run as [the addendum plan](#addendum-plan-the-residual-birth-on-more-khaos-fixtures-pre-registered-2026-11-09) fixed it before any run (`b81d3ab`). The tables are [`proposal-kernels-khaos.csv`](proposal-kernels-khaos.csv) and [`proposal-kernels-khaos-climbs.csv`](proposal-kernels-khaos-climbs.csv).
+
+**The rule's reading,** ESS per CPU second of the residual birth over the fit's own (z over eight seeds).
+
+| Fixture | Verdict (median) | M | ln π | σ² | Fitted values | CPU per fit | Climb from empty, median sweeps |
+| --- | --- | --- | --- | --- | --- | --- | --- |
+| Ishigami, n 120 (new seeds) | gain (1.49) | 1.65 (+1.9) | 1.56 (+1.1) | 1.62 (+1.5) | 1.39–1.41 (+1.2) | 3.25 → 4.09 s | 4,384 → 356 |
+| Ishigami, n 500 | gain (1.53) | 2.34 (+1.8) | 2.82 (+1.5) | 1.52 (+1.4) | 1.14–1.55 (+0.6 to +1.5) | 5.08 → 6.58 s | 3,690 → 346 |
+| Ishigami, 7 inert | gain (8.65) | 1.61 (+1.2) | 0.86 (−1.6) | 13.6 (+1.8) | 3.7–250 (+1.5 to +3.5) | 2.52 → 5.09 s | 12,983 → 472 |
+| Sobol's g-function | gain (6.75) | 7.63 (+7.7) | 4.51 (+2.3) | 11.3 (+6.9) | 2.75–12.6 (+3.3 to +8.4) | 1.67 → 2.45 s | 5,119 → 132 |
+| The borehole | neutral (2.50) | 4.89 (+3.0) | 0.50 (−5.7) | 2.52 (+2.1) | 1.16–2.50 (+0.6 to +2.4) | 3.24 → 4.80 s | 3,193 → 356 |
+
+**The outcome, by the rule:** four gains, no loss, one neutral. **The residual birth goes to the user as a recommended default for KHAOS's raw-ridge fits.** The user decides.
+
+**Read beside it.**
+- *The seven-inert ratios* (114× and 250× on two fitted values) measure the base chains' failure to converge, not a speed-up in kind. Their R̂ runs to 4.1, and their climb takes a median 12,983 sweeps against a 5,000-sweep burn-in. The residual chains' fitted values read R̂ 1.00–1.04.
+- *The borehole's log posterior* mixes poorly under both births, R̂ up to 3.0 (base) and 4.3 (residual). The residual birth's ESS on it is half the base's, while M's R̂ falls from up to 2.7 to at most 1.06 and every other functional gains. That one functional is what makes the fixture neutral, not a gain.
+- *The climbs* are 8–39 times shorter on every fixture, every seed of both arms reaching the band. One borehole seed took 11,044 sweeps under the residual birth.
+- *The cost* is 26% to 100% more CPU per fit, most on the inert fixture, where p 10 widens every scoring pass.
+- *Births' acceptance* hardly moves (0.04–1.86%). The gain comes from where the births go, not from more of them landing.
+- *Slice 2's Ishigami reading replicates* on new seeds, smaller (median 1.49 against about 2), each functional within its spread but none below.
+
+**What it changes.** Nothing yet: the residual birth stays opt-in until the user decides. A default would mean `BirthMixture { Residual = ResidualBirth(0.25) }` whenever a KHAOS fit declares the raw ridge, a change to that class's draws. Pinned KHAOS hashes on raw-ridge fixtures would move with it, and would be re-read in the same commit.
 
 ### Addendum: SMC's step cap, built opt-in (chip, 2026-11-09)
 
