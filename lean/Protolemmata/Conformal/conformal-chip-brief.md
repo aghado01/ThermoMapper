@@ -1,6 +1,47 @@
 # Conformal validity in the Lean harness — chip brief
 
-CB-1 to CB-4 were proved on 2026-11-06, E35's M-1 and M-2 on 2026-11-08, and E16 slice 9's jackknife+ and asymmetric CQR on 2026-11-09. Their reports are below.
+CB-1 to CB-4 were proved on 2026-11-06, E35's M-1 and M-2 on 2026-11-08, and E16 slice 9's jackknife+ and asymmetric CQR on 2026-11-09. Their reports are below. E16 slices 10 and 12 were commissioned on 2026-11-10.
+
+## E16 slices 10 and 12 — the full step's error, Hoff's score and the latent posterior (2026-11-10)
+
+Status: commissioned 2026-11-10 by the user ("Yes, send it"), relayed by the main session.
+
+These are Lean first, by the user's decision 7 on the [layer plan](../../../issues/regression/conformal-layer-brief.md#e16s-completion-the-plan-slices-7-onward), so the C# for slices 10 and 12 waits for these statements. Do slice 10 first and report it on its own, so its C# can start while slice 12's Lean runs. The method, environment, self-review and reporting are as set out below. The numeric checks come first, exhaustive at small n with exact arithmetic. Then come the Lean, `#print axioms` on the main results, the module build, `scripts/meta-ci.ps1 -NoBuild` and D:'s free space. The files are the three named under Scope, plus `conformal-searches.py` where a search needs it.
+
+### Slice 10 — the full step's error, completed
+
+Read first, in the [layer brief](../../../issues/regression/conformal-layer-brief.md):
+- the slice 4 build report, for `ConformalDistribution` and the CDF score F̃;
+- the per-unit bounds' report, for `MarginBounds.Carried`, the orderings' bounds and why each dominates.
+
+- **CB-3 for the CDF score.** CB-3 is proved for the accept rule on a density score at one level. The full step's opt-in distribution reads the CDF score F̃ under the add-one-in weights: Q(y, τ) = (B + τ(T + 1))/m, and the equi-tailed set takes k = ⌊αm/2⌋ per tail. Pose and prove what estimated scores within εⱼ of the exact ones cost:
+  - the equi-tailed set, in the margin form and the inflated form, per tail and two-sided, and whether the two tails' bands add or share units;
+  - the distribution itself: a bound on P(PIT ≤ u) − u from the fragile counts, at each u or uniformly in u;
+  - whether the band read from any ordering's estimates dominates, as `card_fragile_le_estimated` does for the density score.
+- **The carried bound that leaves out the degenerate orderings.** This is CB-3's open follow-up, and it closes the ledger's open "margin under an ε that holds only with high probability".
+  - *The problem:* the layer's carried bound takes each unit's worst error over the orderings. A unit far out degenerates the weights in its own turn as the candidate, and that widens every unit's bound. On BASS the margin's band holds 96 to 100 units of 100.
+  - *What to pose:* bounds over the orderings outside an excluded set D, the turns whose weights degenerate (read by k̂ or the ESS). Each bound holds with probability 1 − ν. The coverage bound subtracts D's share and ν from the margin read under the kept orderings' bounds, of the form 1 − (k + |M_D|)/m − |D|/m − ν if that holds.
+  - *Also settle:* the share's exact form, and whether the inflated rule has the counterpart.
+  - *Compare with* Bhattacharyya, Zhang and Barber's 1 − α − 3√ν (arXiv 2605.29200, appendix).
+  - A different or weaker form is a finding.
+- *Decisions served:* whether the full step's distribution reports its Monte Carlo error, and whether the margin can read anything on fits like BASS's.
+
+### Slice 12 — Hoff's score and the latent posterior
+
+Read first: CB-4 and its Hoff finding in the [ledger](conformal-lemmas.md), and Hoff 2023 §4.1 (`PDFs/Bayesian/Hoff2023.pdf`).
+
+- **Hoff's leave-one-out score,** cᵢ = p(zᵢ | every other unit, the candidate included), in CB-4's finite setting:
+  - its equivariance, so that CB-1 covers with it, under CB-1's tie rule (the ledger records that Hoff's strict rule fails under ties);
+  - the identity the C# computes from the n-unit draws. Each data unit takes the weight g(z_new | θ)/g(zᵢ | θ), add-one-in and leave-one-out at once, and c_{n+1} is the plain n-unit predictive. State the estimator's error in a form slice 10's bounds can carry;
+  - under latents, Hoff's score with every latent integrated (CB-4's (b)) and by the latent posterior ((c)). Say whether each stays equivariant, and whether reading the units differently breaks it as (d) does;
+  - Hoff's optimality: the finite statement that ranking by cᵢ gives the smallest expected set, under the model's own law, among sets valid at that level. Prove it if it fits the finite style; otherwise record what it needs. It is what would make the option worth its cost, so a counterexample is a finding.
+- **CB-4's latent-posterior reading from draws.** The exact score (c) is proved (`latentScore_equivariant`, `latentScore_eq`, `sum_jointU_addOneIn`).
+  - *The C# estimator:* from the n-unit draws, the data units read each draw's retained latents. The candidate's latent is drawn from p(v′ | θ, z_new), as a second candidate matrix.
+  - *To prove:* the estimator's expectation over the drawn latents is (c)'s score for every unit, the candidate included.
+  - *To state:* what the drawn latent adds to the Monte Carlo error that slice 10's bounds must carry.
+- *Decision served:* whether the full step offers Hoff's score, and reads a conditioned observation latent.
+
+Out of scope, as under Scope below, and slices 13 to 18. Report under "Reports", newest first, one report per slice, and tell the requesting session when each is done.
 
 ## E16 slice 9 — cross-fitted intervals and asymmetric CQR (2026-11-09)
 
