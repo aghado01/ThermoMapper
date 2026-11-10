@@ -78,6 +78,24 @@ public sealed class AsymmetricCqrTests(ITestOutputHelper output)
     }
 
     [Fact]
+    public void Rounding_NonintegerAlphaTimesM_AgainstBothFiniteBounds()
+    {
+        const int m = 31;
+        const double alpha = 0.1;
+        double[] y = [.. Enumerable.Range(0, m - 1).Select(i => (double)i)];
+        var calibration = new QuantileReadings(new double[m - 1], new double[m - 1]);
+        var test = new QuantileReadings([0.0], [0.0]);
+        double asym = SplitConformal.AsymmetricQuantiles(calibration, y, test, alpha).Intervals[0].Coverage;
+        double sym = SplitConformal.Quantiles(calibration, y, test, alpha).Intervals[0].Coverage;
+        Assert.Equal(29.0 / 31, asym, 15);
+        Assert.Equal(28.0 / 31, sym, 15);
+        Assert.Equal(1.0 / m, asym - sym, 15);
+        double excess = asym - (1 - alpha);
+        Assert.True(excess > 1.0 / m && excess < 2.0 / m);
+        output.WriteLine($"αm={alpha * m:R}: asymmetric bound {asym:R}, symmetric bound {sym:R}; above nominal {excess:R}, above symmetric {asym - sym:R}");
+    }
+
+    [Fact]
     public void AcceptsZero_SmallCalibrationAndFiniteRounding()
     {
         foreach (int n in new[] { 0, 1, 18, 19, 29 })
