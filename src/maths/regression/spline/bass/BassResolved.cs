@@ -450,7 +450,13 @@ public sealed record BassResolved
     private static BirthMixture? ResolveBirths(BassConfig config, BassData data, List<BassAutoPick> log)
     {
         if (config.Sampling.Births is { } declared) return declared.History is null && declared.Residual is null ? null : declared;
-        if (config.Structure.Legendre is null || config.Coefficients.Form is not RawRidgeForm || data.Response is not ScalarResponse) return null;
+        if (config.Structure.Legendre is null || config.Coefficients.Form is not RawRidgeForm) return null;
+        if (data.Response is not ScalarResponse)
+        {
+            log.Add(new("Births", "the fit's own birth",
+                        "KHAOS's raw-ridge default, E4's residual birth, reads a scalar response's residual, and this response is not scalar"));
+            return null;
+        }
         log.Add(new("Births", $"ResidualBirth(Share = {Text(DefaultResidualBirth.Share)})",
                     "E4's residual birth, KHAOS's default under the raw ridge on a scalar response (decided 2026-11-09); an empty BirthMixture turns it off"));
         return new BirthMixture { Residual = DefaultResidualBirth };

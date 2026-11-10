@@ -705,5 +705,15 @@ public sealed class ResidualBirthTests(ITestOutputHelper output)
         Assert.Equal(declared, byDefault);
         Assert.NotEqual(own, byDefault);
         Assert.DoesNotContain("Births", raw.ToJson());
+
+        // A KHAOS raw-ridge fit whose response is not scalar keeps the fit's own birth, and the log says why (the E34 chip's point,
+        // 2026-11-09: RawRidgeForm takes several outputs, and the residual birth reads a scalar response's residual alone).
+        double[] y = data.Response.Values.ToArray();
+        var two = new double[y.Length, 2];
+        for (int i = 0; i < y.Length; i++) (two[i, 0], two[i, 1]) = (y[i], -y[i] + 0.1 * i);
+        BassResolved several = BassResolved.Resolve(raw with { Sigma2 = Sigma2Prior.ScaledToResponse(2e-3) },   // several outputs refuse Jeffreys
+                                                    new BassData(data.Predictors, new MultiOutputResponse(two, ["a", "b"])));
+        Assert.Null(several.Births);
+        Assert.Contains(several.AutoPicks, p => p.Setting == "Births" && p.Value == "the fit's own birth");
     }
 }
