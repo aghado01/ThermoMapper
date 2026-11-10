@@ -63,6 +63,13 @@ unit's stratum.
   strange test unit
   (`not_acceptsPairwise_of_jackRefuses`), so `jackknifePlus_orderings`, `jackknifePlus_coverage`
   and `jackknifePlus_two_alpha`, its `1 − 2α`.
+* **Slice 9, CV+ with `K` folds** (Barber et al., Theorem 4). By merging the folds' ranks (Vovk):
+  `merged_le`, ranks super-uniform on `1, …, M` summing to at most `L` with probability at most
+  `2L/(KM)`, through `layer_cake`, `sum_antitone_le` and `sum_max_sub_le`; `crossFold_refused_le`,
+  `sum_rankLe_lt_of_cvRefuses`, `cvPlus_merged` and `cvPlus_merged_alpha`, with no symmetric fit.
+  By a tournament across folds: `card_refused_across_le`, at most `2ℓ + m − 2` strange units;
+  `ratio_prodPerm`, averaging over folds and slots; `coverage_across`,
+  `not_acceptsAcross_of_cvRefuses` and `cvPlus_tournament`.
 * **Slice 9, asymmetric CQR** (Romano, Patterson and Candès, Theorem 2). `cqrAsym_coverage`, each
   tail missing at most `k/|C|` and the set covering at least `1 − (k_lo + k_hi)/|C|`;
   `cqrAsym_coverage_half` at `α/2` per tail; `cqrLo_isUpperSet`, `cqrHi_isLowerSet` and
@@ -1943,6 +1950,777 @@ theorem jackknifePlus_two_alpha {W Z X : Type*} [Fintype W] [Fintype Z] {C : Fin
     (jackknifePlus_coverage ht P hP0 hP1 act hP cov resp alg halg k)
 
 end CrossFitted
+
+/-! ### Slice 9: CV+ by merging the folds' ranks (Vovk; Barber et al., Theorem 4(a)) -/
+
+section MergedFolds
+
+/-- **The merging inequality.** If `K` ranks sum to at most `L`, then `L ≤ Σₖ (2L/K − rₖ)₊`. -/
+theorem le_sum_max_of_sum_le {κ : Type*} [Fintype κ] (r : κ → ℝ) {L : ℝ}
+    (hK : 0 < Fintype.card κ) (h : ∑ k, r k ≤ L) :
+    L ≤ ∑ k, max (2 * L / Fintype.card κ - r k) 0 := by
+  have hK' : (0 : ℝ) < Fintype.card κ := by exact_mod_cast hK
+  have hc : ∑ _k : κ, 2 * L / Fintype.card κ = 2 * L := by
+    rw [sum_const, card_univ, nsmul_eq_mul]
+    field_simp
+  calc L ≤ ∑ k, (2 * L / Fintype.card κ - r k) := by
+        rw [sum_sub_distrib, hc]
+        linarith
+    _ ≤ _ := sum_le_sum fun k _ => le_max_left _ _
+
+/-- Telescoping on `1, …, M`: for `1 ≤ r ≤ M + 1`, `h r` is `h (M + 1)` plus the drops
+`h j − h (j + 1)` at every `j ≥ r`. -/
+theorem layer_cake (h : ℕ → ℝ) {M r : ℕ} (hr1 : 1 ≤ r) (hrM : r ≤ M + 1) :
+    h r = h (M + 1) + ∑ j ∈ Icc 1 M, (h j - h (j + 1)) * (if r ≤ j then 1 else 0) := by
+  have hfilt : ∑ j ∈ Icc 1 M, (h j - h (j + 1)) * (if r ≤ j then 1 else 0) =
+      ∑ j ∈ Ico r (M + 1), (h j - h (j + 1)) := by
+    simp only [mul_ite, mul_one, mul_zero]
+    rw [← sum_filter]
+    congr 1
+    ext j
+    simp only [mem_filter, mem_Icc, mem_Ico]
+    omega
+  rw [hfilt, sum_Ico_eq_sum_range]
+  have := sum_range_sub' (fun i => h (r + i)) (M + 1 - r)
+  simp only [show ∀ i, r + (i + 1) = r + i + 1 from fun i => by omega] at this
+  rw [this, show r + (M + 1 - r) = M + 1 by omega, add_zero]
+  ring
+
+/-- Abel's summation on `1, …, M`. -/
+theorem sum_Icc_sub_mul (h : ℕ → ℝ) (M : ℕ) :
+    ∑ j ∈ Icc 1 M, (h j - h (j + 1)) * j = ∑ j ∈ Icc 1 M, h j - M * h (M + 1) := by
+  induction M with
+  | zero => simp
+  | succ M ih =>
+    rw [sum_Icc_succ_top (by omega), sum_Icc_succ_top (by omega), ih]
+    push_cast
+    ring
+
+/-- **The layer cake.** A rank super-uniform on `1, …, M`, `P(r ≤ j) ≤ j/M` for every `j`, keeps the
+expectation of any antitone `h` at most its average over `1, …, M`. -/
+theorem sum_antitone_le {W V : Type*} [Fintype W] [Fintype V] (P : W → V → ℝ)
+    (hP1 : ∑ w, ∑ v, P w v = 1) {M : ℕ} (hM : 0 < M) (r : W → V → ℕ)
+    (hr : ∀ w v, 1 ≤ r w v ∧ r w v ≤ M)
+    (hsu : ∀ j, ∑ w, ∑ v, P w v * (if r w v ≤ j then 1 else 0) ≤ (j : ℝ) / M)
+    {h : ℕ → ℝ} (hanti : Antitone h) :
+    ∑ w, ∑ v, P w v * h (r w v) ≤ (∑ j ∈ Icc 1 M, h j) / M := by
+  have hM' : (0 : ℝ) < M := by exact_mod_cast hM
+  have hexp : ∀ w v, P w v * h (r w v) = P w v * h (M + 1) +
+      ∑ j ∈ Icc 1 M, (h j - h (j + 1)) * (P w v * (if r w v ≤ j then 1 else 0)) := by
+    intro w v
+    rw [layer_cake h (M := M) (hr w v).1 (by have := (hr w v).2; omega), mul_add, mul_sum]
+    congr 1
+    exact sum_congr rfl fun j _ => by ring
+  have hswap : ∑ w, ∑ v, ∑ j ∈ Icc 1 M, (h j - h (j + 1)) * (P w v * (if r w v ≤ j then 1 else 0)) =
+      ∑ j ∈ Icc 1 M, (h j - h (j + 1)) * ∑ w, ∑ v, P w v * (if r w v ≤ j then 1 else 0) := by
+    rw [sum_congr rfl fun w _ => sum_comm, sum_comm]
+    exact sum_congr rfl fun j _ => by rw [mul_sum]; exact sum_congr rfl fun w _ => by rw [mul_sum]
+  have hconst : ∑ w, ∑ v, P w v * h (M + 1) = h (M + 1) := by
+    simp only [← sum_mul, hP1, one_mul]
+  simp only [hexp, sum_add_distrib]
+  rw [hconst, hswap]
+  calc h (M + 1) + ∑ j ∈ Icc 1 M, (h j - h (j + 1)) *
+        ∑ w, ∑ v, P w v * (if r w v ≤ j then 1 else 0)
+      ≤ h (M + 1) + ∑ j ∈ Icc 1 M, (h j - h (j + 1)) * ((j : ℝ) / M) := by
+        gcongr with j hj
+        · exact sub_nonneg.2 (hanti (Nat.le_succ j))
+        · exact hsu j
+    _ = (∑ j ∈ Icc 1 M, h j) / M := by
+        have : ∑ j ∈ Icc 1 M, (h j - h (j + 1)) * ((j : ℝ) / M) =
+            (∑ j ∈ Icc 1 M, (h j - h (j + 1)) * j) / M := by
+          rw [sum_div]
+          exact sum_congr rfl fun j _ => by ring
+        rw [this, sum_Icc_sub_mul]
+        field_simp
+        ring
+
+/-- The drops of `(c − j)₊` sum to at most `c²/2`: a right Riemann sum of a decreasing function. -/
+theorem sum_max_sub_le {c : ℝ} (hc : 0 ≤ c) (M : ℕ) :
+    ∑ j ∈ Icc 1 M, max (c - j) 0 ≤ c ^ 2 / 2 := by
+  have key : ∀ a : ℝ, max a 0 ≤ max (a + 1) 0 ^ 2 / 2 - max a 0 ^ 2 / 2 := by
+    intro a
+    rcases le_or_gt 0 a with ha | ha
+    · rw [max_eq_left ha, max_eq_left (by linarith)]
+      nlinarith
+    · rw [max_eq_right ha.le]
+      have : 0 ≤ max (a + 1) 0 ^ 2 / 2 := by positivity
+      linarith
+  have hind : ∀ M : ℕ, ∑ j ∈ Icc 1 M, max (c - j) 0 ≤
+      max c 0 ^ 2 / 2 - max (c - M) 0 ^ 2 / 2 := by
+    intro M
+    induction M with
+    | zero => simp
+    | succ M ih =>
+      rw [sum_Icc_succ_top (by omega)]
+      have hk := key (c - ((M + 1 : ℕ) : ℝ))
+      have he : c - ((M + 1 : ℕ) : ℝ) + 1 = c - M := by push_cast; ring
+      rw [he] at hk
+      linarith
+  have h0 : 0 ≤ max (c - M) 0 ^ 2 / 2 := by positivity
+  have := hind M
+  rw [max_eq_left hc] at this
+  linarith
+
+/-- **The merged ranks** (Vovk and Wang's average of p-values, as a count). `K` ranks, each
+super-uniform on `1, …, M` and dependent in any way, sum to at most `L` with probability at most
+`2L/(KM)`. -/
+theorem merged_le {W V κ : Type*} [Fintype W] [Fintype V] [Fintype κ] (P : W → V → ℝ)
+    (hP0 : ∀ w v, 0 ≤ P w v) (hP1 : ∑ w, ∑ v, P w v = 1) {M : ℕ} (hM : 0 < M)
+    (r : κ → W → V → ℕ) (hr : ∀ k w v, 1 ≤ r k w v ∧ r k w v ≤ M)
+    (hsu : ∀ k j, ∑ w, ∑ v, P w v * (if r k w v ≤ j then 1 else 0) ≤ (j : ℝ) / M)
+    (hK : 0 < Fintype.card κ) {L : ℕ} (hL : 0 < L) :
+    ∑ w, ∑ v, P w v * (if ∑ k, r k w v ≤ L then 1 else 0) ≤
+      2 * L / (Fintype.card κ * M) := by
+  have hK' : (0 : ℝ) < Fintype.card κ := by exact_mod_cast hK
+  have hL' : (0 : ℝ) < L := by exact_mod_cast hL
+  have hM' : (0 : ℝ) < M := by exact_mod_cast hM
+  set c : ℝ := 2 * L / Fintype.card κ with hcdef
+  have hc : 0 ≤ c := by positivity
+  have hpt : ∀ w v, (if ∑ k, r k w v ≤ L then (1 : ℝ) else 0) ≤
+      (∑ k, max (c - r k w v) 0) / L := by
+    intro w v
+    split_ifs with h
+    · rw [le_div_iff₀ hL', one_mul]
+      have h' : ∑ k, (r k w v : ℝ) ≤ L := by exact_mod_cast h
+      exact le_sum_max_of_sum_le (fun k => (r k w v : ℝ)) hK h'
+    · exact div_nonneg (sum_nonneg fun k _ => le_max_right _ _) hL'.le
+  have hfold : ∀ k, ∑ w, ∑ v, P w v * max (c - r k w v) 0 ≤ c ^ 2 / 2 / M := by
+    intro k
+    have hanti : Antitone fun j : ℕ => max (c - j) 0 := by
+      intro i j hij
+      have : (i : ℝ) ≤ j := by exact_mod_cast hij
+      exact max_le_max (by linarith) le_rfl
+    calc ∑ w, ∑ v, P w v * max (c - r k w v) 0 ≤ (∑ j ∈ Icc 1 M, max (c - j) 0) / M :=
+          sum_antitone_le P hP1 hM (r k) (hr k) (hsu k) hanti
+      _ ≤ c ^ 2 / 2 / M := div_le_div_of_nonneg_right (sum_max_sub_le hc M) hM'.le
+  calc ∑ w, ∑ v, P w v * (if ∑ k, r k w v ≤ L then 1 else 0)
+      ≤ ∑ w, ∑ v, P w v * ((∑ k, max (c - r k w v) 0) / L) :=
+        sum_le_sum fun w _ => sum_le_sum fun v _ => mul_le_mul_of_nonneg_left (hpt w v) (hP0 w v)
+    _ = (∑ k, ∑ w, ∑ v, P w v * max (c - r k w v) 0) / L := by
+        simp only [mul_div_assoc', mul_sum, sum_div]
+        rw [sum_congr rfl fun w _ => sum_comm, sum_comm]
+    _ ≤ (∑ _k : κ, c ^ 2 / 2 / M) / L :=
+        div_le_div_of_nonneg_right (sum_le_sum fun k _ => hfold k) hL'.le
+    _ = 2 * L / (Fintype.card κ * M) := by
+        rw [sum_const, card_univ, nsmul_eq_mul, hcdef]
+        field_simp
+
+variable {ι : Type*} [Fintype ι] [DecidableEq ι]
+
+omit [Fintype ι] [DecidableEq ι] in
+/-- A unit of `C` holds rank `1` at least and `|C|` at most. -/
+theorem one_le_rankLe {α : Type*} [LinearOrder α] {C : Finset ι} (s : ι → α) {u : ι} (hu : u ∈ C) :
+    1 ≤ rankLe C s u :=
+  card_pos.2 ⟨u, mem_filter.2 ⟨hu, le_rfl⟩⟩
+
+omit [Fintype ι] [DecidableEq ι] in
+theorem rankLe_le_card {α : Type*} [LinearOrder α] (C : Finset ι) (s : ι → α) (u : ι) :
+    rankLe C s u ≤ C.card :=
+  card_le_card (filter_subset _ _)
+
+/-- **Each fold's rank is super-uniform** (CB-1 in the fold). -/
+theorem rank_superUniform {W Z α : Type*} [Fintype W] [Fintype Z] [LinearOrder α] {C : Finset ι}
+    {t : ι} (ht : t ∈ C) (P : W → (ι → Z) → ℝ) (hP0 : ∀ w z, 0 ≤ P w z)
+    (hP1 : ∑ w, ∑ z, P w z = 1) (hP : ∀ σ ∈ permsOn C, ∀ w z, P w (z ∘ σ) = P w z)
+    (S : W → (ι → Z) → ι → α) (hS : ∀ w, Equivariant C (S w)) (j : ℕ) :
+    ∑ w, ∑ z, P w z * (if rankLe C (S w z) t ≤ j then 1 else 0) ≤ (j : ℝ) / C.card := by
+  have h := coverage_law ht P hP0 hP1 hP S hS j
+  have hsplit : ∀ w z, P w z * (if rankLe C (S w z) t ≤ j then (1 : ℝ) else 0) =
+      P w z - P w z * (if Accepts j C (S w z) t then 1 else 0) := by
+    intro w z
+    by_cases ha : Accepts j C (S w z) t
+    · have : ¬ rankLe C (S w z) t ≤ j := not_le.2 ha
+      simp [ha, this]
+    · have : rankLe C (S w z) t ≤ j := not_lt.1 ha
+      simp [ha, this]
+  simp only [hsplit, sum_sub_distrib, hP1]
+  linarith
+
+/-- **Cross-conformal and CV+ with `K` folds, by merging the folds' ranks** (Vovk; Barber, Candès,
+Ramdas and Tibshirani, Theorem 4(a)). `C k` is fold `k` with the test unit `t`, `m + 1` units each.
+Given `w`, the units of each `C k` are exchangeable, and fold `k`'s score is equivariant on `C k`:
+a fit that does not read fold `k` or the test unit qualifies, symmetric or not. The rule refuses
+when `Σₖ rₖ < ℓ + K`, `rₖ` the test unit's rank in `C k`; that has probability at most
+`2(ℓ + K − 1)/(K(m + 1))`. -/
+theorem crossFold_refused_le {W Z α κ : Type*} [Fintype W] [Fintype Z] [LinearOrder α] [Fintype κ]
+    {C : κ → Finset ι} {t : ι} (ht : ∀ k, t ∈ C k) {m : ℕ} (hC : ∀ k, (C k).card = m + 1)
+    (P : W → (ι → Z) → ℝ) (hP0 : ∀ w z, 0 ≤ P w z) (hP1 : ∑ w, ∑ z, P w z = 1)
+    (hP : ∀ k, ∀ σ ∈ permsOn (C k), ∀ w z, P w (z ∘ σ) = P w z)
+    (S : κ → W → (ι → Z) → ι → α) (hS : ∀ k w, Equivariant (C k) (S k w)) (ℓ : ℕ)
+    (hK : 0 < Fintype.card κ) :
+    ∑ w, ∑ z, P w z * (if ∑ k, rankLe (C k) (S k w z) t < ℓ + Fintype.card κ then 1 else 0) ≤
+      2 * ((ℓ : ℝ) + Fintype.card κ - 1) / (Fintype.card κ * (m + 1)) := by
+  have hK' : (0 : ℝ) < Fintype.card κ := by exact_mod_cast hK
+  have hr : ∀ k w z, 1 ≤ rankLe (C k) (S k w z) t ∧ rankLe (C k) (S k w z) t ≤ m + 1 :=
+    fun k w z => ⟨one_le_rankLe _ (ht k), (rankLe_le_card _ _ _).trans_eq (hC k)⟩
+  have hsu : ∀ k j, ∑ w, ∑ z, P w z * (if rankLe (C k) (S k w z) t ≤ j then 1 else 0) ≤
+      (j : ℝ) / (m + 1 : ℕ) := fun k j => by
+    have := rank_superUniform (ht k) P hP0 hP1 (hP k) (S k) (hS k) j
+    rwa [hC k] at this
+  rcases Nat.eq_zero_or_pos (ℓ + Fintype.card κ - 1) with hL | hL
+  · -- the event is empty: every rank is at least 1
+    have hnone : ∀ w z, ¬ ∑ k, rankLe (C k) (S k w z) t < ℓ + Fintype.card κ := by
+      intro w z h
+      have : Fintype.card κ ≤ ∑ k, rankLe (C k) (S k w z) t := by
+        calc Fintype.card κ = ∑ _k : κ, 1 := by simp
+          _ ≤ _ := sum_le_sum fun k _ => (hr k w z).1
+      omega
+    simp only [hnone, if_false, mul_zero, sum_const_zero]
+    have h1 : (1 : ℝ) ≤ Fintype.card κ := by exact_mod_cast hK
+    have h2 : (0 : ℝ) ≤ ℓ := Nat.cast_nonneg ℓ
+    exact div_nonneg (by linarith) (by positivity)
+  · have hev : ∀ w z, (∑ k, rankLe (C k) (S k w z) t < ℓ + Fintype.card κ) ↔
+        ∑ k, rankLe (C k) (S k w z) t ≤ ℓ + Fintype.card κ - 1 := fun w z => by omega
+    simp only [hev]
+    have h := merged_le P hP0 hP1 (Nat.succ_pos m) (fun k w z => rankLe (C k) (S k w z) t)
+      hr hsu hK hL
+    have hcast : ((ℓ + Fintype.card κ - 1 : ℕ) : ℝ) = (ℓ : ℝ) + Fintype.card κ - 1 := by
+      rw [Nat.cast_sub (by omega)]
+      push_cast
+      ring
+    rw [hcast] at h
+    push_cast at h
+    exact h
+
+/-- **CV+ refuses** the test unit `t` at level `ℓ` when at least `n + 1 − ℓ` of the upper ends
+`μ̂₋ₖ(Xₜ) + Rᵢ` lie strictly below `Yₜ`, or at least `n + 1 − ℓ` of the lower ends `μ̂₋ₖ(Xₜ) − Rᵢ`
+strictly above it. Here `i` runs over the training units of each fold `k`, the units of `C k` other
+than `t`; `n` counts them; `μ̂₋ₖ = alg k` is fold `k`'s fit and `Rᵢ` its absolute residual at `i`.
+With `ℓ = ⌊α(n + 1)⌋` this is Barber et al.'s CV+ interval, closed. -/
+def CVRefuses {Z X κ : Type*} [Fintype κ] (cov : Z → X) (resp : Z → ℝ) (ℓ : ℕ) (C : κ → Finset ι)
+    (alg : κ → (ι → Z) → X → ℝ) (z : ι → Z) (t : ι) : Prop :=
+  (∑ k, ((C k).erase t).card) + 1 ≤ (∑ k, (((C k).erase t).filter fun i =>
+      alg k z (cov (z t)) + |resp (z i) - alg k z (cov (z i))| < resp (z t)).card) + ℓ ∨
+    (∑ k, ((C k).erase t).card) + 1 ≤ (∑ k, (((C k).erase t).filter fun i =>
+      resp (z t) < alg k z (cov (z t)) - |resp (z i) - alg k z (cov (z i))|).card) + ℓ
+
+noncomputable instance {Z X κ : Type*} [Fintype κ] (cov : Z → X) (resp : Z → ℝ) (ℓ : ℕ)
+    (C : κ → Finset ι) (alg : κ → (ι → Z) → X → ℝ) (z : ι → Z) (t : ι) :
+    Decidable (CVRefuses cov resp ℓ C alg z t) :=
+  inferInstanceAs (Decidable (_ ∨ _))
+
+omit [Fintype ι] in
+/-- The rank in `C` of a unit of `C` is one more than the other units scoring at most its score. -/
+theorem rankLe_eq_card_erase_add_one {α : Type*} [LinearOrder α] {C : Finset ι} (s : ι → α) {t : ι}
+    (ht : t ∈ C) : rankLe C s t = ((C.erase t).filter fun i => s i ≤ s t).card + 1 := by
+  have hmem : t ∈ C.filter fun i => s i ≤ s t := mem_filter.2 ⟨ht, le_rfl⟩
+  rw [rankLe, filter_erase, card_erase_of_mem hmem]
+  have : 0 < (C.filter fun i => s i ≤ s t).card := card_pos.2 ⟨t, hmem⟩
+  omega
+
+omit [Fintype ι] in
+/-- **CV+ refuses only by the merged rule.** A unit `i` whose upper end lies below `Yₜ` (or lower
+end above it) is one the test unit is stranger than under fold `k`'s fit, so it does not count
+toward the test unit's rank: a refusal leaves the ranks summing below `ℓ + K`. -/
+theorem sum_rankLe_lt_of_cvRefuses {Z X κ : Type*} [Fintype κ] {cov : Z → X} {resp : Z → ℝ}
+    {ℓ : ℕ} {C : κ → Finset ι} {alg : κ → (ι → Z) → X → ℝ} {z : ι → Z} {t : ι}
+    (ht : ∀ k, t ∈ C k) (h : CVRefuses cov resp ℓ C alg z t) :
+    ∑ k, rankLe (C k) (fun i => -|resp (z i) - alg k z (cov (z i))|) t < ℓ + Fintype.card κ := by
+  set s : κ → ι → ℝ := fun k i => -|resp (z i) - alg k z (cov (z i))| with hs
+  have hrank : ∀ k,
+      rankLe (C k) (s k) t = (((C k).erase t).filter fun i => s k i ≤ s k t).card + 1 :=
+    fun k => rankLe_eq_card_erase_add_one (s k) (ht k)
+  have hsum : ∑ k, rankLe (C k) (s k) t =
+      ∑ k, (((C k).erase t).filter fun i => s k i ≤ s k t).card + Fintype.card κ := by
+    rw [sum_congr rfl fun k _ => hrank k, sum_add_distrib]
+    simp
+  -- a unit beaten on either side does not score at most the test unit
+  have hdisj : ∀ (k : κ) (p : ι → Prop) [DecidablePred p], (∀ i, p i → s k t < s k i) →
+      (((C k).erase t).filter fun i => s k i ≤ s k t).card + (((C k).erase t).filter p).card ≤
+        ((C k).erase t).card := by
+    intro k p _ hp
+    rw [← card_union_of_disjoint]
+    · exact card_le_card (union_subset (filter_subset _ _) (filter_subset _ _))
+    · rw [disjoint_filter]
+      intro i _ h1 h2
+      exact absurd h1 (not_le.2 (hp i h2))
+  rcases h with h | h
+  · have hb := sum_le_sum fun k (_ : k ∈ univ) => hdisj k
+      (fun i => alg k z (cov (z t)) + |resp (z i) - alg k z (cov (z i))| < resp (z t)) (by
+        intro i hi
+        simp only [hs]
+        rw [neg_lt_neg_iff]
+        have := le_abs_self (resp (z t) - alg k z (cov (z t)))
+        linarith)
+    rw [sum_add_distrib] at hb
+    rw [hsum]
+    omega
+  · have hb := sum_le_sum fun k (_ : k ∈ univ) => hdisj k
+      (fun i => resp (z t) < alg k z (cov (z t)) - |resp (z i) - alg k z (cov (z i))|) (by
+        intro i hi
+        simp only [hs]
+        rw [neg_lt_neg_iff]
+        have := le_abs_self (alg k z (cov (z t)) - resp (z t))
+        rw [abs_sub_comm] at this
+        linarith)
+    rw [sum_add_distrib] at hb
+    rw [hsum]
+    omega
+
+/-- **CV+ by merging the folds** (Barber et al., Theorem 4(a), in counts). Given `w`, the units of
+each fold with the test unit are exchangeable, and fold `k`'s fit `alg k w` does not change when
+they are reordered: it reads neither, in any order. Then CV+ covers with probability at least
+`1 − 2(ℓ + K − 1)/(K(m + 1))`. -/
+theorem cvPlus_merged {W Z X κ : Type*} [Fintype W] [Fintype Z] [Fintype κ] {C : κ → Finset ι}
+    {t : ι} (ht : ∀ k, t ∈ C k) {m : ℕ} (hC : ∀ k, (C k).card = m + 1) (P : W → (ι → Z) → ℝ)
+    (hP0 : ∀ w z, 0 ≤ P w z) (hP1 : ∑ w, ∑ z, P w z = 1)
+    (hP : ∀ k, ∀ σ ∈ permsOn (C k), ∀ w z, P w (z ∘ σ) = P w z) (cov : Z → X) (resp : Z → ℝ)
+    (alg : κ → W → (ι → Z) → X → ℝ)
+    (halg : ∀ k, ∀ σ ∈ permsOn (C k), ∀ w z, alg k w (z ∘ σ) = alg k w z) (ℓ : ℕ)
+    (hK : 0 < Fintype.card κ) :
+    1 - 2 * ((ℓ : ℝ) + Fintype.card κ - 1) / (Fintype.card κ * (m + 1)) ≤
+      ∑ w, ∑ z, P w z * if ¬ CVRefuses cov resp ℓ C (fun k => alg k w) z t then 1 else 0 := by
+  set S : κ → W → (ι → Z) → ι → ℝ := fun k w z i => -|resp (z i) - alg k w z (cov (z i))|
+  have hS : ∀ k w, Equivariant (C k) (S k w) := by
+    intro k w σ hσ z i
+    simp only [S, Function.comp_apply, halg k σ hσ w z]
+  have href := crossFold_refused_le ht hC P hP0 hP1 hP S hS ℓ hK
+  have hpt : ∀ w z,
+      P w z * (if ¬ CVRefuses cov resp ℓ C (fun k => alg k w) z t then (1 : ℝ) else 0) ≥
+      P w z - P w z * (if ∑ k, rankLe (C k) (S k w z) t < ℓ + Fintype.card κ then 1 else 0) := by
+    intro w z
+    by_cases hc : CVRefuses cov resp ℓ C (fun k => alg k w) z t
+    · have := sum_rankLe_lt_of_cvRefuses (alg := fun k => alg k w) ht hc
+      simp [hc, S, this]
+    · have h0 := hP0 w z
+      by_cases hr : ∑ k, rankLe (C k) (S k w z) t < ℓ + Fintype.card κ
+      · simp [hc, hr, h0]
+      · simp [hc, hr]
+  calc 1 - 2 * ((ℓ : ℝ) + Fintype.card κ - 1) / (Fintype.card κ * (m + 1))
+      ≤ ∑ w, ∑ z, (P w z - P w z *
+          (if ∑ k, rankLe (C k) (S k w z) t < ℓ + Fintype.card κ then 1 else 0)) := by
+        simp only [sum_sub_distrib, hP1]
+        linarith
+    _ ≤ _ := sum_le_sum fun w _ => sum_le_sum fun z _ => hpt w z
+
+/-- **CV+ by merging, at level `α`.** At `ℓ ≤ α(n + 1)`, `n = Km`, CV+ covers with probability at
+least `1 − 2α − 2(1 − α)(K − 1)/(n + K)`: Vovk's term, as Barber et al. state it. -/
+theorem cvPlus_merged_alpha {K m ℓ : ℕ} {α : ℝ} (hK : 0 < K)
+    (hℓ : (ℓ : ℝ) ≤ α * (K * m + 1)) :
+    1 - 2 * α - 2 * (1 - α) * (K - 1) / (K * m + K) ≤
+      1 - 2 * ((ℓ : ℝ) + K - 1) / (K * (m + 1)) := by
+  have hK' : (0 : ℝ) < K := by exact_mod_cast hK
+  have hpos : (0 : ℝ) < K * (m + 1) := by positivity
+  have he : (K : ℝ) * m + K = K * (m + 1) := by ring
+  rw [he]
+  rw [show 1 - 2 * α - 2 * (1 - α) * (K - 1) / (K * (m + 1)) =
+      1 - 2 * (α * (K * m + 1) + K - 1) / (K * (m + 1)) by field_simp; ring]
+  have : 2 * ((ℓ : ℝ) + K - 1) / (K * (m + 1)) ≤ 2 * (α * (K * m + 1) + K - 1) / (K * (m + 1)) :=
+    div_le_div_of_nonneg_right (by linarith) hpos.le
+  linarith
+
+end MergedFolds
+
+/-! ### Slice 9: CV+ by a tournament across folds (Barber et al., Theorem 4(b)) -/
+
+section FoldTournament
+
+variable {ι β : Type*} [DecidableEq β]
+
+/-- The units of `C` in other folds than `u`'s that `u` is stranger than. -/
+def strangerAcross {α : Type*} [LinearOrder α] (C : Finset ι) (f : ι → β) (s : ι → ι → α)
+    (u : ι) : Finset ι :=
+  C.filter fun j => f j ≠ f u ∧ s u j < s j u
+
+/-- **The cross-fold rule at level `ℓ`**, with folds of `m` units: `u` is refused when it is
+stranger than at least `n + 1 − ℓ` units of other folds, `n = |C| − m`. A tie makes neither
+stranger. -/
+def AcceptsAcross {α : Type*} [LinearOrder α] (m ℓ : ℕ) (C : Finset ι) (f : ι → β)
+    (s : ι → ι → α) (u : ι) : Prop :=
+  (strangerAcross C f s u).card + ℓ + m < C.card + 1
+
+instance {α : Type*} [LinearOrder α] (m ℓ : ℕ) (C : Finset ι) (f : ι → β) (s : ι → ι → α)
+    (u : ι) : Decidable (AcceptsAcross m ℓ C f s u) :=
+  inferInstanceAs (Decidable (_ < _))
+
+/-- **The counting core across folds** (Barber et al.'s Step 1 for CV+). Every fold of `C` holds
+`m` units, and units play only across folds, ties allowed. Then at most `2ℓ + m − 2` units are
+refused at level `ℓ`: each refused unit is stranger than at least `n + 1 − ℓ` others, and among the
+refused units each comparison across folds goes at most one way. -/
+theorem card_refused_across_le {α : Type*} [LinearOrder α] (C : Finset ι) (f : ι → β) {m : ℕ}
+    (hm : ∀ u ∈ C, (C.filter fun j => f j = f u).card = m) (s : ι → ι → α) (ℓ : ℕ) :
+    (C.filter fun u => ¬ AcceptsAcross m ℓ C f s u).card ≤ 2 * ℓ + m - 2 := by
+  classical
+  set F := C.filter fun u => ¬ AcceptsAcross m ℓ C f s u
+  have hFC : F ⊆ C := filter_subset _ _
+  set a : ι → ℕ := fun u => (F.filter fun j => f j ≠ f u ∧ s u j < s j u).card with ha
+  set q : ι → ℕ := fun u => (F.filter fun j => f j = f u).card with hq
+  set g : ι → ℕ := fun u => ((C \ F).filter fun j => f j ≠ f u).card with hg
+  have hunit : ∀ u ∈ F, C.card + 1 ≤ a u + g u + ℓ + m := by
+    intro u hu
+    have href : C.card + 1 ≤ (strangerAcross C f s u).card + ℓ + m := by
+      simpa only [AcceptsAcross, not_lt] using (mem_filter.1 hu).2
+    have hsplit : (strangerAcross C f s u).card ≤ a u + g u := by
+      calc (strangerAcross C f s u).card ≤ ((F.filter fun j => f j ≠ f u ∧ s u j < s j u) ∪
+            ((C \ F).filter fun j => f j ≠ f u)).card := by
+            refine card_le_card fun j hj => ?_
+            rw [strangerAcross, mem_filter] at hj
+            by_cases hjF : j ∈ F
+            · exact mem_union_left _ (mem_filter.2 ⟨hjF, hj.2⟩)
+            · exact mem_union_right _ (mem_filter.2 ⟨mem_sdiff.2 ⟨hj.1, hjF⟩, hj.2.1⟩)
+        _ ≤ _ := card_union_le _ _
+    omega
+  have hfold : ∀ u ∈ F, g u + m + F.card = C.card + q u := by
+    intro u hu
+    have h1 := (C \ F).card_filter_add_card_filter_not (fun j => f j ≠ f u)
+    have h2 : ((C \ F).filter fun j => ¬ f j ≠ f u) =
+        (C.filter fun j => f j = f u) \ (F.filter fun j => f j = f u) := by
+      ext j
+      simp only [mem_filter, mem_sdiff, not_not]
+      tauto
+    have h3 : (F.filter fun j => f j = f u) ⊆ (C.filter fun j => f j = f u) :=
+      filter_subset_filter _ hFC
+    have h4 := card_le_card h3
+    have h5 := card_le_card hFC
+    rw [h2, card_sdiff_of_subset h3, card_sdiff_of_subset hFC] at h1
+    rw [hm u (hFC hu)] at h1 h4
+    simp only [hg, hq]
+    omega
+  have hqm : ∀ u ∈ F, q u ≤ m := fun u hu => by
+    rw [← hm u (hFC hu)]
+    exact card_le_card (filter_subset_filter _ hFC)
+  have hle : ∀ u j, ((if f j ≠ f u ∧ s u j < s j u then 1 else 0) +
+      (if f u ≠ f j ∧ s j u < s u j then 1 else 0) + (if f j = f u then 1 else 0) : ℕ) ≤ 1 := by
+    intro u j
+    by_cases hf : f j = f u
+    · simp [hf]
+    · have hf' : f u ≠ f j := fun h => hf h.symm
+      by_cases h1 : s u j < s j u
+      · have h2 : ¬ s j u < s u j := fun h2 => lt_asymm h1 h2
+        simp [hf, hf', h1, h2]
+      · simp only [hf, hf', h1, and_false, if_false, ne_eq, not_false_eq_true, true_and]
+        split_ifs <;> omega
+  have hA : ∑ u ∈ F, a u = ∑ u ∈ F, ∑ j ∈ F, if f j ≠ f u ∧ s u j < s j u then 1 else 0 := by
+    simp only [ha, card_filter]
+  have hB : ∑ u ∈ F, a u = ∑ u ∈ F, ∑ j ∈ F, if f u ≠ f j ∧ s j u < s u j then 1 else 0 := by
+    rw [hA, sum_comm]
+  have hQ : ∑ u ∈ F, q u = ∑ u ∈ F, ∑ j ∈ F, if f j = f u then 1 else 0 := by
+    simp only [hq, card_filter]
+  have hpairs : 2 * (∑ u ∈ F, a u) + ∑ u ∈ F, q u ≤ F.card * F.card := by
+    calc 2 * (∑ u ∈ F, a u) + ∑ u ∈ F, q u
+        = ∑ u ∈ F, ∑ j ∈ F, ((if f j ≠ f u ∧ s u j < s j u then 1 else 0) +
+            (if f u ≠ f j ∧ s j u < s u j then 1 else 0) + (if f j = f u then 1 else 0)) := by
+          rw [two_mul]
+          nth_rw 1 [hA]
+          rw [hB, hQ, ← sum_add_distrib, ← sum_add_distrib]
+          refine sum_congr rfl fun u _ => ?_
+          rw [← sum_add_distrib, ← sum_add_distrib]
+      _ ≤ ∑ u ∈ F, ∑ j ∈ F, 1 := sum_le_sum fun u _ => sum_le_sum fun j _ => hle u j
+      _ = F.card * F.card := by simp
+  have hs1 : F.card * (C.card + 1) ≤
+      (∑ u ∈ F, a u) + (∑ u ∈ F, g u) + F.card * ℓ + F.card * m := by
+    have h := sum_le_sum hunit
+    simp only [sum_const, smul_eq_mul, sum_add_distrib] at h
+    linarith
+  have hs3 : (∑ u ∈ F, g u) + F.card * m + F.card * F.card =
+      F.card * C.card + ∑ u ∈ F, q u := by
+    have h := sum_congr rfl hfold
+    simp only [sum_add_distrib, sum_const, smul_eq_mul] at h
+    linarith
+  have hs5 : ∑ u ∈ F, q u ≤ F.card * m := by
+    have h := sum_le_sum hqm
+    simp only [sum_const, smul_eq_mul] at h
+    linarith
+  have h2 : F.card * (F.card + 2) ≤ F.card * (m + 2 * ℓ) := by nlinarith
+  rcases Nat.eq_zero_or_pos F.card with h0 | hpos
+  · rw [h0]
+    exact Nat.zero_le _
+  · have := Nat.le_of_mul_le_mul_left h2 hpos
+    omega
+
+omit [DecidableEq β] in
+/-- Averaging over the permutations of `β`: each point is `π a` equally often. -/
+theorem sum_perm_apply [Fintype β] [DecidableEq β] (a : β) (g : β → ℝ) :
+    (∑ π : Equiv.Perm β, g (π a)) / Fintype.card (Equiv.Perm β) =
+      (∑ b, g b) / Fintype.card β := by
+  have hG : (0 : ℝ) < Fintype.card (Equiv.Perm β) := by exact_mod_cast Fintype.card_pos
+  have hB : (0 : ℝ) < Fintype.card β := by exact_mod_cast Fintype.card_pos_iff.2 ⟨a⟩
+  have huniv : permsOn (univ : Finset β) = univ := eq_univ_of_forall mem_permsOn_univ
+  have hfib : ∀ b, (((univ : Finset (Equiv.Perm β)).filter fun π => π a = b).card : ℝ) =
+      Fintype.card (Equiv.Perm β) / Fintype.card β := by
+    intro b
+    have h := ratio_permsOn (C := (univ : Finset β)) (mem_univ a) (fun x => x = b)
+    rw [huniv, card_univ, card_univ] at h
+    have h1 : ((univ : Finset β).filter fun x => x = b).card = 1 := by
+      rw [filter_eq' univ b]
+      simp
+    rw [h1, Nat.cast_one, div_eq_div_iff hG.ne' hB.ne'] at h
+    field_simp
+    linarith
+  have hrw : ∀ π : Equiv.Perm β, g (π a) = ∑ b, g b * if π a = b then 1 else 0 := by
+    intro π
+    simp [mul_ite]
+  calc (∑ π : Equiv.Perm β, g (π a)) / Fintype.card (Equiv.Perm β)
+      = (∑ b, g b * (((univ : Finset (Equiv.Perm β)).filter fun π => π a = b).card : ℝ)) /
+          Fintype.card (Equiv.Perm β) := by
+        simp only [hrw]
+        rw [sum_comm]
+        congr 1
+        refine sum_congr rfl fun b _ => ?_
+        rw [← mul_sum, sum_boole]
+    _ = (∑ b, g b) / Fintype.card β := by
+        simp only [hfib]
+        rw [← sum_mul]
+        field_simp
+
+section Product
+
+variable {γ : Type*} [Fintype β] [Fintype γ] [DecidableEq γ]
+
+/-- Averaging over the permutations of the folds and of the slots within them,
+`(b, c) ↦ (π b, ρ c)`: each unit is the image of `t` equally often. -/
+theorem ratio_prodPerm (t : β × γ) (q : β × γ → Prop) [DecidablePred q] :
+    (∑ p : Equiv.Perm β × Equiv.Perm γ,
+        if q (Equiv.prodCongr p.1 p.2 t) then (1 : ℝ) else 0) /
+        Fintype.card (Equiv.Perm β × Equiv.Perm γ) =
+      ((univ.filter q).card : ℝ) / (Fintype.card β * Fintype.card γ) := by
+  set Y : β → γ → ℝ := fun b c => if q (b, c) then 1 else 0 with hY
+  have step1 : ∀ π : Equiv.Perm β, (∑ ρ : Equiv.Perm γ, Y (π t.1) (ρ t.2)) /
+      Fintype.card (Equiv.Perm γ) = (∑ c, Y (π t.1) c) / Fintype.card γ :=
+    fun π => sum_perm_apply t.2 (fun c => Y (π t.1) c)
+  have step2 := sum_perm_apply t.1 (fun b => (∑ c, Y b c) / Fintype.card γ)
+  have hcount : ∑ b, ∑ c, Y b c = ((univ.filter q).card : ℝ) := by
+    rw [← sum_boole, ← Fintype.sum_prod_type']
+  rw [Fintype.card_prod, Fintype.sum_prod_type]
+  push_cast
+  calc (∑ π : Equiv.Perm β, ∑ ρ : Equiv.Perm γ,
+          if q (Equiv.prodCongr (π, ρ).1 (π, ρ).2 t) then (1 : ℝ) else 0) /
+          (Fintype.card (Equiv.Perm β) * Fintype.card (Equiv.Perm γ))
+      = (∑ π : Equiv.Perm β, (∑ ρ : Equiv.Perm γ, Y (π t.1) (ρ t.2)) /
+          Fintype.card (Equiv.Perm γ)) / Fintype.card (Equiv.Perm β) := by
+        rw [← sum_div, div_div, mul_comm]
+        rfl
+    _ = (∑ π : Equiv.Perm β, (∑ c, Y (π t.1) c) / Fintype.card γ) /
+          Fintype.card (Equiv.Perm β) := by simp only [step1]
+    _ = (∑ b, (∑ c, Y b c) / Fintype.card γ) / Fintype.card β := step2
+    _ = ((univ.filter q).card : ℝ) / (Fintype.card β * Fintype.card γ) := by
+        rw [← sum_div, div_div, mul_comm, hcount]
+
+omit [DecidableEq γ] in
+/-- Each fold of `β × γ` holds `|γ|` units. -/
+theorem card_fold (u : β × γ) :
+    ((univ : Finset (β × γ)).filter fun j => j.1 = u.1).card = Fintype.card γ := by
+  rw [show ((univ : Finset (β × γ)).filter fun j => j.1 = u.1) = {u.1} ×ˢ univ by
+    ext j
+    simp only [mem_filter, mem_univ, true_and, mem_product, mem_singleton, and_true]]
+  simp
+
+omit [DecidableEq γ] in
+theorem acceptsAcross_prodCongr {α : Type*} [LinearOrder α] {m ℓ : ℕ} (π : Equiv.Perm β)
+    (ρ : Equiv.Perm γ) (s : β × γ → β × γ → α) (u : β × γ) :
+    AcceptsAcross m ℓ univ Prod.fst
+        (fun i j => s (Equiv.prodCongr π ρ i) (Equiv.prodCongr π ρ j)) u ↔
+      AcceptsAcross m ℓ univ Prod.fst s (Equiv.prodCongr π ρ u) := by
+  have h : (strangerAcross univ Prod.fst
+        (fun i j => s (Equiv.prodCongr π ρ i) (Equiv.prodCongr π ρ j)) u).card =
+      (strangerAcross univ Prod.fst s (Equiv.prodCongr π ρ u)).card := by
+    apply card_equiv (Equiv.prodCongr π ρ)
+    intro j
+    simp only [strangerAcross, mem_filter, mem_univ, true_and, Equiv.prodCongr_apply,
+      Prod.map_fst, ne_eq, π.injective.eq_iff]
+  simp only [AcceptsAcross, h]
+
+omit [DecidableEq γ] in
+/-- The share of units the cross-fold rule accepts: at least `1 − (2ℓ + m − 2)/N`. -/
+theorem ratio_acceptsAcross_ge [Nonempty β] [Nonempty γ] {α : Type*} [LinearOrder α]
+    (s : β × γ → β × γ → α) (ℓ : ℕ) :
+    1 - ((2 * ℓ + Fintype.card γ - 2 : ℕ) : ℝ) / (Fintype.card β * Fintype.card γ) ≤
+      ((univ.filter fun u => AcceptsAcross (Fintype.card γ) ℓ univ Prod.fst s u).card : ℝ) /
+        (Fintype.card β * Fintype.card γ) := by
+  have hN : (0 : ℝ) < Fintype.card β * Fintype.card γ := by positivity
+  have hrej := card_refused_across_le (univ : Finset (β × γ)) Prod.fst
+    (fun u _ => card_fold u) s ℓ
+  have hsplit := (univ : Finset (β × γ)).card_filter_add_card_filter_not
+    (fun u => AcceptsAcross (Fintype.card γ) ℓ univ Prod.fst s u)
+  rw [card_univ, Fintype.card_prod] at hsplit
+  have hnat : Fintype.card β * Fintype.card γ ≤
+      (univ.filter fun u => AcceptsAcross (Fintype.card γ) ℓ univ Prod.fst s u).card +
+        (2 * ℓ + Fintype.card γ - 2) := by omega
+  have hcount : ((Fintype.card β * Fintype.card γ : ℕ) : ℝ) ≤
+      ((univ.filter fun u => AcceptsAcross (Fintype.card γ) ℓ univ Prod.fst s u).card : ℝ) +
+        ((2 * ℓ + Fintype.card γ - 2 : ℕ) : ℝ) := by exact_mod_cast hnat
+  push_cast at hcount
+  rw [one_sub_div hN.ne']
+  exact div_le_div_of_nonneg_right (by linarith) hN.le
+
+/-- **The cross-fold rule under an exchangeable law.** Units are `(fold, slot)` in `β × γ`; the test
+unit's fold is made up by further units from the same law, which the interval never reads. Given the
+fits' randomness up to its relabeling `act`, the law is invariant under permuting the folds and the
+slots, and the matrix equivariant. Then the test unit is accepted with probability at least
+`1 − (2ℓ + m − 2)/(n + m)`, `m = |γ|` units a fold and `n + m = |β||γ|`. -/
+theorem coverage_across [Nonempty β] [Nonempty γ] {W Z α : Type*} [Fintype W] [Fintype Z]
+    [LinearOrder α] (t : β × γ) (P : W → (β × γ → Z) → ℝ) (hP0 : ∀ w z, 0 ≤ P w z)
+    (hP1 : ∑ w, ∑ z, P w z = 1) (act : Equiv.Perm β × Equiv.Perm γ → W ≃ W)
+    (hP : ∀ p w z, P (act p w) (z ∘ Equiv.prodCongr p.1 p.2) = P w z)
+    (S : W → (β × γ → Z) → β × γ → β × γ → α)
+    (hS : ∀ p w z i j, S (act p w) (z ∘ Equiv.prodCongr p.1 p.2) i j =
+      S w z (Equiv.prodCongr p.1 p.2 i) (Equiv.prodCongr p.1 p.2 j)) (ℓ : ℕ) :
+    1 - ((2 * ℓ + Fintype.card γ - 2 : ℕ) : ℝ) / (Fintype.card β * Fintype.card γ) ≤
+      ∑ w, ∑ z, P w z *
+        if AcceptsAcross (Fintype.card γ) ℓ univ Prod.fst (S w z) t then 1 else 0 := by
+  set Acc : W × (β × γ → Z) → β × γ → Prop := fun x u =>
+    AcceptsAcross (Fintype.card γ) ℓ univ Prod.fst (S x.1 x.2) u with hAcc
+  rw [← Fintype.sum_prod_type'] at hP1 ⊢
+  have hG : ((Fintype.card (Equiv.Perm β × Equiv.Perm γ) : ℕ) : ℝ) ≠ 0 := by
+    exact_mod_cast Fintype.card_pos.ne'
+  have hswap : ∀ p : Equiv.Perm β × Equiv.Perm γ,
+      ∑ x : W × (β × γ → Z), P x.1 x.2 * (if Acc x t then (1 : ℝ) else 0) =
+        ∑ x : W × (β × γ → Z),
+          P x.1 x.2 * (if Acc x (Equiv.prodCongr p.1 p.2 t) then 1 else 0) := by
+    intro p
+    rw [← Equiv.sum_comp ((act p).prodCongr (reorder (Equiv.prodCongr p.1 p.2)))]
+    refine Fintype.sum_congr _ _ fun x => ?_
+    simp only [Equiv.prodCongr_apply, Prod.map_fst, Prod.map_snd, hAcc]
+    rw [show reorder (Equiv.prodCongr p.1 p.2) x.2 = x.2 ∘ Equiv.prodCongr p.1 p.2 from rfl,
+      hP p]
+    have : S (act p x.1) (x.2 ∘ Equiv.prodCongr p.1 p.2) =
+        fun i j => S x.1 x.2 (Equiv.prodCongr p.1 p.2 i) (Equiv.prodCongr p.1 p.2 j) :=
+      funext fun i => funext fun j => hS p x.1 x.2 i j
+    rw [this]
+    simp only [acceptsAcross_prodCongr]
+    rfl
+  have key : ∀ x : W × (β × γ → Z),
+      (1 - ((2 * ℓ + Fintype.card γ - 2 : ℕ) : ℝ) / (Fintype.card β * Fintype.card γ)) *
+        P x.1 x.2 ≤ P x.1 x.2 * ((∑ p : Equiv.Perm β × Equiv.Perm γ,
+          if Acc x (Equiv.prodCongr p.1 p.2 t) then (1 : ℝ) else 0) /
+            Fintype.card (Equiv.Perm β × Equiv.Perm γ)) := by
+    intro x
+    rw [mul_comm]
+    refine mul_le_mul_of_nonneg_left ?_ (hP0 x.1 x.2)
+    rw [ratio_prodPerm t (Acc x)]
+    exact ratio_acceptsAcross_ge (S x.1 x.2) ℓ
+  calc 1 - ((2 * ℓ + Fintype.card γ - 2 : ℕ) : ℝ) / (Fintype.card β * Fintype.card γ)
+      = ∑ x : W × (β × γ → Z),
+          (1 - ((2 * ℓ + Fintype.card γ - 2 : ℕ) : ℝ) / (Fintype.card β * Fintype.card γ)) *
+            P x.1 x.2 := by
+        rw [← mul_sum, hP1, mul_one]
+    _ ≤ ∑ x : W × (β × γ → Z), P x.1 x.2 * ((∑ p : Equiv.Perm β × Equiv.Perm γ,
+          if Acc x (Equiv.prodCongr p.1 p.2 t) then (1 : ℝ) else 0) /
+            Fintype.card (Equiv.Perm β × Equiv.Perm γ)) :=
+        sum_le_sum fun x _ => key x
+    _ = (∑ p : Equiv.Perm β × Equiv.Perm γ, ∑ x : W × (β × γ → Z),
+          P x.1 x.2 * if Acc x (Equiv.prodCongr p.1 p.2 t) then 1 else 0) /
+            Fintype.card (Equiv.Perm β × Equiv.Perm γ) := by
+        simp only [mul_div_assoc', mul_sum, sum_div]
+        exact sum_comm
+    _ = (∑ _p : Equiv.Perm β × Equiv.Perm γ, ∑ x : W × (β × γ → Z),
+          P x.1 x.2 * if Acc x t then 1 else 0) /
+            Fintype.card (Equiv.Perm β × Equiv.Perm γ) := by
+        rw [sum_congr rfl fun p _ => (hswap p).symm]
+    _ = _ := by
+        rw [sum_const, card_univ, nsmul_eq_mul]
+        field_simp
+        rfl
+
+/-- The units outside the folds of `i` and `j`: the training set of the fit that leaves both
+folds out. -/
+def foldsOut (i j : β × γ) : Finset (β × γ) := univ.filter fun u => u.1 ≠ i.1 ∧ u.1 ≠ j.1
+
+omit [DecidableEq γ] in
+theorem foldsOut_comm (i j : β × γ) : foldsOut i j = foldsOut j i := by
+  unfold foldsOut
+  exact filter_congr fun u _ => and_comm
+
+theorem image_foldsOut (π : Equiv.Perm β) (ρ : Equiv.Perm γ) (i j : β × γ) :
+    (foldsOut i j).image (Equiv.prodCongr π ρ) =
+      foldsOut (Equiv.prodCongr π ρ i) (Equiv.prodCongr π ρ j) := by
+  ext x
+  simp only [foldsOut, mem_image, mem_filter, mem_univ, true_and, Equiv.prodCongr_apply,
+    Prod.map_fst]
+  constructor
+  · rintro ⟨a, ⟨h1, h2⟩, rfl⟩
+    exact ⟨fun h => h1 (π.injective h), fun h => h2 (π.injective h)⟩
+  · rintro ⟨h1, h2⟩
+    refine ⟨(Equiv.prodCongr π ρ).symm x, ⟨fun h => h1 ?_, fun h => h2 ?_⟩,
+      Prod.ext (π.apply_symm_apply x.1) (ρ.apply_symm_apply x.2)⟩
+    · rw [← h]
+      simp
+    · rw [← h]
+      simp
+
+/-- **CV+ refuses**, folds as `β`, the test unit `t`'s fold made up by further units: at least
+`n + 1 − ℓ` upper ends `μ̂₋ₖ(Xₜ) + Rᵢ` strictly below `Yₜ`, or as many lower ends strictly above,
+`i` over the units of other folds than `t`'s, `μ̂₋ₖ` the fit to every unit outside the folds of `i`
+and `t`. That fit reads only the `K` training folds, so the interval is CV+'s. -/
+def CVRefusesAcross {Z X : Type*} (cov : Z → X) (resp : Z → ℝ) (ℓ : ℕ)
+    (alg : Finset (β × γ) → (β × γ → Z) → X → ℝ) (z : β × γ → Z) (t : β × γ) : Prop :=
+  Fintype.card β * Fintype.card γ + 1 ≤ ((univ.filter fun i : β × γ => i.1 ≠ t.1 ∧
+      alg (foldsOut i t) z (cov (z t)) + |resp (z i) - alg (foldsOut i t) z (cov (z i))| <
+        resp (z t)).card) + ℓ + Fintype.card γ ∨
+    Fintype.card β * Fintype.card γ + 1 ≤ ((univ.filter fun i : β × γ => i.1 ≠ t.1 ∧
+      resp (z t) < alg (foldsOut i t) z (cov (z t)) -
+        |resp (z i) - alg (foldsOut i t) z (cov (z i))|).card) + ℓ + Fintype.card γ
+
+noncomputable instance {Z X : Type*} (cov : Z → X) (resp : Z → ℝ) (ℓ : ℕ)
+    (alg : Finset (β × γ) → (β × γ → Z) → X → ℝ) (z : β × γ → Z) (t : β × γ) :
+    Decidable (CVRefusesAcross cov resp ℓ alg z t) :=
+  inferInstanceAs (Decidable (_ ∨ _))
+
+/-- The cross-fold score: unit `i` read by the fit that leaves out the folds of `i` and `j`. -/
+def foldScore {Z X : Type*} (cov : Z → X) (resp : Z → ℝ)
+    (alg : Finset (β × γ) → (β × γ → Z) → X → ℝ) (z : β × γ → Z) (i j : β × γ) : ℝ :=
+  -|resp (z i) - alg (foldsOut i j) z (cov (z i))|
+
+omit [DecidableEq γ] in
+/-- **CV+ refuses only a strange test unit** across folds. -/
+theorem not_acceptsAcross_of_cvRefuses {Z X : Type*} {cov : Z → X} {resp : Z → ℝ} {ℓ : ℕ}
+    {alg : Finset (β × γ) → (β × γ → Z) → X → ℝ} {z : β × γ → Z} {t : β × γ}
+    (h : CVRefusesAcross cov resp ℓ alg z t) :
+    ¬ AcceptsAcross (Fintype.card γ) ℓ univ Prod.fst (foldScore cov resp alg z) t := by
+  unfold AcceptsAcross
+  rw [not_lt, card_univ, Fintype.card_prod]
+  rcases h with h | h
+  · refine h.trans (Nat.add_le_add_right (Nat.add_le_add_right
+      (card_le_card fun i hi => ?_) ℓ) _)
+    rw [mem_filter] at hi
+    rw [strangerAcross, mem_filter]
+    refine ⟨mem_univ _, hi.2.1, ?_⟩
+    simp only [foldScore, foldsOut_comm t i]
+    rw [neg_lt_neg_iff]
+    have h3 := le_abs_self (resp (z t) - alg (foldsOut i t) z (cov (z t)))
+    linarith [hi.2.2]
+  · refine h.trans (Nat.add_le_add_right (Nat.add_le_add_right
+      (card_le_card fun i hi => ?_) ℓ) _)
+    rw [mem_filter] at hi
+    rw [strangerAcross, mem_filter]
+    refine ⟨mem_univ _, hi.2.1, ?_⟩
+    simp only [foldScore, foldsOut_comm t i]
+    rw [neg_lt_neg_iff]
+    have h3 := le_abs_self (alg (foldsOut i t) z (cov (z t)) - resp (z t))
+    rw [abs_sub_comm] at h3
+    linarith [hi.2.2]
+
+/-- **CV+ by the tournament across folds** (Barber, Candès, Ramdas and Tibshirani, Theorem 4(b),
+in counts). The `n + 1` units come with `m − 1` further units from the same law, filling the test
+unit's fold; the law of all `n + m` is invariant under permuting folds and slots, given the fit's
+randomness up to its relabeling; the fit reads its training units as a set, up to that relabeling.
+Then CV+ covers with probability at least `1 − (2ℓ + m − 2)/(n + m)`. -/
+theorem cvPlus_tournament [Nonempty β] [Nonempty γ] {W Z X : Type*} [Fintype W] [Fintype Z]
+    (t : β × γ) (P : W → (β × γ → Z) → ℝ) (hP0 : ∀ w z, 0 ≤ P w z)
+    (hP1 : ∑ w, ∑ z, P w z = 1) (act : Equiv.Perm β × Equiv.Perm γ → W ≃ W)
+    (hP : ∀ p w z, P (act p w) (z ∘ Equiv.prodCongr p.1 p.2) = P w z) (cov : Z → X)
+    (resp : Z → ℝ) (alg : W → Finset (β × γ) → (β × γ → Z) → X → ℝ)
+    (halg : ∀ p w T z, alg (act p w) T (z ∘ Equiv.prodCongr p.1 p.2) =
+      alg w (T.image (Equiv.prodCongr p.1 p.2)) z) (ℓ : ℕ) :
+    1 - ((2 * ℓ + Fintype.card γ - 2 : ℕ) : ℝ) / (Fintype.card β * Fintype.card γ) ≤
+      ∑ w, ∑ z, P w z * if ¬ CVRefusesAcross cov resp ℓ (alg w) z t then 1 else 0 := by
+  have hS : ∀ p w z i j,
+      foldScore cov resp (alg (act p w)) (z ∘ Equiv.prodCongr p.1 p.2) i j =
+        foldScore cov resp (alg w) z (Equiv.prodCongr p.1 p.2 i) (Equiv.prodCongr p.1 p.2 j) := by
+    intro p w z i j
+    simp only [foldScore, halg, image_foldsOut, Function.comp_apply]
+  refine (coverage_across t P hP0 hP1 act hP (fun w => foldScore cov resp (alg w)) hS ℓ).trans ?_
+  refine sum_le_sum fun w _ => sum_le_sum fun z _ => mul_le_mul_of_nonneg_left ?_ (hP0 w z)
+  by_cases hacc : AcceptsAcross (Fintype.card γ) ℓ univ Prod.fst (foldScore cov resp (alg w) z) t
+  · have : ¬ CVRefusesAcross cov resp ℓ (alg w) z t := fun h =>
+      not_acceptsAcross_of_cvRefuses h hacc
+    simp [hacc, this]
+  · simp only [hacc, if_false]
+    split_ifs <;> norm_num
+
+end Product
+
+end FoldTournament
 
 /-! ### Slice 9: asymmetric CQR, a threshold per tail -/
 

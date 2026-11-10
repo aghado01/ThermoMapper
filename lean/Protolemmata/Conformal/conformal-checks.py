@@ -1299,6 +1299,225 @@ for k in (1, 2):
           f"the symmetric bound {Q(pair_bound(k), 4)}")
 
 print()
+print("=== Slice 9: CV+ with K folds ===")
+
+
+# Conventions. n = K m training units in K folds of m units (by position), the test unit last.
+# Fold k's fit leaves out fold k (and the test unit); unit i's CV residual is under its fold's fit,
+# and so is the test unit's comparison with i. The level is l = floor(alpha (n + 1)). CV+'s interval
+# is the jackknife+'s with mu_{-S_k(i)} for mu_{-i}; as counts, y is refused when at least n + 1 - l
+# upper ends lie strictly below it or n + 1 - l lower ends strictly above it.
+# CV-a: r_k is the test unit's rank (ties counted for it) among fold k and itself, in 1..m + 1.
+#   A refusal has sum_k r_k < l + K, and P(sum_k r_k < l + K) <= 2(l + K - 1)/(n + K) whatever
+#   the fits do, provided each fold's fit does not read the fold or the test unit.
+# CV-b: with m - 1 further test units forming a test fold, at most 2l + m - 2 units are strange in
+#   the cross-fold tournament, so P <= (2l + m - 2)/(n + m) for a symmetric fit.
+def folds_of(n, K):
+    m = n // K
+    return [list(range(k * m, (k + 1) * m)) for k in range(K)]
+
+
+def cv_parts(z, fit, K, t, train):
+    """For each training unit i: its fold's fit at x_t and i's CV residual."""
+    n = len(train)
+    out = []
+    for fold in folds_of(n, K):
+        units = [train[j] for j in fold]
+        f = fit(tuple(z[u] for u in train if u not in units))
+        for u in units:
+            out.append((u, f(z[t][0]), abs(z[u][1] - f(z[u][0])), units))
+    return out
+
+
+def cv_refuses(l, z, fit, K, t, train):
+    n, y = len(train), z[t][1]
+    parts = cv_parts(z, fit, K, t, train)
+    vlo = [mu - r for _, mu, r, _ in parts]
+    vhi = [mu + r for _, mu, r, _ in parts]
+    lo, hi = jack_ends(vlo, vhi, l)
+    refused = y < lo or y > hi
+    assert refused == (sum(1 for v in vhi if v < y) + l >= n + 1 or sum(1 for v in vlo if v > y) + l >= n + 1)
+    return refused
+
+
+def cv_ranks(z, fit, K, t, train):
+    """r_k: 1 + the units of fold k whose conformity is at most the test unit's, under fold k's fit."""
+    n = len(train)
+    ranks = []
+    for fold in folds_of(n, K):
+        units = [train[j] for j in fold]
+        f = fit(tuple(z[u] for u in train if u not in units))
+        st = -abs(z[t][1] - f(z[t][0]))
+        ranks.append(1 + sum(1 for u in units if -abs(z[u][1] - f(z[u][0])) <= st))
+    return ranks
+
+
+def fit_first(train):
+    """Reads its training units' order: predicts the first unit's y. Not symmetric."""
+    return lambda x: train[0][1]
+
+
+def fit_weighted(train):
+    """Weights its training units by position. Not symmetric."""
+    w = [Q(j + 1) for j in range(len(train))]
+    yb = sum(wj * p[1] for wj, p in zip(w, train)) / sum(w)
+    return lambda x: yb
+
+
+def bound_merged(l, K, n):
+    return Q(2 * (l + K - 1), n + K)
+
+
+def bound_tournament(l, m, n):
+    return Q(max(2 * l + m - 2, 0), n + m)
+
+
+# CV-a, the merging inequality, deterministically: if the K ranks sum to at most L, then
+# L <= sum_k (2L/K - r_k)+. And the layer cake: for a rank super-uniform on 1..M,
+# E (c - r)+ <= (1/M) sum_j (c - j)+ <= c^2/(2M). Checked on every rank vector and on super-uniform
+# laws (uniform, and mass moved up).
+n_cases = 0
+for K in (1, 2, 3, 4):
+    for M in range(1, 6):
+        for r in itertools.product(range(1, M + 1), repeat=K):
+            for L in range(1, K * M + 1):
+                if sum(r) <= L:
+                    assert L <= sum(max(Q(2 * L, K) - rk, 0) for rk in r)
+                n_cases += 1
+for M in range(1, 9):
+    for cnum in range(0, 4 * M + 1):
+        c = Q(cnum, 2)
+        riemann = sum(max(c - j, 0) for j in range(1, M + 1))
+        assert riemann <= c * c / 2
+        for shift in range(M):
+            law = [Q(0)] * (M + 1)
+            for j in range(1, M + 1):
+                law[min(M, j + (shift if j > M - shift else 0))] += Q(1, M)
+            assert all(sum(law[1:j + 1]) <= Q(j, M) for j in range(1, M + 1))
+            assert sum(law[j] * max(c - j, 0) for j in range(1, M + 1)) <= riemann / M
+print(f"CV-a, merging: the deterministic inequality on {n_cases} (K, M, rank vector, L) cases; the layer "
+      f"cake E (c - r)+ <= sum_j (c - j)+/M <= c^2/(2M) for super-uniform ranks")
+
+# K = 2 with uniform ranks, the worst coupling (a permutation, by Birkhoff) against the bound
+# 2L/(K M): the merged bound is within 1/M of the worst case here.
+for M in range(2, 7):
+    for L in range(2, M + 2):
+        worst = max(sum(1 for i in range(1, M + 1) if i + pi[i - 1] <= L)
+                    for pi in itertools.permutations(range(1, M + 1)))
+        assert Q(2 * L, 2 * M) - Q(1, M) <= Q(worst, M) <= Q(2 * L, 2 * M)
+        if M == 6 and L == 4:
+            print(f"CV-a, K = 2, M = 6, L = 4: the worst coupling of two uniform ranks gives P(r1 + r2 <= 4) = "
+                  f"{Q(worst, M)}, against the merged bound {Q(2 * L, 2 * M)}")
+
+# CV-a and CV-b over orderings. CV-a over every ordering of n + 1 units, with symmetric fits and with
+# two that read their units' order; CV-b over every ordering of n + m units, the test unit's fold
+# made up by m - 1 further units the interval never reads, with symmetric fits.
+cv_cases = [((2, 2), as_q([(0, 0), (1, 2), (2, 1), (3, 3), (4, 8)])),
+            ((3, 2), as_q([(0, 0), (1, 2), (2, 1), (3, 3), (4, 0), (5, 1), (6, 7)])),
+            ((2, 3), as_q([(0, 1), (1, 1), (2, 2), (3, 0), (4, 1), (5, 2), (6, 5)])),
+            ((2, 2), as_q([(0, 1), (0, 1), (1, 1), (2, 1), (3, 2)]))]
+cv_fits = {"mean": fit_mean, "line": fit_line, "nearest": fit_nearest,
+           "first (order-reading)": fit_first, "weighted (order-reading)": fit_weighted}
+n_orderings = 0
+rows_a = []
+for (K, m), z in cv_cases:
+    n = K * m
+    t = n
+    train = list(range(n))
+    perms = list(itertools.permutations(range(n + 1)))
+    for name, fit in cv_fits.items():
+        cov = {l: 0 for l in range(n + 2)}
+        for p in perms:
+            zp = compose(z, p)
+            ranks = cv_ranks(zp, fit, K, t, train)
+            for l in range(n + 2):
+                ref = cv_refuses(l, zp, fit, K, t, train)
+                assert (not ref) or sum(ranks) < l + K
+                cov[l] += not ref
+            n_orderings += 1
+        for l in range(n + 2):
+            c = Q(cov[l], len(perms))
+            assert c >= 1 - bound_merged(l, K, n)
+        rows_a.append(f"{name} (K = {K}, m = {m}), l = 1: {Q(cov[1], len(perms))} >= {1 - bound_merged(1, K, n)}")
+print(f"CV-a over orderings: {n_orderings} orderings, 4 data sets x 5 fits (2 of them read their units' order); "
+      f"every level meets 1 - 2(l + K - 1)/(n + K), and every refusal has sum_k r_k < l + K")
+for row in rows_a[:5]:
+    print("  " + row)
+
+n_orderings = 0
+for (K, m), z in [((2, 2), as_q([(0, 0), (1, 2), (2, 1), (3, 3), (4, 8), (5, 1)])),
+                  ((3, 1), as_q([(0, 0), (1, 2), (2, 1), (3, 9)])),
+                  ((2, 2), as_q([(0, 1), (1, 1), (2, 1), (3, 2), (4, 1), (5, 1)]))]:
+    n = K * m
+    train = list(range(n))
+    perms = list(itertools.permutations(range(n + m)))
+    for name in ("mean", "line", "nearest"):
+        fit = cv_fits[name]
+        cov = {l: 0 for l in range(n + 2)}
+        for p in perms:
+            zp = compose(z, p)
+            for l in range(n + 2):
+                cov[l] += not cv_refuses(l, zp, fit, K, n, train)
+            n_orderings += 1
+        for l in range(n + 2):
+            assert Q(cov[l], len(perms)) >= 1 - bound_tournament(l, m, n)
+print(f"CV-b over orderings of n + m units: {n_orderings} orderings, 3 data sets x 3 symmetric fits; every level "
+      f"meets 1 - (2l + m - 2)/(n + m)")
+
+
+# CV-b's counting core: K + 1 folds of m units, games only across folds, ties allowed. At most
+# 2l + m - 2 units are stranger than n + 1 - l others (n = K m), and the count is attained.
+def cross_comparisons(F, m):
+    N = F * m
+    pairs = [(i, j) for i, j in itertools.combinations(range(N), 2) if i // m != j // m]
+    for choice in itertools.product(range(3), repeat=len(pairs)):
+        P = [[0] * N for _ in range(N)]
+        for (i, j), c in zip(pairs, choice):
+            if c == 0:
+                P[j][i] = 1
+            elif c == 1:
+                P[i][j] = 1
+        yield P
+
+
+n_cases = 0
+for F, m in ((2, 2), (3, 2), (2, 3), (4, 1)):
+    N, n = F * m, (F - 1) * m
+    worst = [0] * (n + 2)
+    for P in cross_comparisons(F, m):
+        n_cases += 1
+        sc = [sum(1 for j in range(N) if j // m != u // m and P[u][j] < P[j][u]) for u in range(N)]
+        for l in range(n + 2):
+            r = sum(1 for c in sc if c + l >= n + 1)
+            assert r <= max(2 * l + m - 2, 0)
+            worst[l] = max(worst[l], r)
+    print(f"CV-b counting core, {F} folds of {m}: the most refused at l = 0..{n + 1} is {worst}, "
+          f"bound {[min(max(2 * l + m - 2, 0), N) for l in range(n + 2)]}")
+print(f"CV-b counting core: {n_cases} outcomes of the cross-fold comparisons, ties included")
+
+# Which bound serves, at alpha = 0.1: the merged one for few folds, the tournament for many.
+rows = []
+for n, K in ((20, 2), (20, 5), (20, 20), (100, 5), (100, 10), (100, 100), (1000, 5), (1000, 10), (1000, 1000)):
+    l = math.floor(Q(1, 10) * (n + 1))
+    a, b = bound_merged(l, K, n), bound_tournament(l, n // K, n)
+    rows.append(f"n = {n}, K = {K}: merged {float(a):.3f}, tournament {float(b):.3f}")
+print("CV+ miscoverage bounds at alpha = 0.1: " + "; ".join(rows))
+
+# The counts sit inside Barber et al.'s alpha forms: merged, 2alpha + 2(1 - alpha)(K - 1)/(n + K)
+# (Vovk's term); tournament, 2alpha + (1 - K/n)/(K + 1).
+n_cases = 0
+for K in range(1, 21):
+    for m in range(1, 21):
+        n = K * m
+        for a in range(0, 21):
+            alpha = Q(a, 40)
+            l = math.floor(alpha * (n + 1))
+            assert bound_merged(l, K, n) <= 2 * alpha + 2 * (1 - alpha) * Q(K - 1, n + K)
+            assert bound_tournament(l, m, n) <= 2 * alpha + (1 - Q(K, n)) / (K + 1)
+            n_cases += 1
+print(f"CV+ bounds inside Barber et al.'s alpha forms on {n_cases} (K, m, alpha) cases")
+
+print()
 print("=== Slice 9: asymmetric CQR, a threshold per tail ===")
 
 

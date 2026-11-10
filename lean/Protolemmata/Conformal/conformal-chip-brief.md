@@ -130,6 +130,51 @@ The user asked for this on 2026-11-08 ("Yes, start it"), relayed by the BASS ext
 
 Newest first.
 
+### 2026-11-09 — slice 9's follow-up: CV+ proved, both bounds
+
+You fetched Barber, Candès, Ramdas and Tibshirani 2021 (1905.02928v3) on 2026-11-09, and I read it in TeX. CV+ is now proved in `lean/Enthymemata/ConformalValidity.lean`, which is 187 declarations and still PROOF-CLOSED. `#print axioms` on the CV+ results shows the standard three only. [conformal-lemmas.md](conformal-lemmas.md) has the record, in its CV+ section.
+- *CV-a, by merging the folds' ranks* (Vovk; Theorem 4(a)).
+  - `cvPlus_merged`: coverage at least 1 − 2(ℓ + K − 1)/(n + K). `cvPlus_merged_alpha` puts it at least 1 − 2α − 2(1 − α)(K − 1)/(n + K).
+  - Through `merged_le`, `sum_antitone_le`, `sum_max_sub_le`, `rank_superUniform`, `crossFold_refused_le` and `sum_rankLe_lt_of_cvRefuses`.
+- *CV-b, by a tournament across folds* (Theorem 4(b)).
+  - `cvPlus_tournament`: coverage at least 1 − (2ℓ + m − 2)/(n + m).
+  - Through `card_refused_across_le`, `ratio_prodPerm`, `coverage_across` and `not_acceptsAcross_of_cvRefuses`.
+
+**The rules the C# worker can implement.**
+- *CV+ at level α.*
+  - Set ℓ = ⌊α(n + 1)⌋ and split the n training units into K folds of m = n/K.
+  - Fit μ̂₋ₖ without fold k. Rᵢ is |Yᵢ − μ̂₋ₖ₍ᵢ₎(Xᵢ)|, under unit i's own fold's fit.
+  - The interval is closed, from the ℓ-th smallest of μ̂₋ₖ₍ᵢ₎(x) − Rᵢ to the ℓ-th largest of μ̂₋ₖ₍ᵢ₎(x) + Rᵢ, the jackknife+'s ends with fold fits. At ℓ = 0 it is the whole line.
+- *The guarantee to assert* is the larger of the two bounds:
+  - 1 − 2(ℓ + K − 1)/(n + K) from the merged ranks, for any fit that never sees its own fold or the test unit;
+  - 1 − (2ℓ + m − 2)/(n + m) from the tournament, for a symmetric fit on i.i.d. data.
+  - At α = 0.1, n = 1000: K = 5 guarantees 0.79 (merged), K = 10 0.78 (merged), K = n 0.80 (the jackknife+).
+- *Fits.* The merged bound needs no symmetric fit, so a sampler that reads its units in index order, with a fixed seed, is covered for K-fold CV+. The tournament bound and the jackknife+ need the symmetry, or the shared random order.
+
+**Correction to the earlier slice 9 report.** It called 1 − (2k − 1)/(n + 1) "sharper than 1 − 2α", as if new. The 2k − 1 count is Barber et al.'s own: their Step 1 reaches 2α(n + 1) − 1 before Theorem 1 rounds it off. Their Theorem 2 also shows the factor of 2 is real, asymptotically. What is new here is the exact finite attainment. The ledger now says so.
+
+**What changed from the task.**
+- CV+ was a follow-up, and both of Barber et al.'s bounds are proved, in counts.
+- The merged bound uses no randomization and no level adjustment. Barber et al. reach it through Vovk's modified cross-conformal set at an adjusted α′.
+- CV-b's hypothesis is stronger than exchangeability of n + 1 units. It needs n + m units exchangeable under permuting folds and slots, which i.i.d. data give.
+
+**Checks first** (`conformal-checks.py`, slice 9, CV+). All assertions hold.
+- the merging inequality on 21,142 cases, and the layer cake;
+- CV-a over 51,600 orderings, including two fits that read their units' order;
+- CV-b over 4,392 orderings of n + m units;
+- CV-b's counting core on 551,934 cross-fold outcomes. It is not attained for 2 folds of 3, where the worst is 4 against 5;
+- both bounds inside Barber et al.'s α forms on 8,400 cases.
+
+**Gates.**
+- `lake build Enthymemata.ConformalValidity`: clean, no warnings.
+- `lake build Enthymemata`: green.
+- `scripts/meta-ci.ps1 -NoBuild`: PASS.
+- Builds ran at below-normal priority. D: had 38 GB free.
+
+**Open, no decision waiting:** whether CV-b holds over the orderings of a fixed n + 1 units, without the further test units. CV-a does.
+
+**What stopped me:** nothing.
+
 ### 2026-11-09 — slice 9: the jackknife+ and asymmetric CQR proved
 
 **Proved** in `lean/Enthymemata/ConformalValidity.lean`, now 153 declarations and still PROOF-CLOSED. `#print axioms` on the slice 9 results shows the standard three only. [conformal-lemmas.md](conformal-lemmas.md) has the record, in its slice 9 section.

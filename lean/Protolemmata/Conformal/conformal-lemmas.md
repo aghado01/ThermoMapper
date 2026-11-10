@@ -2,7 +2,7 @@
 
 Pins the contract of the engine's conformal layer, one layer over retained draws and pointwise densities for every model with a pointwise density ([E16](../../../issues/regression/bass/extensions-brief.md#conformal-bayes-the-consumer)). The layer owns coverage and the score owns width. These are the finite statements of that split. They are the sibling of [GuardedEstimator](../BASS/guarded-estimator-lemmas.md): there, means valid whatever the emulator does; here, prediction sets valid whatever the model does. Written from the [chip brief](conformal-chip-brief.md).
 
-**Status (2026-11-06).** Proved in `lean/Enthymemata/ConformalValidity.lean`, namespace `Conformal`, with no apologies (PROOF-CLOSED, 153 declarations counting E35's M-1 and M-2 and slice 9 at the end of this page; `#print axioms` shows `propext`, `Classical.choice`, `Quot.sound` only):
+**Status (2026-11-06).** Proved in `lean/Enthymemata/ConformalValidity.lean`, namespace `Conformal`, with no apologies (PROOF-CLOSED, 187 declarations counting E35's M-1 and M-2 and slice 9 at the end of this page; `#print axioms` shows `propext`, `Classical.choice`, `Quot.sound` only):
 - CB-1: `card_rankLe_le`, `coverage_orderings`, `coverage_orderings_eq`, `coverage_strict_le`, `coverage_orderings_le`, `rank_uniform`, `coverage_tieBreak`, `coverage_given`, `coverage_law`, `coverage_stratum`;
 - CB-2: `split_coverage`, `exchangeable_given_training`, `cqr_ordConnected`;
 - CB-4: `sum_jointU`, `post_addOneIn`, `integratedScore_equivariant`, `latentScore_equivariant`, `latentScore_eq`, `sum_jointU_addOneIn`, `integratedScore_le_latentScore`, `accepts_latent_of_mixed`, `mixed_counterexample`;
@@ -257,7 +257,7 @@ Each Sₙ/S_i is the betting product from i + 1 to n, so `lintegral_capital` giv
 
 Posed and proved on 2026-11-09 for the [conformal layer's slice 9](../../../issues/regression/conformal-layer-brief.md#e16s-completion-the-plan-slices-7-onward), before any C#, from the [chip brief's assignment](conformal-chip-brief.md#e16-slice-9--cross-fitted-intervals-and-asymmetric-cqr-2026-11-09). The point is the contract: the exact rank rules the layer implements, and the hypotheses it must meet.
 
-**Status (2026-11-09).** Both statements are proved in `lean/Enthymemata/ConformalValidity.lean`, PROOF-CLOSED at 153 declarations, and `#print axioms` shows the standard three only. [`conformal-checks.py`](conformal-checks.py), section "Slice 9", ran first, and every assertion holds. Not included: CV+ and cross-conformal predictive distributions (below).
+**Status (2026-11-09).** The jackknife+, CV+ with both of its bounds, and asymmetric CQR are proved in `lean/Enthymemata/ConformalValidity.lean`, PROOF-CLOSED at 187 declarations, and `#print axioms` shows the standard three only. CV+ was added the same day, once Barber et al. 2021 was on disk. [`conformal-checks.py`](conformal-checks.py), section "Slice 9", ran first, and every assertion holds. Not included: cross-conformal predictive distributions (below).
 
 ### J+ — the jackknife+ covers at least 1 − (2k − 1)/(n + 1), so at least 1 − 2α
 
@@ -290,14 +290,15 @@ Posed and proved on 2026-11-09 for the [conformal layer's slice 9](../../../issu
 3. *Nothing else.* The fit may change with its sample size, need not be stable, and need not mix. The theorem does not need the fit to read only its training units. That locality is what makes the interval computable from the training data and X.
 
 **What changed from the task.**
-- *The bound is sharper than 1 − 2α:* 1 − (2k − 1)/(n + 1).
-  - Barber et al.'s count |S| ≤ 2α(n + 1) is 2k − 1 in integers. With k = ⌊α(n + 1)⌋ the bound is at least 1 − 2α + 1/(n + 1) for k ≥ 1.
+- *The guarantee is 1 − (2k − 1)/(n + 1), above 1 − 2α.*
+  - The count is Barber et al.'s own: their Step 1 gives |S| ≤ 2α(n + 1) − 1 before Theorem 1 rounds it to 2α. With k = ⌊α(n + 1)⌋ it is 2k − 1, and the bound is at least 1 − 2α + 1/(n + 1) for k ≥ 1.
   - At k = 1 it is 1 − 1/(n + 1), the split form's exact rate, so the factor of 2 first costs anything at k = 2.
   - At α = 0.1 and n = 19, the worst case is 0.85, not 0.80.
 - *The bound is attained.*
   - A symmetric fit whose leave-two-out residuals form a regular tournament on 2k − 1 units covers exactly 1 − (2k − 1)/m. That holds over every ordering, for each (m, k) checked with 2k − 1 ≤ m up to m = 7.
+  - Barber et al.'s Theorem 2 makes the same point asymptotically: an i.i.d. law and a fit covering at most 1 − 2α + 6√(log n/n). The case here is the exact finite one.
   - Ordinary fits (mean, median, least-squares line, nearest neighbour) meet the bound at k = 1.
-  - So "near 1 − α", the engine brief's figure, is a measurement under stability, not a guarantee.
+  - So "near 1 − α", the engine brief's figure, is a measurement under stability, not a guarantee. Barber et al.'s section on stability bounds it there.
 - *The law form generalizes the task's.* It is stated up to a relabeling of the randomness, which admits samplers symmetric only in law (hypothesis 2).
 
 **Checks** (`conformal-checks.py`, slice 9).
@@ -313,18 +314,80 @@ Posed and proved on 2026-11-09 for the [conformal layer's slice 9](../../../issu
 - *Order-reading fits.* Every fit that picks the stranger of two missing units from the ordered training tuple was searched exhaustively at m = 4: 2¹² fits. None refuses more than (2k − 1)/m. A seeded annealed search at m = 5 and 6, run outside the checks file, found none either.
 
 **Not included.**
-- *CV+ (K folds).* Barber et al. 2021 give it a guarantee of 1 − 2α less a term in K and n. The 2023 restatement on disk says only "a similar distribution-free guarantee", and the 2021 paper is not on disk, so the term is not stated here.
-  - The finite form here does not reach CV+. CV+ compares the test unit and training unit i under the fit leaving out i's whole fold, and the test unit belongs to no fold. That breaks the pairwise symmetry the tournament uses, so CV+ needs its own statement.
-  - It is open, and decides whether the layer offers K fits instead of n.
+- *CV+* has its own section below.
 - *Cross-conformal predictive distributions* (Vovk et al. 2018) are valid only approximately, and are not posed.
 - *Whether the jackknife+ itself needs a symmetric fit* is open. The Lean statement needs the symmetry for the whole matrix, while the jackknife+ reads only the test unit's row, and the search above found no counterexample.
+- *The asymmetric jackknife+* (Barber et al.'s section on asymmetric forms: signed residuals, α₊ + α₋ = α, the proof run with two signed matrices) is read, not posed.
 
 **Prior art, read.**
-- Barber, Candès, Ramdas and Tibshirani 2023 (arXiv 2202.13415v5), the jackknife+ appendix, read in TeX:
-  - the definition, with its footnote on which quantile is taken;
-  - the background theorem, and its proof by the comparison matrix and Landau's theorem;
+- Barber, Candès, Ramdas and Tibshirani 2021 (arXiv 1905.02928v3, on disk since 2026-11-09), read in TeX:
+  - the quantiles q̂⁺ and q̂⁻, the ⌈(1 − α)(n + 1)⌉-th and ⌊α(n + 1)⌋-th smallest, with q̂⁺ infinite past n;
+  - the symmetry condition, the fit invariant to reordering its data;
+  - Theorem 1 and its proof by Landau's theorem, whose Step 1 has the 2α(n + 1) − 1;
+  - Theorem 2, the worst cases, where the jackknife covers nothing and the jackknife+ near 1 − 2α;
+  - the section on the asymmetric jackknife+ and CV+.
+- Barber, Candès, Ramdas and Tibshirani 2023 (arXiv 2202.13415v5), the jackknife+ appendix:
+  - the restatement, with its footnote on which quantile is taken;
   - the remark that the n-fold cross-conformal set with any score has the same guarantee and lies inside the jackknife+ interval.
-- Barber et al. 2021 itself is not on disk. Its theorem and proof are read here through that restatement.
+
+### CV+ — K folds, by merging the folds and by a tournament across them
+
+**Conventions.** These are the jackknife+'s, with folds.
+- *Folds.* n = Km training units in K folds of m. Fold k's fit μ̂₋ₖ leaves out fold k and the test unit. Unit i's residual Rᵢ is under its fold's fit, and so is the test unit's comparison with i.
+- *Level.* ℓ = ⌊α(n + 1)⌋. Ties count for neither unit, and the interval is closed.
+- *The rule* (`CVRefuses`, `CVRefusesAcross`). y is refused when at least n + 1 − ℓ upper ends μ̂₋ₖ₍ᵢ₎(X) + Rᵢ lie strictly below it, or as many lower ends strictly above it. At K = n it is the jackknife+.
+
+**CV-a, merging the folds' ranks** (Vovk; Barber et al., Theorem 4(a)).
+- *The rule.* rₖ is the test unit's rank in fold k with itself, ties counted for it as in CB-1, so it lies in 1, …, m + 1. CV+ refuses only when Σₖ rₖ < ℓ + K (`sum_rankLe_lt_of_cvRefuses`).
+- *The bound* (`crossFold_refused_le`, `cvPlus_merged`). P(refused) ≤ 2(ℓ + K − 1)/(n + K).
+  - With ℓ ≤ α(n + 1) this is at most 2α + 2(1 − α)(K − 1)/(n + K) (`cvPlus_merged_alpha`). That is Vovk's term, as Barber et al. state it for cross-conformal, sharpened by the floor in ℓ.
+- *The proof.*
+  - Each rₖ is super-uniform, by CB-1 in its fold (`rank_superUniform`).
+  - Σₖ rₖ ≤ L forces L ≤ Σₖ (2L/K − rₖ)₊ (`le_sum_max_of_sum_le`).
+  - The layer cake bounds E(c − rₖ)₊ by its average over 1, …, m + 1 (`sum_antitone_le`), a right Riemann sum at most c²/(2(m + 1)) (`sum_max_sub_le`).
+  - So P ≤ 2L/(K(m + 1)) (`merged_le`). This is the arithmetic mean of p-values, valid up to a factor 2, here in counts. Barber et al.'s route randomizes the p-values and adjusts the level; the counts need neither.
+- *The hypotheses.*
+  - The n + 1 units are exchangeable, each fold with the test unit given the rest.
+  - Each fold's fit is unchanged when its fold and the test unit are reordered: it reads neither.
+  - **No symmetric fit is needed.** A fit that reads its other units' order qualifies, and the checks include two.
+
+**CV-b, the tournament across folds** (Barber et al., Theorem 4(b)).
+- *The setting.* m − 1 further units from the same law fill the test unit's fold, and the interval never reads them. Units are (fold, slot). Unit i is compared with j under the fit leaving out both their folds (`foldScore`), and only across folds (`strangerAcross`, `AcceptsAcross`).
+- *The counting core* (`card_refused_across_le`). At most 2ℓ + m − 2 units are refused, where Barber et al. count 2α(n + 1) + m − 2. The same-fold pairs play no game, so the refused units' wins can be packed into fewer games.
+- *The bound* (`coverage_across`, `cvPlus_tournament`). The coverage is at least 1 − (2ℓ + m − 2)/(n + m), which is at least Barber et al.'s 1 − 2α − (1 − K/n)/(K + 1) (checked). At m = 1 it is the jackknife+'s bound.
+- *The hypotheses.*
+  - The n + m units are exchangeable under permuting the folds and the slots within them (`ratio_prodPerm` averages over those).
+  - i.i.d. data give that. A fixed data set of n + 1 units, sampled without replacement, does not: its law need not extend to n + m units.
+  - A symmetric fit up to a relabeling of its randomness, as for the jackknife+.
+
+**Which bound serves.** The miscoverage bounds at α = 0.1:
+
+| n | K | merged | tournament |
+|---|---|---|---|
+| 20 | 2 | 0.273 | 0.400 |
+| 20 | 5 | 0.480 | 0.250 |
+| 100 | 5 | 0.267 | 0.317 |
+| 100 | 10 | 0.345 | 0.255 |
+| 1000 | 5 | 0.207 | 0.332 |
+| 1000 | 10 | 0.216 | 0.271 |
+| n | n | over 1 | the jackknife+'s |
+
+The merged bound serves few folds and many units, and needs no symmetric fit. The tournament serves many folds. Barber et al.'s minimum of the two is at most 2α + √(2/n).
+
+**Checks** (`conformal-checks.py`, slice 9, CV+).
+- *The merging inequality:* 21,142 (K, M, rank vector, L) cases, and the layer cake on super-uniform laws.
+- *With K = 2 and uniform ranks,* the worst coupling lies within 1/M of the merged bound: 1/2 against 2/3 at M = 6, L = 4.
+- *CV-a over orderings:* 51,600 orderings, 4 data sets × 5 fits, two of them reading their units' order. Every level holds, and every refusal has Σₖ rₖ < ℓ + K.
+- *CV-b over orderings of n + m units:* 4,392 orderings, 3 data sets × 3 symmetric fits. Every level holds.
+- *CV-b's counting core:* 551,934 outcomes of the cross-fold comparisons, ties included. The bound is attained for 2 and 3 folds of 2 and for 4 folds of 1. For 2 folds of 3 the worst is 4 against 5 at ℓ = 2.
+- *Both bounds inside Barber et al.'s α forms:* 8,400 (K, m, α) cases.
+
+**Prior art, read.** Barber, Candès, Ramdas and Tibshirani 2021 (1905.02928v3), read in TeX:
+- the CV+ section and Theorem 4;
+- the subsection on cross-conformal predictors: the cross-conformal set inside CV+, and the remark that both proofs cover it;
+- the proofs for CV+: the modified cross-conformal form, Vovk's averaging of p-values, and the CV+ tournament with its test fold.
+
+Vovk 2015, Vovk et al. 2018 and Vovk and Wang 2012, on combining p-values, are cited through it and were not read.
 
 ### CQR-A — asymmetric CQR, a threshold per tail
 
