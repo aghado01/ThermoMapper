@@ -176,4 +176,19 @@ public sealed class CrossConformalQualificationTests(ITestOutputHelper output)
         output.WriteLine($"n={n}, S={draws}, G={g}, {(BassCost.Cycles ? "cycles" : "wall")}, best of three: n-fold predictive reductions/ranks {cross:F2} ms ({1000 * cross / g:F2} µs/candidate), split {split:F2} ms");
         output.WriteLine($"linear leave-one-out fitting and predictions {refits:F2} ms for {n} fits; jackknife+ two order statistics {ends:F4} ms; density matrices built before clock, one fold retained at a time");
     }
+
+    [Fact]
+    public void AsymmetricCqrCost_AgainstTheSymmetricCalibration()
+    {
+        if (!BassQualification.Enabled) return;
+        const int n = 1000, tests = 200;
+        var rng = new Xoshiro256PlusPlus(20261116);
+        Unit[] cal = Draw(n, rng), test = Draw(tests, rng);
+        QuantileReadings Read(Unit[] u) => new(u.Select(v => 0.5 * v.X - 1).ToArray(), u.Select(v => 0.5 * v.X + 1).ToArray());
+        QuantileReadings calibration = Read(cal), readings = Read(test);
+        double[] response = [.. cal.Select(v => v.Y)];
+        double symmetric = Best(() => SplitConformal.Quantiles(calibration, response, readings));
+        double asymmetric = Best(() => SplitConformal.AsymmetricQuantiles(calibration, response, readings));
+        output.WriteLine($"CQR, n={n} calibration units and {tests} test cases, {(BassCost.Cycles ? "cycles" : "wall")}, best of three: symmetric {symmetric:F4} ms, asymmetric {asymmetric:F4} ms; fitting and quantile readings built before clock");
+    }
 }
