@@ -161,6 +161,8 @@ You asked to address the two open items. The ledger has the record: "What a fit 
 
 **Files.** A new file [`conformal-searches.py`](conformal-searches.py) holds the searches, annealing and an optional scipy MILP. This chip had not named it; it keeps the open item's evidence reproducible. `conformal-checks.py` keeps the standard-library assertions: the parity certificate, the one-fold bound over every CV+ ordering, and the K = 2 and Markov arithmetic.
 
+**Coordinator replay.** The optional MILP in the delivered script checks the jackknife+ cases. The fixed-bag optima can now be replayed separately with `python -I -X utf8 conformal-searches.py --exact-bags`. For two folds of two, strict-order witnesses attain the one-fold upper bounds of 1/3, 2/3 and 1. For three folds of two at ℓ = 1, a seven-point counting argument gives 1/7 and a strict-order witness attains it. The [ledger](conformal-lemmas.md) gives the argument. These are finite certificates in Python.
+
 **Gates.**
 - `lake build Enthymemata.ConformalValidity`: clean, no warnings.
 - `lake build Enthymemata`: green.

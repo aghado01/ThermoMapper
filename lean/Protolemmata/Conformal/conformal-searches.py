@@ -7,9 +7,9 @@
    partition of the rest, and CV+ refuses iff sum_k d_{F_k + x}(x) <= l - 1. The search maximizes
    the refused share over the rankings by annealing; each figure is an exact count for the rankings
    found, so a lower bound on the worst case. Standard library only.
-2. With scipy, the same worst case exactly by a MILP at K = 2, m = 2 (every level) and K = 3, m = 2,
-   l = 1, and the jackknife+'s worst case for fits that read their units' order (model A, positions
-   closed up) or know their units' positions (model B), m <= 5.
+2. Exact fixed-bag checks at K = 2, m = 2 and at K = 3, m = 2, l = 1 use the standard library.
+   The optional scipy MILP checks the jackknife+ for fits that read their units' order (model A,
+   positions closed up) or know their units' positions (model B), m <= 5.
 
 Results of 2026-11-09 (recorded in conformal-lemmas.md, slice 9):
 - the fixed bag stays within CV-b's bound everywhere searched: K = 3, 4, 5 with m = 2 and K = 3 with
@@ -19,11 +19,13 @@ Results of 2026-11-09 (recorded in conformal-lemmas.md, slice 9):
   (jackknifePlus_orderReading); model B reaches 1/2 at k = 1 for m = 3..6, the parity construction
   that conformal-checks.py verifies.
 Run: python -I -X utf8 conformal-searches.py [--milp]
+Quick exact fixed-bag checks only: python -I -X utf8 conformal-searches.py --exact-bags
 """
 import itertools
 import math
 import random
 import sys
+from collections import Counter
 from fractions import Fraction as Q
 
 
@@ -87,7 +89,60 @@ def cv_b(l, m, n):
     return Q(max(2 * l + m - 2, 0), n + m)
 
 
+def exact_bags():
+    # Each string ranks the members of one triple, in lexicographic triple/member order.
+    # The one-fold upper bound is l/3. A witness attaining it certifies the optimum.
+    witnesses = (
+        "012 102 120 120 102 012 102 012 102 120",
+        "012 021 210 210 102 120 012 201 012 201",
+        "012 021 120 102 210 201 012 021 102 012",
+    )
+    units = range(5)
+    for level, witness in enumerate(witnesses, start=1):
+        ranks = {}
+        for triple, order in zip(itertools.combinations(units, 3), witness.split(), strict=True):
+            assert sorted(order) == list("012")
+            ranks[triple] = dict(zip(triple, map(int, order)))
+        refused = total = 0
+        for test in units:
+            for folds in unordered_partitions([i for i in units if i != test], 2):
+                rank_sum = sum(ranks[tuple(sorted((*fold, test)))][test] for fold in folds)
+                refused += rank_sum < level
+                total += 1
+        assert total == 15 and Q(refused, total) == Q(level, 3)
+        print(f"two folds of two, level {level}: exact worst {refused}/{total}")
+
+    # The translates of {0, 1, 3} modulo 7 are the lines of the Fano plane.
+    # For a candidate test unit, its three lines pair up the remaining six units.
+    units = range(7)
+    lines = [(i, (i + 1) % 7, (i + 3) % 7) for i in units]
+    planes = {tuple(sorted(tuple(sorted(labels[i] for i in line)) for line in lines))
+              for labels in itertools.permutations(units)}
+    counts = Counter()
+    for plane in planes:
+        # At level one a refused unit must win on each of its lines. Any two units
+        # share a line, so at most one can do so. Ranking the least unit highest
+        # on each line attains one refusal per plane.
+        for x, y in itertools.combinations(units, 2):
+            assert sum(x in line and y in line for line in plane) == 1
+        winners = 0
+        for test in units:
+            incident = [line for line in plane if test in line]
+            folds = tuple(sorted(tuple(i for i in line if i != test) for line in incident))
+            assert len(folds) == 3
+            assert sorted(itertools.chain.from_iterable(folds)) == [i for i in units if i != test]
+            counts[test, folds] += 1
+            winners += all(min(line) == test for line in incident)
+        assert winners == 1
+    # Equal multiplicities give the uniform law over tests and partitions.
+    assert len(planes) == 30 and len(counts) == 105 and set(counts.values()) == {2}
+    print("three folds of two, level 1: exact worst 1/7 (30 planes, 105 configurations)")
+
+
 def main():
+    exact_bags()
+    if "--exact-bags" in sys.argv:
+        return
     for K, m in ((3, 2), (4, 2), (3, 3), (5, 2)):
         n = K * m
         for l in range(1, n + 1):
