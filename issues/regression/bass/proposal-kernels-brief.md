@@ -98,6 +98,34 @@ q(t | S) = (1 − ω_H − ω_R)·q_base(t | S) + ω_H·q_H(t | S) + ω_R·q_R(t
 - Candidate pools, or multiple-try Metropolis over them.
 - A reference nearer the posterior for SMC, the remedy table's third row.
 
+## Addendum plan: the residual birth on more KHAOS fixtures (pre-registered 2026-11-09)
+
+At the user's word ("Measure more fixtures"), on slice 2's second call: whether the residual birth goes to the user as a recommended default for KHAOS's raw-ridge fits. Written before any run.
+
+**Fixtures,** KHAOS under the raw ridge as slice 2 ran it (d_max 8, q_max 3, τ held at 10⁻⁵, the zero centre, σ² ~ IG(3, 0.5), h₁ = 4, h₂ = 40/n), inputs uniform on their declared domains:
+1. *Ishigami,* slice 2's fixture (n 120, p 4, one inert), on new seeds: the replication.
+2. *Ishigami at n 500,* p 4: the residual's cost grows with n.
+3. *Ishigami with seven inert inputs,* n 200, p 10: many inert predictors.
+4. *Sobol's g-function,* n 200, p 8, a = (0, 1, 4.5, 9, 99, 99, 99, 99), noise sd 0.1: kinks at ½, which polynomials fit poorly, and four nearly inert inputs.
+5. *The borehole,* n 200, p 8 on Morris, Mitchell and Ylvisaker's ranges, the response standardized on the sample, noise sd 0.1: smooth, every input active.
+
+**The design.** Arms: the fit's own birth, and the residual birth at ω_R = ¼ with the exponent ½.
+- Eight master seeds of four chains, 5,000 burn-in and 5,000 kept sweeps, each fit on one thread.
+- A discarded warm-up fit per arm and fixture, the arms' order alternating by seed, tiered compilation off.
+- *The reading:* bulk ESS per CPU second for M, the log posterior, σ² and the three monitored fitted values, the residual's over the base's, with a two-sample z over the seeds. Also R̂, births' acceptance and CPU per fit.
+- *The climb from empty,* per fixture: eight seeds per arm, sweeps until the chain's log posterior reaches the 5% quantile of a base reference chain's last 30,000 of 60,000 sweeps, within 20,000.
+
+**The rule,** per fixture.
+- A *gain:* the median ratio over the six functionals is above 1.2, and no functional is below 1 beyond the spread (z < −2).
+- A *loss:* some functional is below 1 beyond the spread (z < −2), and the median ratio is below 1.
+- Otherwise *neutral*.
+
+**What each outcome does.**
+- *No loss anywhere and a gain on at least three of the five:* the residual birth goes to the user as a recommended default for KHAOS's raw-ridge fits. The user decides.
+- *A loss on any fixture:* it stays opt-in, and the report names the regimes where it gains.
+- *Otherwise:* it stays opt-in, recommended where it gained.
+- The climbs are reported beside the rule and change no outcome. A climb at least three times shorter on every fixture is noted as a reason to declare it for burn-in-heavy fits.
+
 ## The slices
 
 One commit per concern; tests with the code they test. Each slice ends with its gates, its measurement, a fresh-eyes review and a report, and waits for the coordinating session's verification note.
