@@ -130,6 +130,47 @@ The user asked for this on 2026-11-08 ("Yes, start it"), relayed by the BASS ext
 
 Newest first.
 
+### 2026-11-09 — slice 9's open items: what a fit may see, and CV+ on a fixed bag
+
+You asked to address the two open items. The ledger has the record: "What a fit may see" under the jackknife+, and "CV+ by one fold" plus "On a fixed bag" under CV+. `ConformalValidity.lean` is 194 declarations, PROOF-CLOSED, with the standard three axioms only.
+
+**1. Does the jackknife+ need a symmetric fit? The answer depends on what the fit sees.**
+- *Its units' order: no symmetry needed* (`jackknifePlus_orderReading`, through `OrderReading`, `acceptsPairwise_cycleRange` and `coverage_orderReading`).
+  - A fit that reads its training units in index order, with the left-out row's place closed up, keeps 1 − (2k − 1)/(n + 1).
+  - The proof moves any unit to the front with the others kept in order, so the test unit is strange exactly as often as any other.
+  - Exact MILPs had shown this worst case up to m = 6 before the proof.
+- *Its units' positions: no guarantee.* The parity construction: swapping the test unit with unit i flips the ordering's parity, and a fit that knows which positions are missing can side with the even completion. Coverage is exactly 1/2 at every level, for every n.
+  - It is checked exactly in `conformal-checks.py` for m = 3 to 7, with a real interval.
+  - It passes 1 − 2α at k = 1 from m = 5 on.
+- *The C# contract.* Each leave-out fit gets its training rows in index order, with the left-out row's place closed up. It gets no row index, no mask, and no seed keyed to a row. Then a sampler sweeping in index order with a fixed seed is covered, with no random presentation order needed.
+- *CV-a, the merged bound,* holds even for fits that know positions.
+
+**2. CV+'s tournament bound on a fixed bag of n + 1 units: partly resolved.**
+- *Proved:* `cvPlus_oneFold`, P(refused) ≤ ℓ/(m + 1) on any bag. That settles K = 2, and m = 1 is the jackknife+.
+- *Two-fold CV+ covers above 1 − 2α with no extra term,* since ℓ/(m + 1) < 2α. That is better than both of Barber et al.'s bounds at K = 2.
+- *Settled at K = 3, m = 2, ℓ ≤ 2:* exactly by MILP at ℓ = 1 (1/7 against 1/4), and by a Markov count at ℓ = 2 (1/2).
+- *Searched for K = 3, 4, 5 and m = 2, 3 at every level, with no counterexample.* The worst found stays well inside CV-b's bound.
+- *Still open for K ≥ 3,* with no decision waiting: on a fixed bag the layer asserts the merged and one-fold bounds.
+
+**Rules for the C# worker, updated.**
+- The CV+ guarantee to assert is the largest of three:
+  - the merged bound, 1 − 2(ℓ + K − 1)/(n + K);
+  - one fold, 1 − ℓ/(m + 1);
+  - the tournament, 1 − (2ℓ + m − 2)/(n + m), for a symmetric fit on i.i.d. data.
+- At K = 2 that is the one-fold bound.
+
+**Files.** A new file [`conformal-searches.py`](conformal-searches.py) holds the searches, annealing and an optional scipy MILP. This chip had not named it; it keeps the open item's evidence reproducible. `conformal-checks.py` keeps the standard-library assertions: the parity certificate, the one-fold bound over every CV+ ordering, and the K = 2 and Markov arithmetic.
+
+**Gates.**
+- `lake build Enthymemata.ConformalValidity`: clean, no warnings.
+- `lake build Enthymemata`: green.
+- `scripts/meta-ci.ps1 -NoBuild`: PASS.
+- Builds ran at below-normal priority. D: had 38 GB free.
+
+**Open, no decision waiting:** CV-b on a fixed bag for K ≥ 3.
+
+**What stopped me:** nothing.
+
 ### 2026-11-09 — slice 9's follow-up: CV+ proved, both bounds
 
 You fetched Barber, Candès, Ramdas and Tibshirani 2021 (1905.02928v3) on 2026-11-09, and I read it in TeX. CV+ is now proved in `lean/Enthymemata/ConformalValidity.lean`, which is 187 declarations and still PROOF-CLOSED. `#print axioms` on the CV+ results shows the standard three only. [conformal-lemmas.md](conformal-lemmas.md) has the record, in its CV+ section.

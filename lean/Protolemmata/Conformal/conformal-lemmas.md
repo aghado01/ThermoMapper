@@ -257,7 +257,7 @@ Each Sₙ/S_i is the betting product from i + 1 to n, so `lintegral_capital` giv
 
 Posed and proved on 2026-11-09 for the [conformal layer's slice 9](../../../issues/regression/conformal-layer-brief.md#e16s-completion-the-plan-slices-7-onward), before any C#, from the [chip brief's assignment](conformal-chip-brief.md#e16-slice-9--cross-fitted-intervals-and-asymmetric-cqr-2026-11-09). The point is the contract: the exact rank rules the layer implements, and the hypotheses it must meet.
 
-**Status (2026-11-09).** The jackknife+, CV+ with both of its bounds, and asymmetric CQR are proved in `lean/Enthymemata/ConformalValidity.lean`, PROOF-CLOSED at 187 declarations, and `#print axioms` shows the standard three only. CV+ was added the same day, once Barber et al. 2021 was on disk. [`conformal-checks.py`](conformal-checks.py), section "Slice 9", ran first, and every assertion holds. Not included: cross-conformal predictive distributions (below).
+**Status (2026-11-09).** The jackknife+, CV+ with both of its bounds, and asymmetric CQR are proved in `lean/Enthymemata/ConformalValidity.lean`, PROOF-CLOSED, and `#print axioms` shows the standard three only. CV+ was added the same day, once Barber et al. 2021 was on disk. Later the same day came the order-reading jackknife+, the one-fold CV+ bound, and the position-aware counterexample. [`conformal-checks.py`](conformal-checks.py), section "Slice 9", ran first, and every assertion holds. Not included: cross-conformal predictive distributions (below).
 
 ### J+ — the jackknife+ covers at least 1 − (2k − 1)/(n + 1), so at least 1 − 2α
 
@@ -286,7 +286,8 @@ Posed and proved on 2026-11-09 for the [conformal layer's slice 9](../../../issu
 2. *A symmetric fit.* On the data reordered by σ, the fit to the units T is the fit to the units σ(T) of the original: it reads its training units as a set (`FitSymmetric`).
    - The law forms take this up to a relabeling `act σ` of the fits' randomness. The law of the randomness and the data together must be invariant under each reordering with its relabeling.
    - So a fit that reads the order of its units qualifies when it reads them in one uniformly random order drawn per run and shared by every leave-out fit, or when its seeds are attached to the units.
-   - A sampler that sweeps the units in index order with a fixed seed does not qualify as stated.
+   - **A fit that reads its units' order also qualifies, with no randomization** (`OrderReading`, `jackknifePlus_orderReading`, below). A sampler sweeping the units in index order with a fixed seed is such a fit.
+   - **A fit that knows its units' positions does not.** That includes seeds keyed by row index, weights by index, and a mask showing which row was left out. The parity construction below covers exactly 1/2.
 3. *Nothing else.* The fit may change with its sample size, need not be stable, and need not mix. The theorem does not need the fit to read only its training units. That locality is what makes the interval computable from the training data and X.
 
 **What changed from the task.**
@@ -311,12 +312,26 @@ Posed and proved on 2026-11-09 for the [conformal layer's slice 9](../../../issu
 - *Each premise broken.*
   - The plain jackknife, centred on the fit to all n units, covers nothing at any k ≥ 1 when the fit shifts with its sample size. The jackknife+ on the same fit meets its bound.
   - A tie counted as strange refuses all 4 units of a tied set at k = 1, where the core allows 1.
-- *Order-reading fits.* Every fit that picks the stranger of two missing units from the ordered training tuple was searched exhaustively at m = 4: 2¹² fits. None refuses more than (2k − 1)/m. A seeded annealed search at m = 5 and 6, run outside the checks file, found none either.
+- *Order-reading fits.* Every fit that picks the stranger of two missing units from the ordered training tuple was searched exhaustively at m = 4: 2¹² fits. None refuses more than (2k − 1)/m. Exact MILPs in [`conformal-searches.py`](conformal-searches.py) give the same up to m = 6.
+- *Fits that know their units' positions,* exactly over every ordering for m = 3 to 7: the parity construction refuses exactly 1/2 at every level. That passes 1 − 2α from m = 5 at k = 1.
+
+**What a fit may see** (2026-11-09; the open item on symmetric fits, resolved).
+- *Its units' order: the bound holds* (`jackknifePlus_orderReading`, through `coverage_orderReading`).
+  - A fit reads its units' order (`OrderReading`) when, on the data reordered by σ, its fit to the units T is the fit to σ(T) whenever σ keeps the units of T in order. It may depend on that order, not on where in the index its units sit.
+  - The proof moves any unit p to the front, the others kept in order: `(Fin.cycleRange p).symm`, increasing off 0 by `Fin.strictMono_succAbove`.
+  - The test unit's comparisons in the moved data are unit p's in the original (`pairScore_cycleRange`). So the test unit is strange exactly as often as any unit (`acceptsPairwise_cycleRange`), and the counting core gives (2k − 1)/(n + 1).
+  - Only these moves are needed, not the full symmetry. The interval itself never reads where the test unit sits.
+- *Its units' positions: no guarantee.*
+  - Swapping the test unit with training unit i flips the ordering's parity.
+  - The fit leaving out position i and the test knows which positions are missing and, over a fixed bag, which two points. So it can make stranger the point at the test position in the even completion.
+  - Then in every even ordering the test unit is stranger than every training unit, and in every odd one than none. Coverage is exactly 1/2 at every level 1 ≤ k ≤ n, for every n.
+  - The exact MILP worst cases match: 1/2 at k = 1 for m = 3 to 6, and 2/3 at m = 5, k = 2.
+  - Barber et al. 2023 handle fits that are not symmetric by changing the method, swapping the test unit with a random index K. They make no claim for the plain jackknife+.
+- *The engine's reading.* A leave-out fit receives its training rows in index order, row i dropped and the rest closed up, with no index, mask or row-keyed seed. A sweep in index order with a fixed seed is then covered with no randomization.
 
 **Not included.**
 - *CV+* has its own section below.
 - *Cross-conformal predictive distributions* (Vovk et al. 2018) are valid only approximately, and are not posed.
-- *Whether the jackknife+ itself needs a symmetric fit* is open. The Lean statement needs the symmetry for the whole matrix, while the jackknife+ reads only the test unit's row, and the search above found no counterexample.
 - *The asymmetric jackknife+* (Barber et al.'s section on asymmetric forms: signed residuals, α₊ + α₋ = α, the proof run with two signed matrices) is read, not posed.
 
 **Prior art, read.**
@@ -349,7 +364,12 @@ Posed and proved on 2026-11-09 for the [conformal layer's slice 9](../../../issu
 - *The hypotheses.*
   - The n + 1 units are exchangeable, each fold with the test unit given the rest.
   - Each fold's fit is unchanged when its fold and the test unit are reordered: it reads neither.
-  - **No symmetric fit is needed.** A fit that reads its other units' order qualifies, and the checks include two.
+  - **No symmetric fit is needed.** A fit that reads its other units' order qualifies, and the checks include two. So does one that knows their positions: reordering fold k and the test unit moves nothing the fold's fit reads.
+
+**CV+ by one fold** (`cvPlus_oneFold`, 2026-11-09).
+- *The bound.* A refusal leaves the test unit's rank at most ℓ in every fold, so in any one fold k₀. That fold with the test unit is CB-2's split form, so P(refused) ≤ ℓ/(m + 1).
+- *The hypotheses.* Fold k₀ is exchangeable with the test unit, and its fit does not read either. It holds on any bag.
+- *With two folds* it beats both bounds above. ℓ/(m + 1) ≤ α(2m + 1)/(m + 1) < 2α, so two-fold CV+ covers above 1 − 2α with no extra term. For K ≥ 3 it is about Kα and the others serve.
 
 **CV-b, the tournament across folds** (Barber et al., Theorem 4(b)).
 - *The setting.* m − 1 further units from the same law fill the test unit's fold, and the interval never reads them. Units are (fold, slot). Unit i is compared with j under the fit leaving out both their folds (`foldScore`), and only across folds (`strangerAcross`, `AcceptsAcross`).
@@ -359,6 +379,12 @@ Posed and proved on 2026-11-09 for the [conformal layer's slice 9](../../../issu
   - The n + m units are exchangeable under permuting the folds and the slots within them (`ratio_prodPerm` averages over those).
   - i.i.d. data give that. A fixed data set of n + 1 units, sampled without replacement, does not: its law need not extend to n + m units.
   - A symmetric fit up to a relabeling of its randomness, as for the jackknife+.
+- *On a fixed bag of n + 1 units,* without the further test units (2026-11-09; the open item, partly resolved).
+  - *The reduction.* For each left-out set L, a fold with the test unit, a symmetric fit ranks L's residuals. Let d_L(x) count the units of L ranked strictly above x; under a uniform ordering it is uniform on 0, …, m. CV+ refuses iff Σₖ d_{Fₖ ∪ x}(x) ≤ ℓ − 1.
+  - *Settled at K = 2.* The one-fold bound ℓ/(m + 1) lies within CV-b's at every level for m ≥ 2, and m = 1 is the jackknife+.
+  - *Settled at K = 3, m = 2, ℓ ≤ 2.* At ℓ = 2 a refusal needs the test unit on top in two of its three triples, against once on average, so P ≤ 1/2, CV-b's bound by Markov. At ℓ = 1 the exact MILP worst case is 1/7, against 1/4.
+  - *Searched, no counterexample.* Annealing over K = 3, 4, 5 with m = 2, and K = 3 with m = 3, at every level found nothing past CV-b's bound, and the worst found stays well inside it: 0.40 against 0.58 at K = 3, m = 3, ℓ = 3 ([`conformal-searches.py`](conformal-searches.py)).
+  - *Still open for K ≥ 3,* with no decision waiting: on a fixed bag the layer has the merged and one-fold bounds, which need no extension.
 
 **Which bound serves.** The miscoverage bounds at α = 0.1:
 

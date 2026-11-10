@@ -60,13 +60,16 @@ unit's stratum.
   cross-fitted rule covers at least `1 − (2k − 1)/|C|` over orderings
   (`coverage_pairwise_orderings`) and under a law exchangeable up to a relabeling of the fits'
   randomness (`coverage_pairwise`, `crossFit_coverage`). The jackknife+ interval refuses only a
-  strange test unit
-  (`not_acceptsPairwise_of_jackRefuses`), so `jackknifePlus_orderings`, `jackknifePlus_coverage`
-  and `jackknifePlus_two_alpha`, its `1 − 2α`.
+  strange test unit (`not_acceptsPairwise_of_jackRefuses`), so `jackknifePlus_orderings`,
+  `jackknifePlus_coverage` and `jackknifePlus_two_alpha`, its `1 − 2α`. The same bound holds for a
+  fit that reads its units' order (`OrderReading`): `coverage_orderReading` and
+  `jackknifePlus_orderReading`, by moving any unit to the front with the others kept in order
+  (`acceptsPairwise_cycleRange`).
 * **Slice 9, CV+ with `K` folds** (Barber et al., Theorem 4). By merging the folds' ranks (Vovk):
   `merged_le`, ranks super-uniform on `1, …, M` summing to at most `L` with probability at most
   `2L/(KM)`, through `layer_cake`, `sum_antitone_le` and `sum_max_sub_le`; `crossFold_refused_le`,
-  `sum_rankLe_lt_of_cvRefuses`, `cvPlus_merged` and `cvPlus_merged_alpha`, with no symmetric fit.
+  `sum_rankLe_lt_of_cvRefuses`, `cvPlus_merged` and `cvPlus_merged_alpha`, with no symmetric fit;
+  `cvPlus_oneFold`, one fold alone, at most `ℓ/(m + 1)`, above `1 − 2α` with two folds.
   By a tournament across folds: `card_refused_across_le`, at most `2ℓ + m − 2` strange units;
   `ratio_prodPerm`, averaging over folds and slots; `coverage_across`,
   `not_acceptsAcross_of_cvRefuses` and `cvPlus_tournament`.
@@ -1951,6 +1954,139 @@ theorem jackknifePlus_two_alpha {W Z X : Type*} [Fintype W] [Fintype Z] {C : Fin
 
 end CrossFitted
 
+/-! ### Slice 9: the jackknife+ with a fit that reads its units' order -/
+
+section OrderReading
+
+variable {n : ℕ}
+
+/-- A fit **reads its training units' order**: on the data reordered by `σ`, the fit to the units
+`T` is the fit to the units `T.image σ` of the original whenever `σ` keeps the units of `T` in
+their order. It may depend on that order, as a sampler sweeping its units in index order with a
+fixed seed does, but not on where in the index its units sit. Every symmetric fit qualifies. -/
+def OrderReading {Z β : Type*} (fit : Finset (Fin (n + 1)) → (Fin (n + 1) → Z) → β) : Prop :=
+  ∀ σ : Equiv.Perm (Fin (n + 1)), ∀ (T : Finset (Fin (n + 1))) (z : Fin (n + 1) → Z),
+    StrictMonoOn σ (↑T : Set (Fin (n + 1))) → fit T (z ∘ σ) = fit (T.image σ) z
+
+/-- Moving unit `p` to the front, the others keeping their order: `(Fin.cycleRange p).symm` sends
+`0` to `p` and is increasing on every other unit. -/
+theorem strictMonoOn_cycleRange_symm (p : Fin (n + 1)) :
+    StrictMonoOn (Fin.cycleRange p).symm ({0}ᶜ : Set (Fin (n + 1))) := by
+  intro a ha b hb hab
+  obtain ⟨a', rfl⟩ := Fin.exists_succ_eq.2 ha
+  obtain ⟨b', rfl⟩ := Fin.exists_succ_eq.2 hb
+  rw [Fin.cycleRange_symm_succ, Fin.cycleRange_symm_succ]
+  exact Fin.strictMono_succAbove p (Fin.succ_lt_succ_iff.1 hab)
+
+/-- With the test unit moved to the front, its comparisons are unit `p`'s. -/
+theorem pairScore_cycleRange {Z β : Type*} {fit : Finset (Fin (n + 1)) → (Fin (n + 1) → Z) → Z → β}
+    (h : OrderReading fit) (p : Fin (n + 1)) (z : Fin (n + 1) → Z) (j : Fin (n + 1)) :
+    pairScore fit (z ∘ (Fin.cycleRange p).symm) 0 j =
+        pairScore fit z p ((Fin.cycleRange p).symm j) ∧
+      pairScore fit (z ∘ (Fin.cycleRange p).symm) j 0 =
+        pairScore fit z ((Fin.cycleRange p).symm j) p := by
+  set σ := (Fin.cycleRange p).symm with hσ
+  have h0 : σ 0 = p := Fin.cycleRange_symm_zero p
+  have hmono : ∀ T : Finset (Fin (n + 1)), (0 : Fin (n + 1)) ∉ T →
+      StrictMonoOn σ (T : Set (Fin (n + 1))) := fun T hT =>
+    (strictMonoOn_cycleRange_symm p).mono fun x hx => by
+      simp only [Set.mem_compl_iff, Set.mem_singleton_iff]
+      rintro rfl
+      exact hT hx
+  have h1 : (0 : Fin (n + 1)) ∉ (univ \ {0, j} : Finset (Fin (n + 1))) := by simp
+  have h2 : (0 : Fin (n + 1)) ∉ (univ \ {j, 0} : Finset (Fin (n + 1))) := by simp
+  constructor
+  · simp only [pairScore, h σ _ z (hmono _ h1), image_sdiff_pair, h0, Function.comp_apply]
+  · simp only [pairScore, h σ _ z (hmono _ h2), image_sdiff_pair, h0, Function.comp_apply]
+
+theorem acceptsPairwise_cycleRange {Z α : Type*} [LinearOrder α]
+    {fit : Finset (Fin (n + 1)) → (Fin (n + 1) → Z) → Z → α} (h : OrderReading fit) (k : ℕ)
+    (p : Fin (n + 1)) (z : Fin (n + 1) → Z) :
+    AcceptsPairwise k univ (pairScore fit (z ∘ (Fin.cycleRange p).symm)) 0 ↔
+      AcceptsPairwise k univ (pairScore fit z) p := by
+  have hc : (strangerThan univ (pairScore fit (z ∘ (Fin.cycleRange p).symm)) 0).card =
+      (strangerThan univ (pairScore fit z) p).card := by
+    apply card_equiv (Fin.cycleRange p).symm
+    intro j
+    simp only [strangerThan, mem_filter, mem_univ, true_and, (pairScore_cycleRange h p z j).1,
+      (pairScore_cycleRange h p z j).2]
+  simp only [AcceptsPairwise, hc]
+
+/-- **The cross-fitted rule with a fit that reads its units' order.** Given the fits' randomness
+`w`, the units are exchangeable, and each fit reads only its training units' order. Then the test
+unit, unit `0`, is accepted with probability at least `1 − (2k − 1)/(n + 1)`: moving any unit to
+the front keeps the others' order, so the test unit is strange exactly as often as any other. -/
+theorem coverage_orderReading {W Z α : Type*} [Fintype W] [Fintype Z] [LinearOrder α]
+    (P : W → (Fin (n + 1) → Z) → ℝ) (hP0 : ∀ w z, 0 ≤ P w z) (hP1 : ∑ w, ∑ z, P w z = 1)
+    (hP : ∀ σ : Equiv.Perm (Fin (n + 1)), ∀ w z, P w (z ∘ σ) = P w z)
+    (fit : W → Finset (Fin (n + 1)) → (Fin (n + 1) → Z) → Z → α)
+    (hfit : ∀ w, OrderReading (fit w)) (k : ℕ) :
+    1 - ((2 * k - 1 : ℕ) : ℝ) / (n + 1) ≤
+      ∑ w, ∑ z, P w z * if AcceptsPairwise k univ (pairScore (fit w) z) 0 then 1 else 0 := by
+  have hN : (0 : ℝ) < n + 1 := by positivity
+  have hmove : ∀ p : Fin (n + 1),
+      ∑ w, ∑ z, P w z * (if AcceptsPairwise k univ (pairScore (fit w) z) 0 then (1 : ℝ) else 0) =
+        ∑ w, ∑ z, P w z * (if AcceptsPairwise k univ (pairScore (fit w) z) p then 1 else 0) := by
+    intro p
+    refine sum_congr rfl fun w _ => ?_
+    rw [← Equiv.sum_comp (reorder (Fin.cycleRange p).symm)]
+    refine Fintype.sum_congr _ _ fun z => ?_
+    rw [show reorder (Fin.cycleRange p).symm z = z ∘ (Fin.cycleRange p).symm from rfl, hP]
+    simp only [acceptsPairwise_cycleRange (hfit w) k p z]
+  have hratio : ∀ w z, 1 - ((2 * k - 1 : ℕ) : ℝ) / (n + 1) ≤
+      (∑ p : Fin (n + 1),
+        if AcceptsPairwise k univ (pairScore (fit w) z) p then (1 : ℝ) else 0) / (n + 1) := by
+    intro w z
+    have h := ratio_acceptsPairwise_ge (C := (univ : Finset (Fin (n + 1)))) ⟨0, mem_univ _⟩
+      (pairScore (fit w) z) k
+    rw [card_univ, Fintype.card_fin] at h
+    push_cast at h
+    rwa [sum_boole]
+  calc 1 - ((2 * k - 1 : ℕ) : ℝ) / (n + 1)
+      = ∑ w, ∑ z, (1 - ((2 * k - 1 : ℕ) : ℝ) / (n + 1)) * P w z := by
+        simp only [← mul_sum, hP1, mul_one]
+    _ ≤ ∑ w, ∑ z, P w z * ((∑ p : Fin (n + 1),
+          if AcceptsPairwise k univ (pairScore (fit w) z) p then (1 : ℝ) else 0) / (n + 1)) :=
+        sum_le_sum fun w _ => sum_le_sum fun z _ => by
+          rw [mul_comm]
+          exact mul_le_mul_of_nonneg_left (hratio w z) (hP0 w z)
+    _ = (∑ p : Fin (n + 1), ∑ w, ∑ z,
+          P w z * if AcceptsPairwise k univ (pairScore (fit w) z) p then 1 else 0) / (n + 1) := by
+        simp only [mul_div_assoc', mul_sum, sum_div]
+        rw [sum_congr rfl fun w _ => sum_comm, sum_comm]
+    _ = (∑ _p : Fin (n + 1), ∑ w, ∑ z,
+          P w z * if AcceptsPairwise k univ (pairScore (fit w) z) 0 then 1 else 0) / (n + 1) := by
+        rw [sum_congr rfl fun p _ => (hmove p).symm]
+    _ = _ := by
+        rw [sum_const, card_univ, Fintype.card_fin, nsmul_eq_mul]
+        push_cast
+        field_simp
+
+/-- **The jackknife+ with a fit that reads its units' order.** The fit may read its training units
+in index order, as a sampler sweeping them with a fixed seed does. Given its randomness, the units
+are exchangeable. Then the jackknife+ covers the test unit with probability at least
+`1 − (2k − 1)/(n + 1)`, the symmetric fit's bound. -/
+theorem jackknifePlus_orderReading {W Z X : Type*} [Fintype W] [Fintype Z]
+    (P : W → (Fin (n + 1) → Z) → ℝ) (hP0 : ∀ w z, 0 ≤ P w z) (hP1 : ∑ w, ∑ z, P w z = 1)
+    (hP : ∀ σ : Equiv.Perm (Fin (n + 1)), ∀ w z, P w (z ∘ σ) = P w z) (cov : Z → X)
+    (resp : Z → ℝ) (alg : W → Finset (Fin (n + 1)) → (Fin (n + 1) → Z) → X → ℝ)
+    (halg : ∀ w, OrderReading (alg w)) (k : ℕ) :
+    1 - ((2 * k - 1 : ℕ) : ℝ) / (n + 1) ≤
+      ∑ w, ∑ z, P w z * if ¬ JackRefuses cov resp k univ (alg w) z 0 then 1 else 0 := by
+  have hjack : ∀ w, OrderReading (jackFit cov resp (alg w)) := fun w σ T z hmono => by
+    funext p
+    simp only [jackFit, halg w σ T z hmono]
+  refine (coverage_orderReading P hP0 hP1 hP (fun w => jackFit cov resp (alg w)) hjack k).trans ?_
+  refine sum_le_sum fun w _ => sum_le_sum fun z _ => mul_le_mul_of_nonneg_left ?_ (hP0 w z)
+  by_cases hacc : AcceptsPairwise k univ (pairScore (jackFit cov resp (alg w)) z) 0
+  · have : ¬ JackRefuses cov resp k univ (alg w) z 0 := fun h =>
+      not_acceptsPairwise_of_jackRefuses h hacc
+    simp [hacc, this]
+  · simp only [hacc, if_false]
+    split_ifs <;> norm_num
+
+end OrderReading
+
 /-! ### Slice 9: CV+ by merging the folds' ranks (Vovk; Barber et al., Theorem 4(a)) -/
 
 section MergedFolds
@@ -2308,6 +2444,44 @@ theorem cvPlus_merged_alpha {K m ℓ : ℕ} {α : ℝ} (hK : 0 < K)
   have : 2 * ((ℓ : ℝ) + K - 1) / (K * (m + 1)) ≤ 2 * (α * (K * m + 1) + K - 1) / (K * (m + 1)) :=
     div_le_div_of_nonneg_right (by linarith) hpos.le
   linarith
+
+/-- **CV+ by one fold.** A refusal leaves the test unit's rank at most `ℓ` in every fold, so in fold
+`k₀` alone, and that fold with the test unit is a split conformal calibration set: CV+ covers with
+probability at least `1 − ℓ/(m + 1)`. Only fold `k₀`'s exchangeability with the test unit and its
+fit are needed. With two folds, `ℓ = ⌊α(2m + 1)⌋`, this is above `1 − 2α`. -/
+theorem cvPlus_oneFold {W Z X κ : Type*} [Fintype W] [Fintype Z] [Fintype κ] {C : κ → Finset ι}
+    {t : ι} (ht : ∀ k, t ∈ C k) {m : ℕ} (hC : ∀ k, (C k).card = m + 1) (P : W → (ι → Z) → ℝ)
+    (hP0 : ∀ w z, 0 ≤ P w z) (hP1 : ∑ w, ∑ z, P w z = 1) (k₀ : κ)
+    (hP : ∀ σ ∈ permsOn (C k₀), ∀ w z, P w (z ∘ σ) = P w z) (cov : Z → X) (resp : Z → ℝ)
+    (alg : κ → W → (ι → Z) → X → ℝ)
+    (halg : ∀ σ ∈ permsOn (C k₀), ∀ w z, alg k₀ w (z ∘ σ) = alg k₀ w z) (ℓ : ℕ) :
+    1 - (ℓ : ℝ) / (m + 1) ≤
+      ∑ w, ∑ z, P w z * if ¬ CVRefuses cov resp ℓ C (fun k => alg k w) z t then 1 else 0 := by
+  classical
+  set S : κ → W → (ι → Z) → ι → ℝ := fun k w z i => -|resp (z i) - alg k w z (cov (z i))|
+    with hSdef
+  have hS : ∀ w, Equivariant (C k₀) (S k₀ w) := by
+    intro w σ hσ z i
+    simp only [hSdef, Function.comp_apply, halg σ hσ w z]
+  have hcov := coverage_law (ht k₀) P hP0 hP1 (fun σ hσ w z => hP σ hσ w z) (S k₀) hS ℓ
+  rw [hC k₀] at hcov
+  push_cast at hcov
+  refine hcov.trans (sum_le_sum fun w _ => sum_le_sum fun z _ =>
+    mul_le_mul_of_nonneg_left ?_ (hP0 w z))
+  by_cases hc : CVRefuses cov resp ℓ C (fun k => alg k w) z t
+  · have hsum : ∑ k, rankLe (C k) (S k w z) t < ℓ + Fintype.card κ :=
+      sum_rankLe_lt_of_cvRefuses (alg := fun k => alg k w) ht hc
+    have hK : 0 < Fintype.card κ := Fintype.card_pos_iff.2 ⟨k₀⟩
+    have h1 := add_sum_erase univ (fun k => rankLe (C k) (S k w z) t) (mem_univ k₀)
+    have h2 : (univ.erase k₀).card ≤ ∑ k ∈ univ.erase k₀, rankLe (C k) (S k w z) t := by
+      calc (univ.erase k₀).card = ∑ _k ∈ univ.erase k₀, 1 := by simp
+        _ ≤ _ := sum_le_sum fun k _ => one_le_rankLe _ (ht k)
+    rw [card_erase_of_mem (mem_univ _), card_univ] at h2
+    have hle : rankLe (C k₀) (S k₀ w z) t ≤ ℓ := by omega
+    have hna : ¬ Accepts ℓ (C k₀) (S k₀ w z) t := not_lt.2 hle
+    simp [hc, hna]
+  · simp only [hc, not_false_eq_true, if_true]
+    split_ifs <;> norm_num
 
 end MergedFolds
 

@@ -1296,7 +1296,57 @@ for k in (1, 2):
     w = order_reading_worst(4, k)
     assert w == Q(pair_bound(k), 4)
     print(f"Slice 9, order-reading fits, m = 4, k = {k}: the worst refuses {w} of the orderings, "
-          f"the symmetric bound {Q(pair_bound(k), 4)}")
+          f"the symmetric bound {Q(pair_bound(k), 4)} (proved since: jackknifePlus_orderReading)")
+
+
+# A fit that knows its units' positions breaks the jackknife+. Swapping the test unit with training
+# unit i flips the ordering's parity. Over the orderings of a fixed bag, the fit leaving out position i
+# and the test knows the two missing points and the missing positions, so it can make stranger the
+# point that sits at the test position in the even completion. Then in every even ordering the test
+# unit is stranger than every training unit, and in every odd one than none: coverage 1/2 at every
+# level 1 <= k <= n, against 1 - (2k - 1)/(n + 1). The fit reads only its training units and where
+# they sit; the residuals are realized by predictions at the two missing x, on the upper side.
+def parity(seq):
+    return sum(1 for a, b in itertools.combinations(range(len(seq)), 2) if seq[a] > seq[b]) % 2
+
+
+def jack_refuses_positional(k, order, data):
+    """The jackknife+ for the test at the last position with the parity fit; order[j] is the index
+    of the point at position j."""
+    m = len(order)
+    t = m - 1
+    y = data[order[t]][1]
+    vhi = []
+    for i in range(t):
+        seen = {j: order[j] for j in range(m) if j not in (i, t)}
+        a, b = sorted(set(range(m)) - set(seen.values()))
+        comp = [None] * m
+        for j, u in seen.items():
+            comp[j] = u
+        comp[i], comp[t] = b, a
+        stranger = a if parity(comp) == 0 else b
+        other = b if stranger == a else a
+        pred = {data[stranger][0]: data[stranger][1] - 2, data[other][0]: data[other][1] - 1}
+        mu = lambda x: pred[x]
+        r_i = abs(data[order[i]][1] - mu(data[order[i]][0]))
+        vhi.append(mu(data[order[t]][0]) + r_i)
+    return sum(1 for v in vhi if v < y) + k >= m
+
+
+rows = []
+for m in range(3, 8):
+    data = as_q([(j, 0) for j in range(m)])
+    perms = list(itertools.permutations(range(m)))
+    past_sharp, past_two_alpha = [], []
+    for k in range(1, m):
+        refused = sum(1 for p in perms if jack_refuses_positional(k, p, data))
+        assert Q(refused, len(perms)) == Q(1, 2)
+        if Q(1, 2) > Q(pair_bound(k), m):
+            past_sharp.append(k)
+        if Q(1, 2) > Q(2 * k, m):
+            past_two_alpha.append(k)
+    rows.append(f"m = {m}: past (2k - 1)/m at k in {past_sharp}, past 2k/m at k in {past_two_alpha}")
+print("Slice 9, a fit that knows its units' positions refuses exactly 1/2 at every level: " + "; ".join(rows))
 
 print()
 print("=== Slice 9: CV+ with K folds ===")
@@ -1438,6 +1488,7 @@ for (K, m), z in cv_cases:
         for l in range(n + 2):
             c = Q(cov[l], len(perms))
             assert c >= 1 - bound_merged(l, K, n)
+            assert c >= 1 - Q(l, m + 1)  # one fold (cvPlus_oneFold)
         rows_a.append(f"{name} (K = {K}, m = {m}), l = 1: {Q(cov[1], len(perms))} >= {1 - bound_merged(1, K, n)}")
 print(f"CV-a over orderings: {n_orderings} orderings, 4 data sets x 5 fits (2 of them read their units' order); "
       f"every level meets 1 - 2(l + K - 1)/(n + K), and every refusal has sum_k r_k < l + K")
@@ -1516,6 +1567,24 @@ for K in range(1, 21):
             assert bound_tournament(l, m, n) <= 2 * alpha + (1 - Q(K, n)) / (K + 1)
             n_cases += 1
 print(f"CV+ bounds inside Barber et al.'s alpha forms on {n_cases} (K, m, alpha) cases")
+
+# CV-b on a fixed bag of n + 1 units, without the further test units. A refusal leaves the test unit
+# within the top l of fold 1 with itself, so P <= l/(m + 1) on any bag (cvPlus_oneFold). With K = 2 and
+# m >= 2 that is within CV-b's bound at every level, and m = 1 is the jackknife+: K = 2 is settled.
+# For K = 3, m = 2, l = 2 a refusal needs the test on top in two of its three triples, which it tops
+# once on average: P <= 1/2, CV-b's bound. The rest is searched in conformal-searches.py.
+for m in range(2, 40):
+    n = 2 * m
+    for l in range(0, n + 2):
+        if bound_tournament(l, m, n) < 1:
+            assert Q(l, m + 1) <= bound_tournament(l, m, n)
+for m in range(2, 40):
+    for alpha in (Q(1, 20), Q(1, 10), Q(1, 5)):
+        l = math.floor(alpha * (2 * m + 1))
+        assert Q(l, m + 1) < 2 * alpha
+assert Q(3, 3 * 2) == bound_tournament(2, 2, 6)
+print("CV-b on a fixed bag: K = 2 settled by one fold (and two-fold CV+ covers above 1 - 2alpha); "
+      "K = 3, m = 2, l = 2 settled by Markov at 1/2")
 
 print()
 print("=== Slice 9: asymmetric CQR, a threshold per tail ===")
