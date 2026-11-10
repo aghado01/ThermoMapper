@@ -77,9 +77,48 @@ public static class BassMultiOutput
                 for (int l = 0; l < k; l++) { double noise = 0; for (int j = 0; j <= l; j++) noise += root[l, j] * z[j]; predictive[d, i, l] = latent[d, i, l] + noise; }
             }
         }
-        double[,]? rb = options.MeanSurface ? Conditionals(fit, data, cases, options).Mean() : null;
+        double[,]? rb = options.MeanSurface ? MeanSurface(model, fit, pooled, selected, weights, surface) : null;
         double nu = model.Resolved.Outputs!.Prior.DegreesOfFreedom + data.Response.Cases - (model.Target.Intercept == GPriorCentre.Flat ? 1 : 0);
         return new BassOutputPrediction(((MultiOutputResponse)data.Response).Names, selected, weights, latent, predictive, sigma, outside, rb, nu > k + 1);
+    }
+
+    // Only coefficient means are needed here; no case-by-case row covariance is constructed.
+    private static double[,] MeanSurface(BassModel model, BassFit fit, BassDraw[] pooled, int[] selected, double[] weights, BassSurface surface)
+    {
+        int k = model.Data.Response.Outputs, rows = model.Data.Response.Cases;
+        bool flat = model.Target.Intercept == GPriorCentre.Flat;
+        if (!(model.Resolved.Outputs!.Prior.DegreesOfFreedom + rows - (flat ? 1 : 0) > k))
+            throw new InvalidOperationException("The posterior surface has no finite mean.");
+        var designs = new Dictionary<string, (BassDesign Design, BassStructureFit Fit, double[] Means)>();
+        var result = new double[surface.Cases, k]; var buffer = new double[surface.Cases];
+        for (int d = 0; d < selected.Length; d++)
+        {
+            var draw = pooled[selected[d]]; var ids = draw.Structure.TermIds; string key = string.Join(',', ids);
+            if (!designs.TryGetValue(key, out var cached))
+            {
+                var design = model.NewDesign();
+                if (design.Load(ids.Select(id => fit.Terms[id]).ToArray()) is { } refusal) throw new ArgumentException($"The retained structure was refused ({refusal}).", nameof(fit));
+                var means = new double[ids.Length]; var training = new double[rows];
+                for (int j = 0; j < ids.Length; j++) { model.Basis.CaseColumn(fit.Terms[ids[j]], model.Inputs.Cases, training); means[j] = model.Working.ColumnMean(training, null); }
+                cached = (design, BassStructureFit.Of(design, 0), means); designs.Add(key, cached);
+            }
+            double precision = draw.Tau / model.Target.CoefficientConstant;
+            double[,]? pencilMean = cached.Fit.Outputs!.Prior?.Conditional(precision, 1).Mean;
+            var coefficients = new double[ids.Length + 1]; int offset = flat ? 0 : 1;
+            for (int l = 0; l < k; l++)
+            {
+                coefficients[0] = flat ? model.Resolved.Outputs.Means[l] : pencilMean is not null ? pencilMean[0, l]
+                    : model.Resolved.Outputs.Levels[l] + (model.Resolved.Outputs.Means[l] - model.Resolved.Outputs.Levels[l]) / (1 + precision);
+                for (int j = 0; j < ids.Length; j++)
+                {
+                    double value = pencilMean is not null ? pencilMean[j + offset, l] : cached.Design.OutputCoefficients![j, l] / (1 + precision);
+                    coefficients[j + 1] = value; coefficients[0] -= cached.Means[j] * value;
+                }
+                surface.Evaluate(ids, coefficients, buffer);
+                for (int i = 0; i < surface.Cases; i++) result[i, l] += weights[d] * buffer[i];
+            }
+        }
+        return result;
     }
 
     /// <summary>The matrix-t components conditional on each retained structure, τ and covariance rates, with A and Σ integrated out.</summary>

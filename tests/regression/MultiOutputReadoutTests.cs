@@ -59,6 +59,8 @@ public sealed class MultiOutputReadoutTests(ITestOutputHelper output)
         var (fit, data) = Fixed(form, centre, hierarchy: hierarchy);
         var model = BassModel.Create(fit.Config, data); var cases = Cases();
         var result = BassMultiOutput.Conditionals(fit, data, cases);
+        var projectedMean = BassMultiOutput.Predict(fit, data, cases, new BassPredictOptions { Predictive = false, MeanSurface = true }).MeanSurface!;
+        foreach (var pair in projectedMean.Cast<double>().Zip(result.Mean().Cast<double>())) Assert.InRange(Math.Abs(pair.First - pair.Second), 0, 2e-10);
         var (inputs, _) = cases.Prepare(model.Transform, model.Inputs, UnseenLevel.Refuse);
         var surface = new BassSurface(model.Basis, fit.Terms, inputs, null);
         var y = new double[data.Response.Cases, 2]; var response = (MultiOutputResponse)data.Response;
@@ -205,5 +207,22 @@ public sealed class MultiOutputReadoutTests(ITestOutputHelper output)
         Assert.InRange(Math.Abs((double)inside / count - 0.95), 0, 0.006);
         var quantile = prediction.Quantile(0.975);
         Assert.InRange(Math.Abs(quantile[0, 0] - Normal.Standard.Quantile(0.975)), 0, 2e-8);
+    }
+
+    [Fact]
+    public void MeanSurfaceScalesToAGridWithoutJointCaseCovariances()
+    {
+        var (fit, data) = Fixed(count: 20);
+        const int count = 512;
+        double[] x = [.. Enumerable.Range(0, count).Select(i => i / (count - 1.0))];
+        var cases = new PredictionCases([new ContinuousColumn("x", x), new ContinuousColumn("z", x)]);
+        long before = GC.GetAllocatedBytesForCurrentThread();
+        var result = BassMultiOutput.Predict(fit, data, cases, new BassPredictOptions { Predictive = false, MeanSurface = true });
+        long allocated = GC.GetAllocatedBytesForCurrentThread() - before;
+        output.WriteLine($"Mean surface on {count} cases and 20 states allocated {allocated} bytes");
+        Assert.InRange(allocated, 0, 8_000_000);
+        Assert.Equal(count, result.MeanSurface!.GetLength(0));
+        var first = BassMultiOutput.Conditionals(fit, data, new PredictionCases([new ContinuousColumn("x", [x[0]]), new ContinuousColumn("z", [x[0]])])).Mean();
+        for (int k = 0; k < 2; k++) Assert.InRange(Math.Abs(first[0, k] - result.MeanSurface[0, k]), 0, 1e-10);
     }
 }
