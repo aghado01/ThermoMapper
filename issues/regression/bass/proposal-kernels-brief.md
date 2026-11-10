@@ -1,6 +1,6 @@
 # Proposal kernels: E4's history-based and residual-informed births
 
-Date: 2026-11-08. Status: slice 2, the residual birth, landed (`599115d`, `ff2ec0d`) at the user's word; its measurements send the pair of SMC's 1.25 cap and the residual birth to the user as the trap's remedy, and report it a candidate for KHAOS under the raw ridge; verified by the coordinating session 2026-11-09 (the Commit scope 2,496 of 2,496). Both calls wait on the user. Slice 1 landed (`b1df14e`), opt-in, verified.
+Date: 2026-11-08. Status: slices 1 and 2 landed and verified (`b1df14e`; `599115d`, `ff2ec0d`). Slice 2's first call, SMC's step cap, built opt-in 2026-11-09 at the user's word (`0ffc0e0`). Its second, the residual birth as a candidate for KHAOS's raw-ridge fits, waits on the user.
 
 ## Why
 
@@ -186,6 +186,34 @@ Under "Reports" below, newest first, per slice:
 - what was left unbuilt, and why.
 
 ## Reports
+
+### Addendum: SMC's step cap, built opt-in (chip, 2026-11-09)
+
+At the user's word ("Build the cap, opt-in"), on slice 2's first call. The other call, the residual birth as a candidate for KHAOS's raw-ridge fits, still waits on the user.
+
+**Landed** on `main`, nothing pushed:
+- `0ffc0e0`: `SmcSpec.StepCap` and its gates (`SmcStepCapTests`).
+- This commit: the SMC section's paragraph, its config and API rows, KHAOS's remedy table's note, the status line and this report.
+
+**What is built.** With r set, each step from b > 0 takes b′ = min(the conditional-ESS rule's b′, r·b, 1); the first step, from b = 0, stays the rule's alone, as the trap harness ran it.
+- Null by default, and left out of the serialized form when null, so every fingerprint and SMC's pinned baseline stand.
+- Validated: r above 1 and finite.
+- `BassSmcReplicate.CappedSteps` counts the steps it bound, read from the stage reports, so a resumed fit counts them too.
+
+**The gates.**
+
+| Gate | Reading |
+| --- | --- |
+| The bound | Every step from b > 0 within r·b, and the first the uncapped fit's, at r 1.25 and 1.05 on a hinge fit (146 and 158 stages at r 1.05 against 14 and 15 uncapped). The readout's count matches a recount. The last step leaves from b ≥ 1/r, so it never reads as a jump |
+| The evidence | KHAOS's exact-law fixture at r = 1.25, four replicates of 2,000: ln p(y) −72.3035 ± 0.0128 (raw ridge) and −72.2910 ± 0.0172 (with the residual birth) against −72.2910; −69.5909 ± 0.0172 against −69.5869 (the modified g-prior with the residual birth). The flags were clear, and 19–27 of 43–49 steps were bound |
+| Resume | Bit for bit through 25 resumes at r = 1.1, the bound counts equal |
+| The config | r ≤ 1, NaN and ∞ refused. A config without the cap serializes as it did, and one with it moves the fingerprint |
+| The trap | A production fit on the trap fixture (qualification): r = 1.25 with the residual birth, N 500 at 5 sweeps, four replicates. All four reach the posterior (σ² 0.2245–0.2273, M 10.12–10.14), none jumping, 65–66 of 152–154 steps bound. Their ln Ẑ, −286.4 to −291.1, disagree at 3.66 times their errors, and the disagreement flag says so |
+| Hinge BASS untouched | The Commit scope with the pinned tier and SMC's baseline: 2,177 of 2,177 |
+
+**What it settles, and what it does not.** The cap and the residual birth take SMC's trapped posterior to the long chains' in every replicate measured. The evidence still disagrees across replicates, as slice 2 measured, and the flag reads it. The remedy table's third row, a reference nearer the posterior, is what the evidence would need.
+
+**Left as it was.** The cap is opt-in: no SMC fit takes it unless its config says so, and neither does the residual birth.
 
 ### Slice 2: the residual birth (chip, 2026-11-09)
 
