@@ -178,8 +178,8 @@ The chains are AR(1) about the exact posterior, two chains of 500, so they mix m
 
 **Other forms**
 - Asymmetric CQR, jackknife+ and the n-fold pairwise set are available in slice 9 below.
-- CV+ with K folds has a proof contract in `33665cf` and is queued as a separate implementation after this increment's review. Cross-conformal predictive distributions remain a separate proof question.
-- The tournament correction, recorded in E16, which keeps all the data at 1 − 2α for any sampler, at n leave-one-out chains.
+- CV+ with equal-sized K folds is available below, following `33665cf` and `17ba5c9`. Cross-conformal predictive distributions remain a separate proof question.
+- The tournament correction, recorded in E16, keeps all the data at 1 − 2α under the fitting contracts below, at n leave-one-out chains.
 
 ## Cross-fitted sets and asymmetric CQR (slice 9)
 
@@ -191,9 +191,31 @@ The attainable finite-sample lower bound is 1 − (2k − 1)/m for k > 0, clippe
 
 `CrossConformal.Density` reduces predictive density seams with the same arithmetic as the split form. Every fit scores one held-out response and the same test grids. Its two seams match in draws, chain lengths, weights and latent treatment, and serve the split form. Different fits can retain different draws. The overload taking a fit count and a callback reduces one fit at a time, retaining the n × G score matrix. These APIs operate on one exchangeable group in stratum zero. Under the residual score the pairwise set is contained in the jackknife+ interval.
 
-**The fitting hypothesis.** The n training units and test unit must be exchangeable together. Each leave-out fit reads its training units symmetrically, including a relabeling of its randomness under a permutation. An order-reading sampler can use one uniformly random order drawn for the run and shared across every leave-out fit, or randomness attached to the units. Fixed index-order sweeps with a fixed seed fall outside this contract. The layer validates the supplied array and seam alignment. The caller supplies the leave-out fits and their symmetry. These conditions are `FitSymmetric`, `crossFit_coverage` and `jackknifePlus_coverage` in the [Lean contract](../../lean/Protolemmata/Conformal/conformal-lemmas.md#slice-9--cross-fitted-forms-and-asymmetric-cqr).
+**The fitting hypothesis.** The n training units and test unit must be exchangeable together. There are two sufficient fitting contracts. A symmetric fit reads its training units as a set, including a relabeling of its randomness under a permutation. Alternatively, an order-reading fit receives its training rows in index order with the left-out place closed up: it sees compact rows, no held-out position, original indices or masks, and no row-keyed randomness. A sampler sharing a fixed seed across the leave-out fits and sweeping those compact rows in order can qualify by this second route. The original symmetric route remains available, including one uniformly random order shared across the leave-out fits or randomness attached to the units. These conditions are `FitSymmetric`, `crossFit_coverage`, `jackknifePlus_coverage`, `OrderReading` and `jackknifePlus_orderReading` in the [Lean contract](../../lean/Protolemmata/Conformal/conformal-lemmas.md#slice-9--cross-fitted-forms-and-asymmetric-cqr). The layer validates the supplied array and seam alignment; the caller establishes the fitting contract.
+
+**Positions change the claim.** A fit given original positions or a held-out mask need not satisfy the compact order-reading contract. The proof ledger's parity construction then covers exactly one half at every positive level and violates the jackknife+ lower bound at sufficiently small levels. This restriction does not change CV+'s separate merged and one-fold contracts below, which permit order- and position-reading fits that exclude the held-out fold and test unit.
 
 **Asymmetric CQR.** `SplitConformal.AsymmetricQuantiles` fits the two tail calibrations separately at α/2. For each calibration unit the lower conformity is yᵢ − q_lo(xᵢ) and the upper conformity q_hi(xᵢ) − yᵢ. The closed ends are q_lo(x) + c_lo and q_hi(x) − c_hi, using each tail's k-th smallest conformity with k = ⌊αm/2⌋. At level zero that end is infinite. Each `AsymmetricConformalInterval` reports its two levels, thresholds, miscoverage bounds and total `Coverage = 1 − (k_lo + k_hi)/m`. This controls each tail at α/2 and total miscoverage at α under the split form's conditional exchangeability assumption. Fits with crossing quantiles can yield an empty interval. At nominal 90%, finite ends begin at 19 calibration units. With 29 calibration units the bound is 14/15 because of rank rounding. The rounding excess is less than 2/m above nominal coverage and at most 1/m above the symmetric finite-rank bound. For example, 30 calibration units give 29/31 at α = 0.1.
+
+## CV+ with equal-sized folds
+
+`CrossConformal.CvPlus(readings, assumptions, alpha)` reads `FoldReadings(Response, HeldOut, FoldOf, Predictions)`. There are n training units, K nonempty folds of size m = n/K, and one prediction row per fold fit. `FoldOf[i]` indexes that row. `HeldOut[i]` is unit i's prediction under its own fold's fit. Fold labels start at zero and all K labels must occur equally often.
+
+With ℓ = ⌊α(n + 1)⌋, the closed endpoints are the ℓ-th smallest μ̂₋ₖ₍ᵢ₎(x) − Rᵢ and ℓ-th largest μ̂₋ₖ₍ᵢ₎(x) + Rᵢ, where Rᵢ = |Yᵢ − μ̂₋ₖ₍ᵢ₎(Xᵢ)|. Endpoints use the same order-statistic kernel as jackknife+. Ties are accepted at either endpoint. At ℓ = 0 the result is the whole line with coverage one. A single fold is supported when its empty-training fit supplies the readings.
+
+**Three conditional bounds** are returned in `CvPlusBounds`. Their numerical values are clipped at zero.
+
+| Bound | Finite lower bound | Required caller assumptions |
+|---|---|---|
+| `Merged`, `cvPlus_merged` | 1 − 2(ℓ + K − 1)/(n + K) | `ExcludesFoldAndTest` and `FoldTestExchangeability`. Each fold plus the test unit is exchangeable given the rest and the fitting randomness. The fit, preprocessing and tuning read neither the held-out fold nor the test unit. |
+| `OneFold`, `cvPlus_oneFold` | 1 − ℓ/(m + 1) | The same caller assertions as `Merged` suffice. The theorem itself needs exchangeability and fit exclusion for just one fold with the test unit. This API asserts those properties for every fold. |
+| `Tournament`, `cvPlus_tournament` | 1 − max(2ℓ + m − 2, 0)/(n + m) | `ExtendedFoldExchangeability` and `SymmetricFit`. The joint law extends to n + m units and is invariant under fold and slot permutations, with the matching relabeling of fitting randomness. The fit is symmetric under those permutations. I.i.d. units with independent fitting randomness supply the extended law. |
+
+The merged and one-fold proofs admit fits that read their other training units' order or positions. At K = 2 the one-fold bound is above 1 − 2α. The tournament proof uses the extended exchangeability and symmetry hypotheses. An exchangeable sample of n + 1 units alone supplies no such extension in this contract. The API's `CvPlusAssumptions.MergedRanks`, `FoldTournament` and `Both` combine the corresponding flags. These are caller assertions about fitting and the data law. The layer checks the readings and fold dimensions.
+
+Each `CvPlusBound` carries `Value`, `Theorem`, `RequiredAssumptions` and `Applies`. `CvPlusBounds.Coverage` selects the largest value among the applicable bounds. It is null at positive ℓ if neither set of assumptions is supplied. At zero ℓ, the whole line gives coverage one independently of those assertions. For K = n, the endpoints reduce to jackknife+. The tournament bound then reduces to 1 − (2ℓ − 1)/(n + 1), when its assumptions apply.
+
+Near-nominal empirical coverage is a measurement of the fit and data. The [CV+ proof contract](../../lean/Protolemmata/Conformal/conformal-lemmas.md) gives these finite lower bounds under their separate hypotheses.
 
 ## The predictive distribution (slice 4): the reading
 
@@ -818,12 +840,12 @@ Every guarantee on this page rests on exchangeability. A conformal test martinga
 | Grid boundary refinement | `ConformalSet.RefineBoundaries(at, tolerance)` → ordered `ConformalBoundary(Accepted, Rejected)` witnesses |
 | Cross-fitted sets | `CrossConformal.JackknifePlus(LeaveOneOutReadings(Response, HeldOut, Predictions), alpha)` → `JackknifePlusIntervals`; `Pairwise(heldOutScores, candidateScores, grids, alpha)` and `Density(heldOutSeams, candidateSeams, alpha)` → `ConformalPrediction` with `Form = CrossFitted`; streaming density uses `Density(fits, read, alpha)` |
 | Asymmetric CQR | `SplitConformal.AsymmetricQuantiles(calibration, response, test, alpha)` → `AsymmetricConformalIntervals` with `LowerCalibration` and `UpperCalibration`; each interval has `LowerLevel`, `UpperLevel`, `LowerThreshold`, `UpperThreshold`, `LowerMiscoverageBound`, `UpperMiscoverageBound`, `Coverage` and closed ends |
+| CV+ | `CrossConformal.CvPlus(FoldReadings(Response, HeldOut, FoldOf, Predictions), assumptions, alpha)` → `CvPlusIntervals(Intervals, Alpha, Bounds)`; `CvPlusBounds` has `TrainingUnits`, `Folds`, `FoldSize`, `Level`, `Assumptions`, `Merged`, `OneFold`, `Tournament`, `Coverage`; `CvPlusBound(Value, Theorem, RequiredAssumptions, Applies)`; `CvPlusInterval(Case, Lower, Upper, Bounds)` has `WholeSpace`, `Empty`, `Width`, `Contains(y)`, `Coverage` |
 | The product | `DenseProduct.Multiply`, `Pack`, `FusedDot`; `PackedColumns` |
 
 ## Not built yet
 
 - A margin whose bounds read each ordering's own posterior, rather than the held draws reweighted, which needs a run per ordering.
-- CV+ with K folds, now with the `33665cf` proof contract. The merged-rank and fold-tournament bounds have different assumptions, and each bound applies under its own hypotheses.
 - Cross-conformal predictive distributions (slice 4's alternatives).
 - BASS's candidate seam for a direct functional fit's curves, and a whole new curve for the hierarchical P-spline (E17).
 - Candidates for a weighted BASS fit, which wait for such a fit to be reachable (slice 7's finding). `Bass.Fit` takes no observation model, and its models are the unweighted Gaussian and the noise laws, which read their own densities.
