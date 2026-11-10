@@ -361,7 +361,7 @@ internal sealed class BassDrawFit
         if (_block is null) return;
         BassGroupDraw[] groups = _block.Ordered(draw.Groups ?? throw new ArgumentException("A random-intercept fit's draw carries its named groups.", nameof(draw)));
         for (int k = 0; k < groups.Length; k++)
-            for (int i = 0; i < _cases; i++) fit[i] += groups[k].Effects[_block.Layout(k).GroupOf(i)];
+            for (int i = 0; i < _cases; i++) fit[i] += _block.Layout(k).Multiplier(i)*groups[k].Effects[_block.Layout(k).GroupOf(i)];
     }
 
     private void EvaluateTerms(BassDraw draw, Span<double> fit)

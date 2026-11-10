@@ -18,6 +18,7 @@ public sealed class ComparativeSweep
 
     internal static readonly SweptClaim[] Claims =
     [
+        .. RandomSlopesQualificationTests.Claims,
         new("AdaptiveKernelTests.AdaptiveBurn_InEnsemble", DataSeed: 41, ChainSeeds: [5], (d, c) =>
         {
             var r = AdaptiveKernelTests.AdaptiveAgainstFixedKernel(d, c[0]);

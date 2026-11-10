@@ -69,26 +69,38 @@ public sealed record BassConfig
     public IReadOnlyList<BassRandomIntercept>? RandomIntercepts
     {
         get => _randomIntercepts;
-        init => _randomIntercepts = value is null ? null : new InterceptCollection(value);
+        init => _randomIntercepts = value is null ? null : new EffectCollection<BassRandomIntercept>(value);
     }
 
-    private readonly InterceptCollection? _randomIntercepts;
+    private readonly EffectCollection<BassRandomIntercept>? _randomIntercepts;
 
-    private sealed class InterceptCollection(IReadOnlyList<BassRandomIntercept> source)
-        : IReadOnlyList<BassRandomIntercept>, IEquatable<InterceptCollection>
+    /// <summary>Independent named slopes, each with an explicitly chosen input scale; null declares none.</summary>
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public IReadOnlyList<BassRandomSlope>? RandomSlopes
     {
-        private readonly BassRandomIntercept[] _items = source.ToArray();
+        get => _randomSlopes;
+        init => _randomSlopes = value is null ? null : new EffectCollection<BassRandomSlope>(value);
+    }
+
+    private readonly EffectCollection<BassRandomSlope>? _randomSlopes;
+    internal bool HasRandomEffects => (RandomIntercepts?.Count ?? 0) + (RandomSlopes?.Count ?? 0) > 0;
+    internal IBassRandomEffect[] EffectSpecifications => [.. RandomIntercepts ?? Array.Empty<BassRandomIntercept>(), .. RandomSlopes ?? Array.Empty<BassRandomSlope>()];
+
+    private sealed class EffectCollection<T>(IReadOnlyList<T> source)
+        : IReadOnlyList<T>, IEquatable<EffectCollection<T>>
+    {
+        private readonly T[] _items = source.ToArray();
         public int Count => _items.Length;
-        public BassRandomIntercept this[int index] => _items[index];
-        public IEnumerator<BassRandomIntercept> GetEnumerator() => ((IEnumerable<BassRandomIntercept>)_items).GetEnumerator();
+        public T this[int index] => _items[index];
+        public IEnumerator<T> GetEnumerator() => ((IEnumerable<T>)_items).GetEnumerator();
         System.Collections.IEnumerator System.Collections.IEnumerable.GetEnumerator() => GetEnumerator();
-        public bool Equals(InterceptCollection? other) => ReferenceEquals(this, other) || other is not null && _items.SequenceEqual(other._items);
-        public override bool Equals(object? other) => other is InterceptCollection collection && Equals(collection);
+        public bool Equals(EffectCollection<T>? other) => ReferenceEquals(this, other) || other is not null && _items.SequenceEqual(other._items);
+        public override bool Equals(object? other) => other is EffectCollection<T> collection && Equals(collection);
         public override int GetHashCode()
         {
             var hash = new HashCode();
             hash.Add(Count);
-            foreach (BassRandomIntercept item in _items) hash.Add(item);
+            foreach (T item in _items) hash.Add(item);
             return hash.ToHashCode();
         }
     }
@@ -204,13 +216,18 @@ public sealed record BassConfig
         }
 
         CheckRandomIntercepts(RandomIntercepts);
+        CheckRandomSlopes(RandomSlopes);
         if (RandomIntercepts is { Count: > 0 } && Noise is not null)
             throw Bad("RandomIntercepts", "take no Noise: blocks are integrated by whitening under unit weights, and a noise's latent weights move each sweep; not built");
+        if (RandomSlopes is { Count: > 0 } && Noise is not null)
+            throw Bad("RandomSlopes", "take no Noise: moving row weights arrive in slice 4");
         for (int k = 0; k < (RandomIntercepts?.Count ?? 0); k++)
         {
             if (RandomIntercepts![k].ScalePrior is not null && Sampling?.FlatHistogram is not null)
                 throw Bad($"RandomIntercepts[{k}].ScalePrior", "takes no Sampling.FlatHistogram: its weights and WHAM read the rung laws of a marginal that the drawn s moves, which is not gated; take Sampling.Tempering or Sampling.Smc, or hold s");
         }
+        if (RandomSlopes?.Any(s => s.ScalePrior is not null) == true && Sampling?.FlatHistogram is not null)
+            throw Bad("RandomSlopes.ScalePrior", "takes no Sampling.FlatHistogram: its weights read a marginal that the drawn s moves; take Sampling.Tempering or Sampling.Smc, or hold s");
 
         BassSampling run = Sampling ?? throw Bad("Sampling", "is missing");
         if (run.Chains < 1) throw Bad("Sampling.Chains", "must be at least 1");
@@ -375,6 +392,24 @@ public sealed record BassConfig
                 if (!path.Add(next)) throw Bad("RandomIntercepts", $"parent groupings form a cycle at '{next}'");
                 next = parent;
             }
+        }
+    }
+
+    internal static void CheckRandomSlopes(IReadOnlyList<BassRandomSlope>? blocks)
+    {
+        if (blocks is null) return;
+        var names = new HashSet<(string Grouping, string Input)>();
+        for (int k = 0; k < blocks.Count; k++)
+        {
+            string field = $"RandomSlopes[{k}]";
+            BassRandomSlope block = blocks[k] ?? throw Bad(field, "is null");
+            if (string.IsNullOrWhiteSpace(block.Grouping)) throw Bad($"{field}.Grouping", "must name a grouping");
+            if (string.IsNullOrWhiteSpace(block.Input)) throw Bad($"{field}.Input", "must name a continuous predictor");
+            if (!names.Add((block.Grouping, block.Input))) throw Bad(field, "duplicates a grouping/input pair");
+            if (block.InputScale is not (RandomSlopeScale.Unit or RandomSlopeScale.Standardized)) throw Bad($"{field}.InputScale", "is not a known scale");
+            if (!(block.Scale > 0) || !double.IsFinite(block.Scale)) throw Bad($"{field}.Scale", "must be positive and finite");
+            if (block.ScalePrior is { } prior && (!(prior.Scale > 0) || !double.IsFinite(prior.Scale)))
+                throw Bad($"{field}.ScalePrior.Scale", "must be positive and finite");
         }
     }
 

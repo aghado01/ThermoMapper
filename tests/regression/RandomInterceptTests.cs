@@ -554,7 +554,7 @@ public sealed class RandomInterceptTests(ITestOutputHelper output)
         Assert.Equal(block.ToJson(), BassConfig.FromJson(block.ToJson()).ToJson());
         Assert.Equal(block, BassConfig.FromJson(block.ToJson()));
         Assert.NotEqual(Bass.Fingerprint(plain, data), Bass.Fingerprint(block, grouped));
-        Assert.Contains("only random intercepts read", Assert.Throws<ArgumentException>(() => BassModel.Create(plain, grouped)).Message);
+        Assert.Contains("only random effects read", Assert.Throws<ArgumentException>(() => BassModel.Create(plain, grouped)).Message);
         Assert.Contains("has no data grouping", Assert.Throws<ArgumentException>(() => BassModel.Create(block, data)).Message);
         Assert.Contains("RandomIntercepts[0].Scale", Assert.Throws<ArgumentException>(() => (block with { RandomIntercepts = [new BassRandomIntercept("g", 0.0)] }).Validate()).Message);
         Assert.Contains("take no Noise", Assert.Throws<ArgumentException>(() => (block with { Noise = BassNoise.StudentT(5) }).Validate()).Message);

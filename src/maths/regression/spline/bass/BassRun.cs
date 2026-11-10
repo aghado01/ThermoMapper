@@ -323,6 +323,7 @@ internal sealed class BassEnsemble : IEnsembleModel<BassState>
         _options.Cancellation.ThrowIfCancellationRequested();
         if (run.Ladder is { } ladder) ladder.Step();
         else run.Chain!.Step();
+        if (run.Chain is { } chain) _options.SweepObserver?.Invoke(chain);
         if (run.Structure.History is { Learning: true } history) history.Record(run.Current.Terms);
         long done = Interlocked.Increment(ref _sweeps);
         if (_options.Progress is { } progress && done % _options.ProgressInterval == 0)

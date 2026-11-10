@@ -76,7 +76,7 @@ public sealed record BassGroupScalePrior(double Scale = 1.0)
 /// <param name="ParentGrouping">Within-parent centring's parent data grouping; absent under observation centring.</param>
 public sealed record BassRandomIntercept(string Grouping, double Scale, RandomInterceptConvention Convention = RandomInterceptConvention.ObservationCentred,
                                          [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] BassGroupScalePrior? ScalePrior = null,
-                                         [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] string? ParentGrouping = null);
+                                         [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] string? ParentGrouping = null) : IBassRandomEffect;
 
 /// <summary>
 /// A random-intercept block on one data set (E21), integrated out. With Z the cases' level indicators over the L observed levels, D = ZᵀZ
@@ -387,7 +387,8 @@ public sealed class BassGroupScaleBlock : IBlock<ReversibleJumpChain<BassState>>
         _group = group;
         _prior = blocks.Specifications[group].ScalePrior
                  ?? throw new ArgumentException("The group scale's step needs a drawn scale (RandomIntercepts[].ScalePrior).", nameof(model));
-        _name = blocks.Count == 1 ? "group scale" : $"group scale {blocks.Specifications[group].Grouping}";
+        _name = blocks.Count == 1 ? "group scale" : $"group scale {blocks.Specifications[group].Grouping}"
+            + (blocks.Layout(group).Input is { } input ? $" on {input}" : "");
     }
 
     /// <inheritdoc/>

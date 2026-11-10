@@ -60,6 +60,23 @@ The sweep updates each drawn ln s_k separately after τ. Its information is ½ t
 
 When prediction explicitly supplies observed parent and child labels, their pair must agree with the fitted nesting relation. This check also applies to mean surfaces and parents used only for centring. Omitted group columns and levels placed at the population keep their existing readings; crossed groupings impose no pairing restriction.
 
+## Independent random slopes (slice 3)
+
+`BassConfig.RandomSlopes` is an owned, ordered collection of `BassRandomSlope` records. Each names a data grouping and a continuous predictor, and must explicitly choose its input units, including in JSON:
+
+```csharp
+RandomIntercepts = [new("site", 1, ScalePrior: new())],
+RandomSlopes = [new("site", "temperature", RandomSlopeScale.Standardized, 0.5, new())],
+```
+
+`Unit` uses the same fitted [0, 1] transform as the terms. `Standardized` then subtracts the training mean and divides by the training root mean square deviation, so the training mean is zero and the mean square is one. Prediction reuses those training quantities. The slope scale is in units of σ per unit of the chosen input scale.
+
+For slope contribution zᵢb_g, the convention is observation centring against both the level and the population slope: Σᵢ zᵢb_g(i) = 0 and Σᵢ zᵢ²b_g(i) = 0. Its prior is the isotropic normal projected onto this level-space constraint kernel. The two rows are factored jointly to reveal their numerical rank; dependent constraints remove one direction, while two independent constraints on two observed levels fix both effects at zero. These slope coefficients are independent of every intercept block in the prior; their posterior conditionals are generally coupled.
+
+A retained `BassGroupDraw` has `Input = null` for an intercept, and the predictor name for a slope. Records resolve by `(Grouping, Input)` rather than collection position, so a grouping may carry an intercept and several independent slopes. Known-level prediction adds z·b_g. A population case integrates an independent slope with variance σ²s_b²z². Pointwise training readings and conditional mean surfaces use the same fitted input scale. Scalar Gaussian responses are supported; correlated intercept/slope priors and moving noise weights belong to later work.
+
+The rescaling contract distinguishes exact and nonexact arithmetic. Full sampled-scale chains at ×4 (and the retained ×8 control) match bit for bit. At ×3.7, primitive calculations and held-scale fits use a 10⁻¹² relative bound; full sampled-scale chains require every proposal decision to agree and continuous draws within 10⁻⁹ relative. Positive scalars use their own symmetric magnitude; vector coordinates near zero use the paired vectors' measured RMS, with no absolute floor. [The slice report](../../issues/regression/bass/ridge-random-slopes-report.md) gives the comparison formula, qualification receipts and the separate recovery limitations.
+
 ## Migrating a saved one-group configuration
 
 Replace the singular object and supply its data grouping's name:

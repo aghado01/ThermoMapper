@@ -156,7 +156,7 @@ public sealed class RandomEffectsMultipleQualificationTests(ITestOutputHelper ou
         {
             var first = new CategoricalPredictor("first", [.. Enumerable.Range(0, cases).Select(i => i % levels)], [.. Enumerable.Range(0, levels).Select(i => $"A{i}")]);
             var second = new CategoricalPredictor("second", [.. Enumerable.Range(0, cases).Select(i => i / levels % levels)], [.. Enumerable.Range(0, levels).Select(i => $"B{i}")]);
-            RandomEffectsBlock block = RandomEffectsBlock.Of([first, second], [new("first", 0.8), new("second", 1.3)]);
+            RandomEffectsBlock block = RandomEffectsBlock.Of([first, second], [new BassRandomIntercept("first", 0.8), new BassRandomIntercept("second", 1.3)]);
             var reading = block;
             for (int j = 0; j < 100; j++) reading = block.At(0, 0.5 + j % 17 * 0.03);
             var watch = Stopwatch.StartNew();

@@ -42,6 +42,9 @@ public sealed record BassRunOptions
     /// <summary>The sweeps, over every chain, between progress reports.</summary>
     public int ProgressInterval { get; init; } = 1000;
 
+    // Read-only qualification observation after each untempered sweep, including burn-in. Not part of run identity.
+    internal Action<BassChain>? SweepObserver { get; init; }
+
     /// <summary>
     /// The bound P split between <paramref name="units"/> chains (or SMC's replicates) and the work within each: min(units, P)
     /// units at once, and ⌊P / that⌋ workers, at least 1, left for each one's rungs (or particles).

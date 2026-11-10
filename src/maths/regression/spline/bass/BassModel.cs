@@ -52,7 +52,7 @@ public sealed class BassModel
         ArgumentNullException.ThrowIfNull(observation);
         if (config.Noise is { } declared && !(observation is VarianceMeanMixture mixture && mixture.Noise == declared))
             throw new ArgumentException("The config declares its noise, so the observation model is the config's.", nameof(observation));
-        if (data.Response is MultiOutputResponse && (observation is not GaussianObservation || config.RandomIntercepts is { Count: > 0 }))
+        if (data.Response is MultiOutputResponse && (observation is not GaussianObservation || config.HasRandomEffects))
             throw new ArgumentException("Several outputs take Gaussian noise without random intercepts in E34's slice 1; the noise by row and the random "
                                         + "intercepts (decisions 6 and 7) arrive in slice 4.", nameof(config));
         if (config.Sampling.Births?.Residual is not null && data.Response is not ScalarResponse)
@@ -64,15 +64,16 @@ public sealed class BassModel
         WorkingResponse working = observation.Working(data.Response);
         WorkingResponse baseReading = working;
         RandomEffectsBlock? block = null;
-        if (config.RandomIntercepts is { Count: > 0 } intercepts)
+        if (config.HasRandomEffects)
         {
+            IBassRandomEffect[] effects = config.EffectSpecifications;
             config.Validate();
             if (observation is not GaussianObservation)
                 throw new ArgumentException("Random intercepts currently take scalar Gaussian noise; moving row weights arrive in slice 4.", nameof(observation));
-            block = RandomEffectsBlock.Of(data.Groupings, intercepts);
+            block = RandomEffectsBlock.Of(data.Groupings, effects, data.Predictors.OfType<ContinuousPredictor>().ToArray());
             // A drawn s moves the whitened reading, so the priors read the response's own moments, frozen, as a fit without the block
             // reads them: a prior that read the reading at s would read a parameter (PriorsReadResponse).
-            if (intercepts.Any(s => s.ScalePrior is not null) && working.Reference is null && working.IsResponseItself && working.Latents is null)
+            if (effects.Any(s => s.ScalePrior is not null) && working.Reference is null && working.IsResponseItself && working.Latents is null)
                 baseReading = new WorkingResponse(working.Response, output: working.Output, meaning: working.Meaning, priorGram: working.PriorGram,
                     reference: config.Intercept == GPriorCentre.Zero
                     ? BassPriorReference.About(working.Values, 0.0)

@@ -298,7 +298,7 @@ internal static class BassDirectPrediction
                 BassGroupDraw[] effects = model.RandomEffects!.Ordered(draw.Groups!);
                 for (int k = 0; k < groups.Length; k++)
                     for (int i = 0; i < n; i++)
-                        if (groups[k][i] >= 0) f[i * m] += effects[k].Effects[groups[k][i]];
+                        if (groups[k][i] >= 0) f[i * m] += model.RandomEffects!.Layout(k).Multiplier(caseInputs, i)*effects[k].Effects[groups[k][i]];
             }
             for (int i = 0; i < n; i++)
                 for (int l = 0; l < m; l++) latent[d, i, l] = f[i * m + l];
@@ -326,7 +326,8 @@ internal static class BassDirectPrediction
                     BassGroupDraw[] effects = model.RandomEffects!.Ordered(pooled[selected[d]].Groups!);
                     for (int k = 0; k < groups.Length; k++)
                         for (int i = 0; i < n; i++)
-                            if (groups[k][i] < 0) predictive[d, i, 0] += sd * effects[k].Scale * Normal.SampleStandard(rng);
+                            if (groups[k][i] < 0) predictive[d, i, 0] += sd * effects[k].Scale * Normal.SampleStandard(rng)
+                                * model.RandomEffects!.Layout(k).Multiplier(caseInputs, i);
                 }
             }
         }
@@ -349,7 +350,7 @@ internal static class BassDirectPrediction
                     double[][] u = intercepts.MeanEffects(model, structure, a);
                     for (int k = 0; k < groups.Length; k++)
                         for (int i = 0; i < n; i++)
-                            if (groups[k][i] >= 0) f[i * m] += u[k][groups[k][i]];
+                            if (groups[k][i] >= 0) f[i * m] += intercepts.Layout(k).Multiplier(caseInputs, i)*u[k][groups[k][i]];
                 }
                 for (int i = 0; i < n; i++)
                     for (int l = 0; l < m; l++) meanSurface[i, l] += weights[d] * f[i * m + l];

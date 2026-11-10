@@ -179,7 +179,7 @@ public static class BassComponents
         for (int k = 0; k < r; k++)
         {
             BassConfig config = configs[k] ?? throw new ArgumentException($"Config {k} is null.", nameof(configs));
-            if (config.RandomIntercepts is { Count: > 0 })
+            if (config.HasRandomEffects)
                 throw new ArgumentException($"Config {k} declares random intercepts; a decomposition's components share predictors and no grouping, and a block across components is not built (E21).", nameof(configs));
             seeded[k] = config with { Sampling = config.Sampling with { MasterSeed = seeds[k] } };
         }

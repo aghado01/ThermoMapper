@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.Linq;
+using System.Text.Json.Serialization;
 using Maths.Distributions;
 using Maths.LinAlg;
 using Maths.Rng;
@@ -8,12 +9,17 @@ using Maths.Rng;
 namespace Maths.Regression.Spline.Bass;
 
 /// <summary>One retained grouping's scale and effects, in the observed levels' declaration order.</summary>
-public sealed record BassGroupDraw(string Grouping, double Scale, double[] Effects);
+public sealed record BassGroupDraw(string Grouping, double Scale, double[] Effects)
+{
+    /// <summary>The slope's continuous input; absent for an intercept block.</summary>
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public string? Input { get; init; }
+}
 
-/// <summary>Named Gaussian intercept blocks on one set of cases, jointly integrated through their row covariance.</summary>
+/// <summary>Named Gaussian intercept and slope blocks, jointly integrated through their row covariance.</summary>
 public sealed class RandomEffectsBlock
 {
-    private readonly IReadOnlyList<BassRandomIntercept> _specifications;
+    private readonly IReadOnlyList<IBassRandomEffect> _specifications;
     private readonly IReadOnlyList<CategoricalPredictor> _groupings;
     private readonly RandomEffectGrouping[] _layouts;
     private readonly RandomEffectGeometry? _geometry;
@@ -21,7 +27,7 @@ public sealed class RandomEffectsBlock
     private readonly RandomInterceptBlock? _single;
     private readonly double[] _scales;
 
-    private RandomEffectsBlock(BassRandomIntercept[] specifications, CategoricalPredictor[] groupings, RandomEffectGrouping[] layouts,
+    private RandomEffectsBlock(IBassRandomEffect[] specifications, CategoricalPredictor[] groupings, RandomEffectGrouping[] layouts,
                                RandomEffectGeometry? geometry, RandomInterceptBlock? single = null)
     {
         _specifications = Array.AsReadOnly(specifications);
@@ -29,17 +35,21 @@ public sealed class RandomEffectsBlock
         _layouts = layouts;
         _geometry = geometry;
         _scales = [.. specifications.Select(s => s.Scale)];
-        if (geometry is null) _single = single ?? RandomInterceptBlock.Of(groupings[0], specifications[0]);
+        if (geometry is null) _single = single ?? RandomInterceptBlock.Of(groupings[0], (BassRandomIntercept)specifications[0]);
         else _general = geometry.At(_scales);
         LogScalePrior = _single?.LogScalePrior ?? specifications.Sum(s => s.ScalePrior is { } prior ? prior.LogDensity(s.Scale) + Math.Log(s.Scale) : 0);
     }
 
-    public static RandomEffectsBlock Of(IReadOnlyList<CategoricalPredictor> groupings, IReadOnlyList<BassRandomIntercept> specifications)
+    public static RandomEffectsBlock Of(IReadOnlyList<CategoricalPredictor> groupings, IReadOnlyList<IBassRandomEffect> specifications,
+                                        IReadOnlyList<ContinuousPredictor>? predictors = null)
     {
         ArgumentNullException.ThrowIfNull(groupings);
         ArgumentNullException.ThrowIfNull(specifications);
-        BassConfig.CheckRandomIntercepts(specifications);
-        if (specifications.Count == 0) throw new ArgumentException("At least one random-intercept block is required.", nameof(specifications));
+        if (specifications.Any(s => s is not (BassRandomIntercept or BassRandomSlope)))
+            throw new ArgumentException("Each effect must be a declared intercept or slope.", nameof(specifications));
+        BassConfig.CheckRandomIntercepts(specifications.OfType<BassRandomIntercept>().ToArray());
+        BassConfig.CheckRandomSlopes(specifications.OfType<BassRandomSlope>().ToArray());
+        if (specifications.Count == 0) throw new ArgumentException("At least one random-effect block is required.", nameof(specifications));
         var available = new Dictionary<string, CategoricalPredictor>(StringComparer.Ordinal);
         foreach (CategoricalPredictor grouping in groupings)
         {
@@ -50,11 +60,13 @@ public sealed class RandomEffectsBlock
         var layouts = new RandomEffectGrouping[specifications.Count];
         for (int k = 0; k < specifications.Count; k++)
         {
-            BassRandomIntercept spec = specifications[k];
+            IBassRandomEffect spec = specifications[k];
             if (!available.TryGetValue(spec.Grouping, out CategoricalPredictor? grouping))
-                throw new ArgumentException($"Random-intercept block '{spec.Grouping}' has no data grouping.", nameof(specifications));
+                throw new ArgumentException($"Random-effect block '{spec.Grouping}' has no data grouping.", nameof(specifications));
             columns[k] = grouping;
-            if (spec.Convention == RandomInterceptConvention.ObservationCentred)
+            if (spec is BassRandomSlope slope)
+                layouts[k] = RandomEffectGrouping.Slope(grouping, RandomSlopeInput.Of(slope, predictors));
+            else if (((BassRandomIntercept)spec).Convention == RandomInterceptConvention.ObservationCentred)
                 layouts[k] = RandomEffectGrouping.ObservationCentred(grouping);
             else
             {
@@ -63,12 +75,12 @@ public sealed class RandomEffectsBlock
                 layouts[k] = RandomEffectGrouping.WithinParent(grouping, parent);
             }
         }
-        RandomEffectGeometry? geometry = specifications.Count == 1 && specifications[0].Convention == RandomInterceptConvention.ObservationCentred
+        RandomEffectGeometry? geometry = specifications.Count == 1 && specifications[0] is BassRandomIntercept { Convention: RandomInterceptConvention.ObservationCentred }
             ? null : new RandomEffectGeometry(layouts);
         return new RandomEffectsBlock(specifications.ToArray(), columns, layouts, geometry);
     }
 
-    public IReadOnlyList<BassRandomIntercept> Specifications => _specifications;
+    public IReadOnlyList<IBassRandomEffect> Specifications => _specifications;
     public IReadOnlyList<CategoricalPredictor> Groupings => _groupings;
     public ReadOnlyMemory<double> Scales => _scales;
     public int Cases => _layouts[0].Cases;
@@ -81,13 +93,18 @@ public sealed class RandomEffectsBlock
 
     public RandomEffectsBlock At(ReadOnlySpan<double> scales)
     {
-        if (scales.Length != Count) throw new ArgumentException("Give one scale per random-intercept block.", nameof(scales));
+        if (scales.Length != Count) throw new ArgumentException("Give one scale per random-effect block.", nameof(scales));
         if (scales.SequenceEqual(_scales)) return this;
-        var specifications = new BassRandomIntercept[Count];
+        var specifications = new IBassRandomEffect[Count];
         for (int k = 0; k < Count; k++)
         {
             if (!(scales[k] > 0) || !double.IsFinite(scales[k])) throw new ArgumentOutOfRangeException(nameof(scales));
-            specifications[k] = _specifications[k] with { Scale = scales[k] };
+            specifications[k] = _specifications[k] switch
+            {
+                BassRandomIntercept intercept => intercept with { Scale = scales[k] },
+                BassRandomSlope slope => slope with { Scale = scales[k] },
+                _ => throw new InvalidOperationException("Unknown effect declaration."),
+            };
         }
         return new RandomEffectsBlock(specifications, _groupings.ToArray(), _layouts, _geometry, _single?.At(scales[0]));
     }
@@ -108,17 +125,17 @@ public sealed class RandomEffectsBlock
     {
         ArgumentNullException.ThrowIfNull(groups);
         if (groups.Count != Count) throw new ArgumentException("The draw must carry every configured grouping.", nameof(groups));
-        var named = new Dictionary<string, BassGroupDraw>(StringComparer.Ordinal);
+        var named = new Dictionary<(string Grouping, string? Input), BassGroupDraw>();
         foreach (BassGroupDraw group in groups)
         {
             ArgumentNullException.ThrowIfNull(group);
-            if (!named.TryAdd(group.Grouping, group)) throw new ArgumentException($"The draw repeats grouping '{group.Grouping}'.", nameof(groups));
+            if (!named.TryAdd((group.Grouping, group.Input), group)) throw new ArgumentException($"The draw repeats grouping '{group.Grouping}' on input '{group.Input}'.", nameof(groups));
         }
         var ordered = new BassGroupDraw[Count];
         for (int k = 0; k < Count; k++)
         {
             string name = _specifications[k].Grouping;
-            if (!named.TryGetValue(name, out BassGroupDraw? group)) throw new ArgumentException($"The draw has no effects for grouping '{name}'.", nameof(groups));
+            if (!named.TryGetValue((name, _layouts[k].Input), out BassGroupDraw? group)) throw new ArgumentException($"The draw has no effects for grouping '{name}' on input '{_layouts[k].Input}'.", nameof(groups));
             if (group.Effects is null || group.Effects.Length != _layouts[k].Levels)
                 throw new ArgumentException($"The draw's effects do not match the observed levels of '{name}'.", nameof(groups));
             if (!(group.Scale > 0) || !double.IsFinite(group.Scale)) throw new ArgumentException($"The draw's scale of '{name}' must be finite and positive.", nameof(groups));
@@ -138,7 +155,7 @@ public sealed class RandomEffectsBlock
     {
         ArgumentNullException.ThrowIfNull(working);
         if (!working.IsUnweighted || working.Latents is not null || !working.Offset.IsEmpty || working.Response is not ScalarResponse)
-            throw new ArgumentException("Random intercepts whiten a scalar response under unit weights, with no offset or latents.", nameof(working));
+            throw new ArgumentException("Random effects whiten a scalar response under unit weights, with no offset or latents.", nameof(working));
         return WhitenResponse(working);
     }
 
@@ -169,7 +186,7 @@ public sealed class RandomEffectsBlock
     {
         double[][] effects = DrawEffects(model, terms, coefficients, sigma2, rng);
         var groups = new BassGroupDraw[Count];
-        for (int k = 0; k < Count; k++) groups[k] = new BassGroupDraw(_specifications[k].Grouping, _scales[k], effects[k]);
+        for (int k = 0; k < Count; k++) groups[k] = new BassGroupDraw(_specifications[k].Grouping, _scales[k], effects[k]) { Input = _layouts[k].Input };
         return groups;
     }
 
@@ -197,9 +214,11 @@ internal sealed class RandomEffectGrouping
     private readonly string[] _levels;
     private readonly string[]? _parentLevels;
     private readonly HashSet<string>? _observedParents;
+    private readonly RandomSlopeInput? _slope;
 
-    private RandomEffectGrouping(CategoricalPredictor grouping, CategoricalPredictor? parent)
+    private RandomEffectGrouping(CategoricalPredictor grouping, CategoricalPredictor? parent, RandomSlopeInput? slope = null)
     {
+        _slope = slope;
         Name = grouping.Name;
         ParentName = parent?.Name;
         _observed = new int[grouping.Levels.Count];
@@ -236,6 +255,20 @@ internal sealed class RandomEffectGrouping
         {
             _parentLevels = [.. parents.Select(p => parent.Levels[p])];
             _observedParents = new HashSet<string>(_parentLevels, StringComparer.Ordinal);
+        }
+
+        if (slope is not null)
+        {
+            if (slope.Values.Length != Cases) throw new ArgumentException("Slope input and grouping have different case counts.", nameof(slope));
+            var first = new double[Levels];
+            var second = new double[Levels];
+            for (int i = 0; i < Cases; i++)
+            {
+                first[_group[i]] += slope.Values[i];
+                second[_group[i]] += slope.Values[i]*slope.Values[i];
+            }
+            _contrast = Complement([first, second]);
+            return;
         }
 
         // The constraint rows have disjoint supports. Build the Euclidean complement of each count vector separately.
@@ -285,8 +318,52 @@ internal sealed class RandomEffectGrouping
         return new RandomEffectGrouping(grouping, parent);
     }
 
+    public static RandomEffectGrouping Slope(CategoricalPredictor grouping, RandomSlopeInput input) => new(grouping, null, input);
+
+    private static double[,] Complement(double[][] constraints)
+    {
+        int levels = constraints[0].Length;
+        var matrix = new double[constraints.Length,levels];
+        for (int k = 0; k < constraints.Length; k++)
+            for (int g = 0; g < levels; g++) matrix[k,g] = constraints[k][g];
+        ThinSvdResult factor = ThinSvd.Decompose(matrix);
+        // Reveal rank jointly: independently normalizing a nearly zero row would turn rounding noise into a constraint.
+        List<double[]> rows = [.. factor.RightVectors.Take(factor.NumericalRank)];
+        var basis = new List<double[]>();
+        for (int g = 0; g < levels && basis.Count < levels-rows.Count; g++)
+        {
+            var column = new double[levels];
+            column[g] = 1;
+            for (int pass = 0; pass < 2; pass++)
+            {
+                RemoveRows(column, rows);
+                RemoveRows(column, basis);
+            }
+            double norm = Math.Sqrt(PairwiseSum.Dot(column, column));
+            if (norm <= 1e-12) continue;
+            for (int h = 0; h < levels; h++) column[h] /= norm;
+            basis.Add(column);
+        }
+        if (basis.Count != levels-rows.Count) throw new InvalidOperationException("The slope's constraint complement lost rank.");
+        var result = new double[levels,basis.Count];
+        for (int g = 0; g < levels; g++)
+            for (int j = 0; j < basis.Count; j++) result[g,j] = basis[j][g];
+        return result;
+    }
+
+    private static void RemoveRows(double[] column, List<double[]> rows)
+    {
+        for (int pass = 0; pass < 2; pass++)
+            foreach (double[] row in rows)
+            {
+                double dot = PairwiseSum.Dot(column, row);
+                for (int g = 0; g < column.Length; g++) column[g] -= dot*row[g];
+            }
+    }
+
     public string Name { get; }
     public string? ParentName { get; }
+    public string? Input => _slope?.Name;
     public int Cases => _group.Length;
     public int Levels => _counts.Length;
     public int Dimension => _contrast.GetLength(1);
@@ -297,6 +374,8 @@ internal sealed class RandomEffectGrouping
     public string? ParentLevelOf(int g) => _parentLevels?[g];
     public bool IsObservedParentLevel(string level) => _observedParents?.Contains(level) ?? false;
     public double Contrast(int g, int k) => _contrast[g, k];
+    public double Multiplier(int row) => _slope?.Values[row] ?? 1;
+    public double Multiplier(CaseInputs inputs, int row) => _slope?.At(inputs, row) ?? 1;
 
     public double[] Effects(ReadOnlySpan<double> coordinates)
     {
@@ -325,13 +404,13 @@ internal sealed class RandomEffectGeometry
         ArgumentNullException.ThrowIfNull(groups[0]);
         _groups = Array.AsReadOnly(groups.ToArray());
         Cases = groups[0].Cases;
-        var names = new HashSet<string>(StringComparer.Ordinal);
+        var names = new HashSet<(string Grouping, string? Input)>();
         _offsets = new int[groups.Count + 1];
         for (int k = 0; k < groups.Count; k++)
         {
             ArgumentNullException.ThrowIfNull(groups[k]);
             if (groups[k].Cases != Cases) throw new ArgumentException("The groupings have different case counts.", nameof(groups));
-            if (!names.Add(groups[k].Name)) throw new ArgumentException($"Grouping '{groups[k].Name}' is declared twice.", nameof(groups));
+            if (!names.Add((groups[k].Name, groups[k].Input))) throw new ArgumentException($"Grouping '{groups[k].Name}' on input '{groups[k].Input}' is declared twice.", nameof(groups));
             _offsets[k + 1] = _offsets[k] + groups[k].Dimension;
         }
         _coordinateGroup = new int[_offsets[^1]];
@@ -341,7 +420,7 @@ internal sealed class RandomEffectGeometry
             {
                 int column = _offsets[k] + j;
                 _coordinateGroup[column] = k;
-                for (int i = 0; i < Cases; i++) columns[i, column] = groups[k].Contrast(groups[k].GroupOf(i), j);
+                for (int i = 0; i < Cases; i++) columns[i, column] = groups[k].Multiplier(i)*groups[k].Contrast(groups[k].GroupOf(i), j);
             }
         ThinSvdResult factor = ThinSvd.Decompose(columns);
         Rank = factor.NumericalRank;
@@ -353,6 +432,7 @@ internal sealed class RandomEffectGeometry
         for (int a = 0; a < groups.Count; a++)
             for (int b = a + 1; b < groups.Count; b++)
             {
+                if (groups[a].Input is not null || groups[b].Input is not null) continue;
                 if (groups[a].ParentName == groups[b].Name || groups[b].ParentName == groups[a].Name) continue;
                 for (int g = 0; g < groups[a].Levels; g++)
                     for (int h = 0; h < groups[b].Levels; h++)
