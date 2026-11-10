@@ -1,6 +1,6 @@
 # The conformal layer: E16's build (chip brief)
 
-Date: 2026-11-06. Status: slices 0, 1 and 2 built 2026-11-06, the fallback signal read from the inflated set on 2026-11-07 at the user's call, with a split-half comparator measured beside it; on 2026-11-07 both became diagnostics on every set, with no trigger, at the user's decision; slice 3, the split form, built 2026-11-07 at the user's go-ahead (reports below); slice 4 read on 2026-11-07 (the in-sample predictive CDF is not monotone in y where the draws' predictives separate) and built on 2026-11-08 at the user's decision: the split form's predictive distribution by default, the full step's as an opt-in with its flag; CB-3's per-unit bounds built on 2026-11-08 at the user's order, a slice between 4 and 5, and the margin made opt-in the same day at the user's decision; the next wave approved by the user on 2026-11-08 ("Yes, start it", relayed by the main session): slice 5, the other engines' candidate seams, built the same day (report below) and verified by the main session; E35 as slice 6, its plan below, built the same day (6·0 to 6c). On 2026-11-08 the user asked for E16 to be completed after E35 (relayed by the main session): its plan, slices 7 onward, is below. E35 was verified by the main session on 2026-11-09. Slice 7 landed in e3071cf after those three calls. Slice 8 landed in 331f9e7 and awaits coordinating review. Written at the user's request from [E16](bass/extensions-brief.md#conformal-bayes-the-consumer) and the [conformal Lean contract](../../lean/Protolemmata/Conformal/conformal-lemmas.md).
+Date: 2026-11-06. Status: slices 0, 1 and 2 built 2026-11-06, the fallback signal read from the inflated set on 2026-11-07 at the user's call, with a split-half comparator measured beside it; on 2026-11-07 both became diagnostics on every set, with no trigger, at the user's decision; slice 3, the split form, built 2026-11-07 at the user's go-ahead (reports below); slice 4 read on 2026-11-07 (the in-sample predictive CDF is not monotone in y where the draws' predictives separate) and built on 2026-11-08 at the user's decision: the split form's predictive distribution by default, the full step's as an opt-in with its flag; CB-3's per-unit bounds built on 2026-11-08 at the user's order, a slice between 4 and 5, and the margin made opt-in the same day at the user's decision; the next wave approved by the user on 2026-11-08 ("Yes, start it", relayed by the main session): slice 5, the other engines' candidate seams, built the same day (report below) and verified by the main session; E35 as slice 6, its plan below, built the same day (6·0 to 6c). On 2026-11-08 the user asked for E16 to be completed after E35 (relayed by the main session): its plan, slices 7 onward, is below. E35 was verified by the main session on 2026-11-09. Slice 7 landed in e3071cf after those three calls. Slice 8 landed in 331f9e7 and received coordinating sign-off on the combined archive 69398e4. The proved part of slice 9 landed in 3fbe41b following Lean 4084c55 and awaits coordinating review. Written at the user's request from [E16](bass/extensions-brief.md#conformal-bayes-the-consumer) and the [conformal Lean contract](../../lean/Protolemmata/Conformal/conformal-lemmas.md).
 
 ## Why
 
@@ -211,6 +211,92 @@ Under "Reports" below, newest first, per slice: what landed by commit; the gates
 ## Reports
 
 Newest first.
+
+### Slice 9 — The proved cross-fitted forms and asymmetric CQR
+
+Built on `main` on 2026-11-09 in `3fbe41b`, following Claude's `4084c55` proof contract. The implemented rules are `JackRefuses`, `AcceptsPairwise`, `jackknifePlus_coverage`, `crossFit_coverage` and `cqrAsym_coverage_half`. [Lean handoff](../../lean/Protolemmata/Conformal/conformal-chip-brief.md) · [Statistical choices and API](../../docs/Maths/ConformalPrediction.md#cross-fitted-sets-and-asymmetric-cqr-slice-9)
+
+- `CrossConformal.JackknifePlus` reduces leave-one-out prediction rows to closed endpoints. With n training units and m = n + 1, it takes k = ⌊αm⌋ and the k-th smallest lower and k-th largest upper endpoints. At k = 0 it returns the whole line.
+- `CrossConformal.Pairwise` accepts when the candidate is strictly stranger than fewer than m − k held-out units, under each unit's own fit. Ties count for neither side. Its `ConformalSet.Form` is `CrossFitted`, and the result reports the applicable finite bound. `CrossConformal.Density` reduces paired held-out and candidate seams one fit at a time. Draws align within each fit and can differ between fits.
+- For both forms the reported bound is 1 − (2k − 1)/m at positive k, clipped at zero, and 1 at zero k. It requires exchangeable units and fitting symmetry under relabeling, including a relabeling of the fit's randomness. The library reads supplied fits and cannot certify their symmetry. Fixed index-order sampling with a fixed seed falls outside the supplied contract.
+- `SplitConformal.AsymmetricQuantiles` calibrates y − q_lo and q_hi − y separately at α/2. It returns both tail thresholds, levels and miscoverage bounds, with total bound 1 − (k_lo + k_hi)/m. A zero tail level gives an infinite endpoint.
+
+**Finite controls.** The public pairwise rule is checked on all 760 comparison patterns through m = 4, with ties and infinite scores, and 400 seeded matrices through m = 30. Public jackknife+ intervals agree with 74,068 strict endpoint comparisons across dyadic response scales near 10⁻¹⁵⁰ to 10¹⁵⁰. The 960 permutation cases exercise a stable fit, a sample-size-unstable fit and a shared priority order carried with the units. The pairwise residual set stays inside the jackknife+ interval. A symmetric regular-tournament fixture attains the finite bound, including coverage 17/20 at n = 19, α = 0.1. Asymmetric CQR agrees with 23,554 count comparisons, including 178 empty intervals. Its controls cover 360 exact-tail orderings with distinct scores, ties, crossing quantiles, unseen strata and small calibration sets.
+
+**Opt-in coverage and width.** On 500 independent replications of the skewed, heteroscedastic truth used by the earlier conformal checks, 2,500 held-out units gave the readings below. The regression model is a symmetric least-squares line and omits that truth's curvature and skew. Standard errors use replication means, accounting for the five test units sharing their training data.
+
+| Form | Measured coverage | SE | Mean width | Proved lower bound |
+|---|---:|---:|---:|---:|
+| Jackknife+, n = 39 | 0.89960 | 0.00644 | 4.9382 | 0.825 |
+| Pairwise residual, n = 39 | 0.89960 | 0.00644 | 4.9381 | 0.825 |
+| Split residual, 20 training + 19 calibration | 0.90280 | 0.00621 | 5.6187 | 0.900 |
+
+Each uses the same total budget of 39 observed units. Jackknife+ uses 39 leave-one-out fits. The pairwise width is read on a grid of spacing 0.025. No set reached a grid edge. These near-nominal coverages are measurements of this fixture.
+
+On a separate 500-replication fixture with both quantile fits shifted below the truth and 39 calibration units, asymmetric CQR missed below at 0.05480 (SE 0.00463) and above at 0.05000 (SE 0.00463). Coverage was 0.89520 (SE 0.00619), with width 5.4924. Its bounds are 0.05 per tail and 0.90 total. Symmetric CQR on the same fits missed above at 0.10200 (SE 0.00622), with width 9.3126.
+
+**Cost.** Indicative Release calibrated thread-cycle readings, best of three, with density matrices built before the clock. At n = 1,000 and G = 200, the paired density reductions retain one fold's matrices at a time. The table separates the measured cost of simple linear leave-one-out fitting from the reductions.
+
+| Draws per fit | n-fold density reductions and ranks | Per candidate | Split density | 1,000 linear refits and predictions | Jackknife+ endpoint sort |
+|---:|---:|---:|---:|---:|---:|
+| 1,000 | 1,902.32 ms | 9,511.58 µs | 13.77 ms | 195.99 ms | 0.7253 ms |
+| 4,000 | 10,820.69 ms | 54,103.44 µs | 91.62 ms | 349.16 ms | 0.3646 ms |
+
+A separate opt-in cost case (`bccb661`) measured calibration plus 200 test intervals at n = 1,000. Symmetric CQR took 1.3005 ms and asymmetric CQR 2.0863 ms, best of three on the same cycle clock, with the quantile readings built before the clock. [CQR cost receipt](../../artifacts/chip-e16-s9/results/cqr-cost.trx)
+
+**Qualification flags and receipts.** The main run uses a clean archive of `3fbe41b`, including the committed E34 runtime work in `41727ac`. The focused contract filter passed 11/11. The selected classes plus pinned tier passed 843/843, both with `BASS_QUALIFICATION=0`. The opt-in filter passed 26/26 with `BASS_QUALIFICATION=1` and `BASS_COST_CLOCK=cycles`.
+
+The whole regression assembly passed 2,846/2,846 on that archive with qualification off, including the slow tier, at three xUnit workers. The test duration was 26 minutes. The other main runs used two workers.
+
+All 15 gated cases in that filter printed their measurement bodies. These were `HeldOutCoverageAndWidth_JackknifePairwiseAndSplit` (1), `AsymmetricCqr_EachTailUnderWrongQuantileFits` (1), `DensityCost_ThousandFitsAgainstTheSplit` (2), and the existing `ConformalCostTests` cost rows (11). The supplementary CQR cost body ran and printed separately, with the same opt-in flags. In flag-off runs those cases return early and still count as passed.
+
+The supplemental test commits keep the production source of `3fbe41b`. The `a983e1a` CQR filter passed 4/4, then its selected class plus pinned tier passed 40/40. The `bccb661` opt-in CQR cost filter passed 1/1, then its selected class plus pinned tier passed 41/41. All reported counters have zero failures and zero skipped.
+
+| Receipt | File |
+|---|---|
+| Focused contracts on `3fbe41b` | [11/11](../../artifacts/chip-e16-s9/results/focused-3fbe41b.trx) |
+| Commit selection on `3fbe41b` | [843/843](../../artifacts/chip-e16-s9/results/commit-3fbe41b.trx) |
+| Opt-in measurements on `3fbe41b` | [26/26](../../artifacts/chip-e16-s9/results/qualification-3fbe41b.trx) |
+| Whole regression assembly on `3fbe41b` | [2,846/2,846](../../artifacts/chip-e16-s9/results/slice-3fbe41b.trx) |
+| CQR rounding regression | [4/4](../../artifacts/chip-e16-s9/results/rounding.trx) |
+| Rounding commit selection | [40/40](../../artifacts/chip-e16-s9/results/commit-a983e1a.trx) |
+| Supplementary CQR cost | [1/1](../../artifacts/chip-e16-s9/results/cqr-cost.trx) |
+| CQR cost commit selection | [41/41](../../artifacts/chip-e16-s9/results/commit-bccb661.trx) |
+
+The commit receipt also shows new methods missing from the older slow profile. The two E21 drawn-scale ladder and SMC methods sum to 310.0 s and 191.4 s respectively. E34's multi-output SMC enumeration method adds 53.8 s. These observations went to the coordinator for the next slow-tier refresh. The older listed warm-start method ran through the selector's intentional pinned-tier override.
+
+**Commands.** Builds and tests used Release, below-normal priority and disabled build-server reuse. The main archive excludes `r`, following the handoff convention.
+
+```powershell
+$run = Join-Path (Get-Location) 'artifacts/chip-e16-s9'
+$src = Join-Path $run 'snap-3fbe41b'
+$build = Join-Path $run 'head-build'
+$results = Join-Path $run 'results'
+$project = Join-Path $src 'tests/Maths.Regression.Tests/Maths.Regression.Tests.csproj'
+(Get-Process -Id $PID).PriorityClass = 'BelowNormal'
+$env:MSBUILDDISABLENODEREUSE = '1'
+$env:DOTNET_PROCESSOR_COUNT = '2'
+$env:BASS_QUALIFICATION = '0'
+$env:BASS_COST_CLOCK = 'cycles'
+dotnet build $project -c Release "-p:ArtifactsRoot=$build/" --disable-build-servers -m:1
+$selection = @{ SourceRoot = $src; Commit = '3fbe41b'; ArtifactsRoot = $build; NoBuild = $true }
+dotnet test $project -c Release "-p:ArtifactsRoot=$build/" --no-build --disable-build-servers -m:1 --settings "$results/qualification.runsettings" --filter 'FullyQualifiedName~CrossConformalTests|FullyQualifiedName~AsymmetricCqrTests' --logger 'trx;LogFileName=focused-3fbe41b.trx' --results-directory $results
+./scripts/test-select.ps1 @selection -Scope Commit -Threads 2
+$env:BASS_QUALIFICATION = '1'
+$filter = 'FullyQualifiedName~CrossConformalTests|FullyQualifiedName~AsymmetricCqrTests|FullyQualifiedName~CrossConformalQualificationTests|FullyQualifiedName~ConformalCostTests'
+dotnet test $project -c Release "-p:ArtifactsRoot=$build/" --no-build --disable-build-servers -m:1 --settings "$results/qualification.runsettings" --filter $filter --logger 'trx;LogFileName=qualification-3fbe41b.trx' --results-directory $results
+$env:BASS_QUALIFICATION = '0'
+$env:DOTNET_PROCESSOR_COUNT = '3'
+./scripts/test-select.ps1 @selection -Scope Slice -Threads 3
+```
+
+**Numerical choices.** At subnormal α, α/2 can round to zero. Its ranks remain zero at every supported sample size, so the implementation uses the smallest positive representable tail level there. If finite responses and quantiles produce an overflowing CQR conformity difference, the new asymmetric path asks for a common rescaling instead of constructing misleading endpoints.
+
+**Handoff wording corrected.** The implemented bounds are B_asym = 1 − 2⌊αm/2⌋/m and B_sym = 1 − ⌊αm⌋/m. Their relation is B_asym − (1 − α) ∈ [0, 2/m), while B_asym − B_sym is 0 or 1/m. At α = 0.1 and m = 31 the bounds are 29/31 and 28/31. The asymmetric bound's excess above nominal 0.9 is 0.035484, greater than 1/31. The handoff's prose claimed an excess of at most 1/m above nominal. The coordinator has the correction for the Lean notes' owner. The exact level statements and the proved lower bound are unaffected.
+
+The noninteger αm case is covered by `Rounding_NonintegerAlphaTimesM_AgainstBothFiniteBounds` in `a983e1a`. Its snapshot retains the production source of `3fbe41b`. [Supplemental CQR receipt](../../artifacts/chip-e16-s9/results/rounding.trx)
+
+**Next contract.** Claude committed the CV+ proof in `33665cf` while this increment's whole-assembly run was in progress. The [handoff](../../lean/Protolemmata/Conformal/conformal-chip-brief.md#2026-11-09--slice-9s-follow-up-cv-proved-both-bounds) provides both merged-rank and fold-tournament bounds. The merged-rank bound admits a fit without symmetry that excludes its held-out fold and test unit. The tournament bound needs a symmetric fit and the larger exchangeability structure supplied by i.i.d. data. A bound is available only when its own assumptions apply. CV+ is the separate implementation after coordinating verification of this increment. Cross-conformal predictive distributions remain a separate question.
 
 ### Slice 8 — Grid-free split quantiles and refined set boundaries
 
