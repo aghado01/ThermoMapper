@@ -1,0 +1,9 @@
+src/maths/regression/spline/bass/BassRandomEffects.cs
+src/maths/regression/spline/bass/posterior/BassPredictionInputs.cs
+src/maths/regression/spline/bass/BassConfig.cs
+tests/regression/RandomEffectsNestingPredictionTests.cs
+tests/regression/RandomEffectsConfigurationTests.cs
+tests/regression/RandomInterceptTests.cs
+tests/regression/RandomEffectsTests.cs
+docs/Maths/RandomEffects.md
+issues/regression/bass/ridge-multiple-groupings-report.md

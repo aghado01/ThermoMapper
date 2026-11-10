@@ -1,0 +1,30 @@
+[
+  {
+    "Path": "src/maths/regression/spline/bass/BassRandomEffects.cs",
+    "Sha256": "FB5D30BEFC48ED61D33D798826B706EF7D7659238CA0ACE13898BF804224B4C3"
+  },
+  {
+    "Path": "src/maths/regression/spline/bass/posterior/BassPredictionInputs.cs",
+    "Sha256": "7E59D422E6CB6627D02FA6AABBC83A8390769DBA33225D21131266D0F8CAF599"
+  },
+  {
+    "Path": "src/maths/regression/spline/bass/BassConfig.cs",
+    "Sha256": "C45B04DB846EF59A305E01826B3FB175EE5A4AB1BE28A947033B92E38A2ABD3C"
+  },
+  {
+    "Path": "tests/regression/RandomEffectsNestingPredictionTests.cs",
+    "Sha256": "6490EAC047DE9569BE766EAA29A6F7820F3589D8F7C48C89E7FBD5DA39B74ACE"
+  },
+  {
+    "Path": "tests/regression/RandomEffectsConfigurationTests.cs",
+    "Sha256": "1311572C0873B24FD8D8E4FA3068365F1350D85547814716448EDE44938264D8"
+  },
+  {
+    "Path": "tests/regression/RandomInterceptTests.cs",
+    "Sha256": "61DDD9C33EFE391470A15B58503C566A3A5945574628BF53FEB6C4BCE4A9203A"
+  },
+  {
+    "Path": "tests/regression/RandomEffectsTests.cs",
+    "Sha256": "D311C1B84F9FD0C5EF81DBD433CC0542D006CD7EA4F53326BCD788CA6360E1D1"
+  }
+]

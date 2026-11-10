@@ -1,0 +1,20 @@
+Follow-up commit: 5ff02437dd49fbb0a90a27200246cafb88a0fa85 Tested source base: eeda1fd6c39e67515a1c74c1c3e124206b0f6c6f Branch: main Scoped working tree equals follow-up commit. Full live status:
+ M docs/Maths/ConformalPrediction.md
+ M docs/Maths/MultiOutput.md
+ M issues/geometry/gemini-abliteralus-thermomapper.md
+ M issues/regression/conformal-layer-brief.md
+ M src/maths/regression/conformal/CrossConformal.cs
+ M src/maths/regression/spline/bass/sensitivity/BassActiveSubspace.cs
+ M src/maths/regression/spline/bass/sensitivity/BassSensitivity.cs
+?? "issues/regression/discussion/Lean 4 Formalization Audit Report.md"
+?? issues/regression/discussion/astra-checkpoint-review.md
+?? issues/regression/discussion/opus-open-items-11082026.md
+?? src/maths/regression/conformal/CvPlus.cs
+?? src/maths/regression/spline/bass/posterior/BassMultiOutput.cs
+?? src/maths/regression/spline/bass/posterior/BassOutputPrediction.cs
+?? src/maths/regression/spline/bass/sensitivity/BassMultiOutputSubspaces.cs
+?? tests/regression/CvPlusQualificationTests.cs
+?? tests/regression/CvPlusTests.cs
+?? tests/regression/MultiOutputJointPredictiveQualificationTests.cs
+?? tests/regression/MultiOutputReadoutCostTests.cs
+?? tests/regression/MultiOutputReadoutTests.cs

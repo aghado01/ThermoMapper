@@ -59,7 +59,7 @@ These conditional averages price the available exits as s and τ move. The passa
 
 ## Receipts and reproduction
 
-The [saved receipts](../../../artifacts/e21-cold-start-qualification/) contain `diagnostics.trx`, `commit.trx`, both runsettings files and the source baseline. The diagnostic snapshot held `69398e4` plus the new test file. Builds used Release, below-normal priority, `DOTNET_PROCESSOR_COUNT=2`, `MSBUILDDISABLENODEREUSE=1`, `-m:1` and one xUnit worker. With `BASS_QUALIFICATION=1`, all eight diagnostic bodies passed in seven seconds.
+The [saved receipts](../../../artifacts/e21-cold-start-qualification/) ([tracked inputs](../receipts/e21-cold-start-qualification/)) contain `diagnostics.trx`, `commit.trx`, both runsettings files and the source baseline. The diagnostic snapshot held `69398e4` plus the new test file. Builds used Release, below-normal priority, `DOTNET_PROCESSOR_COUNT=2`, `MSBUILDDISABLENODEREUSE=1`, `-m:1` and one xUnit worker. With `BASS_QUALIFICATION=1`, all eight diagnostic bodies passed in seven seconds.
 
 ```powershell
 dotnet test <snapshot>/tests/Maths.Regression.Tests/Maths.Regression.Tests.csproj -c Release -p:ArtifactsRoot=<private-build-root> -m:1 --disable-build-servers --settings <diagnostics.runsettings> --filter FullyQualifiedName~RandomEffectsColdStartDiagnosticsTests --logger 'trx;LogFileName=diagnostics.trx' --results-directory <receipts>

@@ -1,0 +1,86 @@
+{
+  "task": "E21 slice 2 — named crossed/nested Gaussian random intercepts",
+  "branch": "main",
+  "pushAllowed": false,
+  "subagentsAllowed": false,
+  "frozenSourceBaseline": "41727ac",
+  "sourceManifest": "artifacts/e21-ridge-s2-qualification/source-manifest.json",
+  "qualification": {
+    "passed": 66,
+    "total": 66,
+    "enabled": true,
+    "receipt": "combined-qualified.trx"
+  },
+  "heldDrawnSlots": {
+    "passed": 1,
+    "total": 1,
+    "receipt": "held-drawn-slots.trx"
+  },
+  "commitTier": {
+    "passed": 2037,
+    "total": 2037,
+    "receipt": "Commit.trx",
+    "threads": 1
+  },
+  "sliceTier": {
+    "status": "passed",
+    "passed": 2874,
+    "total": 2874,
+    "threads": 2,
+    "qualification": false,
+    "receipt": "Slice.trx"
+  },
+  "workingRoot": "D:/aghado01/ThermoMapper/artifacts/chip-ridge-s2",
+  "receiptRoot": "D:/aghado01/ThermoMapper/artifacts/e21-ridge-s2-qualification",
+  "sourceRoot": "D:/aghado01/ThermoMapper/artifacts/chip-ridge-s2/combined-snap",
+  "buildRoot": "D:/aghado01/ThermoMapper/artifacts/chip-ridge-s2/build-combined",
+  "report": "issues/regression/bass/ridge-multiple-groupings-report.md",
+  "coordinator": {
+    "hostId": "local",
+    "threadId": "01a1c210-1f3d-7f50-abe7-17ddbbc52b54",
+    "twoWayMessagingHumanAuthorized": true
+  },
+  "scopedPaths": [
+    "src/maths/regression/spline/bass/BassModel.cs",
+    "src/maths/regression/spline/bass/BassObservationModel.cs",
+    "src/maths/regression/spline/bass/BassTarget.cs",
+    "src/maths/regression/spline/bass/BassSweep.cs",
+    "src/maths/regression/spline/bass/BassPriorSampler.cs",
+    "src/maths/regression/spline/bass/BassResolved.cs",
+    "src/maths/regression/spline/bass/Bass.cs",
+    "src/maths/regression/spline/bass/BassFit.cs",
+    "src/maths/regression/spline/bass/BassPointwise.cs",
+    "src/maths/regression/spline/bass/posterior/BassPrediction.cs",
+    "src/maths/regression/spline/bass/posterior/BassPredictionInputs.cs",
+    "src/maths/regression/spline/bass/posterior/BassGradient.cs",
+    "src/maths/regression/spline/bass/output/BassComponents.cs",
+    "src/maths/regression/spline/bass/presentation/BassTrainingFit.cs",
+    "tests/regression/BassRunTests.cs",
+    "tests/regression/RandomInterceptTests.cs",
+    "tests/regression/RandomInterceptQualificationTests.cs",
+    "tests/regression/RandomEffectsTests.cs",
+    "tests/regression/RandomEffectsColdStartDiagnosticsTests.cs",
+    "src/maths/regression/spline/bass/BassData.cs",
+    "src/maths/regression/spline/bass/BassConfig.cs",
+    "src/maths/regression/spline/bass/BassState.cs",
+    "src/maths/regression/spline/bass/BassRandomIntercepts.cs",
+    "src/maths/regression/spline/bass/BassRandomEffects.cs",
+    "tests/regression/RandomEffectsConfigurationTests.cs",
+    "tests/regression/RandomEffectsWhiteningTests.cs",
+    "tests/regression/RandomEffectsMultipleReference.cs",
+    "tests/regression/RandomEffectsMultipleTests.cs",
+    "tests/regression/RandomEffectsMultipleLawTests.cs",
+    "tests/regression/RandomEffectsMultipleQualificationTests.cs",
+    "docs/Maths/RandomEffects.md",
+    "docs/Maths/BayesianRegression.md",
+    "issues/regression/bass/ridge-blocks-brief.md",
+    "issues/regression/bass/ridge-multiple-groupings-report.md"
+  ],
+  "remaining": [
+    "Coordinator independent verification before any slice 3 work."
+  ],
+  "commit": "eeda1fd6c39e67515a1c74c1c3e124206b0f6c6f",
+  "status": "committed; all required gates passed",
+  "temporaryWorkingRootRemoved": true,
+  "handoffSent": true
+}

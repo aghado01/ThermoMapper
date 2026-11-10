@@ -1,0 +1,41 @@
+Branch: main Head: dd2532c8d9d11181fd11fc7576c500f716e4e644 Slice 3 remains uncommitted; strict nonexact drawn-scale rescaling gate fails. Full status:
+ M docs/Maths/ConformalPrediction.md
+ M docs/Maths/MultiOutput.md
+ M docs/Maths/RandomEffects.md
+ M issues/geometry/gemini-abliteralus-thermomapper.md
+ M issues/regression/bass/extensions-brief.md
+ M issues/regression/conformal-layer-brief.md
+ M issues/regression/coordination-handoff-2026-11-09.md
+ M lean/Protolemmata/Conformal/conformal-chip-brief.md
+ M lean/Protolemmata/Conformal/conformal-lemmas.md
+ M lean/Protolemmata/Conformal/conformal-searches.py
+ M src/maths/regression/spline/bass/BassConfig.cs
+ M src/maths/regression/spline/bass/BassModel.cs
+ M src/maths/regression/spline/bass/BassPointwise.cs
+ M src/maths/regression/spline/bass/BassRandomEffects.cs
+ M src/maths/regression/spline/bass/BassRandomIntercepts.cs
+ M src/maths/regression/spline/bass/BassResolved.cs
+ M src/maths/regression/spline/bass/output/BassComponents.cs
+ M src/maths/regression/spline/bass/posterior/BassPrediction.cs
+ M src/maths/regression/spline/bass/sensitivity/BassActiveSubspace.cs
+ M src/maths/regression/spline/bass/sensitivity/BassSensitivity.cs
+ M tests/regression/ComparativeSweep.cs
+ M tests/regression/RandomEffectsMultipleQualificationTests.cs
+ M tests/regression/RandomInterceptTests.cs
+?? issues/regression/bass/ridge-random-slopes-report.md
+?? "issues/regression/discussion/Lean 4 Formalization Audit Report.md"
+?? issues/regression/discussion/astra-checkpoint-review.md
+?? issues/regression/discussion/opus-open-items-11082026.md
+?? src/maths/regression/spline/bass/BassRandomSlopes.cs
+?? src/maths/regression/spline/bass/posterior/BassMultiOutput.cs
+?? src/maths/regression/spline/bass/posterior/BassOutputPrediction.cs
+?? src/maths/regression/spline/bass/sensitivity/BassMultiOutputSubspaces.cs
+?? tests/regression/MultiOutputJointPredictiveQualificationTests.cs
+?? tests/regression/MultiOutputReadoutCostTests.cs
+?? tests/regression/MultiOutputReadoutTests.cs
+?? tests/regression/RandomSlopesLawTests.cs
+?? tests/regression/RandomSlopesPredictionTests.cs
+?? tests/regression/RandomSlopesQualificationTests.cs
+?? tests/regression/RandomSlopesReference.cs
+?? tests/regression/RandomSlopesTests.cs
+Staged paths:

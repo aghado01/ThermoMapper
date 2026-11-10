@@ -13,7 +13,7 @@ E21, 2026-11-09. Commission: [ridge-blocks-brief.md](ridge-blocks-brief.md), dec
 
 ## Evidence so far
 
-Builds use isolated archives plus only this slice's files. [The receipts](../../../artifacts/e21-ridge-s3-qualification/) record `baseline.txt` for the historical absolute-tolerance trials and `accepted-contract-baseline.txt` for the final contract, including the newer readout/conformal commits. The archives exclude R. Runs use Release, below-normal priority, `DOTNET_PROCESSOR_COUNT=2`, one xUnit thread and disabled build servers. The final private build root is `artifacts/chip-ridge-blocks/slice3/accepted`; a pre-existing neighboring snapshot was left untouched.
+Builds use isolated archives plus only this slice's files. [The receipts](../../../artifacts/e21-ridge-s3-qualification/) ([tracked inputs](../receipts/e21-ridge-s3-qualification/)) record `baseline.txt` for the historical absolute-tolerance trials and `accepted-contract-baseline.txt` for the final contract, including the newer readout/conformal commits. The archives exclude R. Runs use Release, below-normal priority, `DOTNET_PROCESSOR_COUNT=2`, one xUnit thread and disabled build servers. The final private build root is `artifacts/chip-ridge-blocks/slice3/accepted`; a pre-existing neighboring snapshot was left untouched.
 
 The historical blocker handoff, `handoff-focused.trx`, had 86 passing cases and two absolute-tolerance failures, with no skips. The revised prediction/rescaling batch, `accepted-rescaling.trx`, passes all 24 cases under the user-approved contract:
 

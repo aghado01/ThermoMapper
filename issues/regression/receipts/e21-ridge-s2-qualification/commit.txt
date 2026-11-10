@@ -1,0 +1,43 @@
+commit eeda1fd6c39e67515a1c74c1c3e124206b0f6c6f
+Author:     Azriel Ghadooshahy <azriel.ghadooshahy@gmail.com>
+AuthorDate: Mon Nov 9 16:56:05 2026 -0800
+Commit:     Azriel Ghadooshahy <azriel.ghadooshahy@gmail.com>
+CommitDate: Mon Nov 9 16:56:05 2026 -0800
+
+    feat(bass): support named crossed and nested intercept blocks
+
+ docs/Maths/BayesianRegression.md                   |   6 +-
+ docs/Maths/RandomEffects.md                        |  56 ++-
+ issues/regression/bass/ridge-blocks-brief.md       |   6 +-
+ .../bass/ridge-multiple-groupings-report.md        |  80 ++++
+ src/maths/regression/spline/bass/Bass.cs           |   2 +-
+ src/maths/regression/spline/bass/BassConfig.cs     |  57 ++-
+ src/maths/regression/spline/bass/BassData.cs       |  21 +-
+ src/maths/regression/spline/bass/BassFit.cs        |   2 +-
+ src/maths/regression/spline/bass/BassModel.cs      |  26 +-
+ .../regression/spline/bass/BassObservationModel.cs |  10 +-
+ src/maths/regression/spline/bass/BassPointwise.cs  |  15 +-
+ .../regression/spline/bass/BassPriorSampler.cs     |  11 +-
+ .../regression/spline/bass/BassRandomEffects.cs    | 527 +++++++++++++++++++++
+ .../regression/spline/bass/BassRandomIntercepts.cs |  76 ++-
+ src/maths/regression/spline/bass/BassResolved.cs   |  38 +-
+ src/maths/regression/spline/bass/BassState.cs      |  17 +-
+ src/maths/regression/spline/bass/BassSweep.cs      |   7 +-
+ src/maths/regression/spline/bass/BassTarget.cs     |   2 +-
+ .../spline/bass/output/BassComponents.cs           |   2 +-
+ .../spline/bass/posterior/BassGradient.cs          |   2 +-
+ .../spline/bass/posterior/BassPrediction.cs        |  30 +-
+ .../spline/bass/posterior/BassPredictionInputs.cs  |  13 +-
+ .../spline/bass/presentation/BassTrainingFit.cs    |   2 +-
+ tests/regression/BassRunTests.cs                   |   8 +-
+ .../RandomEffectsColdStartDiagnosticsTests.cs      |   4 +-
+ .../regression/RandomEffectsConfigurationTests.cs  |  76 +++
+ tests/regression/RandomEffectsMultipleLawTests.cs  | 120 +++++
+ .../RandomEffectsMultipleQualificationTests.cs     | 173 +++++++
+ tests/regression/RandomEffectsMultipleReference.cs | 133 ++++++
+ tests/regression/RandomEffectsMultipleTests.cs     | 156 ++++++
+ tests/regression/RandomEffectsTests.cs             |  80 ++--
+ tests/regression/RandomEffectsWhiteningTests.cs    | 407 ++++++++++++++++
+ .../RandomInterceptQualificationTests.cs           |  14 +-
+ tests/regression/RandomInterceptTests.cs           |  58 +--
+ 34 files changed, 2008 insertions(+), 229 deletions(-)

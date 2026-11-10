@@ -1,0 +1,22 @@
+[
+  {
+    "Path": "src/maths/regression/conformal/CrossConformal.cs",
+    "Blob": "2b6530bdbdff96cd0df5cb09642b8b25c41f300f",
+    "Sha256": "BC8CFE14B83B8EAAC9656B553417F3361C250B0C33BE9C9FDE673567EDD81747"
+  },
+  {
+    "Path": "src/maths/regression/conformal/CvPlus.cs",
+    "Blob": "f06c885070b23a1eb6aa7dc8097bfb0e3eaaed99",
+    "Sha256": "34BAC9C0450D88235A4D5FBB772D037E6D660CFE00A33A58D0CA562F4323E0C0"
+  },
+  {
+    "Path": "tests/regression/CvPlusTests.cs",
+    "Blob": "ecc0e767eac7b9c93ee05ea9e1ff496345a89af8",
+    "Sha256": "26C9118D5016D3065B0F69E1878267C20654B15C8957FC18BF6A4A18720B290A"
+  },
+  {
+    "Path": "tests/regression/CvPlusQualificationTests.cs",
+    "Blob": "02fee76458a60ec7b05c5fd618b629ba448ee5d3",
+    "Sha256": "F2E42D48F1ABC4DE83B9B69ED65871BD5101A0FC0AB5D5DBBE0DD5DC0C897944"
+  }
+]

@@ -1,0 +1,36 @@
+diff --git a/tests/regression/MultiOutputLawTests.cs b/tests/regression/MultiOutputLawTests.cs
+--- a/tests/regression/MultiOutputLawTests.cs
++++ b/tests/regression/MultiOutputLawTests.cs
+@@ -200,10 +200,10 @@ public sealed class MultiOutputLawTests(ITestOutputHelper output)
+         InverseWishart sigmaPrior = prior.Resolved.Outputs!.Prior;
+ 
+         // The prior's draw: (structure, τ) from the reference sampler, Σ from its prior, A | Σ ~ MN(0, (τ·blockdiag(N, G_c))⁻¹, Σ).
+-        (BassState S, double[,] Sigma, double[,] F) Draw()
++        (BassState S, double[,] Sigma, double[,] F) Draw(BassState? held = null, double[,]? heldSigma = null)
+         {
+-            BassState state = sampler.DrawState(rng).State;
+-            double[,] sigma = sigmaPrior.Sample(rng);
++            BassState state = held ?? sampler.DrawState(rng).State;
++            double[,] sigma = heldSigma ?? sigmaPrior.Sample(rng);
+             BassDesign d = prior.NewDesign();
+             Assert.Null(d.Load(state.Terms));
+             int m = d.Count;
+@@ -236,8 +236,10 @@ public sealed class MultiOutputLawTests(ITestOutputHelper output)
+ 
+         (BassState S, double[,] Sigma, double[,] F) theta = Draw();
+         var successive = new double[steps][];
++        double cut = Math.Log(Gamma.ShapeRate(0.5, GewekeN / 2.0).Quantile(0.01));
+         for (int t = 0; t < steps; t++)
+         {
++            if (t % 50 == 49) theta = Draw(theta.S, theta.Sigma);
+             double[,] y = Observe(theta.F, theta.Sigma, rng);
+             BassModel model = BassModel.Create(GewekeConfig, GewekeData(y));
+             var chain = new BassChain(model, theta.S.Terms, theta.S.LogTau, new Xoshiro256PlusPlus(rng.NextInt(int.MaxValue)), new Xoshiro256PlusPlus(rng.NextInt(int.MaxValue)));
+@@ -252,6 +254,7 @@ public sealed class MultiOutputLawTests(ITestOutputHelper output)
+         for (int g = 0; g < GewekeNames.Length; g++)
+         {
+             double[] a = [.. marginal.Select(r => r[g])], b = [.. successive.Select(r => r[g])];
++            if (g == 1) output.WriteLine($"ln tau lower 1%: {(double)b.Count(u => u < cut) / b.Length:F5}; q01 = {b.Order().ElementAt(steps / 100):F4}");
+             double meanA = a.Average(), varA = a.Sum(x => (x - meanA) * (x - meanA)) / (a.Length - 1);
+             double meanB = b.Average(), se = Math.Sqrt(varA / a.Length + Math.Pow(KhaosChainTests.BatchError(b, batches), 2));
+             double z = (meanA - meanB) / se;

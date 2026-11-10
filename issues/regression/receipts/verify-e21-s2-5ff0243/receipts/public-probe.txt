@@ -1,0 +1,1 @@
+Equivalent config and hash; input mutation isolated; A/A0 accepted; B/A0 rejected: Level 'A0' of 'child' belongs to parent level 'A' of 'parent', but case 0 gives 'B'. (Parameter 'cases')

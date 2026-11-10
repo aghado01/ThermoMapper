@@ -1,0 +1,738 @@
+[
+  {
+    "K": 2,
+    "N": 10,
+    "Rho": 0.0,
+    "Datasets": 400,
+    "ScaledCorrelation": {
+      "Mean": 0.9125,
+      "Half": 0.027726183077917094
+    },
+    "HwCorrelation": {
+      "Mean": 0.94,
+      "Half": 0.023302857290356763
+    },
+    "DeltaCorrelation": {
+      "Mean": 0.0275,
+      "Half": 0.016046516810647327
+    },
+    "ScaledJoint": {
+      "Mean": 0.94,
+      "Half": 0.023302857290356836
+    },
+    "HwJoint": {
+      "Mean": 0.945,
+      "Half": 0.022370045761428817
+    },
+    "DeltaJoint": {
+      "Mean": 0.005,
+      "Half": 0.006920957240353909
+    },
+    "ScaledCorrelationFlip": 0.0075,
+    "HwCorrelationFlip": 0.005,
+    "ScaledJointFlip": 0.0025,
+    "HwJointFlip": 0.005,
+    "ScaledIntervalWidth": 1.055268663839967,
+    "HwIntervalWidth": 1.007536096009166,
+    "ScaledBandWidth": 4.495692875103156,
+    "HwBandWidth": 4.531253297583325,
+    "CorrelationWidthRatio": {
+      "Mean": 0.9547673787098828,
+      "Half": 0.004391046355654466
+    },
+    "BandWidthRatio": {
+      "Mean": 1.0079098869669456,
+      "Half": 0.0016710501987791848
+    }
+  },
+  {
+    "K": 2,
+    "N": 10,
+    "Rho": 0.7,
+    "Datasets": 400,
+    "ScaledCorrelation": {
+      "Mean": 0.9325,
+      "Half": 0.02461761243714071
+    },
+    "HwCorrelation": {
+      "Mean": 0.9325,
+      "Half": 0.024617612437140703
+    },
+    "DeltaCorrelation": {
+      "Mean": 0.0,
+      "Half": 0.025960834198474857
+    },
+    "ScaledJoint": {
+      "Mean": 0.905,
+      "Half": 0.028771050264690328
+    },
+    "HwJoint": {
+      "Mean": 0.8975,
+      "Half": 0.029761086685498407
+    },
+    "DeltaJoint": {
+      "Mean": -0.0075,
+      "Half": 0.01094574338478727
+    },
+    "ScaledCorrelationFlip": 0.0025,
+    "HwCorrelationFlip": 0.0025,
+    "ScaledJointFlip": 0.0075,
+    "HwJointFlip": 0.005,
+    "ScaledIntervalWidth": 0.6635467740161056,
+    "HwIntervalWidth": 0.7577061951731772,
+    "ScaledBandWidth": 4.309172760556995,
+    "HwBandWidth": 4.2576645136018705,
+    "CorrelationWidthRatio": {
+      "Mean": 1.1419032159363436,
+      "Half": 0.017450359597036384
+    },
+    "BandWidthRatio": {
+      "Mean": 0.9880468364075365,
+      "Half": 0.0021317889370134563
+    }
+  },
+  {
+    "K": 2,
+    "N": 20,
+    "Rho": 0.0,
+    "Datasets": 400,
+    "ScaledCorrelation": {
+      "Mean": 0.9325,
+      "Half": 0.024617612437140713
+    },
+    "HwCorrelation": {
+      "Mean": 0.9625,
+      "Half": 0.018641704801190748
+    },
+    "DeltaCorrelation": {
+      "Mean": 0.03,
+      "Half": 0.016738483865191063
+    },
+    "ScaledJoint": {
+      "Mean": 0.935,
+      "Half": 0.02418979050988841
+    },
+    "HwJoint": {
+      "Mean": 0.94,
+      "Half": 0.023302857290356745
+    },
+    "DeltaJoint": {
+      "Mean": 0.005,
+      "Half": 0.006920957240353891
+    },
+    "ScaledCorrelationFlip": 0.0125,
+    "HwCorrelationFlip": 0.01,
+    "ScaledJointFlip": 0.0025,
+    "HwJointFlip": 0.005,
+    "ScaledIntervalWidth": 0.8045154418988499,
+    "HwIntervalWidth": 0.7788399720652276,
+    "ScaledBandWidth": 4.22008625671806,
+    "HwBandWidth": 4.259396138018801,
+    "CorrelationWidthRatio": {
+      "Mean": 0.9680857961246561,
+      "Half": 0.0018701764388434077
+    },
+    "BandWidthRatio": {
+      "Mean": 1.0093149473516476,
+      "Half": 0.0013191393705910533
+    }
+  },
+  {
+    "K": 2,
+    "N": 20,
+    "Rho": 0.7,
+    "Datasets": 400,
+    "ScaledCorrelation": {
+      "Mean": 0.9475,
+      "Half": 0.02188461367695287
+    },
+    "HwCorrelation": {
+      "Mean": 0.9475,
+      "Half": 0.021884613676952856
+    },
+    "DeltaCorrelation": {
+      "Mean": 0.0,
+      "Half": 0.023011819998625116
+    },
+    "ScaledJoint": {
+      "Mean": 0.93,
+      "Half": 0.025035721847413317
+    },
+    "HwJoint": {
+      "Mean": 0.93,
+      "Half": 0.025035721847413324
+    },
+    "DeltaJoint": {
+      "Mean": 0.0,
+      "Half": 0.006938324788966929
+    },
+    "ScaledCorrelationFlip": 0.005,
+    "HwCorrelationFlip": 0.0025,
+    "ScaledJointFlip": 0.0075,
+    "HwJointFlip": 0.0025,
+    "ScaledIntervalWidth": 0.4565457438308584,
+    "HwIntervalWidth": 0.5029396048460627,
+    "ScaledBandWidth": 4.112700554931165,
+    "HwBandWidth": 4.096045858220712,
+    "CorrelationWidthRatio": {
+      "Mean": 1.101619304619763,
+      "Half": 0.007531434624850046
+    },
+    "BandWidthRatio": {
+      "Mean": 0.9959504232102472,
+      "Half": 0.0015550620295065756
+    }
+  },
+  {
+    "K": 2,
+    "N": 6,
+    "Rho": 0.0,
+    "Datasets": 400,
+    "ScaledCorrelation": {
+      "Mean": 0.8725,
+      "Half": 0.03272709323448915
+    },
+    "HwCorrelation": {
+      "Mean": 0.96,
+      "Half": 0.019228049686248493
+    },
+    "DeltaCorrelation": {
+      "Mean": 0.0875,
+      "Half": 0.027726183077917094
+    },
+    "ScaledJoint": {
+      "Mean": 0.9025,
+      "Half": 0.029106872040808605
+    },
+    "HwJoint": {
+      "Mean": 0.9025,
+      "Half": 0.029106872040808605
+    },
+    "DeltaJoint": {
+      "Mean": 0.0,
+      "Half": 0.0074613555287995625
+    },
+    "ScaledCorrelationFlip": 0.0,
+    "HwCorrelationFlip": 0.0025,
+    "ScaledJointFlip": 0.0,
+    "HwJointFlip": 0.0025,
+    "ScaledIntervalWidth": 1.2063983027066871,
+    "HwIntervalWidth": 1.168598927224117,
+    "ScaledBandWidth": 4.768928748233893,
+    "HwBandWidth": 4.695235709543715,
+    "CorrelationWidthRatio": {
+      "Mean": 0.968667582341783,
+      "Half": 0.00995808897227515
+    },
+    "BandWidthRatio": {
+      "Mean": 0.9845472552473195,
+      "Half": 0.0021043889540199377
+    }
+  },
+  {
+    "K": 2,
+    "N": 6,
+    "Rho": 0.7,
+    "Datasets": 400,
+    "ScaledCorrelation": {
+      "Mean": 0.88,
+      "Half": 0.03188611312979862
+    },
+    "HwCorrelation": {
+      "Mean": 0.9475,
+      "Half": 0.021884613676952887
+    },
+    "DeltaCorrelation": {
+      "Mean": 0.0675,
+      "Half": 0.035776972403851706
+    },
+    "ScaledJoint": {
+      "Mean": 0.91,
+      "Half": 0.028080935656926008
+    },
+    "HwJoint": {
+      "Mean": 0.9,
+      "Half": 0.02943681905011951
+    },
+    "DeltaJoint": {
+      "Mean": -0.01,
+      "Half": 0.009763088381083222
+    },
+    "ScaledCorrelationFlip": 0.0075,
+    "HwCorrelationFlip": 0.0075,
+    "ScaledJointFlip": 0.0025,
+    "HwJointFlip": 0.0025,
+    "ScaledIntervalWidth": 0.7894740576984691,
+    "HwIntervalWidth": 0.9626198608212678,
+    "ScaledBandWidth": 4.6259513754600485,
+    "HwBandWidth": 4.459813068319545,
+    "CorrelationWidthRatio": {
+      "Mean": 1.219317913532923,
+      "Half": 0.03190646810148833
+    },
+    "BandWidthRatio": {
+      "Mean": 0.9640855915559681,
+      "Half": 0.0028628610486263655
+    }
+  },
+  {
+    "K": 2,
+    "N": 60,
+    "Rho": 0.0,
+    "Datasets": 400,
+    "ScaledCorrelation": {
+      "Mean": 0.9675,
+      "Half": 0.017399500900282933
+    },
+    "HwCorrelation": {
+      "Mean": 0.975,
+      "Half": 0.01531940633726759
+    },
+    "DeltaCorrelation": {
+      "Mean": 0.0075,
+      "Half": 0.008465751435544355
+    },
+    "ScaledJoint": {
+      "Mean": 0.9425,
+      "Half": 0.02284253112223292
+    },
+    "HwJoint": {
+      "Mean": 0.9425,
+      "Half": 0.02284253112223292
+    },
+    "DeltaJoint": {
+      "Mean": 0.0,
+      "Half": 0.0074613555287995625
+    },
+    "ScaledCorrelationFlip": 0.0025,
+    "HwCorrelationFlip": 0.005,
+    "ScaledJointFlip": 0.0025,
+    "HwJointFlip": 0.005,
+    "ScaledIntervalWidth": 0.4923670969407194,
+    "HwIntervalWidth": 0.4850984130809224,
+    "ScaledBandWidth": 4.09882957461454,
+    "HwBandWidth": 4.117802053424325,
+    "CorrelationWidthRatio": {
+      "Mean": 0.9852372672646886,
+      "Half": 0.0014388521308756994
+    },
+    "BandWidthRatio": {
+      "Mean": 1.0046287552249764,
+      "Half": 0.0012239496232404367
+    }
+  },
+  {
+    "K": 2,
+    "N": 60,
+    "Rho": 0.7,
+    "Datasets": 400,
+    "ScaledCorrelation": {
+      "Mean": 0.93,
+      "Half": 0.025035721847413282
+    },
+    "HwCorrelation": {
+      "Mean": 0.9275,
+      "Half": 0.02544459753778084
+    },
+    "DeltaCorrelation": {
+      "Mean": -0.0025,
+      "Half": 0.014716365159534905
+    },
+    "ScaledJoint": {
+      "Mean": 0.94,
+      "Half": 0.02330285729035677
+    },
+    "HwJoint": {
+      "Mean": 0.94,
+      "Half": 0.02330285729035677
+    },
+    "DeltaJoint": {
+      "Mean": 0.0,
+      "Half": 0.0074613555287995625
+    },
+    "ScaledCorrelationFlip": 0.005,
+    "HwCorrelationFlip": 0.0075,
+    "ScaledJointFlip": 0.0025,
+    "HwJointFlip": 0.0075,
+    "ScaledIntervalWidth": 0.2629588233578125,
+    "HwIntervalWidth": 0.27343061892720383,
+    "ScaledBandWidth": 3.978833741311809,
+    "HwBandWidth": 3.975822100876185,
+    "CorrelationWidthRatio": {
+      "Mean": 1.039822948078613,
+      "Half": 0.002226057957161273
+    },
+    "BandWidthRatio": {
+      "Mean": 0.9992430846244329,
+      "Half": 0.0013639728737285656
+    }
+  },
+  {
+    "K": 5,
+    "N": 15,
+    "Rho": 0.0,
+    "Datasets": 400,
+    "ScaledCorrelation": {
+      "Mean": 0.917749999999999,
+      "Half": 0.009078308154461822
+    },
+    "HwCorrelation": {
+      "Mean": 0.9609999999999994,
+      "Half": 0.006493174824247811
+    },
+    "DeltaCorrelation": {
+      "Mean": 0.04324999999999995,
+      "Half": 0.006362438156732472
+    },
+    "ScaledJoint": {
+      "Mean": 0.9375,
+      "Half": 0.023751731238840366
+    },
+    "HwJoint": {
+      "Mean": 0.95,
+      "Half": 0.02138535324312727
+    },
+    "DeltaJoint": {
+      "Mean": 0.0125,
+      "Half": 0.01090167378103332
+    },
+    "ScaledCorrelationFlip": 0.007500000000000003,
+    "HwCorrelationFlip": 0.0037500000000000007,
+    "ScaledJointFlip": 0.005,
+    "HwJointFlip": 0.0025,
+    "ScaledIntervalWidth": 0.9041956846653258,
+    "HwIntervalWidth": 0.8755482564064798,
+    "ScaledBandWidth": 8.458092488444224,
+    "HwBandWidth": 8.88332453513464,
+    "CorrelationWidthRatio": {
+      "Mean": 0.9683172251928526,
+      "Half": 0.0010857950684692564
+    },
+    "BandWidthRatio": {
+      "Mean": 1.050275171059123,
+      "Half": 0.00152346952338691
+    }
+  },
+  {
+    "K": 5,
+    "N": 15,
+    "Rho": 0.7,
+    "Datasets": 400,
+    "ScaledCorrelation": {
+      "Mean": 0.9257499999999992,
+      "Half": 0.010909702184495516
+    },
+    "HwCorrelation": {
+      "Mean": 0.9497499999999998,
+      "Half": 0.010793472442565528
+    },
+    "DeltaCorrelation": {
+      "Mean": 0.023999999999999994,
+      "Half": 0.010804199313554762
+    },
+    "ScaledJoint": {
+      "Mean": 0.925,
+      "Half": 0.025844677758119727
+    },
+    "HwJoint": {
+      "Mean": 0.9325,
+      "Half": 0.02461761243714071
+    },
+    "DeltaJoint": {
+      "Mean": 0.0075,
+      "Half": 0.00846575143554436
+    },
+    "ScaledCorrelationFlip": 0.006250000000000003,
+    "HwCorrelationFlip": 0.008250000000000004,
+    "ScaledJointFlip": 0.0,
+    "HwJointFlip": 0.005,
+    "ScaledIntervalWidth": 0.5218916964579802,
+    "HwIntervalWidth": 0.5950058467834228,
+    "ScaledBandWidth": 7.854148976544406,
+    "HwBandWidth": 7.950314119703534,
+    "CorrelationWidthRatio": {
+      "Mean": 1.1400944886106832,
+      "Half": 0.006906214869924002
+    },
+    "BandWidthRatio": {
+      "Mean": 1.012243865432947,
+      "Half": 0.0017725661227606946
+    }
+  },
+  {
+    "K": 5,
+    "N": 150,
+    "Rho": 0.0,
+    "Datasets": 400,
+    "ScaledCorrelation": {
+      "Mean": 0.9482499999999991,
+      "Half": 0.0071413784359122285
+    },
+    "HwCorrelation": {
+      "Mean": 0.9534999999999993,
+      "Half": 0.006718183233948908
+    },
+    "DeltaCorrelation": {
+      "Mean": 0.005250000000000001,
+      "Half": 0.0022958150331998926
+    },
+    "ScaledJoint": {
+      "Mean": 0.9525,
+      "Half": 0.020871272122225778
+    },
+    "HwJoint": {
+      "Mean": 0.955,
+      "Half": 0.020341246662618113
+    },
+    "DeltaJoint": {
+      "Mean": 0.0025,
+      "Half": 0.004899999999999996
+    },
+    "ScaledCorrelationFlip": 0.005750000000000002,
+    "HwCorrelationFlip": 0.004000000000000001,
+    "ScaledJointFlip": 0.005,
+    "HwJointFlip": 0.005,
+    "ScaledIntervalWidth": 0.3163336998918273,
+    "HwIntervalWidth": 0.31430220085489124,
+    "ScaledBandWidth": 7.7938707193616565,
+    "HwBandWidth": 7.8613512300109845,
+    "CorrelationWidthRatio": {
+      "Mean": 0.9935779873038164,
+      "Half": 0.0004563884779243816
+    },
+    "BandWidthRatio": {
+      "Mean": 1.0086581511394193,
+      "Half": 0.000954999975462088
+    }
+  },
+  {
+    "K": 5,
+    "N": 150,
+    "Rho": 0.7,
+    "Datasets": 400,
+    "ScaledCorrelation": {
+      "Mean": 0.9427499999999995,
+      "Half": 0.01007727485092338
+    },
+    "HwCorrelation": {
+      "Mean": 0.9437499999999995,
+      "Half": 0.010975253264072143
+    },
+    "DeltaCorrelation": {
+      "Mean": 0.0009999999999999987,
+      "Half": 0.006166137293541783
+    },
+    "ScaledJoint": {
+      "Mean": 0.92,
+      "Half": 0.026620029393527655
+    },
+    "HwJoint": {
+      "Mean": 0.9175,
+      "Half": 0.026996013350902532
+    },
+    "DeltaJoint": {
+      "Mean": -0.0025,
+      "Half": 0.004899999999999993
+    },
+    "ScaledCorrelationFlip": 0.005000000000000001,
+    "HwCorrelationFlip": 0.0067500000000000025,
+    "ScaledJointFlip": 0.005,
+    "HwJointFlip": 0.0,
+    "ScaledIntervalWidth": 0.16378847777678637,
+    "HwIntervalWidth": 0.16769239675589623,
+    "ScaledBandWidth": 7.356931476335217,
+    "HwBandWidth": 7.377943343869383,
+    "CorrelationWidthRatio": {
+      "Mean": 1.0238351258409653,
+      "Half": 0.0007457215661496514
+    },
+    "BandWidthRatio": {
+      "Mean": 1.0028560640535737,
+      "Half": 0.001194533779203775
+    }
+  },
+  {
+    "K": 5,
+    "N": 25,
+    "Rho": 0.0,
+    "Datasets": 400,
+    "ScaledCorrelation": {
+      "Mean": 0.9347499999999989,
+      "Half": 0.007019333826540867
+    },
+    "HwCorrelation": {
+      "Mean": 0.9602499999999986,
+      "Half": 0.005800819210143689
+    },
+    "DeltaCorrelation": {
+      "Mean": 0.025499999999999953,
+      "Half": 0.004806762049811565
+    },
+    "ScaledJoint": {
+      "Mean": 0.925,
+      "Half": 0.025844677758119723
+    },
+    "HwJoint": {
+      "Mean": 0.935,
+      "Half": 0.02418979050988835
+    },
+    "DeltaJoint": {
+      "Mean": 0.01,
+      "Half": 0.00976308838108328
+    },
+    "ScaledCorrelationFlip": 0.005250000000000001,
+    "HwCorrelationFlip": 0.0037500000000000007,
+    "ScaledJointFlip": 0.0075,
+    "HwJointFlip": 0.0025,
+    "ScaledIntervalWidth": 0.732037539573316,
+    "HwIntervalWidth": 0.7140436104334785,
+    "ScaledBandWidth": 8.159030707770063,
+    "HwBandWidth": 8.477262597185234,
+    "CorrelationWidthRatio": {
+      "Mean": 0.9754193901718133,
+      "Half": 0.0006642180507543315
+    },
+    "BandWidthRatio": {
+      "Mean": 1.0390036391347457,
+      "Half": 0.001194950095904752
+    }
+  },
+  {
+    "K": 5,
+    "N": 25,
+    "Rho": 0.7,
+    "Datasets": 400,
+    "ScaledCorrelation": {
+      "Mean": 0.9327499999999992,
+      "Half": 0.010385463609582616
+    },
+    "HwCorrelation": {
+      "Mean": 0.948249999999999,
+      "Half": 0.011293469079943944
+    },
+    "DeltaCorrelation": {
+      "Mean": 0.01549999999999998,
+      "Half": 0.010388852662788274
+    },
+    "ScaledJoint": {
+      "Mean": 0.945,
+      "Half": 0.022370045761428845
+    },
+    "HwJoint": {
+      "Mean": 0.9475,
+      "Half": 0.021884613676952866
+    },
+    "DeltaJoint": {
+      "Mean": 0.0025,
+      "Half": 0.004899999999999988
+    },
+    "ScaledCorrelationFlip": 0.006000000000000002,
+    "HwCorrelationFlip": 0.006250000000000002,
+    "ScaledJointFlip": 0.0,
+    "HwJointFlip": 0.0025,
+    "ScaledIntervalWidth": 0.40651854150177996,
+    "HwIntervalWidth": 0.4489876205118546,
+    "ScaledBandWidth": 7.601205381700551,
+    "HwBandWidth": 7.690444394180917,
+    "CorrelationWidthRatio": {
+      "Mean": 1.1044702139616642,
+      "Half": 0.0036691225257119817
+    },
+    "BandWidthRatio": {
+      "Mean": 1.0117401133108708,
+      "Half": 0.0013583779618667965
+    }
+  },
+  {
+    "K": 5,
+    "N": 50,
+    "Rho": 0.0,
+    "Datasets": 400,
+    "ScaledCorrelation": {
+      "Mean": 0.951499999999999,
+      "Half": 0.006936763490223549
+    },
+    "HwCorrelation": {
+      "Mean": 0.9629999999999987,
+      "Half": 0.005747513268530134
+    },
+    "DeltaCorrelation": {
+      "Mean": 0.011500000000000002,
+      "Half": 0.0034241177631822695
+    },
+    "ScaledJoint": {
+      "Mean": 0.9425,
+      "Half": 0.022842531122232865
+    },
+    "HwJoint": {
+      "Mean": 0.9575,
+      "Half": 0.01979399607713794
+    },
+    "DeltaJoint": {
+      "Mean": 0.015,
+      "Half": 0.011927059018974734
+    },
+    "ScaledCorrelationFlip": 0.005250000000000001,
+    "HwCorrelationFlip": 0.004750000000000001,
+    "ScaledJointFlip": 0.0075,
+    "HwJointFlip": 0.005,
+    "ScaledIntervalWidth": 0.5359864003022989,
+    "HwIntervalWidth": 0.5276262040082953,
+    "ScaledBandWidth": 7.963101734618626,
+    "HwBandWidth": 8.137692774413367,
+    "CorrelationWidthRatio": {
+      "Mean": 0.9844022230987792,
+      "Half": 0.0005290763422360135
+    },
+    "BandWidthRatio": {
+      "Mean": 1.0219250043027488,
+      "Half": 0.001029559573620501
+    }
+  },
+  {
+    "K": 5,
+    "N": 50,
+    "Rho": 0.7,
+    "Datasets": 400,
+    "ScaledCorrelation": {
+      "Mean": 0.9392499999999994,
+      "Half": 0.011029290588120027
+    },
+    "HwCorrelation": {
+      "Mean": 0.9472499999999984,
+      "Half": 0.011460817842284865
+    },
+    "DeltaCorrelation": {
+      "Mean": 0.008,
+      "Half": 0.009632034271664872
+    },
+    "ScaledJoint": {
+      "Mean": 0.945,
+      "Half": 0.022370045761428845
+    },
+    "HwJoint": {
+      "Mean": 0.95,
+      "Half": 0.02138535324312727
+    },
+    "DeltaJoint": {
+      "Mean": 0.005,
+      "Half": 0.006920957240353894
+    },
+    "ScaledCorrelationFlip": 0.005500000000000001,
+    "HwCorrelationFlip": 0.006000000000000002,
+    "ScaledJointFlip": 0.005,
+    "HwJointFlip": 0.0,
+    "ScaledIntervalWidth": 0.2844691284486164,
+    "HwIntervalWidth": 0.30244278321386797,
+    "ScaledBandWidth": 7.5169174643531385,
+    "HwBandWidth": 7.575641733114542,
+    "CorrelationWidthRatio": {
+      "Mean": 1.0631831470194073,
+      "Half": 0.0016168962236377737
+    },
+    "BandWidthRatio": {
+      "Mean": 1.0078122806376266,
+      "Half": 0.0011541336429592517
+    }
+  }
+]

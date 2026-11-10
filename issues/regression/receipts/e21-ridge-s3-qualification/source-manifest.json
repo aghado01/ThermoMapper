@@ -1,0 +1,82 @@
+[
+  {
+    "Path": "src/maths/regression/spline/bass/BassRandomSlopes.cs",
+    "Sha256": "EC43A291A56C9291E08AC32130B933E1172175AEF9EE3AC77E5EDD62326C522A"
+  },
+  {
+    "Path": "src/maths/regression/spline/bass/BassRandomIntercepts.cs",
+    "Sha256": "0C7756B443F2D24DCCF1F2BCC536D3CF5D955412144FF0FC2B69B09DED7154D3"
+  },
+  {
+    "Path": "src/maths/regression/spline/bass/BassConfig.cs",
+    "Sha256": "5A9DEFD4CAB7617E6052115090E6EB1349AFF9BC58146659217DB53F7E0C4D98"
+  },
+  {
+    "Path": "src/maths/regression/spline/bass/BassRandomEffects.cs",
+    "Sha256": "7F971A608A7B4BE6FD972683620C479533BF64DA2B80A9C6BEB373EDE5294BE8"
+  },
+  {
+    "Path": "src/maths/regression/spline/bass/BassModel.cs",
+    "Sha256": "D4A88752AD2382ED4CA8E9C4A70D9803E03BCFF9A0A12C4F9F8BA30E347D33E3"
+  },
+  {
+    "Path": "src/maths/regression/spline/bass/BassResolved.cs",
+    "Sha256": "289A9EEA8B2E9E3430CABB9F9FA5351CD5019863F37EDAD6AFA9DB9D6B8AEA09"
+  },
+  {
+    "Path": "src/maths/regression/spline/bass/output/BassComponents.cs",
+    "Sha256": "B9BB9714A6DFB05ABF533AE13A2B34F1A192079D347922B408429904641C3D10"
+  },
+  {
+    "Path": "src/maths/regression/spline/bass/BassPointwise.cs",
+    "Sha256": "8647079FBFB9ECDBC2D40B5B3E1A9DB047DB0FBFDF4E1AE5792FAB04C7937309"
+  },
+  {
+    "Path": "src/maths/regression/spline/bass/posterior/BassPrediction.cs",
+    "Sha256": "232181EB5847EFBAB8BED925B56D4E0E752E9BD61DA1E795C99F717226813E9B"
+  },
+  {
+    "Path": "tests/regression/RandomSlopesReference.cs",
+    "Sha256": "3ABFC7512C7749C657089C2EBAEC20D2A58398AA2461A38954079E50DDD431DB"
+  },
+  {
+    "Path": "tests/regression/RandomSlopesTests.cs",
+    "Sha256": "444C8E6A83F31F8D9042594AE6551B9D9E4F95AF3BABECE74DD3DB0D8B7E1D6B"
+  },
+  {
+    "Path": "tests/regression/RandomEffectsMultipleQualificationTests.cs",
+    "Sha256": "2BB5668EA17D5E5F4003B3B9A5678DDCAAB07C7F753B742862996BD74FDD343A"
+  },
+  {
+    "Path": "tests/regression/RandomSlopesPredictionTests.cs",
+    "Sha256": "BFA2FC495017F87895A295E792D22DFA6339D4CDA35D6C56F62D3CD8571F35AB"
+  },
+  {
+    "Path": "tests/regression/RandomSlopesLawTests.cs",
+    "Sha256": "FB26A9F16BF40988AA415715C25600CBF02AAE210C4001679C67BFE953286B77"
+  },
+  {
+    "Path": "tests/regression/RandomSlopesQualificationTests.cs",
+    "Sha256": "8F144DD66E27DB534489D63FA88636CF41556EBB653ED65059D5D5238EEAE095"
+  },
+  {
+    "Path": "tests/regression/ComparativeSweep.cs",
+    "Sha256": "A0128AB18F97BA90546E1FD19601AC7C6DD23A3C9D6072821930461F44AD77BB"
+  },
+  {
+    "Path": "tests/regression/RandomInterceptTests.cs",
+    "Sha256": "977BE08E45FEEC48E19F56798382A5822D1C1DB6C6B2432E70C87B1CB2936F30"
+  },
+  {
+    "Path": "src/maths/regression/spline/bass/BassRun.cs",
+    "Sha256": "D40246A47CB95D34707CEE77F8510D2DD862C6E80B3914E19B083E363B95CBA5"
+  },
+  {
+    "Path": "src/maths/regression/spline/bass/BassRunOptions.cs",
+    "Sha256": "F688C10CB5CD1BA29313105D9E5A931E02FAE405B9DE951796839AEF1E293E26"
+  },
+  {
+    "Path": "tests/regression/RandomSlopesRescaling.cs",
+    "Sha256": "D2A29E4C406967AFB09F7FFED3D14A1898AE7D5F400F499AFAF37D7E33F0C574"
+  }
+]
