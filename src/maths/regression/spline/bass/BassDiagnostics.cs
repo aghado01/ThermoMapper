@@ -279,7 +279,7 @@ public sealed record BassSmcReadout(IReadOnlyList<BassSmcReplicate> Replicates, 
 public sealed record BassSmcReplicate(
     int Seed, IReadOnlyList<SmcStageReport> Stages, double InverseTemperature, double LogNormalizer, double LogNormalizerError,
     double EffectiveSampleSize, int Families, long PriorAttempts, BassSmcAccount Account, double MassAtCap,
-    int StructuresBeforeLastStep = -1, int Particles = 0)
+    int StructuresBeforeLastStep = -1, int Particles = 0, double? StepCap = null)
 {
     /// <summary>The b below which a last step to b = 1 is a jump. On KHAOS's trap the trapped replicates' last steps left from
     /// 0.003 to 0.35, and those that reached the posterior from 0.98 up (2026-11-08).</summary>
@@ -304,6 +304,23 @@ public sealed record BassSmcReplicate(
 
     /// <summary>The stages taken after the initial draw.</summary>
     public int StageCount => Stages.Count - 1;
+
+    /// <summary>The steps the schedule's cap (<see cref="SmcSpec.StepCap"/> r) bound: each step from b &gt; 0 to a b′ below 1 that is
+    /// r·b, read from the stages, so a resumed fit counts the steps before its checkpoint too. Null without the cap.</summary>
+    public int? CappedSteps
+    {
+        get
+        {
+            if (StepCap is not double r) return null;
+            int count = 0;
+            for (int k = 1; k < Stages.Count; k++)
+            {
+                double b = Stages[k - 1].Temperature.InverseTemperature, next = Stages[k].Temperature.InverseTemperature;
+                if (b > 0.0 && next < 1.0 && next == Math.Min(1.0, r * b)) count++;
+            }
+            return count;
+        }
+    }
 
     /// <summary>The stages side by side (<see cref="SmcStageReadout"/>): each one's sweeps per particle, the structure move's
     /// acceptance over them, the fraction of particles whose structure changed, and the ESS over N, so a replicate whose

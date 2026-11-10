@@ -313,6 +313,8 @@ public sealed record BassConfig
                 if (smc.MutationSteps < 1) throw Bad("Sampling.Smc.MutationSteps", "must be at least 1 under Sampling.Smc.AdaptiveMutation, which spends it per stage");
                 if (!(adaptive.StayProbability > 0.0 && adaptive.StayProbability < 1.0)) throw Bad("Sampling.Smc.AdaptiveMutation.StayProbability", "must lie in (0, 1)");
             }
+            if (smc.StepCap is { } cap && !(cap > 1.0 && double.IsFinite(cap)))
+                throw Bad("Sampling.Smc.StepCap", "must exceed 1 and be finite, or the schedule never reaches b = 1; null leaves the conditional-ESS rule alone");
             if (!(smc.ResampleBelow >= 0.0 && smc.ResampleBelow <= 1.0)) throw Bad("Sampling.Smc.ResampleBelow", "must lie in [0, 1]");
             if (smc.Resampling is not (ResamplingScheme.Multinomial or ResamplingScheme.Stratified or ResamplingScheme.Systematic or ResamplingScheme.Residual))
                 throw Bad("Sampling.Smc.Resampling", "is not a known scheme");
@@ -806,6 +808,8 @@ public sealed record TemperingSpec
 /// form, path sampling; off by default, when the evidence is the normalizer alone.</item>
 /// <item><see cref="AdaptiveMutation"/>: each stage's sweeps chosen from the fraction of particles whose structure the previous
 /// stage's sweeps changed, within <see cref="MutationSteps"/> per stage taken; null keeps the fixed count.</item>
+/// <item><see cref="StepCap"/>: a bound on each step after the first, b′ ≤ r·b, so the schedule cannot jump from a collapsed
+/// population to b = 1 (the trap measured on KHAOS's raw ridge); null leaves the conditional-ESS rule alone.</item>
 /// </list>
 /// </summary>
 public sealed record SmcSpec
@@ -843,6 +847,17 @@ public sealed record SmcSpec
     /// null, so a fixed-count config's form and fingerprint stand as they were.</summary>
     [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
     public AdaptiveMutation? AdaptiveMutation { get; init; }
+
+    /// <summary>
+    /// r, a bound on each step of the schedule from b &gt; 0: b′ = min(the conditional-ESS rule's b′, r·b, 1), r &gt; 1. The first step,
+    /// from b = 0, is the rule's alone. Null, the default, leaves the rule alone. Where it binds, the fit's draws differ from the
+    /// uncapped fit's, and it takes at least ln(1/b₁)/ln r stages, b₁ the first step's b.
+    /// <para>Opt-in, built 2026-11-09 for KHAOS's SMC trap: there the rule jumps to b = 1 from a population collapsed at near-empty
+    /// structures, and r = 1.25 with E4's residual birth reached the posterior in 16 of 16 replicates (the proposal-kernels brief's
+    /// slice 2), the cap alone in 11 of 16. Their evidence still spread over 21 nats. Left out of the serialized form when null.</para>
+    /// </summary>
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public double? StepCap { get; init; }
 }
 
 /// <summary>

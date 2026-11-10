@@ -28,6 +28,8 @@ namespace Maths.Regression.Spline.Bass;
 /// <item><b>The sweeps.</b> <see cref="SmcSpec.MutationSteps"/> per particle at each stage, or under
 /// <see cref="SmcSpec.AdaptiveMutation"/> each stage's count from the previous stage's moved fraction, within that many per stage
 /// taken; the progress counts the sweeps each stage took, and the plan the fixed count's.</item>
+/// <item><b>The cap.</b> With <see cref="SmcSpec.StepCap"/> r, each step from b &gt; 0 takes at most r·b, the first step from b = 0
+/// the rule's alone; each replicate counts the steps it bound (<see cref="BassSmcReplicate.CappedSteps"/>).</item>
 /// <item><b>The budget.</b> A replicate ends at b = 1 or after <see cref="SmcSpec.MaxStages"/> stages. A fit short of
 /// b = 1 is flagged (<see cref="BassSmcReadout.ReachedPosterior"/>) and reports no evidence or residual check, and its
 /// checkpoint continues it.</item>
@@ -92,7 +94,8 @@ internal static class BassSmcFit
         while (run.Stage.Temperature.InverseTemperature < 1.0 && run.StagesDone < budget)
         {
             options.Cancellation.ThrowIfCancellationRequested();
-            double next = SmcSampler.NextInverseTemperature(run, spec.TargetConditionalEss);
+            double b = run.Stage.Temperature.InverseTemperature, next = SmcSampler.NextInverseTemperature(run, spec.TargetConditionalEss);
+            if (spec.StepCap is double r && b > 0.0) next = Math.Min(next, Math.Min(1.0, r * b));   // the opt-in cap, b′ ≤ r·b
             if (next >= 1.0) structures = DistinctStructures(run.Result().Particles);
             run.Advance(new SmcStage<BassParticle>(target, new Temperature(next, TemperingPath.Likelihood)));
             progress.Add((long)spec.Particles * run.Reports[^1].Steps);
@@ -214,7 +217,7 @@ internal static class BassSmcFit
             SmcStageReport last = result.Stages[^1];
             accounts[c] = new BassSmcReplicate(runs[c].Seed, result.Stages, last.Temperature.InverseTemperature, result.LogNormalizerRatio,
                                                result.LogNormalizerError, SmcWeights.EffectiveSampleSize(result.Weights), last.Families,
-                                               runs[c].PriorAttempts, runs[c].Account, atCap, runs[c].StructuresBeforeLastStep, n);
+                                               runs[c].PriorAttempts, runs[c].Account, atCap, runs[c].StructuresBeforeLastStep, n, config.Sampling.Smc?.StepCap);
             account.MergeFrom(runs[c].Account);
         }
         var readout = new BassSmcReadout(accounts, spread);
