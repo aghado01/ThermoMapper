@@ -1,6 +1,6 @@
 # Proposal kernels: E4's history-based and residual-informed births
 
-Date: 2026-11-08. Status: slice 2, the residual birth, landed (`599115d`, `ff2ec0d`) at the user's word; its measurements send the pair of SMC's 1.25 cap and the residual birth to the user as the trap's remedy, and report it a candidate for KHAOS under the raw ridge; waiting for the coordinating session's verification. Slice 1 landed (`b1df14e`), opt-in.
+Date: 2026-11-08. Status: slice 2, the residual birth, landed (`599115d`, `ff2ec0d`) at the user's word; its measurements send the pair of SMC's 1.25 cap and the residual birth to the user as the trap's remedy, and report it a candidate for KHAOS under the raw ridge; verified by the coordinating session 2026-11-09 (the Commit scope 2,496 of 2,496). Both calls wait on the user. Slice 1 landed (`b1df14e`), opt-in, verified.
 
 ## Why
 
