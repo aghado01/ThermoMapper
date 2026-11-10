@@ -1,6 +1,6 @@
 # Proposal kernels: E4's history-based and residual-informed births
 
-Date: 2026-11-08. Status: slices 1 and 2 landed and verified (`b1df14e`; `599115d`, `ff2ec0d`). SMC's step cap built opt-in (`0ffc0e0`). The residual birth measured on five KHAOS raw-ridge fixtures by the pre-registered rule: four gains, no loss, so it goes to the user as a recommended default for that class; the user decides.
+Date: 2026-11-08. Status: slices 1 and 2 landed and verified (`b1df14e`; `599115d`, `ff2ec0d`). SMC's step cap built opt-in (`0ffc0e0`). The residual birth, measured on five KHAOS raw-ridge fixtures (four gains, no loss), made KHAOS's raw-ridge default at the user's word on 2026-11-09 (`0738183`).
 
 ## Why
 
@@ -214,6 +214,30 @@ Under "Reports" below, newest first, per slice:
 - what was left unbuilt, and why.
 
 ## Reports
+
+### Addendum: the residual birth, KHAOS's raw-ridge default (chip, 2026-11-09)
+
+At the user's word ("Make it the default"), on the five-fixture measurement's outcome.
+
+**Landed** on `main`, nothing pushed: `0738183`, the default and its gate, with this report and the pages.
+
+**What changed.**
+- *The default:* a config that declares no `Births` takes the residual birth at ω_R = ¼ when the fit is KHAOS's raw ridge (a Legendre basis, `RawRidgeForm`) on a scalar response. `BassResolved.Births` holds the mixture the fit runs, and the auto-pick log says so.
+- *The off:* an empty `BirthMixture` is now valid. It runs the fit's own birth alone, turning a default off; validation refused it before. A declared component runs as declared, and nothing is added to it.
+- *Unchanged:* KHAOS's modified g-prior and normalized ridge, and hinge fits, keep the fit's own birth. So do functional and several-output responses, which the residual birth refuses.
+- *The readers:* the chain's kernel (`KernelOf`) and SMC's history read the resolved mixture.
+- *Measurements kept reproducible:* `BassSmcMutationQualificationTests.Khaos`, the fixture behind the adaptive-mutation, trap and proposal-kernel measurements, now declares the fit's own birth. The measurement harness's base arm does the same.
+
+**The gates.**
+- `KhaosRawRidgeFits_TakeTheResidualBirthByDefault_AndAnEmptyMixtureTurnsItOff`:
+  - the default resolves on KHAOS's raw ridge and is logged;
+  - an empty mixture resolves to none, a history-only mixture as declared, and the other priors and hinge fits to none;
+  - a fit by default hashes as a declared residual birth at ¼ does, and differs from the fit's own birth;
+  - the default leaves the serialized form alone.
+- The config tests now accept an empty mixture.
+- The whole regression assembly with the default: 3,005 of 3,005, KHAOS raw-ridge fits taking the residual birth in every law, reach and evidence test, with no pinned hash moved.
+
+**What moves.** KHAOS raw-ridge fits that declare no mixture now draw differently, by design. No pinned hash runs one: the pinned KHAOS fits use the modified g-prior. Configs serialize as they did, so a checkpoint taken before the change resumes under the new default.
 
 ### Addendum: the residual birth on five KHAOS raw-ridge fixtures (chip, 2026-11-09)
 
