@@ -11,6 +11,15 @@ Splits in the module's language (symbols, identifiers, terms), logged as session
 
 ## Entries
 
+### E34's predictive degrees ν, case-row scale V_* and case count q (2026-11-09)
+
+- **Kind:** one name for several concepts.
+- **Readings:**
+  - ν, the mixing inverse-Wishart degree (`src/maths/regression/gprior/MatrixTPredictive.cs:40`), beside the marginal Student-t degree ν − K + 1 (`MatrixTPredictive.cs:49`), and Huang and Wand's shape ν whose conditional IW degree is ν + K − 1 (`docs/Maths/MultiOutput.md`, “Σ's prior”).
+  - V_*, the predictive case-row scale (`MatrixTPredictive.cs:42`; “Joint prediction and output functionals”), beside E8's symmetrized co-active V = (C_fg + C_fgᵀ)/2 (`docs/Maths/ActiveSubspaces.md`, “Functional outputs and co-active pairs”), and E21's row covariance factor V = I + s²(ZH)(ZH)ᵀ (`docs/Maths/BayesianRegression.md`, “BASS: random-effect intercepts (E21)”).
+  - q, the requested case count in the joint predictive density (“Joint prediction and output functionals”), beside Brown, Vannucci and Fearn's output count q, this page's K (“Notation”).
+- **Found:** 2026-11-09, E34's slice 3. Output-functional vectors reuse E8's a_f and a_g in writing.
+
 ### E34's covariance rates rₖ and scales Aₖ; A for coefficients and a likelihood Gram (2026-11-09)
 
 - **Kind:** one name for several concepts.

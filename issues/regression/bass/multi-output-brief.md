@@ -98,6 +98,76 @@ Under "Reports" below, newest first, per slice: what landed by commit; the gates
 
 ## Reports
 
+### Slice 3: joint readouts and covariance-prior coverage (chip, 2026-11-09)
+
+**Landed:** `371e0af` adds independent predictive and covariance references and the matched coverage experiment; `01ce10c` adds the matrix-t predictive primitive; `7b4a19f` adds the joint readouts, projected Sobol and co-active pairs; `2ecb688` evaluates the Rao–Blackwellized mean surface without constructing joint case-covariance matrices. [Math and API](../../../docs/Maths/MultiOutput.md#joint-prediction-and-output-functionals-slice-3).
+
+**Decision 2, for the user. The covariance default is unchanged.** The fixed-structure comparison finds better small-sample correlation coverage with the optional Huang–Wand prior. Joint predictive coverage is mixed, and neither prior achieves nominal 95% in every tested cell. This is evidence for using the optional prior when small-sample correlation inference matters; it does not establish one universal default for both correlation and joint prediction. No default or scalar pin was changed.
+
+The lowest N/K cells below put the gains beside their uncertainty and interval widths. Correlation coverage averages the off-diagonal pairs within each dataset, then averages independent datasets. “±” is a pointwise 95% half-width using that dataset-level variation. Paired gains use the same datasets under both priors. Width ratios are ratios of mean widths; their paired delta-method 95% half-widths are shown too.
+
+| K | N | ρ magnitude | Current correlation coverage | HW correlation coverage | Paired gain, pp | HW/current interval width |
+| --- | --- | --- | --- | --- | --- | --- |
+| 2 | 6 | 0 | 87.25 ± 3.27% | 96.00 ± 1.92% | 8.75 ± 2.77 | 0.969 ± 0.010 |
+| 2 | 6 | 0.7 | 88.00 ± 3.19% | 94.75 ± 2.19% | 6.75 ± 3.58 | 1.219 ± 0.032 |
+| 5 | 15 | 0 | 91.77 ± 0.91% | 96.10 ± 0.65% | 4.32 ± 0.64 | 0.968 ± 0.001 |
+| 5 | 15 | 0.7 | 92.57 ± 1.09% | 94.97 ± 1.08% | 2.40 ± 1.08 | 1.140 ± 0.007 |
+
+For the same cells, joint coverage means that **all outputs of one independent future case** lie inside their simultaneous posterior predictive box. Its marginal intervals are Wilson 95% intervals. A paired cell with no observed disagreements receives the exact zero-discordance upper-probability bound, about 0.75 percentage points here, rather than a zero error estimate.
+
+| K | N | ρ magnitude | Current joint coverage, 95% CI | HW joint coverage, 95% CI | Paired gain, pp | HW/current band width |
+| --- | --- | --- | --- | --- | --- | --- |
+| 2 | 6 | 0 | 90.25% [86.95, 92.79] | 90.25% [86.95, 92.79] | 0.00 ± 0.75 | 0.985 ± 0.002 |
+| 2 | 6 | 0.7 | 91.00% [87.79, 93.43] | 90.00% [86.67, 92.57] | -1.00 ± 0.98 | 0.964 ± 0.003 |
+| 5 | 15 | 0 | 93.75% [90.94, 95.73] | 95.00% [92.40, 96.74] | 1.25 ± 1.09 | 1.050 ± 0.002 |
+| 5 | 15 | 0.7 | 92.50% [89.50, 94.70] | 93.25% [90.36, 95.32] | 0.75 ± 0.85 | 1.012 ± 0.002 |
+
+Thus, at K = 2, N = 6, correlated truth, HW's correlation intervals are about 22% wider while its predictive boxes are about 4% narrower; the latter do not improve joint coverage. At K = 5, N = 15, uncorrelated truth, its correlation intervals are about 3% narrower and its predictive boxes about 5% wider. The full N/K = 3, 5, 10, 30 results include smaller high-N differences and some joint point estimates below nominal under both priors. These are pointwise intervals over sixteen cells, without a multiple-comparison adjustment. The table is a descriptive comparison, not a simultaneous guarantee of either method's coverage.
+
+![Matched covariance-prior coverage](../../../artifacts/e34-slice3/results/coverage.png)
+
+[All sixteen cells, intervals and widths](../../../artifacts/e34-slice3/results/coverage-tables.md) · [Dataset-level paired records](../../../artifacts/e34-slice3/results/coverage.csv) · [Summary with width uncertainty](../../../artifacts/e34-slice3/results/coverage-summary.json) · [Flagged run](../../../artifacts/e34-slice3/results/coverage.trx)
+
+**What changing the default would trade away.** The current decision-2 prior has the exact K = 1 reduction IG(c, c·s²), c = 0.001, and equivariance under any invertible rescaling or mixing Y → YL. Huang–Wand at ν = 2 instead gives half-t(2, A_k) marginal standard deviations and uniform prior correlations. At K = 1 its reduction is the hierarchical rate mixture, not that inverse gamma. With empirical A_k it preserves rescaling and permutation equivariance but not arbitrary output mixing: a transformed diagonal conditional scale is generally not diagonal. Choosing HW explicitly for small-sample correlation inference is available now. Changing the global default would knowingly change those scalar-prior and coordinate properties and still would not resolve every joint-coverage deficit measured here.
+
+**Experimental scope and uncertainty.** There are 400 independent datasets in each of sixteen cells, 6,400 matched datasets and 12,800 prior-specific estimates. K is 2 or 5; N/K is 3, 5, 10 or 30. Truth is Gaussian with fixed covariance D R D, D_kk = 0.7 + 0.4k with k starting at zero, R_ii = 1, and R_ij = ρ·s_i s_j off the diagonal, s_i = (−1)^i. The row labelled ρ = 0.7 therefore includes correlations of both signs. No truth covariance is drawn from either prior.
+
+This control fixes the empty structure with its intercept inside the mean-centred prior, holds τ = 1/N, and uses empirical output scales under both priors. It uses the engine's N count, not N − 1. Its posterior residual scale is the centred cross-product R; the current prior gives IW(N + K − 1 + 0.002, (1 + 0.002/N)R). HW uses its conditional IW and gamma rates. The future observation and training data are matched across priors. The predictive intercept uncertainty gives row multiplier h = 1 + 1/[N(1 + τ)].
+
+The independent HW reference alternates Σ with r_k | Σ ~ Gamma((2 + K)/2, rate (Σ⁻¹)_kk + 1/(2A_k²)). It is checked against dense log-rate quadrature on a fixed response: the two rate means agree within 1.52 batch standard errors. Each coverage estimate pools two independent chains, each with 1,000 discarded and 4,000 retained covariance draws. An equal-tailed 95% interval is read for each correlation. Predictive boxes use the 95% quantile of the maximum standardized joint Gaussian draw, sharing Σ within an output vector. Separate half-chain constructions disagree on at most 1.25% of correlation-pair classifications and 0.75% of joint classifications, averaged over datasets in a cell. This measures Monte Carlo sensitivity; it is not a bound on bias.
+
+**This control does not qualify end-to-end coverage with sampled structures.** The separate nonlinear check fits two surfaces, sin(4x) + 0.4z² and 0.7cos(3z) + xz, outside the finite hinge basis, with known covariance [[0.04,0.024],[0.024,0.09]]. On one matched training dataset of 160 cases and 400 independent held-out cases, fitted-structure joint coverage is 0.9275 under the current prior and 0.9325 under HW. Conditional binomial standard errors are 0.0130 and 0.0125. These errors describe held-out observations conditional on that fitted dataset; they are not uncertainty over repeated training datasets. Posterior mean covariance entries are [0.04789,0.01908,0.07152] and [0.04887,0.01871,0.07323], respectively. [Nonlinear and scalar-reader checks](../../../artifacts/e34-slice3/results/readouts-final-qualification.trx).
+
+**Readout gates.**
+
+| Gate | Result |
+| --- | --- |
+| Dense predictive conditioning against an augmented-data marginal ratio, proper and flat intercept | 200 cases; maximum absolute log-density difference 1.43·10⁻¹⁴ |
+| Production matrix-t components against the independent dense reference | 520 retained states, all four coefficient forms and all three intercept conventions, τ from 10⁻⁸ to 10⁴, including HW; maximum absolute error in locations, row scales or log density 2.56·10⁻¹³ |
+| Matrix-t sampling and scalar reduction | Joint row/output covariance moments from 80,000 draws; Student-t density at K = 1 for degrees 0.5 through 1,000; mean/covariance existence flags; near-singular output scales and output units 10^±6 |
+| Joint Gaussian probability and simultaneous bands | Positive-quadrant probability 0.39785 versus analytic 0.397584 at correlation 0.8; independent joint-band coverage 0.950217 on 60,000 observations |
+| Weighted records, selections and bounds | Joint events agree with direct counting; weights, repeated selections and seeds preserved; per-case and whole-block bands checked; incomplete-posterior and data-fingerprint guards use the existing seam |
+| Sobol and co-active pairs | Exact polynomial variances and ANOVA shares; scalar readers of the same retained structures and coefficients agree exactly for each output and a contrast; sampled co-active cross moments at 40,000 shared points agree within their Monte Carlo error |
+| Mean-surface scaling | All forms/intercepts agree with collapsed conditional means; 512 cases × 20 states allocate 272,168 bytes, below the 8 MB regression cap |
+
+The initial reference/pin run passed 40/40 with `BASS_QUALIFICATION` unset. With `BASS_QUALIFICATION=1`, the extended readout run passed 61/61; the scalar-reader/nonlinear run passed 38/38; the fully warmed cost/pin run passed 37/37; and the final mean-surface/pin run passed 53/53. Each includes the requested pinned tier; the flagged runs execute its qualification-only bodies. They are separate runs, not a count of unique cases. [References](../../../artifacts/e34-slice3/results/predictive-references.trx) · [Extended readouts](../../../artifacts/e34-slice3/results/readouts-qualified.trx) · [Mean-surface fix](../../../artifacts/e34-slice3/results/mean-surface.trx).
+
+**Cost.** Cycle-clock medians are indicative, for N = 40, M = 3, K = 2, 400 states and two prediction cases, in milliseconds per call. One complete pass over all forms is discarded before five interleaved batches of ten calls. The readouts include their model/fingerprint preparation. Several IQRs are large; these measurements do not rank coefficient priors by readout speed.
+
+| Form | Joint draws | Matrix-t components | Σ summaries | Projected Sobol | Exact co-active |
+| --- | ---: | ---: | ---: | ---: | ---: |
+| g | 0.536 | 2.242 | 5.806 | 0.891 | 3.416 |
+| normalized ridge | 0.560 | 2.092 | 1.000 | 0.489 | 2.857 |
+| modified g | 0.260 | 1.596 | 1.103 | 0.338 | 0.691 |
+
+The g-form covariance-summary IQR is 4.097 ms on a 5.806 ms median. The full IQRs and reported load are retained in the [warmed cost receipt](../../../artifacts/e34-slice3/results/readout-costs-warm.trx). The matrix-t component path explicitly stores and factors a joint case-row scale. The mean-surface option now computes coefficient means directly and does not take that path. The first Commit selection on `7b4a19f` was intentionally interrupted after this scaling issue was found; its 1,490 completed cases are not a final passing gate.
+
+**Final verification.** A clean archive of `2ecb688` builds in Release. The Commit selection passes 2,084/2,084 (5 min 22 s), and the whole regression assembly passes 2,951/2,951 (15 min 11 s), both with zero skips and `BASS_QUALIFICATION` unset. The runs use below-normal priority, `DOTNET_PROCESSOR_COUNT=2`, MSBuild node reuse off, a serial build and at most two xUnit threads. Receipts, runsettings, source hashes, the coverage records and figure protocol are retained under `artifacts/e34-slice3/results/`; the temporary snapshots, build trees and archives are removed after verification. [Commit receipt](../../../artifacts/e34-slice3/results/commit.trx) · [Full assembly](../../../artifacts/e34-slice3/results/slice.trx) · [Provenance](../../../artifacts/e34-slice3/results/provenance.json).
+
+**Recorded performance follow-up.** The explicit joint `MatrixTPredictive` constructor currently factors its row scale twice, through `_rowFactor.Decompose(rowScale)` and `Root(rowScale)`. `DenseCholesky.Factor(i,j)` exposes the first factor, so a later change can reuse it for sampling and remove the second cubic factorization. This is separate from the corrected mean-only grid path. It remains deferred at this check-in and does not change the qualified numerical contract.
+
+**Remaining scope.** No covariance default change, later slice, row-noise/random-effect extension or PCA integration is included. E21's owned data/config/state/design and scalar prediction paths were preserved. The slice-1 uninterrupted-chain τ-tail precision finding remains open. A repeated fitted-structure coverage study would extend the present prior-only decision evidence; another joint-predictive calibration strategy would need its own reference and measurements.
+
 ### Slice 2: samplers, covariance rates and coefficient forms (chip, 2026-11-09)
 
 **Landed:** `4f3f210` adds the normalized test-side rung and evidence references and the properness boundaries. `41727ac` adds the ladder, SMC, flat histogram and exact resume for several outputs; optional Huang and Wand rates in the state, sweep and every sampler; and the normalized ridge, raw ridge and modified g-form through a shared `OutputPencil`. The math and implementation choices are on [the several-output page](../../../docs/Maths/MultiOutput.md).
