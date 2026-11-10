@@ -64,11 +64,8 @@ Links open each session in the app.
 
 ## Waiting on the user
 
-1. **SMC's trap remedy** (proposal kernels slice 2's report).
-   - *What was measured:* the residual birth reaches the posterior in 16 of 16 replicates, but only with a step cap of 1.25. Under the engine's schedule it reaches it in 0 of 16.
-   - *The question:* whether the pair of cap and residual birth becomes the remedy for KHAOS's SMC trap, beside the flags.
-   - *What the pair does not fix:* the evidence still spreads 21 nats. A reference nearer the posterior is what the evidence would need.
-2. **The residual birth as a candidate for KHAOS under the raw ridge.** About 2× ESS per second at the same cost, and a 12× shorter climb from an empty structure. It is one fixture, so no default is proposed. On hinge fits it costs 19 to 88× the CPU with no gain, and it stays opt-in.
+1. ~~**SMC's trap remedy**~~ **Decided 2026-11-09** in the KHAOS session ("Build the cap, opt-in"): `SmcSpec.StepCap`, opt-in (`0ffc0e0`, docs `5a6cb1d`). The evidence stays flagged. The coordinating session has not rerun it from a snapshot.
+2. ~~**The residual birth as a candidate for KHAOS under the raw ridge**~~ **Decided 2026-11-09** in the KHAOS session, after the pre-registered five-fixture measurement (four gains, no loss; `b81d3ab`, `7c148e1`). It is now KHAOS's raw-ridge default on scalar responses (`0738183`, docs `233c0e0`). Non-scalar responses keep the fit's own birth and log why (`a980d1f`). Hinge fits are unchanged.
 3. **E34's default prior on Σ.** The default is the IW that reduces to scalar BASS's at K = 1; it puts a correlation's prior mass near ±1 at small n/K. Slice 3 measures coverage against Huang and Wand at ν = 2 for n/K from 3 to 30, and the default question comes back with those numbers.
 4. **GBASS's open decisions** ([gbass-noise-brief.md](bass/gbass-noise-brief.md)):
    - the flat histogram under a noise: the walker carries a and σ², a Metropolis step on each latent, or keep it refused;
