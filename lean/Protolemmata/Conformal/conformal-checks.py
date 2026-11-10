@@ -1631,7 +1631,8 @@ print(f"Symmetric CQR at k = 2 (alpha = 1/2), quantile fits below the data: abov
 
 # Small calibration sets and rounding. A tail's end is finite only once floor((alpha/2) m) >= 1,
 # m >= 2/alpha, twice the symmetric form's m >= 1/alpha. And 2 floor(alpha m / 2) is floor(alpha m)
-# or one less, so the two-sided guarantee is 1 - alpha or up to 1/m above it.
+# or one less. Equal-tail rounding adds 0 or 1/m to the symmetric finite-rank bound.
+# Its excess over nominal 1 - alpha lies in [0, 2/m).
 rows9 = []
 for alpha in (Q(1, 5), Q(1, 10), Q(1, 20)):
     m_sym = min(mm for mm in range(1, 400) if math.floor(alpha * mm) >= 1)

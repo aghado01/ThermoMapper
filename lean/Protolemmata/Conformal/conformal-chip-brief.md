@@ -214,7 +214,7 @@ You fetched Barber, Candès, Ramdas and Tibshirani 2021 (1905.02928v3) on 2026-1
   - Set k_lo = k_hi = ⌊(α/2)(n₂ + 1)⌋.
   - The lower end is q_lo(x) + c_lo(k_lo), where c_lo(k) is the k-th smallest of yᵢ − q_lo(xᵢ) over calibration. The upper end is q_hi(x) − c_hi(k_hi), from q_hi(xᵢ) − yᵢ. Both are closed, with ties counted for the test, as CB-1's rule.
   - At level 0 that end is infinite (`accepts_zero`), which happens below n₂ + 1 = 2/α: n₂ < 19 at α = 0.1.
-  - Assert each tail missing at most k/m, exactly k/m on distinct scores, and two-sided coverage at least 1 − (k_lo + k_hi)/m, at least 1 − α. The rounding can leave it up to 1/m above 1 − α.
+  - Assert each tail missing at most k/m, exactly k/m on distinct scores, and two-sided coverage at least 1 − (k_lo + k_hi)/m. With equal tail levels, the excess of this lower bound over 1 − α lies in [0, 2/m). Its excess over the symmetric finite-rank bound 1 − ⌊αm⌋/m is either zero or 1/m.
 
 **What changed from the task.**
 - *The jackknife+'s bound is 1 − (2k − 1)/(n + 1),* sharper than 1 − 2α by at least 1/(n + 1), and attained.

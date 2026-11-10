@@ -410,7 +410,7 @@ Vovk 2015, Vovk et al. 2018 and Vovk and Wang 2012, on combining p-values, are c
 
 **Small calibration sets and rounding.**
 - *A tail's end is finite only once ⌊(α/2)m⌋ ≥ 1,* that is m ≥ 2/α: n₂ ≥ 19 at α = 0.1, against n₂ ≥ 9 for the symmetric form.
-- *Rounding costs up to 1/m.* 2⌊αm/2⌋ is ⌊αm⌋ or one less, so the two-sided guarantee is up to 1/m above 1 − α. At α = 0.1 and m = 30 it is 14/15, against 9/10 for the symmetric form.
+- *Rounding each tail.* Since 2⌊αm/2⌋ is ⌊αm⌋ or one less, the asymmetric lower bound equals the symmetric finite-rank bound or exceeds it by 1/m. Its excess over nominal 1 − α is (αm − 2⌊αm/2⌋)/m, in [0, 2/m). At α = 0.1 and m = 31 the asymmetric and symmetric lower bounds are 29/31 and 28/31, respectively, with nominal coverage 9/10.
 
 **Checks** (`conformal-checks.py`, slice 9).
 - *Under an i.i.d. law,* N = 4, every pair of levels, ties included: each tail and both hold. At k_lo = k_hi = 1, the set misses below 0.190 of the time and above 0.170, and covers 0.640.
