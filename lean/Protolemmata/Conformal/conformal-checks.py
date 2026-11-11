@@ -1977,4 +1977,267 @@ print(f"Slice 10 at m = 100, k = 5, nu = 1/20: over every turn the margin reads 
 
 
 print()
+print("=== Slice 12: Hoff's score and the latent posterior ===")
+
+
+# CB-4's model again (theta, a latent bit per unit, x and y). marg(zs) is the units' prior
+# predictive with every latent integrated, the x law left out (it is the same factor for every
+# theta, so it cancels in every ratio below).
+def marg(zs):
+    return sum(prior[th] * prod(g(th, z) for z in zs) for th in TH)
+
+
+# Hoff's score c_i = p(z_i | every other unit) = p(z) / p(z_-i), with every latent integrated
+# ((b) of CB-4): equivariant, so CB-1's rule (ties counted for the candidate) covers with it.
+n_h = 0
+for N, sets in ((3, list(itertools.product(Z, repeat=3))), (4, multisets(Z, 4))):
+    C = list(range(N))
+    for zs in sets:
+        c = score_hoff(zs)
+        assert all(c[i] == marg(zs) / marg(zs[:i] + zs[i + 1:]) for i in range(N))
+        assert is_equivariant(zs, score_hoff, C)
+        for k in range(N + 1):
+            assert coverage_orderings(zs, score_hoff, k, N - 1, C) >= 1 - Q(k, N)
+        n_h += 1
+zs = ((0, 1),) * 4
+assert coverage_orderings(zs, score_hoff, 1, 3, range(4), rule=accepts_strict) == 0
+print(f"Slice 12, Hoff's score: c_i = p(z)/p(z_-i) on {n_h} data sets (every ordering of 3 units, "
+      f"every multiset of 4); equivariant, and CB-1's rule covers >= 1 - k/m at every k; the strict "
+      f"rule covers 0 when every unit ties")
+
+# The draw identity. From the n-unit posterior, c_{n+1} is the plain n-unit predictive
+# A = E_n[g(z_new | theta)], and each data unit's c_i = A / B_i with B_i = E_n[g(z_new|th)/g(z_i|th)]:
+# the weight g(z_new)/g(z_i) is add-one-in and leave-one-out at once. The ranks need only the B_i:
+# the candidate is accepted at level k iff at least k data units have B_i >= 1.
+n_d = 0
+for zs in itertools.product(Z, repeat=4):
+    zn, znew = zs[:-1], zs[-1]
+    pn = post(zn)
+    A = sum(pn[th] * g(th, znew) for th in TH)
+    B = [sum(pn[th] * g(th, znew) / g(th, z) for th in TH) for z in zn]
+    c = score_hoff(zs)
+    assert c[-1] == A and all(c[i] == A / B[i] for i in range(3))
+    for k in range(5):
+        assert accepts(k, c, 3, range(4)) == (sum(1 for b in B if b >= 1) >= k)
+    n_d += 1
+# From S draws the estimator is c_hat_i = A_hat / B_hat_i, c_hat_{n+1} = A_hat, with A_hat common to
+# every unit: shifting every log score of an ordering by one constant changes no rule, so the
+# bounds slice 10 carries are on log B_hat_i alone, and the candidate's bound is 0.
+mr = random.Random(1210)
+n_mc = 0
+for trial in range(300):
+    zs = tuple(mr.choice(Z) for _ in range(4))
+    zn, znew = zs[:-1], zs[-1]
+    pn = post(zn)
+    draws = mr.choices(list(TH), weights=[float(w) for w in pn], k=mr.choice((1, 3, 10)))
+    Ah = sum(g(th, znew) for th in draws) / len(draws)
+    Bh = [sum(g(th, znew) / g(th, z) for th in draws) / len(draws) for z in zn]
+    ch = tuple(Ah / b for b in Bh) + (Ah,)
+    num = [sum(g(th, znew) / g(th, z) * g(th, z) for th in draws) / len(draws) for z in zn]
+    assert all(ch[i] == num[i] / Bh[i] for i in range(3))  # the self-normalized weights' reading
+    shifted = tuple(1 / b for b in Bh) + (Q(1),)  # every score divided by A_hat
+    for k in range(5):
+        assert accepts(k, ch, 3, range(4)) == accepts(k, shifted, 3, range(4))
+        for cc in (Q(-3), Q(1, 7), Q(5)):
+            s_add = tuple(v + cc for v in ch)
+            assert accepts(k, s_add, 3, range(4)) == accepts(k, ch, 3, range(4))
+            e = (Q(1, 50),) * 4
+            assert accepts_inflated(k, s_add, 3, range(4), e) == accepts_inflated(k, ch, 3, range(4), e)
+    n_mc += 1
+print(f"Slice 12, the draw identity on all {n_d} data sets of 3 units and a candidate: c_(n+1) = A, "
+      f"c_i = A/B_i, accepted iff #{{B_i >= 1}} >= k; on {n_mc} Monte Carlo draws the estimator "
+      f"A_hat/B_hat_i ranks as 1/B_hat_i against 1, and a common shift changes neither rule")
+
+
+# Hoff's score under latents. (c1): E[f(z_i | theta, v_i)] under the joint posterior of theta and
+# every latent given the other units; unit i's latent is then at its prior, so (c1) is (b).
+def score_hoff_joint(zs):
+    out = []
+    for i, z in enumerate(zs):
+        tot, num = Q(0), Q(0)
+        for th in TH:
+            for vs in itertools.product(V, repeat=len(zs)):
+                w = prior[th] * prod(qv[th][v] * (f[th][v][zj[0]][zj[1]] if j != i else 1)
+                                     for j, (v, zj) in enumerate(zip(vs, zs)))
+                tot += w
+                num += w * f[th][vs[i]][z[0]][z[1]]
+        out.append(num / tot)
+    return tuple(out)
+
+
+# (c2): each unit's own latent conditioned on its own value, theta given the other units:
+# sum_theta p(theta | z_-i) sum_v q f(z_i)^2 / g(z_i).
+def score_hoff_cond(zs):
+    out = []
+    for i, z in enumerate(zs):
+        p = post(zs[:i] + zs[i + 1:])
+        out.append(sum(p[th] * sum(qv[th][v] * f[th][v][z[0]][z[1]] ** 2 for v in V) / g(th, z)
+                       for th in TH))
+    return tuple(out)
+
+
+# (c2) from the n-unit draws: each data unit reads its retained latent with Hoff's weight
+# g(z_new|theta)/g(z_i|theta); the candidate draws its latent from p(v | theta, z_new), unweighted.
+def score_hoff_cond_draws(zs):
+    zn, znew = zs[:-1], zs[-1]
+    Jn = joint(zn)
+    out = []
+    for i in range(len(zn)):
+        wts = {key: w * g(key[0], znew) / g(key[0], zn[i]) for key, w in Jn.items()}
+        tot = sum(wts.values())
+        out.append(sum(w / tot * f[th][vs[i]][zn[i][0]][zn[i][1]] for (th, vs), w in wts.items()))
+    cand = sum(w * sum(qv[th][v] * f[th][v][znew[0]][znew[1]] ** 2 for v in V) / g(th, znew)
+               for (th, vs), w in Jn.items())
+    return tuple(out) + (cand,)
+
+
+def score_hoff_mixed(zs):
+    """The broken reading: data units by (c2), the candidate by (b)."""
+    return score_hoff_cond(zs)[:-1] + (score_hoff(zs)[-1],)
+
+
+def score_hoff_mixed_reverse(zs):
+    return score_hoff(zs)[:-1] + (score_hoff_cond(zs)[-1],)
+
+
+gap = Q(0)
+for zs in itertools.product(Z, repeat=3):
+    hb = score_hoff(zs)
+    assert score_hoff_joint(zs) == hb
+    hc = score_hoff_cond(zs)
+    assert hc == score_hoff_cond_draws(zs)
+    assert all(a >= b for a, b in zip(hc, hb))
+    gap = max(gap, max(a - b for a, b in zip(hc, hb)))
+for zs in multisets(Z, 3):
+    assert is_equivariant(zs, score_hoff_cond, range(3))
+print(f"Slice 12, latents: (c1), the joint posterior given the others, equals (b) on all 216 data sets; "
+      f"(c2), each unit's latent conditioned on its own value, is equivariant, equals its reading from "
+      f"the n-unit draws, and sits above (b) unit by unit (by up to {float(gap):.4f})")
+N = 4
+for lname, law in (("the model's own law", model_law(N)), ("an iid law outside the model", out_law(N))):
+    for k in (1, 2):
+        bound = 1 - Q(k, N)
+        row = {}
+        for sname, sc in (("(b)", score_hoff), ("(c2)", score_hoff_cond), ("mixed", score_hoff_mixed),
+                          ("reverse", score_hoff_mixed_reverse)):
+            row[sname] = coverage_law(law, sc, k, N - 1, range(N))
+        assert row["(b)"] >= bound and row["(c2)"] >= bound
+        assert row["mixed"] < bound
+        print(f"Slice 12 Hoff under {lname}, N = 4, k = {k}, bound {float(bound):.3f}: " +
+              ", ".join(f"{a} {float(c):.3f}" for a, c in row.items()))
+
+# CB-4(c) from S draws, the candidate's latent drawn per draw from p(v | theta_s, z_new). Over the
+# drawn latents the estimate's mean is the Rao-Blackwell reading sum_s w_s E[f | theta_s, z_new]/W,
+# and its variance is sum_s (w_s/W)^2 Var(f | theta_s, z_new): what the drawn latent adds.
+mr = random.Random(1211)
+n_rb = 0
+for trial in range(300):
+    znew = mr.choice(Z)
+    S = mr.choice((1, 2, 3, 4))
+    ths = [mr.choice(TH) for _ in range(S)]
+    w = [g(th, znew) for th in ths]
+    W = sum(w)
+    cond = [[qv[th][v] * f[th][v][znew[0]][znew[1]] / g(th, znew) for v in V] for th in ths]
+    fv = [[f[th][v][znew[0]][znew[1]] for v in V] for th in ths]
+    mean, second = Q(0), Q(0)
+    for vs in itertools.product(V, repeat=S):
+        pr = prod(cond[s][vs[s]] for s in range(S))
+        est = sum(w[s] * fv[s][vs[s]] for s in range(S)) / W
+        mean += pr * est
+        second += pr * est ** 2
+    rb = [sum(cond[s][v] * fv[s][v] for v in V) for s in range(S)]
+    var_s = [sum(cond[s][v] * (fv[s][v] - rb[s]) ** 2 for v in V) for s in range(S)]
+    assert mean == sum(w[s] * rb[s] for s in range(S)) / W
+    assert second - mean ** 2 == sum((w[s] / W) ** 2 * var_s[s] for s in range(S))
+    n_rb += 1
+for zs in itertools.product(Z, repeat=3):
+    assert score_lat_from_draws(zs) == score_lat(zs)
+print(f"Slice 12, CB-4(c) from draws: on {n_rb} draw sets the mean over the candidate's drawn latents is "
+      f"the Rao-Blackwell reading and the added variance is sum_s (w_s/W)^2 Var(f | theta_s, z_new); "
+      f"the weighted reading of the n-unit joint is (c) for every unit, the candidate included")
+
+
+# Hoff's optimality, finite. P is the model's law of the units (exchangeable, positive). A procedure
+# phi gives phi(z), the chance that z's last unit is accepted given the others; its expected size is
+# sum_z P_-t(z) phi(z), with P_-t(z) = sum_y P(z with t -> y) the others' marginal. Among procedures
+# whose coverage over the orderings of every data set is at least that of Hoff's set, Hoff's set
+# has the smallest expected size; with ties broken at random to exactly 1 - k/m, it is smallest
+# among all procedures valid at 1 - k/m.
+def opt_check(N, k, trials, seed):
+    C, t = list(range(N)), N - 1
+    P = model_law(N)
+    G = perms_on(N, C)
+
+    def Pm(zs, i):
+        return sum(P[zs[:i] + (y,) + zs[i + 1:]] for y in Z)
+
+    hoff_cache = {zs: score_hoff(zs) for zs in P}
+    for zs in itertools.islice(P, 0, None, 37):
+        assert all(P[zs] / Pm(zs, i) == hoff_cache[zs][i] / 2 for i in range(N))
+
+    def size(phi):
+        return sum(Pm(zs, t) * phi[zs] for zs in P)
+
+    def conformal(score):
+        return {zs: (1 if accepts(k, score(zs), t, C) else 0) for zs in P}
+
+    def randomized(score):
+        """CB-1's rule with ties broken at random: exactly 1 - k/m on every data set."""
+        out = {}
+        for zs in P:
+            c = score(zs)
+            L = sum(1 for u in C if c[u] < c[t])
+            T = sum(1 for u in C if c[u] == c[t])
+            out[zs] = Q(1) if L >= k else (Q(0) if L + T <= k else Q(L + T - k, T))
+        return out
+
+    orbits = {}
+    for zs in P:
+        orbits.setdefault(tuple(sorted(zs)), []).append(zs)
+
+    def orbit_cov(phi, key):
+        # every ordering of the data set, each member weighted by how many orderings land on it
+        mem = orbits[key]
+        return sum(phi[zs] for zs in mem) * Q(len(G), len(mem))
+
+    hoff, hoff_r = conformal(hoff_cache.get), randomized(hoff_cache.get)
+    for key in orbits:
+        assert orbit_cov(hoff_r, key) == len(G) * Q(N - k, N)
+    det, rnd, short = {"Hoff": size(hoff)}, {"Hoff": size(hoff_r)}, {}
+    for sname, sc in (("in-sample", score_int), ("(c)", score_lat), ("(c2)", score_hoff_cond)):
+        phi, phr = conformal(sc), randomized(sc)
+        det[sname], rnd[sname] = size(phi), size(phr)
+        short[sname] = sum(1 for key in orbits if orbit_cov(phi, key) < orbit_cov(hoff, key))
+        if short[sname] == 0:
+            assert size(hoff) <= size(phi)
+        assert size(hoff_r) <= size(phr) and size(hoff_r) <= size(phi)
+    rr = random.Random(seed)
+    for trial in range(trials):
+        for target, ref in ((hoff, "cb1"), (hoff_r, "exact")):
+            phi = {zs: rr.choice((Q(0), Q(1, 2), Q(1))) for zs in P}
+            for key, mem in orbits.items():
+                need = orbit_cov(target, key)
+                order = mem[:]
+                rr.shuffle(order)
+                for zs in order:
+                    if orbit_cov(phi, key) >= need:
+                        break
+                    phi[zs] = Q(1)
+                assert orbit_cov(phi, key) >= need
+            assert size(target) <= size(phi)
+    return det, rnd, short, len(orbits)
+
+
+for N, k, trials in ((3, 1, 40), (4, 1, 8), (4, 2, 8)):
+    det, rnd, short, n_orb = opt_check(N, k, trials, 1212 + N + k)
+    print(f"Slice 12, Hoff's optimality at m = {N}, k = {k}, expected sizes counting (x, y) values. "
+          f"Ties broken at random (every set exactly 1 - k/m): " +
+          ", ".join(f"{a} {float(b):.4f}" for a, b in rnd.items()) +
+          ". CB-1's tie rule: " + ", ".join(f"{a} {float(b):.4f}" for a, b in det.items()) +
+          f", the others covering less than Hoff's on " +
+          ", ".join(f"{b} ({a})" for a, b in short.items()) + f" of {n_orb} data sets. Hoff's set no "
+          f"larger than any of {2 * trials} random procedures covering as much on every data set")
+
+
+print()
 print("All assertions hold.")

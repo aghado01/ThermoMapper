@@ -4,7 +4,7 @@ CB-1 to CB-4 were proved on 2026-11-06, E35's M-1 and M-2 on 2026-11-08, and E16
 
 ## E16 slices 10 and 12 — the full step's error, Hoff's score and the latent posterior (2026-11-10)
 
-Status: commissioned 2026-11-10 by the user ("Yes, send it"), relayed by the main session. Slice 10 was proved on 2026-11-10 and reported under Reports; slice 12 is in progress.
+Status: commissioned 2026-11-10 by the user ("Yes, send it"), relayed by the main session. Slice 10 and slice 12 were proved on 2026-11-10 and reported under Reports.
 
 These are Lean first, by the user's decision 7 on the [layer plan](../../../issues/regression/conformal-layer-brief.md#e16s-completion-the-plan-slices-7-onward), so the C# for slices 10 and 12 waits for these statements. Do slice 10 first and report it on its own, so its C# can start while slice 12's Lean runs. The method, environment, self-review and reporting are as set out below. The numeric checks come first, exhaustive at small n with exact arithmetic. Then come the Lean, `#print axioms` on the main results, the module build, `scripts/meta-ci.ps1 -NoBuild` and D:'s free space. The files are the three named under Scope, plus `conformal-searches.py` where a search needs it.
 
@@ -170,6 +170,74 @@ The user asked for this on 2026-11-08 ("Yes, start it"), relayed by the BASS ext
 ## Reports
 
 Newest first.
+
+### 2026-11-10 — slice 12: Hoff's score and the latent posterior, proved
+
+Slice 12 is proved in `ConformalValidity.lean`: 60 new declarations, 299 in the file, PROOF-CLOSED, with the standard three axioms only. The ledger's [slice 12 section](conformal-lemmas.md#slice-12--hoffs-score-and-the-latent-posterior) has the statements. The checks ran first, in CB-4's model and in exact arithmetic, and every assertion holds.
+
+**1. Hoff's leave-one-out score.**
+- *Valid.* It is equivariant, and CB-1 covers with it, ties counted for the candidate (`hoffScore_equivariant`, `hoff_coverage`). The strict rule covers 0 when every unit ties.
+- *The draw identity.*
+  - The candidate's score c₍ₙ₊₁₎ = A = E_n[g(z_new | θ)] is the plain n-unit predictive (`hoffScore_none`).
+  - A data unit's score is cᵢ = A/Bᵢ, with Bᵢ = E_n[g(z_new | θ)/g(zᵢ | θ)], the mean of its add-one-in and leave-one-out weight (`hoffScore_some`).
+  - The candidate is accepted iff at least k data units have Bᵢ ≥ 1 (`hoff_accepts_iff`).
+- *The error in slice 10's form.* Â is common to every unit of an ordering. Ranks see only differences, so CB-3 and every slice 10 form hold with bounds up to one shift per ordering (`coverage_close_shift`, `coverage_inflated_shift`). On the log scale the bounds are |log B̂ᵢ − log Bᵢ| for the data units and 0 for the candidate.
+- *Latents.*
+  - (b), every latent integrated, is `hoffScore`.
+  - (c) read literally is the joint posterior given the others. It is (b), since unit i's latent is then at its prior (`hoffJointScore_eq`).
+  - (c) read as the draws read it conditions each unit's latent on its own value (`hoffCondScore`). It is equivariant and sits above (b) unit by unit. Its draw identities: the data units read their retained latents with Hoff's weights, and the candidate draws its latent per draw, unweighted.
+  - Reading the units differently breaks it, as CB-4(d) does: coverage 0 against 1/2 (`hoffMixed_counterexample`), and 0.53 against 0.75 in the checks' model.
+- *Hoff's optimality: proved, finite* (`hoff_expectedSize_le`, `hoff_cb1_expectedSize_le`).
+  - The setting is any exchangeable positive law and any base measure, so covariates are covered.
+  - The claim: among procedures (any φ, randomized, not necessarily symmetric) that cover at least as much on every data set, a threshold in Hoff's score has the smallest expected size.
+  - With distinct scores, CB-1's rule is exactly 1 − k/m, so the comparison is with every valid procedure. `hoffScore_eq_hoffP` ties `hoffP` to the model's score.
+- *Finding: ties.* CB-1's rule counts ties for the candidate. So where Hoff's scores tie at the boundary, his set over-covers, and another score's set can be smaller. In the checks' model, CB-1's Hoff set is 3.719 against 3.678 for the in-sample score at m = 3, k = 1.
+- *How much it buys.* At exact coverage (ties broken at random), Hoff's set is smallest, but only 0.2–0.5% below the in-sample (Fong and Holmes) score's. It is 1–4% below (c)'s.
+
+**2. CB-4(c) from draws, the candidate's latent drawn per draw.**
+- *Proved:* the estimator's expectation is (c)'s score for every unit, the candidate included (`latentScore_some_draws`, `latentScore_none_draws`).
+- *What the drawn latent adds.* Over the drawn latents (`drawnLatent_mean_var`), the candidate's estimate has:
+  - mean equal to the Rao–Blackwell reading Σ_s w̄_s E[f | θ_s, z_new];
+  - variance exactly Σ_s w̄_s² Var(f | θ_s, z_new).
+
+  That variance is what each unit's carried bound must take from its own turn as the candidate, and a closed-form conditional mean removes it. The common normalizer drops out as a shift.
+
+**Rules for the C# worker.**
+- *Hoff's score:*
+  - each data unit's weight is g(z_new | θ)/g(zᵢ | θ);
+  - the candidate gets the plain n-unit predictive, with no weight;
+  - accept iff #{B̂ᵢ ≥ 1} ≥ k;
+  - carry bounds on log B̂ᵢ, and 0 for the candidate.
+  - The weights' k̂ is the place to read slice 10's D.
+- *Any latent reading:* every unit reads alike.
+  - For the conditioned reading, the candidate's latent is drawn from p(v′ | θ, z_new) for each draw, unweighted under Hoff's score and with the add-one-in weight under CB-4(c).
+  - Prefer Σ_v q f²/g in closed form when the model has it.
+
+**Decisions served.**
+- *Does the full step offer Hoff's score?*
+  - For: valid and optimal at equal coverage.
+  - Against: the gain over the in-sample score is small here, and a per-unit weight brings PSIS instability and degenerate turns. Under CB-1's tie rule on discrete data the gain can reverse.
+  - The measurements are at m ≤ 4 in one model. The decision is yours.
+- *Does it read a conditioned observation latent?* For Hoff's score there is nothing to read, since the literal latent posterior is (b). The conditioned reading is valid only if every unit reads alike.
+
+**Files.**
+- `ConformalValidity.lean`, sections `ShiftedBounds`, `Hoff`, `DrawnLatents`, `HoffOptimal`, `HoffLink`.
+- `conformal-checks.py`, section "Slice 12".
+- `conformal-lemmas.md`: the slice 12 section, and the status line, whose count is now 299 with the Hoff finding closed.
+- This brief.
+
+**Gates.**
+- `lake build Enthymemata.ConformalValidity`: clean, no warnings.
+- `lake build Enthymemata`: green.
+- `scripts/meta-ci.ps1 -NoBuild`: PASS.
+- `#print axioms` on all 49 new theorems: the standard three, or fewer.
+- Builds ran at below-normal priority. D: had 38 GB free.
+
+**Open, no decision waiting:**
+- Hoff's gain at larger n and in a continuous model.
+- The law forms on continuous spaces, unchanged.
+
+**What stopped me:** nothing.
 
 ### 2026-11-10 — slice 10: the full step's error, proved
 

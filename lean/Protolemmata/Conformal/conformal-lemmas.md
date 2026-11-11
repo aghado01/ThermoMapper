@@ -2,13 +2,13 @@
 
 Pins the contract of the engine's conformal layer, one layer over retained draws and pointwise densities for every model with a pointwise density ([E16](../../../issues/regression/bass/extensions-brief.md#conformal-bayes-the-consumer)). The layer owns coverage and the score owns width. These are the finite statements of that split. They are the sibling of [GuardedEstimator](../BASS/guarded-estimator-lemmas.md): there, means valid whatever the emulator does; here, prediction sets valid whatever the model does. Written from the [chip brief](conformal-chip-brief.md).
 
-**Status (2026-11-06).** Proved in `lean/Enthymemata/ConformalValidity.lean`, namespace `Conformal`, with no apologies (PROOF-CLOSED, 239 declarations counting E35's M-1 and M-2, slice 9 and slice 10 at the end of this page; `#print axioms` shows `propext`, `Classical.choice`, `Quot.sound` only):
+**Status (2026-11-06).** Proved in `lean/Enthymemata/ConformalValidity.lean`, namespace `Conformal`, with no apologies (PROOF-CLOSED, 299 declarations counting E35's M-1 and M-2 and slices 9, 10 and 12 at the end of this page; `#print axioms` shows `propext`, `Classical.choice`, `Quot.sound` only):
 - CB-1: `card_rankLe_le`, `coverage_orderings`, `coverage_orderings_eq`, `coverage_strict_le`, `coverage_orderings_le`, `rank_uniform`, `coverage_tieBreak`, `coverage_given`, `coverage_law`, `coverage_stratum`;
 - CB-2: `split_coverage`, `exchangeable_given_training`, `cqr_ordConnected`;
 - CB-4: `sum_jointU`, `post_addOneIn`, `integratedScore_equivariant`, `latentScore_equivariant`, `latentScore_eq`, `sum_jointU_addOneIn`, `integratedScore_le_latentScore`, `accepts_latent_of_mixed`, `mixed_counterexample`;
 - CB-3, with an error bound per unit: `accepts_or_fragile`, `accepts_shift_of_accepts_close`, `acceptsInflated_of_accepts`, `fragileEstimated_of_fragile`, `fragileEstimated_mono`, `coverage_close`, `coverage_inflated`, `card_fragile_le_estimated`.
 
-[`conformal-checks.py`](conformal-checks.py) holds the exact-arithmetic checks, run before the Lean. Every assertion holds. Changed from the brief: CB-1's upper bound is an equality at the grid levels, and Hoff's strict rule fails under ties; CB-3's band is one-sided and tight, its bounds are per unit, and it gives a third option, the inflated rule. Nothing proved false. CB-3's prior art was read in full on 2026-11-06; the inflated rule is known, and the margin was not found. Open: the law forms on continuous spaces, and the Hoff finding under CB-4 (slice 12). CB-3's margin under an ε that holds only with high probability was closed by slice 10 on 2026-11-10, at the end of this page.
+[`conformal-checks.py`](conformal-checks.py) holds the exact-arithmetic checks, run before the Lean. Every assertion holds. Changed from the brief: CB-1's upper bound is an equality at the grid levels, and Hoff's strict rule fails under ties; CB-3's band is one-sided and tight, its bounds are per unit, and it gives a third option, the inflated rule. Nothing proved false. CB-3's prior art was read in full on 2026-11-06; the inflated rule is known, and the margin was not found. Open: the law forms on continuous spaces. Closed on 2026-11-10, at the end of this page: CB-3's margin under an ε that holds only with high probability (slice 10), and the Hoff finding under CB-4 (slice 12).
 
 **Conventions, fixed here and used throughout.**
 - A score is a **conformity** score: higher conforms better. The engine's pointwise log density is one, and a monotone map of every unit's score changes nothing.
@@ -545,3 +545,108 @@ On D's turns, and on kept orderings whose bounds fail, the estimate may be anyth
 
   Whether to show it depends on whether it reads anything on real fits, which the C# measures.
 - *Can the margin read anything on fits like BASS's?* With D left out, yes, when the degenerate turns are the far units that the exact rule already refuses. Their turns cost nothing, and the band shrinks to what the kept turns' bounds give.
+
+## Slice 12 — Hoff's score and the latent posterior
+
+Posed and proved on 2026-11-10 for the [conformal layer's slice 12](../../../issues/regression/conformal-layer-brief.md#e16s-completion-the-plan-slices-7-onward), before any C#, from the [chip brief's assignment](conformal-chip-brief.md#e16-slices-10-and-12--the-full-steps-error-hoffs-score-and-the-latent-posterior-2026-11-10). It closes CB-4's Hoff finding.
+
+**Status (2026-11-10).** Proved in `lean/Enthymemata/ConformalValidity.lean`, PROOF-CLOSED, and `#print axioms` shows the standard three only. The sections are `ShiftedBounds`, `Hoff`, `DrawnLatents`, `HoffOptimal` and `HoffLink`. [`conformal-checks.py`](conformal-checks.py), section "Slice 12", ran first, in CB-4's model and in exact arithmetic, and every assertion holds.
+
+### Hoff's score
+
+- *The score* (`hoffScore`, every latent integrated): cᵢ = p(zᵢ | z₋ᵢ) = Σ_θ p(θ | z₋ᵢ) g(zᵢ | θ), which equals p(z)/p(z₋ᵢ) (`hoffScore_eq`). The numerator is the same for every unit.
+- *Validity.* The score is equivariant (`hoffScore_equivariant`), so CB-1's rule covers with it (`hoff_coverage`), ties counted for the candidate. Hoff's strict rule covers 0 when every unit ties (checked; the CB-4 finding).
+- *From the n-unit draws:*
+  - The candidate's score is the plain n-unit predictive, c₍ₙ₊₁₎ = A = E_n[g(z_new | θ)] (`hoffScore_none`).
+  - Each data unit's score is cᵢ = A/Bᵢ, with Bᵢ = E_n[g(z_new | θ)/g(zᵢ | θ)] (`hoffScore_some`, `hoffMeanWeight`).
+  - The posterior given every unit but i is the n-unit posterior times g(z_new | θ)/g(zᵢ | θ), which is add-one-in and leave-one-out at once (`postUExcept_some`).
+- *The accept rule needs only the Bᵢ.* The candidate is accepted at level k iff at least k data units have Bᵢ ≥ 1 (`hoff_accepts_iff`).
+- *The estimator's error, in a form slice 10 carries.* From S draws, ĉᵢ = Â/B̂ᵢ and ĉ₍ₙ₊₁₎ = Â, with Â common to every unit of the ordering.
+  - Ranks see only differences (`rankLe_add_const`, `accepts_add_const_iff`, `acceptsInflated_add_const_iff`), so CB-3 holds with bounds up to one shift per ordering (`coverage_close_shift`, `coverage_inflated_shift`). Every slice 10 form transfers the same way.
+  - On the log scale the bounds are |log B̂ᵢ − log Bᵢ| for data units and 0 for the candidate.
+  - The weights g(z_new)/g(zᵢ) are where PSIS's k̂ applies. A unit whose weights degenerate is one of slice 10's D.
+
+### Under latents
+
+- *(b), every latent integrated:* `hoffScore` itself.
+- *(c), read literally:* E[f(zᵢ | θ, vᵢ)] under the joint posterior of θ and every latent given the other units. It equals (b) (`hoffJointScore_eq`): given the others, unit i's latent is at its prior. The latent posterior adds nothing to a leave-one-out score.
+- *(c), read as the draws read it:* θ given the others, and unit i's latent given θ and its own value, Σ_θ p(θ | z₋ᵢ) Σ_v q f(zᵢ)²/g(zᵢ) (`hoffCondScore`).
+  - This is what the C# computes when the data units read their retained latents with Hoff's weights and the candidate draws its latent from p(v′ | θ, z_new), unweighted (`hoffCondScore_some_draws`, `hoffCondScore_none_draws`).
+  - It is equivariant (`hoffCondScore_equivariant`).
+  - It sits above (b) unit by unit (`hoffScore_le_hoffCondScore`, through `integrated_le_sq_div`).
+- *Reading the units differently breaks it, as CB-4(d) does.* With the data units conditioned and the candidate integrated, the score accepts no candidate that the conditioned score refuses (`accepts_hoffCond_of_mixed`). CB-4(d)'s model gives coverage 0 against 1/2 (`hoffMixed_counterexample`).
+
+In the checks' model at m = 4, under the model's own law and then an iid law outside it:
+
+| score | k = 1 (bound 0.75) | k = 2 (bound 0.50) |
+|---|---|---|
+| (b) | 0.813, 0.825 | 0.595, 0.587 |
+| (c), conditioned | 0.812, 0.816 | 0.594, 0.583 |
+| mixed (data conditioned, candidate integrated) | 0.531, 0.485 | 0.260, 0.226 |
+| reversed | 0.889, 0.909 | 0.714, 0.744 |
+
+### Hoff's optimality
+
+**Setting.**
+- P is any exchangeable, positive law of the m units, and μ > 0 is a base measure on a unit's values.
+- A procedure is φ, with φ(z) the chance that the candidate's value z_t is accepted given the others. It may be any function: randomized, and not necessarily symmetric in the data.
+- Its expected size is Σ_z P₋ₜ(z) μ(z_t) φ(z) (`expectedSize`).
+- Hoff's score for P is cᵢ = P(z)/(μ(zᵢ) P₋ᵢ(z)) (`hoffP`). It is equivariant under any exchangeable P (`hoffP_comp`), and it is the model's `hoffScore` when P is the model's law and g a μ-density (`hoffScore_eq_hoffP`). With covariates, μ(x, y) = h(x) gives sets over y, and c is p(yᵢ | xᵢ, the rest).
+
+**Claims.**
+- *Averaging over the orderings* (`sum_perm_expectedSize`): the size is Σ_z P(z) Σ_σ φ(z∘σ)/c_σ(t)(z), up to the number of orderings. For each data set this is a linear program in the orderings' readings with weights 1/c, and a threshold in c solves it (`sum_mul_le_of_threshold`).
+- *The theorem* (`hoff_expectedSize_le`). Let ψ be a threshold in Hoff's score on every data set: CB-1's rule on it, or that rule with ties broken at random. Every φ that covers at least as much as ψ on every data set has an expected size at least ψ's.
+  - For CB-1's rule this is `hoff_cb1_expectedSize_le`.
+  - With distinct Hoff scores, CB-1's rule covers exactly 1 − k/m, so it is smallest among all procedures valid at 1 − k/m.
+  - This is Hoff's Theorem 4.1 in finite form: there, constant coverage forces coverage given the multiset.
+
+**The tie finding.** Under CB-1's rule, ties count for the candidate.
+- So on a data set where Hoff's scores tie at the boundary, Hoff's set covers more than 1 − k/m, and another score's CB-1 set that covers less can be smaller.
+- In the checks' model, where values repeat: at m = 3, k = 1, CB-1's Hoff set has expected size 3.719, against 3.678 for the in-sample score's. The in-sample set covers less than Hoff's on 2 of 56 data sets.
+- With ties broken at random, every set is exactly 1 − k/m and Hoff's is the smallest.
+
+**What it buys.** Expected sizes with ties broken at random, counting (x, y) values:
+
+| m, k | Hoff | in-sample (Fong and Holmes) | (c) | (c), conditioned Hoff |
+|---|---|---|---|---|
+| 3, 1 | 3.2538 | 3.2594 (+0.2%) | 3.3368 (+2.6%) | 3.3151 (+1.9%) |
+| 4, 1 | 3.7783 | 3.7840 (+0.2%) | 3.8224 (+1.2%) | 3.8199 (+1.1%) |
+| 4, 2 | 2.2011 | 2.2123 (+0.5%) | 2.2953 (+4.3%) | 2.2699 (+3.1%) |
+
+Hoff's set is also no larger than any of 112 random procedures repaired to cover as much on every data set.
+
+The in-sample and leave-one-out predictives differ by one unit's weight, so their gap should shrink as n grows. That is not checked here.
+
+### CB-4(c) read from draws, the candidate's latent drawn per draw
+
+- *The estimator.*
+  - It reads the n-unit joint draws (θ_s, v_s) with add-one-in weights w_s = g(z_new | θ_s).
+  - The data units read their retained latents, f(zᵢ | θ_s, v_s,i).
+  - The candidate draws v′_s from p(v′ | θ_s, z_new) and reads f(z_new | θ_s, v′_s).
+- *Its expectation is (c) for every unit, the candidate included* (`latentScore_some_draws`, `latentScore_none_draws`). These are the weighted readings under the n-unit joint posterior.
+- *What the drawn latent adds* (`drawnLatent_mean_var`; also `sum_pi_prod_mul_sum`, `sum_pi_prod_mul_sq`). For fixed draws, over the drawn latents:
+  - the candidate's estimate has mean Σ_s w̄_s E[f | θ_s, z_new], the Rao–Blackwell reading;
+  - its variance is Σ_s w̄_s² Var(f | θ_s, z_new), with w̄ = w/Σw.
+
+  This variance is the term that the candidate's bound in each ordering carries on top of the draws' own error. So each unit's carried bound carries it from its own turn as the candidate. Reading the conditional mean Σ_v q f²/g in closed form removes it.
+- *The normalizer drops out.* Σ_s w_s is common to every unit of an ordering, so on the log scale it drops out as a common shift (`coverage_close_shift`). The bounds are on the log numerators.
+
+**Checks** (`conformal-checks.py`, slice 12).
+- Hoff's ratio form, equivariance and CB-1 coverage on 342 data sets.
+- The draw identity and the B-form accept rule on all 1,296 data sets of 3 units and a candidate.
+- 300 Monte Carlo draw sets for the common shift.
+- (c) read literally equals (b), and the conditioned reading's equivariance, draw identity and order above (b) hold, on all 216 data sets.
+- The coverage table.
+- The drawn latent's mean and variance on 300 draw sets.
+- The optimality comparisons at m = 3 and 4.
+
+**Decisions served.**
+- *Does the full step offer Hoff's score?* The evidence:
+  - it is valid, and optimal at equal coverage;
+  - in the checks' model it is 0.2–0.5% smaller than the in-sample score at exact coverage;
+  - under CB-1's tie rule on discrete data it can be larger;
+  - it costs a weight per data unit, which adds PSIS instability and degenerate turns.
+- *Does the full step read a conditioned observation latent?*
+  - For Hoff's score the literal latent posterior is (b), so there is nothing to read.
+  - The conditioned reading is valid only when every unit reads alike, with the candidate's latent drawn per draw.
+  - For CB-4(c), the drawn latent costs Σ w̄² Var on the candidate, which a closed-form conditional mean removes.

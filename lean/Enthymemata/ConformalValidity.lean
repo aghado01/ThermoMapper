@@ -3881,4 +3881,790 @@ theorem card_pit_excluding_estimated {C : Finset ι} {s ŝ ε : ι → ℝ}
 
 end FullStepError
 
+/-! ### Slice 12: Hoff's score and the latent posterior -/
+
+section ShiftedBounds
+
+variable {ι : Type*} [DecidableEq ι]
+
+omit [DecidableEq ι] in
+/-- Ranks see only differences: one constant added to every score changes no rank. -/
+theorem rankLe_add_const (C : Finset ι) (s : ι → ℝ) (c : ℝ) (u : ι) :
+    rankLe C (fun j => s j + c) u = rankLe C s u := by
+  unfold rankLe
+  congr 1
+  exact filter_congr fun j _ => add_le_add_iff_right c
+
+omit [DecidableEq ι] in
+theorem accepts_add_const_iff (k : ℕ) (C : Finset ι) (s : ι → ℝ) (c : ℝ) (u : ι) :
+    Accepts k C (fun j => s j + c) u ↔ Accepts k C s u := by
+  unfold Accepts
+  rw [rankLe_add_const]
+
+omit [DecidableEq ι] in
+theorem acceptsInflated_add_const_iff (k : ℕ) (C : Finset ι) (s ε : ι → ℝ) (c : ℝ) (u : ι) :
+    AcceptsInflated k C (fun j => s j + c) ε u ↔ AcceptsInflated k C s ε u := by
+  unfold AcceptsInflated
+  rw [filter_congr fun j _ => show s j + c - ε j ≤ s u + c + ε u ↔ s j - ε j ≤ s u + ε u by
+    constructor <;> intro h <;> linarith]
+
+variable [Fintype ι]
+
+/-- **CB-3 with bounds up to a common shift per ordering.** The estimates need only lie within
+their bounds of the exact scores after one constant `c σ` is added to every unit's estimate in the
+ordering `σ`. A factor common to every unit of an ordering, such as a shared normalizer on the log
+scale, so drops out of the bounds. The same transfer holds for every form of CB-3 and slice 10,
+since the rules see only differences. -/
+theorem coverage_close_shift {Z : Type*} {C : Finset ι} {t : ι} (ht : t ∈ C)
+    {S : (ι → Z) → ι → ℝ} (hS : Equivariant C S) (z : ι → Z) (ŝ : Equiv.Perm ι → ι → ℝ)
+    (c : Equiv.Perm ι → ℝ) (ε : ι → ℝ)
+    (hclose : ∀ σ ∈ permsOn C, ∀ j ∈ C, |ŝ σ j + c σ - S (z ∘ σ) j| ≤ ε (σ j)) (k : ℕ) :
+    1 - ((k : ℝ) + (C.filter fun u => Fragile k C (S z) ε u).card) / C.card ≤
+      (((permsOn C).filter fun σ : Equiv.Perm ι => Accepts k C (ŝ σ) t).card : ℝ) /
+        (permsOn C).card := by
+  have h := coverage_close ht hS z (fun σ j => ŝ σ j + c σ) ε hclose k
+  simp only [accepts_add_const_iff] at h
+  exact h
+
+/-- **The inflated rule with bounds up to a common shift per ordering.** -/
+theorem coverage_inflated_shift {Z : Type*} {C : Finset ι} {t : ι} (ht : t ∈ C)
+    {S : (ι → Z) → ι → ℝ} (hS : Equivariant C S) (z : ι → Z) (ŝ ε : Equiv.Perm ι → ι → ℝ)
+    (c : Equiv.Perm ι → ℝ)
+    (hclose : ∀ σ ∈ permsOn C, ∀ j ∈ C, |ŝ σ j + c σ - S (z ∘ σ) j| ≤ ε σ j) (k : ℕ) :
+    1 - (k : ℝ) / C.card ≤
+      (((permsOn C).filter fun σ : Equiv.Perm ι => AcceptsInflated k C (ŝ σ) (ε σ) t).card : ℝ) /
+        (permsOn C).card := by
+  have h := coverage_inflated ht hS z (fun σ j => ŝ σ j + c σ) ε hclose k
+  simp only [acceptsInflated_add_const_iff] at h
+  exact h
+
+end ShiftedBounds
+
+section Hoff
+
+variable {Θ V Z : Type*} [Fintype Θ] [Fintype V]
+variable (prior : Θ → ℝ) (q : Θ → V → ℝ) (f : Θ → V → Z → ℝ)
+variable {ι : Type*} [Fintype ι] [DecidableEq ι]
+
+/-- The unnormalized posterior of `θ` given every unit but `i`, each latent integrated. -/
+noncomputable def postUExcept (z : ι → Z) (i : ι) (θ : Θ) : ℝ :=
+  prior θ * ∏ j ∈ univ.erase i, integrated q f θ (z j)
+
+/-- **Hoff's score**, every latent integrated (CB-4(b)'s reading): unit `i`'s predictive density
+given every other unit, `c_i = p(z_i | z_{-i})`. Hoff 2023, §4.1. -/
+noncomputable def hoffScore (z : ι → Z) (i : ι) : ℝ :=
+  (∑ θ, postUExcept prior q f z i θ * integrated q f θ (z i)) / ∑ θ, postUExcept prior q f z i θ
+
+omit [Fintype Θ] in
+theorem postUExcept_mul (z : ι → Z) (i : ι) (θ : Θ) :
+    postUExcept prior q f z i θ * integrated q f θ (z i) = postU prior q f z θ := by
+  rw [postUExcept, postU, ← mul_prod_erase univ (fun j => integrated q f θ (z j)) (mem_univ i)]
+  ring
+
+/-- `c_i = p(z) / p(z_{-i})`: the numerator is the same for every unit. -/
+theorem hoffScore_eq (z : ι → Z) (i : ι) :
+    hoffScore prior q f z i = (∑ θ, postU prior q f z θ) / ∑ θ, postUExcept prior q f z i θ := by
+  simp only [hoffScore, postUExcept_mul]
+
+omit [Fintype Θ] in
+theorem postUExcept_comp (z : ι → Z) (σ : Equiv.Perm ι) (i : ι) (θ : Θ) :
+    postUExcept prior q f (z ∘ σ) i θ = postUExcept prior q f z (σ i) θ := by
+  unfold postUExcept
+  congr 1
+  exact prod_equiv σ (fun j => by simp) fun j _ => rfl
+
+theorem hoffScore_comp (z : ι → Z) (σ : Equiv.Perm ι) (i : ι) :
+    hoffScore prior q f (z ∘ σ) i = hoffScore prior q f z (σ i) := by
+  simp only [hoffScore_eq, postU_comp, postUExcept_comp]
+
+/-- **Hoff's score is equivariant**, so CB-1 covers with it (`hoff_coverage`), ties counted for
+the candidate. Hoff's strict rule does not cover under ties (the CB-4 finding). -/
+theorem hoffScore_equivariant (C : Finset ι) : Equivariant C (hoffScore prior q f) :=
+  fun σ _ z i => hoffScore_comp prior q f z σ i
+
+theorem hoff_coverage {C : Finset ι} {t : ι} (ht : t ∈ C) (z : ι → Z) (k : ℕ) :
+    1 - (k : ℝ) / C.card ≤
+      (((permsOn C).filter fun σ : Equiv.Perm ι =>
+        Accepts k C (hoffScore prior q f (z ∘ σ)) t).card : ℝ) / (permsOn C).card :=
+  coverage_orderings ht (hoffScore_equivariant prior q f C) z k
+
+/-! #### Hoff's score from the `n`-unit draws -/
+
+omit [Fintype Θ] in
+theorem postUExcept_none {ι₀ : Type*} [Fintype ι₀] [DecidableEq ι₀] (z : Option ι₀ → Z)
+    (θ : Θ) : postUExcept prior q f z none θ = postU prior q f (fun j => z (some j)) θ := by
+  have he : (univ : Finset (Option ι₀)).erase none = univ.map Function.Embedding.some := by
+    ext o
+    cases o <;> simp
+  rw [postUExcept, postU, he, prod_map]
+  rfl
+
+omit [Fintype Θ] in
+/-- **Add-one-in and leave-one-out at once.** The posterior given every unit but data unit `i` is
+the `n`-unit posterior reweighted by `g(z_new | θ) / g(z_i | θ)`. -/
+theorem postUExcept_some {ι₀ : Type*} [Fintype ι₀] [DecidableEq ι₀] (z : Option ι₀ → Z) (i : ι₀)
+    (θ : Θ) (hg : integrated q f θ (z (some i)) ≠ 0) :
+    postUExcept prior q f z (some i) θ = postU prior q f (fun j => z (some j)) θ *
+      (integrated q f θ (z none) / integrated q f θ (z (some i))) := by
+  rw [← mul_div_assoc, eq_div_iff hg, postUExcept_mul, postU_addOneIn]
+
+/-- **The candidate's Hoff score is the plain `n`-unit predictive**, `E_n[g(z_new | θ)]`. -/
+theorem hoffScore_none {ι₀ : Type*} [Fintype ι₀] [DecidableEq ι₀] (z : Option ι₀ → Z) :
+    hoffScore prior q f z none =
+      ∑ θ, post prior q f (fun j => z (some j)) θ * integrated q f θ (z none) := by
+  simp only [hoffScore, postUExcept_none, post, div_mul_eq_mul_div, ← sum_div]
+
+/-- `B_i = E_n[g(z_new | θ) / g(z_i | θ)]`, the mean of data unit `i`'s Hoff weight under the
+`n`-unit posterior. -/
+noncomputable def hoffMeanWeight {ι₀ : Type*} [Fintype ι₀] (z : Option ι₀ → Z) (i : ι₀) : ℝ :=
+  ∑ θ, post prior q f (fun j => z (some j)) θ *
+    (integrated q f θ (z none) / integrated q f θ (z (some i)))
+
+/-- **Each data unit's Hoff score is the candidate's over its mean weight**: `c_i = c_{n+1} / B_i`.
+From `S` draws the estimator is `Â / B̂_i` and `Â`, with `Â` common to every unit, so on the log
+scale the bounds slice 10 carries are on `log B̂_i` alone and the candidate's is zero
+(`coverage_close_shift`). -/
+theorem hoffScore_some {ι₀ : Type*} [Fintype ι₀] [DecidableEq ι₀] (z : Option ι₀ → Z) (i : ι₀)
+    (hg : ∀ θ, integrated q f θ (z (some i)) ≠ 0)
+    (hN : ∑ θ, postU prior q f (fun j => z (some j)) θ ≠ 0) :
+    hoffScore prior q f z (some i) = hoffScore prior q f z none / hoffMeanWeight prior q f z i := by
+  rw [hoffScore_eq, hoffScore_none prior q f z, hoffMeanWeight]
+  have hnum : ∑ θ, postU prior q f z θ =
+      ∑ θ, postU prior q f (fun j => z (some j)) θ * integrated q f θ (z none) :=
+    sum_congr rfl fun θ _ => postU_addOneIn prior q f z θ
+  have hden : ∑ θ, postUExcept prior q f z (some i) θ =
+      ∑ θ, postU prior q f (fun j => z (some j)) θ *
+        (integrated q f θ (z none) / integrated q f θ (z (some i))) :=
+    sum_congr rfl fun θ _ => postUExcept_some prior q f z i θ (hg θ)
+  rw [hnum, hden]
+  simp only [post, div_mul_eq_mul_div, ← sum_div]
+  rw [div_div_div_cancel_right₀ hN]
+
+/-- **The candidate's accept rule needs only the mean weights**: at level `k` it is accepted iff at
+least `k` data units have `B_i ≥ 1`. -/
+theorem hoff_accepts_iff {ι₀ : Type*} [Fintype ι₀] [DecidableEq ι₀] (z : Option ι₀ → Z)
+    (hg : ∀ θ i, integrated q f θ (z (some i)) ≠ 0)
+    (hN : ∑ θ, postU prior q f (fun j => z (some j)) θ ≠ 0)
+    (hA : 0 < hoffScore prior q f z none) (hB : ∀ i, 0 < hoffMeanWeight prior q f z i) (k : ℕ) :
+    Accepts k univ (hoffScore prior q f z) none ↔
+      k ≤ (univ.filter fun i : ι₀ => 1 ≤ hoffMeanWeight prior q f z i).card := by
+  have hrank : rankLe univ (hoffScore prior q f z) none =
+      1 + (univ.filter fun i : ι₀ => 1 ≤ hoffMeanWeight prior q f z i).card := by
+    unfold rankLe
+    rw [card_filter, Fintype.sum_option, if_pos le_rfl, ← card_filter]
+    congr 1
+    refine congrArg card (filter_congr fun i _ => ?_)
+    rw [hoffScore_some prior q f z i (fun θ => hg θ i) hN, div_le_iff₀ (hB i),
+      le_mul_iff_one_le_right hA]
+  unfold Accepts
+  rw [hrank]
+  constructor <;> intro h <;> omega
+
+/-! #### Hoff's score under latents -/
+
+/-- The unnormalized joint posterior of `θ` and every latent given every unit but `i`: unit `i`'s
+latent keeps its prior. -/
+noncomputable def jointUExcept (z : ι → Z) (i : ι) (θ : Θ) (v : ι → V) : ℝ :=
+  prior θ * ∏ j, (q θ (v j) * if j = i then 1 else f θ (v j) (z j))
+
+/-- **Hoff's score read by the joint posterior given the others**: `E[f(z_i | θ, v_i)]` under the
+joint posterior of `θ` and every latent given every unit but `i`. -/
+noncomputable def hoffJointScore (z : ι → Z) (i : ι) : ℝ :=
+  (∑ θ, ∑ v, jointUExcept prior q f z i θ v * f θ (v i) (z i)) /
+    ∑ θ, ∑ v, jointUExcept prior q f z i θ v
+
+/-- **Given the others, unit `i`'s latent is at its prior**, so the joint-posterior reading of
+Hoff's score is the integrated one: the latent posterior adds nothing to a leave-one-out score. -/
+theorem hoffJointScore_eq (hq1 : ∀ θ, ∑ v, q θ v = 1) (z : ι → Z) (i : ι) :
+    hoffJointScore prior q f z i = hoffScore prior q f z i := by
+  have ha : ∀ θ, ∀ j ∈ univ.erase i,
+      ∑ x, q θ x * (if j = i then 1 else f θ x (z j)) = integrated q f θ (z j) :=
+    fun θ j hj => by simp only [if_neg (ne_of_mem_erase hj), integrated]
+  have hnum : ∀ θ, ∑ v, jointUExcept prior q f z i θ v * f θ (v i) (z i) =
+      postUExcept prior q f z i θ * integrated q f θ (z i) := by
+    intro θ
+    have h := sum_prod_mul_coord (fun j x => q θ x * (if j = i then 1 else f θ x (z j)))
+      (fun x => f θ x (z i)) i
+    have hl : ∑ v, jointUExcept prior q f z i θ v * f θ (v i) (z i) =
+        prior θ * ∑ v : ι → V,
+          (∏ j, q θ (v j) * (if j = i then 1 else f θ (v j) (z j))) * f θ (v i) (z i) := by
+      rw [mul_sum]
+      exact sum_congr rfl fun v _ => by rw [jointUExcept, mul_assoc]
+    rw [hl, h, prod_congr rfl (ha θ)]
+    simp only [↓reduceIte, mul_one, postUExcept, integrated]
+    ring
+  have hden : ∀ θ, ∑ v, jointUExcept prior q f z i θ v = postUExcept prior q f z i θ := by
+    intro θ
+    have h := sum_prod_mul_coord (fun j x => q θ x * (if j = i then 1 else f θ x (z j)))
+      (fun _ => (1 : ℝ)) i
+    have hl : ∑ v, jointUExcept prior q f z i θ v = prior θ * ∑ v : ι → V,
+        (∏ j, q θ (v j) * (if j = i then 1 else f θ (v j) (z j))) * 1 := by
+      rw [mul_sum]
+      exact sum_congr rfl fun v _ => by rw [jointUExcept, mul_one]
+    rw [hl, h, prod_congr rfl (ha θ)]
+    simp only [↓reduceIte, mul_one, hq1, one_mul, postUExcept]
+  rw [hoffJointScore, hoffScore, sum_congr rfl fun θ _ => hnum θ,
+    sum_congr rfl fun θ _ => hden θ]
+
+/-- **Hoff's score with each unit's latent conditioned on its own value**: `θ` given the other
+units, unit `i`'s latent given `θ` and `z_i`, `Σ_θ p(θ | z_{-i}) Σ_v q f(z_i)² / g(z_i)`. This is
+what reading the retained latents with Hoff's weights computes (`hoffCondScore_some_draws`). -/
+noncomputable def hoffCondScore (z : ι → Z) (i : ι) : ℝ :=
+  (∑ θ, postUExcept prior q f z i θ *
+      ((∑ v, q θ v * f θ v (z i) ^ 2) / integrated q f θ (z i))) /
+    ∑ θ, postUExcept prior q f z i θ
+
+theorem hoffCondScore_comp (z : ι → Z) (σ : Equiv.Perm ι) (i : ι) :
+    hoffCondScore prior q f (z ∘ σ) i = hoffCondScore prior q f z (σ i) := by
+  simp only [hoffCondScore, postUExcept_comp, Function.comp_apply]
+
+/-- **The conditioned reading stays equivariant**: every unit reads its own latent alike. -/
+theorem hoffCondScore_equivariant (C : Finset ι) : Equivariant C (hoffCondScore prior q f) :=
+  fun σ _ z i => hoffCondScore_comp prior q f z σ i
+
+omit [Fintype Θ] in
+/-- `g ≤ Σ_v q f² / g`: the latent's conditional mean of `f` is at least its prior mean, by the
+conditional variance. -/
+theorem integrated_le_sq_div (hq : ∀ θ v, 0 ≤ q θ v) (hq1 : ∀ θ, ∑ v, q θ v = 1) (θ : Θ) (y : Z)
+    (hg : 0 < integrated q f θ y) :
+    integrated q f θ y ≤ (∑ v, q θ v * f θ v y ^ 2) / integrated q f θ y := by
+  rw [le_div_iff₀ hg]
+  have hvar : 0 ≤ ∑ v, q θ v * (f θ v y - integrated q f θ y) ^ 2 :=
+    sum_nonneg fun v _ => mul_nonneg (hq θ v) (sq_nonneg _)
+  have hterm : ∀ v, q θ v * (f θ v y - integrated q f θ y) ^ 2 =
+      q θ v * f θ v y ^ 2 - 2 * integrated q f θ y * (q θ v * f θ v y) +
+        integrated q f θ y ^ 2 * q θ v := fun v => by ring
+  have hsum : ∑ v, q θ v * (f θ v y - integrated q f θ y) ^ 2 =
+      ∑ v, q θ v * f θ v y ^ 2 - 2 * integrated q f θ y * integrated q f θ y +
+        integrated q f θ y ^ 2 * 1 := by
+    rw [sum_congr rfl fun v _ => hterm v, sum_add_distrib, sum_sub_distrib, ← mul_sum, ← mul_sum,
+      hq1]
+    rfl
+  rw [hsum] at hvar
+  nlinarith [hvar]
+
+omit [Fintype Θ] in
+theorem postUExcept_nonneg (hprior : ∀ θ, 0 ≤ prior θ) (hq : ∀ θ v, 0 ≤ q θ v)
+    (hf : ∀ θ v y, 0 ≤ f θ v y) (z : ι → Z) (i : ι) (θ : Θ) : 0 ≤ postUExcept prior q f z i θ :=
+  mul_nonneg (hprior θ) (prod_nonneg fun j _ =>
+    sum_nonneg fun v _ => mul_nonneg (hq θ v) (hf θ v (z j)))
+
+/-- **The conditioned reading sits above the integrated one**, unit by unit. -/
+theorem hoffScore_le_hoffCondScore (hprior : ∀ θ, 0 ≤ prior θ) (hq : ∀ θ v, 0 ≤ q θ v)
+    (hf : ∀ θ v y, 0 ≤ f θ v y) (hq1 : ∀ θ, ∑ v, q θ v = 1) (z : ι → Z) (i : ι)
+    (hg : ∀ θ, 0 < integrated q f θ (z i)) :
+    hoffScore prior q f z i ≤ hoffCondScore prior q f z i := by
+  refine div_le_div_of_nonneg_right (sum_le_sum fun θ _ => mul_le_mul_of_nonneg_left
+    (integrated_le_sq_div q f hq hq1 θ (z i) (hg θ))
+    (postUExcept_nonneg prior q f hprior hq hf z i θ)) ?_
+  exact sum_nonneg fun θ _ => postUExcept_nonneg prior q f hprior hq hf z i θ
+
+omit [Fintype Θ] in
+/-- Every latent but unit `i`'s integrates out of the joint posterior given every unit, leaving
+`postU · Σ_v q f(z_i)² / g(z_i)`. -/
+theorem sum_jointU_mul_self (z : ι → Z) (i : ι) (θ : Θ)
+    (hg : integrated q f θ (z i) ≠ 0) :
+    ∑ v, jointU prior q f z θ v * f θ (v i) (z i) = postU prior q f z θ *
+      ((∑ v, q θ v * f θ v (z i) ^ 2) / integrated q f θ (z i)) := by
+  have h := sum_prod_mul_coord (fun j x => q θ x * f θ x (z j)) (fun x => f θ x (z i)) i
+  have hp : postU prior q f z θ = prior θ *
+      (integrated q f θ (z i) * ∏ j ∈ univ.erase i, integrated q f θ (z j)) := by
+    rw [postU, mul_prod_erase univ (fun j => integrated q f θ (z j)) (mem_univ i)]
+  have hl : ∑ v, jointU prior q f z θ v * f θ (v i) (z i) =
+      prior θ * ∑ v : ι → V, (∏ j, q θ (v j) * f θ (v j) (z j)) * f θ (v i) (z i) := by
+    rw [mul_sum]
+    exact sum_congr rfl fun v _ => by rw [jointU, mul_assoc]
+  rw [hl, h, hp]
+  have hsq : ∑ x, q θ x * f θ x (z i) * f θ x (z i) = ∑ v, q θ v * f θ v (z i) ^ 2 :=
+    sum_congr rfl fun x _ => by ring
+  rw [hsq]
+  simp only [integrated] at hg ⊢
+  field_simp
+
+/-- **The conditioned Hoff score of a data unit from the `n`-unit draws**: the retained latents
+read with Hoff's weight `g(z_new | θ) / g(z_i | θ)`. -/
+theorem hoffCondScore_some_draws {ι₀ : Type*} [Fintype ι₀] [DecidableEq ι₀] (z : Option ι₀ → Z)
+    (i : ι₀) (hg : ∀ θ, integrated q f θ (z (some i)) ≠ 0) :
+    hoffCondScore prior q f z (some i) =
+      (∑ θ, ∑ v₀ : ι₀ → V, jointU prior q f (fun j => z (some j)) θ v₀ *
+          (integrated q f θ (z none) / integrated q f θ (z (some i))) * f θ (v₀ i) (z (some i))) /
+        ∑ θ, postU prior q f (fun j => z (some j)) θ *
+          (integrated q f θ (z none) / integrated q f θ (z (some i))) := by
+  rw [hoffCondScore]
+  congr 1
+  · refine sum_congr rfl fun θ _ => ?_
+    have h := sum_jointU_mul_self prior q f (fun j => z (some j)) i θ (hg θ)
+    beta_reduce at h
+    rw [postUExcept_some prior q f z i θ (hg θ)]
+    calc postU prior q f (fun j => z (some j)) θ *
+          (integrated q f θ (z none) / integrated q f θ (z (some i))) *
+          ((∑ v, q θ v * f θ v (z (some i)) ^ 2) / integrated q f θ (z (some i)))
+        = (integrated q f θ (z none) / integrated q f θ (z (some i))) *
+            ∑ v₀ : ι₀ → V, jointU prior q f (fun j => z (some j)) θ v₀ *
+              f θ (v₀ i) (z (some i)) := by rw [h]; ring
+      _ = _ := by
+        rw [mul_sum]
+        exact sum_congr rfl fun v₀ _ => by ring
+  · exact sum_congr rfl fun θ _ => postUExcept_some prior q f z i θ (hg θ)
+
+omit [Fintype Θ] in
+/-- The mean of `f(z_new | θ, v')` under the candidate latent's conditional `q f / g`. -/
+theorem sum_cond_mul_self (θ : Θ) (y : Z) :
+    ∑ v, q θ v * f θ v y / integrated q f θ y * f θ v y =
+      (∑ v, q θ v * f θ v y ^ 2) / integrated q f θ y := by
+  rw [sum_div]
+  exact sum_congr rfl fun v _ => by ring
+
+/-- **The conditioned Hoff score of the candidate from the `n`-unit draws**: unweighted, with the
+candidate's latent drawn from `p(v' | θ, z_new)` for each draw. -/
+theorem hoffCondScore_none_draws {ι₀ : Type*} [Fintype ι₀] [DecidableEq ι₀]
+    (z : Option ι₀ → Z) :
+    hoffCondScore prior q f z none =
+      (∑ θ, ∑ v₀ : ι₀ → V, jointU prior q f (fun j => z (some j)) θ v₀ *
+          ∑ v', q θ v' * f θ v' (z none) / integrated q f θ (z none) * f θ v' (z none)) /
+        ∑ θ, postU prior q f (fun j => z (some j)) θ := by
+  rw [hoffCondScore]
+  simp only [postUExcept_none, sum_cond_mul_self, ← sum_mul, sum_jointU]
+
+/-- **The mixed Hoff reading**: data units by their conditioned latents, the candidate
+integrated. -/
+noncomputable def hoffMixedScore {ι₀ : Type*} [Fintype ι₀] [DecidableEq ι₀] (z : Option ι₀ → Z)
+    (o : Option ι₀) : ℝ :=
+  o.elim (hoffScore prior q f z none) fun j => hoffCondScore prior q f z (some j)
+
+/-- **Reading the units differently breaks Hoff's score as it breaks CB-4's**: the mixed reading
+accepts no candidate the conditioned reading refuses. -/
+theorem accepts_hoffCond_of_mixed {ι₀ : Type*} [Fintype ι₀] [DecidableEq ι₀]
+    (z : Option ι₀ → Z) (hle : hoffScore prior q f z none ≤ hoffCondScore prior q f z none)
+    {k : ℕ} (h : Accepts k univ (hoffMixedScore prior q f z) none) :
+    Accepts k univ (hoffCondScore prior q f z) none := by
+  refine lt_of_lt_of_le h (card_le_card fun j hj => ?_)
+  rw [mem_filter] at hj ⊢
+  refine ⟨hj.1, ?_⟩
+  cases j with
+  | none => exact le_rfl
+  | some j => exact le_trans hj.2 hle
+
+/-- **The mixed Hoff reading, the counterexample**: CB-4(d)'s model (one `θ`, a fair latent bit,
+`y` the bit with probability `3/4`, two units). The data unit scores `5/8` and the candidate
+`1/2`, whatever the data, so the candidate is never accepted at `k = 1`: coverage `0` against
+CB-1's `1/2`. -/
+theorem hoffMixed_counterexample (z : Option Unit → Bool) :
+    ¬ Accepts 1 univ (hoffMixedScore (fun _ => (1 : ℝ)) exQ exF z) none := by
+  have hg : ∀ y, integrated exQ exF () y = 1 / 2 := by
+    intro y
+    cases y <;> simp [integrated, exQ, exF] <;> norm_num
+  have hE : ∀ i, postUExcept (fun _ => (1 : ℝ)) exQ exF z i () ≠ 0 := by
+    intro i
+    rw [postUExcept, one_mul]
+    exact prod_ne_zero_iff.2 fun j _ => by rw [hg]; norm_num
+  have hU : ∀ F : Unit → ℝ, ∑ θ, F θ = F () := fun F => Fintype.sum_unique F
+  have hint : hoffMixedScore (fun _ => (1 : ℝ)) exQ exF z none = 1 / 2 := by
+    change hoffScore (fun _ => (1 : ℝ)) exQ exF z none = 1 / 2
+    rw [hoffScore, hU, hU, mul_div_cancel_left₀ _ (hE none), hg]
+  have hlat : ∀ u, hoffMixedScore (fun _ => (1 : ℝ)) exQ exF z (some u) = 5 / 8 := by
+    intro u
+    change hoffCondScore (fun _ => (1 : ℝ)) exQ exF z (some u) = 5 / 8
+    rw [hoffCondScore, hU, hU, mul_div_cancel_left₀ _ (hE (some u)), hg]
+    simp only [exQ, exF, Fintype.sum_bool]
+    cases z (some u) <;> norm_num
+  have hfilt : (univ.filter fun j => hoffMixedScore (fun _ => (1 : ℝ)) exQ exF z j ≤
+      hoffMixedScore (fun _ => (1 : ℝ)) exQ exF z none) = {none} := by
+    ext j
+    cases j with
+    | none => simp
+    | some u =>
+      simp only [mem_filter, mem_univ, true_and, mem_singleton, reduceCtorEq, iff_false, not_le,
+        hint, hlat]
+      norm_num
+  simp only [Accepts, rankLe, hfilt, card_singleton, lt_irrefl, not_false_eq_true]
+
+/-! #### CB-4(c) read from draws, the candidate's latent drawn per draw -/
+
+/-- **CB-4(c) of a data unit from the `n`-unit draws**: the retained latents, read with the
+add-one-in weight `g(z_new | θ)`. -/
+theorem latentScore_some_draws {ι₀ : Type*} [Fintype ι₀] [DecidableEq ι₀] (z : Option ι₀ → Z)
+    (i : ι₀) :
+    latentScore prior q f z (some i) =
+      (∑ θ, ∑ v₀ : ι₀ → V, jointU prior q f (fun j => z (some j)) θ v₀ *
+          integrated q f θ (z none) * f θ (v₀ i) (z (some i))) /
+        ∑ θ, postU prior q f (fun j => z (some j)) θ * integrated q f θ (z none) := by
+  unfold latentScore
+  congr 1
+  · refine sum_congr rfl fun θ _ => ?_
+    rw [sum_jointU_addOneIn prior q f z θ (fun v => f θ (v (some i)) (z (some i)))]
+    refine sum_congr rfl fun v₀ _ => ?_
+    simp only [Option.elim_some]
+    rw [← sum_mul, integrated]
+    ring
+  · exact sum_congr rfl fun θ _ => postU_addOneIn prior q f z θ
+
+/-- **CB-4(c) of the candidate from the `n`-unit draws**: the add-one-in weight, and the
+candidate's latent drawn from `p(v' | θ, z_new)` for each draw. So the estimator's expectation
+over the drawn latents (`drawnLatent_mean_var`) gives (c)'s score for every unit, the candidate
+included. -/
+theorem latentScore_none_draws {ι₀ : Type*} [Fintype ι₀] [DecidableEq ι₀] (z : Option ι₀ → Z)
+    (hg : ∀ θ, integrated q f θ (z none) ≠ 0) :
+    latentScore prior q f z none =
+      (∑ θ, ∑ v₀ : ι₀ → V, jointU prior q f (fun j => z (some j)) θ v₀ *
+          integrated q f θ (z none) *
+            ∑ v', q θ v' * f θ v' (z none) / integrated q f θ (z none) * f θ v' (z none)) /
+        ∑ θ, postU prior q f (fun j => z (some j)) θ * integrated q f θ (z none) := by
+  unfold latentScore
+  congr 1
+  · refine sum_congr rfl fun θ _ => ?_
+    rw [sum_jointU_addOneIn prior q f z θ (fun v => f θ (v none) (z none))]
+    refine sum_congr rfl fun v₀ _ => ?_
+    simp only [Option.elim_none]
+    rw [sum_cond_mul_self, mul_assoc, ← mul_div_assoc, mul_div_cancel_left₀ _ (hg θ)]
+    congr 1
+    exact sum_congr rfl fun v _ => by ring
+  · exact sum_congr rfl fun θ _ => postU_addOneIn prior q f z θ
+
+end Hoff
+
+section DrawnLatents
+
+variable {S V : Type*} [Fintype S] [DecidableEq S] [Fintype V]
+
+/-- Independent draws factor: the sum over every draw's value of a product of per-draw factors. -/
+theorem sum_pi_prod_mul_prod (a b : S → V → ℝ) :
+    ∑ v : S → V, (∏ j, a j (v j)) * ∏ j, b j (v j) = ∏ j, ∑ x, a j x * b j x := by
+  have h := Finset.prod_univ_sum (t := fun _ : S => (univ : Finset V))
+    (f := fun j x => a j x * b j x)
+  rw [Fintype.piFinset_univ] at h
+  rw [h]
+  exact sum_congr rfl fun v _ => prod_mul_distrib.symm
+
+omit [Fintype S] [Fintype V] in
+/-- The factor reading `H` at draw `s`, `H'` at draw `s'`, and nothing elsewhere. -/
+def twoPoint (s s' : S) (H H' : V → ℝ) (j : S) (x : V) : ℝ :=
+  if j = s then H x else if j = s' then H' x else 1
+
+omit [Fintype V] in
+theorem prod_twoPoint {s s' : S} (hss : s ≠ s') (H H' : V → ℝ) (v : S → V) :
+    ∏ j, twoPoint s s' H H' j (v j) = H (v s) * H' (v s') := by
+  rw [Fintype.prod_eq_mul s s' hss fun j hj => by simp only [twoPoint, if_neg hj.1, if_neg hj.2]]
+  simp only [twoPoint, ↓reduceIte, if_neg hss.symm]
+
+/-- Two distinct draws are independent. -/
+theorem sum_pi_prod_mul_two (p : S → V → ℝ) (hp1 : ∀ s, ∑ v, p s v = 1) {s s' : S}
+    (hss : s ≠ s') (H H' : V → ℝ) :
+    ∑ v : S → V, (∏ j, p j (v j)) * (H (v s) * H' (v s')) =
+      (∑ x, p s x * H x) * ∑ x, p s' x * H' x := by
+  have e : ∀ v : S → V, (∏ j, p j (v j)) * (H (v s) * H' (v s')) =
+      (∏ j, p j (v j)) * ∏ j, twoPoint s s' H H' j (v j) := fun v => by rw [prod_twoPoint hss]
+  rw [sum_congr rfl fun v _ => e v, sum_pi_prod_mul_prod,
+    Fintype.prod_eq_mul s s' hss fun j hj => by
+      simp only [twoPoint, if_neg hj.1, if_neg hj.2, mul_one, hp1]]
+  simp only [twoPoint, ↓reduceIte, if_neg hss.symm]
+
+/-- The mean of a sum of per-draw readings, each draw's latent drawn independently. -/
+theorem sum_pi_prod_mul_sum (p : S → V → ℝ) (hp1 : ∀ s, ∑ v, p s v = 1) (h : S → V → ℝ) :
+    ∑ v : S → V, (∏ j, p j (v j)) * ∑ s, h s (v s) = ∑ s, ∑ x, p s x * h s x := by
+  simp only [mul_sum]
+  refine sum_comm.trans (sum_congr rfl fun s _ => ?_)
+  rw [sum_prod_mul_coord p (h s) s, prod_congr rfl fun j _ => hp1 j, prod_const_one, mul_one]
+
+/-- The variance of a sum of centred per-draw readings is the sum of their variances. -/
+theorem sum_pi_prod_mul_sq (p : S → V → ℝ) (hp1 : ∀ s, ∑ v, p s v = 1) (d : S → V → ℝ)
+    (hd : ∀ s, ∑ x, p s x * d s x = 0) :
+    ∑ v : S → V, (∏ j, p j (v j)) * (∑ s, d s (v s)) ^ 2 = ∑ s, ∑ x, p s x * d s x ^ 2 := by
+  have hcross : ∀ s s', ∑ v : S → V, (∏ j, p j (v j)) * (d s (v s) * d s' (v s')) =
+      if s = s' then ∑ x, p s x * d s x ^ 2 else 0 := by
+    intro s s'
+    split_ifs with h
+    · rw [← h]
+      have hc := sum_prod_mul_coord p (fun x => d s x ^ 2) s
+      beta_reduce at hc
+      rw [prod_congr rfl fun j _ => hp1 j, prod_const_one, mul_one] at hc
+      rw [← hc]
+      exact sum_congr rfl fun v _ => by ring
+    · rw [sum_pi_prod_mul_two p hp1 h, hd, zero_mul]
+  calc ∑ v : S → V, (∏ j, p j (v j)) * (∑ s, d s (v s)) ^ 2
+      = ∑ v : S → V, ∑ s, ∑ s', (∏ j, p j (v j)) * (d s (v s) * d s' (v s')) := by
+        refine sum_congr rfl fun v _ => ?_
+        rw [sq, sum_mul_sum, mul_sum]
+        exact sum_congr rfl fun s _ => by rw [mul_sum]
+    _ = ∑ s, ∑ s', ∑ v : S → V, (∏ j, p j (v j)) * (d s (v s) * d s' (v s')) := by
+        exact sum_comm.trans (sum_congr rfl fun s _ => sum_comm)
+    _ = ∑ s, ∑ x, p s x * d s x ^ 2 := by
+        refine sum_congr rfl fun s _ => ?_
+        rw [sum_congr rfl fun s' _ => hcross s s', sum_ite_eq, if_pos (mem_univ s)]
+
+/-- **What the drawn latent adds.** Draws `s` carry normalized weights `a s` (the add-one-in
+weights over their sum), the candidate's latent at draw `s` is drawn from `p s` (its conditional
+`p(v' | θ_s, z_new)`), and `h s v` is its reading `f(z_new | θ_s, v)`. Over the drawn latents the
+estimate `Σ_s a_s h_s(v_s)` has mean `Σ_s a_s E_s h_s`, the Rao–Blackwell reading, and variance
+`Σ_s a_s² Var_s h_s`: the term the candidate's bound must carry on top of the draws' own error,
+and that reading the conditional mean in closed form removes. -/
+theorem drawnLatent_mean_var (p : S → V → ℝ) (hp1 : ∀ s, ∑ v, p s v = 1) (a : S → ℝ)
+    (h : S → V → ℝ) :
+    ∑ v : S → V, (∏ j, p j (v j)) * ∑ s, a s * h s (v s) = ∑ s, a s * ∑ x, p s x * h s x ∧
+    ∑ v : S → V, (∏ j, p j (v j)) * (∑ s, a s * (h s (v s) - ∑ x, p s x * h s x)) ^ 2 =
+      ∑ s, a s ^ 2 * ∑ x, p s x * (h s x - ∑ x', p s x' * h s x') ^ 2 := by
+  constructor
+  · rw [sum_pi_prod_mul_sum p hp1 (fun s x => a s * h s x)]
+    exact sum_congr rfl fun s _ => by rw [mul_sum]; exact sum_congr rfl fun x _ => by ring
+  · have hd : ∀ s, ∑ x, p s x * (a s * (h s x - ∑ x', p s x' * h s x')) = 0 := by
+      intro s
+      have e : ∀ x, p s x * (a s * (h s x - ∑ x', p s x' * h s x')) =
+          a s * (p s x * h s x) - (a s * ∑ x', p s x' * h s x') * p s x := fun x => by ring
+      rw [sum_congr rfl fun x _ => e x, sum_sub_distrib, ← mul_sum, ← mul_sum, hp1]
+      ring
+    rw [sum_pi_prod_mul_sq p hp1 (fun s x => a s * (h s x - ∑ x', p s x' * h s x')) hd]
+    exact sum_congr rfl fun s _ => by rw [mul_sum]; exact sum_congr rfl fun x _ => by ring
+
+end DrawnLatents
+
+section HoffOptimal
+
+variable {ι Z : Type*} [Fintype ι] [DecidableEq ι] [Fintype Z]
+
+/-- The others' mass: the law of every unit but `i`, `P_{-i}(z) = Σ_y P(z with i ↦ y)`. -/
+noncomputable def othersMass (P : (ι → Z) → ℝ) (i : ι) (z : ι → Z) : ℝ :=
+  ∑ y, P (Function.update z i y)
+
+/-- **Hoff's score for any law `P` of the units**: the `μ`-density of unit `i`'s value given the
+others, `c_i = P(z) / (μ(z_i) P_{-i}(z))`. -/
+noncomputable def hoffP (P : (ι → Z) → ℝ) (μ : Z → ℝ) (z : ι → Z) (i : ι) : ℝ :=
+  P z / (μ (z i) * othersMass P i z)
+
+/-- **A procedure's expected size** under the law `P`. `φ z` is the chance that the candidate's
+value `z t` is accepted given the others, and the size counts accepted values by `μ`. Summing over
+every `z` counts each value of the others once per candidate value, as `P_{-t}` does not read
+`z t`. -/
+noncomputable def expectedSize (P : (ι → Z) → ℝ) (μ : Z → ℝ) (t : ι) (φ : (ι → Z) → ℝ) : ℝ :=
+  ∑ z, othersMass P t z * μ (z t) * φ z
+
+omit [Fintype ι] [Fintype Z] in
+theorem update_comp_perm (z : ι → Z) (σ : Equiv.Perm ι) (i : ι) (y : Z) :
+    Function.update (z ∘ σ) i y = Function.update z (σ i) y ∘ σ := by
+  funext j
+  simp only [Function.comp_apply, Function.update_apply]
+  by_cases h : j = i
+  · simp [h]
+  · have : σ j ≠ σ i := fun h' => h (σ.injective h')
+    simp [h, this]
+
+omit [Fintype ι] in
+theorem othersMass_comp {P : (ι → Z) → ℝ} (hP : ∀ σ : Equiv.Perm ι, ∀ z, P (z ∘ σ) = P z)
+    (z : ι → Z) (σ : Equiv.Perm ι) (i : ι) :
+    othersMass P i (z ∘ σ) = othersMass P (σ i) z := by
+  unfold othersMass
+  exact sum_congr rfl fun y _ => by rw [update_comp_perm, hP]
+
+omit [Fintype ι] in
+/-- Hoff's score is equivariant under any exchangeable law. -/
+theorem hoffP_comp {P : (ι → Z) → ℝ} (hP : ∀ σ : Equiv.Perm ι, ∀ z, P (z ∘ σ) = P z)
+    (μ : Z → ℝ) (z : ι → Z) (σ : Equiv.Perm ι) (i : ι) :
+    hoffP P μ (z ∘ σ) i = hoffP P μ z (σ i) := by
+  simp only [hoffP, hP, Function.comp_apply, othersMass_comp hP]
+
+omit [Fintype ι] in
+theorem othersMass_pos {P : (ι → Z) → ℝ} (hpos : ∀ z, 0 < P z) (i : ι) (z : ι → Z) :
+    0 < othersMass P i z :=
+  sum_pos (fun _ _ => hpos _) ⟨z i, mem_univ _⟩
+
+omit [Fintype ι] in
+theorem hoffP_pos {P : (ι → Z) → ℝ} (hpos : ∀ z, 0 < P z) {μ : Z → ℝ} (hμ : ∀ y, 0 < μ y)
+    (z : ι → Z) (i : ι) : 0 < hoffP P μ z i :=
+  div_pos (hpos z) (mul_pos (hμ _) (othersMass_pos hpos i z))
+
+theorem expectedSize_eq {P : (ι → Z) → ℝ} (hpos : ∀ z, 0 < P z) (μ : Z → ℝ) (t : ι)
+    (χ : (ι → Z) → ℝ) :
+    expectedSize P μ t χ = ∑ z, P z * (χ z / hoffP P μ z t) := by
+  refine sum_congr rfl fun z _ => ?_
+  rw [hoffP, div_div_eq_mul_div, ← mul_div_assoc, mul_div_cancel_left₀ _ (hpos z).ne']
+  ring
+
+theorem sum_comp_perm (F : (ι → Z) → ℝ) (σ : Equiv.Perm ι) :
+    ∑ z, F (z ∘ σ) = ∑ z, F z := by
+  let e : (ι → Z) ≃ (ι → Z) :=
+    ⟨fun z => z ∘ σ, fun z => z ∘ σ.symm, fun z => by funext i; simp, fun z => by funext i; simp⟩
+  exact Fintype.sum_equiv e (fun z => F (z ∘ σ)) F fun z => rfl
+
+/-- **The expected size, averaged over the orderings.** By exchangeability each data set's share
+of the size is its orderings' readings weighted by `1 / c` at the unit the candidate lands on. -/
+theorem sum_perm_expectedSize {P : (ι → Z) → ℝ} (hP : ∀ σ : Equiv.Perm ι, ∀ z, P (z ∘ σ) = P z)
+    (hpos : ∀ z, 0 < P z) (μ : Z → ℝ) (t : ι) (χ : (ι → Z) → ℝ) :
+    ∑ _σ : Equiv.Perm ι, expectedSize P μ t χ =
+      ∑ z, P z * ∑ σ : Equiv.Perm ι, χ (z ∘ σ) / hoffP P μ z (σ t) := by
+  rw [expectedSize_eq hpos μ t χ]
+  calc ∑ _σ : Equiv.Perm ι, ∑ z, P z * (χ z / hoffP P μ z t)
+      = ∑ σ : Equiv.Perm ι, ∑ z, P (z ∘ σ) * (χ (z ∘ σ) / hoffP P μ (z ∘ σ) t) :=
+        sum_congr rfl fun σ _ => (sum_comp_perm (fun z => P z * (χ z / hoffP P μ z t)) σ).symm
+    _ = ∑ z, ∑ σ : Equiv.Perm ι, P z * (χ (z ∘ σ) / hoffP P μ z (σ t)) := by
+        rw [sum_comm]
+        exact sum_congr rfl fun z _ => sum_congr rfl fun σ _ => by rw [hP, hoffP_comp hP]
+    _ = _ := sum_congr rfl fun z _ => by rw [mul_sum]
+
+omit [Fintype ι] [DecidableEq ι] [Fintype Z] in
+/-- **The bag's linear program.** Readings `a` and `b` in `[0, 1]`, with `b` a threshold in the
+weights `w ≥ 0` (wherever `b x > 0` and `b y < 1`, `w x ≤ w y`) and no more total than `a`: then
+`b`'s weighted total is no more than `a`'s. -/
+theorem sum_mul_le_of_threshold {α : Type*} (s : Finset α) (a b w : α → ℝ)
+    (ha0 : ∀ x ∈ s, 0 ≤ a x) (ha1 : ∀ x ∈ s, a x ≤ 1) (hb0 : ∀ x ∈ s, 0 ≤ b x)
+    (hb1 : ∀ x ∈ s, b x ≤ 1) (hw0 : ∀ x ∈ s, 0 ≤ w x)
+    (hsep : ∀ x ∈ s, ∀ y ∈ s, 0 < b x → b y < 1 → w x ≤ w y)
+    (hcount : ∑ x ∈ s, b x ≤ ∑ x ∈ s, a x) :
+    ∑ x ∈ s, b x * w x ≤ ∑ x ∈ s, a x * w x := by
+  classical
+  rcases (s.filter fun x => 0 < b x).eq_empty_or_nonempty with hT | hT
+  · have hzero : ∀ x ∈ s, b x = 0 := fun x hx => by
+      by_contra hne
+      have hmem : x ∈ s.filter fun x => 0 < b x :=
+        mem_filter.2 ⟨hx, lt_of_le_of_ne (hb0 x hx) (Ne.symm hne)⟩
+      rw [hT] at hmem
+      simp at hmem
+    rw [sum_eq_zero fun x hx => by rw [hzero x hx, zero_mul]]
+    exact sum_nonneg fun x hx => mul_nonneg (ha0 x hx) (hw0 x hx)
+  · set τ := (s.filter fun x => 0 < b x).sup' hT w
+    have hle : ∀ x ∈ s, 0 < b x → w x ≤ τ := fun x hx hb => le_sup' w (mem_filter.2 ⟨hx, hb⟩)
+    have hge : ∀ y ∈ s, b y < 1 → τ ≤ w y := fun y hy hb =>
+      sup'_le hT w fun x hx => by
+        rw [mem_filter] at hx
+        exact hsep x hx.1 y hy hx.2 hb
+    have hτ : 0 ≤ τ := by
+      obtain ⟨x, hx⟩ := id hT
+      rw [mem_filter] at hx
+      exact (hw0 x hx.1).trans (hle x hx.1 hx.2)
+    have key : ∀ x ∈ s, (a x - b x) * τ ≤ (a x - b x) * w x := by
+      intro x hx
+      rcases le_or_gt (b x) (a x) with hab | hab
+      · rcases lt_or_eq_of_le (hb1 x hx) with hb | hb
+        · exact mul_le_mul_of_nonneg_left (hge x hx hb) (by linarith)
+        · have : a x = b x := le_antisymm (by rw [hb]; exact ha1 x hx) hab
+          rw [this, sub_self, zero_mul, zero_mul]
+      · exact mul_le_mul_of_nonpos_left (hle x hx (lt_of_le_of_lt (ha0 x hx) hab)) (by linarith)
+    have hsum := sum_le_sum key
+    rw [← sum_mul] at hsum
+    have hnn : 0 ≤ (∑ x ∈ s, (a x - b x)) * τ :=
+      mul_nonneg (by rw [sum_sub_distrib]; linarith) hτ
+    have h2 : ∑ x ∈ s, (a x - b x) * w x = ∑ x ∈ s, a x * w x - ∑ x ∈ s, b x * w x := by
+      rw [← sum_sub_distrib]
+      exact sum_congr rfl fun x _ => by ring
+    linarith
+
+/-- **Hoff's optimality, finite** (Hoff 2023, Theorem 4.1). Under an exchangeable, positive law
+`P` of the units, take a procedure `ψ` that on every data set is a threshold in Hoff's score:
+wherever it gives some chance to the candidate landing on one unit and less than certainty on
+another, the first unit's Hoff score is at least the second's. CB-1's rule on Hoff's score is one
+(`hoff_cb1_expectedSize_le`), and so is its form with ties broken at random. Every procedure `φ`
+whose coverage over the orderings of every data set is at least `ψ`'s has an expected size at
+least `ψ`'s. `φ` may be any procedure, randomized or not, symmetric in the data or not. -/
+theorem hoff_expectedSize_le {P : (ι → Z) → ℝ} (hP : ∀ σ : Equiv.Perm ι, ∀ z, P (z ∘ σ) = P z)
+    (hpos : ∀ z, 0 < P z) {μ : Z → ℝ} (hμ : ∀ y, 0 < μ y) (t : ι) (φ ψ : (ι → Z) → ℝ)
+    (hφ0 : ∀ z, 0 ≤ φ z) (hφ1 : ∀ z, φ z ≤ 1) (hψ0 : ∀ z, 0 ≤ ψ z) (hψ1 : ∀ z, ψ z ≤ 1)
+    (hψ : ∀ z, ∀ σ σ' : Equiv.Perm ι, 0 < ψ (z ∘ σ) → ψ (z ∘ σ') < 1 →
+      hoffP P μ z (σ' t) ≤ hoffP P μ z (σ t))
+    (hcov : ∀ z, ∑ σ : Equiv.Perm ι, ψ (z ∘ σ) ≤ ∑ σ : Equiv.Perm ι, φ (z ∘ σ)) :
+    expectedSize P μ t ψ ≤ expectedSize P μ t φ := by
+  have hbag : ∀ z, ∑ σ : Equiv.Perm ι, ψ (z ∘ σ) / hoffP P μ z (σ t) ≤
+      ∑ σ : Equiv.Perm ι, φ (z ∘ σ) / hoffP P μ z (σ t) := by
+    intro z
+    simp only [div_eq_mul_inv]
+    refine sum_mul_le_of_threshold (univ : Finset (Equiv.Perm ι)) (fun σ => φ (z ∘ σ))
+      (fun σ => ψ (z ∘ σ)) (fun σ => (hoffP P μ z (σ t))⁻¹) (fun σ _ => hφ0 _) (fun σ _ => hφ1 _)
+      (fun σ _ => hψ0 _) (fun σ _ => hψ1 _)
+      (fun σ _ => (inv_pos.2 (hoffP_pos hpos hμ z (σ t))).le)
+      (fun σ _ σ' _ h0 h1 => inv_anti₀ (hoffP_pos hpos hμ z (σ' t)) (hψ z σ σ' h0 h1))
+      (hcov z)
+  have h := sum_le_sum fun z (_ : z ∈ univ) =>
+    mul_le_mul_of_nonneg_left (hbag z) (hpos z).le
+  rw [← sum_perm_expectedSize hP hpos μ t ψ, ← sum_perm_expectedSize hP hpos μ t φ,
+    sum_const, sum_const, nsmul_eq_mul, nsmul_eq_mul] at h
+  exact le_of_mul_le_mul_left h (by exact_mod_cast card_pos.2 ⟨1, mem_univ _⟩)
+
+/-- **CB-1's rule on Hoff's score is smallest** among procedures that cover at least as much on
+every data set. With Hoff's scores distinct on a data set that is exactly `1 − k/m`, so then the
+comparison is with every procedure valid at `1 − k/m`. -/
+theorem hoff_cb1_expectedSize_le {P : (ι → Z) → ℝ}
+    (hP : ∀ σ : Equiv.Perm ι, ∀ z, P (z ∘ σ) = P z) (hpos : ∀ z, 0 < P z) {μ : Z → ℝ}
+    (hμ : ∀ y, 0 < μ y) (t : ι) (k : ℕ) (φ : (ι → Z) → ℝ) (hφ0 : ∀ z, 0 ≤ φ z)
+    (hφ1 : ∀ z, φ z ≤ 1)
+    (hcov : ∀ z, (((univ : Finset (Equiv.Perm ι)).filter fun σ : Equiv.Perm ι =>
+      Accepts k univ (hoffP P μ (z ∘ σ)) t).card : ℝ) ≤ ∑ σ : Equiv.Perm ι, φ (z ∘ σ)) :
+    expectedSize P μ t (fun z => if Accepts k univ (hoffP P μ z) t then 1 else 0) ≤
+      expectedSize P μ t φ := by
+  have hacc : ∀ z (σ : Equiv.Perm ι),
+      Accepts k univ (hoffP P μ (z ∘ σ)) t ↔ Accepts k univ (hoffP P μ z) (σ t) := by
+    intro z σ
+    have hfun : hoffP P μ (z ∘ σ) = hoffP P μ z ∘ σ := funext fun i => hoffP_comp hP μ z σ i
+    rw [hfun]
+    unfold Accepts
+    rw [rankLe_comp (mem_permsOn_univ σ)]
+  refine hoff_expectedSize_le hP hpos hμ t φ _ hφ0 hφ1
+    (fun z => by split_ifs <;> norm_num)
+    (fun z => by split_ifs <;> norm_num) (fun z σ σ' h0 h1 => ?_) (fun z => ?_)
+  · beta_reduce at h0 h1
+    have ha : Accepts k univ (hoffP P μ z) (σ t) := by
+      rw [← hacc]
+      by_contra hn
+      rw [if_neg hn] at h0
+      exact lt_irrefl _ h0
+    have hr : ¬ Accepts k univ (hoffP P μ z) (σ' t) := by
+      rw [← hacc]
+      intro hn
+      rw [if_pos hn] at h1
+      exact lt_irrefl _ h1
+    by_contra hlt
+    rw [not_le] at hlt
+    apply hr
+    refine lt_of_lt_of_le ha (card_le_card fun j hj => ?_)
+    rw [mem_filter] at hj ⊢
+    exact ⟨hj.1, hj.2.trans hlt.le⟩
+  · rw [sum_boole]
+    exact hcov z
+
+end HoffOptimal
+
+section HoffLink
+
+variable {Θ V Z : Type*} [Fintype Θ] [Fintype V] [Fintype Z]
+variable (prior : Θ → ℝ) (q : Θ → V → ℝ) (f : Θ → V → Z → ℝ)
+variable {ι : Type*} [Fintype ι] [DecidableEq ι]
+
+omit [Fintype Z] in
+theorem prod_update_erase (F : Z → ℝ) (z : ι → Z) (i : ι) (y : Z) :
+    ∏ j, F (Function.update z i y j) = F y * ∏ j ∈ univ.erase i, F (z j) := by
+  rw [← mul_prod_erase univ _ (mem_univ i), Function.update_self]
+  congr 1
+  exact prod_congr rfl fun j hj => by rw [Function.update_of_ne (ne_of_mem_erase hj)]
+
+/-- **The model's Hoff score is `hoffP` of its law.** With the units' law
+`P(z) = Σ_θ π(θ) ∏_j μ(z_j) g(z_j | θ)` and `g` a `μ`-density, `hoffP P μ` is `hoffScore`, so
+`hoff_expectedSize_le` is Hoff's optimality for the model's own score. -/
+theorem hoffScore_eq_hoffP (μ : Z → ℝ) (hμ : ∀ y, μ y ≠ 0)
+    (hg1 : ∀ θ, ∑ y, μ y * integrated q f θ y = 1) (z : ι → Z) (i : ι) :
+    hoffScore prior q f z i = hoffP (fun w => ∑ θ, prior θ * ∏ j, (μ (w j) *
+      integrated q f θ (w j))) μ z i := by
+  have hP : (∑ θ, prior θ * ∏ j, (μ (z j) * integrated q f θ (z j))) =
+      (μ (z i) * ∏ j ∈ univ.erase i, μ (z j)) * ∑ θ, postU prior q f z θ := by
+    rw [mul_prod_erase univ (fun j => μ (z j)) (mem_univ i), mul_sum]
+    refine sum_congr rfl fun θ _ => ?_
+    rw [postU, prod_mul_distrib]
+    ring
+  have hM : othersMass (fun w => ∑ θ, prior θ * ∏ j, (μ (w j) * integrated q f θ (w j))) i z =
+      (∏ j ∈ univ.erase i, μ (z j)) * ∑ θ, postUExcept prior q f z i θ := by
+    unfold othersMass
+    beta_reduce
+    rw [sum_comm, mul_sum]
+    refine sum_congr rfl fun θ _ => ?_
+    calc ∑ y, prior θ * ∏ j, (μ (Function.update z i y j) *
+          integrated q f θ (Function.update z i y j))
+        = ∑ y, prior θ * ((μ y * integrated q f θ y) *
+            ∏ j ∈ univ.erase i, (μ (z j) * integrated q f θ (z j))) :=
+          sum_congr rfl fun y _ => by
+            rw [prod_update_erase (fun w => μ w * integrated q f θ w) z i y]
+      _ = (∏ j ∈ univ.erase i, μ (z j)) * postUExcept prior q f z i θ := by
+          rw [← mul_sum, ← sum_mul, hg1, one_mul, postUExcept, prod_mul_distrib]
+          ring
+  have hne : ∏ j ∈ univ.erase i, μ (z j) ≠ 0 := prod_ne_zero_iff.2 fun j _ => hμ _
+  unfold hoffP
+  beta_reduce
+  rw [hoffScore_eq, hP, hM, ← mul_assoc, mul_div_mul_left _ _ (mul_ne_zero (hμ _) hne)]
+
+end HoffLink
+
 end Conformal
