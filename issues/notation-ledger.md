@@ -11,6 +11,17 @@ Splits in the module's language (symbols, identifiers, terms), logged as session
 
 ## Entries
 
+### E21's weighted whitening L, its intercept direction c and the effects u, beside E8's L, GBASS's c and the z parameterization's u (2026-11-10)
+
+- **Kind:** one name for several concepts.
+- **Readings:**
+  - L = V_w^(−½)W^½, the random-effect block's whitening under a noise's weights, with V_w = I + W^½Z̃S²Z̃ᵀW^½ the weighted form of the block's V (`WeightedWhitening`, `src/maths/regression/spline/bass/BassRandomEffects.cs:702`), beside the module's L = Σ_ρ^{1/2} of dependent inputs (the 2026-11-08 entry on whitening's map).
+  - c = L·1, the GLS intercept direction the weighted design centres against (`WeightedWhitening.Direction`, `BassRandomEffects.cs:728`), beside GBASS's variance scale c in the weights 1/(c·v) (`_model.VarianceScale`, `src/maths/regression/spline/bass/BassNoise.cs:993`) and hbass's c (the 2026-11-06 entry). Both meet in the weighted reading.
+  - u, the random effects carried as a latent, read as the offset Z̃u (`RandomEffectsLatent`, `BassGroupEffectsBlock`, `src/maths/regression/spline/bass/BassRandomEffectsNoise.cs`), beside u = σ of the z parameterization, which the interweaving block computes beside u's energy (`BassNoise.cs:1008`), and u = ln v (the 2026-11-08 entry on u and z).
+  - "Energy" for u's prior quadratic Σ‖u_k‖²/s_k² (`RandomEffectsLatent.Prior`, `BassSweepFit.PriorEnergy`) follows the existing `GPriorConditional.PriorEnergy`. SPC's energy is the Potts one (the 2026-10-31 entry).
+  - q_k, a group's effect dimension in s's step (`BassLatentGroupScaleBlock`, `BassRandomEffectsNoise.cs:111`), beside KHAOS's q, the quantile level q, and E34's predictive case count q.
+- **Found:** 2026-11-10, E21's slice 4.
+
 ### D07's K and its y-space Σ beside E34's K and Σ, met under the joint option (2026-11-10)
 
 - **Kind:** one name for several concepts.
