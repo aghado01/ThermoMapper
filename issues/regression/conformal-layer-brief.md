@@ -290,7 +290,7 @@ Started at the main session's word (resume order 11, 12b, 13).
   - the refusals;
   - qualification: held-out coverage on slice 5's truth, the split form beside it at equal data, and the cost row.
 
-**State.** Code and tests written, not yet built. Nothing committed.
+**State.** The code and tests are committed in `5c25b48`. The Commit selection passed 149 of 149. Qualification gave coverage 0.889 (se 0.012) on the full step against 0.873 on the split form at equal data, and the cost row is read. The whole assembly is running at `5c25b48`; the report follows it.
 
 ### 2026-11-11 — Slice 10, density and CDF error diagnostics
 
