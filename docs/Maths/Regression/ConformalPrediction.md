@@ -13,13 +13,13 @@ What it serves, by problem class:
 - intervals whose width follows the noise, from any fit's quantiles (CQR) or centre and scale;
 - a calibrated predictive distribution at each x, with its PIT, quantiles and CRPS.
 
-It does not reach a curve's or a parameter's own intervals: those stay with [calibrated intervals and resampling](../../issues/regression/bass/extensions-brief.md#calibrated-intervals-for-loss-based-posteriors).
+It does not reach a curve's or a parameter's own intervals: those stay with [calibrated intervals and resampling](../../../issues/regression/bass/extensions-brief.md#calibrated-intervals-for-loss-based-posteriors).
 
 Where things are:
-- *The contract*, CB-1 to CB-4, is proved in `lean/Enthymemata/ConformalValidity.lean`, with its statements, checks and decisions in [conformal-lemmas.md](../../lean/Protolemmata/Conformal/conformal-lemmas.md). Every contract test below names its declaration.
-- *The build* is [the layer's brief](../../issues/regression/conformal-layer-brief.md), slice by slice, and E16 in the [extensions brief](../../issues/regression/bass/extensions-brief.md#conformal-bayes-the-consumer) holds the literature.
-- *The seams it reads* are [BayesianRegression](./BayesianRegression.md)'s pointwise density (OQ17), the draws × units matrix of log p(y_unit | draw), and its sibling at new cases, the candidate density.
-- *The product it runs on* is [LinearAlgebra](./LinearAlgebra.md#dense-product-denseproduct)'s `DenseProduct`.
+- *The contract*, CB-1 to CB-4, is proved in `lean/Enthymemata/ConformalValidity.lean`, with its statements, checks and decisions in [conformal-lemmas.md](../../../lean/Protolemmata/Conformal/conformal-lemmas.md). Every contract test below names its declaration.
+- *The build* is [the layer's brief](../../../issues/regression/conformal-layer-brief.md), slice by slice, and E16 in the [extensions brief](../../../issues/regression/bass/extensions-brief.md#conformal-bayes-the-consumer) holds the literature.
+- *The seams it reads* are [BayesianRegression](./Regression.md)'s pointwise density (OQ17), the draws × units matrix of log p(y_unit | draw), and its sibling at new cases, the candidate density.
+- *The product it runs on* is [LinearAlgebra](../LinearAlgebra.md#dense-product-denseproduct)'s `DenseProduct`.
 
 ## The seams
 
@@ -191,7 +191,7 @@ The attainable finite-sample lower bound is 1 − (2k − 1)/m for k > 0, clippe
 
 `CrossConformal.Density` reduces predictive density seams with the same arithmetic as the split form. Every fit scores one held-out response and the same test grids. Its two seams match in draws, chain lengths, weights and latent treatment, and serve the split form. Different fits can retain different draws. The overload taking a fit count and a callback reduces one fit at a time, retaining the n × G score matrix. These APIs operate on one exchangeable group in stratum zero. Under the residual score the pairwise set is contained in the jackknife+ interval.
 
-**The fitting hypothesis.** The n training units and test unit must be exchangeable together. There are two sufficient fitting contracts. A symmetric fit reads its training units as a set, including a relabeling of its randomness under a permutation. Alternatively, an order-reading fit receives its training rows in index order with the left-out place closed up: it sees compact rows, no held-out position, original indices or masks, and no row-keyed randomness. A sampler sharing a fixed seed across the leave-out fits and sweeping those compact rows in order can qualify by this second route. The original symmetric route remains available, including one uniformly random order shared across the leave-out fits or randomness attached to the units. These conditions are `FitSymmetric`, `crossFit_coverage`, `jackknifePlus_coverage`, `OrderReading` and `jackknifePlus_orderReading` in the [Lean contract](../../lean/Protolemmata/Conformal/conformal-lemmas.md#slice-9--cross-fitted-forms-and-asymmetric-cqr). The layer validates the supplied array and seam alignment; the caller establishes the fitting contract.
+**The fitting hypothesis.** The n training units and test unit must be exchangeable together. There are two sufficient fitting contracts. A symmetric fit reads its training units as a set, including a relabeling of its randomness under a permutation. Alternatively, an order-reading fit receives its training rows in index order with the left-out place closed up: it sees compact rows, no held-out position, original indices or masks, and no row-keyed randomness. A sampler sharing a fixed seed across the leave-out fits and sweeping those compact rows in order can qualify by this second route. The original symmetric route remains available, including one uniformly random order shared across the leave-out fits or randomness attached to the units. These conditions are `FitSymmetric`, `crossFit_coverage`, `jackknifePlus_coverage`, `OrderReading` and `jackknifePlus_orderReading` in the [Lean contract](../../../lean/Protolemmata/Conformal/conformal-lemmas.md#slice-9--cross-fitted-forms-and-asymmetric-cqr). The layer validates the supplied array and seam alignment; the caller establishes the fitting contract.
 
 **Positions change the claim.** A fit given original positions or a held-out mask need not satisfy the compact order-reading contract. The proof ledger's parity construction then covers exactly one half at every positive level and violates the jackknife+ lower bound at sufficiently small levels. This restriction does not change CV+'s separate merged and one-fold contracts below, which permit order- and position-reading fits that exclude the held-out fold and test unit.
 
@@ -215,7 +215,7 @@ The merged and one-fold proofs admit fits that read their other training units' 
 
 Each `CvPlusBound` carries `Value`, `Theorem`, `RequiredAssumptions` and `Applies`. `CvPlusBounds.Coverage` selects the largest value among the applicable bounds. It is null at positive ℓ if neither set of assumptions is supplied. At zero ℓ, the whole line gives coverage one independently of those assertions. For K = n, the endpoints reduce to jackknife+. The tournament bound then reduces to 1 − (2ℓ − 1)/(n + 1), when its assumptions apply.
 
-Near-nominal empirical coverage is a measurement of the fit and data. The [CV+ proof contract](../../lean/Protolemmata/Conformal/conformal-lemmas.md) gives these finite lower bounds under their separate hypotheses.
+Near-nominal empirical coverage is a measurement of the fit and data. The [CV+ proof contract](../../../lean/Protolemmata/Conformal/conformal-lemmas.md) gives these finite lower bounds under their separate hypotheses.
 
 ## The predictive distribution (slice 4): the reading
 
@@ -693,7 +693,7 @@ A unit far out, or of high leverage, makes the weights degenerate when it is the
 
 ## Conformal test martingales (E35, slice 6)
 
-Every guarantee on this page rests on exchangeability. A conformal test martingale tests it as the data arrive, with a false-alarm rate fixed in advance and no stopping rule (Vovk, Nouretdinov and Gammerman 2003; Vovk et al. 2021). Each new observation's score is ranked among every score so far, a betting function turns the ranks' p-values into capital, and an alarm reads the capital. The contract is M-1 and M-2 in `ConformalValidity.lean`, recorded in [conformal-lemmas.md](../../lean/Protolemmata/Conformal/conformal-lemmas.md) under E35. The build is [the layer's brief](../../issues/regression/conformal-layer-brief.md), slice 6.
+Every guarantee on this page rests on exchangeability. A conformal test martingale tests it as the data arrive, with a false-alarm rate fixed in advance and no stopping rule (Vovk, Nouretdinov and Gammerman 2003; Vovk et al. 2021). Each new observation's score is ranked among every score so far, a betting function turns the ranks' p-values into capital, and an alarm reads the capital. The contract is M-1 and M-2 in `ConformalValidity.lean`, recorded in [conformal-lemmas.md](../../../lean/Protolemmata/Conformal/conformal-lemmas.md) under E35. The build is [the layer's brief](../../../issues/regression/conformal-layer-brief.md), slice 6.
 
 ### The p-values (slice 6a)
 
@@ -854,4 +854,4 @@ Every guarantee on this page rests on exchangeability. A conformal test martinga
 - The conformal test martingale's full form, every score recomputed at every arrival, and one monitor per stratum (E35, recorded in the brief's slice 6 plan).
 - CB-4's latent-posterior reading, and Hoff's leave-one-out score.
 
-**See also:** [BayesianRegression](./BayesianRegression.md) (the pointwise seam) · [VarianceMeanMixtures](./VarianceMeanMixtures.md) (the noise laws whose latents are integrated) · [LinearAlgebra](./LinearAlgebra.md) (the product)
+**See also:** [BayesianRegression](./Regression.md) (the pointwise seam) · [VarianceMeanMixtures](./VarianceMeanMixtures.md) (the noise laws whose latents are integrated) · [LinearAlgebra](../LinearAlgebra.md) (the product)

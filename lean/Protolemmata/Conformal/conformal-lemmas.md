@@ -520,7 +520,7 @@ On D's turns, and on kept orderings whose bounds fail, the estimate may be anyth
 - *The PIT* (`card_pit_excluding_estimated`, through `shiftedBelow_estimated_le` and `shiftedAtMost_le_estimated`). The counts with D, read with the shifts doubled, bound the exact ones from the safe side.
 
 **What it rests on.**
-- *D must be fixed for the data set.* A turn is labelled by its unit and does not depend on which unit is the test unit. If the test unit's own turn were flagged after its estimate was seen, the excluded orderings would no longer be a share of units, and the bound would not follow.
+- *D must be fixed for the data set.* A turn is labelled by its unit and does not depend on which unit is the test unit. If the test unit's own turn were flagged after its estimate was seen, the excluded orderings would no longer be a share of units, and the bound would not follow. The precise rule, and how the engine reads it, is under "Reading from the realized ordering" below.
 - *ν must be joint per ordering.* The layer's z = Φ⁻¹(1 − ν/(2m)) per unit gives it by a union bound.
 
 **Against Bhattacharyya, Zhang and Barber.** Their 1 − α − 3√ν (arXiv 2605.29200, appendix) is for the inflated rule, with ν the chance that one score's estimate misses its bound. Ours takes ν per ordering, jointly over its m units. It pays ν once, for the margin and the inflated rule alike.
@@ -545,6 +545,43 @@ On D's turns, and on kept orderings whose bounds fail, the estimate may be anyth
 
   Whether to show it depends on whether it reads anything on real fits, which the C# measures.
 - *Can the margin read anything on fits like BASS's?* With D left out, yes, when the degenerate turns are the far units that the exact rule already refuses. Their turns cost nothing, and the band shrinks to what the kept turns' bounds give.
+
+### Reading from the realized ordering (added 2026-11-10, after verification)
+
+The main session's verification raised two points about the engine's reading. Both are settled here.
+
+**1. D is each unit's own turn, the candidate's included.**
+- *What the theorems need.* They take one set D per data set and draw, the same whichever unit is the test (`D w` in `coverage_close_excluding` is fixed for every ordering). The kept bounds must hold on every ordering whose test unit is outside D. A unit's turn is the ordering in which it is the test. So the set to use is D_own, the units whose own turns degenerate by the per-turn rule.
+- *In the full step at grid value y,* the data set has m units, the candidate (x_new, y) among them.
+  - The candidate's own turn is the held ordering at y, read by its held add-one-in weights' k̂ or ESS.
+  - A data unit's own turn is the ordering in which that unit is the candidate and (x_new, y) is a data unit.
+  - So D(y) is read per (data set, y) over all m units, by one rule.
+- *A D read from the n data units' turns alone fails.* It never contains the test unit, so it changes with which unit is the test, and the hypothesis fails.
+- *What the engine can read.* It reads the candidate's own flag at y directly. A data unit's own-turn flag it reads only through a proxy, since that turn's draws are not held.
+  - A proxy set is sound if it contains D_own at every y. A reading made with a larger set bounds the count made with D_own, so extra flags only charge more.
+  - A proxy that misses a unit of D_own is not sound.
+  - At a far y the far candidate is a data unit of the other turns. So a proxy must read each data unit's own add-one-in weight under a fit that includes the candidate, not the candidate's held weight.
+
+**2. The engine reads only the realized ordering.**
+- *At a flagged y the held ordering gives no reading at all.* When the candidate's own turn at y is in D, that ordering's estimates carry no guarantee for any unit, since every unit's estimate there uses the candidate's add-one-in weights. So the candidate cannot be charged as one unit of D with the rest read from those estimates. Another kept ordering of the same data set would serve, but the engine holds none.
+- *Per data set, proved.* Each ordering reads its own estimates, and a left-out ordering reads nothing.
+  - *Coverage* (`coverage_read_excluding`, `coverage_read_twoSided_excluding`, through `le_read_excluding`): at least 1 − (the orderings' average reading)/m − |D|/m − 2ν. Here the reading is ĉ(σ) = k + |M̂_D| + |D's units the inflated rule accepts| (2k and the union band for the equi-tailed set), from `card_excluded_le_estimated`.
+  - *The PIT* (`pit_read_excluding`, through `read_le_excluding` as well): P(PIT ≤ k/m) lies between (the average lower reading)/m − 2ν and (the average upper reading)/m + |D|/m + 2ν.
+  - *D is charged twice in the upper forms:* inside the count, for D's own orderings, and again for the orderings that read nothing.
+  - *The second ν* is the realized ordering's own bounds failing, which voids its reading.
+  - *A lower reading needs no D charge,* since a left-out ordering reads 0.
+- *Over the grid.* This is the layer's reading, and it is not formalized, as the maximum over the grid was not before. The true y is unknown. In each realization the reading at the true y is the reading at one kept grid value, or nothing when that value is flagged, and |D| at the true y is at most its largest value over the grid. So the sound reports are:
+  - *the margin:* 1 − max over kept y of ĉ(y)/m − max over all grid y of |D(y)|/m − 2ν;
+  - *the PIT's bounds:* [min over kept y of (lower reading)(y)/m − max_y |D(y)|/m − 2ν, max over kept y of (upper reading)(y)/m + max_y |D(y)|/m + 2ν].
+- *Does the maximum collapse when the grid reaches far out? No.*
+  - Flagged y drop out of the maximum, and they are paid for by D's share.
+  - A far y costs its one flagged unit, the candidate, in max_y |D(y)|.
+  - The report collapses only if the flagged count itself is large at some grid value, as it would be with proxies that inherit the far candidate's weights.
+- *Other readings.* A reading per y is not a coverage statement, since the true y is unknown. A reading over the candidates outside D is sound only with D's share charged, as above.
+
+**Checks** (`conformal-checks.py`, slice 10, "reading from the realized ordering").
+- 400 random data sets with arbitrary readings on left-out and failed orderings: both reading bounds hold.
+- On the 261 (data, D, k) cases of the exclusion check, the engine's own reading from every kept ordering gives coverage ≥ 1 − average reading/m − |D|/m − 2ν.
 
 ## Slice 12 — Hoff's score and the latent posterior
 

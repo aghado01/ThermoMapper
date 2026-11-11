@@ -4,9 +4,9 @@
 
 ## Overview
 
-TWCD2025 (Tang, Wu, Cheng & Dunson, *Adaptive Bayesian Regression on Data with Low Intrinsic Dimensionality*) prove posterior contraction rates for GP regression with an empirical-Bayes bandwidth prior (their Theorems 3.1–3.3). They assume the noise standard deviation σ is known. Their §6 names the unknown-σ extension and leaves it. The implementation goes further: `GpNoiseModel.UnknownScale` infers a signal amplitude s and a noise ratio η, with σ² = s²η (see [BayesianRegression](./BayesianRegression.md#bayesian-gp-bandwidth-bgp)).
+TWCD2025 (Tang, Wu, Cheng & Dunson, *Adaptive Bayesian Regression on Data with Low Intrinsic Dimensionality*) prove posterior contraction rates for GP regression with an empirical-Bayes bandwidth prior (their Theorems 3.1–3.3). They assume the noise standard deviation σ is known. Their §6 names the unknown-σ extension and leaves it. The implementation goes further: `GpNoiseModel.UnknownScale` infers a signal amplitude s and a noise ratio η, with σ² = s²η (see [BayesianRegression](./Regression.md#bayesian-gp-bandwidth-bgp)).
 
-This document states the extension, derives it, and records what Lean checks. It formalizes the protolemma [`bgp-unknown-variance-lemmas.md`](../../lean/Protolemmata/BARS/bgp-unknown-variance-lemmas.md) (BGP-4), whose pieces UV-1 to UV-8 label the sections below. The protolemma keeps the working history: the checks against the papers, the corrections, and the review record.
+This document states the extension, derives it, and records what Lean checks. It formalizes the protolemma [`bgp-unknown-variance-lemmas.md`](../../../lean/Protolemmata/BARS/bgp-unknown-variance-lemmas.md) (BGP-4), whose pieces UV-1 to UV-8 label the sections below. The protolemma keeps the working history: the checks against the papers, the corrections, and the review record.
 
 **What Lean checks, and what it takes as given.**
 

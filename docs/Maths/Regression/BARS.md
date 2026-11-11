@@ -2,14 +2,17 @@
 
 > Free-knot splines by reversible-jump MCMC. Integrates out the spline coefficients and noise scale, sampling the number and positions of knots over a bounded domain. Part of `Maths.Regression`.
 
-### Spline core
 
-- **Knot vector.** `MakeClampedKnots` builds $[0^{\times(p+1)},\xi_1..\xi_k,1^{\times(p+1)}]$, so a degree-p basis has $\nu=k+p+1$ functions. The default is cubic ($p=3$).
-- **Basis evaluation.** `EvaluateBasis` finds the knot span by a linear search clamped to $[p,\nu-1]$, so $t=1$ falls in the last span. It then applies the Cox–de Boor recurrence (Piegl–Tiller A2.2) with zero-denominator guards and returns a dense row of length ν.
-- **`StepBasis`.** An indicator design with $\nu=k+1$, used for changepoint-style carriers.
-- **`BandedDesign`.** Scans each row for its first and last non-zero entry. Its bandwidth is the data-derived maximum span, which is at most p, not the spline degree itself. It accumulates $Z^\top WZ$ into band storage and $Z^\top Wr$ into a vector.
 
 ### BARS: target and moves
+
+**BARS** (`BarsEnsemble.PointwiseLogDensity(result, x, y, units)`). Knots, β and σ² are global and conditioned on.
+  - Normal model: N(yᵢ; zᵢβ, σ²).
+  - With robust weights, each weight belongs to one observation and is integrated out under its prior: the resampler's `MarginalLogDensity`, Student t_ν(0, σ) or the mixture (1 − π)N(0, σ²) + πN(0, κ²σ²).
+  - Poisson: the Poisson log mass at exp(zᵢβ).
+  - Whittle: the exponential density of a periodogram ordinate with mean exp(zᵢβ), under Whittle's approximation of independent ordinates.
+  - Gibbs loss declines, since its likelihood is a pseudo-likelihood.
+  - **The collapsed content** (`content: PointwiseContent.CollapsedPredictive`) is the Normal model's alone. Per draw it is the g-prior's leave-unit-out Student t at the draw's knots, with the prior held at the full data's (`IConditionalFit.LeaveOutLogDensities`, through `GPriorConditional.LeaveOutLogDensity`). Robust weights decline, since the term would condition on the unit's own fitted weights; so do Poisson, Whittle and Gibbs loss, which have no closed form.
 
 **Target.** $\log p(y\mid Z(\xi),W)+\log p(k)$. It includes no density term for ξ given k.
 

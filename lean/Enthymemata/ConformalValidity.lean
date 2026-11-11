@@ -4667,4 +4667,243 @@ theorem hoffScore_eq_hoffP (μ : Z → ℝ) (hμ : ∀ y, μ y ≠ 0)
 
 end HoffLink
 
+/-! ### Slice 10, the follow-up: reading from the realized ordering
+
+The engine holds one ordering's estimates, the realized one. When that ordering's own test unit
+is in `D`, its estimates carry no guarantee, for any unit: every unit's estimate shares the test
+unit's add-one-in weights. Such an ordering reads nothing. -/
+
+section ReadingExcluded
+
+variable {ι : Type*} [Fintype ι] [DecidableEq ι]
+
+/-- **A count read from the realized ordering, from above.** `c w ≤ B` is a count of the data set
+under the draw `w`, and `ĉ w σ ≥ 0` is what the ordering `σ` reads. The reading is at least `c w`
+whenever `σ`'s test unit is kept (outside `D w`) and `σ`'s bounds hold, and a left-out ordering
+reads `0`. Then `c` is at most the orderings' average reading, plus `B` times `D`'s share and the
+failure share `ν`. -/
+theorem le_read_excluding {W : Type*} [Fintype W] {C : Finset ι} {t : ι} (ht : t ∈ C)
+    (p : W → ℝ) (hp0 : ∀ w, 0 ≤ p w) (D : W → Finset ι) (hold : W → Equiv.Perm ι → Prop)
+    [∀ w, DecidablePred (hold w)] (c : W → ℝ) (ĉ : W → Equiv.Perm ι → ℝ) {B : ℝ} (hB : 0 ≤ B)
+    (hcB : ∀ w, c w ≤ B) (hĉ0 : ∀ w σ, 0 ≤ ĉ w σ)
+    (hread : ∀ w, ∀ σ ∈ permsOn C, σ t ∉ D w → hold w σ → c w ≤ ĉ w σ) {ν : ℝ}
+    (hfail : ∑ w, p w * (((permsOn C).filter fun σ : Equiv.Perm ι =>
+        σ t ∉ D w ∧ ¬ hold w σ).card : ℝ) ≤ ν * (permsOn C).card) :
+    ∑ w, p w * c w ≤
+      ∑ w, p w * ((∑ σ ∈ permsOn C, if σ t ∈ D w then 0 else ĉ w σ) / (permsOn C).card) +
+        B * (∑ w, p w * (((C.filter fun u => u ∈ D w).card : ℝ) / C.card) + ν) := by
+  have hg : (0 : ℝ) < (permsOn C).card := by exact_mod_cast card_permsOn_pos C
+  have hw : ∀ w, c w ≤ (∑ σ ∈ permsOn C, if σ t ∈ D w then 0 else ĉ w σ) / (permsOn C).card +
+      B * (((C.filter fun u => u ∈ D w).card : ℝ) / C.card) +
+      B * ((((permsOn C).filter fun σ : Equiv.Perm ι => σ t ∉ D w ∧ ¬ hold w σ).card : ℝ) /
+        (permsOn C).card) := by
+    intro w
+    have hσ : ∀ σ ∈ permsOn C, c w ≤ (if σ t ∈ D w then 0 else ĉ w σ) +
+        B * (if σ t ∈ D w then 1 else 0) + B * (if σ t ∉ D w ∧ ¬ hold w σ then 1 else 0) := by
+      intro σ hσ
+      split_ifs with h1 h2 h2
+      · linarith [hcB w]
+      · linarith [hcB w]
+      · linarith [hĉ0 w σ, hcB w]
+      · have hh : hold w σ := by
+          by_contra hh
+          exact h2 ⟨h1, hh⟩
+        linarith [hread w σ hσ h1 hh]
+    have hsum := sum_le_sum hσ
+    rw [sum_const, nsmul_eq_mul, sum_add_distrib, sum_add_distrib, ← mul_sum, ← mul_sum,
+      sum_boole, sum_boole] at hsum
+    rw [← ratio_permsOn ht (fun u => u ∈ D w)]
+    have e : (∑ σ ∈ permsOn C, if σ t ∈ D w then 0 else ĉ w σ) / (permsOn C).card +
+        B * ((((permsOn C).filter fun σ : Equiv.Perm ι => σ t ∈ D w).card : ℝ) /
+          (permsOn C).card) +
+        B * ((((permsOn C).filter fun σ : Equiv.Perm ι => σ t ∉ D w ∧ ¬ hold w σ).card : ℝ) /
+          (permsOn C).card) =
+        ((∑ σ ∈ permsOn C, if σ t ∈ D w then 0 else ĉ w σ) +
+          B * (((permsOn C).filter fun σ : Equiv.Perm ι => σ t ∈ D w).card : ℝ) +
+          B * (((permsOn C).filter fun σ : Equiv.Perm ι => σ t ∉ D w ∧ ¬ hold w σ).card : ℝ)) /
+            (permsOn C).card := by ring
+    rw [e, le_div_iff₀ hg, mul_comm (c w)]
+    linarith
+  have hsum := sum_le_sum fun w (_ : w ∈ univ) => mul_le_mul_of_nonneg_left (hw w) (hp0 w)
+  simp only [mul_add, sum_add_distrib] at hsum
+  have hν : ∑ w, p w * ((((permsOn C).filter fun σ : Equiv.Perm ι =>
+      σ t ∉ D w ∧ ¬ hold w σ).card : ℝ) / (permsOn C).card) ≤ ν :=
+    weighted_share_le C p (fun w σ => σ t ∉ D w ∧ ¬ hold w σ) hfail
+  have e1 : ∑ w, p w * (B * (((C.filter fun u => u ∈ D w).card : ℝ) / C.card)) =
+      B * ∑ w, p w * (((C.filter fun u => u ∈ D w).card : ℝ) / C.card) := by
+    rw [mul_sum]
+    exact sum_congr rfl fun w _ => by ring
+  have e2 : ∑ w, p w * (B * ((((permsOn C).filter fun σ : Equiv.Perm ι =>
+      σ t ∉ D w ∧ ¬ hold w σ).card : ℝ) / (permsOn C).card)) =
+      B * ∑ w, p w * ((((permsOn C).filter fun σ : Equiv.Perm ι =>
+        σ t ∉ D w ∧ ¬ hold w σ).card : ℝ) / (permsOn C).card) := by
+    rw [mul_sum]
+    exact sum_congr rfl fun w _ => by ring
+  have e3 := mul_le_mul_of_nonneg_left hν hB
+  rw [mul_add]
+  linarith
+
+/-- **A count read from the realized ordering, from below.** A reading at most `B`, at most the
+count `c ≥ 0` whenever the ordering is kept and its bounds hold, and `0` on a left-out ordering:
+the orderings' average reading is at most `c` plus `B ν`. No `D` share is charged, since a
+left-out ordering reads `0`. -/
+theorem read_le_excluding {W : Type*} [Fintype W] {C : Finset ι} {t : ι}
+    (p : W → ℝ) (hp0 : ∀ w, 0 ≤ p w) (D : W → Finset ι) (hold : W → Equiv.Perm ι → Prop)
+    [∀ w, DecidablePred (hold w)] (c : W → ℝ) (ĉ : W → Equiv.Perm ι → ℝ) {B : ℝ} (hB : 0 ≤ B)
+    (hc0 : ∀ w, 0 ≤ c w) (hĉB : ∀ w σ, ĉ w σ ≤ B)
+    (hread : ∀ w, ∀ σ ∈ permsOn C, σ t ∉ D w → hold w σ → ĉ w σ ≤ c w) {ν : ℝ}
+    (hfail : ∑ w, p w * (((permsOn C).filter fun σ : Equiv.Perm ι =>
+        σ t ∉ D w ∧ ¬ hold w σ).card : ℝ) ≤ ν * (permsOn C).card) :
+    ∑ w, p w * ((∑ σ ∈ permsOn C, if σ t ∈ D w then 0 else ĉ w σ) / (permsOn C).card) - B * ν ≤
+      ∑ w, p w * c w := by
+  have hg : (0 : ℝ) < (permsOn C).card := by exact_mod_cast card_permsOn_pos C
+  have hw : ∀ w, (∑ σ ∈ permsOn C, if σ t ∈ D w then 0 else ĉ w σ) / (permsOn C).card ≤
+      c w + B * ((((permsOn C).filter fun σ : Equiv.Perm ι => σ t ∉ D w ∧ ¬ hold w σ).card : ℝ) /
+        (permsOn C).card) := by
+    intro w
+    have hσ : ∀ σ ∈ permsOn C, (if σ t ∈ D w then 0 else ĉ w σ) ≤
+        c w + B * (if σ t ∉ D w ∧ ¬ hold w σ then 1 else 0) := by
+      intro σ hσ
+      split_ifs with h1 h2 h2
+      · linarith [hc0 w]
+      · linarith [hc0 w]
+      · linarith [hc0 w, hĉB w σ]
+      · have hh : hold w σ := by
+          by_contra hh
+          exact h2 ⟨h1, hh⟩
+        linarith [hread w σ hσ h1 hh]
+    have hsum := sum_le_sum hσ
+    rw [sum_add_distrib, sum_const, nsmul_eq_mul, ← mul_sum, sum_boole] at hsum
+    rw [div_le_iff₀ hg, add_mul, mul_assoc, div_mul_cancel₀ _ hg.ne', mul_comm (c w)]
+    linarith
+  have hsum := sum_le_sum fun w (_ : w ∈ univ) => mul_le_mul_of_nonneg_left (hw w) (hp0 w)
+  simp only [mul_add, sum_add_distrib] at hsum
+  have hν : ∑ w, p w * ((((permsOn C).filter fun σ : Equiv.Perm ι =>
+      σ t ∉ D w ∧ ¬ hold w σ).card : ℝ) / (permsOn C).card) ≤ ν :=
+    weighted_share_le C p (fun w σ => σ t ∉ D w ∧ ¬ hold w σ) hfail
+  have e2 : ∑ w, p w * (B * ((((permsOn C).filter fun σ : Equiv.Perm ι =>
+      σ t ∉ D w ∧ ¬ hold w σ).card : ℝ) / (permsOn C).card)) =
+      B * ∑ w, p w * ((((permsOn C).filter fun σ : Equiv.Perm ι =>
+        σ t ∉ D w ∧ ¬ hold w σ).card : ℝ) / (permsOn C).card) := by
+    rw [mul_sum]
+    exact sum_congr rfl fun w _ => by ring
+  have e3 := mul_le_mul_of_nonneg_left hν hB
+  linarith
+
+/-- **The margin read from the realized ordering.** In ordering `σ` the engine reads a count
+`ĉ w σ`, at least `|D ∪ R ∪ M_D|` whenever `σ`'s test unit is kept and `σ`'s bounds hold.
+`card_excluded_le_estimated` gives such a reading, `k + |M̂_D| + |D's units the inflated rule
+accepts|`, from `σ`'s own estimates (a relabelling of units does not change a count). A left-out
+ordering reads nothing. Coverage is at least one, less the orderings' average reading over `|C|`,
+less `D`'s share, less `2ν`: `D` is charged inside the count, and again for the orderings that read
+nothing. -/
+theorem coverage_read_excluding {W Z : Type*} [Fintype W] {C : Finset ι} {t : ι} (ht : t ∈ C)
+    {S : (ι → Z) → ι → ℝ} (hS : Equivariant C S) (z : ι → Z) (p : W → ℝ) (hp0 : ∀ w, 0 ≤ p w)
+    (hp1 : ∑ w, p w = 1) (ŝ : W → Equiv.Perm ι → ι → ℝ) (ε : W → ι → ℝ) (D : W → Finset ι)
+    {ν : ℝ} (hfail : ∑ w, p w * (((permsOn C).filter fun σ : Equiv.Perm ι => σ t ∉ D w ∧
+        ¬ ∀ j ∈ C, |ŝ w σ j - S (z ∘ σ) j| ≤ ε w (σ j)).card : ℝ) ≤ ν * (permsOn C).card)
+    (k : ℕ) (ĉ : W → Equiv.Perm ι → ℝ) (hĉ0 : ∀ w σ, 0 ≤ ĉ w σ)
+    (hread : ∀ w, ∀ σ ∈ permsOn C, σ t ∉ D w →
+      (∀ j ∈ C, |ŝ w σ j - S (z ∘ σ) j| ≤ ε w (σ j)) →
+      ((C.filter fun u => u ∈ D w ∨ ¬ Accepts k C (S z) u ∨
+        Fragile k C (S z) (ε w) u).card : ℝ) ≤ ĉ w σ) :
+    1 - ∑ w, p w * ((∑ σ ∈ permsOn C, if σ t ∈ D w then 0 else ĉ w σ / C.card) /
+        (permsOn C).card) - ∑ w, p w * (((C.filter fun u => u ∈ D w).card : ℝ) / C.card) -
+        2 * ν ≤
+      ∑ w, p w * ((((permsOn C).filter fun σ : Equiv.Perm ι =>
+        Accepts k C (ŝ w σ) t).card : ℝ) / (permsOn C).card) := by
+  have hc : (0 : ℝ) < C.card := by exact_mod_cast card_pos.2 ⟨t, ht⟩
+  have h1 := coverage_close_excluding ht hS z p hp0 hp1 ŝ ε D hfail k
+  have h2 := le_read_excluding ht p hp0 D
+    (fun w σ => ∀ j ∈ C, |ŝ w σ j - S (z ∘ σ) j| ≤ ε w (σ j))
+    (fun w => ((C.filter fun u => u ∈ D w ∨ ¬ Accepts k C (S z) u ∨
+      Fragile k C (S z) (ε w) u).card : ℝ) / C.card)
+    (fun w σ => ĉ w σ / C.card) zero_le_one
+    (fun w => div_le_one_of_le₀ (by exact_mod_cast card_filter_le _ _) hc.le)
+    (fun w σ => div_nonneg (hĉ0 w σ) hc.le)
+    (fun w σ hσ hk hh => div_le_div_of_nonneg_right (hread w σ hσ hk hh) hc.le) hfail
+  rw [one_mul] at h2
+  linarith
+
+/-- **The equi-tailed set read from the realized ordering**, with a reading at least
+`|D ∪ R ∪ M_lo ∪ M_hi|` on kept orderings whose bounds hold
+(`card_excluded_le_estimated_twoSided` gives one). -/
+theorem coverage_read_twoSided_excluding {W Z : Type*} [Fintype W] {C : Finset ι} {t : ι}
+    (ht : t ∈ C) {S : (ι → Z) → ι → ℝ} (hS : Equivariant C S) (z : ι → Z) (p : W → ℝ)
+    (hp0 : ∀ w, 0 ≤ p w) (hp1 : ∑ w, p w = 1) (ŝ : W → Equiv.Perm ι → ι → ℝ) (ε : W → ι → ℝ)
+    (D : W → Finset ι) {ν : ℝ}
+    (hfail : ∑ w, p w * (((permsOn C).filter fun σ : Equiv.Perm ι => σ t ∉ D w ∧
+        ¬ ∀ j ∈ C, |ŝ w σ j - S (z ∘ σ) j| ≤ ε w (σ j)).card : ℝ) ≤ ν * (permsOn C).card)
+    (k : ℕ) (ĉ : W → Equiv.Perm ι → ℝ) (hĉ0 : ∀ w σ, 0 ≤ ĉ w σ)
+    (hread : ∀ w, ∀ σ ∈ permsOn C, σ t ∉ D w →
+      (∀ j ∈ C, |ŝ w σ j - S (z ∘ σ) j| ≤ ε w (σ j)) →
+      ((C.filter fun u => u ∈ D w ∨ ¬ AcceptsTwoSided k C (S z) u ∨
+        FragileTwoSided k C (S z) (ε w) u).card : ℝ) ≤ ĉ w σ) :
+    1 - ∑ w, p w * ((∑ σ ∈ permsOn C, if σ t ∈ D w then 0 else ĉ w σ / C.card) /
+        (permsOn C).card) - ∑ w, p w * (((C.filter fun u => u ∈ D w).card : ℝ) / C.card) -
+        2 * ν ≤
+      ∑ w, p w * ((((permsOn C).filter fun σ : Equiv.Perm ι =>
+        AcceptsTwoSided k C (ŝ w σ) t).card : ℝ) / (permsOn C).card) := by
+  have hc : (0 : ℝ) < C.card := by exact_mod_cast card_pos.2 ⟨t, ht⟩
+  have h1 := coverage_close_twoSided_excluding ht hS z p hp0 hp1 ŝ ε D hfail k
+  have h2 := le_read_excluding ht p hp0 D
+    (fun w σ => ∀ j ∈ C, |ŝ w σ j - S (z ∘ σ) j| ≤ ε w (σ j))
+    (fun w => ((C.filter fun u => u ∈ D w ∨ ¬ AcceptsTwoSided k C (S z) u ∨
+      FragileTwoSided k C (S z) (ε w) u).card : ℝ) / C.card)
+    (fun w σ => ĉ w σ / C.card) zero_le_one
+    (fun w => div_le_one_of_le₀ (by exact_mod_cast card_filter_le _ _) hc.le)
+    (fun w σ => div_nonneg (hĉ0 w σ) hc.le)
+    (fun w σ hσ hk hh => div_le_div_of_nonneg_right (hread w σ hσ hk hh) hc.le) hfail
+  rw [one_mul] at h2
+  linarith
+
+/-- **The PIT read from the realized ordering.** Readings `up` (from above) and `lo` (from below) of
+`pit_excluding`'s counts on kept orderings whose bounds hold (`card_pit_excluding_estimated` gives
+both), nothing on a left-out ordering. `P(PIT ≤ k/|C|)` is at least the average lower reading
+less `2ν`, and at most the average upper reading plus `D`'s share plus `2ν`. -/
+theorem pit_read_excluding {W Z : Type*} [Fintype W] {C : Finset ι} {t : ι} (ht : t ∈ C)
+    {S : (ι → Z) → ι → ℝ} (hS : Equivariant C S) (z : ι → Z) (p : W → ℝ) (hp0 : ∀ w, 0 ≤ p w)
+    (ŝ : W → Equiv.Perm ι → ι → ℝ) (ε : W → ι → ℝ) (D : W → Finset ι) {ν : ℝ}
+    (hfail : ∑ w, p w * (((permsOn C).filter fun σ : Equiv.Perm ι => σ t ∉ D w ∧
+        ¬ ∀ j ∈ C, |ŝ w σ j - S (z ∘ σ) j| ≤ ε w (σ j)).card : ℝ) ≤ ν * (permsOn C).card)
+    (k : ℕ) (up lo : W → Equiv.Perm ι → ℝ) (hup0 : ∀ w σ, 0 ≤ up w σ)
+    (hlo1 : ∀ w σ, lo w σ ≤ C.card)
+    (hreadA : ∀ w, ∀ σ ∈ permsOn C, σ t ∉ D w →
+      (∀ j ∈ C, |ŝ w σ j - S (z ∘ σ) j| ≤ ε w (σ j)) →
+      ((C.filter fun u => u ∈ D w ∨ shiftedBelow C (S z) (ε w) u < k).card : ℝ) ≤ up w σ)
+    (hreadB : ∀ w, ∀ σ ∈ permsOn C, σ t ∉ D w →
+      (∀ j ∈ C, |ŝ w σ j - S (z ∘ σ) j| ≤ ε w (σ j)) →
+      lo w σ ≤ ((C.filter fun u => u ∉ D w ∧ shiftedAtMost C (S z) (ε w) u ≤ k).card : ℝ)) :
+    ∑ w, p w * ((∑ σ ∈ permsOn C, if σ t ∈ D w then 0 else lo w σ / C.card) /
+        (permsOn C).card) - 2 * ν ≤
+      ∑ w, p w * ((∑ σ ∈ permsOn C, pitRankLe C (ŝ w σ) t k) / (permsOn C).card) ∧
+    ∑ w, p w * ((∑ σ ∈ permsOn C, pitRankLe C (ŝ w σ) t k) / (permsOn C).card) ≤
+      ∑ w, p w * ((∑ σ ∈ permsOn C, if σ t ∈ D w then 0 else up w σ / C.card) /
+        (permsOn C).card) + ∑ w, p w * (((C.filter fun u => u ∈ D w).card : ℝ) / C.card) +
+        2 * ν := by
+  have hc : (0 : ℝ) < C.card := by exact_mod_cast card_pos.2 ⟨t, ht⟩
+  obtain ⟨hlo, hup⟩ := pit_excluding ht hS z p hp0 ŝ ε D hfail k
+  constructor
+  · have h2 := read_le_excluding p hp0 D
+      (fun w σ => ∀ j ∈ C, |ŝ w σ j - S (z ∘ σ) j| ≤ ε w (σ j))
+      (fun w => ((C.filter fun u => u ∉ D w ∧ shiftedAtMost C (S z) (ε w) u ≤ k).card : ℝ) /
+        C.card)
+      (fun w σ => lo w σ / C.card) zero_le_one (fun w => div_nonneg (Nat.cast_nonneg _) hc.le)
+      (fun w σ => div_le_one_of_le₀ (hlo1 w σ) hc.le)
+      (fun w σ hσ hk hh => div_le_div_of_nonneg_right (hreadB w σ hσ hk hh) hc.le) hfail
+    rw [one_mul] at h2
+    linarith
+  · have h2 := le_read_excluding ht p hp0 D
+      (fun w σ => ∀ j ∈ C, |ŝ w σ j - S (z ∘ σ) j| ≤ ε w (σ j))
+      (fun w => ((C.filter fun u => u ∈ D w ∨ shiftedBelow C (S z) (ε w) u < k).card : ℝ) /
+        C.card)
+      (fun w σ => up w σ / C.card) zero_le_one
+      (fun w => div_le_one_of_le₀ (by exact_mod_cast card_filter_le _ _) hc.le)
+      (fun w σ => div_nonneg (hup0 w σ) hc.le)
+      (fun w σ hσ hk hh => div_le_div_of_nonneg_right (hreadA w σ hσ hk hh) hc.le) hfail
+    rw [one_mul] at h2
+    linarith
+
+end ReadingExcluded
+
 end Conformal

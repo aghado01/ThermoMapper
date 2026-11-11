@@ -1958,6 +1958,72 @@ print(f"Slice 10, leaving out the degenerate turns, two-sided and the PIT: {n_d2
       f"#{{u not in D : U <= k}}/m - nu <= P(PIT <= k/m) <= #{{u in D or L < k}}/m + nu; from any "
       f"ordering's estimates, |D u R u M| <= k (2k) + |M_hat| + |D's units the inflated rule accepts|, "
       f"and the PIT's counts with D read from the estimates bound the exact ones")
+# What the engine reads, leaving out the degenerate turns (follow-up, 2026-11-10). The engine holds
+# one ordering's estimates, the realized one, and when its own test unit's turn is in D it reads
+# nothing there. Per data set: a count c (at most B) that every kept ordering whose bounds hold
+# reads from above, read as 0 on the left-out orderings, is at most the average reading plus B
+# times D's share and the failure share; a count read from below needs no D charge. So coverage >=
+# 1 - avg_sigma[1[kept] c_hat(sigma)]/m - |D|/m - 2 nu, and the PIT's counts likewise.
+rr = random.Random(1213)
+n_read = 0
+for trial in range(400):
+    N = rr.choice((3, 4))
+    C = list(range(N))
+    t = N - 1
+    G = perms_on(N, C)
+    W = rr.choice((1, 2, 3))
+    pw = [Q(rr.randint(1, 5)) for _ in range(W)]
+    pw = [x / sum(pw) for x in pw]
+    B = Q(rr.randint(1, 6))
+    lhs_up, rhs_up, lhs_lo, rhs_lo, nu_w, shareD = Q(0), Q(0), Q(0), Q(0), Q(0), Q(0)
+    for w in range(W):
+        D = {u for u in C if rr.random() < 0.3}
+        hold = {p: rr.random() < 0.8 for p in G}
+        c = Q(rr.randint(0, 12), 2) * B / 6
+        up = {p: (c + Q(rr.randint(0, 4), 3) if (p[t] not in D and hold[p]) else Q(rr.randint(0, 9), 3)) for p in G}
+        lo = {p: (max(Q(0), c - Q(rr.randint(0, 4), 3)) if (p[t] not in D and hold[p]) else Q(rr.randint(0, 9), 3) * B / 3)
+              for p in G}
+        lo = {p: min(v, B) for p, v in lo.items()}
+        fail = Q(sum(1 for p in G if p[t] not in D and not hold[p]), len(G))
+        lhs_up += pw[w] * c
+        rhs_up += pw[w] * sum(Q(0) if p[t] in D else up[p] for p in G) / len(G)
+        rhs_lo += pw[w] * sum(Q(0) if p[t] in D else lo[p] for p in G) / len(G)
+        nu_w += pw[w] * fail
+        shareD += pw[w] * Q(len(D), N)
+    assert lhs_up <= rhs_up + B * (shareD + nu_w)
+    assert rhs_lo - B * nu_w <= lhs_up
+    n_read += 1
+# The engine's reading itself: in the slice 10 setting, each kept ordering reads
+# k + |M_hat| + |D's units the inflated rule accepts| from its own estimates; coverage is at least
+# 1 - (the kept orderings' average reading)/m - |D|/m - 2 nu.
+n_eng = 0
+for N in (4, 5):
+    C = list(range(N))
+    t = N - 1
+    G = perms_on(N, C)
+    for z in multisets(range(3), N)[::2]:
+        s = score_sq(z)
+        for Dset in ({0}, {N - 1}, {0, 1}):
+            kept_eps = tuple(Q(1, 40) for _ in C)
+            for k in range(0, N):
+                hits, read = Q(0), Q(0)
+                for p in G:
+                    if p[t] in Dset:
+                        continue
+                    base = score_sq(compose(z, p))
+                    e = tuple(kept_eps[p[i]] for i in range(N))
+                    good = tuple(v - e[i] if i == t else v + e[i] for i, v in enumerate(base))
+                    hits += (1 - nu) * accepts(k, good, t, C)
+                    Mh = sum(1 for i in C if fragile_est(k, good, i, C, e))
+                    Di = sum(1 for i in C if p[i] in Dset and accepts_inflated(k, good, i, C, e))
+                    read += k + Mh + Di
+                cov = hits / len(G)
+                assert cov >= 1 - read / len(G) / N - Q(len(Dset), N) - 2 * nu
+                n_eng += 1
+print(f"Slice 10, reading from the realized ordering: {n_read} random data sets with readings above (and "
+      f"below) the count on kept orderings whose bounds hold: count <= average kept reading + B (D share + nu), "
+      f"and >= average kept reading - B nu; on {n_eng} (data, D, k) cases the engine's own reading gives "
+      f"coverage >= 1 - average kept reading/m - |D|/m - 2 nu")
 # What the margin can then read at m = 100: one unit far out (in D, and in the exact low tail),
 # whose turn widens every carried bound to 3 against 0.002 over the kept turns.
 mr = random.Random(20261110)

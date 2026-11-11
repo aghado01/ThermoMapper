@@ -4,7 +4,7 @@
 
 ## Overview
 
-KHAOS (Rumsey, Francom et al., *Bayesian Adaptive Polynomial Chaos Expansions*, arXiv 2510.25036; CRAN `khaos` 2.1.1, the oracle) is BASS's lineage on three axes: the basis, the proposals and the coefficient prior. It moves no latent and is conjugate, so it is a diff against the engine and not a new engine. The basis is a part type behind [the design-kernel contract](./BayesianRegression.md) (F-X3). The proposal fills F-X4, the proposal-kernel contract. The ridges are the core's collapsed blocks. So the sweep, the target, the design's admission, the run, the fingerprint and the readers serve a Legendre fit as they serve a hinge fit. The build is [the brief's](../../issues/regression/bass/khaos-brief.md), slice by slice. Slice 0's oracle modes sit under `r/oracles/khaos_*_oracle.R`, with `khaos`'s samplers corrected for the defects slice 0 confirmed (`khaos_corrected`), and those corrected samplers are the reference the engine meets.
+KHAOS (Rumsey, Francom et al., *Bayesian Adaptive Polynomial Chaos Expansions*, arXiv 2510.25036; CRAN `khaos` 2.1.1, the oracle) is BASS's lineage on three axes: the basis, the proposals and the coefficient prior. It moves no latent and is conjugate, so it is a diff against the engine and not a new engine. The basis is a part type behind [the design-kernel contract](./Regression.md) (F-X3). The proposal fills F-X4, the proposal-kernel contract. The ridges are the core's collapsed blocks. So the sweep, the target, the design's admission, the run, the fingerprint and the readers serve a Legendre fit as they serve a hinge fit. The build is [the brief's](../../../issues/regression/bass/khaos-brief.md), slice by slice. Slice 0's oracle modes sit under `r/oracles/khaos_*_oracle.R`, with `khaos`'s samplers corrected for the defects slice 0 confirmed (`khaos_corrected`), and those corrected samplers are the reference the engine meets.
 
 | Piece | Where | Slice |
 |---|---|---|
@@ -20,9 +20,9 @@ KHAOS (Rumsey, Francom et al., *Bayesian Adaptive Polynomial Chaos Expansions*, 
 | Sobol and the Jacobi measure from the coefficients | `BassSensitivity.FromCoefficients` → `PolynomialChaosSensitivity` | 4 |
 | The gradient readout | `BassFit.Gradient` → `BassGradient`; `BassSurface.EvaluateDerivative` | 4 |
 | The engine's reach | The ladder, SMC, the flat histogram, the pointwise and candidate densities and GBASS's noise laws, unchanged; gated on Legendre terms | 5 |
-| Random-effect intercepts (E21) | `BassRandomIntercept`, `RandomInterceptBlock`: a capability of the core, gated on a hinge fit and a Legendre fit ([BayesianRegression](./BayesianRegression.md#bass-random-effect-intercepts-e21)) | 3 |
-| The history birth (E4) | `BirthMixture`, `HistoryBirth`, `BassBirthMixture`: an engine kernel, gated on hinge and Legendre fits and measured on Ishigami under both priors ([BayesianRegression](./BayesianRegression.md#bass-the-birth-mixture-and-the-history-birth-e4)) | the proposal-kernels brief's 1 |
-| The residual birth (E4) | `ResidualBirth`, `BassResidualBirth`: an engine kernel, gated on hinge and Legendre fits; on Ishigami under the raw ridge about 2× ESS per second and a 12× shorter climb from empty, and with the 1.25 cap SMC's trap reached in every replicate; the default for KHAOS's raw ridge since 2026-11-09 ([BayesianRegression](./BayesianRegression.md#bass-the-residual-birth-e4)) | the proposal-kernels brief's 2 |
+| Random-effect intercepts (E21) | `BassRandomIntercept`, `RandomInterceptBlock`: a capability of the core, gated on a hinge fit and a Legendre fit ([BayesianRegression](./Regression.md#bass-random-effect-intercepts-e21)) | 3 |
+| The history birth (E4) | `BirthMixture`, `HistoryBirth`, `BassBirthMixture`: an engine kernel, gated on hinge and Legendre fits and measured on Ishigami under both priors ([BayesianRegression](./Regression.md#bass-the-birth-mixture-and-the-history-birth-e4)) | the proposal-kernels brief's 1 |
+| The residual birth (E4) | `ResidualBirth`, `BassResidualBirth`: an engine kernel, gated on hinge and Legendre fits; on Ishigami under the raw ridge about 2× ESS per second and a 12× shorter climb from empty, and with the 1.25 cap SMC's trap reached in every replicate; the default for KHAOS's raw ridge since 2026-11-09 ([BayesianRegression](./Regression.md#bass-the-residual-birth-e4)) | the proposal-kernels brief's 2 |
 
 ## The basis (E19)
 
@@ -174,11 +174,11 @@ Two things to know when fitting:
   - `LeastMoved` under 0.1 at the last three stages: 40 of 43 trapped, and 1 of 5 found.
   - A drift in the mean log posterior over two extra stages at b = 1: none.
 - *Decided 2026-11-08: flag it.* The coordinating session made the call, the user unsure and leaving it to that session; the user can reverse it.
-  - BASS's SMC fit now flags a replicate whose last step jumped over a collapsed population, and replicates whose ln Ẑ disagree beyond their own errors ([Bayesian regression](./BayesianRegression.md#bass-smc), "The flags"). Neither changes a draw.
+  - BASS's SMC fit now flags a replicate whose last step jumped over a collapsed population, and replicates whose ln Ẑ disagree beyond their own errors ([Bayesian regression](./Regression.md#bass-smc), "The flags"). Neither changes a draw.
   - On this fixture, as production fits:
     - *Raw ridge, 32 replicates:* 24 of the 30 trapped replicates jumped, and neither of the 2 that reached the posterior did. The other six read as disagreement (between-to-within 30), and every group of four was flagged.
     - *The g-prior, 16 replicates:* all reached the posterior's σ², none jumped, and they disagreed at 9.2 times their errors.
-- *Recorded, not built,* each waiting on its own decision ([the brief](../../issues/regression/bass/khaos-brief.md#reports)):
+- *Recorded, not built,* each waiting on its own decision ([the brief](../../../issues/regression/bass/khaos-brief.md#reports)):
   - a cap on the step: measured above, it reaches the basin but not the evidence;
   - a birth proposed from the data's residual through F-X4, aimed at the 2% birth acceptance;
   - a reference nearer the posterior, a pilot run and a tempering path from it.
@@ -228,4 +228,4 @@ This page takes KHAOS's symbols. α is a multi-index, q a term's order (its vari
 - *d / degree:* KHAOS's degree is a sum over the term's factors. BASS's `Degree` is the hinge power, so a Legendre fit refuses it and caps its degree by `Legendre.MaxDegree`.
 - *g:* KHAOS's g₀² is the engine's 1/τ, as the g-form's g is in σ²G_c⁻¹/τ, so the two meet at ζ = 0. g_m is a term's complexity factor, with no BASS counterpart. `khaos`'s g₁ and g₂ are the ridge's σ² hyperparameters.
 
-The code follows the page: `LegendreFactor.Degree` is α, `LegendreDegree` is d, `MaxInteraction` is q_max. These crossings are in [the notation ledger](../../issues/notation-ledger.md).
+The code follows the page: `LegendreFactor.Degree` is α, `LegendreDegree` is d, `MaxInteraction` is q_max. These crossings are in [the notation ledger](../../../issues/notation-ledger.md).

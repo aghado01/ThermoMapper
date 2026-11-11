@@ -112,6 +112,12 @@ $\ell_p$ equals, up to a constant, the log evidence with σ² integrated out und
 
 **Hierarchical P-spline** (Behseta–Kass–Wallstrom). Replicate curves $\beta_r\sim N(\beta_0,\tau_u^2I)$ share a penalized population curve $\beta_0$. It uses conjugate banded Gibbs updates for $\beta_r$, $\beta_0$, σ², $\tau_u^2$ and $\tau_0^2$, in that order. Since 2026-10-24 the sweep is a `BlockScan` of five blocks built on the shared primitives (`GaussianConditional`, `ConjugateUpdates`; [Samplers](../Samplers.md)), bit-identical to the former single-chain loop.
 
+- **BAPS** (`Baps.PointwiseLogDensity(result, units)`). The retained content for every scheme: N(yᵢ; zᵢβ, σ²), with β and σ² global and conditioned on.
+- **`HierarchicalPSpline`** (`PointwiseLogDensity(result, units)`; observation o = r·n + i).
+  - A unit holding all of replicate r integrates β_r out: N(y_r; Zβ₀, σ²I + τ_u²ZZᵀ), formed through ZᵀZ = V diag(λ) Vᵀ.
+  - A unit holding part of it conditions on β_r, which needs the retained replicate draws.
+  - Curve units therefore work without replicate draws; split units refuse.
+
 **On the ensemble shell (2026-10-24).** `Run(chains = 4, masterSeed, burn, samples, retainReplicates, start, rHatTarget, batchSize, minEssPerChain, checkpoint, resumeFrom)`, as BAPS's:
 - **Starts** (`HierarchicalStart`). `Overdispersed`, the default, starts each variance at the responses' pooled variance v times exp(2z), z ~ N(0, 1), and the population coefficients at N(0, v) draws, so the chains begin orders of magnitude apart. `Fixed` is the original start, every curve at 0 and every variance at 1, which the first-sweep conditional checks use. Each chain's seed splits into a start stream and a sweep stream.
 - **Functionals.** log σ², log τ_u² and log τ₀² are monitored: split R̂, bulk and tail ESS (`NoiseVarianceConvergence`, `DeviationVarianceConvergence`, `PopulationSmoothingVarianceConvergence`), and the early stop's ESS gate. The population coefficients follow with classic R̂ (`RHatPopulation`, worst in `RHatPopulationMax`), a consensus map the early stop also waits on, since the population curve is the main readout.
