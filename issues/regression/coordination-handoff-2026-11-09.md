@@ -29,6 +29,9 @@ On an independent archive of `e5183dc`, all eight E21 diagnostic bodies passed w
   - *Selection:* `scripts/test-select.ps1 -SourceRoot <snap> -Scope Commit -Changed <files since the last verified commit> -ArtifactsRoot artifacts/verify-main/bin/`. The totals are in the `.trx`'s `<Counters>`.
   - *Oracles:* each oracle class is run with `dotnet test tests/Maths.Oracle.Tests/... --filter <class>`.
   - *Hygiene:* run at below-normal priority with `MSBUILDDISABLENODEREUSE=1`, and delete `artifacts/verify-main` after.
+- **Docs and messages** (the user's standing guidance, 2026-11-10; [AGENTS.md](../../AGENTS.md#docops--conventions-for-issues)).
+  - Chips leave `docs/` alone. Each report lists the doc changes its work calls for under "Doc changes owed", and `docs/` is updated offline in batches.
+  - Messages carry events and coordination, tersely, and results travel in reports. Chips message each other directly to coordinate.
 - **Chips report slice by slice and wait for a verification note.** Decisions beyond a brief come back to the parent, and anything that changes a default or removes an option goes to the user. A removal is always its own question.
 - **Repository rules.** Work on `main`, commit by pathspec (`git commit -m … -- <paths>`), leave nothing staged, push nothing.
   - Commit messages carry no attribution lines (CLAUDE.md).

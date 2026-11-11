@@ -119,7 +119,10 @@ workstream subfolder (`ph`, `spred`, `viz`, `docs`, …). Canonical file kinds:
   deferred work begins.
 - **Reports** — writeups of work performed: what was done, open ends, caveats,
   follow-up items. A report on delegated work is appended to (or sits beside)
-  the brief that commissioned it, closing the loop.
+  the brief that commissioned it, closing the loop. Delegated sessions (chips)
+  leave `docs/` alone. A report lists the doc changes its work calls for under
+  a **Doc changes owed** heading. `docs/` is updated offline in batches, once
+  enough work has accrued or a chunk of work completes.
 - **Design notes** (`design.md`, `dev-sequence.md`, roadmaps) — settled
   decisions with rationale. Also the designated parking lot for academic
   critique, derivations, and prior-art discussion kept out of docstrings.
@@ -136,6 +139,10 @@ workstream subfolder (`ph`, `spred`, `viz`, `docs`, …). Canonical file kinds:
 
 Docs reference each other by wikilink or explicit relative link. Generated
 analysis output goes to `artifacts/`, not `issues/`.
+
+**Messages between sessions** carry events and coordination, tersely, with only
+the context the receiver needs. Results travel in reports. Chips message each
+other directly when they need to coordinate.
 
 
 NO COMMITS "Co-Authored-By: Claude Opus 5.5" OR THE LIKE. KEEP COMMITS INFORMATIVE TO THE WORK. 
