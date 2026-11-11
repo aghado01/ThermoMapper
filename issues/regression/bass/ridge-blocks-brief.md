@@ -100,6 +100,22 @@ Slices 1 to 3 run under Gaussian BASS; slice 4 carries every block to the noises
 - **The KHAOS chip** takes E4's proposal kernels and leaves `BassRandomIntercepts.cs` to this brief.
 - **Shared docs** (`BayesianRegression.md`, the notation ledger): checked, edited and committed in one step. The ledger takes sₖ, Z̃, Πₖ and the slopes' scale beside KHAOS's s.
 
+## Slices 4 and 5, commissioned (2026-11-10)
+
+Commissioned by the user on 2026-11-10: the GBASS chip takes slices 4 and 5, which the GPT workers that built slices 1 to 3 left.
+- **Read first** slice 2's [report](ridge-multiple-groupings-report.md) and slice 3's [report](ridge-random-slopes-report.md). They landed after this chip's slice 0, so read the current code before editing.
+- **Order.** Slice 4, then slice 5, each reported to the main session and verified before the next starts.
+- **Who else is writing:**
+  - *The E34 chip* builds its slice 5, the PCA mode's joint option, now. Its slice 4, noise by row and random intercepts under K outputs, waits for this slice 4's verification, because it reuses the block under the noises.
+  - *The conformal chip* holds `ConformalBayes.cs` and its tests through slices 12a, 10, 11 and 12b, and owns `posterior/BassPrediction.cs`.
+- **Shared files** (`BassConfig.cs`, `BassModel.cs`, `BassResolved.cs`, `BassSweep.cs` and the like):
+  - message the other chip with the change's shape before editing;
+  - check `git diff -- <file>` for changes you did not make;
+  - commit each such edit by itself.
+- **Slice 5's seam** is agreed with the conformal chip by message first (decision 8). Edits to the conformal chip's files wait until its tree is clean.
+- **Docs.** Chips leave `docs/` alone (AGENTS.md, the user's standing guidance of 2026-11-10). This replaces the "Shared docs" line under Coordination: list the doc changes owed in the report. Notation-ledger entries stay in `issues/`, each edited and committed in one step.
+- **Messages** are terse: events and coordination, with a pointer to the report. No session reads another's transcript.
+
 ## Not in this brief
 
 - A slope correlated with its intercept (decision 6's follow-up).

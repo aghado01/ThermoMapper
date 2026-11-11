@@ -73,6 +73,25 @@ One commit per concern; tests with the code they test; each slice ends with its 
 - **The cost row:** the structure step at K = 1, 2, 5 and 10 against scalar BASS, and the readouts. Cycle clock, marked indicative.
 - **`docs/Maths`:** the decisions on the regression page or a new page, with their alternatives and implications. New writing takes the module's symbols, and crossings go in `issues/notation-ledger.md`.
 
+## Slices 5 and 4, commissioned (2026-11-10)
+
+Commissioned by the user on 2026-11-10: this chip takes the last two slices, which the GPT workers that built slices 2 and 3 left.
+- **Read first** the slice 2 and slice 3 reports below. They landed after this chip's slice 1, so read the current code before editing.
+- **Order:**
+  - *Slice 5,* the PCA mode's joint option (decision 8), now.
+  - *Slice 4,* decisions 6 and 7, after E21's slice 4 is verified. There the GBASS chip builds the random-effect block under the noises, which this slice reuses under K outputs.
+  - Each slice is reported to the main session and verified before the next starts.
+- **Who else is writing:**
+  - *The GBASS chip* builds E21's slice 4, the block under the noises, and then its slice 5, the candidate seam ([ridge-blocks-brief.md](ridge-blocks-brief.md)).
+  - *The conformal chip* holds `ConformalBayes.cs` and its tests, and `posterior/BassPrediction.cs`.
+- **Shared files** (`BassConfig.cs`, `BassModel.cs`, `BassResolved.cs`, `BassSweep.cs` and the like):
+  - message the other chip with the change's shape before editing;
+  - check `git diff -- <file>` for changes you did not make;
+  - commit each such edit by itself.
+- **Docs.** Chips leave `docs/` alone (AGENTS.md, the user's standing guidance of 2026-11-10). This replaces the `docs/Maths` gate above: each decision, with its alternatives, goes under "Doc changes owed" in the report. Crossings still go in `issues/notation-ledger.md`.
+- **Σ's default** (decision 2's question, back with slice 3's numbers) stays the user's call. These slices keep `ScaledToResponse`.
+- **Messages** are terse: events and coordination, with a pointer to the report. No session reads another's transcript.
+
 ## Not in this brief
 
 - **E22's coupled outcomes** and its parameter expansion for a correlation matrix.
