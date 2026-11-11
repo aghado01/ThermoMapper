@@ -58,6 +58,7 @@ public sealed class GpRegression
 {
     private readonly double[,] _x;        // n × D train predictors in the mapped frame
     private readonly double[] _y;         // n responses less _yShift
+    private readonly double[] _response;  // the n responses as given, which in-sample terms read
     private readonly double _yShift;      // training mean, subtracted for conditioning only (the mean is integrated out)
     private readonly double _sigma2;      // known noise variance σ² (NaN for an unknown scale)
     private readonly IGpKernel _kernel;
@@ -110,6 +111,7 @@ public sealed class GpRegression
         _x = Transform.MapInputs(x);
         _y = new double[_n];
         for (int i = 0; i < _n; i++) _y[i] = y[i] - _yShift;
+        _response = (double[])y.Clone();
         _sigma2 = sigma2; _kernel = kernel;
 
         _sqDist = new double[_n, _n];
@@ -136,6 +138,12 @@ public sealed class GpRegression
 
     /// <summary>Pairwise squared distances in the mapped frame — the frame the bandwidth prior must read.</summary>
     internal double[,] SquaredDistances => _sqDist;
+
+    /// <summary>The training inputs in the mapped frame.</summary>
+    internal double[,] MappedInputs => _x;
+
+    /// <summary>The training responses as given.</summary>
+    internal IReadOnlyList<double> Responses => _response;
 
     /// <summary>Add what a fit depends on to a run fingerprint: the mapped inputs and their scale, the shifted responses
     /// and the shift, the noise variance and the kernel's type.</summary>
@@ -393,6 +401,56 @@ public sealed class GpRegression
             variance[a] = Math.Max(0.0, prior - quad + u * u / factored.OneKOne);
         }
         return variance;
+    }
+
+    /// <summary>
+    /// The joint posterior of g = m + f at the points <paramref name="mappedPoints"/> (already in the fitted frame) given the data and
+    /// the fit's bandwidth and nugget: its mean, m̂ + k_t(z, X)·α in the response's units, as <see cref="PredictMean"/> sums it; and its
+    /// covariance in units of the signal variance, k(z, z′) − k(z, X)R⁻¹k(X, z′) + u(z)u(z′)/1ᵀR⁻¹1 with u(z) = 1 − 1ᵀR⁻¹k(X, z)
+    /// (universal kriging, the constant mean's flat prior included; Rasmussen &amp; Williams 2006, §2.7). Its diagonal is
+    /// <see cref="PredictVariance"/>'s before the floor. Only the lower triangle is written. One refit, O(n³), then O(n²) per point and
+    /// O(n) per pair.
+    /// </summary>
+    internal (double[] Mean, double[,] Covariance) JointPosteriorInFrame(GpFit fit, double[,] mappedPoints)
+    {
+        if (fit.Alpha.Length != _n) throw new ArgumentException("The fit is not of this GP's data.", nameof(fit));
+        GpFactoredFit factored = Refit(fit);
+        int p = mappedPoints.GetLength(0);
+        double t = fit.Bandwidth;
+        var k = new double[p][];
+        var solved = new double[p][];
+        var u = new double[p];
+        var mean = new double[p];
+        for (int a = 0; a < p; a++)
+        {
+            var ka = new double[_n];
+            double f = fit.Mean;
+            for (int j = 0; j < _n; j++)
+            {
+                double s = 0.0;
+                for (int c = 0; c < _d; c++) { double diff = mappedPoints[a, c] - _x[j, c]; s += diff * diff; }
+                ka[j] = _kernel.Evaluate(s, t);
+                f += ka[j] * fit.Alpha[j];
+            }
+            mean[a] = f;
+            k[a] = ka;
+            solved[a] = factored.Factor.Solve(ka);
+            double oneSolved = 0.0;
+            foreach (double v in solved[a]) oneSolved += v;
+            u[a] = 1.0 - oneSolved;
+        }
+        var covariance = new double[p, p];
+        for (int a = 0; a < p; a++)
+            for (int b = 0; b <= a; b++)
+            {
+                double s = 0.0;
+                for (int c = 0; c < _d; c++) { double diff = mappedPoints[a, c] - mappedPoints[b, c]; s += diff * diff; }
+                double quad = 0.0;
+                double[] ka = k[a], wb = solved[b];
+                for (int j = 0; j < _n; j++) quad += ka[j] * wb[j];
+                covariance[a, b] = _kernel.Evaluate(s, t) - quad + u[a] * u[b] / factored.OneKOne;
+            }
+        return (mean, covariance);
     }
 
     /// <summary>

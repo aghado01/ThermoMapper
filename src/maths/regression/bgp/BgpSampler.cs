@@ -323,8 +323,9 @@ public sealed partial class BgpSampler : IEnsembleModel<double>
     /// <summary>
     /// The run's pointwise density (OQ17) in the collapsed content: per draw and unit, the leave-unit-out predictive
     /// log p(y_U | y_rest, t, η), with f, the constant mean and s² integrated out (<see cref="GpRegression.LeaveOutLogDensities"/>).
-    /// It is BGP's one content, since f is integrated and never drawn. PSIS-LOO reads it; WAIC and the conformal layer's full step
-    /// refuse it, and the split form reads the candidate density (<see cref="CandidateLogDensity"/>) instead. Draws that
+    /// PSIS-LOO reads it; WAIC and the conformal layer's full step refuse it, and the split form reads the candidate density
+    /// (<see cref="CandidateLogDensity"/>) instead. The retained-parameters content, with g = m + f drawn, which WAIC and the full step
+    /// read, is <see cref="DrawFunction"/>'s. Draws that
     /// repeat their predecessor's (t, η), as a rejected proposal does, reuse its row, so a run costs one O(n³) refit per
     /// accepted state.
     /// </summary>

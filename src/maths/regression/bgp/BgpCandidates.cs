@@ -8,8 +8,9 @@ public sealed partial class BgpSampler
     /// <summary>
     /// BGP's candidate density (E16's seam, the conformal layer's slice 5): per retained draw (t, η), the predictive of a new observation at
     /// each case given the training data, log p(y | x_t, Y, t, η), on each case's grid (<see cref="GpRegression.PredictiveLogDensities"/>),
-    /// in <see cref="PointwiseLogDensity"/>'s rows with its chain lengths and latent report. Its content is the collapsed one, BGP's only:
-    /// f, the constant mean and s² are integrated against their posterior given the training data, never drawn.
+    /// in <see cref="PointwiseLogDensity"/>'s rows with its chain lengths and latent report. Its content is the collapsed one: f, the
+    /// constant mean and s² are integrated against their posterior given the training data. The retained-parameters content, with g = m + f
+    /// drawn at the training and the cases' inputs, is <see cref="DrawFunction"/>'s, whose seams the full step takes.
     /// <para>The split form takes it (<see cref="Conformal.SplitConformal"/>, CB-2): a fit on the training split read at the calibration
     /// cases and the test cases. The full step refuses it, as it refuses the training density: a draw (t, η) leaves the units dependent
     /// through f, so each term leaves its unit out rather than reading it in sample (CB-4). The seam names the split form alone
@@ -64,8 +65,9 @@ public sealed partial class BgpSampler
         {
             LogCdf = logCdfs,
             Forms = ConformalForms.Split,
-            FormsReason = "BGP integrates f and never draws it, so a draw (t, η) leaves the units dependent and its terms are leave-unit-out "
-                          + "predictives, not in sample (CB-4). The split form takes the fit's predictive at new cases.",
+            FormsReason = "This seam's content is collapsed: f is integrated, so a draw (t, η) leaves the units dependent and its terms are "
+                          + "leave-unit-out predictives, not in sample (CB-4). The split form takes the fit's predictive at new cases; the full "
+                          + "step takes the drawn function's seams (BgpSampler.DrawFunction).",
         };
     }
 
