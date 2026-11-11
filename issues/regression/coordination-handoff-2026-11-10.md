@@ -65,7 +65,7 @@ A separate limitation in the existing shared weight reader affects all its calle
 | Conformal ([brief](conformal-layer-brief.md)) | 12a and 10a/10b done and signed off | Slices 11 and 12b (decision 10). The C# order of 13–18 is now the user's (waiting list, item 6) |
 | E21 ([brief](bass/ridge-blocks-brief.md)) | Slices 0–5 done and verified. New-group coverage stays open, as the layer's follow-up | The u–s funnel fix (waiting list, item 1) |
 | E34 ([brief](bass/multi-output-brief.md)), [Claude chip](claude://claude.ai/epitaxy/local_26b4e7ee-1be4-482b-a19d-995477d32291) | Slice 5 verified (2,396 of 2,396). Slice 4 commissioned on 2026-11-11 | Slice 4 |
-| Conformal Lean ([brief](../../lean/Protolemmata/Conformal/conformal-chip-brief.md)), [Claude chip](claude://claude.ai/epitaxy/local_21649695-833f-41ac-8d7c-326b4f691dda) | The commission is complete: slices 10, 12, 13–16 and 18 | Verify slice 18 (`4383916`). Its sources are on the waiting list |
+| Conformal Lean ([brief](../../lean/Protolemmata/Conformal/conformal-chip-brief.md)), [Claude chip](claude://claude.ai/epitaxy/local_21649695-833f-41ac-8d7c-326b4f691dda) | The commission is complete: slices 10, 12, 13–16 and 18, all verified (slice 18 on 2026-11-11: checks pass, the build is clean, its 15 results on the standard axioms, meta-ci passes) | The sources it wants are on the waiting list |
 
 **E21 slice 4's finding, settled.** The first, successive-conditional Geweke design failed on ln s and is on record as unqualified.
 - *The cause* is the u–s funnel: ln s's integrated autocorrelation time is about 19,000 sweeps, and z falls as the chain grows.
