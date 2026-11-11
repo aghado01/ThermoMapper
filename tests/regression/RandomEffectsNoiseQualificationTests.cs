@@ -269,9 +269,11 @@ public sealed class RandomEffectsNoiseQualificationTests(ITestOutputHelper outpu
         BassModel model = BassModel.Create(Config(new BassSampling { Chains = 1, MasterSeed = seed, BurnIn = 0, Samples = 1 }), data);
         string[] names = ["ln sigma2", "ln s", "u0", "M"];
         var perSecond = new double[2][];
+        var perSweep = new double[2][];
         foreach (bool collapse in new[] { true, false })
         {
-            const int chains = 4, burn = 2000, kept = 8000;
+            // M's integrated autocorrelation is about a thousand sweeps here, so 8000 kept per chain read its ESS to within a factor of 3.
+            const int chains = 4, burn = 2000, kept = 40_000;
             var samples = new double[names.Length][][];
             for (int g = 0; g < names.Length; g++) samples[g] = new double[chains][];
             long t0 = BassCost.Tick();
@@ -295,16 +297,21 @@ public sealed class RandomEffectsNoiseQualificationTests(ITestOutputHelper outpu
             }
             double seconds = (BassCost.Tick() - t0) / BassCost.TicksPerSecond;
             perSecond[collapse ? 0 : 1] = new double[names.Length];
+            perSweep[collapse ? 0 : 1] = new double[names.Length];
             var cells = new List<string>();
             for (int g = 0; g < names.Length; g++)
             {
                 ConvergenceDiagnostic d = ChainDiagnostics.Diagnose(samples[g]);
                 perSecond[collapse ? 0 : 1][g] = d.BulkEss.Value / seconds;
-                cells.Add($"{names[g]} R̂ {d.RHat.Value:F3} ESS {d.BulkEss.Value:F0} ({d.BulkEss.Value / seconds:F1}/s)");
+                perSweep[collapse ? 0 : 1][g] = d.BulkEss.Value;
+                double[] means = [.. samples[g].Select(chain => chain.Average())];
+                double mean = means.Average(), se = Math.Sqrt(means.Sum(m => (m - mean) * (m - mean)) / (chains - 1) / chains);
+                cells.Add($"{names[g]} {mean:F4} ± {se:F4} R̂ {d.RHat.Value:F3} ESS {d.BulkEss.Value:F0} ({d.BulkEss.Value / seconds:F1}/s)");
             }
             output.WriteLine($"seed {seed}, {(collapse ? "collapsed at b = 1" : "the likelihood given u")}: {seconds:F1} s; {string.Join("; ", cells)}");
         }
-        output.WriteLine($"seed {seed}: bulk ESS per second, collapsed over not: " +
+        output.WriteLine($"seed {seed}: bulk ESS, collapsed over not, per sweep: " +
+                         string.Join(", ", names.Select((n, g) => $"{n} {perSweep[0][g] / perSweep[1][g]:F2}")) + "; per second: " +
                          string.Join(", ", names.Select((n, g) => $"{n} {perSecond[0][g] / perSecond[1][g]:F2}")));
     }
 
