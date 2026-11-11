@@ -64,7 +64,7 @@ A separate limitation in the existing shared weight reader affects all its calle
 | E8 ([brief](bass/active-subspace-brief.md)), [Claude chip](claude://claude.ai/epitaxy/local_66d45fa0-e3f5-4429-b588-1786ae46c0ef) | Slice 7a is WIP at `bd5dc9c`. The review above found the analysis's input-scale contract unenforced | 7a's gates (finish order item 3), then 7b and 7c |
 | Conformal ([brief](conformal-layer-brief.md)) | 12a and 10a/10b done and signed off | Slices 11 and 12b (decision 10). The C# order of 13–18 is now the user's (waiting list, item 6) |
 | E21 ([brief](bass/ridge-blocks-brief.md)) | Slices 0–5 done and verified. New-group coverage stays open, as the layer's follow-up | The u–s funnel fix (waiting list, item 1) |
-| E34 ([brief](bass/multi-output-brief.md)), [Claude chip](claude://claude.ai/epitaxy/local_26b4e7ee-1be4-482b-a19d-995477d32291) | Slice 5 landed (`4135eb9`, `cb4849b`, `6f2d3ea`), not yet verified here | Verify slice 5, then slice 4, now unblocked |
+| E34 ([brief](bass/multi-output-brief.md)), [Claude chip](claude://claude.ai/epitaxy/local_26b4e7ee-1be4-482b-a19d-995477d32291) | Slice 5 verified (2,396 of 2,396). Slice 4 commissioned on 2026-11-11 | Slice 4 |
 | Conformal Lean ([brief](../../lean/Protolemmata/Conformal/conformal-chip-brief.md)), [Claude chip](claude://claude.ai/epitaxy/local_21649695-833f-41ac-8d7c-326b4f691dda) | The commission is complete: slices 10, 12, 13–16 and 18 | Verify slice 18 (`4383916`). Its sources are on the waiting list |
 
 **E21 slice 4's finding, settled.** The first, successive-conditional Geweke design failed on ln s and is on record as unqualified.
@@ -89,7 +89,7 @@ A separate limitation in the existing shared weight reader affects all its calle
 | Weighted fits through `Bass.Fit`, and their candidates | `7343bc8`, `c1bbf51`, `97b2fc4` | Yes (the same run) |
 | E8 slice 6, the readout follow-ups | `276af70`, `e9d8827`, `30df59e`, `9a669b6`, `3c26660` | Yes: 2,278 of 2,278 at `3c26660` |
 | E8 slice 7's plan; the BPPR draft brief | `5816337`, `72ec20f`; `57e1ef6` | Plan read and approved by the user. The brief awaits the user |
-| E34 slice 5, the PCA mode's joint option; decision 2's hint | `4135eb9`, `cb4849b`, `6f2d3ea` | **Not yet.** The chip ran the whole assembly, 3,015 of 3,015 |
+| E34 slice 5, the PCA mode's joint option; decision 2's hint | `4135eb9`, `cb4849b`, `6f2d3ea` | Yes: 2,396 of 2,396 at `e5f142f` (2026-11-11) |
 | E21 slice 4, random effects under the noises | `4f5bf3f`, `94133f8`, `1940cc0`, `397ca88`, `2cd9711` | Yes: 2,278 of 2,278 at `2cd9711` |
 | KHAOS: SMC's step cap, the residual birth as raw-ridge default | `0ffc0e0`, `5a6cb1d`, `0738183`, `233c0e0`, `a980d1f` | Not rerun (the user: "Not now") |
 
