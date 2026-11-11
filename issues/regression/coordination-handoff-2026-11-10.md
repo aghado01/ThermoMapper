@@ -61,7 +61,7 @@ A separate limitation in the existing shared weight reader affects all its calle
 
 | Workstream | State | Next |
 |---|---|---|
-| E8 ([brief](bass/active-subspace-brief.md)), [Claude chip](claude://claude.ai/epitaxy/local_66d45fa0-e3f5-4429-b588-1786ae46c0ef) | Slice 7a is WIP at `bd5dc9c`. The review above found the analysis's input-scale contract unenforced | 7a's gates (finish order item 3), then 7b and 7c |
+| E8 ([brief](bass/active-subspace-brief.md)), [Claude chip](claude://claude.ai/epitaxy/local_66d45fa0-e3f5-4429-b588-1786ae46c0ef) | Slice 7 done and verified here: 7a `7b2ca7a` (2,349 of 2,349), 7b `70a2aa2` (48 of 48), 7c `015d977` (46 of 46) | The user's call on column-mass support and the raw ridge under a projected fit (waiting list); then the BPPR brief |
 | Conformal ([brief](conformal-layer-brief.md)) | 12a, 10a/10b and 11 done; 11 verified here, 149 of 149 at `9248e33` | 12b, then 13 (decisions 10 and 11). The C# order of 13–18 is now the user's (waiting list, item 6) |
 | E21 ([brief](bass/ridge-blocks-brief.md)) | Slices 0–5 done and verified. New-group coverage stays open, as the layer's follow-up | The u–s funnel fix (waiting list, item 1) |
 | E34 ([brief](bass/multi-output-brief.md)), [Claude chip](claude://claude.ai/epitaxy/local_26b4e7ee-1be4-482b-a19d-995477d32291) | Slice 5 verified (2,396 of 2,396). Slice 4 commissioned on 2026-11-11 | Slice 4 |
@@ -105,29 +105,30 @@ A separate limitation in the existing shared weight reader affects all its calle
 
 ## Waiting on the user
 
-1. **E21's u–s funnel fix:** commission it or not. ln s's integrated autocorrelation time is about 19,000 sweeps under every random-effects fit with a noise. The remedies are a step on s with u integrated, exact at b = 1 only, or interweaving u's centred and non-centred forms, exact at every rung (the coordinating session's recommendation).
-2. **The BPPR brief** ([bppr-brief.md](bass/bppr-brief.md)): six open decisions, each with a recommendation the coordinating session agrees with.
+1. **Projected fits (E8 slice 7b): column-mass support and the raw ridge.** Both read the projected box's scale. At p = 40 the bounding box is 4.06× the data's range, and their means differ by 33% and 2.4% between the two domains, while the default g-form is unchanged. The options are to refuse both (recommended by the chip and the coordinating session), to allow them and report the spread, or to use the training range for those two rules only.
+2. **E21's u–s funnel fix:** commission it or not. ln s's integrated autocorrelation time is about 19,000 sweeps under every random-effects fit with a noise. The remedies are a step on s with u integrated, exact at b = 1 only, or interweaving u's centred and non-centred forms, exact at every rung (the coordinating session's recommendation).
+3. **The BPPR brief** ([bppr-brief.md](bass/bppr-brief.md)): six open decisions, each with a recommendation the coordinating session agrees with.
    - The coordinating session also recommends that the moves' balance go Lean first.
    - The power spherical paper (arXiv 2006.04437) is not on disk.
    - Approval gives the go-ahead to install `BayesPPR` 0.2.0 from CRAN.
-3. **Sources for the conformal Lean's slice 18.**
+4. **Sources for the conformal Lean's slice 18.**
    - *Wanted:* Vlassis and Thomas (arXiv 2607.08415), who prove Gaffke's conjecture, and Angelopoulos et al., Conformal Risk Control (arXiv 2208.02814).
    - *Optional:* Gneiting and Raftery 2007.
    - *Its findings:* Snell and Griffiths's Theorem 4.3 is false as stated (a point-mass prior on all-zero losses breaks it), and Gressmann's proof of Proposition 2.5(i) has two sign slips while the statement stands.
-4. **Slice 12a's k̂ diagnostic:** opt-in (recommended; it costs about 200× the score) or on by default.
-5. **The original side-session notes** in `%APPDATA%\Claude\side-session-notes\`: delete them or keep them. Copies are in the repository; three PyTeXML notes were left there.
+5. **Slice 12a's k̂ diagnostic:** opt-in (recommended; it costs about 200× the score) or on by default.
+6. **The original side-session notes** in `%APPDATA%\Claude\side-session-notes\`: delete them or keep them. Copies are in the repository; three PyTeXML notes were left there.
 6. ~~**Conformal slices 13–18's C# order.**~~ **Decided 2026-11-11** ("Yes, 13 first"; conformal decision 11): the tournament correction (13) comes first among 13–18, after slices 11 and 12b. The reading behind it:
    - *The reading* (the [slice 10 report](conformal-layer-brief.md#2026-11-11--slice-10-density-and-cdf-error-diagnostics)): the margin still reads nothing on BASS fits with the degenerate turns left out.
      - The Kept diagnostic is negative on the Gaussian and Student-t fits at every ESS floor: −0.50 to −0.25 and −0.64 to −0.40.
      - The carried diagnostic is near 0.
      - The own-turn proxy is not a guaranteed superset, missing 3, 1 and 3 turns at floors 10, 100 and 400.
    - *The recommendation:* by decision 10's rule, the tournament correction (13), whose Lean is verified (`f998131`), comes first. It is the full-data guarantee that does not lean on mixing.
-7. **Lean for the active-subspace geometry** (proposed 2026-11-10):
+8. **Lean for the active-subspace geometry** (proposed 2026-11-10):
    - E36's direction moves;
    - the matrix Poincaré check's reduction and the product law's constant;
    - P̄'s readings under mixed ranks;
    - rotate-and-refit's non-invariance.
-8. **Carried from 2026-11-09:**
+9. **Carried from 2026-11-09:**
    - GBASS's open decisions;
    - `RungWorkers`' default and the GC pass;
    - the Lean promotion review;
