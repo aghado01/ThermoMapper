@@ -18,7 +18,7 @@ namespace Maths.Regression.Tests;
 /// </summary>
 public sealed class ConformalBayesTests(ITestOutputHelper output)
 {
-    private static readonly LatentReport[] Theta = [new("θ", LatentScope.Global, LatentTreatment.Conditioned)];
+    internal static readonly LatentReport[] Theta = [new("θ", LatentScope.Global, LatentTreatment.Conditioned)];
 
     // ---- the discrete model: θ ∈ {0, 1, 2} under a uniform prior, a unit (x, y) with x ∈ {0, 1}, y ∈ {0, 1, 2} ----------------
 
@@ -30,10 +30,10 @@ public sealed class ConformalBayesTests(ITestOutputHelper output)
         { { 0.10, 0.65, 0.25 }, { 0.35, 0.30, 0.35 } },
     };
 
-    private static double LogP(int theta, int unit) => Math.Log(Table[theta, unit / 3, unit % 3]);
+    internal static double LogP(int theta, int unit) => Math.Log(Table[theta, unit / 3, unit % 3]);
 
     // The exact posterior over θ given the units, as the three draws' weights.
-    private static double[] Posterior(IEnumerable<int> units)
+    internal static double[] Posterior(IEnumerable<int> units)
     {
         var log = new double[3];
         foreach (int u in units)
@@ -45,7 +45,7 @@ public sealed class ConformalBayesTests(ITestOutputHelper output)
     }
 
     // The full step with unit `test` of `units` as the candidate and the rest as training, each unit's stratum `strata[i]`.
-    private static (PointwiseLogDensity Training, CandidateLogDensity Candidate) Split(int[] units, int test, int[]? strata = null)
+    internal static (PointwiseLogDensity Training, CandidateLogDensity Candidate) Split(int[] units, int test, int[]? strata = null)
     {
         int[] rest = [.. Enumerable.Range(0, units.Length).Where(i => i != test)];
         double[] weights = Posterior(rest.Select(i => units[i]));
@@ -60,7 +60,7 @@ public sealed class ConformalBayesTests(ITestOutputHelper output)
         return (training, candidate);
     }
 
-    private static IEnumerable<int[]> Multisets(int alphabet, int size, int from = 0)
+    internal static IEnumerable<int[]> Multisets(int alphabet, int size, int from = 0)
     {
         if (size == 0)
         {

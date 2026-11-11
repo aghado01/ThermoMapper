@@ -49,6 +49,40 @@ public sealed record ConformalOptions
     /// bounds (<see cref="ConformalMargin.Computed"/>). The inflated rule, its gap and k̂ are read either way.
     /// </summary>
     public MarginBounds? MarginBounds { get; init; }
+
+    /// <summary>
+    /// The full step's conformity score (<see cref="FullStepScore"/>): Fong and Holmes's in-sample score by default, or Hoff's
+    /// leave-one-out score as an opt-in (the user's decision of 2026-11-10). Under the leave-one-out score the margin and the fallback
+    /// rule are refused, and the split-half reading is not computed: each reads the in-sample score's weights.
+    /// </summary>
+    public FullStepScore Score { get; init; } = FullStepScore.InSample;
+
+    /// <summary>
+    /// Under the leave-one-out score, whether k̂ is read for the weights of each data unit whose side of the candidate its own bound could
+    /// change, where the inflated rule accepts. Off by default: those PSIS fits are the leave-one-out step's cost, about 200 times the score's
+    /// own at n 1,000 where the weights degenerate. Where it is off, <see cref="ConformalMargin.ParetoK"/> reads NaN, not read. The in-sample
+    /// score reads its one k̂ per grid value either way.
+    /// </summary>
+    public bool LeaveOneOutParetoK { get; init; }
+}
+
+/// <summary>The full step's conformity score (<see cref="ConformalOptions.Score"/>).</summary>
+public enum FullStepScore
+{
+    /// <summary>Fong and Holmes's in-sample score, p(zᵢ | all n + 1 units), the default: one self-normalized estimate per unit under the
+    /// candidate's add-one-in weights.</summary>
+    InSample,
+
+    /// <summary>
+    /// Hoff's leave-one-out score, p(zᵢ | every other unit, the candidate included) (Hoff 2023, <i>Bayes-optimal prediction with
+    /// frequentist coverage control</i>): among procedures covering as much on every data set, the threshold in it has the smallest
+    /// prior-expected size (<c>hoff_expectedSize_le</c>). Read from the n-unit draws as A/Bᵢ, each data unit with its own weight
+    /// p(z_new | θ)/p(zᵢ | θ), whose PSIS instability it carries; ties count for the candidate as everywhere (<c>hoff_coverage</c>). In the
+    /// Lean's finite model its sets are 0.2 to 0.5% smaller at exact coverage, and under CB-1's tie rule on discrete data they can be
+    /// larger; on a conjugate model and BASS fits they measured alike under the model's own law and up to 2% wider outside it (the layer's
+    /// brief, slice 12a). The inflated rule reads it by the shift form (<c>coverage_inflated_shift</c>).
+    /// </summary>
+    LeaveOneOut,
 }
 
 /// <summary>
@@ -127,7 +161,8 @@ public readonly record struct GridInterval(double Lower, double Upper);
 /// there. Null without the margin.</param>
 /// <param name="Fragile">The estimated band's count at each grid value; null without the margin.</param>
 /// <param name="InflatedRanks">The inflated rule's rank at each grid value.</param>
-/// <param name="ParetoK">k̂ of the add-one-in weights where the inflated rule accepts.</param>
+/// <param name="ParetoK">k̂ of the add-one-in weights where the inflated rule accepts; under the leave-one-out score the largest among the
+/// deciding units' weights when asked for (<see cref="ConformalOptions.LeaveOneOutParetoK"/>), −∞ where no unit decides; NaN where not read.</param>
 /// <param name="ParetoKThreshold">PSIS's threshold at the draws' count.</param>
 /// <param name="Bounds">The bounds <see cref="Fragile"/> was read with; null when the margin was not asked for.</param>
 /// <param name="Inflation">The bounds <see cref="InflatedRanks"/> were read with.</param>
@@ -153,12 +188,12 @@ public sealed record ConformalMargin(double Multiple, double[] CandidateErrors, 
         }
     }
 
-    /// <summary>The grid values the inflated rule accepts whose weights' k̂ exceeds the threshold.</summary>
+    /// <summary>The grid values the inflated rule accepts whose weights' k̂ exceeds the threshold; a k̂ not read (NaN) counts as none.</summary>
     public int Untrusted(int level)
     {
         int count = 0;
         for (int g = 0; g < ParetoK.Length; g++)
-            if (InflatedRanks[g] > level && !(ParetoK[g] <= ParetoKThreshold)) count++;
+            if (InflatedRanks[g] > level && !double.IsNaN(ParetoK[g]) && !(ParetoK[g] <= ParetoKThreshold)) count++;
         return count;
     }
 }
@@ -187,9 +222,10 @@ public sealed record ConformalMargin(double Multiple, double[] CandidateErrors, 
 /// <param name="Tied">Those scoring equal to it; the strict rule (accept when Below ≥ k) and random tie-breaking read
 /// these with <see cref="Below"/>.</param>
 /// <param name="CandidateScores">The candidate's own log conformity score at y_g, ln p(y_g | all m units), in the split form
-/// ln p(y_g | the training split); −∞ outside every draw's support. Null in the pairwise form, which has one score per fit.</param>
-/// <param name="EffectiveSampleSizes">Kish's ESS of the add-one-in weights at y_g, 1/Σ w̃²; 0 outside every draw's
-/// support; null in the split form.</param>
+/// ln p(y_g | the training split); under the leave-one-out score ln A = ln p(y_g | the n units); −∞ outside every draw's support. Null
+/// in the pairwise form, which has one score per fit.</param>
+/// <param name="EffectiveSampleSizes">Kish's ESS of the add-one-in weights at y_g, 1/Σ w̃²; under the leave-one-out score the least
+/// of the data units' weights' ESS, each unit's W̄_s p(y_g | θ_s)/p(zᵢ | θ_s); 0 outside every draw's support; null in the split form.</param>
 /// <param name="Margin">CB-3's reading: the inflated rule's always, the margin's band when asked for; null for the whole space and in
 /// the split form.</param>
 /// <param name="Inflated">Whether the set is the inflated rule's.</param>
@@ -377,6 +413,8 @@ public sealed record ConformalScores(int[] Units, double[] Scores, double Candid
 /// the data units at their retained latents and the candidate otherwise and undercovers (<c>mixed_counterexample</c>); a
 /// candidate whose latents are treated otherwise than the training units'; draws that do not align; and a seam whose engine names it the
 /// split form's only (<see cref="CandidateLogDensity.Forms"/>), quoting the engine's reason.</item>
+/// <item><b>Hoff's leave-one-out score,</b> an opt-in (<see cref="FullStepScore.LeaveOneOut"/>): each unit scored given every other
+/// unit, the candidate included, read from the n-unit draws as A/Bᵢ (<see cref="LeaveOneOutScorer"/>).</item>
 /// </list>
 /// The guarantee is exact for exact posterior weights; from Monte Carlo draws it holds up to the estimates' error, which the
 /// margin reads. A candidate whose density is zero under every draw scores −∞ and takes π = 1/m. The full step's predictive
@@ -407,6 +445,15 @@ public static class ConformalBayes
         if (!(alpha > 0.0 && alpha < 1.0)) throw new ArgumentOutOfRangeException(nameof(options), "α must lie in (0, 1).");
         if (!(nu > 0.0 && nu < 1.0)) throw new ArgumentOutOfRangeException(nameof(options), "ν must lie in (0, 1).");
         if (options.FallbackShare is double share && !(share >= 0.0)) throw new ArgumentOutOfRangeException(nameof(options), "The fallback share must be non-negative.");
+        bool leaveOneOut = options.Score == FullStepScore.LeaveOneOut;
+        if (!Enum.IsDefined(options.Score)) throw new ArgumentOutOfRangeException(nameof(options), "The score is in-sample or leave-one-out.");
+        if (leaveOneOut && options.MarginBounds is not null)
+            throw new ArgumentException("The margin's carried bounds are built for the in-sample score's weights; under the leave-one-out score each data "
+                                        + "unit has weights of its own, whose carried bounds are not built. The inflated rule reads the leave-one-out "
+                                        + "score by the shift form.", nameof(options));
+        if (leaveOneOut && options.FallbackShare is not null)
+            throw new ArgumentException("The fallback rule reads the margin's trust in the add-one-in weights' k̂; under the leave-one-out score each data "
+                                        + "unit has weights of its own, and that rule is not built for them.", nameof(options));
         Check(training, candidates);
         (int[] rows, double[]? logWeights) = PredictiveChecks.Rows(training);
         Dictionary<int, List<int>> units = UnitsByStratum(training.Units);
@@ -427,6 +474,23 @@ public static class ConformalBayes
             {
                 foreach (int t in cases)
                     sets[t] = new ConformalSet(t, h, m, k, candidates.Grids[t], null, null, null, null, null, null, options.Inflate, nu);
+                continue;
+            }
+            if (leaveOneOut)
+            {
+                var loo = new LeaveOneOutScorer(training.Values, rows, logWeights, members, training.ChainLengths, k, Multiple(nu, m),
+                                                options.InflationBounds) { ReadParetoK = options.LeaveOneOutParetoK };
+                foreach (int t in cases)
+                {
+                    int g = candidates.Grids[t].Length, offset = candidates.Offset(t);
+                    var r = new Reading(g);
+                    for (int b0 = 0; b0 < g; b0 += Batch) loo.Rank(candidates.Values, offset + b0, Math.Min(Batch, g - b0), r.Slice(b0));
+                    var p = new double[g];
+                    for (int j = 0; j < g; j++) p[j] = (r.Below[j] + r.Tied[j] + 1) / (double)m;
+                    var margin = new ConformalMargin(loo.Multiple, r.CandidateErrors, r.UniformErrors, null, null, null, null, r.InflatedRanks, r.ParetoK,
+                                                     PredictiveChecks.ParetoKThreshold(Math.Max(2, rows.Length)), null, options.InflationBounds);
+                    sets[t] = new ConformalSet(t, h, m, k, candidates.Grids[t], p, r.Below, r.Tied, r.Own, r.Ess, margin, options.Inflate, nu);
+                }
                 continue;
             }
             var scorer = new StratumScorer(training.Values, rows, logWeights, members, training.ChainLengths, k, Multiple(nu, m),
@@ -512,17 +576,28 @@ public static class ConformalBayes
 
     /// <summary>
     /// The conformity scores at candidate column <paramref name="candidate"/>: every training unit of its case's stratum, the
-    /// candidate's own, the add-one-in weights' ESS and each score's Monte Carlo standard error, computed as
-    /// <see cref="FullStep"/> computes them, bit for bit.
+    /// candidate's own, the weights' ESS and each score's Monte Carlo standard error, under <paramref name="score"/>, computed as
+    /// <see cref="FullStep"/> computes them, bit for bit. Under the leave-one-out score the ESS is the least of the data units' weights',
+    /// each error is ln B̂ᵢ's, and the candidate's is 0: Â is common to every unit.
     /// </summary>
-    public static ConformalScores Scores(PointwiseLogDensity training, CandidateLogDensity candidates, int candidate)
+    public static ConformalScores Scores(PointwiseLogDensity training, CandidateLogDensity candidates, int candidate,
+                                         FullStepScore score = FullStepScore.InSample)
     {
         Check(training, candidates);
         if ((uint)candidate >= (uint)candidates.Values.GetLength(1)) throw new ArgumentOutOfRangeException(nameof(candidate));
+        if (!Enum.IsDefined(score)) throw new ArgumentOutOfRangeException(nameof(score));
         int t = 0;
         while (t + 1 < candidates.Cases && candidates.Offset(t + 1) <= candidate) t++;
         (int[] rows, double[]? logWeights) = PredictiveChecks.Rows(training);
         int[] members = UnitsByStratum(training.Units).TryGetValue(candidates.StratumOf[t], out List<int>? found) ? [.. found] : [];
+        if (score == FullStepScore.LeaveOneOut)
+        {
+            var loo = new LeaveOneOutScorer(training.Values, rows, logWeights, members, training.ChainLengths, members.Length + 1, 1.0);
+            var reading = new Reading(1);
+            loo.Rank(candidates.Values, candidate, 1, reading);
+            return new ConformalScores(members, [.. loo.UnitScores.AsSpan(0, members.Length)], reading.Own[0], reading.Ess[0],
+                                       [.. loo.UnitErrors.AsSpan(0, members.Length)], reading.CandidateErrors[0]);
+        }
         var scorer = new StratumScorer(training.Values, rows, logWeights, members, training.ChainLengths, members.Length + 1, 1.0);
         var r = new Reading(1);
         scorer.Weigh(candidates.Values, candidate, 1, r);
