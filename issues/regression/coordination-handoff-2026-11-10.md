@@ -62,7 +62,7 @@ A separate limitation in the existing shared weight reader affects all its calle
 | Workstream | State | Next |
 |---|---|---|
 | E8 ([brief](bass/active-subspace-brief.md)), [Claude chip](claude://claude.ai/epitaxy/local_66d45fa0-e3f5-4429-b588-1786ae46c0ef) | Slice 7a is WIP at `bd5dc9c`. The review above found the analysis's input-scale contract unenforced | 7a's gates (finish order item 3), then 7b and 7c |
-| Conformal ([brief](conformal-layer-brief.md)) | 12a and 10a/10b done and signed off | Slices 11 and 12b (decision 10). The C# order of 13–18 is now the user's (waiting list, item 6) |
+| Conformal ([brief](conformal-layer-brief.md)) | 12a, 10a/10b and 11 done; 11 verified here, 149 of 149 at `9248e33` | 12b, then 13 (decisions 10 and 11). The C# order of 13–18 is now the user's (waiting list, item 6) |
 | E21 ([brief](bass/ridge-blocks-brief.md)) | Slices 0–5 done and verified. New-group coverage stays open, as the layer's follow-up | The u–s funnel fix (waiting list, item 1) |
 | E34 ([brief](bass/multi-output-brief.md)), [Claude chip](claude://claude.ai/epitaxy/local_26b4e7ee-1be4-482b-a19d-995477d32291) | Slice 5 verified (2,396 of 2,396). Slice 4 commissioned on 2026-11-11 | Slice 4 |
 | Conformal Lean ([brief](../../lean/Protolemmata/Conformal/conformal-chip-brief.md)), [Claude chip](claude://claude.ai/epitaxy/local_21649695-833f-41ac-8d7c-326b4f691dda) | The commission is complete: slices 10, 12, 13–16 and 18, all verified (slice 18 on 2026-11-11: checks pass, the build is clean, its 15 results on the standard axioms, meta-ci passes) | The sources it wants are on the waiting list |
@@ -135,6 +135,11 @@ A separate limitation in the existing shared weight reader affects all its calle
    - the next wave (E25 and E15, then E3);
    - test tooling's follow-ups;
    - the offline docs pass with each report's "Doc changes owed", and the ~200 links into `docs/.archive/BayesianRegression.md` once the docs layout settles.
+
+## Open defects in shared code (2026-11-11)
+
+- **`CholeskyDecomposition` on a near-singular covariance** (found by conformal slice 11, `9248e33`). The factor's entries go infinite while `LogDet` stays finite, and only `Status.Finite` reports it. A caller that does not read the status gets wrong numbers silently. BGP's drawn function uses a pivoted factor instead. This is for LinAlg's owner.
+- **The shared weight reader at extreme weights** (`PredictiveChecks.Rows`; the conformal slice 10 report). Weights like `[1e300, 1e-300]` and `[1e308, 1e308]` read as −∞ log weights. The acceptance criteria are in that report.
 
 ## Local, untracked
 
