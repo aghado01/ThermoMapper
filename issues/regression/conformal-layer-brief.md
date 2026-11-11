@@ -98,6 +98,9 @@ It does not reach a curve's or a parameter's own intervals: those stay with E15'
 **The Lean for slices 10 and 12 is done and verified** (`dfe5c99`, `a708eb2`, `f82ae97`, `f692e37`; verified on 3b61763). The rules the C# implements are in the [Lean chip's reports](../../lean/Protolemmata/Conformal/conformal-chip-brief.md#reports) and the ledger's [slice 10](../../lean/Protolemmata/Conformal/conformal-lemmas.md#slice-10--the-full-steps-error-completed) and slice 12 sections.
 - *Slice 10, the excluded set:* it is read per grid value y over all m units, the candidate included. The data units' flags come from conservative proxies.
 - *Slice 10, the reading:* only at kept y. The largest excluded share over the grid is charged, and 2ν in place of ν.
+- *Slice 10, the grid* (`coverage_grid_excluding`, `bb5df90`). The maximum over the grid bounds coverage only if the grid holds the test unit's value. On a continuous response, a fixed grid's maximum is a reading at its points, not a bound.
+  - Each count is constant between the y where an estimate comparison or a flag changes. A sound report puts a grid value in every such interval, using the breakpoints, as slice 8's refined boundaries do.
+  - The PIT is linear between grid values (`pitCdf_interp`), so its largest departure sits at a grid value.
 - *Slice 12:* the draw identity cᵢ = A/B̂ᵢ, with the candidate at A. The latent-posterior reading draws the candidate's latent per draw, or uses its closed-form conditional mean.
 
 ## The slices
