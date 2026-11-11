@@ -187,6 +187,46 @@ Written on 2026-11-08 at the user's request, relayed by the main session: comple
 - *Lean first* for slices 9, 10, 12 to 16 and 18, as for CB and M, or C# with the Lean following.
 - *The order.* As above, by what each completes and needs. Slices 13 to 18 are wider additions that could be ordered by need instead.
 
+## Slice 12a, the plan: Hoff's score as an opt-in (2026-11-10)
+
+Commissioned by the user on 2026-11-10 ("lets build Hoff's score as an opt-in"), under decision 9, ahead of slices 10 and 11. Slice 12's other half, CB-4's latent-posterior reading, stays queued.
+
+**Own the files.** This slice holds `ConformalBayes.cs` and its tests until it lands. Slice 10's C# touches the same file and waits for it.
+
+**What the Lean fixes** (in `ConformalValidity.lean` and the ledger's slice 12 section; each test names its declaration).
+- *The score.* Hoff's leave-one-out score is cᵢ = p(zᵢ | every other unit, the candidate included), in CB-4's integrated reading (b), which the layer already reads for latent-noise models (`hoffJointScore_eq`).
+- *From the n-unit draws* (`hoffScore_none`, `hoffScore_some`):
+  - the candidate scores A = E_n[g(z_new | θ)], the plain n-unit predictive;
+  - each data unit scores A/Bᵢ, with Bᵢ = E_n[g(z_new | θ)/g(zᵢ | θ)];
+  - so the candidate is accepted iff #{i : Bᵢ ≥ 1} ≥ k (`hoff_accepts_iff`).
+- *Validity.* It is equivariant, so CB-1 covers under the layer's tie rule (ties count for the candidate; `hoff_coverage`). Hoff's strict rule fails under ties and is not offered.
+- *Its error* (`coverage_close_shift`, `coverage_inflated_shift`). Â is common to every unit of an ordering, so on the log scale the ranks ignore it. The bounds are log B̂ᵢ's Monte Carlo error for the data units and 0 for the candidate's position.
+- *Latents.* Every unit, the candidate included, is read the same way. A mixed reading undercovers (the ledger's counterexample) and stays refused under the existing contract.
+
+**Build.**
+- *The option.* `ConformalOptions` gains the score choice. The default stays Fong and Holmes's in-sample score, and every existing set, hash and fingerprint stays unchanged with the option off.
+  - Name it by what it does, for example `ConformalScore.InSample` and `ConformalScore.LeaveOneOut`, and credit Hoff (2023) in the docstring.
+- *The full step under the option:*
+  - the plain set and the inflated rule, the latter on per-position bounds by the shift form;
+  - per candidate and data unit, the weights' PSIS k̂ and ESS, as the add-one-in path reports them.
+- *What the option does not yet serve, refused with the reason or reported as not computed* (never read with the in-sample score's bounds):
+  - the margin (`MarginBounds`), unless its carried bounds for B̂ᵢ come cleanly in this slice;
+  - the fallback rule's k̂ trigger, the split-half comparator and the full step's predictive distribution, wherever they read the in-sample score.
+
+  Each is recorded in the report with the decision it would change.
+- *`Scores`,* the per-candidate diagnostic, reports the chosen score.
+
+**Gates** (with the common gates below):
+- `hoff_accepts_iff` and the draw identity on exact-draw fixtures. On the conjugate fixture the closed-form leave-one-out predictive is the reference.
+- Equivariance: permuting the units permutes the scores.
+- CB-1 coverage by enumeration with the option on.
+- The inflated rule's coverage under the shift form's bounds.
+- **Decision 9's measurement:** set width against the in-sample score at equal coverage, and coverage from truth outside the model. Run it on the conjugate fixture and on BASS fits (a healthy Gaussian fit, a Student t fit and a wrong fit, as slice 4's reading used), behind the qualification switch.
+  - Optional: the finite model of `conformal-checks.py`, where Hoff's expected size was 0.2 to 0.5% below the in-sample score's.
+- The cost row: the extra weight per data unit against the in-sample step.
+
+**Report** under "Reports": what landed by commit, the gates' numbers, the measurement with no default proposed, the refusals and their reasons, and the "Doc changes owed". Message the main session tersely when it lands.
+
 ## Gates common to every slice
 
 - **Nothing upstream moves.** The layer reads; every pinned hash and fingerprint holds: the pinned tier at each commit, the whole assembly at the slice's end ([targeted runs](../../CONTRIBUTING.md#testing-standards)).
@@ -194,13 +234,13 @@ Written on 2026-11-08 at the user's request, relayed by the main session: comple
 - **Coverage from truth outside the model.** Data from a process the model does not share; coverage over replications against 1 − α within its binomial error, and the width beside it.
 - **Primitives.** Chosen cases and a seeded random sweep, far ranges included: log-weights far in a tail, scores that tie, strata of one.
 - **The cost row.** Per candidate and per grid: the weights, the score product and the ranks, at the cost report's base and at n 1,000 with S 4,000, on the cycle clock, marked indicative.
-- **`docs/Maths`.** Decided statistical choices land on the new page with their alternatives and implications.
+- **Docs, offline.** Chips leave `docs/` alone (the user's standing guidance of 2026-11-10, [AGENTS.md](../../AGENTS.md#docops--conventions-for-issues)). Each report lists under "Doc changes owed" the decided statistical choices, with their alternatives and implications, for the offline docs pass.
 
 ## Not in this brief
 
 Each is recorded in E16, with the decision it would change:
 - the tournament correction (Bhattacharyya, Zhang and Barber), full data at 1 − 2α whatever the draws, at n leave-one-out chains;
-- Hoff's leave-one-out score;
+- Hoff's leave-one-out score, now slice 12a (above);
 - weighted conformal under shift, and conformal Bayes under label shift;
 - batch predictive inference and E17's whole-curve bands;
 - CBMA across noise laws, which needs each law's evidence, GBASS's slice 5;
