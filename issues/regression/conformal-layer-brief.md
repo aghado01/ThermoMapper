@@ -295,7 +295,7 @@ Started at the main session's word after slice 11's verification.
   - the refusals;
   - qualification: coverage and width of (c) against (b) on BARS t-weight fits, under t noise (right) and slice 5's contaminated truth (wrong), with the ESS and k̂, plus the cost row.
 
-**State.** Being written. Nothing committed.
+**State.** The code and tests are committed in `c5a3f1f`, covering the layer, BARS and BASS (the GBASS chip confirmed its files free and declined to build BASS's side). The Commit selection passed 2,659 of 2,659. The measurements are read: BARS coverage 0.885 and 0.895 under the latent-posterior reading, widths 0.6% narrower; BASS's Student t fit 0.896, 0.3% wider. The whole assembly is running at `c5a3f1f`, and the report follows it.
 
 ### 2026-11-11 — Slice 11, BGP's drawn f: the retained-parameters content the full step takes
 
