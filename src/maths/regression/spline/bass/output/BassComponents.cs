@@ -126,6 +126,15 @@ public sealed class BassBasisFit
     public CoActiveAnalysis CoActiveSubspace(CoActiveSpec spec) => BassActiveSubspaces.CoActive(this, spec);
 
     /// <summary>
+    /// The co-active subspaces of this basis fit and <paramref name="other"/>, another basis fit on the same inputs at one hinge degree
+    /// (E8's slice 6): f = a_fᵀy for <see cref="CoActiveSpec.Output"/> over this fit's training output locations and g = a_gᵀy for
+    /// <see cref="CoActiveSpec.OtherOutput"/> over the other's, both required; joint draws paired by position. A basis fit paired with a
+    /// direct or scalar fit is that fit's <see cref="BassFit.CoActiveSubspace(BassData, BassBasisFit, CoActiveSpec)"/>, with the roles
+    /// swapped: V and the concordances are the same, and C_f and C_g trade places.
+    /// </summary>
+    public CoActiveAnalysis CoActiveSubspace(BassBasisFit other, CoActiveSpec spec) => BassActiveSubspaces.CoActive(this, other, spec);
+
+    /// <summary>
     /// Basis adequacy (E8's slice 5): beside <paramref name="direct"/>, a direct-mode fit of the same cases, the share of its
     /// G = E[J W_x Jᵀ] outside this fit's span, G = diag(y_s)K, and the containment defect of G's leading patterns in it, per draw of
     /// the direct fit and for E[G], under the spec's law, input metric and output metric. The spec's <see cref="ActiveSubspaceSpec.OutputPatterns"/>
