@@ -142,7 +142,9 @@ analysis output goes to `artifacts/`, not `issues/`.
 
 **Messages between sessions** carry events and coordination, tersely, with only
 the context the receiver needs. Results travel in reports. Chips message each
-other directly when they need to coordinate.
+other directly when they need to coordinate. Sessions do not read each other's
+transcripts. An event points the orchestrator to the report it needs to read
+to supervise.
 
 
 NO COMMITS "Co-Authored-By: Claude Opus 5.5" OR THE LIKE. KEEP COMMITS INFORMATIVE TO THE WORK. 

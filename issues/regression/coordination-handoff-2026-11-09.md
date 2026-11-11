@@ -32,6 +32,7 @@ On an independent archive of `e5183dc`, all eight E21 diagnostic bodies passed w
 - **Docs and messages** (the user's standing guidance, 2026-11-10; [AGENTS.md](../../AGENTS.md#docops--conventions-for-issues)).
   - Chips leave `docs/` alone. Each report lists the doc changes its work calls for under "Doc changes owed", and `docs/` is updated offline in batches.
   - Messages carry events and coordination, tersely, and results travel in reports. Chips message each other directly to coordinate.
+  - No session reads another's transcript. An event prompts the orchestrator to read the report it points to.
 - **Chips report slice by slice and wait for a verification note.** Decisions beyond a brief come back to the parent, and anything that changes a default or removes an option goes to the user. A removal is always its own question.
 - **Repository rules.** Work on `main`, commit by pathspec (`git commit -m … -- <paths>`), leave nothing staged, push nothing.
   - Commit messages carry no attribution lines (CLAUDE.md).
