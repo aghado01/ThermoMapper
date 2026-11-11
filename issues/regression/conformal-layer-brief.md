@@ -492,12 +492,12 @@ Built at the user's decisions of 2026-11-09 (6 to 8 above), relayed by the main 
 - *The layer holds every entry point to the flag:* the full step, its distribution and its scores; the split form and its distribution; an inductive stream's density and centrality scores. Out-of-range flags are refused.
 - *The conformal tests:* 78 of 78. *Per commit,* the selected classes and the pinned tier: 2,141 of 2,141. *At the slice's end,* the whole assembly at e3071cf: 2,736 of 2,736.
 
-**The weighted BASS fit's candidates: nothing to build.** The plan's second item was slice 1's "candidates for a weighted fit, each case with its weight". Reading it first showed no weighted Gaussian BASS fit can be made:
-- `Bass.Fit` builds its model from the config alone and takes no observation model.
-- The config's observation models are the Gaussian, with unit weights, and the noise laws, whose terms read the law's density.
-- A weighted working response exists only inside the core's tests, at `BassModel`'s level (`BassWeightedCoreTests`'s own observation model).
-
-The seam's refusal stays as a guard. The candidates are recorded on the page as waiting for a weighted fit to be reachable: each case would carry its weight, and the term would be the training row's, N(y; f, σ²/w) for precision weights or w copies of the Gaussian term for replication.
+**The weighted BASS fit's candidates: not built, blocked on a missing entry point** (corrected 2026-11-10 at the user's word: "it seems like some things are missing that are expected, not that there's nothing to build").
+- *The core holds weighted fits.* `WorkingResponse` takes weights with their meaning, precision or replication, and `BassWeightedCoreTests` gates them at `BassModel`'s level.
+- *The path to them is missing.* `Bass.Fit` builds its model from the config alone and takes no weights. BASS's page (`WeightMeaning`) names who hands a weight: aggregated rows and resampling (E18) for replication; a latent scale, Pólya–Gamma or a mixture for precision. Aggregated rows have no entry point, so no fit a user can make carries weights.
+- *Once a weighted fit is reachable, the candidates take each case's weight.* Each candidate reads the training row's term: N(y; f, σ²/w) under precision weights, w copies of the Gaussian term under replication, with the CDF read alike. Until then the seam's refusal stays as a guard.
+- *My first record called this "nothing to build".* That mistook a missing entry point for an absence of need.
+- *Doc changes owed:* the page's "Not built yet" line on these candidates should name the missing `Bass.Fit` entry point, not a fit "to be reachable".
 
 **Decided in building it.**
 - *The flag is three values.* A seam that leaves a form out gives its reason, which the refusal quotes; a refusal without one says the engine gave none.
