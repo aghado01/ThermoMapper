@@ -276,6 +276,22 @@ Each report gives the commits, gate results, coverage and width by fit, cost, de
 
 Newest first.
 
+### In progress — Slice 11, BGP's drawn f (started 2026-11-11)
+
+Started at the main session's word (resume order 11, 12b, 13).
+
+**Plan.**
+- `BgpSampler.DrawFunction(result, xCases, seed)` returns a `BgpDrawnFunction`. For each retained draw (t, η, s²), it draws g = m + f jointly at the distinct mapped inputs, the training inputs first and then the cases'. The law is the kriging mean and s² times the universal-kriging covariance (`GpRegression.JointPosteriorInFrame`). Each accepted state is factored once, and each draw takes its own normals.
+- The training density (`PointwiseLogDensity`) and the candidate density (`CandidateLogDensity`) come from that one object. Both are in-sample N(y | g(x), σ²), with every latent conditioned and both forms served.
+- A case at a training input reads that input's g, so its term is the training term, bit for bit.
+- *Gates:*
+  - candidates at training inputs, bit for bit, log CDF included, with the full step taking the pair;
+  - the draws against the universal-kriging moments from the bordered system;
+  - the refusals;
+  - qualification: held-out coverage on slice 5's truth, the split form beside it at equal data, and the cost row.
+
+**State.** Code and tests written, not yet built. Nothing committed.
+
 ### 2026-11-11 — Slice 10, density and CDF error diagnostics
 
 Completed after slice 12a's verification, under decision 10's rules and the grid rule (1d76a22). The coordinator verified 10a before releasing 10b, then signed off the completed slice on `6fc1da2`. Defaults are unchanged. The numerical coverage and PIT readouts remain conditional diagnostics, not guaranteed bounds.
