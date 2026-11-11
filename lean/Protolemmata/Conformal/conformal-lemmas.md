@@ -2,13 +2,13 @@
 
 Pins the contract of the engine's conformal layer, one layer over retained draws and pointwise densities for every model with a pointwise density ([E16](../../../issues/regression/bass/extensions-brief.md#conformal-bayes-the-consumer)). The layer owns coverage and the score owns width. These are the finite statements of that split. They are the sibling of [GuardedEstimator](../BASS/guarded-estimator-lemmas.md): there, means valid whatever the emulator does; here, prediction sets valid whatever the model does. Written from the [chip brief](conformal-chip-brief.md).
 
-**Status (2026-11-06).** Proved in `lean/Enthymemata/ConformalValidity.lean`, namespace `Conformal`, with no apologies (PROOF-CLOSED, 187 declarations counting E35's M-1 and M-2 and slice 9 at the end of this page; `#print axioms` shows `propext`, `Classical.choice`, `Quot.sound` only):
+**Status (2026-11-06).** Proved in `lean/Enthymemata/ConformalValidity.lean`, namespace `Conformal`, with no apologies (PROOF-CLOSED, 239 declarations counting E35's M-1 and M-2, slice 9 and slice 10 at the end of this page; `#print axioms` shows `propext`, `Classical.choice`, `Quot.sound` only):
 - CB-1: `card_rankLe_le`, `coverage_orderings`, `coverage_orderings_eq`, `coverage_strict_le`, `coverage_orderings_le`, `rank_uniform`, `coverage_tieBreak`, `coverage_given`, `coverage_law`, `coverage_stratum`;
 - CB-2: `split_coverage`, `exchangeable_given_training`, `cqr_ordConnected`;
 - CB-4: `sum_jointU`, `post_addOneIn`, `integratedScore_equivariant`, `latentScore_equivariant`, `latentScore_eq`, `sum_jointU_addOneIn`, `integratedScore_le_latentScore`, `accepts_latent_of_mixed`, `mixed_counterexample`;
 - CB-3, with an error bound per unit: `accepts_or_fragile`, `accepts_shift_of_accepts_close`, `acceptsInflated_of_accepts`, `fragileEstimated_of_fragile`, `fragileEstimated_mono`, `coverage_close`, `coverage_inflated`, `card_fragile_le_estimated`.
 
-[`conformal-checks.py`](conformal-checks.py) holds the exact-arithmetic checks, run before the Lean. Every assertion holds. Changed from the brief: CB-1's upper bound is an equality at the grid levels, and Hoff's strict rule fails under ties; CB-3's band is one-sided and tight, its bounds are per unit, and it gives a third option, the inflated rule. Nothing proved false. CB-3's prior art was read in full on 2026-11-06; the inflated rule is known, and the margin was not found. Open: the law forms on continuous spaces, CB-3's margin under an ε that holds only with high probability (for the inflated rule, Bhattacharyya et al. give 1 − α − 3√ν), and the Hoff finding under CB-4.
+[`conformal-checks.py`](conformal-checks.py) holds the exact-arithmetic checks, run before the Lean. Every assertion holds. Changed from the brief: CB-1's upper bound is an equality at the grid levels, and Hoff's strict rule fails under ties; CB-3's band is one-sided and tight, its bounds are per unit, and it gives a third option, the inflated rule. Nothing proved false. CB-3's prior art was read in full on 2026-11-06; the inflated rule is known, and the margin was not found. Open: the law forms on continuous spaces, and the Hoff finding under CB-4 (slice 12). CB-3's margin under an ε that holds only with high probability was closed by slice 10 on 2026-11-10, at the end of this page.
 
 **Conventions, fixed here and used throughout.**
 - A score is a **conformity** score: higher conforms better. The engine's pointwise log density is one, and a monotone map of every unit's score changes nothing.
@@ -445,3 +445,103 @@ Vovk 2015, Vovk et al. 2018 and Vovk and Wang 2012, on combining p-values, are c
 - *Symmetric CQR controls only the total.* With both quantile fits below the data, every refusal falls above the set: 0.363 above, against 0.127 for the asymmetric form at k = 1 per tail.
 
 **Prior art, read.** Romano, Patterson and Candès 2019 (arXiv 1905.03222v1), read in TeX: Theorem 2 with its proof, and their quantile Q_{1−α}(E, I₂), the (1 − α)(1 + 1/|I₂|)-th empirical quantile. Linusson et al. 2014, which they cite, was not read.
+
+## Slice 10 — the full step's error, completed
+
+Posed and proved on 2026-11-10 for the [conformal layer's slice 10](../../../issues/regression/conformal-layer-brief.md#e16s-completion-the-plan-slices-7-onward), before any C#, from the [chip brief's assignment](conformal-chip-brief.md#e16-slices-10-and-12--the-full-steps-error-hoffs-score-and-the-latent-posterior-2026-11-10). It closes CB-3's open item, the margin under bounds that hold only with high probability.
+
+**Status (2026-11-10).** Proved in `lean/Enthymemata/ConformalValidity.lean`, section `FullStepError`, PROOF-CLOSED, and `#print axioms` shows the standard three only. [`conformal-checks.py`](conformal-checks.py), section "Slice 10", ran first, exhaustive in exact arithmetic, and every assertion holds. Checked, not formalized: the PIT between grid values.
+
+**Setting.** As in CB-3:
+- the exact score S is equivariant;
+- the estimates ŝ are read per ordering;
+- the bounds εⱼ are carried by the units.
+
+The full step's CDF score F̃ is equivariant, since each unit's add-one-in predictive CDF is symmetric in the units, so everything here applies to it. The equi-tailed set at k per tail is CB-1's rule on F̃ (the lower tail) and on −F̃ (the upper tail), `AcceptsTwoSided`. The full step takes k = ⌊αm/2⌋.
+
+### The equi-tailed set
+
+- *Exact.* It refuses at most 2k units (`card_not_acceptsTwoSided_le`).
+- *Margin form* (`coverage_close_twoSided`). Coverage is at least 1 − |R ∪ M_lo ∪ M_hi|/m, so at least 1 − 2k/m − |M_lo ∪ M_hi|/m.
+  - R is the exact set's refusals.
+  - M_lo and M_hi are CB-3's fragile units of F̃ and of −F̃ (`FragileTwoSided`).
+- *Inflated form* (`coverage_inflated_twoSided`). With each tail inflated by the same bounds, coverage is at least 1 − 2k/m, with bounds by ordering and position.
+- *Do the tails' bands add or share units?* They enter as their union, never more than their sum.
+  - A unit fragile in both tails has at least m − 2k + 2 units within εⱼ + ε_u of it, itself included (`card_near_of_fragile_both`). At k = ⌊αm/2⌋ that is more than (1 − α)m of the set.
+  - Short of that bunching, the bands add.
+- *Dominance* (`card_fragileTwoSided_le_estimated`). For every ordering, |M_lo ∪ M_hi| is at most the union band read from that ordering's estimates (each tail's `FragileEstimated`, shifts doubled). As for the density score, any ordering's reading is a valid report.
+
+### The distribution: P(PIT ≤ u) − u
+
+- *The PIT.* Given the scores and the ordering, the test unit's PIT is (R − 1 + V)/m.
+  - R = B + J, with J uniform on 1..T + 1 (`tieRankProb`), and V uniform on (0, 1].
+  - So P(PIT ≤ k/m) = P(R ≤ k) (`pitRankLe`).
+  - With exact scores it is k/m at every grid value (checked).
+- *Bounds* (`pit_ge_lower`, `pit_le_upper`). With estimates within the bounds,
+
+  #{u : U(u) ≤ k}/m ≤ P(PIT ≤ k/m) ≤ #{u : L(u) < k}/m,
+
+  where L(u) = #{j : F̃ⱼ + εⱼ + ε_u < F̃_u} (`shiftedBelow`) and U(u) = #{j : F̃ⱼ ≤ F̃_u + εⱼ + ε_u} (`shiftedAtMost`).
+- *The two counts bracket k* (`card_shiftedAtMost_le_le_card_shiftedBelow`): #{U ≤ k} ≤ k ≤ #{L < k} for k ≤ m. So
+
+  |P(PIT ≤ k/m) − k/m| ≤ max(#{L < k} − k, k − #{U ≤ k})/m.
+
+  - With distinct exact scores, #{L < k} − k counts the units above level k whose shifted count falls below it. Likewise k − #{U ≤ k} counts the units at or below level k whose shifted count rises above it. These are the PIT's fragile units at level k.
+  - Under ties the exact counts already pass k, and the bound is loose by the tied mass, while the randomized PIT stays uniform.
+- *Uniformly in u.* Given R, the PIT is uniform on ((R − 1)/m, R/m]. So P(PIT ≤ u) is linear between grid values, as u is, and the largest departure sits at a grid value: sup_u |P(PIT ≤ u) − u| is the largest of the grid bounds. Checked, not formalized.
+- *Dominance* (`card_pit_counts_estimated`). For every ordering, the counts read from its estimates with the shifts doubled bound the exact ones: #{L < k} ≤ #{L̂ < k} and #{Û ≤ k} ≤ #{U ≤ k}.
+
+### Leaving out the degenerate turns
+
+**Setting.** The draws w, the Monte Carlo seeds, have weights p summing to 1. For each draw:
+- D(w) ⊆ C is the set of turns whose weights degenerate. It is read once for the data set (by k̂ or the ESS of each turn's weights), so it is the same for every ordering.
+- ε(w) is the set of bounds carried over the kept turns only.
+- ν bounds the weighted share of kept orderings (test unit outside D) on which some unit's bound fails. It is joint over the m units of an ordering.
+
+On D's turns, and on kept orderings whose bounds fail, the estimate may be anything.
+
+**Claims.**
+- *The accept rule* (`coverage_close_excluding`). Coverage is at least 1 − |D ∪ R ∪ M_D|/m − ν.
+  - R is the exact refusals (at most k).
+  - M_D is the set of fragile units under the kept bounds.
+- *The share is |D \ (R ∪ M_D)|/m.* A degenerate turn costs only when its unit is neither refused nor fragile already. The brief's form, 1 − (k + |M_D|)/m − |D|/m − ν, follows, and is never tighter. A far-out unit sits in the exact rule's low tail, so its turn usually costs nothing.
+- *The inflated rule* (`coverage_inflated_excluding`): at least 1 − |D ∪ R|/m − ν, so at least 1 − (k + |D|)/m − ν.
+- *The equi-tailed set* (`coverage_close_twoSided_excluding`, `coverage_inflated_twoSided_excluding`): at least 1 − |D ∪ R ∪ M_lo ∪ M_hi|/m − ν, and the inflated set at least 1 − |D ∪ R|/m − ν, with R its refusals (at most 2k).
+- *The PIT* (`pit_excluding`):
+
+  #{u ∉ D : U(u) ≤ k}/m − ν ≤ P(PIT ≤ k/m) ≤ #{u : u ∈ D or L(u) < k}/m + ν.
+- *The steps.*
+  - `coverage_ge_of_good_fail` is for indicators.
+  - `avg_le_of_fail` and `avg_ge_of_fail` are for any reading in [0, 1]. A reading controlled on the kept orderings whose bounds hold averages within the controlled share, give or take ν.
+
+**What the engine reads.** The engine reads these from one ordering whose kept bounds hold: units at their positions, the observed ordering in the engine.
+- *The margin* (`card_excluded_le_estimated`). |D ∪ R ∪ M_D| is at most k + |M̂_D| + |{u ∈ D : the inflated rule accepts u}|. A degenerate turn that the inflated rule refuses is refused by the exact rule too (the contrapositive of `acceptsInflated_of_accepts`), so it costs nothing.
+- *The equi-tailed set* (`card_excluded_le_estimated_twoSided`). The same bound holds with 2k, the union band, and the units of D that the inflated set accepts.
+- *The PIT* (`card_pit_excluding_estimated`, through `shiftedBelow_estimated_le` and `shiftedAtMost_le_estimated`). The counts with D, read with the shifts doubled, bound the exact ones from the safe side.
+
+**What it rests on.**
+- *D must be fixed for the data set.* A turn is labelled by its unit and does not depend on which unit is the test unit. If the test unit's own turn were flagged after its estimate was seen, the excluded orderings would no longer be a share of units, and the bound would not follow.
+- *ν must be joint per ordering.* The layer's z = Φ⁻¹(1 − ν/(2m)) per unit gives it by a union bound.
+
+**Against Bhattacharyya, Zhang and Barber.** Their 1 − α − 3√ν (arXiv 2605.29200, appendix) is for the inflated rule, with ν the chance that one score's estimate misses its bound. Ours takes ν per ordering, jointly over its m units. It pays ν once, for the margin and the inflated rule alike.
+- Theirs, for a coverage cost of 0.01: it needs ν ≈ 1.1·10⁻⁵ per point, so z ≈ 4.39 for a two-sided normal bound.
+- Ours: ν = 0.01 per ordering gives z ≈ 3.89 per unit at m = 100, and 4.42 at m = 1000.
+- At ν = 0.05 theirs costs 0.67.
+
+**An illustration at m = 100** (checks). One unit far out sits both in D and in the exact low tail; k = 5 and ν = 1/20.
+- With bounds carried over every turn (3, widened by the far unit's turn), the margin reads 0.00, with 95 units fragile.
+- Leaving out the far unit's turn (bounds 0.002), it reads 0.88, that is 1 − (5 + 2)/100 − 0.05, and D costs nothing.
+- These bounds are chosen, not measured. BASS's own reading waits for the C#.
+
+**Checks** (`conformal-checks.py`, slice 10).
+- *The equi-tailed set:* 768 cases (m = 3 to 5, three bound profiles, a symmetric squared score and an in-sample CDF score, every k), each over every ordering with an adversarial and a noisy estimate.
+- *The PIT:* 276 cases. The exact PIT is uniform at every grid value. The estimate's P(R ≤ k) lies within the counts, and each ordering's estimated counts dominate. Between grid values the departure is at most the larger at the ends.
+- *Leaving out D:* 261 one-sided cases, and 489 two-sided and PIT cases. These include the engine's reading from every ordering.
+
+**Decisions served.**
+- *Can the full step's distribution report its Monte Carlo error?* Yes:
+  - for the PIT, max(#{L̂ < k} − k, k − #{Û ≤ k})/m at each grid level, read from any ordering, or the form with D plus ν;
+  - for the equi-tailed set, the union band.
+
+  Whether to show it depends on whether it reads anything on real fits, which the C# measures.
+- *Can the margin read anything on fits like BASS's?* With D left out, yes, when the degenerate turns are the far units that the exact rule already refuses. Their turns cost nothing, and the band shrinks to what the kept turns' bounds give.

@@ -1716,4 +1716,265 @@ print("Asymmetric CQR, finite ends need " + "; ".join(rows9) + ". At alpha = 0.1
 
 
 print()
+print("=== Slice 10: the full step's error, completed ===")
+
+
+# The CDF score's equi-tailed set accepts when the candidate is in neither tail: CB-1's rule on F
+# (the lower tail) and on -F (the upper), k per tail. Estimates within per-unit bounds eps.
+def neg(s):
+    return tuple(-v for v in s)
+
+
+def two_sided(k, s, u, C):
+    return accepts(k, s, u, C) and accepts(k, neg(s), u, C)
+
+
+def two_sided_inflated(k, s, u, C, eps):
+    return accepts_inflated(k, s, u, C, eps) and accepts_inflated(k, neg(s), u, C, eps)
+
+
+def score_ecdf(z):
+    """An in-sample CDF score, symmetric in the units: the share at or below each unit."""
+    return tuple(Q(sum(1 for y in z if y <= x), len(z)) for x in z)
+
+
+n_ts = 0
+worst_overlap = None
+for N in (3, 4, 5):
+    C = list(range(N))
+    t = N - 1
+    for eps0 in ((Q(1, 50),) * N, tuple(Q(i + 1, 60) for i in range(N)), (Q(2, 5),) * N):
+        by_unit = lambda p, eps0=eps0: tuple(eps0[p[i]] for i in range(len(p)))
+        for score in (score_sq, score_ecdf):
+            for z in multisets(range(3), N):
+                s = score(z)
+
+                def adv(w, p, score=score, eps0=eps0):
+                    e = by_unit(p)
+                    base = score(w)
+                    # the test unit pushed toward its nearer tail, the rest away
+                    lo = rank_le(base, t, C) <= rank_le(neg(base), t, C)
+                    sign = -1 if lo else 1
+                    return tuple(v + sign * e[i] if i == t else v - sign * e[i] for i, v in enumerate(base))
+
+                def noisy(w, p, score=score, eps0=eps0):
+                    e = by_unit(p)
+                    return tuple(v + e[i] * Q(random.Random(hash((p, i, 7))).randint(-10, 10), 10)
+                                 for i, v in enumerate(score(w)))
+
+                for k in range(0, N // 2 + 1):
+                    R = {u for u in C if not two_sided(k, s, u, C)}
+                    Mlo = {u for u in C if fragile(k, s, u, C, eps0)}
+                    Mhi = {u for u in C if fragile(k, neg(s), u, C, eps0)}
+                    assert len(R) <= 2 * k
+                    for u in Mlo & Mhi:
+                        near = sum(1 for j in C if j == u or abs(s[j] - s[u]) < eps0[j] + eps0[u])
+                        assert near >= N - 2 * k + 2
+                        worst_overlap = (N, k, near) if worst_overlap is None else worst_overlap
+                    for est in (adv, noisy):
+                        G = perms_on(N, C)
+                        hits = sum(1 for p in G if two_sided(k, est(compose(z, p), p), t, C))
+                        assert Q(hits, len(G)) >= 1 - Q(len(R | Mlo | Mhi), N)
+                        inf = sum(1 for p in G if two_sided_inflated(k, est(compose(z, p), p), t, C, by_unit(p)))
+                        assert Q(inf, len(G)) >= 1 - Q(2 * k, N)
+                        for p in G:
+                            sh = est(compose(z, p), p)
+                            e = by_unit(p)
+                            Mhat = {u for u in C if fragile_est(k, sh, u, C, e) or fragile_est(k, neg(sh), u, C, e)}
+                            assert len(Mlo | Mhi) <= len(Mhat)
+                    n_ts += 1
+print(f"Slice 10, the equi-tailed set: {n_ts} (data, score, bounds, k) cases over every ordering, an "
+      f"adversarial and a noisy estimate: coverage >= 1 - |R u M_lo u M_hi|/m with |R| <= 2k, the "
+      f"inflated set >= 1 - 2k/m, every ordering's estimated union band at least the exact one; a unit "
+      f"fragile in both tails has at least m - 2k + 2 units within its bounds (first such case {worst_overlap})")
+
+
+# The PIT. Its rank R = B + J, J uniform on 1..T+1 (theta's ceil), so P(R <= k | ordering) is
+# sum_{r <= k} tieprob. The exact score's shifted counts bound it from both sides:
+# P(R_hat <= k) <= #{u : L(u) < k}/m and >= #{u : U(u) <= k}/m, with L(u) the units at least
+# eps_j + eps_u below u and U(u) the units at most eps_j + eps_u above it (u among them).
+def tieprob(s, u, C, r):
+    lt, le = rank_lt(s, u, C), rank_le(s, u, C)
+    return Q(1, le - lt) if lt < r <= le else Q(0)
+
+
+def L_count(s, u, C, eps):
+    return sum(1 for j in C if s[j] + eps[j] + eps[u] < s[u])
+
+
+def U_count(s, u, C, eps):
+    return sum(1 for j in C if s[j] <= s[u] + eps[j] + eps[u])
+
+
+def Lhat(s, u, C, eps):
+    return sum(1 for j in C if s[j] + 2 * (eps[j] + eps[u]) < s[u])
+
+
+def Uhat(s, u, C, eps):
+    return sum(1 for j in C if s[j] <= s[u] + 2 * (eps[j] + eps[u]))
+
+
+n_pit, worst_dev = 0, Q(0)
+for N in (3, 4, 5):
+    C = list(range(N))
+    t = N - 1
+    for eps0 in ((Q(1, 50),) * N, tuple(Q(i + 1, 60) for i in range(N)), (Q(1, 4),) * N):
+        by_unit = lambda p, eps0=eps0: tuple(eps0[p[i]] for i in range(len(p)))
+        for z in multisets(range(3), N):
+            s = score_ecdf(z)
+            G = perms_on(N, C)
+            for est in ("exact", "noisy"):
+                def sh_of(p):
+                    base = score_ecdf(compose(z, p))
+                    if est == "exact":
+                        return base
+                    e = by_unit(p)
+                    return tuple(v + e[i] * Q(random.Random(hash((p, i, 3))).randint(-10, 10), 10)
+                                 for i, v in enumerate(base))
+                cdf = {k: sum(sum(tieprob(sh_of(p), t, C, r) for r in range(1, k + 1)) for p in G) / len(G)
+                       for k in range(N + 1)}
+                for k in range(N + 1):
+                    up = Q(sum(1 for u in C if L_count(s, u, C, eps0) < k), N)
+                    lo = Q(sum(1 for u in C if U_count(s, u, C, eps0) <= k), N)
+                    assert lo <= Q(k, N) <= up
+                    if est == "exact":
+                        assert cdf[k] == Q(k, N)
+                    else:
+                        assert lo <= cdf[k] <= up
+                        worst_dev = max(worst_dev, abs(cdf[k] - Q(k, N)))
+                        for p in G:
+                            sh, e = sh_of(p), by_unit(p)
+                            assert sum(1 for u in C if L_count(s, u, C, eps0) < k) <= \
+                                sum(1 for u in C if Lhat(sh, u, C, e) < k)
+                            assert sum(1 for u in C if U_count(s, u, C, eps0) <= k) >= \
+                                sum(1 for u in C if Uhat(sh, u, C, e) <= k)
+                # Between grid values the PIT's CDF interpolates linearly, so its largest departure
+                # from u is at a grid value.
+                for uu in [Q(i, 7 * N) for i in range(7 * N + 1)]:
+                    kk = min(int(uu * N), N - 1)
+                    th = uu * N - kk
+                    val = (1 - th) * cdf[kk] + th * cdf[kk + 1]
+                    assert abs(val - uu) <= max(abs(cdf[kk] - Q(kk, N)), abs(cdf[kk + 1] - Q(kk + 1, N)))
+                n_pit += 1
+print(f"Slice 10, the PIT: {n_pit} (data, bounds, estimate) cases: the exact score's PIT is uniform at "
+      f"every grid value; the estimate's P(R <= k) lies between #{{U <= k}}/m and #{{L < k}}/m, which "
+      f"bracket k/m; each ordering's estimated counts dominate; the departure between grid values is "
+      f"at most the larger at its ends (largest departure seen {worst_dev})")
+
+
+# The carried bound that leaves out the degenerate turns D. Bounds hold, with chance 1 - nu, on the
+# orderings whose candidate is outside D; on D's turns and on failure the estimate is anything
+# (here the adversary that refuses). Coverage >= 1 - |D u R u M_D|/m - nu, where M_D is the margin
+# under bounds carried over the kept turns only, and the inflated rule >= 1 - |D u R|/m - nu.
+nu = Q(1, 10)
+n_d = 0
+for N in (4, 5):
+    C = list(range(N))
+    t = N - 1
+    for z in multisets(range(3), N)[::2]:
+        s = score_sq(z)
+        for Dset in ({0}, {N - 1}, {0, 1}):
+            kept_eps = tuple(Q(1, 40) for _ in C)  # carried over the kept turns
+            G = perms_on(N, C)
+            for k in range(0, N):
+                R = {u for u in C if not accepts(k, s, u, C)}
+                MD = {u for u in C if fragile(k, s, u, C, kept_eps)}
+                hits = Q(0)
+                hits_inf = Q(0)
+                for p in G:
+                    base = score_sq(compose(z, p))
+                    e = tuple(kept_eps[p[i]] for i in range(N))
+                    good = tuple(v - e[i] if i == t else v + e[i] for i, v in enumerate(base))
+                    if p[t] in Dset:
+                        continue  # D's turn: refused, whatever w; on failure (chance nu) refused too
+                    hits += (1 - nu) * accepts(k, good, t, C)
+                    hits_inf += (1 - nu) * accepts_inflated(k, good, t, C, e)
+                cov, cov_inf = hits / len(G), hits_inf / len(G)
+                bound = 1 - Q(len(Dset | R | MD), N) - nu
+                assert cov >= bound >= 1 - Q(k + len(MD), N) - Q(len(Dset), N) - nu
+                assert cov_inf >= 1 - Q(len(Dset | R), N) - nu
+                n_d += 1
+print(f"Slice 10, leaving out the degenerate turns: {n_d} (data, D, k) cases: coverage >= "
+      f"1 - |D u R u M_D|/m - nu (and so >= 1 - (k + |M_D|)/m - |D|/m - nu); the inflated rule >= "
+      f"1 - |D u R|/m - nu")
+# The same for the equi-tailed set and the PIT. D's turns and failed orderings read the worst
+# case: refused for coverage, 1 for the PIT's upper bound and 0 for its lower. The equi-tailed set
+# covers >= 1 - |D u R u M_lo u M_hi|/m - nu (inflated >= 1 - |D u R|/m - nu), and
+# #{u not in D : U(u) <= k}/m - nu <= P(PIT <= k/m) <= #{u in D or L(u) < k}/m + nu.
+n_d2 = 0
+for N in (4, 5):
+    C = list(range(N))
+    t = N - 1
+    kept_eps = tuple(Q(1, 40) for _ in C)
+    G = perms_on(N, C)
+    for z in multisets(range(3), N)[::2]:
+        s = score_ecdf(z)
+        ests = {}
+        for p in G:
+            base = score_ecdf(compose(z, p))
+            e = tuple(kept_eps[p[i]] for i in range(N))
+            sign = -1 if rank_le(base, t, C) <= rank_le(neg(base), t, C) else 1
+            adv = tuple(v + sign * e[i] if i == t else v - sign * e[i] for i, v in enumerate(base))
+            noisy = tuple(v + e[i] * Q(random.Random(hash((p, i, 11))).randint(-10, 10), 10)
+                          for i, v in enumerate(base))
+            ests[p] = (e, adv, noisy)
+        for Dset in ({0}, {N - 1}, {0, 1}):
+            for k in range(0, N // 2 + 1):
+                R2 = {u for u in C if not two_sided(k, s, u, C)}
+                Mlo = {u for u in C if fragile(k, s, u, C, kept_eps)}
+                Mhi = {u for u in C if fragile(k, neg(s), u, C, kept_eps)}
+                kept = [p for p in G if p[t] not in Dset]
+                cov = sum((1 - nu) * two_sided(k, ests[p][1], t, C) for p in kept) / len(G)
+                cov_inf = sum((1 - nu) * two_sided_inflated(k, ests[p][1], t, C, ests[p][0])
+                              for p in kept) / len(G)
+                assert cov >= 1 - Q(len(Dset | R2 | Mlo | Mhi), N) - nu
+                assert cov_inf >= 1 - Q(len(Dset | R2), N) - nu
+                # What the engine reads from one ordering whose bounds hold: k (2k) plus the
+                # estimated band plus the units of D the inflated rule accepts.
+                R1 = {u for u in C if not accepts(k, s, u, C)}
+                for p in G:
+                    e = ests[p][0]
+                    for est in ests[p][1:]:
+                        Mh1 = {i for i in C if fragile_est(k, est, i, C, e)}
+                        Mh2 = Mh1 | {i for i in C if fragile_est(k, neg(est), i, C, e)}
+                        Di1 = {i for i in C if p[i] in Dset and accepts_inflated(k, est, i, C, e)}
+                        Di2 = {i for i in C if p[i] in Dset and two_sided_inflated(k, est, i, C, e)}
+                        assert len(Dset | R1 | Mlo) <= k + len(Mh1) + len(Di1)
+                        assert len(Dset | R2 | Mlo | Mhi) <= 2 * k + len(Mh2) + len(Di2)
+                n_d2 += 1
+            for k in range(N + 1):
+                cdf = {p: sum(tieprob(ests[p][2], t, C, r) for r in range(1, k + 1)) for p in G}
+                up = sum(1 if p[t] in Dset else (1 - nu) * cdf[p] + nu for p in G) / len(G)
+                lo = sum(0 if p[t] in Dset else (1 - nu) * cdf[p] for p in G) / len(G)
+                assert up <= Q(sum(1 for u in C if u in Dset or L_count(s, u, C, kept_eps) < k), N) + nu
+                assert lo >= Q(sum(1 for u in C if u not in Dset and U_count(s, u, C, kept_eps) <= k), N) - nu
+                for p in G:
+                    e, est = ests[p][0], ests[p][2]
+                    assert sum(1 for u in C if u in Dset or L_count(s, u, C, kept_eps) < k) <=                         sum(1 for i in C if p[i] in Dset or Lhat(est, i, C, e) < k)
+                    assert sum(1 for i in C if p[i] not in Dset and Uhat(est, i, C, e) <= k) <=                         sum(1 for u in C if u not in Dset and U_count(s, u, C, kept_eps) <= k)
+                n_d2 += 1
+print(f"Slice 10, leaving out the degenerate turns, two-sided and the PIT: {n_d2} (data, D, k) cases: "
+      f"the equi-tailed set >= 1 - |D u R u M_lo u M_hi|/m - nu, inflated >= 1 - |D u R|/m - nu; "
+      f"#{{u not in D : U <= k}}/m - nu <= P(PIT <= k/m) <= #{{u in D or L < k}}/m + nu; from any "
+      f"ordering's estimates, |D u R u M| <= k (2k) + |M_hat| + |D's units the inflated rule accepts|, "
+      f"and the PIT's counts with D read from the estimates bound the exact ones")
+# What the margin can then read at m = 100: one unit far out (in D, and in the exact low tail),
+# whose turn widens every carried bound to 3 against 0.002 over the kept turns.
+mr = random.Random(20261110)
+m, k, nu = 100, 5, Q(1, 20)
+vals = sorted(mr.uniform(0, 1) for _ in range(m - 1)) + [-50.0]
+sc = tuple(Q(v).limit_denominator(10**6) for v in vals)
+Cm = list(range(m))
+Rm = {u for u in Cm if not accepts(k, sc, u, Cm)}
+M_all = {u for u in Cm if fragile(k, sc, u, Cm, (Q(3),) * m)}
+M_kept = {u for u in Cm if fragile(k, sc, u, Cm, (Q(1, 500),) * m)}
+Dm = {m - 1}
+assert Dm <= Rm
+print(f"Slice 10 at m = 100, k = 5, nu = 1/20: over every turn the margin reads "
+      f"{float(1 - Q(len(Rm | M_all), m)):.2f} ({len(M_all)} fragile units); leaving out the far unit's "
+      f"turn it reads {float(1 - Q(len(Dm | Rm | M_kept), m) - nu):.2f} (D inside R, so D costs nothing; "
+      f"{len(M_kept)} fragile)")
+
+
+print()
 print("All assertions hold.")

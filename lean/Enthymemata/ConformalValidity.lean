@@ -3027,4 +3027,858 @@ theorem cqrAsym_ordConnected {ι₀ X : Type*} [Fintype ι₀] (qlo qhi : X → 
 
 end AsymmetricCQR
 
+/-! ### Slice 10: the full step's error, completed -/
+
+section FullStepError
+
+variable {ι : Type*} [Fintype ι] [DecidableEq ι]
+
+omit [Fintype ι] [DecidableEq ι] in
+/-- The share of units without a property is one less the share with it. -/
+theorem card_filter_not_div {C : Finset ι} (hC : C.Nonempty) (q : ι → Prop) [DecidablePred q] :
+    ((C.filter fun u => ¬ q u).card : ℝ) / C.card = 1 - ((C.filter q).card : ℝ) / C.card := by
+  have hc : (0 : ℝ) < C.card := by exact_mod_cast card_pos.2 hC
+  have h : ((C.filter q).card : ℝ) + ((C.filter fun u => ¬ q u).card : ℝ) = C.card := by
+    exact_mod_cast C.card_filter_add_card_filter_not q
+  rw [eq_sub_iff_add_eq, ← add_div, add_comm, h, div_self hc.ne']
+
+omit [Fintype ι] [DecidableEq ι] in
+/-- Its weighted form, over draws with weights summing to one. -/
+theorem weighted_share_not {W : Type*} [Fintype W] {C : Finset ι} (hC : C.Nonempty)
+    (p : W → ℝ) (hp1 : ∑ w, p w = 1) (bad : W → ι → Prop) [∀ w, DecidablePred (bad w)] :
+    ∑ w, p w * (((C.filter fun u => ¬ bad w u).card : ℝ) / C.card) =
+      1 - ∑ w, p w * (((C.filter (bad w)).card : ℝ) / C.card) := by
+  simp only [card_filter_not_div hC, mul_sub, mul_one, sum_sub_distrib, hp1]
+
+/-- `ν` as a share: a weighted count of orderings at most `ν` times their number is a weighted
+share at most `ν`. -/
+theorem weighted_share_le {W : Type*} [Fintype W] (C : Finset ι) (p : W → ℝ)
+    (bad : W → Equiv.Perm ι → Prop) [∀ w, DecidablePred (bad w)] {ν : ℝ}
+    (hfail : ∑ w, p w * (((permsOn C).filter (bad w)).card : ℝ) ≤ ν * (permsOn C).card) :
+    ∑ w, p w * ((((permsOn C).filter (bad w)).card : ℝ) / (permsOn C).card) ≤ ν := by
+  have hg : (0 : ℝ) < (permsOn C).card := by exact_mod_cast card_permsOn_pos C
+  have heq : ∑ w, p w * ((((permsOn C).filter (bad w)).card : ℝ) / (permsOn C).card) =
+      (∑ w, p w * (((permsOn C).filter (bad w)).card : ℝ)) / (permsOn C).card := by
+    rw [sum_div]
+    exact sum_congr rfl fun w _ => by ring
+  rw [heq, div_le_iff₀ hg]
+  exact hfail
+
+/-- Fewer orderings fail less. -/
+theorem weighted_fail_mono {W : Type*} [Fintype W] (C : Finset ι) (p : W → ℝ)
+    (hp0 : ∀ w, 0 ≤ p w) (a b : W → Equiv.Perm ι → Prop) [∀ w, DecidablePred (a w)]
+    [∀ w, DecidablePred (b w)] (hab : ∀ w σ, a w σ → b w σ) {ν : ℝ}
+    (h : ∑ w, p w * (((permsOn C).filter (b w)).card : ℝ) ≤ ν * (permsOn C).card) :
+    ∑ w, p w * (((permsOn C).filter (a w)).card : ℝ) ≤ ν * (permsOn C).card := by
+  refine le_trans (sum_le_sum fun w _ => mul_le_mul_of_nonneg_left ?_ (hp0 w)) h
+  exact_mod_cast card_le_card fun σ hσ => by
+    rw [mem_filter] at hσ ⊢
+    exact ⟨hσ.1, hab w σ hσ.2⟩
+
+/-- **Coverage from a sufficient condition.** If every ordering that puts the test unit on a unit
+with property `good` is accepted, the share of orderings accepted is at least the share of units
+with it. -/
+theorem coverage_ge_of_good {C : Finset ι} {t : ι} (ht : t ∈ C) (good : ι → Prop)
+    [DecidablePred good] (acc : Equiv.Perm ι → Prop) [DecidablePred acc]
+    (h : ∀ σ ∈ permsOn C, good (σ t) → acc σ) :
+    ((C.filter good).card : ℝ) / C.card ≤
+      (((permsOn C).filter acc).card : ℝ) / (permsOn C).card := by
+  rw [← ratio_permsOn ht good]
+  have hg : (0 : ℝ) < (permsOn C).card := by exact_mod_cast card_permsOn_pos C
+  refine div_le_div_of_nonneg_right ?_ hg.le
+  exact_mod_cast card_le_card fun σ hσ => by
+    rw [mem_filter] at hσ ⊢
+    exact ⟨hσ.1, h σ hσ.1 hσ.2⟩
+
+/-- **The same, with a chance of failure.** `W` carries the draws' randomness, with weights `p`.
+The draw `w` is trusted on the orderings `hold w σ`, and on the others its estimates may be
+anything. If every trusted ordering that puts the test unit on a good unit is accepted, coverage is
+at least the good units' share, less `ν`, the weighted share of untrusted orderings among those. -/
+theorem coverage_ge_of_good_fail {W : Type*} [Fintype W] {C : Finset ι} {t : ι} (ht : t ∈ C)
+    (p : W → ℝ) (hp0 : ∀ w, 0 ≤ p w) (good : W → ι → Prop) [∀ w, DecidablePred (good w)]
+    (hold acc : W → Equiv.Perm ι → Prop) [∀ w, DecidablePred (hold w)]
+    [∀ w, DecidablePred (acc w)] (h : ∀ w, ∀ σ ∈ permsOn C, good w (σ t) → hold w σ → acc w σ)
+    {ν : ℝ} (hfail : ∑ w, p w * (((permsOn C).filter fun σ : Equiv.Perm ι =>
+        good w (σ t) ∧ ¬ hold w σ).card : ℝ) ≤ ν * (permsOn C).card) :
+    ∑ w, p w * (((C.filter (good w)).card : ℝ) / C.card) - ν ≤
+      ∑ w, p w * ((((permsOn C).filter (acc w)).card : ℝ) / (permsOn C).card) := by
+  have hg : (0 : ℝ) < (permsOn C).card := by exact_mod_cast card_permsOn_pos C
+  have hw : ∀ w, ((C.filter (good w)).card : ℝ) / C.card ≤
+      (((permsOn C).filter (acc w)).card : ℝ) / (permsOn C).card +
+        (((permsOn C).filter fun σ : Equiv.Perm ι => good w (σ t) ∧ ¬ hold w σ).card : ℝ) /
+          (permsOn C).card := by
+    intro w
+    rw [← ratio_permsOn ht (good w), ← add_div]
+    refine div_le_div_of_nonneg_right ?_ hg.le
+    have hsub : ((permsOn C).filter fun σ : Equiv.Perm ι => good w (σ t)) ⊆
+        ((permsOn C).filter (acc w)) ∪
+          (permsOn C).filter fun σ : Equiv.Perm ι => good w (σ t) ∧ ¬ hold w σ := by
+      intro σ hσ
+      rw [mem_filter] at hσ
+      rw [mem_union, mem_filter, mem_filter]
+      by_cases hh : hold w σ
+      · exact Or.inl ⟨hσ.1, h w σ hσ.1 hσ.2 hh⟩
+      · exact Or.inr ⟨hσ.1, hσ.2, hh⟩
+    exact_mod_cast (card_le_card hsub).trans (card_union_le _ _)
+  have hsum : ∑ w, p w * (((C.filter (good w)).card : ℝ) / C.card) ≤
+      ∑ w, p w * ((((permsOn C).filter (acc w)).card : ℝ) / (permsOn C).card) +
+        ∑ w, p w * ((((permsOn C).filter fun σ : Equiv.Perm ι =>
+          good w (σ t) ∧ ¬ hold w σ).card : ℝ) / (permsOn C).card) := by
+    rw [← sum_add_distrib]
+    refine sum_le_sum fun w _ => ?_
+    rw [← mul_add]
+    exact mul_le_mul_of_nonneg_left (hw w) (hp0 w)
+  have hν : ∑ w, p w * ((((permsOn C).filter fun σ : Equiv.Perm ι =>
+      good w (σ t) ∧ ¬ hold w σ).card : ℝ) / (permsOn C).card) ≤ ν :=
+    weighted_share_le C p (fun w σ => good w (σ t) ∧ ¬ hold w σ) hfail
+  linarith
+
+/-! #### The equi-tailed set -/
+
+/-- **The equi-tailed set at `k` per tail**: CB-1's rule on the score (the lower tail) and on its
+negation (the upper). The full step's CDF score `F̃` takes `k = ⌊α·|C|/2⌋`. -/
+def AcceptsTwoSided (k : ℕ) (C : Finset ι) (s : ι → ℝ) (u : ι) : Prop :=
+  Accepts k C s u ∧ Accepts k C (fun j => -s j) u
+
+noncomputable instance (k : ℕ) (C : Finset ι) (s : ι → ℝ) (u : ι) :
+    Decidable (AcceptsTwoSided k C s u) :=
+  inferInstanceAs (Decidable (_ ∧ _))
+
+omit [Fintype ι] [DecidableEq ι] in
+/-- The exact set refuses at most `2k` units, `k` per tail. -/
+theorem card_not_acceptsTwoSided_le (C : Finset ι) (s : ι → ℝ) (k : ℕ) :
+    (C.filter fun u => ¬ AcceptsTwoSided k C s u).card ≤ 2 * k := by
+  classical
+  have hsub : (C.filter fun u => ¬ AcceptsTwoSided k C s u) ⊆
+      (C.filter fun u => rankLe C s u ≤ k) ∪
+        C.filter fun u => rankLe C (fun j => -s j) u ≤ k := by
+    intro u hu
+    rw [mem_filter] at hu
+    rw [mem_union, mem_filter, mem_filter]
+    by_cases h : Accepts k C s u
+    · exact Or.inr ⟨hu.1, not_lt.1 fun h' => hu.2 ⟨h, h'⟩⟩
+    · exact Or.inl ⟨hu.1, not_lt.1 h⟩
+  have h₁ := card_rankLe_le C s k
+  have h₂ := card_rankLe_le C (fun j => -s j) k
+  have := (card_le_card hsub).trans (card_union_le _ _)
+  omega
+
+theorem acceptsTwoSided_comp {k : ℕ} {C : Finset ι} {σ : Equiv.Perm ι} (hσ : σ ∈ permsOn C)
+    (s : ι → ℝ) (u : ι) : AcceptsTwoSided k C (s ∘ σ) u ↔ AcceptsTwoSided k C s (σ u) := by
+  have h₁ := rankLe_comp hσ s u
+  have h₂ := rankLe_comp hσ (fun j => -s j) u
+  simp only [AcceptsTwoSided, Accepts]
+  rw [h₁, show (fun j => -(s ∘ σ) j) = (fun j => -s j) ∘ σ from rfl, h₂]
+
+/-- The two tails' fragile units, the margin of the equi-tailed set. -/
+def FragileTwoSided (k : ℕ) (C : Finset ι) (s : ι → ℝ) (ε : ι → ℝ) (u : ι) : Prop :=
+  Fragile k C s ε u ∨ Fragile k C (fun j => -s j) ε u
+
+noncomputable instance (k : ℕ) (C : Finset ι) (s ε : ι → ℝ) (u : ι) :
+    Decidable (FragileTwoSided k C s ε u) :=
+  inferInstanceAs (Decidable (_ ∨ _))
+
+theorem fragileTwoSided_comp {k : ℕ} {C : Finset ι} {σ : Equiv.Perm ι} (hσ : σ ∈ permsOn C)
+    (s ε : ι → ℝ) (u : ι) :
+    FragileTwoSided k C (s ∘ σ) (ε ∘ σ) u ↔ FragileTwoSided k C s ε (σ u) := by
+  simp only [FragileTwoSided]
+  rw [fragile_comp hσ s ε u, show (fun j => -(s ∘ σ) j) = (fun j => -s j) ∘ σ from rfl,
+    fragile_comp hσ (fun j => -s j) ε u]
+
+omit [Fintype ι] [DecidableEq ι] in
+/-- Bounds on a score's estimates are bounds on its negation's. -/
+theorem close_neg {C : Finset ι} {s ŝ ε : ι → ℝ} (h : ∀ j ∈ C, |ŝ j - s j| ≤ ε j) :
+    ∀ j ∈ C, |(fun j => -ŝ j) j - (fun j => -s j) j| ≤ ε j := fun j hj => by
+  change |-ŝ j - -s j| ≤ ε j
+  rw [show -ŝ j - -s j = -(ŝ j - s j) by ring, abs_neg]
+  exact h j hj
+
+omit [Fintype ι] in
+/-- **The deterministic part, per tail.** An estimate within its bounds refuses a unit the exact
+equi-tailed set accepts only when the unit is fragile in one of the tails. -/
+theorem acceptsTwoSided_or_fragile {k : ℕ} {C : Finset ι} {s ŝ ε : ι → ℝ}
+    (hclose : ∀ j ∈ C, |ŝ j - s j| ≤ ε j) {u : ι} (hu : u ∈ C) (h : AcceptsTwoSided k C s u) :
+    AcceptsTwoSided k C ŝ u ∨ FragileTwoSided k C s ε u := by
+  have hclose' := close_neg hclose
+  rcases accepts_or_fragile hclose hu h.1 with h₁ | h₁
+  · rcases accepts_or_fragile hclose' hu h.2 with h₂ | h₂
+    · exact Or.inl ⟨h₁, h₂⟩
+    · exact Or.inr (Or.inr h₂)
+  · exact Or.inr (Or.inl h₁)
+
+/-- **CB-3 for the equi-tailed set.** With bounds carried by the units, the estimate's equi-tailed
+set covers at least `1 − |R ∪ M_lo ∪ M_hi|/|C|`, with `R` the units the exact set refuses (at most
+`2k`, `card_not_acceptsTwoSided_le`) and `M_lo`, `M_hi` the two tails' fragile units. The tails'
+bands enter as their union, which is never more than their sum. -/
+theorem coverage_close_twoSided {Z : Type*} {C : Finset ι} {t : ι} (ht : t ∈ C)
+    {S : (ι → Z) → ι → ℝ} (hS : Equivariant C S) (z : ι → Z) (ŝ : Equiv.Perm ι → ι → ℝ)
+    (ε : ι → ℝ) (hclose : ∀ σ ∈ permsOn C, ∀ j ∈ C, |ŝ σ j - S (z ∘ σ) j| ≤ ε (σ j)) (k : ℕ) :
+    1 - ((C.filter fun u => ¬ AcceptsTwoSided k C (S z) u ∨
+        FragileTwoSided k C (S z) ε u).card : ℝ) / C.card ≤
+      (((permsOn C).filter fun σ : Equiv.Perm ι => AcceptsTwoSided k C (ŝ σ) t).card : ℝ) /
+        (permsOn C).card := by
+  classical
+  have hgood := coverage_ge_of_good ht
+    (fun u => ¬ (¬ AcceptsTwoSided k C (S z) u ∨ FragileTwoSided k C (S z) ε u))
+    (fun σ => AcceptsTwoSided k C (ŝ σ) t) fun σ hσ hgood => by
+      simp only [not_or, not_not] at hgood
+      have hfun : S (z ∘ σ) = S z ∘ σ := funext fun i => hS σ hσ z i
+      have hacc : AcceptsTwoSided k C (S (z ∘ σ)) t := by
+        rw [hfun, acceptsTwoSided_comp hσ]
+        exact hgood.1
+      rcases acceptsTwoSided_or_fragile (ε := fun j => ε (σ j)) (hclose σ hσ) ht hacc with h | h
+      · exact h
+      · exfalso
+        apply hgood.2
+        rw [hfun] at h
+        exact (fragileTwoSided_comp hσ (S z) ε t).1 h
+  rw [card_filter_not_div ⟨t, ht⟩] at hgood
+  exact hgood
+
+/-- **The inflated equi-tailed set** keeps `1 − 2k/|C|`, with bounds by ordering and position. -/
+theorem coverage_inflated_twoSided {Z : Type*} {C : Finset ι} {t : ι} (ht : t ∈ C)
+    {S : (ι → Z) → ι → ℝ} (hS : Equivariant C S) (z : ι → Z) (ŝ ε : Equiv.Perm ι → ι → ℝ)
+    (hclose : ∀ σ ∈ permsOn C, ∀ j ∈ C, |ŝ σ j - S (z ∘ σ) j| ≤ ε σ j) (k : ℕ) :
+    1 - ((2 * k : ℕ) : ℝ) / C.card ≤
+      (((permsOn C).filter fun σ : Equiv.Perm ι => AcceptsInflated k C (ŝ σ) (ε σ) t ∧
+        AcceptsInflated k C (fun j => -ŝ σ j) (ε σ) t).card : ℝ) / (permsOn C).card := by
+  classical
+  have hc : (0 : ℝ) < C.card := by exact_mod_cast card_pos.2 ⟨t, ht⟩
+  have hgood := coverage_ge_of_good ht (fun u => AcceptsTwoSided k C (S z) u)
+    (fun σ => AcceptsInflated k C (ŝ σ) (ε σ) t ∧
+      AcceptsInflated k C (fun j => -ŝ σ j) (ε σ) t) fun σ hσ hgood => by
+      have hfun : S (z ∘ σ) = S z ∘ σ := funext fun i => hS σ hσ z i
+      have hacc : AcceptsTwoSided k C (S (z ∘ σ)) t := by
+        rw [hfun, acceptsTwoSided_comp hσ]
+        exact hgood
+      have hclose' := close_neg (hclose σ hσ)
+      exact ⟨acceptsInflated_of_accepts (hclose σ hσ) ht hacc.1,
+        acceptsInflated_of_accepts hclose' ht hacc.2⟩
+  have hrej := card_not_acceptsTwoSided_le C (S z) k
+  have hsplit := C.card_filter_add_card_filter_not (fun u => AcceptsTwoSided k C (S z) u)
+  have hcnt : (C.card : ℝ) - ((2 * k : ℕ) : ℝ) ≤ ((C.filter fun u =>
+      AcceptsTwoSided k C (S z) u).card : ℝ) := by
+    have : C.card ≤ (C.filter fun u => AcceptsTwoSided k C (S z) u).card + 2 * k := by omega
+    have : (C.card : ℝ) ≤ ((C.filter fun u => AcceptsTwoSided k C (S z) u).card : ℝ) +
+        ((2 * k : ℕ) : ℝ) := by exact_mod_cast this
+    linarith
+  rw [one_sub_div hc.ne']
+  exact (div_le_div_of_nonneg_right hcnt hc.le).trans hgood
+
+omit [Fintype ι] in
+/-- **When the tails' bands share a unit.** A unit fragile in both tails has at least
+`|C| − 2k + 2` units of `C`, itself among them, within the sum of their bounds of it. At
+`k = ⌊α|C|/2⌋` that is most of `C`, so the bands add except where the scores bunch within the
+bounds. -/
+theorem card_near_of_fragile_both {k : ℕ} {C : Finset ι} {s ε : ι → ℝ} {u : ι} (hu : u ∈ C)
+    (hlo : Fragile k C s ε u) (hhi : Fragile k C (fun j => -s j) ε u) :
+    C.card + 2 ≤ 2 * k + (C.filter fun j => j = u ∨ |s j - s u| < ε j + ε u).card := by
+  classical
+  set A := C.filter fun j => j = u ∨ s j + (ε j + ε u) ≤ s u with hA
+  set B := C.filter fun j => j = u ∨ -s j + (ε j + ε u) ≤ -s u with hB
+  set Nr := C.filter fun j => j = u ∨ |s j - s u| < ε j + ε u with hN
+  have hAk : A.card ≤ k := hlo.2
+  have hBk : B.card ≤ k := hhi.2
+  have huA : u ∈ A := mem_filter.2 ⟨hu, Or.inl rfl⟩
+  have huB : u ∈ B := mem_filter.2 ⟨hu, Or.inl rfl⟩
+  have hcover : C ⊆ (A.erase u ∪ B.erase u) ∪ Nr := by
+    intro j hj
+    rw [mem_union, mem_union, mem_erase, mem_erase]
+    by_cases hju : j = u
+    · exact Or.inr (mem_filter.2 ⟨hj, Or.inl hju⟩)
+    · by_cases hnear : |s j - s u| < ε j + ε u
+      · exact Or.inr (mem_filter.2 ⟨hj, Or.inr hnear⟩)
+      · rw [not_lt, le_abs] at hnear
+        rcases hnear with h | h
+        · exact Or.inl (Or.inr ⟨hju, mem_filter.2 ⟨hj, Or.inr (by linarith)⟩⟩)
+        · exact Or.inl (Or.inl ⟨hju, mem_filter.2 ⟨hj, Or.inr (by linarith)⟩⟩)
+  have h1 := card_le_card hcover
+  have h2 := card_union_le (A.erase u ∪ B.erase u) Nr
+  have h3 := card_union_le (A.erase u) (B.erase u)
+  rw [card_erase_of_mem huA, card_erase_of_mem huB] at h3
+  have hA1 : 1 ≤ A.card := card_pos.2 ⟨u, huA⟩
+  have hB1 : 1 ≤ B.card := card_pos.2 ⟨u, huB⟩
+  omega
+
+/-- **The engine's reading, two-sided.** For every ordering, the exact union band is at most the
+union band read from that ordering's estimates and the units' bounds. -/
+theorem card_fragileTwoSided_le_estimated {Z : Type*} {C : Finset ι} {S : (ι → Z) → ι → ℝ}
+    (hS : Equivariant C S) (z : ι → Z) {σ : Equiv.Perm ι} (hσ : σ ∈ permsOn C) (ŝ ε : ι → ℝ)
+    (hclose : ∀ j ∈ C, |ŝ j - S (z ∘ σ) j| ≤ ε (σ j)) (k : ℕ) :
+    (C.filter fun u => FragileTwoSided k C (S z) ε u).card ≤
+      (C.filter fun u => FragileEstimated k C ŝ (ε ∘ σ) u ∨
+        FragileEstimated k C (fun j => -ŝ j) (ε ∘ σ) u).card := by
+  have heq : (C.filter fun u => FragileTwoSided k C (S z) ε u).card =
+      (C.filter fun u => FragileTwoSided k C (S (z ∘ σ)) (ε ∘ σ) u).card := by
+    symm
+    apply card_equiv σ
+    intro u
+    have : S (z ∘ σ) = S z ∘ σ := funext fun i => hS σ hσ z i
+    simp only [mem_filter, this, fragileTwoSided_comp hσ, mem_iff_of_mem_permsOn hσ]
+  rw [heq]
+  have hclose' := close_neg (ε := ε ∘ σ) hclose
+  refine card_le_card fun u hu => ?_
+  rw [mem_filter] at hu ⊢
+  refine ⟨hu.1, ?_⟩
+  rcases hu.2 with h | h
+  · exact Or.inl (fragileEstimated_of_fragile hclose hu.1 h)
+  · exact Or.inr (fragileEstimated_of_fragile hclose' hu.1 h)
+
+/-! #### The PIT -/
+
+/-- `P(PIT ≤ k/|C|)` given the scores: the PIT is `(R − 1 + V)/|C|` with `V` uniform and
+`R = L + ⌈θ(T + 1)⌉` the randomized rank (`tieRankProb`), so this is `P(R ≤ k)`. -/
+noncomputable def pitRankLe (C : Finset ι) (s : ι → ℝ) (u : ι) (k : ℕ) : ℝ :=
+  ∑ r ∈ Finset.Icc 1 k, tieRankProb C s u r
+
+omit [Fintype ι] [DecidableEq ι] in
+theorem pitRankLe_le (C : Finset ι) (s : ι → ℝ) {u : ι} (hu : u ∈ C) (k : ℕ) :
+    pitRankLe C s u k ≤ if rankLt C s u < k then 1 else 0 := by
+  classical
+  have hlt := rankLt_lt_rankLe C s hu
+  have hpos : (0 : ℝ) < ((rankLe C s u - rankLt C s u : ℕ) : ℝ) := by
+    exact_mod_cast Nat.sub_pos_of_lt hlt
+  unfold pitRankLe tieRankProb
+  rw [← sum_filter]
+  split_ifs with hk
+  · rw [sum_const, nsmul_eq_mul]
+    have hsub : ((Finset.Icc 1 k).filter fun r => rankLt C s u < r ∧ r ≤ rankLe C s u) ⊆
+        Finset.Ioc (rankLt C s u) (rankLe C s u) := fun r hr => by
+      rw [mem_filter] at hr
+      exact Finset.mem_Ioc.2 hr.2
+    have hcard := card_le_card hsub
+    rw [Nat.card_Ioc] at hcard
+    rw [mul_one_div, div_le_one hpos]
+    exact_mod_cast hcard
+  · rw [Finset.sum_eq_zero]
+    intro r hr
+    rw [mem_filter, Finset.mem_Icc] at hr
+    omega
+
+omit [Fintype ι] [DecidableEq ι] in
+theorem pitRankLe_nonneg (C : Finset ι) (s : ι → ℝ) (u : ι) (k : ℕ) : 0 ≤ pitRankLe C s u k :=
+  sum_nonneg fun r _ => by
+    unfold tieRankProb
+    split_ifs
+    · positivity
+    · exact le_rfl
+
+omit [Fintype ι] [DecidableEq ι] in
+theorem le_pitRankLe (C : Finset ι) (s : ι → ℝ) {u : ι} (hu : u ∈ C) (k : ℕ) :
+    (if rankLe C s u ≤ k then 1 else 0) ≤ pitRankLe C s u k := by
+  classical
+  have hlt := rankLt_lt_rankLe C s hu
+  have hpos : (0 : ℝ) < ((rankLe C s u - rankLt C s u : ℕ) : ℝ) := by
+    exact_mod_cast Nat.sub_pos_of_lt hlt
+  split_ifs with hk
+  · unfold pitRankLe tieRankProb
+    rw [← sum_filter]
+    have heq : ((Finset.Icc 1 k).filter fun r => rankLt C s u < r ∧ r ≤ rankLe C s u) =
+        Finset.Ioc (rankLt C s u) (rankLe C s u) := by
+      ext r
+      rw [mem_filter, Finset.mem_Icc, Finset.mem_Ioc]
+      omega
+    rw [heq, sum_const, Nat.card_Ioc, nsmul_eq_mul, mul_one_div, div_self hpos.ne']
+  · exact pitRankLe_nonneg C s u k
+
+/-- The units of `C` at least `ε j + ε u` below `u`. -/
+noncomputable def shiftedBelow (C : Finset ι) (s ε : ι → ℝ) (u : ι) : ℕ :=
+  (C.filter fun j => s j + (ε j + ε u) < s u).card
+
+/-- The units of `C` at most `ε j + ε u` above `u`, `u` among them for bounds `≥ 0`. -/
+noncomputable def shiftedAtMost (C : Finset ι) (s ε : ι → ℝ) (u : ι) : ℕ :=
+  (C.filter fun j => s j ≤ s u + (ε j + ε u)).card
+
+theorem shiftedBelow_comp {C : Finset ι} {σ : Equiv.Perm ι} (hσ : σ ∈ permsOn C) (s ε : ι → ℝ)
+    (u : ι) : shiftedBelow C (s ∘ σ) (ε ∘ σ) u = shiftedBelow C s ε (σ u) := by
+  apply card_equiv σ
+  intro j
+  simp only [mem_filter, Function.comp_apply, mem_iff_of_mem_permsOn hσ]
+
+theorem shiftedAtMost_comp {C : Finset ι} {σ : Equiv.Perm ι} (hσ : σ ∈ permsOn C) (s ε : ι → ℝ)
+    (u : ι) : shiftedAtMost C (s ∘ σ) (ε ∘ σ) u = shiftedAtMost C s ε (σ u) := by
+  apply card_equiv σ
+  intro j
+  simp only [mem_filter, Function.comp_apply, mem_iff_of_mem_permsOn hσ]
+
+omit [Fintype ι] [DecidableEq ι] in
+theorem shiftedBelow_le_rankLt {C : Finset ι} {s ŝ ε : ι → ℝ}
+    (hclose : ∀ j ∈ C, |ŝ j - s j| ≤ ε j) {u : ι} (hu : u ∈ C) :
+    shiftedBelow C s ε u ≤ rankLt C ŝ u := by
+  refine card_le_card fun j hj => ?_
+  rw [mem_filter] at hj ⊢
+  have hj' := abs_le.1 (hclose j hj.1)
+  have hu' := abs_le.1 (hclose u hu)
+  exact ⟨hj.1, by linarith [hj.2]⟩
+
+omit [Fintype ι] [DecidableEq ι] in
+theorem rankLe_le_shiftedAtMost {C : Finset ι} {s ŝ ε : ι → ℝ}
+    (hclose : ∀ j ∈ C, |ŝ j - s j| ≤ ε j) {u : ι} (hu : u ∈ C) :
+    rankLe C ŝ u ≤ shiftedAtMost C s ε u := by
+  refine card_le_card fun j hj => ?_
+  rw [mem_filter] at hj ⊢
+  have hj' := abs_le.1 (hclose j hj.1)
+  have hu' := abs_le.1 (hclose u hu)
+  exact ⟨hj.1, by linarith [hj.2]⟩
+
+/-- **The PIT from above.** With bounds carried by the units, `P(PIT ≤ k/|C|)` under the estimates
+is at most `#{u : shiftedBelow u < k}/|C|`. -/
+theorem pit_le_upper {Z : Type*} {C : Finset ι} {t : ι} (ht : t ∈ C) {S : (ι → Z) → ι → ℝ}
+    (hS : Equivariant C S) (z : ι → Z) (ŝ : Equiv.Perm ι → ι → ℝ) (ε : ι → ℝ)
+    (hclose : ∀ σ ∈ permsOn C, ∀ j ∈ C, |ŝ σ j - S (z ∘ σ) j| ≤ ε (σ j)) (k : ℕ) :
+    (∑ σ ∈ permsOn C, pitRankLe C (ŝ σ) t k) / (permsOn C).card ≤
+      ((C.filter fun u => shiftedBelow C (S z) ε u < k).card : ℝ) / C.card := by
+  classical
+  rw [← ratio_permsOn ht (fun u => shiftedBelow C (S z) ε u < k), ← sum_boole]
+  have hg : (0 : ℝ) < (permsOn C).card := by exact_mod_cast card_permsOn_pos C
+  refine div_le_div_of_nonneg_right (sum_le_sum fun σ hσ => ?_) hg.le
+  refine (pitRankLe_le C (ŝ σ) ht k).trans ?_
+  have hfun : S (z ∘ σ) = S z ∘ σ := funext fun i => hS σ hσ z i
+  have hb : shiftedBelow C (S z) ε (σ t) ≤ rankLt C (ŝ σ) t := by
+    rw [← shiftedBelow_comp hσ, ← hfun]
+    exact shiftedBelow_le_rankLt (ε := fun j => ε (σ j)) (hclose σ hσ) ht
+  split_ifs with h₁ h₂ h₂ <;> first | exact le_rfl | (exfalso; omega) | norm_num
+
+/-- **The PIT from below.** `P(PIT ≤ k/|C|)` under the estimates is at least
+`#{u : shiftedAtMost u ≤ k}/|C|`. -/
+theorem pit_ge_lower {Z : Type*} {C : Finset ι} {t : ι} (ht : t ∈ C) {S : (ι → Z) → ι → ℝ}
+    (hS : Equivariant C S) (z : ι → Z) (ŝ : Equiv.Perm ι → ι → ℝ) (ε : ι → ℝ)
+    (hclose : ∀ σ ∈ permsOn C, ∀ j ∈ C, |ŝ σ j - S (z ∘ σ) j| ≤ ε (σ j)) (k : ℕ) :
+    ((C.filter fun u => shiftedAtMost C (S z) ε u ≤ k).card : ℝ) / C.card ≤
+      (∑ σ ∈ permsOn C, pitRankLe C (ŝ σ) t k) / (permsOn C).card := by
+  classical
+  rw [← ratio_permsOn ht (fun u => shiftedAtMost C (S z) ε u ≤ k), ← sum_boole]
+  have hg : (0 : ℝ) < (permsOn C).card := by exact_mod_cast card_permsOn_pos C
+  refine div_le_div_of_nonneg_right (sum_le_sum fun σ hσ => ?_) hg.le
+  refine le_trans ?_ (le_pitRankLe C (ŝ σ) ht k)
+  have hfun : S (z ∘ σ) = S z ∘ σ := funext fun i => hS σ hσ z i
+  have hb : rankLe C (ŝ σ) t ≤ shiftedAtMost C (S z) ε (σ t) := by
+    rw [← shiftedAtMost_comp hσ, ← hfun]
+    exact rankLe_le_shiftedAtMost (ε := fun j => ε (σ j)) (hclose σ hσ) ht
+  split_ifs with h₁ h₂ h₂ <;> first | exact le_rfl | (exfalso; omega) | norm_num
+
+omit [Fintype ι] [DecidableEq ι] in
+/-- The two counts bracket `k`: with bounds `≥ 0`, `#{shiftedAtMost ≤ k} ≤ k ≤ #{shiftedBelow < k}`
+for `k ≤ |C|`, so the PIT's departure from `k/|C|` is at most their excess over `k`. -/
+theorem card_shiftedAtMost_le_le_card_shiftedBelow (C : Finset ι) (s ε : ι → ℝ)
+    (hε : ∀ j, 0 ≤ ε j) {k : ℕ} (hk : k ≤ C.card) :
+    (C.filter fun u => shiftedAtMost C s ε u ≤ k).card ≤ k ∧
+      k ≤ (C.filter fun u => shiftedBelow C s ε u < k).card := by
+  constructor
+  · refine le_trans (card_le_card fun u hu => ?_) (card_rankLe_le C s k)
+    rw [mem_filter] at hu ⊢
+    refine ⟨hu.1, le_trans (card_le_card fun j hj => ?_) hu.2⟩
+    rw [mem_filter] at hj ⊢
+    exact ⟨hj.1, by linarith [hj.2, hε j, hε u]⟩
+  · refine le_trans (le_card_rankLt_lt C s hk) (card_le_card fun u hu => ?_)
+    rw [mem_filter] at hu ⊢
+    refine ⟨hu.1, lt_of_le_of_lt (card_le_card fun j hj => ?_) hu.2⟩
+    rw [mem_filter] at hj ⊢
+    exact ⟨hj.1, by linarith [hj.2, hε j, hε u]⟩
+
+/-- **The engine's reading for the PIT.** For every ordering, the counts read from its estimates
+with doubled shifts bound the exact ones: `#{shiftedBelow < k}` from above and
+`#{shiftedAtMost ≤ k}` from below. -/
+theorem card_pit_counts_estimated {Z : Type*} {C : Finset ι} {S : (ι → Z) → ι → ℝ}
+    (hS : Equivariant C S) (z : ι → Z) {σ : Equiv.Perm ι} (hσ : σ ∈ permsOn C) (ŝ ε : ι → ℝ)
+    (hclose : ∀ j ∈ C, |ŝ j - S (z ∘ σ) j| ≤ ε (σ j)) (k : ℕ) :
+    (C.filter fun u => shiftedBelow C (S z) ε u < k).card ≤
+        (C.filter fun u => shiftedBelow C ŝ (fun j => 2 * ε (σ j)) u < k).card ∧
+      (C.filter fun u => shiftedAtMost C ŝ (fun j => 2 * ε (σ j)) u ≤ k).card ≤
+        (C.filter fun u => shiftedAtMost C (S z) ε u ≤ k).card := by
+  have hfun : S (z ∘ σ) = S z ∘ σ := funext fun i => hS σ hσ z i
+  have hB : (C.filter fun u => shiftedBelow C (S z) ε u < k).card =
+      (C.filter fun u => shiftedBelow C (S (z ∘ σ)) (ε ∘ σ) u < k).card := by
+    symm
+    apply card_equiv σ
+    intro u
+    simp only [mem_filter, hfun, shiftedBelow_comp hσ, mem_iff_of_mem_permsOn hσ]
+  have hA : (C.filter fun u => shiftedAtMost C (S z) ε u ≤ k).card =
+      (C.filter fun u => shiftedAtMost C (S (z ∘ σ)) (ε ∘ σ) u ≤ k).card := by
+    symm
+    apply card_equiv σ
+    intro u
+    simp only [mem_filter, hfun, shiftedAtMost_comp hσ, mem_iff_of_mem_permsOn hσ]
+  rw [hB, hA]
+  constructor
+  · refine card_le_card fun u hu => ?_
+    rw [mem_filter] at hu ⊢
+    refine ⟨hu.1, lt_of_le_of_lt (card_le_card fun j hj => ?_) hu.2⟩
+    rw [mem_filter] at hj ⊢
+    have hj' := abs_le.1 (hclose j hj.1)
+    have hu' := abs_le.1 (hclose u hu.1)
+    exact ⟨hj.1, by simp only [Function.comp_apply]; linarith [hj.2]⟩
+  · refine card_le_card fun u hu => ?_
+    rw [mem_filter] at hu ⊢
+    refine ⟨hu.1, le_trans (card_le_card fun j hj => ?_) hu.2⟩
+    rw [mem_filter] at hj ⊢
+    have hj' := abs_le.1 (hclose j hj.1)
+    have hu' := abs_le.1 (hclose u hu.1)
+    exact ⟨hj.1, by simp only [Function.comp_apply] at hj ⊢; linarith [hj.2]⟩
+
+/-! #### The carried bound that leaves out the degenerate turns -/
+
+/-- **An average under a chance of failure, from above.** The draw `w` reads `f w σ ≤ 1` on the
+ordering `σ`. On an ordering whose test unit is kept (not `out w`) and whose bounds hold
+(`hold w σ`), the reading is at most `0` unless the test unit lands on a `good` unit. The average
+reading is at most the share of units left out or good, plus `ν`, the weighted share of kept
+orderings whose bounds fail. -/
+theorem avg_le_of_fail {W : Type*} [Fintype W] {C : Finset ι} {t : ι} (ht : t ∈ C)
+    (p : W → ℝ) (hp0 : ∀ w, 0 ≤ p w) (out good : W → ι → Prop) [∀ w, DecidablePred (out w)]
+    [∀ w, DecidablePred (good w)] (hold : W → Equiv.Perm ι → Prop)
+    [∀ w, DecidablePred (hold w)] (f : W → Equiv.Perm ι → ℝ)
+    (hf1 : ∀ w, ∀ σ ∈ permsOn C, f w σ ≤ 1)
+    (h : ∀ w, ∀ σ ∈ permsOn C, ¬ out w (σ t) → hold w σ → good w (σ t) ∨ f w σ ≤ 0) {ν : ℝ}
+    (hfail : ∑ w, p w * (((permsOn C).filter fun σ : Equiv.Perm ι =>
+        ¬ out w (σ t) ∧ ¬ hold w σ).card : ℝ) ≤ ν * (permsOn C).card) :
+    ∑ w, p w * ((∑ σ ∈ permsOn C, f w σ) / (permsOn C).card) ≤
+      ∑ w, p w * (((C.filter fun u => out w u ∨ good w u).card : ℝ) / C.card) + ν := by
+  have hg : (0 : ℝ) < (permsOn C).card := by exact_mod_cast card_permsOn_pos C
+  have hw : ∀ w, (∑ σ ∈ permsOn C, f w σ) / (permsOn C).card ≤
+      ((C.filter fun u => out w u ∨ good w u).card : ℝ) / C.card +
+        (((permsOn C).filter fun σ : Equiv.Perm ι => ¬ out w (σ t) ∧ ¬ hold w σ).card : ℝ) /
+          (permsOn C).card := by
+    intro w
+    rw [← ratio_permsOn ht (fun u => out w u ∨ good w u), ← add_div, ← sum_boole, ← sum_boole,
+      ← sum_add_distrib]
+    refine div_le_div_of_nonneg_right (sum_le_sum fun σ hσ => ?_) hg.le
+    have h1 := hf1 w σ hσ
+    split_ifs with hA hB hB
+    · linarith
+    · linarith
+    · linarith
+    · simp only [not_or, not_and, not_not] at hA hB
+      rcases h w σ hσ hA.1 (hB hA.1) with hgd | hf
+      · exact absurd hgd hA.2
+      · linarith
+  have hsum := sum_le_sum fun w (_ : w ∈ univ) => mul_le_mul_of_nonneg_left (hw w) (hp0 w)
+  simp only [mul_add, sum_add_distrib] at hsum
+  have hν : ∑ w, p w * ((((permsOn C).filter fun σ : Equiv.Perm ι =>
+      ¬ out w (σ t) ∧ ¬ hold w σ).card : ℝ) / (permsOn C).card) ≤ ν :=
+    weighted_share_le C p (fun w σ => ¬ out w (σ t) ∧ ¬ hold w σ) hfail
+  linarith
+
+/-- **The same from below.** A reading `f w σ ≥ 0` that is at least `1` on a kept ordering whose
+bounds hold and whose test unit lands on a good unit averages at least the share of kept good
+units, less `ν`. -/
+theorem avg_ge_of_fail {W : Type*} [Fintype W] {C : Finset ι} {t : ι} (ht : t ∈ C)
+    (p : W → ℝ) (hp0 : ∀ w, 0 ≤ p w) (out good : W → ι → Prop) [∀ w, DecidablePred (out w)]
+    [∀ w, DecidablePred (good w)] (hold : W → Equiv.Perm ι → Prop)
+    [∀ w, DecidablePred (hold w)] (f : W → Equiv.Perm ι → ℝ)
+    (hf0 : ∀ w, ∀ σ ∈ permsOn C, 0 ≤ f w σ)
+    (h : ∀ w, ∀ σ ∈ permsOn C, ¬ out w (σ t) → hold w σ → good w (σ t) → 1 ≤ f w σ) {ν : ℝ}
+    (hfail : ∑ w, p w * (((permsOn C).filter fun σ : Equiv.Perm ι =>
+        ¬ out w (σ t) ∧ ¬ hold w σ).card : ℝ) ≤ ν * (permsOn C).card) :
+    ∑ w, p w * (((C.filter fun u => ¬ out w u ∧ good w u).card : ℝ) / C.card) - ν ≤
+      ∑ w, p w * ((∑ σ ∈ permsOn C, f w σ) / (permsOn C).card) := by
+  have hg : (0 : ℝ) < (permsOn C).card := by exact_mod_cast card_permsOn_pos C
+  have hw : ∀ w, ((C.filter fun u => ¬ out w u ∧ good w u).card : ℝ) / C.card ≤
+      (∑ σ ∈ permsOn C, f w σ) / (permsOn C).card +
+        (((permsOn C).filter fun σ : Equiv.Perm ι => ¬ out w (σ t) ∧ ¬ hold w σ).card : ℝ) /
+          (permsOn C).card := by
+    intro w
+    rw [← ratio_permsOn ht (fun u => ¬ out w u ∧ good w u), ← add_div, ← sum_boole,
+      ← sum_boole, ← sum_add_distrib]
+    refine div_le_div_of_nonneg_right (sum_le_sum fun σ hσ => ?_) hg.le
+    have h0 := hf0 w σ hσ
+    split_ifs with hA hB hB
+    · linarith
+    · simp only [not_and, not_not] at hB
+      linarith [h w σ hσ hA.1 (hB hA.1) hA.2]
+    · linarith
+    · linarith
+  have hsum := sum_le_sum fun w (_ : w ∈ univ) => mul_le_mul_of_nonneg_left (hw w) (hp0 w)
+  simp only [mul_add, sum_add_distrib] at hsum
+  have hν : ∑ w, p w * ((((permsOn C).filter fun σ : Equiv.Perm ι =>
+      ¬ out w (σ t) ∧ ¬ hold w σ).card : ℝ) / (permsOn C).card) ≤ ν :=
+    weighted_share_le C p (fun w σ => ¬ out w (σ t) ∧ ¬ hold w σ) hfail
+  linarith
+
+/-- **The margin, leaving out the degenerate turns.** `W` carries the draws, with weights `p`. For
+the draw `w`, `D w` is the set of turns whose weights degenerate (read once for the data set, by
+`k̂` or the ESS, so the same for every ordering), `ε w` the bounds carried over the other turns
+only, and `ν` bounds the weighted share of kept orderings on which some unit's bound fails. Then
+coverage is at least `1 − |D ∪ R ∪ M_D|/|C| − ν`, with `R` the exact rule's refusals and `M_D` its
+fragile units under the kept bounds. Since `|R| ≤ k`, this is at least
+`1 − (k + |M_D| + |D|)/|C| − ν`. -/
+theorem coverage_close_excluding {W Z : Type*} [Fintype W] {C : Finset ι} {t : ι} (ht : t ∈ C)
+    {S : (ι → Z) → ι → ℝ} (hS : Equivariant C S) (z : ι → Z) (p : W → ℝ) (hp0 : ∀ w, 0 ≤ p w)
+    (hp1 : ∑ w, p w = 1) (ŝ : W → Equiv.Perm ι → ι → ℝ) (ε : W → ι → ℝ) (D : W → Finset ι)
+    {ν : ℝ} (hfail : ∑ w, p w * (((permsOn C).filter fun σ : Equiv.Perm ι => σ t ∉ D w ∧
+        ¬ ∀ j ∈ C, |ŝ w σ j - S (z ∘ σ) j| ≤ ε w (σ j)).card : ℝ) ≤ ν * (permsOn C).card)
+    (k : ℕ) :
+    1 - ∑ w, p w * (((C.filter fun u => u ∈ D w ∨ ¬ Accepts k C (S z) u ∨
+        Fragile k C (S z) (ε w) u).card : ℝ) / C.card) - ν ≤
+      ∑ w, p w * ((((permsOn C).filter fun σ : Equiv.Perm ι =>
+        Accepts k C (ŝ w σ) t).card : ℝ) / (permsOn C).card) := by
+  have key := coverage_ge_of_good_fail ht p hp0
+    (fun w u => ¬ (u ∈ D w ∨ ¬ Accepts k C (S z) u ∨ Fragile k C (S z) (ε w) u))
+    (fun w σ => ∀ j ∈ C, |ŝ w σ j - S (z ∘ σ) j| ≤ ε w (σ j))
+    (fun w σ => Accepts k C (ŝ w σ) t) (fun w σ hσ hg hh => by
+      simp only [not_or, not_not] at hg
+      have hfun : S (z ∘ σ) = S z ∘ σ := funext fun i => hS σ hσ z i
+      have hacc : Accepts k C (S (z ∘ σ)) t := by
+        rw [hfun]
+        simp only [Accepts, rankLe_comp hσ]
+        exact hg.2.1
+      rcases accepts_or_fragile (ε := fun j => ε w (σ j)) hh ht hacc with h | h
+      · exact h
+      · exfalso
+        apply hg.2.2
+        rw [hfun] at h
+        exact (fragile_comp hσ (S z) (ε w) t).1 h)
+    (weighted_fail_mono C p hp0 _ _ (by
+      intro w σ h
+      exact ⟨fun hD => h.1 (Or.inl hD), h.2⟩) hfail)
+  rw [weighted_share_not ⟨t, ht⟩ p hp1] at key
+  exact key
+
+/-- **The inflated rule, leaving out the degenerate turns.** With bounds by ordering and position,
+trusted on the kept orderings with the same `ν`, coverage is at least `1 − |D ∪ R|/|C| − ν`. -/
+theorem coverage_inflated_excluding {W Z : Type*} [Fintype W] {C : Finset ι} {t : ι}
+    (ht : t ∈ C) {S : (ι → Z) → ι → ℝ} (hS : Equivariant C S) (z : ι → Z) (p : W → ℝ)
+    (hp0 : ∀ w, 0 ≤ p w) (hp1 : ∑ w, p w = 1) (ŝ ε : W → Equiv.Perm ι → ι → ℝ)
+    (D : W → Finset ι) {ν : ℝ}
+    (hfail : ∑ w, p w * (((permsOn C).filter fun σ : Equiv.Perm ι => σ t ∉ D w ∧
+        ¬ ∀ j ∈ C, |ŝ w σ j - S (z ∘ σ) j| ≤ ε w σ j).card : ℝ) ≤ ν * (permsOn C).card)
+    (k : ℕ) :
+    1 - ∑ w, p w * (((C.filter fun u => u ∈ D w ∨ ¬ Accepts k C (S z) u).card : ℝ) / C.card) -
+        ν ≤
+      ∑ w, p w * ((((permsOn C).filter fun σ : Equiv.Perm ι =>
+        AcceptsInflated k C (ŝ w σ) (ε w σ) t).card : ℝ) / (permsOn C).card) := by
+  have key := coverage_ge_of_good_fail ht p hp0 (fun w u => ¬ (u ∈ D w ∨ ¬ Accepts k C (S z) u))
+    (fun w σ => ∀ j ∈ C, |ŝ w σ j - S (z ∘ σ) j| ≤ ε w σ j)
+    (fun w σ => AcceptsInflated k C (ŝ w σ) (ε w σ) t) (fun w σ hσ hg hh => by
+      simp only [not_or, not_not] at hg
+      have hfun : S (z ∘ σ) = S z ∘ σ := funext fun i => hS σ hσ z i
+      have hacc : Accepts k C (S (z ∘ σ)) t := by
+        rw [hfun]
+        simp only [Accepts, rankLe_comp hσ]
+        exact hg.2
+      exact acceptsInflated_of_accepts hh ht hacc)
+    (weighted_fail_mono C p hp0 _ _ (by
+      intro w σ h
+      exact ⟨fun hD => h.1 (Or.inl hD), h.2⟩) hfail)
+  rw [weighted_share_not ⟨t, ht⟩ p hp1] at key
+  exact key
+
+/-- **The equi-tailed set, leaving out the degenerate turns.** Coverage is at least
+`1 − |D ∪ R ∪ M_lo ∪ M_hi|/|C| − ν`, with `R` the exact set's refusals (at most `2k`) and the
+tails' bands read under the kept bounds. -/
+theorem coverage_close_twoSided_excluding {W Z : Type*} [Fintype W] {C : Finset ι} {t : ι}
+    (ht : t ∈ C) {S : (ι → Z) → ι → ℝ} (hS : Equivariant C S) (z : ι → Z) (p : W → ℝ)
+    (hp0 : ∀ w, 0 ≤ p w) (hp1 : ∑ w, p w = 1) (ŝ : W → Equiv.Perm ι → ι → ℝ) (ε : W → ι → ℝ)
+    (D : W → Finset ι) {ν : ℝ}
+    (hfail : ∑ w, p w * (((permsOn C).filter fun σ : Equiv.Perm ι => σ t ∉ D w ∧
+        ¬ ∀ j ∈ C, |ŝ w σ j - S (z ∘ σ) j| ≤ ε w (σ j)).card : ℝ) ≤ ν * (permsOn C).card)
+    (k : ℕ) :
+    1 - ∑ w, p w * (((C.filter fun u => u ∈ D w ∨ ¬ AcceptsTwoSided k C (S z) u ∨
+        FragileTwoSided k C (S z) (ε w) u).card : ℝ) / C.card) - ν ≤
+      ∑ w, p w * ((((permsOn C).filter fun σ : Equiv.Perm ι =>
+        AcceptsTwoSided k C (ŝ w σ) t).card : ℝ) / (permsOn C).card) := by
+  have key := coverage_ge_of_good_fail ht p hp0
+    (fun w u => ¬ (u ∈ D w ∨ ¬ AcceptsTwoSided k C (S z) u ∨ FragileTwoSided k C (S z) (ε w) u))
+    (fun w σ => ∀ j ∈ C, |ŝ w σ j - S (z ∘ σ) j| ≤ ε w (σ j))
+    (fun w σ => AcceptsTwoSided k C (ŝ w σ) t) (fun w σ hσ hg hh => by
+      simp only [not_or, not_not] at hg
+      have hfun : S (z ∘ σ) = S z ∘ σ := funext fun i => hS σ hσ z i
+      have hacc : AcceptsTwoSided k C (S (z ∘ σ)) t := by
+        rw [hfun, acceptsTwoSided_comp hσ]
+        exact hg.2.1
+      rcases acceptsTwoSided_or_fragile (ε := fun j => ε w (σ j)) hh ht hacc with h | h
+      · exact h
+      · exfalso
+        apply hg.2.2
+        rw [hfun] at h
+        exact (fragileTwoSided_comp hσ (S z) (ε w) t).1 h)
+    (weighted_fail_mono C p hp0 _ _ (by
+      intro w σ h
+      exact ⟨fun hD => h.1 (Or.inl hD), h.2⟩) hfail)
+  rw [weighted_share_not ⟨t, ht⟩ p hp1] at key
+  exact key
+
+/-- **The inflated equi-tailed set, leaving out the degenerate turns:** at least
+`1 − |D ∪ R|/|C| − ν`, so at least `1 − (2k + |D|)/|C| − ν`. -/
+theorem coverage_inflated_twoSided_excluding {W Z : Type*} [Fintype W] {C : Finset ι} {t : ι}
+    (ht : t ∈ C) {S : (ι → Z) → ι → ℝ} (hS : Equivariant C S) (z : ι → Z) (p : W → ℝ)
+    (hp0 : ∀ w, 0 ≤ p w) (hp1 : ∑ w, p w = 1) (ŝ ε : W → Equiv.Perm ι → ι → ℝ)
+    (D : W → Finset ι) {ν : ℝ}
+    (hfail : ∑ w, p w * (((permsOn C).filter fun σ : Equiv.Perm ι => σ t ∉ D w ∧
+        ¬ ∀ j ∈ C, |ŝ w σ j - S (z ∘ σ) j| ≤ ε w σ j).card : ℝ) ≤ ν * (permsOn C).card)
+    (k : ℕ) :
+    1 - ∑ w, p w * (((C.filter fun u => u ∈ D w ∨ ¬ AcceptsTwoSided k C (S z) u).card : ℝ) /
+        C.card) - ν ≤
+      ∑ w, p w * ((((permsOn C).filter fun σ : Equiv.Perm ι =>
+        AcceptsInflated k C (ŝ w σ) (ε w σ) t ∧
+          AcceptsInflated k C (fun j => -ŝ w σ j) (ε w σ) t).card : ℝ) / (permsOn C).card) := by
+  have key := coverage_ge_of_good_fail ht p hp0
+    (fun w u => ¬ (u ∈ D w ∨ ¬ AcceptsTwoSided k C (S z) u))
+    (fun w σ => ∀ j ∈ C, |ŝ w σ j - S (z ∘ σ) j| ≤ ε w σ j)
+    (fun w σ => AcceptsInflated k C (ŝ w σ) (ε w σ) t ∧
+      AcceptsInflated k C (fun j => -ŝ w σ j) (ε w σ) t) (fun w σ hσ hg hh => by
+      simp only [not_or, not_not] at hg
+      have hfun : S (z ∘ σ) = S z ∘ σ := funext fun i => hS σ hσ z i
+      have hacc : AcceptsTwoSided k C (S (z ∘ σ)) t := by
+        rw [hfun, acceptsTwoSided_comp hσ]
+        exact hg.2
+      exact ⟨acceptsInflated_of_accepts hh ht hacc.1,
+        acceptsInflated_of_accepts (close_neg hh) ht hacc.2⟩)
+    (weighted_fail_mono C p hp0 _ _ (by
+      intro w σ h
+      exact ⟨fun hD => h.1 (Or.inl hD), h.2⟩) hfail)
+  rw [weighted_share_not ⟨t, ht⟩ p hp1] at key
+  exact key
+
+/-- **The PIT, leaving out the degenerate turns.** With bounds carried over the kept turns, failing
+on a weighted share `ν` of kept orderings, `P(PIT ≤ k/|C|)` lies between
+`#{u ∉ D : shiftedAtMost u ≤ k}/|C| − ν` and `#{u ∈ D or shiftedBelow u < k}/|C| + ν`. -/
+theorem pit_excluding {W Z : Type*} [Fintype W] {C : Finset ι} {t : ι} (ht : t ∈ C)
+    {S : (ι → Z) → ι → ℝ} (hS : Equivariant C S) (z : ι → Z) (p : W → ℝ) (hp0 : ∀ w, 0 ≤ p w)
+    (ŝ : W → Equiv.Perm ι → ι → ℝ) (ε : W → ι → ℝ) (D : W → Finset ι) {ν : ℝ}
+    (hfail : ∑ w, p w * (((permsOn C).filter fun σ : Equiv.Perm ι => σ t ∉ D w ∧
+        ¬ ∀ j ∈ C, |ŝ w σ j - S (z ∘ σ) j| ≤ ε w (σ j)).card : ℝ) ≤ ν * (permsOn C).card)
+    (k : ℕ) :
+    ∑ w, p w * (((C.filter fun u => u ∉ D w ∧ shiftedAtMost C (S z) (ε w) u ≤ k).card : ℝ) /
+        C.card) - ν ≤
+      ∑ w, p w * ((∑ σ ∈ permsOn C, pitRankLe C (ŝ w σ) t k) / (permsOn C).card) ∧
+    ∑ w, p w * ((∑ σ ∈ permsOn C, pitRankLe C (ŝ w σ) t k) / (permsOn C).card) ≤
+      ∑ w, p w * (((C.filter fun u => u ∈ D w ∨ shiftedBelow C (S z) (ε w) u < k).card : ℝ) /
+        C.card) + ν := by
+  constructor
+  · refine avg_ge_of_fail ht p hp0 (fun w u => u ∈ D w)
+      (fun w u => shiftedAtMost C (S z) (ε w) u ≤ k)
+      (fun w σ => ∀ j ∈ C, |ŝ w σ j - S (z ∘ σ) j| ≤ ε w (σ j))
+      (fun w σ => pitRankLe C (ŝ w σ) t k) (fun w σ _ => pitRankLe_nonneg _ _ _ _)
+      (fun w σ hσ _ hh hg => ?_) hfail
+    have hfun : S (z ∘ σ) = S z ∘ σ := funext fun i => hS σ hσ z i
+    have hb : rankLe C (ŝ w σ) t ≤ shiftedAtMost C (S z) (ε w) (σ t) := by
+      rw [← shiftedAtMost_comp hσ, ← hfun]
+      exact rankLe_le_shiftedAtMost (ε := fun j => ε w (σ j)) hh ht
+    have hle := le_pitRankLe C (ŝ w σ) ht k
+    rw [if_pos (hb.trans hg)] at hle
+    exact hle
+  · refine avg_le_of_fail ht p hp0 (fun w u => u ∈ D w)
+      (fun w u => shiftedBelow C (S z) (ε w) u < k)
+      (fun w σ => ∀ j ∈ C, |ŝ w σ j - S (z ∘ σ) j| ≤ ε w (σ j))
+      (fun w σ => pitRankLe C (ŝ w σ) t k) (fun w σ _ => ?_) (fun w σ hσ _ hh => ?_) hfail
+    · exact (pitRankLe_le C (ŝ w σ) ht k).trans (by split_ifs <;> norm_num)
+    · by_cases hg : shiftedBelow C (S z) (ε w) (σ t) < k
+      · exact Or.inl hg
+      · refine Or.inr ?_
+        have hfun : S (z ∘ σ) = S z ∘ σ := funext fun i => hS σ hσ z i
+        have hb : shiftedBelow C (S z) (ε w) (σ t) ≤ rankLt C (ŝ w σ) t := by
+          rw [← shiftedBelow_comp hσ, ← hfun]
+          exact shiftedBelow_le_rankLt (ε := fun j => ε w (σ j)) hh ht
+        have hlt : ¬ rankLt C (ŝ w σ) t < k := by omega
+        have hle := pitRankLe_le C (ŝ w σ) ht k
+        rw [if_neg hlt] at hle
+        exact hle
+
+/-! #### What the engine reads, leaving out the degenerate turns -/
+
+omit [Fintype ι] in
+/-- **The share, read from estimates.** From estimates within the kept bounds on one ordering
+(units at their positions), the share in `coverage_close_excluding` is at most `k`, plus the band
+read from the estimates, plus the units of `D` that the inflated rule accepts. A degenerate turn
+that the inflated rule refuses is refused by the exact rule too, so it costs nothing. -/
+theorem card_excluded_le_estimated {k : ℕ} {C : Finset ι} {s ŝ ε : ι → ℝ}
+    (hclose : ∀ j ∈ C, |ŝ j - s j| ≤ ε j) (D : Finset ι) :
+    (C.filter fun u => u ∈ D ∨ ¬ Accepts k C s u ∨ Fragile k C s ε u).card ≤
+      k + (C.filter fun u => FragileEstimated k C ŝ ε u).card +
+        (C.filter fun u => u ∈ D ∧ AcceptsInflated k C ŝ ε u).card := by
+  have hsub : (C.filter fun u => u ∈ D ∨ ¬ Accepts k C s u ∨ Fragile k C s ε u) ⊆
+      ((C.filter fun u => rankLe C s u ≤ k) ∪ C.filter fun u => FragileEstimated k C ŝ ε u) ∪
+        C.filter fun u => u ∈ D ∧ AcceptsInflated k C ŝ ε u := by
+    intro u hu
+    rw [mem_filter] at hu
+    simp only [mem_union, mem_filter]
+    by_cases hacc : Accepts k C s u
+    · rcases hu.2 with hD | hna | hfr
+      · exact Or.inr ⟨hu.1, hD, acceptsInflated_of_accepts hclose hu.1 hacc⟩
+      · exact absurd hacc hna
+      · exact Or.inl (Or.inr ⟨hu.1, fragileEstimated_of_fragile hclose hu.1 hfr⟩)
+    · exact Or.inl (Or.inl ⟨hu.1, not_lt.1 hacc⟩)
+  have h1 := card_rankLe_le C s k
+  have h2 := (card_le_card hsub).trans ((card_union_le _ _).trans
+    (Nat.add_le_add_right (card_union_le _ _) _))
+  omega
+
+omit [Fintype ι] in
+/-- **The same for the equi-tailed set:** at most `2k`, plus the union band read from the
+estimates, plus the units of `D` the inflated set accepts. -/
+theorem card_excluded_le_estimated_twoSided {k : ℕ} {C : Finset ι} {s ŝ ε : ι → ℝ}
+    (hclose : ∀ j ∈ C, |ŝ j - s j| ≤ ε j) (D : Finset ι) :
+    (C.filter fun u => u ∈ D ∨ ¬ AcceptsTwoSided k C s u ∨ FragileTwoSided k C s ε u).card ≤
+      2 * k + (C.filter fun u => FragileEstimated k C ŝ ε u ∨
+          FragileEstimated k C (fun j => -ŝ j) ε u).card +
+        (C.filter fun u => u ∈ D ∧ AcceptsInflated k C ŝ ε u ∧
+          AcceptsInflated k C (fun j => -ŝ j) ε u).card := by
+  have hclose' := close_neg hclose
+  have hsub : (C.filter fun u => u ∈ D ∨ ¬ AcceptsTwoSided k C s u ∨
+      FragileTwoSided k C s ε u) ⊆
+      ((C.filter fun u => ¬ AcceptsTwoSided k C s u) ∪ C.filter fun u =>
+        FragileEstimated k C ŝ ε u ∨ FragileEstimated k C (fun j => -ŝ j) ε u) ∪
+        C.filter fun u => u ∈ D ∧ AcceptsInflated k C ŝ ε u ∧
+          AcceptsInflated k C (fun j => -ŝ j) ε u := by
+    intro u hu
+    rw [mem_filter] at hu
+    simp only [mem_union, mem_filter]
+    by_cases hacc : AcceptsTwoSided k C s u
+    · rcases hu.2 with hD | hna | hfr
+      · exact Or.inr ⟨hu.1, hD, acceptsInflated_of_accepts hclose hu.1 hacc.1,
+          acceptsInflated_of_accepts hclose' hu.1 hacc.2⟩
+      · exact absurd hacc hna
+      · refine Or.inl (Or.inr ⟨hu.1, ?_⟩)
+        rcases hfr with h | h
+        · exact Or.inl (fragileEstimated_of_fragile hclose hu.1 h)
+        · exact Or.inr (fragileEstimated_of_fragile hclose' hu.1 h)
+    · exact Or.inl (Or.inl ⟨hu.1, hacc⟩)
+  have h1 := card_not_acceptsTwoSided_le C s k
+  have h2 := (card_le_card hsub).trans ((card_union_le _ _).trans
+    (Nat.add_le_add_right (card_union_le _ _) _))
+  omega
+
+omit [Fintype ι] [DecidableEq ι] in
+/-- Read from estimates with a shift at least doubled, fewer units sit below `u`. -/
+theorem shiftedBelow_estimated_le {C : Finset ι} {s ŝ ε δ : ι → ℝ}
+    (hclose : ∀ j ∈ C, |ŝ j - s j| ≤ ε j) (hδ : ∀ j ∈ C, 2 * ε j ≤ δ j) {u : ι} (hu : u ∈ C) :
+    shiftedBelow C ŝ δ u ≤ shiftedBelow C s ε u := by
+  refine card_le_card fun j hj => ?_
+  rw [mem_filter] at hj ⊢
+  have hj' := abs_le.1 (hclose j hj.1)
+  have hu' := abs_le.1 (hclose u hu)
+  exact ⟨hj.1, by linarith [hj.2, hδ j hj.1, hδ u hu]⟩
+
+omit [Fintype ι] [DecidableEq ι] in
+/-- Read from estimates with a shift at least doubled, more units sit at most above `u`. -/
+theorem shiftedAtMost_le_estimated {C : Finset ι} {s ŝ ε δ : ι → ℝ}
+    (hclose : ∀ j ∈ C, |ŝ j - s j| ≤ ε j) (hδ : ∀ j ∈ C, 2 * ε j ≤ δ j) {u : ι} (hu : u ∈ C) :
+    shiftedAtMost C s ε u ≤ shiftedAtMost C ŝ δ u := by
+  refine card_le_card fun j hj => ?_
+  rw [mem_filter] at hj ⊢
+  have hj' := abs_le.1 (hclose j hj.1)
+  have hu' := abs_le.1 (hclose u hu)
+  exact ⟨hj.1, by linarith [hj.2, hδ j hj.1, hδ u hu]⟩
+
+omit [Fintype ι] in
+/-- **The PIT's band with `D`, read from estimates.** The counts in `pit_excluding`, read from one
+ordering's estimates with the shifts doubled, bound the exact ones from the safe side. -/
+theorem card_pit_excluding_estimated {C : Finset ι} {s ŝ ε : ι → ℝ}
+    (hclose : ∀ j ∈ C, |ŝ j - s j| ≤ ε j) (D : Finset ι) (k : ℕ) :
+    (C.filter fun u => u ∈ D ∨ shiftedBelow C s ε u < k).card ≤
+        (C.filter fun u => u ∈ D ∨ shiftedBelow C ŝ (fun j => 2 * ε j) u < k).card ∧
+      (C.filter fun u => u ∉ D ∧ shiftedAtMost C ŝ (fun j => 2 * ε j) u ≤ k).card ≤
+        (C.filter fun u => u ∉ D ∧ shiftedAtMost C s ε u ≤ k).card := by
+  have hδ : ∀ j ∈ C, 2 * ε j ≤ (fun j => 2 * ε j) j := fun j _ => le_rfl
+  constructor
+  · refine card_le_card fun u hu => ?_
+    rw [mem_filter] at hu ⊢
+    exact ⟨hu.1, hu.2.imp id fun h =>
+      lt_of_le_of_lt (shiftedBelow_estimated_le hclose hδ hu.1) h⟩
+  · refine card_le_card fun u hu => ?_
+    rw [mem_filter] at hu ⊢
+    exact ⟨hu.1, hu.2.1, le_trans (shiftedAtMost_le_estimated hclose hδ hu.1) hu.2.2⟩
+
+end FullStepError
+
 end Conformal

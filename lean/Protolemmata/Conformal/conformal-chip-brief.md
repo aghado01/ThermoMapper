@@ -4,7 +4,7 @@ CB-1 to CB-4 were proved on 2026-11-06, E35's M-1 and M-2 on 2026-11-08, and E16
 
 ## E16 slices 10 and 12 — the full step's error, Hoff's score and the latent posterior (2026-11-10)
 
-Status: commissioned 2026-11-10 by the user ("Yes, send it"), relayed by the main session.
+Status: commissioned 2026-11-10 by the user ("Yes, send it"), relayed by the main session. Slice 10 was proved on 2026-11-10 and reported under Reports; slice 12 is in progress.
 
 These are Lean first, by the user's decision 7 on the [layer plan](../../../issues/regression/conformal-layer-brief.md#e16s-completion-the-plan-slices-7-onward), so the C# for slices 10 and 12 waits for these statements. Do slice 10 first and report it on its own, so its C# can start while slice 12's Lean runs. The method, environment, self-review and reporting are as set out below. The numeric checks come first, exhaustive at small n with exact arithmetic. Then come the Lean, `#print axioms` on the main results, the module build, `scripts/meta-ci.ps1 -NoBuild` and D:'s free space. The files are the three named under Scope, plus `conformal-searches.py` where a search needs it.
 
@@ -170,6 +170,71 @@ The user asked for this on 2026-11-08 ("Yes, start it"), relayed by the BASS ext
 ## Reports
 
 Newest first.
+
+### 2026-11-10 — slice 10: the full step's error, proved
+
+Slice 10 is proved in `ConformalValidity.lean`, section `FullStepError`: 45 new declarations, 239 in the file, PROOF-CLOSED, with the standard three axioms only. The ledger's [slice 10 section](conformal-lemmas.md#slice-10--the-full-steps-error-completed) has the statements. The checks ran first, and every assertion holds.
+
+**1. CB-3 for the CDF score F̃.**
+- *The equi-tailed set.*
+  - Margin form: at least 1 − |R ∪ M_lo ∪ M_hi|/m, with |R| ≤ 2k (`coverage_close_twoSided`).
+  - Inflated form: at least 1 − 2k/m (`coverage_inflated_twoSided`).
+  - *Do the bands add or share?* They enter as their union, so they add unless they share a unit. A unit can be fragile in both tails only when at least m − 2k + 2 units sit within its bounds, which is more than (1 − α)m at k = ⌊αm/2⌋ (`card_near_of_fragile_both`).
+  - The union band read from any ordering's estimates dominates (`card_fragileTwoSided_le_estimated`).
+- *The distribution.* At each grid value,
+
+  |P(PIT ≤ k/m) − k/m| ≤ max(#{L < k} − k, k − #{U ≤ k})/m.
+
+  - L and U are the counts shifted by the bounds (`pit_le_upper`, `pit_ge_lower`, `card_shiftedAtMost_le_le_card_shiftedBelow`).
+  - With distinct exact scores, the excesses are the PIT's fragile units at level k.
+  - The bound holds uniformly in u, since P(PIT ≤ u) is linear between grid values. That step is checked, not formalized.
+  - The counts read from any ordering's estimates, with doubled shifts, dominate (`card_pit_counts_estimated`).
+
+**2. The carried bound that leaves out the degenerate turns.**
+- *The form holds, and its share is exact* (`coverage_close_excluding`). Coverage is at least 1 − |D ∪ R ∪ M_D|/m − ν.
+  - D's share is |D \ (R ∪ M_D)|/m: a degenerate turn whose unit the exact rule already refuses costs nothing.
+  - The brief's 1 − (k + |M_D|)/m − |D|/m − ν follows, and is never tighter.
+- *The inflated counterpart:* at least 1 − |D ∪ R|/m − ν (`coverage_inflated_excluding`).
+- *Added, as the full step needs them:*
+  - the equi-tailed set with D left out, both forms;
+  - the PIT with D left out (`pit_excluding`): #{u ∉ D : U ≤ k}/m − ν ≤ P(PIT ≤ k/m) ≤ #{u ∈ D or L < k}/m + ν.
+- *What the engine reads from one ordering whose bounds hold* (`card_excluded_le_estimated` and its two-sided form, `card_pit_excluding_estimated`). The share is at most k (or 2k) + |M̂_D| + |{u ∈ D : the inflated rule accepts u}|. A D unit the inflated rule refuses is refused by the exact rule too.
+- *Against Bhattacharyya, Zhang and Barber's 1 − α − 3√ν:*
+  - Theirs takes ν per score.
+  - Ours takes ν per ordering, jointly over the m units, and pays ν once. The layer's z = Φ⁻¹(1 − ν/(2m)) already buys the joint ν by a union bound.
+  - For a cost of 0.01, theirs needs ν ≈ 1.1·10⁻⁵ per score (z ≈ 4.39). Ours takes ν = 0.01 (z ≈ 3.89 at m = 100, 4.42 at m = 1000).
+- *An illustration at m = 100, k = 5, ν = 1/20,* with one far unit in D and in R. The margin reads 0.00 with bounds over every turn, and 0.88 with that turn left out. The bounds there are chosen; BASS's own reading is the C#'s to measure.
+
+**Rules for the C# worker.**
+- *Read D per turn, once for the data set,* from k̂ or the ESS of that turn's weights. It must not depend on which unit is the test unit.
+- *Make ν joint per ordering,* through the existing per-unit z. Carry εⱼ over the kept turns only.
+- *Report from the observed ordering's estimates:*
+  - 1 − (k + |M̂_D| + |D ∩ inflated-accepted|)/m − ν for the margin;
+  - 2k, the union band, and D's units that the inflated set accepts, for the equi-tailed set;
+  - 1 − |D ∪ R|/m − ν, or at least 1 − (k + |D|)/m − ν, for the inflated rule;
+  - for the PIT, the counts #{u ∈ D or L̂ < k} and #{u ∉ D, Û ≤ k}, with the shifts doubled, ± ν.
+- Without D, the same rules hold with D empty and ν = 0 for the deterministic forms.
+
+**Decisions served.**
+- *The full step's distribution can report its Monte Carlo error.* Use the PIT band at each grid level and the union band for the set. Whether it reads anything on real fits is the C#'s measurement.
+- *The margin can read something on BASS-like fits* when the degenerate turns are far units that the exact rule refuses.
+
+**Files.**
+- `ConformalValidity.lean`.
+- `conformal-checks.py`, section "Slice 10".
+- `conformal-lemmas.md`: the slice 10 section, and the status line, whose stale count of 187 is now 239.
+- This brief.
+
+**Gates.**
+- `lake build Enthymemata.ConformalValidity`: clean, no warnings.
+- `lake build Enthymemata`: green.
+- `scripts/meta-ci.ps1 -NoBuild`: PASS.
+- `#print axioms` on all 38 new theorems: the standard three.
+- The full checks run in about 5 minutes. Builds ran at below-normal priority, and D: had 38 GB free.
+
+**Open, no decision waiting:** the PIT's uniform-in-u step in Lean. It needs a real-valued CDF of the randomized rank.
+
+**What stopped me:** nothing. Slice 12 is next.
 
 ### 2026-11-09 — slice 9's open items: what a fit may see, and CV+ on a fixed bag
 
