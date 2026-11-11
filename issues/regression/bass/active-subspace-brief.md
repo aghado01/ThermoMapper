@@ -1,6 +1,6 @@
 # Active subspaces on the BASS core: E8's build (chip brief)
 
-Date: 2026-11-08. Status: complete. Commissioned by the user on 2026-11-08 ("kick off e8"), after KHAOS's last slice; slice 5, the Grassmann discussion's items the user settled, commissioned 2026-11-08 ("ill take as recommended"). Every slice landed and was verified by the coordinating session on 2026-11-08: slice 0 (`15fb495`, `9e3028d`, `aa62879`), slice 1 (`95294f8`, `9dfcc6d`, `1385b86`), slice 2 (`8c7db77`, `3cdc2e8`), slice 3 (`84fe230`, `1049055`), slice 4 (`20aeb06`, `bc72014`) and slice 5 (`def59f3`, `9d2ff23`, `95d2900`, `a54a537`). Rotate-and-refit, E36 (BPPR) and the reports' open follow-ups wait for the user. Written by the main session from [E8's entry](extensions-brief.md#active-subspace-analysis), [gap G3](lineage-gaps-register.md#g3-sobol-indices-and-active-subspaces-have-different-standing), [the lineage review's separability question](lineage-review.md#separability-is-what-the-closed-forms-rest-on), the [Astra notes](../discussion/astra-grassman-stiefel-pca-extensions.md), and the [Grassmann discussion](../discussion/grassmann-stiefel-subspaces-brief.md)'s report so far. Reports go under "Reports" below, newest first.
+Date: 2026-11-08. Status: slices 0–5 complete; slice 6 landed and waits for its verification. Commissioned by the user on 2026-11-08 ("kick off e8"), after KHAOS's last slice; slice 5, the Grassmann discussion's items the user settled, commissioned 2026-11-08 ("ill take as recommended"). Every slice landed and was verified by the coordinating session on 2026-11-08: slice 0 (`15fb495`, `9e3028d`, `aa62879`), slice 1 (`95294f8`, `9dfcc6d`, `1385b86`), slice 2 (`8c7db77`, `3cdc2e8`), slice 3 (`84fe230`, `1049055`), slice 4 (`20aeb06`, `bc72014`) and slice 5 (`def59f3`, `9d2ff23`, `95d2900`, `a54a537`). The follow-ups, commissioned 2026-11-10: slice 6 (`276af70`, `e9d8827`, `30df59e`, `9a669b6`) landed; slice 7's plan and E36's brief follow, each after the one before is verified. Written by the main session from [E8's entry](extensions-brief.md#active-subspace-analysis), [gap G3](lineage-gaps-register.md#g3-sobol-indices-and-active-subspaces-have-different-standing), [the lineage review's separability question](lineage-review.md#separability-is-what-the-closed-forms-rest-on), the [Astra notes](../discussion/astra-grassman-stiefel-pca-extensions.md), and the [Grassmann discussion](../discussion/grassmann-stiefel-subspaces-brief.md)'s report so far. Reports go under "Reports" below, newest first.
 
 ## Why
 
@@ -145,6 +145,103 @@ Commissioned by the user on 2026-11-10 ("lets send the E8 follow-ups to E8 slice
 Under "Reports" below, newest first, per slice: what landed by commit; the gates' numbers; decisions taken beyond this brief; what was left unbuilt and why; follow-ups with the decision each would change.
 
 ## Reports
+
+### Slice 6: the readout follow-ups (2026-11-10)
+
+**Landed:**
+- `276af70`: items 2 to 6, and the core that pairs a basis fit with another fit.
+- `e9d8827`: item 7.
+- `30df59e`: `BassFit`'s overload, committed alone through the index, since the file held the weighted-fits session's uncommitted hunk, which stays in the working tree.
+- `9a669b6`: `BassBasisFit`'s overload and the pair gates.
+
+**What was built:**
+1. *Pairs with basis fits.*
+   - `BassFit.CoActiveSubspace(data, BassBasisFit other, spec)` pairs a scalar or direct functional fit with a basis fit.
+   - `BassBasisFit.CoActiveSubspace(BassBasisFit other, spec)` pairs two basis fits.
+   - Both run through one internal core over two sides, each a direct fit or a basis fit, in the terms-and-H form: draws by position, product weights. The direct pairing of slice 3 now takes the same core, with the same calls in the same order.
+2. *The co-active projection mean.* `CoActivePosterior.ProjectionMean(q)` returns a `CoActiveProjection`:
+   - each pair's top-q co-active subspace by |λ|, and P̄ over the pairs with its eigensystem;
+   - each pair's q selected eigenvalues, signed, and its angles to the mean subspace;
+   - along each mean direction u, the directional concordance uᵀE[V]u/√(uᵀE[C_f]u·uᵀE[C_g]u), in [−1, 1] by Cauchy–Schwarz.
+3. *Output locations.*
+   - `OutputMetric.Locations` takes columns by output-variable name, as prediction's `OutputLocations` does. A direct fit's C, output patterns and checks are then read there.
+   - Refused: locations outside the output variables' boxes, and locations asked of a basis fit or of basis adequacy.
+   - The sampled route reads the gradient there through the internal `BassGradients.Of`, which gains the locations.
+4. *The matrix check's Grams cached.* Σ_B and K_D are kept per structure within a readout, keyed by the terms' identities.
+   - It is a pure cache: a constant budget of 2²² values, filled in draw order, never evicted.
+   - The check stays off by default (below).
+5. *Poincaré constants for truncated normals.* A mixture of one normal component, N(μ, σ²) truncated to [a, b], takes min(σ², (b − a)²/π²), in both the per-input check and the matrix check.
+   - σ² is Bakry–Émery's bound for a law with potential curvature 1/σ²; (b − a)²/π² is the weighted Payne–Weinberger bound for a log-concave law on an interval. Both are cited from memory and checked numerically below.
+6. *Activity scores.* `ActiveSubspaceAnalysis.Activity` (`ActivityScores`), read when asked from the posterior and the ranks:
+   - C's diagonal per draw and its weighted mean, always;
+   - the truncation at k, per draw and for E[C]'s own eigensystem;
+   - under a rank rule, the truncation at each draw's k_s.
+7. *Legendre moments under a uniform law.* `LegendreDesignFactor` skips the monomial expansion:
+   - on [0, 1], closed forms;
+   - on another interval, the Gauss–Legendre rule exact for the integrand's degree, each factor by its recurrence;
+   - its error estimate is 0. Other laws keep the expansion.
+
+**Gates:**
+
+| Gate | Reading |
+| --- | --- |
+| Pairs: C_f, C_g, C_fg per pair against tensor quadrature of the two gradients (the direct fit's readout; the basis fit's reconstructed from its components'), split at the knots | direct with basis 1.3·10⁻¹⁴; two bases 1.6·10⁻¹⁴ |
+| Pairs: the routes, direct with basis, 8 pairs at 8,192 points | within 2.53 standard errors |
+| A basis fit paired with itself against its two outputs read together | every pair's matrices the same bits |
+| The projection mean on 20 pairs with known co-active subspaces and signs (p = 5, groups of 70% and 30%) | P̄'s eigenvalues (1, 0.7, 0.3, 0, 0) to 2·10⁻¹⁵; the mean subspace to 6·10⁻¹⁶ rad; the concordances 1 and −0.908383, as the closed form |
+| Opposed pairs, g = −f; weights against replicates | P̄ equals the C_f draws' projection mean to 1.1·10⁻¹⁶; every concordance −1; weighted against replicated 1.1·10⁻¹⁶ |
+| The training locations declared as the metric's locations | C and the patterns the same bits, on both routes |
+| Nine new locations, one of them a training location, against tensor quadrature of the gradient readout there; W = I and a full W | 4.1·10⁻¹⁵ and 6.8·10⁻¹⁵; tr E[G] = tr E[C] to 2.7·10⁻¹⁵; the training location's partials the same bits |
+| New locations, the routes | within 0.97 standard errors |
+| The Gram cache: every draw's ratio read alone against among every draw | the same bits; scalar 60 draws over 3 structures, functional 60 over 5 |
+| Truncated normal at σ = 0.08 and 2 of the box on [0.1, 0.9]: Bound/C_vv | the constant taken, σ² and (b − a)²/π², to 2·10⁻¹⁶; no violation in either check |
+| The Gaussian equality: a hinge linear on the support under N(0.5, 0.05²) truncated at eight sds | Var/(σ²E[φ′²]) = 1 − 8.1·10⁻¹⁴; at 0.95σ², 1.053 (fails) |
+| The cited bounds on 300 seeded truncated normals and random smooth functions; their two ends | worst 0.99935; linear under a wide truncation 1.00000000, cos under a nearly flat normal 0.99999968 |
+| Laws with no constant here: two normals, a Student t, the empirical marginal | not applicable; the per-input ratio NaN |
+| Activity scores on known spectra, k = 1 to 4, with a trace-share rule | to 8.7·10⁻¹⁵; the mean is E[C]'s diagonal bit for bit through the readout |
+| Legendre on [0, 1] to degree 40 | the means and pairs exactly; the slopes 1.3·10⁻¹⁶ from the closed forms, 4.3·10⁻¹⁴ from 64-node quadrature |
+| Legendre on [0.1, 0.85], [−0.2, 1.3] and [0.4, 0.45] to degree 30 | within 3.1·10⁻¹³ of a wider rule; within 1.3·10⁻¹⁴ of the expansion to degree six, which at degree 30 is 42% off on [0.1, 0.85] |
+| C of three Legendre terms to degree 25 against a 30 × 30 tensor rule of the recurrence | within 10⁻¹⁴ of C's largest entry; the service's error estimate 0 |
+| Fitting untouched | the whole regression assembly 3,049 of 3,049 on `9a669b6` |
+
+**The matrix check's cost (item 4), for the user's decision on its default.** The machine was loaded throughout, so the readings are on the thread-cycle clock and indicative (identical binaries differ up to 2×). Per draw at 3,000 draws, the exact readout with the check and without, µs:
+
+| Build | Scalar | Functional | Basis |
+| --- | --- | --- | --- |
+| Cached, run 1 | 19.5 / 13.4 | 58.5 / 31.0 | 72.9 / 19.9 |
+| Cached, run 2 | 31.8 / 25.4 | 49.2 / 44.1 | 110.2 / 24.2 |
+| Before the cache (`cb4849b`), interleaved | 44.5 / 20.5; 36.8 / 27.7 | 46.6 / 56.5; 53.4 / 54.0 | 135.9 / 34.9; 142.9 / 34.6 |
+| Cached, interleaved | 31.3 / 22.7; 15.9 / 11.8 | 65.4 / 52.2; 56.6 / 24.9 | 135.8 / 29.6; 69.1 / 18.7 |
+
+- On the scalar fit the check's added cost fell from +24 and +9 µs to +8.6 and +4.1 µs.
+- The functional readings are below the noise: two of the pre-cache pairs read the check as costing less than nothing.
+- On the basis fit it stays about +50 to +108 µs either way.
+- So the Grams were the scalar check's cost. The functional and basis checks' cost is the per-draw m × m generalized eigenproblem over the output locations (15 for the basis fixture).
+- With the cache the check still costs 1.3 to 2 times the readout on scalar and functional fits, and 3 to 5 times on the basis fit. It therefore stays off by default, and the default is the user's call with these numbers.
+
+**Decisions beyond the brief:**
+1. *Pairs: the direct fit with a basis fit on `BassFit`, two basis fits on `BassBasisFit`.* A basis fit first with a direct fit is the first with the roles swapped: V and the concordances are the same, and C_f and C_g trade places. *Alternative:* that ordering on the basis class, leaving two basis fits unpaired.
+2. *q is the call's,* `ProjectionMean(q)`, as `CoActivityScores(q)` takes it, so the spec is unchanged. *The signs beside the mean:* each pair's selected eigenvalues, and the directional concordance along each mean direction. *Alternative:* each pair's concordance alone, which the posterior already holds.
+3. *Locations outside the output variables' boxes are refused,* as a joint sample's points are. Prediction allows them with a flag. The co-active output functionals stay over the training locations.
+4. *The cache lives for one readout,* so nothing is kept between calls. Its budget is counted in values, and its keys are term identities, so equal terms from other instances only miss.
+5. *The constant is built for one normal component alone.* A mixture of several is not log-concave in general, a Student t is not log-concave, and an atom has no Poincaré inequality. Slice 5's gate that pinned one normal component as not applicable now uses a mixture of two normals.
+6. *Activity scores are a property of the analysis,* computed from the posterior and the ranks, so the record's shape is unchanged. The truncation at k is always given, since every readout has a k.
+7. *The brief's "exact rationals"* are read as closed forms, with the standardization's square roots, on [0, 1], and as an exact rule on other intervals. The change moves the low bits of every Legendre moment under a uniform law: Sobol indices, effects and C alike.
+
+**Left unbuilt:**
+- A public `outputLocations` on `BassFit.Gradient`. The internal path carries it; the public file was in another session's hands.
+- Co-active output functionals at new locations.
+- Constants for several components, Student t and empirical laws.
+- The matrix check's reduction to K × K for a basis fit.
+
+**Follow-ups:**
+- *The matrix check's default.* If on, every readout pays the costs above; if off, it stays opt-in as now.
+- *A K × K matrix check for basis fits.* A basis fit's outputs are G·w, so the generalized eigenvalue of (AΣAᵀ, AKAᵀ) with A = RG of full column rank K is that of the K × K pair (Σ, K). If built, the basis check costs about what the scalar's does, which could change the default question. If not, it stays at 3 to 5 times the readout.
+- *A public `outputLocations` on `BassFit.Gradient`.* If wanted, one optional parameter, which the internal path already takes. If not, the readout alone reads gradients at new locations.
+
+**Doc changes owed:**
+- `docs/Maths/Regression/ActiveSubspaces.md`: a slice-6 section with the seven items, their alternatives and the cost table above; the matrix check's paragraph (the truncated-normal constant, the cache); `OutputMetric`'s locations.
+- `docs/Maths/Regression/PolynomialChaos.md:41`: moments under a uniform law no longer go through the expansion, on [0, 1] or elsewhere.
 
 ### Slice 5: the Grassmann discussion's settled items (2026-11-08)
 
