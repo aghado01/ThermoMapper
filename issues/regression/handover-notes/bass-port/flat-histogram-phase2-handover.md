@@ -1,0 +1,11 @@
+# Flat-histogram sampler, Phase 2 (N17): hand-over, 2026-10-30
+
+Full report: `issues/regression/bass/flat-histogram-phase2-brief.md`, under Reports ("Phase 2 built, and the Friedman qualification read").
+
+- Commits on `main`, none pushed: `33e067e` (config + chain), `9d78484` (fit, evidence, readout, views), `820982b` (pilot + WHAM start), `68ee777` (`Sampling.Thin` read as sweeps per iteration), `6a656d8` (qualification harness, criteria written before the run), `acf9d2d` (reading below the lower split, added after the run), `78708b3` (`BassMovePassTests` data hash re-pinned: the config's JSON gained `"FlatHistogram":null`), `69f6658` (report). No change to `Maths.Samplers.FlatHistogram`, SMC or `ParallelTempering`.
+- Qualification (Friedman, n = 500, one seed per arm, 45M sweeps a chain, 13–15 min an arm): every production chain of every arm tunnels (4–17 round trips, short of the 20 sized for); chains' ln Ẑ_c SD 0.34 / 1.09 / 0.14; ln Ẑ(1) −841.36 ± 0.17 and −840.96 ± 0.54 from b_lo = 0, and −846.60 ± 0.22 through SMC's ln Ẑ(0.10) (arm ii's ratio −715.25 ± 0.07). All above the −864.6 bound. Posterior: a1 (4 × x1·x2 + 2 × x3 + x4 + x5) 66–68%, a1 + x6·x8 11%, four x1·x2 terms 96–98%; A/B/G/S/T 1.3% or less together. σ covers 1. D10 verdict on π_w converged on two arms, R̂ 1.01 on the third.
+- The arms part by 5.4 nats, all below b = 0.10: at b ≤ 0.05 the flat histogram, SMC and exact prior IS agree to 0.1 nat; at 0.10 IS −136.5, SMC −131.4, FH −125.9 (chains −125.8 to −126.0). Read as SMC from the prior (linear form) missing mass, a reading not a proof.
+- Shape calls revised/added: `MaxIterations` per-call budget; a complete run has no checkpoint; `Sampling.Thin` read; pilot ladders read one at a time and pooled by b; the ratio above b_lo = 0 kept out of `BassFit.Evidence`; `BassEvidence.SteppingStone` nullable (9 CS8602 warnings in 7 harnesses not this chip's, listed in the report).
+- Engine finding: SAMC's `FixedPoint` refuses sparse pilots' ĝ (a segment left empty beside a drawn node), not only empty nodes; Friedman's pilots were accepted. Warm start on fixture A plateaus near 0.05 past 16k iterations at the default gain start.
+- Suites at `78708b3`: Regression 1,331/1,331, Samplers 262/262, BASS oracle classes 90/90.
+- `artifacts\chip-fh2\` deleted.
