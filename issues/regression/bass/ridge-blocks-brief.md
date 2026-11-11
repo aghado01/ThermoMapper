@@ -110,7 +110,7 @@ Slices 1 to 3 run under Gaussian BASS; slice 4 carries every block to the noises
 - **E34's chip** works in the collapsed core and `BassData`. Its decision 7 puts random intercepts with one shared s under K outputs, with row covariance V ⊗ Σ, so decision 3's whitening on the working response is the form it reuses. Before slice 0's edit of `BassDesign` and slice 2's of `BassData` I send it the change's shape, check `git diff -- <file>`, and commit each edit by itself.
 - **The conformal chip** owns the layer and `posterior/BassPrediction.cs`. Slice 5's shape is agreed with it first (decision 8), and any edit to its files waits for its tree to be clean.
 - **The KHAOS chip** takes E4's proposal kernels and leaves `BassRandomIntercepts.cs` to this brief.
-- **Shared docs** (`BayesianRegression.md`, the notation ledger): checked, edited and committed in one step. The ledger takes sₖ, Z̃, Πₖ and the slopes' scale beside KHAOS's s.
+- **Notation ledger.** Check the diff, edit and commit in one step. The ledger takes sₖ, Z̃, Πₖ and the slopes' scale beside KHAOS's s. Record changes owed to the regression pages in the slice report for the offline docs pass.
 
 ## Slices 4 and 5, commissioned (2026-11-10)
 
@@ -125,8 +125,8 @@ Commissioned by the user on 2026-11-10: the GBASS chip takes slices 4 and 5, whi
   - check `git diff -- <file>` for changes you did not make;
   - commit each such edit by itself.
 - **Slice 5's seam** is agreed with the conformal chip by message first (decision 8). Edits to the conformal chip's files wait until its tree is clean.
-- **Docs.** Chips leave `docs/` alone (AGENTS.md, the user's standing guidance of 2026-11-10). This replaces the "Shared docs" line under Coordination: list the doc changes owed in the report. Notation-ledger entries stay in `issues/`, each edited and committed in one step.
-- **Messages** are terse: events and coordination, with a pointer to the report. No session reads another's transcript.
+- **Docs.** Chips leave `docs/` alone. Give each slice report a **Doc changes owed** heading for the offline docs pass. Notation-ledger entries stay in `issues/`.
+- **Messages.** Send the other worker a short message directly when a shared file or interface needs coordination. Send the coordinator a short event with a report link when a slice lands or needs a decision. Results and receipts go in the report. Sessions do not read each other's transcripts. [Repository DocOps](../../../AGENTS.md#docops--conventions-for-issues)
 
 ## Not in this brief
 
@@ -146,7 +146,7 @@ The GBASS chip's rules carry over:
 
 ## Report
 
-Each slice reports here and to the main session:
+Maintain an **In progress** entry here with uncommitted work, running checks and the next step. Keep probe code and data in the repository's `artifacts/`. Fold the entry into the slice report when the work lands and send the coordinator its link. The report records:
 - what landed, with commits;
 - each gate's reading;
 - the decisions taken beyond this brief;

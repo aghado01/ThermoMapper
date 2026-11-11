@@ -253,6 +253,8 @@ Each is recorded in E16, with the decision it would change:
 
 ## Working rules
 
+- **Messages.** Coordinate shared files and interfaces directly with their owner before editing. For slice 10, the conformal worker owns the full-step code and its tests. E21 owns the grouped BASS candidate seam. Send the coordinator a short event with the report link when a slice lands or needs a decision. Results and receipts go in the report. Sessions do not read each other's transcripts. [Repository DocOps](../../AGENTS.md#docops--conventions-for-issues)
+- **Verification.** Build from a snapshot of committed sources plus this worker's own edits. The coordinator independently checks the committed slice. For slice 10, wait for that check on 10a before starting 10b.
 - On `main`, committing by pathspec with nothing left staged and nothing pushed. Commit messages describe the work, with no attribution lines ([CLAUDE.md](../../CLAUDE.md)).
 - Builds set `ArtifactsRoot` inline into `artifacts\chip-conformal\`, deleted at the end.
 - Heavy runs at below-normal priority with capped threads; the machine is shared. Tests run by [targeted runs](../../CONTRIBUTING.md#testing-standards) (`scripts/test-select.ps1`): the selected classes per edit, with the pinned tier per commit, the whole assembly once at the slice's end, and the qualification gates as each slice states.
@@ -262,7 +264,9 @@ Each is recorded in E16, with the decision it would change:
 
 ## Report
 
-Under "Reports" below, newest first, per slice: what landed by commit; the gates' numbers; coverage and width by fit; the cost row; defects found; decisions taken beyond this brief; what was left unbuilt and why. E16 takes a line per slice that lands.
+Maintain an **In progress** entry under "Reports" with uncommitted work, running checks and the next step. Keep probe code and data in the repository's `artifacts/`. Fold the entry into the slice report when the work lands.
+
+Each report gives the commits, gate results, coverage and width by fit, cost, defects, decisions and open work. Include a **Doc changes owed** heading for the offline docs pass. E16 takes a line per slice that lands.
 
 ## Reports
 
