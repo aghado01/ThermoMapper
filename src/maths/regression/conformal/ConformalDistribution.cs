@@ -33,6 +33,15 @@ namespace Maths.Regression.Conformal;
 public sealed record ConformalDistribution(int Case, int Stratum, int Units, double[] Grid, int[] Below, int[] Tied, ConformalForm Form,
                                            int Fall, double ScoreFall)
 {
+    /// <summary>The optional full-step CDF-score error readouts, including inflated ranks; null on the original API and split form.</summary>
+    public ConformalCdfMargin? Margin { get; init; }
+
+    /// <summary>Whether set queries use the inflated tails; distribution, PIT and monotonicity queries retain the original ranks.</summary>
+    public bool Inflated { get; init; }
+
+    /// <summary>The conditional fixed/refined-grid coverage diagnostic at alpha; NaN for an uncomputed plain margin.</summary>
+    public double CoverageUnderError(double alpha) => WholeSpace(alpha) ? 1.0 : Margin?.CoverageUnderError(Level(alpha), Units, Inflated) ?? double.NaN;
+
     /// <summary>Whether Q rises along the grid, so the case has a distribution there.</summary>
     public bool Monotone => Fall == 0;
 
@@ -67,9 +76,22 @@ public sealed record ConformalDistribution(int Case, int Stratum, int Units, dou
 
     /// <summary>Whether the equi-tailed set at α holds y_g: both p-values above k/m, (B + T + 1) &gt; k and m − B &gt; k.</summary>
     public bool Accepts(int g, double alpha)
+        => Inflated ? AcceptsInflated(g, alpha) : AcceptsPlain(g, alpha);
+
+    /// <summary>The original equi-tailed set, irrespective of the inflation choice.</summary>
+    public bool AcceptsPlain(int g, double alpha)
     {
         int k = Level(alpha);
         return k == 0 || (Below[g] + Tied[g] + 1 > k && Units - Below[g] > k);
+    }
+
+    /// <summary>Each tail inflated by its held CDF-score errors; requires the options overload's error readouts.</summary>
+    public bool AcceptsInflated(int g, double alpha)
+    {
+        int k = Level(alpha);
+        if (k == 0) return true;
+        if (Margin is null) throw new InvalidOperationException("CDF-score inflation requires the full-step options overload.");
+        return Margin.InflatedLowerRanks[g] > k && Margin.InflatedUpperRanks[g] > k;
     }
 
     /// <summary>The set's maximal runs of accepted grid values, one interval where Q rises; empty for the whole line.</summary>
@@ -286,6 +308,7 @@ internal static class CdfScores
 /// </summary>
 internal sealed class CdfScorer
 {
+    internal double[] CopyWeights(int count) => [.. _weights.AsSpan(0, _s * count)];
     private readonly int[] _rows;
     private readonly double[]? _logWeights;
     private readonly double[] _fixed, _lower, _upper;

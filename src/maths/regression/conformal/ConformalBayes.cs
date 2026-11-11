@@ -528,7 +528,7 @@ public sealed record ConformalScores(int[] Units, double[] Scores, double Candid
 public static class ConformalBayes
 {
     // Candidates scored per product: a multiple of the product's panel, so only a case's last batch has a partial panel.
-    private const int Batch = 256;
+    internal const int Batch = 256;
 
     // A product entry below this share of its unit's largest likelihood is summed again in logs: above it, the terms that
     // underflow in the product weigh less than S·2⁻¹⁰²²/10⁻²⁰⁰ of the entry.
@@ -679,10 +679,35 @@ public static class ConformalBayes
     /// (<see cref="ConformalDistribution.Fall"/>, <see cref="ConformalDistribution.ScoreFall"/>): it keeps its p-values and its set,
     /// with no distribution. A conformal p-value needs no monotone score, so for draws from the posterior the PIT holds on every case,
     /// flagged or not, up to their Monte Carlo error as the full step's sets do. Draws that are no posterior, a wrong fit's or two
-    /// chains stuck apart, break the score's symmetry, and the split form is the guarantee there. No margin is read for this score.
+    /// chains stuck apart, break the score's symmetry, and the split form is the guarantee there. This overload reads no margin;
+    /// the options overload reads the CDF score's Monte Carlo errors.
     /// CB-4's refusals and alignment are the full step's.
     /// </summary>
     public static ConformalDistributions Distribution(PointwiseLogDensity training, CandidateLogDensity candidates)
+        => DistributionCore(training, candidates, null);
+
+    /// <summary>
+    /// The full step's CDF score with Monte Carlo error readouts: per-position inflated tails, an optional carried two-tail union
+    /// band and PIT counts at every rank level. Kept-turn and fixed/refined-grid numbers are diagnostics conditional on proxy
+    /// containment, grid coverage and simultaneous error containment; the density check found missed population own-turn flags.
+    /// The existing distribution and its monotonicity flag are retained. Alpha is queried on the returned distribution.
+    /// </summary>
+    public static ConformalDistributions Distribution(PointwiseLogDensity training, CandidateLogDensity candidates, ConformalOptions options)
+    {
+        ArgumentNullException.ThrowIfNull(options);
+        if (!(options.ErrorLevel > 0 && options.ErrorLevel < 1)) throw new ArgumentOutOfRangeException(nameof(options));
+        if (options.Score != FullStepScore.InSample || options.FallbackShare is not null || options.LeaveOneOutParetoK)
+            throw new ArgumentException("CDF margins use the in-sample CDF score and no density-score fallback or leave-one-out diagnostics.", nameof(options));
+        if (options.MarginBounds is { } bounds && !Enum.IsDefined(bounds)) throw new ArgumentOutOfRangeException(nameof(options));
+        if (!Enum.IsDefined(options.InflationBounds)) throw new ArgumentOutOfRangeException(nameof(options));
+        if (options.MarginBounds == MarginBounds.Kept && !(double.IsFinite(options.DegenerateEss) && options.DegenerateEss > 0))
+            throw new ArgumentOutOfRangeException(nameof(options));
+        if (options.MarginRefinement is { } probe && (options.MarginBounds is null || probe.At is null || !(double.IsFinite(probe.Tolerance) && probe.Tolerance > 0)))
+            throw new ArgumentException("Margin refinement needs a margin, a seam and a positive finite tolerance.", nameof(options));
+        return DistributionCore(training, candidates, options);
+    }
+
+    private static ConformalDistributions DistributionCore(PointwiseLogDensity training, CandidateLogDensity candidates, ConformalOptions? options)
     {
         Check(training, candidates);
         double[,] unitLogCdf = training.LogCdf
@@ -703,16 +728,24 @@ public static class ConformalBayes
         {
             int[] members = units.TryGetValue(h, out List<int>? found) ? [.. found] : [];
             var scorer = new CdfScorer(unitLogCdf, rows, logWeights, members);
+            var margins = options is null ? null : new CdfMarginScorer(training, rows, logWeights, members, options, scorer);
             foreach (int t in cases)
             {
                 int g = candidates.Grids[t].Length, offset = candidates.Offset(t);
                 var below = new int[g];
                 var tied = new int[g];
                 var own = new CdfScore[g];
+                var readings = margins is null ? null : new CdfMarginReading[g];
                 for (int b0 = 0; b0 < g; b0 += Batch)
+                {
                     scorer.Score(candidates.Values, candidateLogCdf, offset + b0, Math.Min(Batch, g - b0), below, tied, own, b0);
+                    margins?.Read(candidates, offset + b0, Math.Min(Batch, g - b0), scorer.CopyWeights(Math.Min(Batch, g - b0)), own, b0, readings!);
+                }
                 distributions[t] = new ConformalDistribution(t, h, members.Length + 1, candidates.Grids[t], below, tied, ConformalForm.Full,
-                                                             CdfScores.Fall(below, tied), CdfScores.ScoreFall(own));
+                                                             CdfScores.Fall(below, tied), CdfScores.ScoreFall(own))
+                {
+                    Margin = margins?.Finish(training, candidates, t, readings!), Inflated = options?.Inflate ?? false
+                };
             }
         }
         return new ConformalDistributions(distributions, ConformalForm.Full);
@@ -813,7 +846,7 @@ public static class ConformalBayes
 
     // z = Φ⁻¹(1 − ν/(2m)): the multiple of a score's Monte Carlo standard error that every one of a stratum's m units stays within
     // with chance 1 − ν, by the union of their normal tails.
-    private static double Multiple(double nu, int m) => Normal.StandardQuantile(1.0 - nu / (2.0 * m));
+    internal static double Multiple(double nu, int m) => -Normal.StandardInverseLogCdf(Math.Log(nu) - Math.Log(2.0 * m));
 
     /// <summary>
     /// The count of FragileEstimated units of <paramref name="scores"/> under one bound <paramref name="error"/> for every unit
@@ -893,7 +926,7 @@ public static class ConformalBayes
     }
 
     // CB-4's refusals and the draws' alignment.
-    private static void Check(PointwiseLogDensity training, CandidateLogDensity candidates)
+    internal static void Check(PointwiseLogDensity training, CandidateLogDensity candidates)
     {
         ArgumentNullException.ThrowIfNull(training);
         ArgumentNullException.ThrowIfNull(candidates);
@@ -1021,7 +1054,7 @@ public static class ConformalBayes
 
         public StratumScorer(double[,] ll, int[] rows, double[]? logWeights, int[] members, IReadOnlyList<int>? chains, int level, double multiple,
                              MarginBounds? margin = null, InflationBounds inflation = InflationBounds.PerPosition, bool plain = false,
-                             double degenerateEss = 100.0)
+                             double degenerateEss = 100.0, bool flagsOnly = false)
         {
             _plain = plain;
             _margin = margin;
@@ -1053,7 +1086,7 @@ public static class ConformalBayes
                 if (double.IsNegativeInfinity(_top[i])) throw new ArgumentException($"Unit {members[i]} has zero density under every draw of positive weight.", "training");
             // P in tiles of 32 draws by 32 units, so the strided reads of the draws × units matrix stay in cache.
             _left = new double[(long)n * s];
-            _leftSquared = plain ? [] : new double[(long)n * s];
+            _leftSquared = plain || flagsOnly ? [] : new double[(long)n * s];
             const int tile = 32;
             for (int d0 = 0; d0 < s; d0 += tile)
                 for (int i0 = 0; i0 < n; i0 += tile)
@@ -1065,10 +1098,10 @@ public static class ConformalBayes
                         {
                             double p = Math.Exp(ll[rows[d], u] - top);
                             _left[(long)i * s + d] = p;
-                            if (!plain) _leftSquared[(long)i * s + d] = p * p;
+                            if (!plain && !flagsOnly) _leftSquared[(long)i * s + d] = p * p;
                         }
                     }
-            if (margin is not null && !plain) Orderings();
+            if (margin is not null && !plain) Orderings(flagsOnly);
         }
 
         // Per unit i of the stratum, as the candidate: its weights' total τᵢ = Σ_s W_s·P_is and Σ_s W_s²·P_is², the relative
@@ -1084,7 +1117,7 @@ public static class ConformalBayes
         // v_s = W_s·P_is/τᵢ. Unit j's score there is G₁/τᵢ, and its relative variance Σ_s ψ_s² is G₃/G₁² − 2G₂/(τᵢG₁) + Σ_s v_s²,
         // with G₁ = Σ_s P_js·W_s·P_is, G₂ = Σ_s P_js·W_s²·P_is² and G₃ = Σ_s P_js²·W_s²·P_is²: three (n × S)·(S × n) products,
         // in blocks of Batch columns. Its error is over unit i's relative efficiency, as the held ordering's is over the candidate's.
-        private void Orderings()
+        private void Orderings(bool flagsOnly)
         {
             int n = _members.Length, s = _s;
             var weight = new double[s];
@@ -1109,6 +1142,7 @@ public static class ConformalBayes
                 _unitEfficiency[i] = _chains is null ? 1.0 : PredictiveChecks.RelativeEfficiency(row, _chains);
             }
             if (_kept) FlagTurns(weight);
+            if (flagsOnly) return;
             int block = Math.Min(Batch, n);
             var first = new double[s * block];
             var second = new double[s * block];
@@ -1148,6 +1182,26 @@ public static class ConformalBayes
         /// <summary>Under the kept turns' bounds, the training units whose own turn the proxy flags without the candidate; empty
         /// otherwise.</summary>
         public bool[] FreeFlagged => _freeFlagged;
+
+        // The same density-weight proxy for CDF scores; it supplies flags only, never density-score error bounds.
+        internal (bool Own, bool[] Units) Flags(double[] weights, double ess, double efficiency)
+        {
+            bool own = !(ess * efficiency >= _degenerateEss);
+            var units = new bool[_members.Length];
+            for (int i = 0; i < units.Length; i++)
+            {
+                double ep = 0, inverse = 0;
+                for (int d = 0; d < _s; d++)
+                {
+                    ep += weights[d] * _left[(long)i * _s + d];
+                    inverse += weights[d] * _inverse[(long)i * _s + d];
+                }
+                double logProduct = Math.Log(ep) + _top[i] + Math.Log(inverse) - _bottom[i];
+                double relative = Math.Exp(-Math.Max(0, logProduct));
+                units[i] = _freeFlagged[i] || (!own && !(_drawEss * relative * _unitEfficiency![i] >= _degenerateEss));
+            }
+            return (own, units);
+        }
 
         // The proxy's first two flags for each unit's own turn, read once per stratum: its ESS without the candidate, Kish(W)·rel times
         // its relative efficiency, with rel = 1/(E[p]·E[1/p]) under the held draws, the relative ESS of p(zᵢ | θ) as weights over draws
