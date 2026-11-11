@@ -152,6 +152,13 @@ Nothing is built until the user decides the items marked **Decision** below. The
 
 **What a user declares:** the analysis the frame comes from (decision 1's summary), d, the inputs' form (decision 3), the refit's configuration (the native fit's by default), and optionally the folds and the evidence ladder. A name for the types, after the paper's "projected Bayesian MARS": `BassProjection` for the frame and the map, and `BassProjectedFit` for the refit, which predicts, differentiates and reads E8 in the original coordinates.
 
+**Decided by the user on 2026-11-10 ("Approve as recommended"), relayed by the main session:**
+1. The frame is E[C]'s eigenvectors.
+2. No simplicity rotation. The report gives the eigengaps within the active block, where near-equal eigenvalues make the eigenvectors arbitrary.
+3. The refit takes the d active variables (a). Form (b) is (a) at d = p, so it comes with it. (c), the native inputs plus the active ones, stays a later option.
+4. Each active variable's domain is the zonotope's bounding box. A gate is added: how the ridge forms and any knot-spacing rule read that scaling when, in high p, the box is far wider than the projected data's spread.
+5. Cross-fitting is an opt-in. The caveat about reusing the data stays in every report, the evidence included.
+
 **Proposed slices, after the user's call:**
 
 | Slice | Delivers | Gates |
