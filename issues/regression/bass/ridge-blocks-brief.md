@@ -157,6 +157,25 @@ Each slice reports here and to the main session:
 
 Newest first.
 
+### In progress: slice 5, the candidate seam under random effects (GBASS chip, updated 2026-11-10)
+
+Hand-over state, updated in place until the slice's report replaces it.
+- *State.* The shape below went to the conformal chip on 2026-11-10. That chip is paused for the user's quota. Nothing is built until the shape is agreed.
+- *Proposed shape* (decision 8, refined against the code):
+  1. *`BassFit.CandidateLogDensity` takes random-effect fits*, which it refuses today. Each candidate names its groups as prediction does (`BassPredictionInputs.GroupsOf`).
+     - *A level seen in training* reads the draw's effects. Under Gaussian noise that is N(y | f + Σₖ z̃ₖ·u_{k,g}, σ²), with z̃ the layout's multiplier: 1 for an intercept, the scaled input for a slope. Under a noise it is the law's density with v integrated. These are the training pointwise terms (`BassPointwise.Retained` with `BassDrawFit` adding Z̃u), so a training case's candidate is its column bit for bit.
+     - *A new group* takes that grouping's effect integrated from its prior. That covers a level unseen in training under `UnseenLevel.OutsideEverySubset`, or the grouping's column left out. Under Gaussian noise it is N(y | f + the known effects, σ²(1 + Σ_new s_k²·z̃_k²)). Under a noise it is a mixture over v again, y | v ~ N(f + known + σβv, σ²(c·v + Σ_new s_k²·z̃_k²)). That density is taken by quadrature on v when `quadrature: true` is passed, and refused otherwise. It needs a law density with an added variance beside `IBassNoiseLaw.LogDensity`, in `BassNoise.cs`, a shared file. Its CDF needs the same, on `cdf: true`.
+  2. *The latent report:* the group effects are conditioned for known groups and integrated for new ones. Under a noise, v is also reported as integrated. `BassPointwise.Latents` drops that line today when random effects are present, a slice-4 gap this slice fixes.
+  3. *Open, the conformal chip's call:* may one call mix known-group and new-group cases (with a per-case flag on `CandidateLogDensity`), or is a mixed call refused, so each call is read by one density (CB-4)?
+  4. *Open:* does BASS give a helper with each training unit's and each candidate's level of grouping k, as strata for Mondrian sets, or does the conformal layer build strata from the data?
+  5. *Units* are cases, for the split step. The full step and Hoff's leave-one-out score stay refused for random-effect fits, because u couples a level's cases, so leaving a case out moves its group's draw. Coverage for new groups, with whole groups held out, is the conformal chip's design.
+- *Files:* `BassCandidates.cs`, `BassFit.cs` (the candidate entry), `BassPointwise.cs` (the latent report), `BassNoise.cs` (the widened law density, shared). Ownership was asked of the conformal chip.
+- *Gates, per the slices table:*
+  - at the training cases the candidate is the pointwise column, bit for bit;
+  - the new group's density against the population predictive's closed form, and under a noise against independent quadrature;
+  - coverage by simulation within known groups, marginally and by group stratum, and for new groups split over groups;
+  - the refusals with their reasons.
+
 ### Slice 4: random effects under GBASS's noises (GBASS chip, 2026-11-10)
 
 **Landed** in `4f5bf3f` (the block under the noises, its tests), `94133f8` (the notation ledger), `1940cc0` (the exact-start Geweke rows, committed as WIP by the main session at the user's word), `397ca88` (the mixing measurement lengthened to 40,000 sweeps per chain), and the commit that carries this report. Decision 7 as the user amended it on 2026-11-10 ("B, with the refinement").
