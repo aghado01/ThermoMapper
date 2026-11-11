@@ -116,7 +116,7 @@ A separate limitation in the existing shared weight reader affects all its calle
    - *Its findings:* Snell and Griffiths's Theorem 4.3 is false as stated (a point-mass prior on all-zero losses breaks it), and Gressmann's proof of Proposition 2.5(i) has two sign slips while the statement stands.
 4. **Slice 12a's k̂ diagnostic:** opt-in (recommended; it costs about 200× the score) or on by default.
 5. **The original side-session notes** in `%APPDATA%\Claude\side-session-notes\`: delete them or keep them. Copies are in the repository; three PyTeXML notes were left there.
-6. **Conformal slices 13–18's C# order: ready to decide, now that slice 10's BASS reading is in.**
+6. ~~**Conformal slices 13–18's C# order.**~~ **Decided 2026-11-11** ("Yes, 13 first"; conformal decision 11): the tournament correction (13) comes first among 13–18, after slices 11 and 12b. The reading behind it:
    - *The reading* (the [slice 10 report](conformal-layer-brief.md#2026-11-11--slice-10-density-and-cdf-error-diagnostics)): the margin still reads nothing on BASS fits with the degenerate turns left out.
      - The Kept diagnostic is negative on the Gaussian and Student-t fits at every ESS floor: −0.50 to −0.25 and −0.64 to −0.40.
      - The carried diagnostic is near 0.
