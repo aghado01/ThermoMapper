@@ -179,6 +179,11 @@ Newest first.
 
 **Follow-ups.** The coordinator's earlier independent six-check review, including the three E21 repros and grouped/full-step integration, passed on hash-identified pre-correction files ([receipt](../../../artifacts/verify-e21-conformal-nov11/review.trx)). New-group coverage and cross-seam cell enforcement remain conformal-layer follow-ups, separately commissioned. No decision beyond the agreed seam and requested numerical correction was taken, and no further slice is commissioned.
 
+*Addendum (the coordinating session, 2026-11-11, from the GBASS chip): the decision the new-group follow-up would change.*
+- *Today* a new group's candidate gets split-form sets calibrated on cases in known cells. A new group's cases are correlated, so case-level calibration does not certify them.
+- *The follow-up:* group-level units, one score per held-out group (Dunn, Wasserman and Ramdas's two-layer conformal).
+- *The decision it changes:* whether BASS's new-group sets ship as calibrated or stay marked uncalibrated.
+
 #### Doc changes owed
 
 Offline batch: document grouped candidate and `GroupCells` APIs, mixed latent treatment and per-case flags, new-group split-only restriction, mixture quadrature opt-in, and the known-cell simulation's scope. Leave `docs/` to the offline owner.
