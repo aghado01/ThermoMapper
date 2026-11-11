@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.Linq;
 using Maths.Distributions;
 using Maths.Regression.Conformal;
+using Maths.Rng;
 
 namespace Maths.Regression.Spline.Bass;
 
@@ -25,6 +26,9 @@ namespace Maths.Regression.Spline.Bass;
 /// the latent (<see cref="IBassNoiseLaw.DensityByQuadrature"/>) costs draws × candidates integrals, so it is taken on
 /// <c>quadrature</c> alone, as the pointwise path takes it. On <c>cdf</c> each draw's log CDF rides beside the density, from the same law
 /// at the draw (<see cref="IBassNoiseLaw.At"/>) or N(f, σ²), and <see cref="UnitLogCdf"/> gives the training units' (E16, slice 4).
+/// Under the latent-posterior reading (the conformal layer's slice 12b) a noise law's candidates also carry
+/// <see cref="CandidateLogDensity.ConditionedValues"/>: each candidate's latent drawn per draw from its exact conditional given its residual
+/// net of f and the known groups' effects, N(e | σβv′, σ²c·v′), beside the training terms at their retained latents.
 /// Thread-safe: it reads the model and the table and writes only its own buffers.
 /// </summary>
 internal static class BassCandidates
@@ -32,10 +36,14 @@ internal static class BassCandidates
     public static CandidateLogDensity LogDensity(BassModel model, BassTermTable terms, IReadOnlyList<IReadOnlyList<BassDraw>> draws,
                                                  IReadOnlyList<double>? weights, PredictionCases cases, IReadOnlyList<double[]> grids,
                                                  int[]? strata, UnseenLevel unseenLevels, bool quadrature = false, bool cdf = false,
-                                                 IReadOnlyList<double>? caseWeights = null)
+                                                 IReadOnlyList<double>? caseWeights = null,
+                                                 LatentTreatment observationLatents = LatentTreatment.Integrated, int seed = 0)
     {
         ArgumentNullException.ThrowIfNull(cases);
         ArgumentNullException.ThrowIfNull(grids);
+        bool conditioned = BassPointwise.ConditionsLatents(model, observationLatents);
+        if (conditioned && cdf)
+            throw new ArgumentException("The CDF is read with each observation's latent integrated, as the predictive distribution reads it.", nameof(cdf));
         if (model.Data.Response is FunctionalResponse)
             throw new NotSupportedException("A direct functional fit's unit is a curve; a candidate here is one observation of a scalar response. Whole curves are E17's.");
         IBassNoiseLaw? law = model.Observation.Law;
@@ -73,6 +81,9 @@ internal static class BassCandidates
             }
             groups = [.. Enumerable.Range(0, block.Count).Select(k => cases.GroupsOf(block.Layout(k), block.Groupings[k], unseenLevels))];
             fresh = cells.NewGroup!;
+            if (conditioned && fresh.Any(x => x))
+                throw new NotSupportedException("A new group's effect is integrated from its prior, and beside a candidate's drawn latent its conditional "
+                                                + "given y is not the latent's alone; the latent-posterior reading takes cases in known groups.");
             if (law is not null && fresh.Any(x => x) && !quadrature)
                 throw new NotSupportedException("A new group under a noise is the mixture over v of N(σβv, σ²(c·v + Σ s²z̃²)), an integral over v for every "
                                                 + "draw and candidate (BassWidenedMixture); pass quadrature: true to take it.");
@@ -84,6 +95,10 @@ internal static class BassCandidates
 
         var values = new double[pooled.Count, offsets[n]];
         double[,]? logCdfs = cdf ? new double[pooled.Count, offsets[n]] : null;
+        // Under the latent-posterior reading, each candidate's latent drawn from its exact conditional given its residual, in draw, case and grid
+        // order on one stream, and its term at that latent.
+        double[,]? conditionedValues = conditioned ? new double[pooled.Count, offsets[n]] : null;
+        Xoshiro256PlusPlus? rng = conditioned ? new Xoshiro256PlusPlus(seed) : null;
         var f = new double[n];
         double[]? widened = fresh is not null && fresh.Any(x => x) ? new double[n] : null;
         for (int s = 0; s < pooled.Count; s++)
@@ -105,6 +120,15 @@ internal static class BassCandidates
             }
             double sigma2 = draw.Sigma2;
             ObservationLatents? globals = law is null ? null : draw.LatentsOn(model);
+            Func<double, double, double, double>? drawLatent = null;
+            double unitVariance = 0.0, unitDrift = 0.0;
+            if (conditioned)
+            {
+                var mixture = (VarianceMeanMixture)model.Observation;
+                drawLatent = ExactDraw(mixture.MixingAt(globals), rng!);
+                unitVariance = sigma2 * mixture.VarianceScale;
+                unitDrift = Math.Sqrt(sigma2) * (globals?.Skew ?? 0.0);
+            }
             IContinuousDistribution? noise = cdf && law is not null ? law.At(sigma2, globals) : null;
             double normalizer = -0.5 * Math.Log(2.0 * Math.PI * sigma2), sigma = Math.Sqrt(sigma2);
             for (int t = 0; t < n; t++)
@@ -142,13 +166,16 @@ internal static class BassCandidates
                     double e = grid[g] - f[t];
                     values[s, at + g] = law is not null ? law.LogDensity(e, sigma2, globals)
                         : w is null ? BassPointwise.NormalTerm(e, sigma2, normalizer) : BassPointwise.WeightedNormalTerm(e, sigma2, normalizer, w[t], counts);
+                    if (drawLatent is not null)
+                        conditionedValues![s, at + g] = BassPointwise.ConditionedTerm(e, drawLatent(e, unitVariance, unitDrift), unitVariance, unitDrift);
                     if (logCdfs is not null)
                         logCdfs[s, at + g] = noise is not null ? LogCdf(noise, e)
                             : w is null ? Normal.StandardLogCdf(e / sigma) : BassPointwise.WeightedNormalLogCdf(e, sigma, w[t], counts);
                 }
             }
         }
-        List<LatentReport> latents = BassPointwise.Latents(model, pooled, collapsed: false);
+        List<LatentReport> latents = BassPointwise.Latents(model, pooled, collapsed: false,
+                                                           conditioned ? LatentTreatment.Conditioned : LatentTreatment.Integrated);
         bool anyNew = fresh is not null && fresh.Any(x => x);
         if (anyNew)
         {
@@ -158,8 +185,8 @@ internal static class BassCandidates
                 if (latents[i].Name == BassPointwise.GroupEffects) latents[i] = latents[i] with { Treatment = treatment };
         }
         CandidateLogDensity density = weights is null
-            ? new CandidateLogDensity(values, grids, latents, strata, chains) { LogCdf = logCdfs }
-            : new CandidateLogDensity(values, grids, latents, strata) { Weights = weights, LogCdf = logCdfs };
+            ? new CandidateLogDensity(values, grids, latents, strata, chains) { LogCdf = logCdfs, ConditionedValues = conditionedValues }
+            : new CandidateLogDensity(values, grids, latents, strata) { Weights = weights, LogCdf = logCdfs, ConditionedValues = conditionedValues };
         if (!anyNew) return density;
         return density with
         {
@@ -169,6 +196,17 @@ internal static class BassCandidates
                           + "in-sample scores would read the candidate by another density, which undercovers (CB-4).",
         };
     }
+
+    /// <summary>A latent v from its exact conditional given the residual (e, s², m) at likelihood power 1: Student t's, the exponential's
+    /// and the GIG's draws. A law whose conditional is a slice step from the current value has none, and is refused.</summary>
+    private static Func<double, double, double, double> ExactDraw(IMixingLaw mixing, Xoshiro256PlusPlus rng) => mixing switch
+    {
+        StudentTMixing t => (e, s2, m) => t.SampleConditional(e, s2, m, 1.0, rng),
+        ExponentialMixing x => (e, s2, m) => x.SampleConditional(e, s2, m, 1.0, rng),
+        GigMixing g => (e, s2, m) => g.SampleConditional(e, s2, m, 1.0, rng),
+        _ => throw new NotSupportedException("This noise's latent has no exact draw from its conditional, only a step from its current value, so the "
+                                             + "latent-posterior reading cannot draw a candidate's latent."),
+    };
 
     /// <summary>
     /// Each draw's log CDF at each training unit's response, ln F(y_u | x_u, θ_s), draws × units in the pooled draws' rows, for the

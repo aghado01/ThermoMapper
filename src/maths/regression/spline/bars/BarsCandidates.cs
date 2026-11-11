@@ -2,6 +2,7 @@ using System;
 using System.Collections.Generic;
 using Maths.Distributions;
 using Maths.Regression.GPrior;
+using Maths.Rng;
 
 namespace Maths.Regression.Spline.Bars;
 
@@ -25,11 +26,20 @@ public sealed partial class BarsEnsemble
     /// <param name="quadrature">Takes a noise whose marginal is an integral over v, draws × candidates integrals; refused without it, as
     /// <see cref="PointwiseLogDensity"/> refuses it.</param>
     /// <param name="cdf">Adds each draw's log CDF at each candidate, for the conformal predictive distribution.</param>
+    /// <param name="observationLatents">CB-4's reading of each observation's latent, the robust weight or the noise's scale: integrated, the
+    /// default; or <see cref="LatentTreatment.Conditioned"/>, the latent-posterior reading (the conformal layer's slice 12b), beside the
+    /// training density's conditioned content. Under it each candidate's latent is drawn per draw from its exact conditional given the
+    /// candidate's value, p(v′ | θ_s, y), on a stream from <paramref name="seed"/>, and ln N(y | η + m·v′, σ²/w′) is
+    /// <see cref="Maths.Regression.CandidateLogDensity.ConditionedValues"/>; the values stay the integrated terms, the add-one-in weights. A
+    /// noise without an exact conditional draw (the generalized beta prime's slice step) is refused, and so is the CDF.</param>
+    /// <param name="seed">The candidates' latent draws' seed under the conditioned reading.</param>
     public CandidateLogDensity CandidateLogDensity(BarsResult result, double[] x, IReadOnlyList<double[]> grids, int[]? strata = null,
-                                                   bool quadrature = false, bool cdf = false)
+                                                   bool quadrature = false, bool cdf = false,
+                                                   LatentTreatment observationLatents = LatentTreatment.Integrated, int seed = 0)
     {
         ArgumentNullException.ThrowIfNull(result);
         ArgumentNullException.ThrowIfNull(x);
+        bool conditioned = CheckObservationLatents(observationLatents, cdf);
         CheckQuadrature(quadrature);
         Func<double, double, double, double> term = RetainedTerm();
         if (cdf) CheckLogCdf();
@@ -46,6 +56,9 @@ public sealed partial class BarsEnsemble
         foreach (IReadOnlyList<BarsDraw> chain in result.Draws) draws += chain.Count;
         var values = new double[draws, offsets[cases]];
         double[,]? logCdfs = cdf ? new double[draws, offsets[cases]] : null;
+        Func<BarsDraw, double[], Xoshiro256PlusPlus, double[]>? drawLatents = conditioned ? LatentDraws() : null;
+        double[,]? conditionedValues = drawLatents is null ? null : new double[draws, offsets[cases]];
+        Xoshiro256PlusPlus? rng = drawLatents is null ? null : new Xoshiro256PlusPlus(seed);
         int row = 0;
         foreach (IReadOnlyList<BarsDraw> chain in result.Draws)
             foreach (BarsDraw d in chain)
@@ -61,10 +74,66 @@ public sealed partial class BarsEnsemble
                         values[row, offsets[t] + g] = inSupport(grid[g]) ? Term(term, grid[g], eta, d) : double.NegativeInfinity;
                         if (logCdf is not null) logCdfs![row, offsets[t] + g] = logCdf(grid[g], eta);
                     }
+                    if (drawLatents is null) continue;
+                    var residuals = new double[grid.Length];
+                    for (int g = 0; g < grid.Length; g++) residuals[g] = grid[g] - eta;
+                    double[] weights = drawLatents(d, residuals, rng!);
+                    for (int g = 0; g < grid.Length; g++) conditionedValues![row, offsets[t] + g] = ConditionedTerm(d, residuals[g], weights[g]);
                 }
                 row++;
             }
-        return new CandidateLogDensity(values, grids, RetainedLatents(), strata, ChainLengths.Of(result.Draws)) { LogCdf = logCdfs };
+        return new CandidateLogDensity(values, grids, RetainedLatents(observationLatents), strata, ChainLengths.Of(result.Draws))
+        {
+            LogCdf = logCdfs,
+            ConditionedValues = conditionedValues,
+        };
+    }
+
+    // Whether the model holds an observation latent: a robust weight, or a noise's scale.
+    private bool HasObservationLatents => _model is WeightedNormalModel && (_resampler is not null || _noise is not null);
+
+    // Integrated or conditioned, the latter refusing the CDF, which the predictive distribution reads with the latents integrated; true when
+    // conditioned and the model holds a latent to condition on.
+    private bool CheckObservationLatents(LatentTreatment observationLatents, bool cdf)
+    {
+        if (observationLatents is not (LatentTreatment.Integrated or LatentTreatment.Conditioned))
+            throw new ArgumentOutOfRangeException(nameof(observationLatents), "An observation's latent is read integrated or conditioned.");
+        if (observationLatents == LatentTreatment.Integrated || !HasObservationLatents) return false;
+        if (cdf) throw new ArgumentException("The CDF is read with each observation's latent integrated, as the predictive distribution reads it.", nameof(cdf));
+        return true;
+    }
+
+    // ln f(e | θ, the observation's latent) at a draw: N(e; m·v, σ²/w), with w the latent's precision weight, the robust weight or 1/(c·v)
+    // under a noise, and m·v the noise's skew shift, m = √σ²·β. The training terms and the candidates' conditioned terms share it.
+    internal double ConditionedTerm(BarsDraw d, double residual, double weight)
+    {
+        double shift = _noise is { } noise ? Math.Sqrt(d.Sigma2) * d.Skew / (noise.VarianceScale * weight) : 0.0;
+        double variance = d.Sigma2 / weight, e = residual - shift;
+        return -0.5 * Math.Log(2.0 * Math.PI * variance) - 0.5 * e * e / variance;
+    }
+
+    // Each candidate's latent drawn from its exact conditional given its residual at a draw, as a precision weight: the robust weights'
+    // resampler on the grid's residuals at once, or the noise's mixing law, v′ given r with s² = σ²c and m = √σ²·β, read as w′ = 1/(c·v′). A
+    // law whose conditional is a slice step from the current value has no exact draw, and is refused.
+    internal Func<BarsDraw, double[], Xoshiro256PlusPlus, double[]> LatentDraws()
+    {
+        if (_noise is not { } noise) return (d, residuals, rng) => _resampler!.Resample(residuals, d.Sigma2, rng);
+        Func<double, double, double, Xoshiro256PlusPlus, double> draw = noise.Mixing switch
+        {
+            StudentTMixing t => (r, s2, m, rng) => t.SampleConditional(r, s2, m, 1.0, rng),
+            ExponentialMixing e => (r, s2, m, rng) => e.SampleConditional(r, s2, m, 1.0, rng),
+            GigMixing g => (r, s2, m, rng) => g.SampleConditional(r, s2, m, 1.0, rng),
+            _ => throw new NotSupportedException($"{noise.Name}'s latent has no exact draw from its conditional, only a step from its current value, "
+                                                 + "so the latent-posterior reading cannot draw a candidate's latent."),
+        };
+        double c = noise.VarianceScale;
+        return (d, residuals, rng) =>
+        {
+            double s2 = d.Sigma2 * c, m = Math.Sqrt(d.Sigma2) * d.Skew;
+            var weights = new double[residuals.Length];
+            for (int g = 0; g < residuals.Length; g++) weights[g] = 1.0 / (c * draw(residuals[g], s2, m, rng));
+            return weights;
+        };
     }
 
     // ηᵢ = zᵢβ, summed in column order: the training terms' and the candidates' one arithmetic.
@@ -92,8 +161,9 @@ public sealed partial class BarsEnsemble
             $"{_model.GetType().Name} has no pointwise density: its likelihood is a pseudo-likelihood, not a density of a new observation."),
     };
 
-    // The retained parameters' latents: knots, coefficients and σ² global and conditioned on, each observation's weight or scale integrated.
-    private List<LatentReport> RetainedLatents()
+    // The retained parameters' latents: knots, coefficients and σ² global and conditioned on, each observation's weight or scale integrated, or
+    // conditioned under the latent-posterior reading.
+    private List<LatentReport> RetainedLatents(LatentTreatment observation = LatentTreatment.Integrated)
     {
         var latents = new List<LatentReport>
         {
@@ -103,10 +173,10 @@ public sealed partial class BarsEnsemble
         if (_model is WeightedNormalModel)
         {
             latents.Add(new LatentReport("noise variance σ²", LatentScope.Global, LatentTreatment.Conditioned));
-            if (_resampler is not null) latents.Add(new LatentReport("robust weights wᵢ", LatentScope.Observation, LatentTreatment.Integrated));
+            if (_resampler is not null) latents.Add(new LatentReport("robust weights wᵢ", LatentScope.Observation, observation));
             if (_noise is { } noise)
             {
-                latents.Add(new LatentReport("latent scales vᵢ", LatentScope.Observation, LatentTreatment.Integrated));
+                latents.Add(new LatentReport("latent scales vᵢ", LatentScope.Observation, observation));
                 if (noise.SkewPrior is not null) latents.Add(new LatentReport("skew β", LatentScope.Global, LatentTreatment.Conditioned));
             }
         }

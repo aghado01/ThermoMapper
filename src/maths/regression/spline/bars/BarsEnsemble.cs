@@ -657,9 +657,13 @@ public sealed partial class BarsEnsemble : IEnsembleModel<KnotConfig>
     /// <param name="cdf">Adds each draw's log CDF at each unit's response (<see cref="Maths.Regression.PointwiseLogDensity.LogCdf"/>), from
     /// the term's own law, for the full step's predictive distribution: the retained parameters' content, each unit one observation, and a
     /// continuous response. The candidates' log CDF (<see cref="CandidateLogDensity"/>) reads the same law.</param>
+    /// <param name="observationLatents">CB-4's reading of each observation's latent: integrated, the default; or
+    /// <see cref="LatentTreatment.Conditioned"/>, the latent-posterior reading (the conformal layer's slice 12b), each term at its draw's
+    /// retained latent, ln N(yᵢ | ηᵢ + m·vᵢ, σ²/wᵢ) with the draw's weight wᵢ (the robust weight, or 1/(c·vᵢ) under a noise), for the retained
+    /// parameters' content without the CDF. The candidates' seam takes the same reading.</param>
     public PointwiseLogDensity PointwiseLogDensity(BarsResult result, double[] x, double[] y, UnitPartition? units = null,
                                                    PointwiseContent content = PointwiseContent.RetainedParameters, bool quadrature = false,
-                                                   bool cdf = false)
+                                                   bool cdf = false, LatentTreatment observationLatents = LatentTreatment.Integrated)
     {
         ArgumentNullException.ThrowIfNull(result);
         ArgumentNullException.ThrowIfNull(x);
@@ -670,8 +674,10 @@ public sealed partial class BarsEnsemble : IEnsembleModel<KnotConfig>
             throw new ArgumentException("The partition must cover the fitted observations.", nameof(units));
         if (content is not (PointwiseContent.RetainedParameters or PointwiseContent.CollapsedPredictive))
             throw new ArgumentOutOfRangeException(nameof(content));
+        bool conditioned = CheckObservationLatents(observationLatents, cdf);
         if (content == PointwiseContent.CollapsedPredictive)
             return cdf ? throw new ArgumentException("The CDF is read for the retained parameters' content.", nameof(cdf))
+                       : conditioned ? throw new ArgumentException("The latents are read conditioned in the retained parameters' content.", nameof(observationLatents))
                        : CollapsedPointwise(result, x, y, partition);
         CheckQuadrature(quadrature);
         Func<double, double, double, double> term = RetainedTerm();
@@ -692,11 +698,12 @@ public sealed partial class BarsEnsemble : IEnsembleModel<KnotConfig>
             foreach (BarsDraw d in chain)
             {
                 double[,] z = _basis.Design(d.Knots, x);
+                if (conditioned && d.Weights is null) throw new InvalidOperationException("A retained draw kept no latents to condition on.");
                 for (int i = 0; i < n; i++)
                 {
                     double eta = Linear(z, i, d.Coefficients);
                     etas[i] = eta;
-                    terms[i] = Term(term, y[i], eta, d);
+                    terms[i] = conditioned ? ConditionedTerm(d, y[i] - eta, d.Weights![i]) : Term(term, y[i], eta, d);
                 }
                 for (int u = 0; u < partition.Units; u++)
                 {
@@ -715,7 +722,7 @@ public sealed partial class BarsEnsemble : IEnsembleModel<KnotConfig>
                 }
                 row++;
             }
-        return new PointwiseLogDensity(values, partition, RetainedLatents(), ChainLengths.Of(result.Draws)) { LogCdf = logCdfs };
+        return new PointwiseLogDensity(values, partition, RetainedLatents(observationLatents), ChainLengths.Of(result.Draws)) { LogCdf = logCdfs };
     }
 
     // The collapsed content: each draw's knots refitted, and its fit's leave-unit-out predictive per unit.

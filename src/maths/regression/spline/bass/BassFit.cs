@@ -56,15 +56,19 @@ public sealed record BassFit(
     /// level indices refer to that data's inputs, so data with another fingerprint are refused. <paramref name="quadrature"/> takes a noise
     /// whose density is an integral over each observation's latent, which costs N × draws integrals. <paramref name="cdf"/> adds each
     /// draw's log CDF at each unit's response (<see cref="Maths.Regression.PointwiseLogDensity.LogCdf"/>, <see cref="BassCandidates.UnitLogCdf"/>),
-    /// for the conformal predictive distribution: the retained content, each unit one observation.
+    /// for the conformal predictive distribution: the retained content, each unit one observation. <paramref name="observationLatents"/>
+    /// reads a noise law's latent per observation integrated, the default, or conditioned on each draw's retained value, the latent-posterior
+    /// reading (the conformal layer's slice 12b; <see cref="BassPointwise.LogDensity"/>), without the CDF.
     /// </summary>
     public PointwiseLogDensity PointwiseLogDensity(BassData data, UnitPartition? units = null,
                                                    PointwiseContent content = PointwiseContent.RetainedParameters, bool quadrature = false,
-                                                   bool cdf = false)
+                                                   bool cdf = false, LatentTreatment observationLatents = LatentTreatment.Integrated)
     {
         BassModel model = ModelOn(data);
         if (cdf && content != PointwiseContent.RetainedParameters)
             throw new ArgumentException("The CDF is the retained parameters' own; the collapsed content's terms leave each unit out.", nameof(cdf));
+        if (cdf && BassPointwise.ConditionsLatents(model, observationLatents))
+            throw new ArgumentException("The CDF is read with each observation's latent integrated, as the predictive distribution reads it.", nameof(cdf));
         // Under random effects a stratum lies inside one cell (E21's slice 5). A partition without strata reads as one stratum, which LOO and
         // WAIC pass, so the check reads a partition that gives more than one.
         if (model.RandomEffects is not null && units is not null && units.StratumOf.Distinct().Skip(1).Any())
@@ -72,7 +76,7 @@ public sealed record BassFit(
             int[] cells = BassGroupCells.Of(model, null, UnseenLevel.Refuse).Training;
             BassGroupCells.CheckStrata(units.StratumOf, u => units.Members[u].Select(i => cells[i]), nameof(units));
         }
-        PointwiseLogDensity density = BassPointwise.LogDensity(model, Terms, Draws, units, content, DrawWeights, quadrature);
+        PointwiseLogDensity density = BassPointwise.LogDensity(model, Terms, Draws, units, content, DrawWeights, quadrature, observationLatents);
         return cdf ? density with { LogCdf = BassCandidates.UnitLogCdf(model, Terms, Draws, density.Units) } : density;
     }
 
@@ -93,12 +97,19 @@ public sealed record BassFit(
     /// conformal predictive distribution. A noise without a closed-form CDF builds one table of its tails per draw.</param>
     /// <param name="caseWeights">Each case's weight, for a fit on data with case weights (<see cref="BassData.Weights"/>), read at their
     /// meaning as the training rows' are; required by such a fit and refused by any other.</param>
+    /// <param name="observationLatents">A noise law's latent per observation read integrated, the default, or conditioned: the latent-posterior
+    /// reading (the conformal layer's slice 12b), each candidate's latent drawn per draw from its exact conditional given its residual net of
+    /// f and the group effects, its term at that latent the seam's <see cref="Maths.Regression.CandidateLogDensity.ConditionedValues"/>, beside
+    /// the integrated values the weights read. Laws without an exact conditional draw, new groups and the CDF are refused under it.</param>
+    /// <param name="seed">The candidates' latent draws' seed under the conditioned reading.</param>
     public CandidateLogDensity CandidateLogDensity(BassData data, PredictionCases cases, IReadOnlyList<double[]> grids, int[]? strata = null,
                                                    UnseenLevel unseenLevels = UnseenLevel.Refuse, bool quadrature = false, bool cdf = false,
-                                                   IReadOnlyList<double>? caseWeights = null)
+                                                   IReadOnlyList<double>? caseWeights = null,
+                                                   LatentTreatment observationLatents = LatentTreatment.Integrated, int seed = 0)
     {
         BassModel model = ModelOn(data);
-        return BassCandidates.LogDensity(model, Terms, Draws, DrawWeights, cases, grids, strata, unseenLevels, quadrature, cdf, caseWeights);
+        return BassCandidates.LogDensity(model, Terms, Draws, DrawWeights, cases, grids, strata, unseenLevels, quadrature, cdf, caseWeights,
+                                         observationLatents, seed);
     }
 
     /// <summary>

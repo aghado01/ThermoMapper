@@ -59,17 +59,23 @@ public static class BassPointwise
     /// <param name="weights">One weight per draw, pooled in chain order; null for equal weights (MCMC).</param>
     /// <param name="quadrature">Takes a noise law whose density is an integral over each observation's latent
     /// (<see cref="IBassNoiseLaw.DensityByQuadrature"/>), N × draws integrals of hundreds of nodes each; refused without it.</param>
+    /// <param name="observationLatents">CB-4's reading of a noise law's latent per observation: integrated, the default; or
+    /// <see cref="LatentTreatment.Conditioned"/>, the latent-posterior reading (the conformal layer's slice 12b), each term at its draw's
+    /// retained latent, ln N(eᵢ | σβvᵢ, σ²c·vᵢ) with eᵢ the residual net of f and the draw's group effects, no quadrature needed. Without a
+    /// noise law there is no such latent, and the terms read alike.</param>
     public static PointwiseLogDensity LogDensity(BassModel model, BassTermTable terms, IReadOnlyList<IReadOnlyList<BassDraw>> draws,
                                                  UnitPartition? units = null,
                                                  PointwiseContent content = PointwiseContent.RetainedParameters,
-                                                 IReadOnlyList<double>? weights = null, bool quadrature = false)
+                                                 IReadOnlyList<double>? weights = null, bool quadrature = false,
+                                                 LatentTreatment observationLatents = LatentTreatment.Integrated)
     {
         ArgumentNullException.ThrowIfNull(model);
         ArgumentNullException.ThrowIfNull(terms);
         ArgumentNullException.ThrowIfNull(draws);
         if (content is not (PointwiseContent.RetainedParameters or PointwiseContent.CollapsedPredictive))
             throw new ArgumentOutOfRangeException(nameof(content));
-        if (content == PointwiseContent.RetainedParameters && model.Observation.Law is { DensityByQuadrature: true } && !quadrature)
+        bool conditioned = ConditionsLatents(model, observationLatents);
+        if (content == PointwiseContent.RetainedParameters && model.Observation.Law is { DensityByQuadrature: true } && !quadrature && !conditioned)
             throw new NotSupportedException("This noise's density is an integral over each observation's latent, N × draws integrals of hundreds "
                                             + "of nodes each; pass quadrature: true to take it.");
         UnitPartition partition = units ?? DefaultUnits(model);
@@ -94,9 +100,9 @@ public static class BassPointwise
         }
         (List<BassDraw> pooled, int[] chains) = BassDrawFit.Pool(draws, terms, collapsed, nameof(draws));
         var fit = new BassDrawFit(model, terms);
-        double[,] values = collapsed ? Collapsed(model, fit, pooled, partition, nameof(draws)) : Retained(model, fit, pooled, partition);
+        double[,] values = collapsed ? Collapsed(model, fit, pooled, partition, nameof(draws)) : Retained(model, fit, pooled, partition, conditioned);
 
-        List<LatentReport> latents = Latents(model, pooled, collapsed);
+        List<LatentReport> latents = Latents(model, pooled, collapsed, conditioned ? LatentTreatment.Conditioned : LatentTreatment.Integrated);
         return weights is null
             ? new PointwiseLogDensity(values, partition, latents, chains)
             : new PointwiseLogDensity(values, partition, latents) { Weights = weights };
@@ -112,7 +118,8 @@ public static class BassPointwise
     /// weights conditioned on. The candidate density (<see cref="BassCandidates"/>) reports the same, since every unit is read by one
     /// density (CB-4).
     /// </summary>
-    internal static List<LatentReport> Latents(BassModel model, List<BassDraw> pooled, bool collapsed)
+    internal static List<LatentReport> Latents(BassModel model, List<BassDraw> pooled, bool collapsed,
+                                               LatentTreatment observation = LatentTreatment.Integrated)
     {
         LatentTreatment treatment = collapsed ? LatentTreatment.IntegratedGivenOthers : LatentTreatment.Conditioned;
         var latents = new List<LatentReport> { new("structure", LatentScope.Global, LatentTreatment.Conditioned) };
@@ -121,7 +128,7 @@ public static class BassPointwise
         if (model.RandomEffects is not null)   // each draw's effects, read at its levels; the whitening is the block's integral, not an offset
             latents.Add(new LatentReport(GroupEffects, LatentScope.Group, LatentTreatment.Conditioned));
         if (model.Observation.Law is not null)   // under a noise, beside the group effects too (E21's slice 5)
-            latents.Add(new LatentReport("the noise's latent per observation", LatentScope.Observation, LatentTreatment.Integrated));
+            latents.Add(new LatentReport("the noise's latent per observation", LatentScope.Observation, observation));
         else if (model.RandomEffects is null && Moved(model, pooled))
             latents.Add(new LatentReport("the working response's offset and weights", LatentScope.Observation, LatentTreatment.Conditioned));
         latents.Add(new LatentReport("coefficients a", LatentScope.Global, treatment));
@@ -132,7 +139,7 @@ public static class BassPointwise
     // Each draw's Normal log terms at its fit and σ², summed over each unit's observations: on the working response it was composed on,
     // under W at its meaning, N(y | f, σ²/w) or w copies of N(y | f, σ²). Under a noise law, the law's density of y − f, each
     // observation's latent integrated out.
-    private static double[,] Retained(BassModel model, BassDrawFit fit, List<BassDraw> pooled, UnitPartition partition)
+    private static double[,] Retained(BassModel model, BassDrawFit fit, List<BassDraw> pooled, UnitPartition partition, bool conditioned = false)
     {
         int n = model.Data.Response.Observations;
         var values = new double[pooled.Count, partition.Units];
@@ -147,7 +154,15 @@ public static class BassPointwise
                 ReadOnlySpan<double> observed = model.Data.Response.Values;
                 ObservationLatents? globals = draw.LatentsOn(model);
                 fit.Evaluate(draw, f);
-                for (int i = 0; i < n; i++) log[i] = law.LogDensity(observed[i] - f[i], draw.Sigma2, globals);
+                if (conditioned)
+                {
+                    // Each observation at its retained latent: N(e | σβv, σ²c·v).
+                    ReadOnlySpan<double> v = (globals ?? throw new InvalidOperationException("A retained draw kept no latents to condition on.")).Values;
+                    double unit = draw.Sigma2 * ((VarianceMeanMixture)model.Observation).VarianceScale, drift = Math.Sqrt(draw.Sigma2) * globals.Skew;
+                    for (int i = 0; i < n; i++) log[i] = ConditionedTerm(observed[i] - f[i], v[i], unit, drift);
+                }
+                else
+                    for (int i = 0; i < n; i++) log[i] = law.LogDensity(observed[i] - f[i], draw.Sigma2, globals);
                 Sum(log, partition, values, s);
                 continue;
             }
@@ -193,6 +208,22 @@ public static class BassPointwise
     // One observation's Normal log term at residual e under σ², normalizer −½ln 2πσ²: N(y | f, σ²) at unit weight. The training and
     // candidate densities (BassCandidates) both read these, so a training case's term is the same bits through either.
     internal static double NormalTerm(double e, double sigma2, double normalizer) => normalizer - 0.5 * e * e / sigma2;
+
+    /// <summary>ln N(e | m·v, s²·v): a noise law's term at the latent v, with the unit variance s² = σ²c and the drift m = σβ (CB-4(c)).</summary>
+    internal static double ConditionedTerm(double e, double v, double unitVariance, double drift)
+    {
+        double variance = unitVariance * v, d = e - drift * v;
+        return -0.5 * Math.Log(2.0 * Math.PI * variance) - 0.5 * d * d / variance;
+    }
+
+    /// <summary>Whether <paramref name="observationLatents"/> conditions on a noise law's latent: integrated or conditioned, and conditioned
+    /// only where the model has a noise law.</summary>
+    internal static bool ConditionsLatents(BassModel model, LatentTreatment observationLatents)
+    {
+        if (observationLatents is not (LatentTreatment.Integrated or LatentTreatment.Conditioned))
+            throw new ArgumentOutOfRangeException(nameof(observationLatents), "An observation's latent is read integrated or conditioned.");
+        return observationLatents == LatentTreatment.Conditioned && model.Observation.Law is not null;
+    }
 
     // The term under weight w at its meaning: w copies of N(y | f, σ²) when the weights count rows, N(y | f, σ²/w) at a precision.
     internal static double WeightedNormalTerm(double e, double sigma2, double normalizer, double w, bool counts)

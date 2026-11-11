@@ -141,6 +141,31 @@ public sealed record CandidateLogDensity
             : throw new ArgumentException($"One flag per case is required: {value.Length} flags for {Grids.Count} cases.", nameof(NewGroup));
     }
 
+    /// <summary>
+    /// CB-4(c)'s reading of each candidate (the conformal layer's slice 12b), in <see cref="Values"/>' layout: ln f(y | x_t, θ_s, v′_s), the
+    /// candidate's observation latents v′ drawn per draw from their conditional given its value, p(v′ | θ_s, y), or that reading's
+    /// conditional mean, ln E[f(y | x_t, θ_s, v) | θ_s, y]. <see cref="Values"/> stays ln g(y | x_t, θ_s), each latent integrated, which
+    /// the add-one-in weights read. An engine gives it beside a training density whose observation latents are conditioned on each draw's
+    /// retained values, and reports the candidates' observation latents conditioned as the training units' are (<see cref="Latents"/>), so
+    /// every unit reads alike; null otherwise. The full step reads it under its latent-posterior option.
+    /// </summary>
+    public double[,]? ConditionedValues
+    {
+        get;
+        init
+        {
+            if (value is not null)
+            {
+                if (value.GetLength(0) != Values.GetLength(0) || value.GetLength(1) != Values.GetLength(1))
+                    throw new ArgumentException("The conditioned reading must have the values' layout.", nameof(ConditionedValues));
+                foreach (double v in value)
+                    if (double.IsNaN(v) || double.IsPositiveInfinity(v))
+                        throw new ArgumentException("A candidate's conditioned log term is NaN or +∞.", nameof(ConditionedValues));
+            }
+            field = value;
+        }
+    }
+
     /// <summary>Refuses the seam in <paramref name="form"/> when it does not serve it, quoting the engine's reason.</summary>
     internal void CheckServes(ConformalForms form, string parameter)
     {

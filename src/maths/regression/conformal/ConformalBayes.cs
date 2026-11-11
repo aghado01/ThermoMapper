@@ -82,6 +82,31 @@ public sealed record ConformalOptions
     /// as slice 8's crossings are. Needs the margin (<see cref="MarginBounds"/>).
     /// </summary>
     public MarginRefinement? MarginRefinement { get; init; }
+
+    /// <summary>
+    /// How every unit reads its observation latents (CB-4; <see cref="LatentReading"/>): integrated by default, CB-4(b); or conditioned,
+    /// CB-4(c)'s latent-posterior reading, an opt-in (the conformal layer's slice 12b). Under it the margin and the leave-one-out score are
+    /// refused, each reading the training terms as something they no longer are.
+    /// </summary>
+    public LatentReading ObservationLatents { get; init; } = LatentReading.Integrated;
+}
+
+/// <summary>How the full step's units read their observation latents (<see cref="ConformalOptions.ObservationLatents"/>, CB-4).</summary>
+public enum LatentReading
+{
+    /// <summary>CB-4(b), the default: every unit's term integrates its observation latents, g(z | θ) (<c>integratedScore_equivariant</c>).</summary>
+    Integrated,
+
+    /// <summary>
+    /// CB-4(c), the latent-posterior reading (<c>latentScore_equivariant</c>, <c>latentScore_eq</c>): each training unit reads its retained
+    /// latents, f(zᵢ | θ_s, v_s,i), the training density's conditioned content, and the candidate reads its own latents drawn per draw from
+    /// their conditional given its value, f(y | θ_s, v′_s) (<see cref="CandidateLogDensity.ConditionedValues"/>), under the add-one-in
+    /// weights g(y | θ_s). The weighted readings are the latent-posterior score of every unit, the candidate included
+    /// (<c>latentScore_some_draws</c>, <c>latentScore_none_draws</c>), so it covers as the default does. The drawn latent adds
+    /// Σ_s w̃_s² Var(f | θ_s, y) to the candidate's estimate, which its bound carries; a seam reading the conditional mean instead removes it
+    /// (<c>drawnLatent_mean_var</c>). A density with no observation latent reads alike either way.
+    /// </summary>
+    Conditioned,
 }
 
 /// <summary>
@@ -310,7 +335,8 @@ public sealed record ConformalMargin(double Multiple, double[] CandidateErrors, 
 /// <param name="Tied">Those scoring equal to it; the strict rule (accept when Below ≥ k) and random tie-breaking read
 /// these with <see cref="Below"/>.</param>
 /// <param name="CandidateScores">The candidate's own log conformity score at y_g, ln p(y_g | all m units), in the split form
-/// ln p(y_g | the training split); under the leave-one-out score ln A = ln p(y_g | the n units); −∞ outside every draw's support. Null
+/// ln p(y_g | the training split); under the leave-one-out score ln A = ln p(y_g | the n units); under the latent-posterior reading
+/// ln Σ_s w̃_s f(y_g | θ_s, v′_s), its latents drawn from their conditional; −∞ outside every draw's support. Null
 /// in the pairwise form, which has one score per fit.</param>
 /// <param name="EffectiveSampleSizes">Kish's ESS of the add-one-in weights at y_g, 1/Σ w̃²; under the leave-one-out score the least
 /// of the data units' weights' ESS, each unit's W̄_s p(y_g | θ_s)/p(zᵢ | θ_s); 0 outside every draw's support; null in the split form.</param>
@@ -514,7 +540,8 @@ public sealed record ConformalScores(int[] Units, double[] Scores, double Candid
 /// represent (<see cref="ConformalMargin"/>).</item>
 /// <item><b>Refused</b> (CB-4): leave-unit-out terms (<see cref="PointwiseLogDensity.LeavesUnitsOut"/>, the collapsed
 /// predictive), whose rest excludes the candidate; a latent of one observation's term conditioned on or mixed, which reads
-/// the data units at their retained latents and the candidate otherwise and undercovers (<c>mixed_counterexample</c>); a
+/// the data units at their retained latents and the candidate otherwise and undercovers (<c>mixed_counterexample</c>), unless every
+/// unit reads its latents conditioned, the candidate's drawn from their conditional (<see cref="LatentReading.Conditioned"/>, opt-in); a
 /// candidate whose latents are treated otherwise than the training units'; draws that do not align; and a seam whose engine names it the
 /// split form's only (<see cref="CandidateLogDensity.Forms"/>), quoting the engine's reason.</item>
 /// <item><b>Hoff's leave-one-out score,</b> an opt-in (<see cref="FullStepScore.LeaveOneOut"/>): each unit scored given every other
@@ -562,7 +589,10 @@ public static class ConformalBayes
         if (leaveOneOut && options.FallbackShare is not null)
             throw new ArgumentException("The fallback rule reads the margin's trust in the add-one-in weights' k̂; under the leave-one-out score each data "
                                         + "unit has weights of its own, and that rule is not built for them.", nameof(options));
-        Check(training, candidates);
+        bool conditioned = options.ObservationLatents == LatentReading.Conditioned;
+        CheckReading(options.ObservationLatents, options.MarginBounds is not null, leaveOneOut);
+        Check(training, candidates, conditioned);
+        double[,]? ownTerms = conditioned ? candidates.ConditionedValues : null;
         (int[] rows, double[]? logWeights) = PredictiveChecks.Rows(training);
         Dictionary<int, List<int>> units = UnitsByStratum(training.Units);
 
@@ -612,10 +642,10 @@ public static class ConformalBayes
                 for (int b0 = 0; b0 < g; b0 += Batch)
                 {
                     int count = Math.Min(Batch, g - b0);
-                    scorer.Rank(candidates.Values, offset + b0, count, r.Slice(b0));
+                    scorer.Rank(candidates.Values, offset + b0, count, r.Slice(b0), ownTerms);
                     if (halves is not { } h2) continue;
-                    h2.A.Rank(candidates.Values, offset + b0, count, ra!.Value.Slice(b0));
-                    h2.B.Rank(candidates.Values, offset + b0, count, rb!.Value.Slice(b0));
+                    h2.A.Rank(candidates.Values, offset + b0, count, ra!.Value.Slice(b0), ownTerms);
+                    h2.B.Rank(candidates.Values, offset + b0, count, rb!.Value.Slice(b0), ownTerms);
                 }
                 (double splitMass, int disagreements) = SplitHalf(candidates.Grids[t], r, ra, rb, k);
                 var p = new double[g];
@@ -698,6 +728,8 @@ public static class ConformalBayes
         if (!(options.ErrorLevel > 0 && options.ErrorLevel < 1)) throw new ArgumentOutOfRangeException(nameof(options));
         if (options.Score != FullStepScore.InSample || options.FallbackShare is not null || options.LeaveOneOutParetoK)
             throw new ArgumentException("CDF margins use the in-sample CDF score and no density-score fallback or leave-one-out diagnostics.", nameof(options));
+        if (options.ObservationLatents != LatentReading.Integrated)
+            throw new ArgumentException("The CDF score reads every observation latent integrated; the latent-posterior reading is the density score's.", nameof(options));
         if (options.MarginBounds is { } bounds && !Enum.IsDefined(bounds)) throw new ArgumentOutOfRangeException(nameof(options));
         if (!Enum.IsDefined(options.InflationBounds)) throw new ArgumentOutOfRangeException(nameof(options));
         if (options.MarginBounds == MarginBounds.Kept && !(double.IsFinite(options.DegenerateEss) && options.DegenerateEss > 0))
@@ -758,11 +790,12 @@ public static class ConformalBayes
     /// each error is ln B̂ᵢ's, and the candidate's is 0: Â is common to every unit.
     /// </summary>
     public static ConformalScores Scores(PointwiseLogDensity training, CandidateLogDensity candidates, int candidate,
-                                         FullStepScore score = FullStepScore.InSample)
+                                         FullStepScore score = FullStepScore.InSample, LatentReading latents = LatentReading.Integrated)
     {
-        Check(training, candidates);
-        if ((uint)candidate >= (uint)candidates.Values.GetLength(1)) throw new ArgumentOutOfRangeException(nameof(candidate));
         if (!Enum.IsDefined(score)) throw new ArgumentOutOfRangeException(nameof(score));
+        CheckReading(latents, margin: false, score == FullStepScore.LeaveOneOut);
+        Check(training, candidates, latents == LatentReading.Conditioned);
+        if ((uint)candidate >= (uint)candidates.Values.GetLength(1)) throw new ArgumentOutOfRangeException(nameof(candidate));
         int t = 0;
         while (t + 1 < candidates.Cases && candidates.Offset(t + 1) <= candidate) t++;
         (int[] rows, double[]? logWeights) = PredictiveChecks.Rows(training);
@@ -777,7 +810,7 @@ public static class ConformalBayes
         }
         var scorer = new StratumScorer(training.Values, rows, logWeights, members, training.ChainLengths, members.Length + 1, 1.0);
         var r = new Reading(1);
-        scorer.Weigh(candidates.Values, candidate, 1, r);
+        scorer.Weigh(candidates.Values, candidate, 1, r, latents == LatentReading.Conditioned ? candidates.ConditionedValues : null);
         var scores = new double[members.Length];
         var errors = new double[members.Length];
         scorer.Multiply(1);
@@ -925,8 +958,24 @@ public static class ConformalBayes
         return units;
     }
 
-    // CB-4's refusals and the draws' alignment.
-    internal static void Check(PointwiseLogDensity training, CandidateLogDensity candidates)
+    // The options the latent-posterior reading does not serve.
+    private static void CheckReading(LatentReading reading, bool margin, bool leaveOneOut)
+    {
+        if (!Enum.IsDefined(reading)) throw new ArgumentOutOfRangeException(nameof(reading), "The observation latents are integrated or conditioned.");
+        if (reading != LatentReading.Conditioned) return;
+        if (margin)
+            throw new ArgumentException("The margin's carried bounds read each training unit's terms as the weights of its turn as the candidate, "
+                                        + "g(zᵢ | θ); under the latent-posterior reading those terms are f(zᵢ | θ, vᵢ), and the carried bounds are not "
+                                        + "built for it.", "options");
+        if (leaveOneOut)
+            throw new ArgumentException("Hoff's score under the latent-posterior reading, each data unit's retained latents read with its own "
+                                        + "weights (the Lean's hoffCondScore), is not built.", "options");
+    }
+
+    // CB-4's refusals and the draws' alignment. Under the latent-posterior reading (conditioned) the training units' observation latents
+    // may be conditioned on, when the candidates read theirs drawn from their conditional; a training density that integrates them is
+    // refused there, since the reading would be the default's under another name.
+    internal static void Check(PointwiseLogDensity training, CandidateLogDensity candidates, bool conditioned = false)
     {
         ArgumentNullException.ThrowIfNull(training);
         ArgumentNullException.ThrowIfNull(candidates);
@@ -935,12 +984,25 @@ public static class ConformalBayes
             throw new ArgumentException(
                 "The training terms are leave-unit-out predictives (the collapsed content): each leaves its unit out of a rest that "
                 + "excludes the candidate, which is not the full step's in-sample score. Take the retained parameters' content.", nameof(training));
+        bool anyConditioned = false;
         foreach (LatentReport latent in training.Latents)
-            if (latent.Scope == LatentScope.Observation && latent.Treatment is LatentTreatment.Conditioned or LatentTreatment.Mixed)
+        {
+            if (latent.Scope != LatentScope.Observation) continue;
+            if (latent.Treatment == LatentTreatment.Mixed || latent.Treatment == LatentTreatment.Conditioned && !conditioned)
                 throw new ArgumentException(
                     $"The latent '{latent.Name}' of each observation's term is {(latent.Treatment == LatentTreatment.Mixed ? "mixed" : "conditioned on")}: "
                     + "the scores would read the data units at their retained latents and the candidate by another density, which undercovers "
-                    + "(CB-4). Take the density with it integrated out.", nameof(training));
+                    + "(CB-4). Take the density with it integrated out, or read every unit's latents conditioned, the candidate's drawn from "
+                    + "their conditional (ConformalOptions.ObservationLatents).", nameof(training));
+            if (conditioned && latent.Treatment == LatentTreatment.Integrated)
+                throw new ArgumentException(
+                    $"The latent '{latent.Name}' of each observation's term is integrated; the latent-posterior reading reads each unit at its "
+                    + "retained latents. Take the training density's conditioned content.", nameof(training));
+            anyConditioned |= latent.Treatment == LatentTreatment.Conditioned;
+        }
+        if (anyConditioned && candidates.ConditionedValues is null)
+            throw new ArgumentException("Under the latent-posterior reading each candidate reads its own latents drawn from their conditional given its "
+                                        + "value (CandidateLogDensity.ConditionedValues); this seam gives none.", nameof(candidates));
         if (!SameLatents(training.Latents, candidates.Latents))
             throw new ArgumentException("The candidates' latents are not treated as the training units' are (CB-4): every unit, the candidate included, is read by one density.", nameof(candidates));
         if (candidates.Draws != training.Draws)
@@ -1278,9 +1340,9 @@ public static class ConformalBayes
         /// <summary>The readings of <paramref name="count"/> candidates from column <paramref name="first"/> into
         /// <paramref name="into"/> from its start. Its steps are apart for the cost row: <see cref="Weigh"/>, <see cref="Multiply"/>,
         /// <see cref="Count"/>.</summary>
-        public void Rank(double[,] candidates, int first, int count, Reading into)
+        public void Rank(double[,] candidates, int first, int count, Reading into, double[,]? conditioned = null)
         {
-            Weigh(candidates, first, count, into);
+            Weigh(candidates, first, count, into, conditioned);
             Multiply(count);
             if (_plain) CountPlain(count, into);
             else Count(candidates, first, count, into);
@@ -1519,12 +1581,15 @@ public static class ConformalBayes
         }
 
         /// <summary>The batch's normalized add-one-in weights and their squares, draws × candidates, packed as the products' right
-        /// operands; each candidate's scaled likelihoods, log normalizer, own log score and bound, ESS and relative efficiency.</summary>
-        public void Weigh(double[,] candidates, int first, int count, Reading into)
+        /// operands; each candidate's scaled likelihoods, log normalizer, own log score and bound, ESS and relative efficiency. With
+        /// <paramref name="conditioned"/> (the latent-posterior reading, <see cref="LatentReading.Conditioned"/>) each candidate's own score
+        /// and its error read that matrix's terms under the same weights, which <paramref name="candidates"/>' terms give.</summary>
+        public void Weigh(double[,] candidates, int first, int count, Reading into, double[,]? conditioned = null)
         {
             int s = _s, size = s * count, at = into.Start;
             _batch = candidates;
             _batchFirst = first;
+            _ownTerms = conditioned;
             if (_weights.Length < size)
             {
                 _weights = new double[size];
@@ -1609,7 +1674,31 @@ public static class ConformalBayes
             // the normalized weights.
             for (int b = 0; b < count; b++) into.LogPredictive[at + b] = _logWeights is null ? norm[b] - Math.Log(s) : norm[b];
             Span<double> ownFirst = _ownFirst.AsSpan(0, count), ownSecond = _ownSecond.AsSpan(0, count);
-            OwnSums(w, w2, p, s, count, own, ownFirst, ownSecond);
+            // The candidate's own terms: its likelihoods, or under the latent-posterior reading the conditioned terms, each scaled by
+            // its own largest, kept apart from the weights' likelihoods, which the efficiency reads.
+            Span<double> ownTop = top;
+            ReadOnlySpan<double> ownLikelihoods = p;
+            if (conditioned is not null)
+            {
+                if (_conditionedLikelihoods.Length < size) _conditionedLikelihoods = new double[size];
+                if (_conditionedTop.Length < count) _conditionedTop = new double[count];
+                Span<double> ct = _conditionedTop.AsSpan(0, count), cp = _conditionedLikelihoods.AsSpan(0, size);
+                ct.Fill(double.NegativeInfinity);
+                for (int d = 0; d < s; d++)
+                {
+                    int row = _rows[d];
+                    for (int b = 0; b < count; b++) ct[b] = Math.Max(ct[b], conditioned[row, first + b]);
+                }
+                for (int d = 0; d < s; d++)
+                {
+                    int row = _rows[d];
+                    Span<double> cd = cp.Slice(d * count, count);
+                    for (int b = 0; b < count; b++) cd[b] = double.IsNegativeInfinity(ct[b]) ? 0.0 : Math.Exp(conditioned[row, first + b] - ct[b]);
+                }
+                ownTop = ct;
+                ownLikelihoods = cp;
+            }
+            OwnSums(w, w2, ownLikelihoods, s, count, own, ownFirst, ownSecond);
             Span<double> errors = into.CandidateErrors.AsSpan(at, count), efficiency = into.Efficiency.AsSpan(at, count);
             for (int b = 0; b < count; b++)
             {
@@ -1624,12 +1713,12 @@ public static class ConformalBayes
                 if (acc >= ErrorFloor)
                 {
                     rel = ownSecond[b] / (acc * acc) - 2.0 * ownFirst[b] / acc + squares[b];
-                    own[b] = top[b] + Math.Log(acc);
+                    own[b] = ownTop[b] + Math.Log(acc);
                 }
                 else
                 {
                     (double exact, rel) = LogScoreAndVariance(candidates, first + b, b, -1);
-                    own[b] = acc >= Floor ? top[b] + Math.Log(acc) : exact;
+                    own[b] = acc >= Floor ? ownTop[b] + Math.Log(acc) : exact;
                 }
                 errors[b] = Multiple * PredictiveChecks.LogScaleError(Math.Max(0.0, rel), efficiency[b]);
             }
@@ -1694,7 +1783,11 @@ public static class ConformalBayes
         private double LogWeight(double[,] candidates, int column, double norm, int d)
             => (_logWeights is null ? 0.0 : _logWeights[d]) + candidates[_rows[d], column] - norm;
 
-        private double Term(double[,] candidates, int column, int unit, int d) => unit < 0 ? candidates[_rows[d], column] : _ll[_rows[d], unit];
+        private double Term(double[,] candidates, int column, int unit, int d) => unit < 0 ? (_ownTerms ?? candidates)[_rows[d], column] : _ll[_rows[d], unit];
+
+        // Under the latent-posterior reading, the batch's conditioned terms (Weigh's), their scaled likelihoods and each candidate's largest.
+        private double[,]? _ownTerms;
+        private double[] _conditionedLikelihoods = [], _conditionedTop = [];
 
         // By fused multiply-adds in draw order, four candidates to a vector: own[b] = Σ_d w̃·p, each lane the product's entry for a
         // unit whose column equals the candidate's, bit for bit; first[b] = Σ_d w̃²·p and second[b] = Σ_d w̃²·p², the error's sums
