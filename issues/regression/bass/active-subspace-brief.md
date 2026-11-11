@@ -1,6 +1,6 @@
 # Active subspaces on the BASS core: E8's build (chip brief)
 
-Date: 2026-11-08. Status: slices 0–5 complete; slice 6 landed and waits for its verification. Commissioned by the user on 2026-11-08 ("kick off e8"), after KHAOS's last slice; slice 5, the Grassmann discussion's items the user settled, commissioned 2026-11-08 ("ill take as recommended"). Every slice landed and was verified by the coordinating session on 2026-11-08: slice 0 (`15fb495`, `9e3028d`, `aa62879`), slice 1 (`95294f8`, `9dfcc6d`, `1385b86`), slice 2 (`8c7db77`, `3cdc2e8`), slice 3 (`84fe230`, `1049055`), slice 4 (`20aeb06`, `bc72014`) and slice 5 (`def59f3`, `9d2ff23`, `95d2900`, `a54a537`). The follow-ups, commissioned 2026-11-10: slice 6 (`276af70`, `e9d8827`, `30df59e`, `9a669b6`) landed; slice 7's plan and E36's brief follow, each after the one before is verified. Written by the main session from [E8's entry](extensions-brief.md#active-subspace-analysis), [gap G3](lineage-gaps-register.md#g3-sobol-indices-and-active-subspaces-have-different-standing), [the lineage review's separability question](lineage-review.md#separability-is-what-the-closed-forms-rest-on), the [Astra notes](../discussion/astra-grassman-stiefel-pca-extensions.md), and the [Grassmann discussion](../discussion/grassmann-stiefel-subspaces-brief.md)'s report so far. Reports go under "Reports" below, newest first.
+Date: 2026-11-08. Status: slices 0–6 complete; slice 7's plan written and waiting for the user's call. Commissioned by the user on 2026-11-08 ("kick off e8"), after KHAOS's last slice; slice 5, the Grassmann discussion's items the user settled, commissioned 2026-11-08 ("ill take as recommended"). Every slice landed and was verified by the coordinating session on 2026-11-08: slice 0 (`15fb495`, `9e3028d`, `aa62879`), slice 1 (`95294f8`, `9dfcc6d`, `1385b86`), slice 2 (`8c7db77`, `3cdc2e8`), slice 3 (`84fe230`, `1049055`), slice 4 (`20aeb06`, `bc72014`) and slice 5 (`def59f3`, `9d2ff23`, `95d2900`, `a54a537`). The follow-ups, commissioned 2026-11-10: slice 6 (`276af70`, `e9d8827`, `30df59e`, `9a669b6`, report `3c26660`) verified by the coordinating session on 2026-11-10; slice 7's plan (below, "Slice 7's plan") waits for the user's decisions; E36's brief follows its verification. Written by the main session from [E8's entry](extensions-brief.md#active-subspace-analysis), [gap G3](lineage-gaps-register.md#g3-sobol-indices-and-active-subspaces-have-different-standing), [the lineage review's separability question](lineage-review.md#separability-is-what-the-closed-forms-rest-on), the [Astra notes](../discussion/astra-grassman-stiefel-pca-extensions.md), and the [Grassmann discussion](../discussion/grassmann-stiefel-subspaces-brief.md)'s report so far. Reports go under "Reports" below, newest first.
 
 ## Why
 
@@ -109,6 +109,58 @@ Commissioned by the user on 2026-11-10 ("lets send the E8 follow-ups to E8 slice
 - *Other writers:* the GBASS chip (E21 slice 4, the noise and block files), the E34 chip (its slice 5, the PCA mode) and the conformal chip (`ConformalBayes.cs`). On shared files (`BassConfig.cs`, `BassModel.cs`, `BassResolved.cs`, `BassSweep.cs`, the moment service), message the other chip before editing and commit each such edit by itself.
 - *Docs:* chips leave `docs/` alone (AGENTS.md, 2026-11-10). This replaces the `docs/Maths` gate below and the shared-docs line under Working rules: list the doc changes owed in each report.
 - *Messages* are terse, and no session reads another's transcript.
+
+### Slice 7's plan: rotate-and-refit (2026-11-10), for the user's call
+
+Nothing is built until the user decides the items marked **Decision** below. The plan follows the brief's four headings, then proposes slices and gates.
+
+**What the source does** (2307.11241, read again for this plan):
+- *§4.1.3 projects and refits.* It fits Bayesian MARS on the data projected onto the first d active directions, d = 1 to 6, for g(x) = f(x·t₁, x·t₂), with f = x₁² + x₁x₂ + x₂³/9, t₁ = (12, 9, 6, 1, 1, 1)/3 and t₂ = (1, 1, 1, 15, 6, 6)/3. Each refit is reported as the percentage of g's sd it accounts for: 91.06% at d = 1, 98.37% at d = 2, 99.45% at d = 6.
+- *§4.3 refits on the projected data.* On 240 nuclear-data inputs it whitens by the prior's covariance and refits on the projected data. That refit runs in 38 s against 89 s, uses M = 44 basis functions against 223, and has an order of magnitude smaller RMSE.
+- *The conclusion names the obstacle and the next step.* Iterating on the projected data is complicated because "the measure corresponding to the projected variables is a high dimensional composition of the measure for x and dependence among the projected variables will be introduced". It suggests a projected Bayesian MARS, which is E36's ground.
+- *It never states which summary of the posterior's C it takes the directions from.*
+
+**The frame.** The frame is the ordered eigenvectors W of a summary in the analysis's own metric. The active variables are u = W₁ᵀL⁻¹(x_box − c), with L and c the analysis's map (for the box metric, u = W₁ᵀx_box; for whitening, the paper's Σ^(−1/2)(x − μ)).
+- BASS ignores an input's sign and the inputs' order, so W₁ fully specifies the refit, and no Stiefel code is needed (the Grassmann discussion, settled).
+- **Decision 1, the summary.**
+  - *E[C]'s eigenvectors (recommended).* For any frame W, the posterior mean of each draw's inactive energy Σ_{j>d} w_jᵀC_sw_j is Σ_{j>d} w_jᵀE[C]w_j, and E[C]'s trailing eigenvectors minimize it. That energy is what bounds a ridge approximation's error by Poincaré's inequality (Constantine's bound, cited from memory).
+  - *P̄'s eigenvectors,* the Bayes action under chordal loss, each draw counted once. The two agree when the draws agree; under SG-5's disagreement they part by up to 54°.
+- **Decision 2, a rotation within the span for simplicity** (varimax's role). Not recommended. It needs Stiefel code, and BASS's axis alignment already rewards a frame whose directions are E[C]'s eigenvectors.
+
+**The inputs the refit takes.** **Decision 3:**
+- *(a) Projected (recommended), as the paper does:* the d active variables, plus the categorical predictors unchanged. Variation along W₂ goes into the noise.
+- *(b) Rotated:* all p rotated variables, so nothing is dropped and only the axes move.
+- *(c) Augmented:* the p native inputs plus the d active variables, so the sampler chooses between axis-aligned and oblique terms, and the native model is a special case.
+
+**The rotated inputs' box and law, and how BASS reads them.**
+- *The box.* The input box maps onto a zonotope in u, whose bounding box is exact: [Σᵢ min(0, aᵢⱼ), Σᵢ max(0, aᵢⱼ)] per variable for A = L⁻ᵀW₁, shifted by c's image.
+  - **Decision 4:** that bounding box as each active variable's declared domain (`InputDomain`) (recommended), so every image of the input box lies inside the refit's box and E8 readouts of the refit by a joint sample are never refused. *Alternative:* BASS's default, the projected training range, which a pushforward point can leave.
+- *The knot prior* reads knots at the training values of each input. The active variables' training values are the projected cases, almost all distinct, so every case is a knot candidate. Nothing in the prior changes.
+- *The law.* ρ_u is the pushforward of the analysis's law, and in general not a product (the paper's obstacle). So the moment service's exact route does not hold for the refit under ρ_u.
+  - The refit's readouts under ρ_u take E8's sampled route on a pushforward joint sample: N points from the original law, mapped. That route exists (slice 4).
+  - Readouts in x follow by the chain rule: ∇ₓf = A∇ᵤf̃, so C_x = A C_u Aᵀ, of rank at most d.
+  - A product law declared on u is allowed, but it is another law, and the readout says so.
+
+**What the refit reports beside the native fit.**
+- *Size and fit:* M (the basis functions in use) and the run's time for both fits. With a test set, held-out RMSE and the percentage of sd accounted for, the paper's measure.
+- *Predictive criteria:* PSIS-LOO's elpd for both fits (`PredictiveChecks.PsisLoo`).
+- *Evidence:* ln p(y) for both, when both runs are tempered to the exact reference rung (`BassFit.Evidence`). It is opt-in, as the ladder is.
+- *Consistency:* the refit's own C mapped back to x against the frame (principal angles), and the frame's posterior spread (each draw's angles to the mean), which the refit does not carry.
+- *The caveat, in every report:* the frame was estimated from the same data, so in-sample criteria favour the refit.
+  - **Decision 5:** cross-fitting as an opt-in (recommended). Over K folds, the frame comes from a native fit on the other folds and the refit is scored on the fold held out, at K + 1 native fits and K refits. *Alternative:* in-sample criteria with the caveat alone.
+- *Frame uncertainty is a plug-in,* as the PCA basis's is (settled). Propagating it means refitting per frame draw, or E36's joint model.
+
+**What a user declares:** the analysis the frame comes from (decision 1's summary), d, the inputs' form (decision 3), the refit's configuration (the native fit's by default), and optionally the folds and the evidence ladder. A name for the types, after the paper's "projected Bayesian MARS": `BassProjection` for the frame and the map, and `BassProjectedFit` for the refit, which predicts, differentiates and reads E8 in the original coordinates.
+
+**Proposed slices, after the user's call:**
+
+| Slice | Delivers | Gates |
+| --- | --- | --- |
+| 7a. The frame and the projected data | `BassProjection` from an analysis: the summary, d, the map; projected `BassData` and cases with the bounding box as their domains; the pushforward joint sample | the bounding box against the input box's vertices, every projected vertex inside, one on each face; the pushforward's mean and covariance against AᵀE[x] and AᵀΣA; refusals (another fit's inputs, d outside 1 to p) |
+| 7b. The projected fit | `BassProjectedFit`: fit, predict and gradient in x by the chain rule; E8's readout in u on the pushforward sample, and in x by A | the gradient against central differences of the prediction; C_x in span(W₁); a ridge g(wᵀx) recovered at d = 1 with fewer basis functions and lower held-out error than the native fit; the paper's g at d = 1 to 6, against its 91.06% and 98.37% at d = 1 and 2 (exploration, not validation) |
+| 7c. The comparison | The report above, with cross-fitting opt-in | the criteria against their direct computation; cross-fitting's folds disjoint and its frames from the other folds only; a function with no low-dimensional structure, where the refit does not win |
+
+**The cost row:** native against projected fit time and M, and the pushforward readout per draw.
 
 ## Gates common to every slice
 
