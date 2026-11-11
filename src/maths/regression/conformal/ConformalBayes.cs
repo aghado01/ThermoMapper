@@ -147,6 +147,9 @@ public enum MarginBounds
     /// ĉ(y) = k + the band + the flagged units the inflated rule accepts (<c>card_excluded_le_estimated</c>); where it is flagged, nothing
     /// is read. The plain set's coverage under error is 1 − (k + the largest of the rest over kept y + the largest |D(y)| over every
     /// y)/m − 2ν; the inflated set's 1 − (k + the largest |D(y)|)/m − ν.
+    /// These are empirical fixed/refined-grid proxy readings, conditional on containment of every actual degenerate own turn
+    /// and coverage of the relevant response intervals. Exact conjugate refits found missed flags, so containment is not
+    /// established and the reported number is not a guaranteed coverage lower bound.
     /// </summary>
     Kept,
 }
@@ -346,6 +349,9 @@ public sealed record ConformalSet(int Case, int Stratum, int Units, int Level, d
     /// (<see cref="ConformalMargin.FlaggedCount"/>): 1 − (k + m̂ + D̂)/m − 2ν for the plain rule, the second ν the realized ordering's
     /// own bounds failing (<c>coverage_read_excluding</c>, <c>coverage_grid_excluding</c>); 1 − (k + D̂)/m − ν for the inflated one
     /// (<c>coverage_inflated_excluding</c>).
+    /// The kept mode is an empirical fixed/refined-grid proxy reading, conditional on flag containment and grid coverage.
+    /// Exact-refit checks found missed own-turn flags; neither a fixed grid nor the optional refinement certifies all response
+    /// intervals. Its numeric reading is therefore not a guaranteed lower bound, even before the normal approximation.
     /// </summary>
     public double CoverageUnderError
     {
@@ -544,6 +550,10 @@ public static class ConformalBayes
         if (!(nu > 0.0 && nu < 1.0)) throw new ArgumentOutOfRangeException(nameof(options), "ν must lie in (0, 1).");
         if (options.FallbackShare is double share && !(share >= 0.0)) throw new ArgumentOutOfRangeException(nameof(options), "The fallback share must be non-negative.");
         bool leaveOneOut = options.Score == FullStepScore.LeaveOneOut;
+        if (options.MarginBounds == MarginBounds.Kept && !(double.IsFinite(options.DegenerateEss) && options.DegenerateEss > 0))
+            throw new ArgumentOutOfRangeException(nameof(options), "The degenerate ESS floor must be positive and finite.");
+        if (options.MarginRefinement is { } probe && (options.MarginBounds is null || probe.At is null || !(double.IsFinite(probe.Tolerance) && probe.Tolerance > 0)))
+            throw new ArgumentException("Margin refinement needs a margin, a seam and a positive finite tolerance.", nameof(options));
         if (!Enum.IsDefined(options.Score)) throw new ArgumentOutOfRangeException(nameof(options), "The score is in-sample or leave-one-out.");
         if (leaveOneOut && options.MarginBounds is not null)
             throw new ArgumentException("The margin's carried bounds are built for the in-sample score's weights; under the leave-one-out score each data "
@@ -592,7 +602,7 @@ public static class ConformalBayes
                 continue;
             }
             var scorer = new StratumScorer(training.Values, rows, logWeights, members, training.ChainLengths, k, Multiple(nu, m),
-                                           options.MarginBounds, options.InflationBounds);
+                                           options.MarginBounds, options.InflationBounds, degenerateEss: options.DegenerateEss);
             (StratumScorer A, StratumScorer B)? halves = Halves(training.Values, rows, logWeights, members, training.ChainLengths, k);
             foreach (int t in cases)
             {
@@ -614,13 +624,49 @@ public static class ConformalBayes
                 var margin = new ConformalMargin(scorer.Multiple, r.CandidateErrors, r.UniformErrors, band ? r.CandidateCarried : null,
                                                  band ? r.CarriedUniform : null, band ? scorer.UnitCarriedErrors : null, band ? r.Fragile : null,
                                                  r.InflatedRanks, r.ParetoK, PredictiveChecks.ParetoKThreshold(Math.Max(2, rows.Length)),
-                                                 options.MarginBounds, options.InflationBounds);
+                                                 options.MarginBounds, options.InflationBounds)
+                {
+                    Flagged = options.MarginBounds == MarginBounds.Kept ? r.Flagged : null,
+                    CandidateFlagged = options.MarginBounds == MarginBounds.Kept ? r.CandidateFlagged : null,
+                    DegenerateAccepted = options.MarginBounds == MarginBounds.Kept ? r.DegenerateAccepted : null
+                };
+                if (options.MarginRefinement is { } refinement)
+                    margin = margin with { Refined = RefineMargin(training, candidates, t, scorer, r, margin, refinement) };
                 var set = new ConformalSet(t, h, m, k, candidates.Grids[t], p, r.Below, r.Tied, r.Own, r.Ess, margin, options.Inflate, nu,
                                            SplitHalfMass: splitMass, SplitHalfDisagreements: disagreements);
                 sets[t] = options.FallbackShare is double asked ? set with { FallBack = set.Gap > asked || margin.Untrusted(k) > 0 } : set;
             }
         }
         return new ConformalPrediction(sets, alpha);
+    }
+
+    private static MarginRefined RefineMargin(PointwiseLogDensity training, CandidateLogDensity candidates, int t,
+                                               StratumScorer scorer, Reading initial, ConformalMargin margin, MarginRefinement refinement)
+    {
+        int count = margin.Count ?? 0, flagged = margin.FlaggedCount ?? 0, probes = 0;
+        (int Band, int Flags, bool Own) Key(Reading r, int i) => (r.Fragile[i] + r.DegenerateAccepted[i], r.Flagged[i], r.CandidateFlagged[i]);
+        var cells = new Stack<(double Lo, double Hi, (int, int, bool) Left, (int, int, bool) Right)>();
+        double[] grid = candidates.Grids[t];
+        for (int g = 1; g < grid.Length; g++) cells.Push((grid[g - 1], grid[g], Key(initial, g - 1), Key(initial, g)));
+        while (cells.TryPop(out var cell))
+        {
+            if (cell.Left == cell.Right || cell.Hi - cell.Lo <= refinement.Tolerance) continue;
+            double y = cell.Lo < 0.0 && cell.Hi > 0.0 ? (cell.Lo + cell.Hi) * 0.5 : cell.Lo + (cell.Hi - cell.Lo) * 0.5;
+            if (!(y > cell.Lo && y < cell.Hi)) continue;
+            CandidateLogDensity at = refinement.At(t, y);
+            Check(training, at);
+            if (at.Cases != 1 || at.Grids[0].Length != 1 || at.Grids[0][0] != y || at.StratumOf[0] != candidates.StratumOf[t])
+                throw new ArgumentException("A margin probe must return its one response in the original case's stratum.", nameof(refinement));
+            var reading = new Reading(1);
+            scorer.Rank(at.Values, 0, 1, reading);
+            var key = Key(reading, 0);
+            count = Math.Max(count, key.Band);
+            flagged = Math.Max(flagged, key.Flags);
+            probes++;
+            cells.Push((cell.Lo, y, cell.Left, key));
+            cells.Push((y, cell.Hi, key, cell.Right));
+        }
+        return new MarginRefined(count, flagged, probes);
     }
 
     /// <summary>
@@ -1199,6 +1245,11 @@ public static class ConformalBayes
                 _second = new double[n * count];
             }
             DenseProduct.Multiply(_left, n, _right!, _product);
+            if (_kept)
+            {
+                if (_inverseProduct.Length < n * count) _inverseProduct = new double[n * count];
+                DenseProduct.Multiply(_inverse, n, _right!, _inverseProduct);
+            }
             if (_plain) return;
             DenseProduct.Multiply(_left, n, _rightSquared!, _first);
             DenseProduct.Multiply(_leftSquared, n, _rightSquared!, _second);
@@ -1291,7 +1342,7 @@ public static class ConformalBayes
                             : RelativeInLogs(i, d => candidates[_rows[d], column]);
                         double crossError = double.IsNaN(crossRelative) ? double.PositiveInfinity
                                           : Multiple * PredictiveChecks.LogScaleError(Math.Max(0.0, crossRelative), _unitEfficiency![i]);
-                        if (crossError > carried[b]) carried[b] = crossError;
+                        if (crossError > carried[b] && !(_kept && _freeFlagged[i])) carried[b] = crossError;
                     }
                     if (score < candidate) below[b]++;
                     else if (score == candidate) tied[b]++;
@@ -1304,6 +1355,28 @@ public static class ConformalBayes
             Span<double> scores = _column.Length >= n + 1 ? _column.AsSpan(0, n + 1) : (_column = new double[n + 1]).AsSpan();
             for (int b = 0; b < count; b++)
             {
+                if (_kept)
+                {
+                    bool ownFlag = !(into.Ess[at + b] * into.Efficiency[at + b] >= _degenerateEss);
+                    into.CandidateFlagged[at + b] = ownFlag;
+                    into.Flagged[at + b] = ownFlag ? 1 : 0;
+                    if (_unitFlagged.Length < n) _unitFlagged = new bool[n];
+                    for (int i = 0; i < n; i++)
+                    {
+                        // E_tilde[p_i] is the score saved in the product; the inverse product uses exp(bottom-l_i).
+                        double logProduct = _product[i * count + b] + Math.Log(_inverseProduct[i * count + b]) - _bottom[i];
+                        double relative = Math.Exp(-Math.Max(0, logProduct));
+                        _unitFlagged[i] = _freeFlagged[i] || (!ownFlag && !(_drawEss * relative * _unitEfficiency![i] >= _degenerateEss));
+                        if (_unitFlagged[i]) into.Flagged[at + b]++;
+                    }
+                    if (ownFlag && _inflation != InflationBounds.Uniform)
+                    {
+                        into.Fragile[at + b] = -1;
+                        carriedUniform[b] = double.NaN;
+                        into.ParetoK[at + b] = inflated[b] > _level ? ParetoK(candidates, first + b, into.Efficiency[at + b]) : double.NaN;
+                        continue;
+                    }
+                }
                 if (double.IsNegativeInfinity(own[b]))
                 {
                     into.ParetoK[at + b] = double.NaN;
@@ -1331,6 +1404,13 @@ public static class ConformalBayes
                         if (scores[i] - bound <= own[b] + bound) rank++;
                     inflated[b] = rank;
                 }
+                if (_kept && into.CandidateFlagged[at + b])
+                {
+                    into.Fragile[at + b] = -1;
+                    carriedUniform[b] = double.NaN;
+                    into.ParetoK[at + b] = inflated[b] > _level ? ParetoK(candidates, first + b, into.Efficiency[at + b]) : double.NaN;
+                    continue;
+                }
                 if (band && _margin == MarginBounds.Uniform) into.Fragile[at + b] = EstimatedBand(scores, largest, _level);   // sorts the scores
                 else if (band)
                 {
@@ -1338,6 +1418,21 @@ public static class ConformalBayes
                     for (int i = 0; i < n; i++) bounds[i] = _first[i * count + b];
                     bounds[n] = carried[b];
                     into.Fragile[at + b] = EstimatedBand(scores, bounds, _level);
+                    if (_kept)
+                    {
+                        int accepted = 0;
+                        Span<double> lowered = _lowered.Length >= n + 1 ? _lowered.AsSpan(0, n + 1) : (_lowered = new double[n + 1]).AsSpan();
+                        for (int j = 0; j <= n; j++) lowered[j] = scores[j] - bounds[j];
+                        lowered.Sort();
+                        for (int i = 0; i < n; i++)
+                        {
+                            if (!_unitFlagged[i]) continue;
+                            double raised = scores[i] + bounds[i];
+                            int rank = CountWhere(lowered, v => v <= raised);
+                            if (rank > _level) accepted++;
+                        }
+                        into.DegenerateAccepted[at + b] = accepted;
+                    }
                 }
                 into.ParetoK[at + b] = inflated[b] > _level ? ParetoK(candidates, first + b, into.Efficiency[at + b]) : double.NaN;
             }
