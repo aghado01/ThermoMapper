@@ -24,7 +24,7 @@ Written by the coordinating session (`local_b6732445`) at the user's quota pause
 | [E8](claude://claude.ai/epitaxy/local_66d45fa0-e3f5-4429-b588-1786ae46c0ef) ([brief](bass/active-subspace-brief.md)) | Slice 7a, the frame and the projected data. The plan was approved as recommended (`72ec20f`) | Uncommitted: `sensitivity/BassActiveSubspace.cs` and the new `spline/bass/projection/` | 7a, then 7b and 7c, each verified |
 | [Conformal slices](claude://claude.ai/epitaxy/local_69bae1e5-39ad-45c0-8df2-e8e705b21e42) ([brief](conformal-layer-brief.md)) | Slice 10, the full step's Monte Carlo error, which had just started | Nothing in the tree | Slice 10 under the rules beside decision 9, the grid rule (`1d76a22`) included; then slices 11 and 12b (decision 10) |
 | [GBASS](claude://claude.ai/epitaxy/local_add4be38-7ddb-4981-8b14-6f8ac64f7dab) ([brief](bass/ridge-blocks-brief.md)) | E21 slice 4, random effects under the noises. The code is committed (`4f5bf3f`, ledger `94133f8`) | Uncommitted: the brief's "In progress" entry and `RandomEffectsNoiseQualificationTests.cs`, whose Geweke rows were rewritten as exact-start tests | Finish the qualification on the four conditions below, report, be verified; then slice 5, the candidate seam, agreed with the conformal chip |
-| [Conformal Lean](claude://claude.ai/epitaxy/local_21649695-833f-41ac-8d7c-326b4f691dda) ([brief](../../lean/Protolemmata/Conformal/conformal-chip-brief.md)) | Slice 18, the guarantee read out | Uncommitted: the slice 18 Lean, checks, ledger and brief entry. The build gates passed; the full checks run decides the commit | Commit 18 when its checks pass, then report |
+| [Conformal Lean](claude://claude.ai/epitaxy/local_21649695-833f-41ac-8d7c-326b4f691dda) ([brief](../../lean/Protolemmata/Conformal/conformal-chip-brief.md)) | **Done.** Slice 18 landed in `4383916` after these rows were written, completing all six items of the commission | Nothing | Verify slice 18 (unverified). The sources it wants fetched are in "Waiting on the user" |
 
 **E21 slice 4's open finding.** The first qualification run failed Geweke on ln s in nearly every row, with z up to 5.1. The chip reads it as slow mixing of the half-Cauchy scale, not a kernel defect. Verification needs four things:
 1. the failing successive-chain rows kept on record as unqualified;
@@ -69,15 +69,19 @@ Written by the coordinating session (`local_b6732445`) at the user's quota pause
    - The coordinating session also recommends that the moves' balance go Lean first.
    - The power spherical paper (arXiv 2006.04437) is not on disk.
    - Approval gives the go-ahead to install `BayesPPR` 0.2.0 from CRAN.
-2. **Slice 12a's k̂ diagnostic:** opt-in (recommended; it costs about 200× the score) or on by default.
-3. **The original side-session notes** in `%APPDATA%\Claude\side-session-notes\`: delete them or keep them. Copies are in the repository; three PyTeXML notes were left there.
-4. **Conformal slices 13–18's C# order,** after slice 10's BASS reading. The tournament correction (13) is the candidate if the margin still reads nothing on BASS.
-5. **Lean for the active-subspace geometry** (proposed 2026-11-10):
+2. **Sources for the conformal Lean's slice 18.**
+   - *Wanted:* Vlassis and Thomas (arXiv 2607.08415), who prove Gaffke's conjecture, and Angelopoulos et al., Conformal Risk Control (arXiv 2208.02814).
+   - *Optional:* Gneiting and Raftery 2007.
+   - *Its findings:* Snell and Griffiths's Theorem 4.3 is false as stated (a point-mass prior on all-zero losses breaks it), and Gressmann's proof of Proposition 2.5(i) has two sign slips while the statement stands.
+3. **Slice 12a's k̂ diagnostic:** opt-in (recommended; it costs about 200× the score) or on by default.
+4. **The original side-session notes** in `%APPDATA%\Claude\side-session-notes\`: delete them or keep them. Copies are in the repository; three PyTeXML notes were left there.
+5. **Conformal slices 13–18's C# order,** after slice 10's BASS reading. The tournament correction (13) is the candidate if the margin still reads nothing on BASS.
+6. **Lean for the active-subspace geometry** (proposed 2026-11-10):
    - E36's direction moves;
    - the matrix Poincaré check's reduction and the product law's constant;
    - P̄'s readings under mixed ranks;
    - rotate-and-refit's non-invariance.
-6. **Carried from 2026-11-09:**
+7. **Carried from 2026-11-09:**
    - GBASS's open decisions;
    - `RungWorkers`' default and the GC pass;
    - the Lean promotion review;
