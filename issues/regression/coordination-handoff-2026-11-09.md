@@ -1,5 +1,7 @@
 # Regression coordination: handoff (2026-11-09)
 
+> **Superseded for the current state by [the 2026-11-10 handoff](coordination-handoff-2026-11-10.md).** This file keeps the earlier record and the verification routine.
+
 Written by the coordinating session (`local_b6732445`) for a new parent session to take over. It gathers what is in flight, what waits on the user, and where each record lives. The briefs are the records of truth; this file points at them and lists what crosses them.
 
 ## Coordinating review and subsequent handoffs (2026-11-09)
