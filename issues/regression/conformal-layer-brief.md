@@ -276,6 +276,31 @@ Each report gives the commits, gate results, coverage and width by fit, cost, de
 
 Newest first.
 
+### In progress — Slice 13, the tournament correction (started 2026-11-11)
+
+Started at the main session's word after 12b's verification (decision 11), under the Lean's rules (`f998131`, the ledger's slice 13): each pair's fit must not know which unit is the test unit.
+
+**Plan.**
+- *`CrossConformal.Tournament(unitScores, candidateScores, grids, alpha, inflation)`.*
+  - Game i, at each candidate value, holds the conformity of zᵢ and of the candidate under one fit to the rest plus the pair.
+  - The candidate wins game i when it is stranger by more than δ (δ = 0 for the plain rule, 2ε for the inflated one). It is accepted when its wins plus k fall below m = n + 1, at k = ⌊αm⌋ (`tournament_count_iff`, `AcceptsPairwiseBy`).
+  - Coverage is at least 1 − (2k − 1)/m. The inflated set holds the plain one, so the bound carries to it.
+- *The density form,* from n leave-one-out chains, each given as a held-out seam and a candidate seam over its draws.
+  - The pair fit reweights fit i's draws by p(zᵢ | θ)·p(y | θ), the pair's product, formed as a sum of the two terms, so it cannot know which member is the test.
+  - Each member scores ln Σ w̃ p(· | θ) by one function with the roles swapped.
+  - Where no draw supports the pair, each member reads its own predictive under the fit to the rest.
+- *The stable bound* under the stray chance ν (`coverage_tournament_stable`, `card_refused_by_le`): 1 − min over a of [(k + a)/m + 2(m − 1)ν/(a + 1)], with their 1 − α − 3√ν.
+- *Read, not built:* the influence-function approximation (Abad et al., 2202.01315) and the RKHS approximation (Razafindrakoto et al., 2601.13102), weighed in the report.
+- *Gates:*
+  - the count rule against a direct count;
+  - the pair fit's symmetry, bit for bit;
+  - coverage over every ordering with an order-reading, non-symmetric pair fit;
+  - a fit that marks the test unit fails;
+  - the inflated set's coverage on a fixture whose ν is known;
+  - qualification: coverage with Metropolis chains stopped before mixing, beside the full step from the same stopped chains, plus BASS chains stopped early and the cost row.
+
+**State.** Being written. Nothing committed.
+
 ### 2026-11-11 — Slice 12b, CB-4's latent-posterior reading as the full step's opt-in
 
 Built at the main session's word of 2026-11-11, after slice 11's verification, against the Lean's CB-4(c) and slice 12 ("CB-4(c) read from draws").
