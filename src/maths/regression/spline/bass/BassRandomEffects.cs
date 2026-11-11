@@ -40,6 +40,9 @@ public sealed class RandomEffectsBlock
         LogScalePrior = _single?.LogScalePrior ?? specifications.Sum(s => s.ScalePrior is { } prior ? prior.LogDensity(s.Scale) + Math.Log(s.Scale) : 0);
     }
 
+    /// <summary>Each block's grouping layout, in the declaration order.</summary>
+    internal IReadOnlyList<RandomEffectGrouping> Layouts => _layouts;
+
     public static RandomEffectsBlock Of(IReadOnlyList<CategoricalPredictor> groupings, IReadOnlyList<IBassRandomEffect> specifications,
                                         IReadOnlyList<ContinuousPredictor>? predictors = null)
     {
@@ -171,6 +174,20 @@ public sealed class RandomEffectsBlock
                                    reference: working.Reference, logJacobian: -LogDeterminant) { Whitening = this };
     }
 
+    /// <summary>
+    /// <paramref name="reading"/> whitened by this block at its scales. At unit weights V^(−½) acts on the raw response and the offset
+    /// carries it (<see cref="WhitenResponse"/>). Under weights, a noise's, the reading keeps its own offset and weights and carries the
+    /// weighted whitening beside them (<see cref="WeightedWhitening"/>; E21's slice 4), which the design applies to the response and each
+    /// column.
+    /// </summary>
+    internal WorkingResponse Rewhiten(WorkingResponse reading)
+    {
+        ArgumentNullException.ThrowIfNull(reading);
+        if (reading.IsUnweighted) return WhitenResponse(reading);
+        if (reading.Response is not ScalarResponse) throw new ArgumentException("Random effects under weights take a scalar response.", nameof(reading));
+        return reading.WithWhitening(this, new WeightedWhitening(this, reading.Weights));
+    }
+
     internal double ScaleInformation(int group) => _single?.LogScaleInformation ?? _general!.ScaleInformation(group);
 
     internal double[][] MeanEffects(BassModel model, IReadOnlyList<BassTerm> terms, ReadOnlySpan<double> coefficients)
@@ -182,18 +199,52 @@ public sealed class RandomEffectsBlock
             : _general!.DrawEffects(Residual(model, terms, coefficients), sigma2, rng);
 
     internal BassGroupDraw[] DrawGroups(BassModel model, IReadOnlyList<BassTerm> terms, ReadOnlySpan<double> coefficients,
-                                       double sigma2, Xoshiro256PlusPlus rng)
+                                       double sigma2, Xoshiro256PlusPlus rng, WorkingResponse? reading = null)
     {
-        double[][] effects = DrawEffects(model, terms, coefficients, sigma2, rng);
+        // Under a noise's weights, from u's conditional given the coefficients, σ² and the latents, on the reading's own y − σβv.
+        double[][] effects = reading?.Weighted is { } weighted
+            ? weighted.DrawEffects(Residual(model, terms, coefficients, reading.Values), sigma2, rng).Effects
+            : DrawEffects(model, terms, coefficients, sigma2, rng);
+        return Named(effects);
+    }
+
+    /// <summary>The effects' conditional mean given the coefficients: on <paramref name="reading"/>'s weights and y − σβv under a noise, where
+    /// it carries u as a latent or integrates it; at unit weights the block's own.</summary>
+    internal double[][] MeanEffects(BassModel model, IReadOnlyList<BassTerm> terms, ReadOnlySpan<double> coefficients, WorkingResponse? reading)
+    {
+        if (reading?.Weighted is { } weighted) return weighted.MeanEffects(Residual(model, terms, coefficients, reading.Values));
+        if (reading is { IsUnweighted: false, Effects: { } latent })
+        {
+            double[] values = reading.Values.ToArray();   // y − σβv − Z̃u, with Z̃u put back
+            latent.AddTo(values);
+            return new WeightedWhitening(this, reading.Weights).MeanEffects(Residual(model, terms, coefficients, values));
+        }
+        return MeanEffects(model, terms, coefficients);
+    }
+
+    // The effects as named retained records, at this block's scales.
+    internal BassGroupDraw[] Named(double[][] effects)
+    {
         var groups = new BassGroupDraw[Count];
         for (int k = 0; k < Count; k++) groups[k] = new BassGroupDraw(_specifications[k].Grouping, _scales[k], effects[k]) { Input = _layouts[k].Input };
         return groups;
     }
 
+    /// <summary>Adds Σ_k z_k·u_k at each training case, the effects' contribution, to <paramref name="fit"/>.</summary>
+    internal void AddEffects(double[][] effects, Span<double> fit)
+    {
+        for (int k = 0; k < Count; k++)
+            for (int i = 0; i < fit.Length; i++) fit[i] += _layouts[k].Multiplier(i) * effects[k][_layouts[k].GroupOf(i)];
+    }
+
     private static double[] Residual(BassModel model, IReadOnlyList<BassTerm> terms, ReadOnlySpan<double> coefficients)
+        => Residual(model, terms, coefficients, model.Data.Response.Values);
+
+    // values − α − Σⱼ βⱼBⱼ on the unwhitened case columns.
+    private static double[] Residual(BassModel model, IReadOnlyList<BassTerm> terms, ReadOnlySpan<double> coefficients, ReadOnlySpan<double> values)
     {
         if (coefficients.Length != terms.Count + 1) throw new ArgumentException("Give an intercept and one coefficient per term.", nameof(coefficients));
-        double[] residual = model.Data.Response.Values.ToArray();
+        double[] residual = values.ToArray();
         for (int i = 0; i < residual.Length; i++) residual[i] -= coefficients[0];
         var column = new double[residual.Length];
         for (int j = 0; j < terms.Count; j++)
@@ -397,7 +448,9 @@ internal sealed class RandomEffectGeometry
     private readonly int[] _coordinateGroup, _offsets;
     private readonly IReadOnlyList<RandomEffectGrouping> _groups;
 
-    public RandomEffectGeometry(IReadOnlyList<RandomEffectGrouping> groups)
+    /// <summary>The factorization of the groupings' constrained indicators, each row scaled by <paramref name="roots"/> where given: W^½'s
+    /// for a block under a noise's weights (<see cref="WeightedWhitening"/>), whose aliases the unweighted geometry has reported.</summary>
+    public RandomEffectGeometry(IReadOnlyList<RandomEffectGrouping> groups, ReadOnlySpan<double> roots = default)
     {
         ArgumentNullException.ThrowIfNull(groups);
         if (groups.Count == 0) throw new ArgumentException("At least one grouping is required.", nameof(groups));
@@ -422,6 +475,12 @@ internal sealed class RandomEffectGeometry
                 _coordinateGroup[column] = k;
                 for (int i = 0; i < Cases; i++) columns[i, column] = groups[k].Multiplier(i)*groups[k].Contrast(groups[k].GroupOf(i), j);
             }
+        if (!roots.IsEmpty)
+        {
+            if (roots.Length != Cases) throw new ArgumentException("Give one root weight per case.", nameof(roots));
+            for (int i = 0; i < Cases; i++)
+                for (int column = 0; column < Dimension; column++) columns[i, column] *= roots[i];
+        }
         ThinSvdResult factor = ThinSvd.Decompose(columns);
         Rank = factor.NumericalRank;
         _q = [.. factor.LeftVectors.Take(Rank)];
@@ -429,7 +488,7 @@ internal sealed class RandomEffectGeometry
         for (int i = 0; i < Rank; i++)
             for (int j = 0; j < Dimension; j++) _r[i, j] = factor.SingularValues[i] * factor.RightVectors[i][j];
         var aliases = new List<RandomEffectAlias>();
-        for (int a = 0; a < groups.Count; a++)
+        for (int a = 0; a < groups.Count && roots.IsEmpty; a++)
             for (int b = a + 1; b < groups.Count; b++)
             {
                 if (groups[a].Input is not null || groups[b].Input is not null) continue;
@@ -567,6 +626,10 @@ internal sealed class RandomEffectWhitening
     // The posterior square root in standardized contrast coordinates is I + V(diag(roots)-I)Vᵀ.
     // Draw all q coordinates, retaining the prior variation in the q-r aliased directions.
     public double[][] DrawEffects(ReadOnlySpan<double> residual, double sigma2, Xoshiro256PlusPlus rng)
+        => _geometry.Effects(DrawCoordinates(residual, sigma2, rng));
+
+    // The draw's contrast coordinates, each a grouping's scale times its standardized coordinate.
+    internal double[] DrawCoordinates(ReadOnlySpan<double> residual, double sigma2, Xoshiro256PlusPlus rng)
     {
         ArgumentNullException.ThrowIfNull(rng);
         if (!(sigma2 > 0) || !double.IsFinite(sigma2)) throw new ArgumentOutOfRangeException(nameof(sigma2));
@@ -575,7 +638,19 @@ internal sealed class RandomEffectWhitening
         double[] z = [.. Enumerable.Range(0, _geometry.Dimension).Select(_ => Normal.SampleStandard(rng))];
         double[] noise = ConditionalNoise(z);
         for (int j = 0; j < noise.Length; j++) mean[j] += sd * noise[j];
-        return _geometry.Effects(mean);
+        return mean;
+    }
+
+    // u's prior energy over σ², Σ_j (c_j/s_g(j))², the coefficients' Q's counterpart in σ²'s conditional: u | σ² ~ N(0, σ²S²) in contrasts.
+    internal double Energy(ReadOnlySpan<double> coordinates)
+    {
+        double energy = 0;
+        for (int j = 0; j < coordinates.Length; j++)
+        {
+            double standardized = coordinates[j] / _scales[_geometry.CoordinateGroup(j)];
+            energy += standardized * standardized;
+        }
+        return energy;
     }
 
     // The physical contrast square root at unit σ, applied to supplied standard coordinates.
@@ -614,4 +689,135 @@ internal sealed class RandomEffectWhitening
         }
         return result;
     }
+}
+
+/// <summary>
+/// A random-effect block's whitening under observation weights W (E21's slice 4, the block under GBASS's noises). With y's covariance
+/// σ²(W⁻¹ + Z̃S²Z̃ᵀ), the map L = V_w^(−½)W^½, V_w = I + W^½Z̃S²Z̃ᵀW^½, takes it to σ²I, at the price −½ln|V_w| beside the weights'
+/// ½Σ ln wᵢ. The blocks' conventions centre u with unweighted counts, so L·1 is not W^½·1: the intercept's direction is c = L·1, its mass
+/// cᵀc, and the centring of a column or of the response is its GLS mean cᵀLz/cᵀc. At W = I this is the unweighted block's (V1 = 1). V_w is
+/// factored by the thin SVD of W^½Z̃ (<see cref="RandomEffectGeometry"/>) at each reading, O(n·q²); u's conditional given the coefficients
+/// and σ² is the general block's on the scaled rows.
+/// </summary>
+internal sealed class WeightedWhitening
+{
+    private readonly double[] _roots, _direction;
+    private readonly RandomEffectWhitening _whitening;
+
+    internal WeightedWhitening(RandomEffectsBlock block, ReadOnlySpan<double> weights)
+    {
+        ArgumentNullException.ThrowIfNull(block);
+        int n = weights.Length;
+        if (n != block.Cases) throw new ArgumentException("Give one weight per case.", nameof(weights));
+        _roots = new double[n];
+        for (int i = 0; i < n; i++) _roots[i] = Math.Sqrt(weights[i]);
+        _whitening = new RandomEffectGeometry(block.Layouts, _roots).At(block.Scales.Span);
+        var ones = new double[n];
+        Array.Fill(ones, 1.0);
+        _direction = Apply(ones);
+        Mass = PairwiseSum.Dot(_direction, _direction);
+    }
+
+    /// <summary>cᵀc, the intercept's mass under L.</summary>
+    internal double Mass { get; }
+
+    /// <summary>ln|V_w|.</summary>
+    internal double LogDeterminant => _whitening.LogDeterminant;
+
+    /// <summary>c = L·1, the intercept's direction.</summary>
+    internal ReadOnlySpan<double> Direction => _direction;
+
+    /// <summary>L·z = V_w^(−½)(W^½∘z), a new array.</summary>
+    internal double[] Apply(ReadOnlySpan<double> z)
+    {
+        var t = new double[z.Length];
+        for (int i = 0; i < t.Length; i++) t[i] = _roots[i] * z[i];
+        _whitening.Whiten(t);
+        return t;
+    }
+
+    /// <summary>The GLS centring of a vector already taken through L: cᵀt/cᵀc.</summary>
+    internal double CentringOf(ReadOnlySpan<double> applied) => PairwiseSum.Dot(_direction, applied) / Mass;
+
+    /// <summary>The GLS mean of <paramref name="z"/>, 1ᵀC⁻¹z/1ᵀC⁻¹1.</summary>
+    internal double Mean(ReadOnlySpan<double> z) => CentringOf(Apply(z));
+
+    /// <summary>u's conditional mean given the residual e = y − σβv − f, through W^½∘e.</summary>
+    internal double[][] MeanEffects(ReadOnlySpan<double> residual) => _whitening.MeanEffects(Scaled(residual));
+
+    /// <summary>A draw of u given the residual and σ², with its prior energy over σ² (<see cref="RandomEffectWhitening.Energy"/>).</summary>
+    internal (double[][] Effects, double Energy) DrawEffects(ReadOnlySpan<double> residual, double sigma2, Xoshiro256PlusPlus rng)
+    {
+        double[] coordinates = _whitening.DrawCoordinates(Scaled(residual), sigma2, rng);
+        return (_whitening.Geometry.Effects(coordinates), _whitening.Energy(coordinates));
+    }
+
+    /// <summary>q, u's contrast coordinates, each drawn: the count u's prior adds to σ²'s conditional.</summary>
+    internal int Dimension => _whitening.Geometry.Dimension;
+
+    private double[] Scaled(ReadOnlySpan<double> x)
+    {
+        var scaled = new double[x.Length];
+        for (int i = 0; i < x.Length; i++) scaled[i] = _roots[i] * x[i];
+        return scaled;
+    }
+}
+
+/// <summary>
+/// Random effects carried as a latent under a noise (E21's decision 7, amended 2026-11-10): u at the block's scales, which the reading takes
+/// as the offset Z̃u beside σβv. Every rung conditions on it, so ladders, SMC and the reference rung are exact; at b = 1 the structure step
+/// may integrate it and draw it afresh (<see cref="BassCollapsedStructureBlock"/>). u | σ², s ~ N(0, σ²S²) in each grouping's orthonormal
+/// contrasts, so its prior energy over σ² is Σ_k ‖u_k‖²/s_k² on Σ_k q_k coordinates.
+/// </summary>
+internal sealed record RandomEffectsLatent(RandomEffectsBlock Block, double[][] Effects)
+{
+    /// <summary>u = 0 at <paramref name="block"/>'s scales: a reading's start.</summary>
+    internal static RandomEffectsLatent Zero(RandomEffectsBlock block)
+        => new(block, [.. Enumerable.Range(0, block.Count).Select(k => new double[block.Layout(k).Levels])]);
+
+    /// <summary>u from its prior given <paramref name="sigma2"/>, at <paramref name="block"/>'s scales: the reference rung's and SMC's draw.</summary>
+    internal static RandomEffectsLatent DrawPrior(RandomEffectsBlock block, double sigma2, Xoshiro256PlusPlus rng)
+    {
+        ArgumentNullException.ThrowIfNull(rng);
+        double sigma = Math.Sqrt(sigma2);
+        var effects = new double[block.Count][];
+        for (int k = 0; k < block.Count; k++)
+        {
+            RandomEffectGrouping layout = block.Layout(k);
+            double sd = sigma * block.Scales.Span[k];
+            double[] coordinates = [.. Enumerable.Range(0, layout.Dimension).Select(_ => sd * Normal.SampleStandard(rng))];
+            effects[k] = layout.Effects(coordinates);
+        }
+        return new RandomEffectsLatent(block, effects);
+    }
+
+    /// <summary>These effects at <paramref name="block"/>'s scales (a step of s, which moves no effect).</summary>
+    internal RandomEffectsLatent At(RandomEffectsBlock block) => this with { Block = block };
+
+    /// <summary>Σ_k ‖u_k‖²/s_k², the prior energy over σ², and Σ_k q_k, its coordinates.</summary>
+    internal (double Energy, int Count) Prior
+    {
+        get
+        {
+            double energy = 0;
+            int count = 0;
+            for (int k = 0; k < Effects.Length; k++)
+            {
+                double s = Block.Scales.Span[k], squares = 0;
+                foreach (double u in Effects[k]) squares += u * u;
+                energy += squares / (s * s);
+                count += Block.Layout(k).Dimension;
+            }
+            return (energy, count);
+        }
+    }
+
+    /// <summary>Grouping k's ‖u_k‖².</summary>
+    internal double Squares(int k) => Effects[k].Sum(u => u * u);
+
+    /// <summary>Adds Z̃u at each training case to <paramref name="fit"/>.</summary>
+    internal void AddTo(Span<double> fit) => Block.AddEffects(Effects, fit);
+
+    /// <summary>The effects as named retained records.</summary>
+    internal BassGroupDraw[] Groups => Block.Named(Effects);
 }

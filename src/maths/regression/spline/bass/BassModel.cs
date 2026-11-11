@@ -40,7 +40,7 @@ public sealed class BassModel
     public static BassModel Create(BassConfig config, BassData data, TemperedForm? form = null)
     {
         ArgumentNullException.ThrowIfNull(config);
-        return Create(config, data, config.Noise is { } noise ? new VarianceMeanMixture(noise, config.Sigma2) : GaussianObservation.Instance, form);
+        return Create(config, data, config.Noise is { } noise ? new VarianceMeanMixture(noise, config.Sigma2, recordsSigma2: config.HasRandomEffects) : GaussianObservation.Instance, form);
     }
 
     /// <summary><see cref="Create(BassConfig, BassData, TemperedForm?)"/> with <paramref name="observation"/> as the noise
@@ -69,8 +69,8 @@ public sealed class BassModel
         {
             IBassRandomEffect[] effects = config.EffectSpecifications;
             config.Validate();
-            if (observation is not GaussianObservation)
-                throw new ArgumentException("Random intercepts currently take scalar Gaussian noise; moving row weights arrive in slice 4.", nameof(observation));
+            if (observation is not (GaussianObservation or VarianceMeanMixture))
+                throw new ArgumentException("Random effects take Gaussian noise or a variance-mean mixture's.", nameof(observation));
             block = RandomEffectsBlock.Of(data.Groupings, effects, data.Predictors.OfType<ContinuousPredictor>().ToArray());
             // A drawn s moves the whitened reading, so the priors read the response's own moments, frozen, as a fit without the block
             // reads them: a prior that read the reading at s would read a parameter (PriorsReadResponse).
@@ -79,7 +79,13 @@ public sealed class BassModel
                     reference: config.Intercept == GPriorCentre.Zero
                     ? BassPriorReference.About(working.Values, 0.0)
                     : BassPriorReference.Moments(working.Values));
-            working = block.Whitened(baseReading);
+            // Under a noise u is a latent the reading carries, from 0; at unit weights it is integrated by the whitening (E21's decision 7, amended).
+            if (observation is VarianceMeanMixture latentMixture)
+            {
+                if (!latentMixture.RecordsSigma2) throw new ArgumentException("Random effects under a noise keep σ² on the record: build the mixture with recordsSigma2.", nameof(observation));
+                working = latentMixture.At(working, RandomEffectsLatent.Zero(block));
+            }
+            else working = block.Rewhiten(baseReading);
         }
         BassResolved resolved = BassResolved.Resolve(config, data, working);
         BassInputTransform transform = BassInputTransform.Fit(data);
@@ -100,6 +106,9 @@ public sealed class BassModel
 
     /// <summary>Whether the random-intercept block's scale is drawn (<see cref="BassRandomIntercept.ScalePrior"/>).</summary>
     public bool ScaleDrawn => RandomEffects?.Specifications.Any(s => s.ScalePrior is not null) ?? false;
+
+    /// <summary>Whether the random effects are a latent the state carries: under a noise (E21's decision 7, amended).</summary>
+    public bool EffectsAreLatent => RandomEffects is not null && Observation is VarianceMeanMixture;
 
     // Whether a state's reading moves with it: a noise's latents, or a drawn scale's whitening.
     internal bool ReadingMoves => Observation is VarianceMeanMixture || ScaleDrawn;

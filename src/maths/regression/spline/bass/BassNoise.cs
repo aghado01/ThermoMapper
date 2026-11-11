@@ -411,19 +411,21 @@ public sealed class VarianceMeanMixture : IBassObservationModel, IBassNoiseLaw
     private readonly double? _held;   // σ² as the config holds it, under a skew
 
     /// <summary>The model of <paramref name="noise"/> under σ²'s prior <paramref name="sigma2"/> (D03's default when null), which a
-    /// skewed noise draws σ² against, or holds it at.</summary>
-    public VarianceMeanMixture(BassNoise noise, Sigma2Prior? sigma2 = null)
+    /// skewed noise draws σ² against, or holds it at. <paramref name="recordsSigma2"/> keeps σ² on the record without a skew as well, which
+    /// random effects need: their prior scales with σ² (E21's decision 7, amended).</summary>
+    public VarianceMeanMixture(BassNoise noise, Sigma2Prior? sigma2 = null, bool recordsSigma2 = false)
     {
         ArgumentNullException.ThrowIfNull(noise);
         Noise = noise;
         Mixing = noise.Mixing;
         Skew = noise.Skew;
         Skewed = noise.Skewed;
+        RecordsSigma2 = noise.Skewed || recordsSigma2;
         _held = sigma2?.IsHeld == true ? sigma2.Value : null;
         _coefficients = [new BassCoefficientsBlock()];
         _latent = noise.RescalesSkew ? [new BassLatentScaleBlock(this), new BassSkewRescaleBlock(this)] : [new BassLatentScaleBlock(this)];
         var scale = new List<IBlock<ReversibleJumpChain<BassState>>>();
-        if (Skewed && _held is null) scale.Add(new BassScaleBlock(this));
+        if (RecordsSigma2 && _held is null) scale.Add(new BassScaleBlock(this));
         if (noise.SkewDrawn || noise.GammaPrior is { IsHeld: false }) scale.Add(new BassNoiseShapeBlock(this));
         if (noise.Interweave && _held is null) scale.Add(new BassInterweavingBlock(this));
         _scale = [.. scale];
@@ -445,8 +447,11 @@ public sealed class VarianceMeanMixture : IBassObservationModel, IBassNoiseLaw
     /// <summary>β, the drift per unit v, the kind's or where a chain starts; 0 for a pure scale mixture.</summary>
     public double Skew { get; }
 
-    /// <summary>Whether σ² is drawn apart and held on the record: a skew drawn, or held away from 0.</summary>
+    /// <summary>Whether the noise is skewed: a skew drawn, or held away from 0.</summary>
     public bool Skewed { get; }
+
+    /// <summary>Whether σ² is drawn apart and held on the record: under a skew, or beside random effects.</summary>
+    public bool RecordsSigma2 { get; }
 
     /// <summary>
     /// The working response at v = 1, β and γ at their starts: under a skew, σ² starts at the response's variance over the noise's per unit
@@ -460,7 +465,7 @@ public sealed class VarianceMeanMixture : IBassObservationModel, IBassNoiseLaw
         var ones = new double[n];
         Array.Fill(ones, 1.0);
         double? sigma2 = null, gamma = Noise.GammaStart;
-        if (Skewed)
+        if (RecordsSigma2)
         {
             ReadOnlySpan<double> y = response.Values;
             double mean = 0.0, squares = 0.0;
@@ -504,7 +509,7 @@ public sealed class VarianceMeanMixture : IBassObservationModel, IBassNoiseLaw
         var v = new double[observations];
         for (int i = 0; i < observations; i++) v[i] = law.SamplePrior(rng);
         double? sigma2 = null;
-        if (Skewed)
+        if (RecordsSigma2)
             sigma2 = _held ?? (sigma2Prior is { } prior
                 ? prior.Sample(rng)
                 : throw new InvalidOperationException("Under a skew σ² sits on the record, and an exact draw of it needs a proper prior: take an inverse gamma, a held σ² or the hierarchical prior."));
@@ -519,7 +524,35 @@ public sealed class VarianceMeanMixture : IBassObservationModel, IBassNoiseLaw
     internal WorkingResponse At(WorkingResponse from, ObservationLatents latents, bool weightsMoved = true)
     {
         (double[]? offset, double[] weights) = Reading(latents);
-        return from.Moved(offset, weightsMoved ? weights : default, latents);
+        return from.Moved(WithEffects(offset, from.Effects, latents.Values.Length), weightsMoved ? weights : default, latents);
+    }
+
+    /// <summary>The reading of <paramref name="from"/>'s latents with <paramref name="effects"/> as its random effects: the offset σβ·v + Z̃u,
+    /// the weights as they stand, no whitening (E21's decision 7, amended).</summary>
+    internal WorkingResponse At(WorkingResponse from, RandomEffectsLatent effects)
+    {
+        ObservationLatents latents = from.Latents ?? throw new InvalidOperationException("The working response holds no latents.");
+        (double[]? offset, _) = Reading(latents);
+        return from.Reread(WithEffects(offset, effects, latents.Values.Length), latents, effects);
+    }
+
+    /// <summary>The u-integrated reading of <paramref name="from"/> at b = 1 (<see cref="BassCollapsedStructureBlock"/>): the offset σβ·v alone
+    /// and the random effects' whitening under its weights, which the design reads with the GLS intercept direction.</summary>
+    internal WorkingResponse Integrated(WorkingResponse from)
+    {
+        ObservationLatents latents = from.Latents ?? throw new InvalidOperationException("The working response holds no latents.");
+        RandomEffectsLatent effects = from.Effects ?? throw new InvalidOperationException("The reading carries no random effects.");
+        (double[]? offset, _) = Reading(latents);
+        return effects.Block.Rewhiten(from.Reread(offset, latents, null));
+    }
+
+    // σβ·v (or none) with Z̃u added where `effects` are carried.
+    private static double[]? WithEffects(double[]? offset, RandomEffectsLatent? effects, int n)
+    {
+        if (effects is null) return offset;
+        double[] total = offset ?? new double[n];
+        effects.AddTo(total);
+        return total;
     }
 
     // The offset σβ·v (none at β = 0) and the weights 1/(c·v) at `latents`.
@@ -847,7 +880,7 @@ public sealed class BassScaleBlock : IBlock<ReversibleJumpChain<BassState>>
             squares += r * r * weights[i];
             sum += r;
         }
-        (double quadratic, int count) = fit.Conditional.PriorEnergy(fit.Centred);
+        (double quadratic, int count) = fit.PriorEnergy();
         InverseGamma? prior = (state.Target as BassTarget ?? throw new InvalidOperationException("The chain's target is BASS's.")).Sigma2At(state.Current);
         double u = VarianceMeanConditionals.SampleInverseScale(y.Length, squares, sum, quadratic, count, prior, latents.Skew, c,
                                                                BassCoefficientsBlock.Power(state), rng);
@@ -966,7 +999,7 @@ public sealed class BassInterweavingBlock : IBlock<ReversibleJumpChain<BassState
             double e = y[i] - fit.Fitted[i] - beta * z[i];
             a += e * e / (c * z[i]);
         }
-        (double quadratic, int count) = fit.Conditional.PriorEnergy(fit.Centred);
+        (double quadratic, int count) = fit.PriorEnergy();
         InverseGamma? prior = (state.Target as BassTarget ?? throw new InvalidOperationException("The chain's target is BASS's.")).Sigma2At(state.Current);
         double shape = prior?.Shape ?? 0.0, scale = prior?.Scale ?? 0.0;
         var density = new ScaleGivenZ(z, _model.MixingAt(latents), -(0.5 * b * n + n + 2.0 * shape + count), 0.5 * b * a, scale + 0.5 * quadratic);
@@ -998,4 +1031,19 @@ internal sealed record BassSweepFit(BassState State, double Sigma2, double[] Cen
 {
     /// <summary>The structure the coefficients belong to.</summary>
     public BassTerm[] Structure => State.TermArray;
+
+    /// <summary>Under random effects and a noise, the effects drawn after the coefficients, whose contribution <see cref="Fitted"/>
+    /// includes (E21's slice 4); null otherwise.</summary>
+    public BassGroupDraw[]? Groups { get; init; }
+
+    /// <summary>u's prior energy over σ² and its count, which σ²'s conditional and interweaving's add to the coefficients'.</summary>
+    public (double Energy, int Count) GroupPrior { get; init; }
+
+    /// <summary>The coefficients' prior energy and count (<see cref="GPriorConditional.PriorEnergy"/>), with u's beside them under random
+    /// effects: every prior whose variance scales with σ².</summary>
+    public (double Quadratic, int Count) PriorEnergy()
+    {
+        (double quadratic, int count) = Conditional.PriorEnergy(Centred);
+        return (quadratic + GroupPrior.Energy, count + GroupPrior.Count);
+    }
 }

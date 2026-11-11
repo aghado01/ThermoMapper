@@ -289,12 +289,39 @@ public sealed class WorkingResponse
         Weighting = source.Weighting;
         Output = source.Output;
         Whitening = source.Whitening;
+        Weighted = source.Weighted;
+        Effects = source.Effects;
         _weights = source._weights;
         if (Response is MultiOutputResponse)
             throw new NotSupportedException("Several outputs read the response itself: offsets and latents arrive with E34's noise (slice 4).");
         (_offset, _shifted) = Shifted(Response, offset);
-        _responseMean = MeanOf(_weights, Values, Weighting, Response.Observations);
+        _responseMean = Weighted is { } weighted ? weighted.Mean(Values) : MeanOf(_weights, Values, Weighting, Response.Observations);
     }
+
+    // `source` with `block`'s whitening under its weights (E21's slice 4): its offset, weights and latents as they stand; its mass cᵀc, its
+    // mean the GLS one, and Σ ln wᵢ less ln|V_w|, the price of the effects' integral.
+    private WorkingResponse(WorkingResponse source, RandomEffectsBlock block, WeightedWhitening weighted)
+    {
+        if (source._weights is not { } weights) throw new ArgumentException("A weighted whitening reads the reading's weights.", nameof(source));
+        if (source.Meaning != WeightMeaning.Precision) throw new NotSupportedException("Random effects under weights that count rows are not built.");
+        Response = source.Response;
+        Meaning = source.Meaning;
+        PriorGram = source.PriorGram;
+        Reference = source.Reference;
+        Latents = source.Latents;
+        Output = source.Output;
+        Whitening = block;
+        Weighted = weighted;
+        _weights = weights;
+        (_offset, _shifted) = (source._offset, source._shifted);
+        var logs = new double[weights.Length];
+        for (int i = 0; i < weights.Length; i++) logs[i] = Math.Log(weights[i]);
+        Weighting = new GPriorWeights(weights.Length, weighted.Mass, PairwiseSum.Of(logs) - weighted.LogDeterminant);
+        _responseMean = weighted.Mean(Values);
+    }
+
+    // This reading with `block`'s whitening under its weights (RandomEffectsBlock.Rewhiten).
+    internal WorkingResponse WithWhitening(RandomEffectsBlock block, WeightedWhitening weighted) => new(this, block, weighted);
 
     private static (double[]? Offset, double[]? Shifted) Shifted(BassResponse response, ReadOnlySpan<double> offset)
     {
@@ -326,7 +353,9 @@ public sealed class WorkingResponse
     {
         if (weights.IsEmpty) return new WorkingResponse(this, offset, latents);
         if (_weights is null) throw new ArgumentException("This working response holds no weights, and a design's layout depends on whether it does; declare them from the start.", nameof(weights));
-        return new WorkingResponse(Response, offset, weights, Output, Meaning, PriorGram, Reference, latents);
+        var moved = new WorkingResponse(Response, offset, weights, Output, Meaning, PriorGram, Reference, latents) { Effects = Effects };
+        // A random-effect block whitens under the new weights, at its scales (E21's slice 4).
+        return Whitening is { } block ? block.Rewhiten(moved) : moved;
     }
 
     /// <summary>The response the working response derives from.</summary>
@@ -338,6 +367,18 @@ public sealed class WorkingResponse
     /// is on, so a reading at another scale moves every column as moved weights do (E21).
     /// </summary>
     public RandomEffectsBlock? Whitening { get; internal init; }
+
+    /// <summary>A random-effect block's whitening under this reading's weights (E21's slice 4): L = V_w^(−½)W^½, by which the design reads
+    /// the response and each column, centred against L·1; null at unit weights or without a block.</summary>
+    internal WeightedWhitening? Weighted { get; private init; }
+
+    /// <summary>Under a noise, the random effects this reading carries as a latent, its offset holding Z̃u beside σβv (E21's decision 7,
+    /// amended); null otherwise. The design reads the offset alone.</summary>
+    internal RandomEffectsLatent? Effects { get; init; }
+
+    // A reading of this response at `offset` and `latents`, this reading's weights copied, with `effects` as its latent and no whitening.
+    internal WorkingResponse Reread(ReadOnlySpan<double> offset, ObservationLatents? latents, RandomEffectsLatent? effects)
+        => new(Response, offset, _weights, Output, Meaning, PriorGram, Reference, latents) { Effects = effects };
 
     /// <summary>y − offset, case by case and location by location; the response itself when there is no offset.</summary>
     public ReadOnlySpan<double> Values => _shifted ?? Response.Values;
@@ -404,6 +445,7 @@ public sealed class WorkingResponse
     /// <paramref name="h"/> for a direct response: āh̄ at unit weights.</summary>
     internal double ColumnMean(double[] a, double[]? h)
     {
+        if (Weighted is { } weighted && h is null) return weighted.Mean(a);   // the GLS centring under a block's weighted whitening
         if (_weights is null)
         {
             double mean = PairwiseSum.Of(a) / a.Length;
@@ -507,6 +549,10 @@ public static class BassSweepSlots
     /// the structure slot; a tempering replica or an SMC particle, whose moves the engine runs itself, at τ's.
     /// </summary>
     public static List<IBlock<ReversibleJumpChain<BassState>>> Blocks(BassModel model, BassSweepSlot first = BassSweepSlot.Structure)
+        => Blocks(model, first, collapse: true);
+
+    // `collapse` false keeps every structure step on the likelihood given u: the mixing measurement's reference (E21's slice 4).
+    internal static List<IBlock<ReversibleJumpChain<BassState>>> Blocks(BassModel model, BassSweepSlot first, bool collapse)
     {
         ArgumentNullException.ThrowIfNull(model);
         var blocks = new List<IBlock<ReversibleJumpChain<BassState>>>();
@@ -516,13 +562,21 @@ public static class BassSweepSlots
             switch (slot)
             {
                 case BassSweepSlot.Structure:
-                    blocks.Add(new MoveStep<BassState>());
+                    // Under a noise with random effects a chain's structure step at b = 1 reads the u-integrated likelihood (E21's slice 4).
+                    blocks.Add(collapse && model.EffectsAreLatent ? new BassCollapsedStructureBlock(model) : new MoveStep<BassState>());
                     break;
                 case BassSweepSlot.Tau:
+                    // A replica or a particle runs its own moves; at b = 1 the collapsed step follows them.
+                    if (collapse && model.EffectsAreLatent && first == BassSweepSlot.Tau) blocks.Add(new BassCollapsedStructureBlock(model));
                     if (model.Target.SamplesTau) blocks.Add(new BassTauBlock());
                     if (model.RandomEffects is { } groups)
                         for (int group = 0; group < groups.Count; group++)
-                            if (groups.Specifications[group].ScalePrior is not null) blocks.Add(new BassGroupScaleBlock(model, group));
+                            if (groups.Specifications[group].ScalePrior is not null)
+                                blocks.Add(model.EffectsAreLatent ? new BassLatentGroupScaleBlock(model, group) : new BassGroupScaleBlock(model, group));
+                    break;
+                case BassSweepSlot.Coefficients:
+                    blocks.AddRange(model.Observation.Blocks(slot));
+                    if (model.EffectsAreLatent) blocks.Add(new BassGroupEffectsBlock(model));   // u given the coefficients, before any block reads it
                     break;
                 case BassSweepSlot.Scale:
                     blocks.AddRange(model.Observation.Blocks(slot));

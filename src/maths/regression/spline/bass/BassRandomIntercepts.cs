@@ -428,7 +428,7 @@ public sealed class BassGroupScaleBlock : IBlock<ReversibleJumpChain<BassState>>
         RandomEffectsBlock at = block.At(_group, moved);
         double reverse = Scale(at);
         double proposalRatio = Math.Log(h) - Math.Log(reverse) - t * t / (2.0 * reverse * reverse) + t * t / (2.0 * h * h);
-        BassState candidate = BassStructureMoves.Of(state).ProposeFollow(state.Current, at.WhitenResponse(Reading(state)));
+        BassState candidate = BassStructureMoves.Of(state).ProposeFollow(state.Current, at.Rewhiten(Reading(state)));
         if ((state.Target as BassTarget ?? throw new InvalidOperationException("The chain's target is BASS's.")).Refusal(candidate.Fit) is not null) return null;
         ITargetEvaluation evaluation = state.Target.Evaluate(candidate);
         double target = state.Temperature.LogDensity(evaluation) - state.CurrentLogDensity;

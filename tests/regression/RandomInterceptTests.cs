@@ -557,7 +557,7 @@ public sealed class RandomInterceptTests(ITestOutputHelper output)
         Assert.Contains("only random effects read", Assert.Throws<ArgumentException>(() => BassModel.Create(plain, grouped)).Message);
         Assert.Contains("has no data grouping", Assert.Throws<ArgumentException>(() => BassModel.Create(block, data)).Message);
         Assert.Contains("RandomIntercepts[0].Scale", Assert.Throws<ArgumentException>(() => (block with { RandomIntercepts = [new BassRandomIntercept("g", 0.0)] }).Validate()).Message);
-        Assert.Contains("take no Noise", Assert.Throws<ArgumentException>(() => (block with { Noise = BassNoise.StudentT(5) }).Validate()).Message);
+        (block with { Noise = BassNoise.StudentT(5) }).Validate();   // random effects take a noise (E21's slice 4)
         Assert.Contains("used twice", Assert.Throws<ArgumentException>(() =>
             new BassData(data.Predictors, data.Response, [new CategoricalPredictor(data.Predictors[0].Name,
                                                                                 [.. Enumerable.Range(0, data.Response.Cases).Select(i => i % 2)], ["a", "b"])])).Message);

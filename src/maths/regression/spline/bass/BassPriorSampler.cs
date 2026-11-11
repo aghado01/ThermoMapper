@@ -220,6 +220,14 @@ public sealed class BassPriorSampler : IReferenceSampler<BassState>
             double logTau = DrawLogTau(rng), logRate = target.Sigma2Rate?.SampleLogRate(rng) ?? double.NaN;
             InverseGamma? sigma2Prior = target.Sigma2Rate is { } rate ? rate.PriorAt(logRate) : target.Sigma2;
             WorkingResponse working = mixture.At(_model.Working, mixture.PriorLatents(n, sigma2Prior, rng));
+            if (_model.RandomEffects is { } block)   // each drawn scale from its prior, then u from its prior given σ² (E21's slice 4)
+            {
+                double[] scales = block.Scales.ToArray();
+                for (int k = 0; k < scales.Length; k++)
+                    if (block.Specifications[k].ScalePrior is { } scalePrior) scales[k] = scalePrior.Sample(rng);
+                double sigma2 = working.Latents!.Sigma2 ?? throw new InvalidOperationException("Random effects under a noise keep σ² on the record.");
+                working = mixture.At(working, RandomEffectsLatent.DrawPrior(block.At(scales), sigma2, rng));
+            }
             if (_design.Load(terms, working) is { } refusal)
             {
                 Refusals.Add(refusal);

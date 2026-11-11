@@ -316,19 +316,24 @@ internal static class BassDirectPrediction
                     ObservationLatents? globals = pooled[selected[d]].LatentsOn(model);
                     for (int i = 0; i < n; i++)
                         for (int l = 0; l < m; l++) predictive[d, i, l] = latent[d, i, l] + law.Sample(noise[d], globals, rng);
+                    PopulationEffects(d, Math.Sqrt(noise[d]));   // u's prior scales with σ under a noise too (E21's slice 4)
                     continue;
                 }
                 double sd = Math.Sqrt(noise[d]);
                 for (int i = 0; i < n; i++)
                     for (int l = 0; l < m; l++) predictive[d, i, l] = latent[d, i, l] + sd * Normal.SampleStandard(rng);
-                if (groups is not null)   // a population case's own group effect, after every case's noise
-                {
-                    BassGroupDraw[] effects = model.RandomEffects!.Ordered(pooled[selected[d]].Groups!);
-                    for (int k = 0; k < groups.Length; k++)
-                        for (int i = 0; i < n; i++)
-                            if (groups[k][i] < 0) predictive[d, i, 0] += sd * effects[k].Scale * Normal.SampleStandard(rng)
-                                * model.RandomEffects!.Layout(k).Multiplier(caseInputs, i);
-                }
+                PopulationEffects(d, sd);
+            }
+
+            // A population case's own group effect, after every case's noise.
+            void PopulationEffects(int d, double sd)
+            {
+                if (groups is null) return;
+                BassGroupDraw[] effects = model.RandomEffects!.Ordered(pooled[selected[d]].Groups!);
+                for (int k = 0; k < groups.Length; k++)
+                    for (int i = 0; i < n; i++)
+                        if (groups[k][i] < 0) predictive![d, i, 0] += sd * effects[k].Scale * Normal.SampleStandard(rng)
+                            * model.RandomEffects!.Layout(k).Multiplier(caseInputs, i);
             }
         }
 
@@ -347,7 +352,7 @@ internal static class BassDirectPrediction
                     RandomEffectsBlock intercepts = model.BlockAt(draw)!;   // at the draw's scales
                     var structure = new BassTerm[draw.Structure.TermIds.Length];
                     for (int j = 0; j < structure.Length; j++) structure[j] = terms[draw.Structure.TermIds[j]];
-                    double[][] u = intercepts.MeanEffects(model, structure, a);
+                    double[][] u = intercepts.MeanEffects(model, structure, a, draw.WorkingOn(model));   // under a noise, at the draw's weights
                     for (int k = 0; k < groups.Length; k++)
                         for (int i = 0; i < n; i++)
                             if (groups[k][i] >= 0) f[i * m] += intercepts.Layout(k).Multiplier(caseInputs, i)*u[k][groups[k][i]];

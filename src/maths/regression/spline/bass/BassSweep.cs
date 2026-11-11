@@ -53,7 +53,7 @@ public sealed class BassStructureMoves
     private BassState _committed;
     private Pending? _candidate;
     private readonly Dictionary<BassTerm, double> _columnMeans = [];
-    private double[]? _columnMeansWeights;        // the weights those means were read under
+    private object? _columnMeansWeights;          // the weights, or a random-effect block's weighted whitening, those means were read under
     private readonly BassFactorShares? _shares;   // the fixed-M family's shares of the change's slot; null when off
     private readonly Dictionary<BassTerm, (double[] Case, double[]? Output)> _sweepColumns = [];   // the sweep fit's raw columns, a pure cache
 
@@ -81,7 +81,7 @@ public sealed class BassStructureMoves
         Support = new BassSupportTally(model.Prior);
         Kinds = new BassMoveTally();
         _shares = model.Resolved.FactorShares;
-        _columnMeansWeights = model.Working.WeightArray;
+        _columnMeansWeights = MeansKey(model.Working);
         _kernel = KernelOf(model, null);
         Moves = Palette();
     }
@@ -105,7 +105,7 @@ public sealed class BassStructureMoves
         Support = snapshot.Support.Copy();
         Kinds = snapshot.Kinds.Copy();
         _shares = model.Resolved.FactorShares;
-        _columnMeansWeights = _design.Working.WeightArray;
+        _columnMeansWeights = MeansKey(_design.Working);
         _kernel = KernelOf(model, snapshot.History);
         Moves = Palette();
     }
@@ -329,7 +329,8 @@ public sealed class BassStructureMoves
         // The group effects at the block the reading carries, the chain's s, drawn last, so a fit without the block draws as it did. A
         // drawn s is the draw's generative state, and its reading a view rebuilt from it (BassDraw.WorkingOn).
         RandomEffectsBlock? block = working.Whitening;
-        BassGroupDraw[]? groups = block?.DrawGroups(_model, [.. order.Select(k => state.Terms[k])], coefficients, sigma2, rng);
+        // Under a noise u is the state's latent, kept as it stands; at unit weights it is drawn from its conditional.
+        BassGroupDraw[]? groups = working.Effects?.Groups ?? block?.DrawGroups(_model, [.. order.Select(k => state.Terms[k])], coefficients, sigma2, rng, working);
         return new BassDraw(new BassStructure(sorted), tau, sigma2, coefficients, lambda, target.Sigma2Rate?.RateAt(state.LogRate),
                             working.IsResponseItself || rebuilds || _model.ScaleDrawn ? null : working, rebuilds ? working.Latents : null, groups);
     }
@@ -370,6 +371,9 @@ public sealed class BassStructureMoves
     /// before the first. Not state: it is redrawn each sweep before it is read, so a snapshot leaves it out.</summary>
     internal BassSweepFit? SweepFit { get; private set; }
 
+    // A block that moves the state after the coefficients' draw hands its fit on at the new state (E21's u block and collapsed step).
+    internal void Hand(BassSweepFit fit) => SweepFit = fit;
+
     /// <summary>
     /// σ² and the coefficients at <paramref name="state"/> from their conditional given the structure, τ and the working response, as
     /// <see cref="Compose"/> draws them, with the fit f = α + Σⱼ βⱼ(zⱼ − z̄ⱼ) at every observation, centred under W as the design centres
@@ -409,7 +413,27 @@ public sealed class BassStructureMoves
             for (int i = 0; i < a.Length; i++)
                 for (int r = 0; r < h.Length; r++) fitted[i * h.Length + r] += c * (a[i] * h[r] - mean);
         }
-        return SweepFit = new BassSweepFit(state, sigma2, centred, fitted, conditional);
+        if (working.Effects is { } latent)
+        {
+            // Random effects as a latent under a noise: the fit includes Z̃u, so the blocks after read the residual net of it, and σ²'s and
+            // interweaving's priors its energy (E21's decision 7, amended).
+            latent.AddTo(fitted);
+            return SweepFit = new BassSweepFit(state, sigma2, centred, fitted, conditional) { Groups = latent.Groups, GroupPrior = latent.Prior };
+        }
+        if (working.Weighted is not { } weighted) return SweepFit = new BassSweepFit(state, sigma2, centred, fitted, conditional);
+        // Random effects under a noise (E21's slice 4): u from its conditional given a, σ² and the latents, right after a, so the blocks after
+        // read the fit net of it and σ²'s and interweaving's priors its energy.
+        RandomEffectsBlock block = working.Whitening!;
+        ReadOnlySpan<double> values = working.Values;
+        var residual = new double[n];
+        for (int i = 0; i < n; i++) residual[i] = values[i] - fitted[i];
+        (double[][] effects, double energy) = weighted.DrawEffects(residual, sigma2, rng);
+        block.AddEffects(effects, fitted);
+        return SweepFit = new BassSweepFit(state, sigma2, centred, fitted, conditional)
+        {
+            Groups = block.Named(effects),
+            GroupPrior = (energy, weighted.Dimension),
+        };
     }
 
     // The term's case column and, for a direct functional response, its output column, at the training inputs.
@@ -434,16 +458,21 @@ public sealed class BassStructureMoves
     // evaluation's, so draws are unchanged.
     private double ColumnMean(BassTerm term)
     {
-        if (!ReferenceEquals(_columnMeansWeights, _design.Working.WeightArray))
+        object? key = MeansKey(_design.Working);
+        if (!ReferenceEquals(_columnMeansWeights, key))
         {
             _columnMeans.Clear();
-            _columnMeansWeights = _design.Working.WeightArray;
+            _columnMeansWeights = key;
         }
         if (_columnMeans.TryGetValue(term, out double cached)) return cached;
         double mean = EvaluateColumnMean(term);
         _columnMeans.Add(term, mean);
         return mean;
     }
+
+    // What the column means depend on: the weights, or under a random-effect block's weighted whitening that whitening, whose GLS centring
+    // moves with the scales as well as the weights (E21's slice 4).
+    private static object? MeansKey(WorkingResponse working) => (object?)working.Weighted ?? working.WeightArray;
 
     private double EvaluateColumnMean(BassTerm term)
     {

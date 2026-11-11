@@ -209,7 +209,7 @@ public sealed record BassConfig
                 throw Bad("Noise", "takes no Sampling.FlatHistogram: its walkers' π_w and WHAM read the rung laws prior·e^{b·ℓ₁} of the marginal over a and σ², "
                                + "whose weights couple every latent, so no vᵢ keeps a step of its own; take Sampling.Tempering or Sampling.Smc");
             bool drawsPrior = Sampling?.Smc is not null || Sampling?.Tempering is { ReferenceRung: true };
-            if (drawsPrior && noise.Skewed && !Sigma2.IsProper)
+            if (drawsPrior && (noise.Skewed || HasRandomEffects) && !Sigma2.IsProper)
                 throw Bad("Sigma2", "is Jeffreys, improper, while the noise's skew puts σ² on the record and b = 0 draws it from its prior (an SMC start or a reference rung); take an inverse gamma, a held σ² or the hierarchical prior");
             if (noise.Reference == BassNoiseReference.None && (Intercept == GPriorCentre.Mean || Sigma2.ReadsResponse))
                 throw Bad("Noise.Reference", "is None, while the intercept's level or σ²'s prior reads the response; state Moments or Robust, or take priors that read nothing");
@@ -217,10 +217,6 @@ public sealed record BassConfig
 
         CheckRandomIntercepts(RandomIntercepts);
         CheckRandomSlopes(RandomSlopes);
-        if (RandomIntercepts is { Count: > 0 } && Noise is not null)
-            throw Bad("RandomIntercepts", "take no Noise: blocks are integrated by whitening under unit weights, and a noise's latent weights move each sweep; not built");
-        if (RandomSlopes is { Count: > 0 } && Noise is not null)
-            throw Bad("RandomSlopes", "take no Noise: moving row weights arrive in slice 4");
         for (int k = 0; k < (RandomIntercepts?.Count ?? 0); k++)
         {
             if (RandomIntercepts![k].ScalePrior is not null && Sampling?.FlatHistogram is not null)

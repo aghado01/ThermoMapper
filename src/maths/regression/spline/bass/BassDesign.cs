@@ -152,7 +152,8 @@ public sealed class BassDesign
     private readonly BassAdmission _rules;
     private readonly bool _functional, _ridge;
     private readonly BassPriorPrecision _precision; // how the prior's precision reads the columns (E21)
-    private readonly bool _whitened;                // a random-effect block's whitening rides the working response, by which each column is whitened (E21)
+    // Whether the reading the design is on carries a random-effect block's whitening, by which each column is whitened (E21).
+    private bool IsWhitened() => _response.Working.Whitening is not null;
     private readonly bool _khatriRao;               // a direct response held as case and output factors, its rows unweighted
     private readonly int _cases, _locations, _rows;
     private BassDesignResponse _response;           // what the design reads of the working response it is on
@@ -217,7 +218,7 @@ public sealed class BassDesign
     internal void WarmTables()
     {
         int degree = _basis.Degree;
-        if (!TablesOn || _functional || _khatriRao || _priorColumns is not null || _counted is not null || _whitened || degree is not (1 or 2)) return;
+        if (!TablesOn || _functional || _khatriRao || _priorColumns is not null || _counted is not null || IsWhitened() || degree is not (1 or 2)) return;
         int variables = _basis.Inputs.Cases.ContinuousCount, served = Math.Min(variables, TableVariables());
         double[]? roots = _response.Roots;
         for (int v = 0; v < served; v++)
@@ -285,7 +286,6 @@ public sealed class BassDesign
         if (basis.Inputs.Cases.Cases != _cases) throw new ArgumentException("The basis was not prepared from these data.", nameof(basis));
         working ??= new WorkingResponse(data.Response);
         if (!ReferenceEquals(working.Response, data.Response)) throw new ArgumentException("The working response is of another response.", nameof(working));
-        _whitened = working.Whitening is not null;
         _intercept = intercept;
         _output = working.Output;
         if (!_output.IsIdentity)
@@ -352,6 +352,16 @@ public sealed class BassDesign
         }
         ReadOnlySpan<double> values = working.Values;
         double mean = working.ResponseMean;
+        if (working.Weighted is { } weighted)
+        {
+            // A random-effect block under weights (E21's slice 4): L(y − offset), centred against c = L·1 at the GLS mean.
+            double[] t = weighted.Apply(values);
+            ReadOnlySpan<double> c = weighted.Direction;
+            for (int i = 0; i < _rows; i++) t[i] -= c[i] * mean;
+            double[] rootsOf = sameWeights?.Roots ?? [.. working.WeightArray!.Select(Math.Sqrt)];
+            double centre = _priorColumns is null || _intercept == GPriorCentre.Zero ? 0.0 : working.Reference?.Level ?? PairwiseSum.Of(values) / _rows;
+            return new BassDesignResponse(working, t, rootsOf, centre, _output.Dot(t, t));
+        }
         var y = new double[_rows];
         for (int i = 0; i < _rows; i++) y[i] = values[i] - mean;
         double[]? roots = null;
@@ -663,7 +673,13 @@ public sealed class BassDesign
             || !ReferenceEquals(working.Output, current.Output))
             throw new ArgumentException("What a weight states, the prior's Gram, the reference and the inner product are the model's, which WorkingResponse.Moved keeps.", nameof(working));
         if ((working.Whitening is null) != (current.Whitening is null))
-            throw new ArgumentException("A design's layout depends on whether its columns are whitened, so a model with a random-effect block declares it from the start.", nameof(working));
+        {
+            // Under weights every column is evaluated afresh on a reweighting, so a noise's random effects may pass between their integral at
+            // b = 1 and their reading as an offset (E21's slice 4); at unit weights whitening is the design's layout.
+            if (current.WeightArray is null || working.WeightArray is null)
+                throw new ArgumentException("A design's layout depends on whether its columns are whitened, so a model with a random-effect block declares it from the start.", nameof(working));
+            return true;
+        }
         if (!ReferenceEquals(working.Whitening, current.Whitening)) return true;   // the block at another scale: every column whitened afresh
         double[]? now = current.WeightArray, next = working.WeightArray;
         if ((now is null) != (next is null)) throw new ArgumentException("A design's layout depends on whether it holds weights, so a model whose weights move declares them from the start.", nameof(working));
@@ -1044,6 +1060,8 @@ public sealed class BassDesign
         var a = new double[_cases];
         _basis.CaseColumn(term, _basis.Inputs.Cases, a);
         if (!Supported(a, _rules.SupportMinimum, _counted)) return null;
+        // A random-effect block under weights reads the raw column: L for the fit, the column itself for the prior's side (E21's slice 4).
+        if (!_functional && response.Working.Weighted is { } weighted) return Whitened(term, a, response, weighted);
         response.Working.Whitening?.Whiten(a);   // the support reads the column as evaluated, the fit its whitened image
         if (!_functional)
         {
@@ -1088,6 +1106,33 @@ public sealed class BassDesign
         }
         ColumnOps.CentreAndScale(z, mean, response.Roots!);
         return (z, null, prior);
+    }
+
+    // A random-effect block under weights (E21's slice 4): L·z − c·m, m = cᵀLz/cᵀc the GLS centring, and the prior's side the raw column's
+    // against that same centring. Under a noise u is a latent and the coefficient prior belongs to the model given it, so the reading that
+    // integrates u at b = 1 carries the prior the reading given u does, and a chain that follows between them keeps one prior Gram.
+    private (double[] Column, double[]? Output, BassPriorColumn? Prior) Whitened(BassTerm term, double[] z, BassDesignResponse response, WeightedWhitening weighted)
+    {
+        double[] column = weighted.Apply(z);
+        double mean = weighted.CentringOf(column);
+        ReadOnlySpan<double> c = weighted.Direction;
+        for (int i = 0; i < column.Length; i++) column[i] -= c[i] * mean;
+        BassPriorColumn? prior = null;
+        if (_precision.Unit) prior = new BassPriorColumn([], -mean);   // the raw coefficients' centre is 0
+        else if (_priorColumns is not null)
+        {
+            double own = (_priorWeights is null ? PairwiseSum.Of(z) : PairwiseSum.Dot(_priorWeights, z)) / _priorMass;
+            var centred = new double[_rows];
+            ColumnOps.CentreInto(centred, z, own, _priorRoots);
+            double scale = _precision.Scale(term);
+            if (scale == 1.0) prior = new BassPriorColumn(centred, own - mean);
+            else
+            {
+                for (int i = 0; i < centred.Length; i++) centred[i] *= scale;
+                prior = new BassPriorColumn(centred, scale * own - mean);
+            }
+        }
+        return (column, null, prior);
     }
 
     private bool Supported(double[] part, double minimum, double[]? counts)
@@ -1233,7 +1278,7 @@ public sealed class BassDesign
         approximate = false;
         int degree = _basis.Degree;
         // Under a block the held columns are whitened, V^(−½)xⱼ, where the tables would sum them against the raw hinge: xⱼᵀV^(−½)h for xⱼᵀV⁻¹h.
-        if (!TablesOn || _functional || _khatriRao || _priorColumns is not null || _counted is not null || _whitened || degree is not (1 or 2)
+        if (!TablesOn || _functional || _khatriRao || _priorColumns is not null || _counted is not null || IsWhitened() || degree is not (1 or 2)
             || term.Continuous.Count != 1 || term.Categorical.Count != 0 || term.Functional.Count != 0)
             return null;
         HingeFactor f = term.Continuous[0];
