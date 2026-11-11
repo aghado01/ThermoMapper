@@ -25,9 +25,9 @@ namespace Maths.Regression.Tests;
 /// </summary>
 public sealed class BassProjectedFitTests(ITestOutputHelper output)
 {
-    private static readonly double[] W = Normalize([3.0, -2.0, 1.0, 0.5, 0.0, 0.0]);
+    internal static readonly double[] W = Normalize([3.0, -2.0, 1.0, 0.5, 0.0, 0.0]);
 
-    private static double Ridge(double u) => Math.Sin(4.0 * u) + u * u;
+    internal static double Ridge(double u) => Math.Sin(4.0 * u) + u * u;
 
     private static double[] Normalize(double[] v)
     {
@@ -35,13 +35,13 @@ public sealed class BassProjectedFitTests(ITestOutputHelper output)
         return [.. v.Select(x => x / n)];
     }
 
-    private static BassConfig Config() => SensitivityFixture.Config(maxBasis: 30) with
+    internal static BassConfig Config() => SensitivityFixture.Config(maxBasis: 30) with
     {
         Sampling = new BassSampling { Chains = 2, MasterSeed = 29, BurnIn = 2_000, Samples = 40, Thin = 10 },
     };
 
     // n cases uniform in [0, 1]^p, each input's domain declared [0, 1], and y = g(wᵀx) + noise of sd 0.05.
-    private static (BassData Data, double[][] X) RidgeData(int n, int seed)
+    internal static (BassData Data, double[][] X) RidgeData(int n, int seed)
     {
         var rng = new Xoshiro256PlusPlus(seed);
         double[][] x = [.. Enumerable.Range(0, W.Length).Select(_ => Enumerable.Range(0, n).Select(_ => rng.NextDouble()).ToArray())];
@@ -50,9 +50,9 @@ public sealed class BassProjectedFitTests(ITestOutputHelper output)
         return (new BassData(predictors, new ScalarResponse(y)), x);
     }
 
-    private sealed record RidgeFits(BassData Data, BassFit Native, ActiveSubspaceAnalysis Analysis, BassProjection Projection, BassProjectedFit Refit);
+    internal sealed record RidgeFits(BassData Data, BassFit Native, ActiveSubspaceAnalysis Analysis, BassProjection Projection, BassProjectedFit Refit);
 
-    private static readonly Lazy<RidgeFits> Fixture = new(() =>
+    internal static readonly Lazy<RidgeFits> Fixture = new(() =>
     {
         (BassData data, _) = RidgeData(200, 20261111);
         BassFit native = Bass.Fit(Config(), data);
@@ -61,7 +61,7 @@ public sealed class BassProjectedFitTests(ITestOutputHelper output)
         return new RidgeFits(data, native, analysis, projection, BassProjectedFit.Of(projection, data, Config()));
     });
 
-    private static PredictionCases Cases(double[][] x) => new([.. x.Select((column, i) => new ContinuousColumn($"x{i}", column))]);
+    internal static PredictionCases Cases(double[][] x) => new([.. x.Select((column, i) => new ContinuousColumn($"x{i}", column))]);
 
     // ── The gradient ─────────────────────────────────────────────────────────────────────────────────────────────────
 
