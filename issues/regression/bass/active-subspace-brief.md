@@ -1,6 +1,6 @@
 # Active subspaces on the BASS core: E8's build (chip brief)
 
-Date: 2026-11-08. Status: slices 0–6 complete; slice 7's plan written and waiting for the user's call. Commissioned by the user on 2026-11-08 ("kick off e8"), after KHAOS's last slice; slice 5, the Grassmann discussion's items the user settled, commissioned 2026-11-08 ("ill take as recommended"). Every slice landed and was verified by the coordinating session on 2026-11-08: slice 0 (`15fb495`, `9e3028d`, `aa62879`), slice 1 (`95294f8`, `9dfcc6d`, `1385b86`), slice 2 (`8c7db77`, `3cdc2e8`), slice 3 (`84fe230`, `1049055`), slice 4 (`20aeb06`, `bc72014`) and slice 5 (`def59f3`, `9d2ff23`, `95d2900`, `a54a537`). The follow-ups, commissioned 2026-11-10: slice 6 (`276af70`, `e9d8827`, `30df59e`, `9a669b6`, report `3c26660`) verified by the coordinating session on 2026-11-10; slice 7's plan (below, "Slice 7's plan") waits for the user's decisions; E36's brief follows its verification. Written by the main session from [E8's entry](extensions-brief.md#active-subspace-analysis), [gap G3](lineage-gaps-register.md#g3-sobol-indices-and-active-subspaces-have-different-standing), [the lineage review's separability question](lineage-review.md#separability-is-what-the-closed-forms-rest-on), the [Astra notes](../discussion/astra-grassman-stiefel-pca-extensions.md), and the [Grassmann discussion](../discussion/grassmann-stiefel-subspaces-brief.md)'s report so far. Reports go under "Reports" below, newest first.
+Date: 2026-11-08. Status: slices 0–6 complete; slice 7's plan approved by the user (2026-11-10); slice 7a landed (`7b2ca7a`) and waits for its verification; 7b and 7c follow. Commissioned by the user on 2026-11-08 ("kick off e8"), after KHAOS's last slice; slice 5, the Grassmann discussion's items the user settled, commissioned 2026-11-08 ("ill take as recommended"). Every slice landed and was verified by the coordinating session on 2026-11-08: slice 0 (`15fb495`, `9e3028d`, `aa62879`), slice 1 (`95294f8`, `9dfcc6d`, `1385b86`), slice 2 (`8c7db77`, `3cdc2e8`), slice 3 (`84fe230`, `1049055`), slice 4 (`20aeb06`, `bc72014`) and slice 5 (`def59f3`, `9d2ff23`, `95d2900`, `a54a537`). The follow-ups, commissioned 2026-11-10: slice 6 (`276af70`, `e9d8827`, `30df59e`, `9a669b6`, report `3c26660`) verified by the coordinating session on 2026-11-10; slice 7's plan (below, "Slice 7's plan") waits for the user's decisions; E36's brief follows its verification. Written by the main session from [E8's entry](extensions-brief.md#active-subspace-analysis), [gap G3](lineage-gaps-register.md#g3-sobol-indices-and-active-subspaces-have-different-standing), [the lineage review's separability question](lineage-review.md#separability-is-what-the-closed-forms-rest-on), the [Astra notes](../discussion/astra-grassman-stiefel-pca-extensions.md), and the [Grassmann discussion](../discussion/grassmann-stiefel-subspaces-brief.md)'s report so far. Reports go under "Reports" below, newest first.
 
 ## Why
 
@@ -204,6 +204,40 @@ Nothing is built until the user decides the items marked **Decision** below. The
 Under "Reports" below, newest first, per slice: what landed by commit; the gates' numbers; decisions taken beyond this brief; what was left unbuilt and why; follow-ups with the decision each would change.
 
 ## Reports
+
+### Slice 7a: the frame and the projected data (2026-11-11)
+
+**Landed:** `bd5dc9c` (the work in progress, committed by the user at the pause) and `7b2ca7a` (the contract, the rest and the gates).
+
+**What was built:**
+- *`BassProjection.Of(transform, analysis, d, names)`.* E[C]'s d leading eigenvectors W₁ in the analysis's metric, A = L⁻ᵀW₁, and the active variables u = Aᵀx_box (u1 to ud unless named).
+  - *The domains:* each active variable's is the zonotope's bounding box, [Σᵢ min(0, aᵢⱼ), Σᵢ max(0, aᵢⱼ)], padded by 10⁻¹⁴ of Σᵢ|aᵢⱼ|.
+  - *Reported:* E[C]'s eigenvalues and the eigengaps (λ_j − λ_{j+1})/λ₁ for j = 1 to d (decision 2's report), and `Spreads`, each domain's width over the projected data's range.
+- *Projection:* `Project(BassData)` gives the refit's data, the active variables with their domains and the categorical predictors, response, groupings and case weights unchanged. `Project(cases)` and `ProjectCases(cases)` serve prediction.
+- *The pushforward:* `Pushforward(points, seed)` draws the analysis's product law as E8's sampled route does and maps it; `Pushforward(sample)` maps a joint sample with its weights.
+- *The input-scale contract* (the review's finding of 2026-11-11, the coordination handoff's item 3): `ActiveSubspaceAnalysis.Boxes` records each continuous input's box. `Of` refuses a fit in other boxes, an analysis without them, other inputs or another order, and a law over other levels.
+
+**Gates:**
+
+| Gate | Reading |
+| --- | --- |
+| The bounding box: p = 2 to 8, d to 3, in the box metric, a diagonal metric and a full symmetric one | 9,108 vertex projections inside; the extreme vertices on each unpadded end exactly; LᵀA = W₁ to 1.0·10⁻¹⁴ |
+| The contract: the review's case (x0's domain [−2, 2] against the analysis's [0, 1]); no boxes; other inputs; other levels; a fit's own analysis | each refused, the review's with "the frame is in the analysis's box units, so the fit must share its boxes"; the fit's own taken |
+| The pushforward under a product law (x0's truncated mixture, x1 uniform, z's levels at 0.2, 0.5, 0.3), d = 2, 200,000 points: the mean and covariance against Aᵀm and AᵀΣA, and z's shares | worst 1.98 standard errors |
+| The pushforward of a weighted joint sample of 500 points | its weights carried; its moments against Aᵀm̂ and AᵀΣ̂A to 5·10⁻¹⁶ |
+| Projected data against projected cases; the refusals (d outside 1 to p, names, too few points, a joint-sample analysis's law, a missing or a foreign column) | bit for bit; each refused |
+| Decision 4's gate: a dense direction 1/√p, 300 uniform cases in a declared [0, 1] box | the bounding box 1.10, 2.15 and 4.06 times the projected range at p = 2, 10 and 40 |
+| At p = 40, y = sin(3u) plus noise fitted with the bounding box and with the training range, draw for draw | g-form with count support: 60 of 60 draws the same, posterior means to 2·10⁻¹⁵; column-mass support: 60 of 60 differ, means 33% apart; raw ridge: 60 of 60 differ, means 2.4% apart |
+| Fitting untouched | the Commit scope 2,349 of 2,349 |
+
+**What decision 4's gate says.** BASS's defaults read nothing of the box's scale: the g-form's marginal is invariant to a column's scale, and the count support counts cases. The column-mass support reads hinges normalized to a maximum of one on the box, so a box four times the data's spread makes every column's mass small. The raw ridge penalizes the columns as evaluated, so it shrinks harder. Both move with the box.
+
+**Decision for 7b** (the coordinating session's or the user's): what a projected fit does under those two options.
+- *Recommended:* refuse them, with the reason, since under decision 4's domains they read a scale the data do not span.
+- *Alternative:* take them, reporting the spreads beside the fit.
+- *Second alternative:* take the projected training range as their box, which decision 4 set aside.
+
+**Doc changes owed:** `docs/Maths/Regression/ActiveSubspaces.md`, a slice-7 section: the frame, the domains and the contract, and the gate's reading of how BASS's rules read the box.
 
 ### Slice 6: the readout follow-ups (2026-11-10)
 
