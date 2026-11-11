@@ -146,8 +146,9 @@ public sealed record BassFit(
     /// factors, or from the gradient readout averaged over points the draws share, with its Monte Carlo error: drawn from the product law,
     /// or a dependent law's joint sample (<see cref="ActiveSubspaceSpec.Sample"/>, E8's slice 4), whose full covariance whitening then
     /// takes. Categorical inputs take
-    /// no part in C. A functional response reads C = E[JᵀW_yJ] over the training output locations under the spec's output metric W_y, the
-    /// identity by default (E8's slice 3). <paramref name="data"/> must be the data the fit was run on.
+    /// no part in C. A functional response reads C = E[JᵀW_yJ] over the training output locations, or the output metric's declared ones
+    /// (E8's slice 6), under the spec's output metric W_y, the identity by default (E8's slice 3). <paramref name="data"/> must be the data
+    /// the fit was run on.
     /// </summary>
     public ActiveSubspaceAnalysis ActiveSubspace(BassData data, ActiveSubspaceSpec? spec = null)
     {
@@ -166,6 +167,19 @@ public sealed record BassFit(
         RequirePosterior();
         other?.RequirePosterior();
         return BassActiveSubspaces.CoActive(this, data, other!, otherData, spec ?? new CoActiveSpec());
+    }
+
+    /// <summary>
+    /// The co-active subspaces of this fit and <paramref name="other"/>, a basis fit on the same inputs at one hinge degree (E8's slice 6):
+    /// this fit as itself or through <see cref="CoActiveSpec.Output"/>, the basis fit's reconstruction through
+    /// <see cref="CoActiveSpec.OtherOutput"/> over its training output locations, which is required; this fit's draws pair by position with
+    /// the basis fit's joint draws. The basis fit first is this pairing with the roles swapped: V and the concordances are the same, and
+    /// C_f and C_g trade places. Two basis fits pair through <see cref="BassBasisFit.CoActiveSubspace(BassBasisFit, CoActiveSpec)"/>.
+    /// </summary>
+    public CoActiveAnalysis CoActiveSubspace(BassData data, BassBasisFit other, CoActiveSpec spec)
+    {
+        RequirePosterior();
+        return BassActiveSubspaces.CoActive(this, data, other, spec);
     }
 
     /// <summary>
