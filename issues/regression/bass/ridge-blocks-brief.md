@@ -65,6 +65,13 @@ y = α + Σⱼ βⱼBⱼ(x) + Σₖ Z̃ₖuₖ + ε, ε ~ N(0, σ²W⁻¹) (W = 
      - Interweaving adds u's term, as it adds the coefficients' prior.
      - The β·v move becomes a step on the (a, u)-marginal, with a and then u drawn afresh after an accepted move.
      - s's step reads the marginal at the current weights.
+   - **Amended by the user on 2026-11-10 ("B with your refinement"), after slice 4's finding.**
+     - *The finding.* Integrating u out and tempering that likelihood is exact only at b = 1. Under a noise, the blocks for v, σ², the shape and interweaving condition on u, and their conditionals at b < 1 belong to tempering the likelihood given u.
+     - *The form.* Under a noise, every rung carries u as a latent that the structure reads as an offset Z̃u, with no whitening. That makes ladders, SMC and the reference rung exact, and s steps on N(u; 0, σ²s²) with no refit.
+     - *At b = 1 only* (plain chains, the cold rung, SMC's final stage), the structure step reads the u-integrated likelihood at the current weights, and u is drawn from its conditional right after, before any block reads it. This is the partially collapsed order of the β·v fix, so each rung's kernel leaves its own target invariant, and swaps read the shared state (structure, latents, u).
+     - *The evidence is unchanged:* both tempering paths end at p(y).
+     - *The Gaussian collapse stays as built.*
+     - *Slice 4's finding 2:* under weights, the centring convention uses the GLS intercept direction c = L·1, not unweighted counts.
 8. **The candidate seam: a case in a known group and in a new one,** its shape agreed with the conformal chip before slice 5 opens. The proposal:
    - *A known group:* log p(y | x_t, θ_s) = the training terms' density at f + Σₖ u_{k,g(t)}, conditioned on the draw's effects, as the hierarchical P-spline's new point on a seen curve is. The groups are offered as strata for Mondrian sets.
    - *A new group:* the draw's population predictive with its effects integrated: N(y | f, σ²(1 + Σₖ sₖ²·z̃ₖ²)) under Gaussian BASS. Under a noise, y | v ~ N(f + σβv, σ²(cv + Σ s²z̃²)) is a mixture over v again, read by quadrature on v or refused at first.
