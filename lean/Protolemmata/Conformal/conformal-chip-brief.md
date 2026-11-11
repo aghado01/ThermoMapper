@@ -208,6 +208,23 @@ The user asked for this on 2026-11-08 ("Yes, start it"), relayed by the BASS ext
 
 Newest first.
 
+### In progress — slice 18
+
+Updated 2026-11-10, in place.
+- *Slice 18:* the Lean compiles against the module, and its checks pass on their own. The drafts, splice script and axioms probe are in `artifacts/chip-conformal-lean/`, which is untracked. It splices next.
+
+### 2026-11-10 — slice 16: batch predictive inference, proved
+
+The statements are in the ledger, under "Slice 16". The new declarations are PROOF-CLOSED, with the standard three axioms only. The checks ran first.
+
+- *The ranks are uniform on H* (`card_testRank_mem`, `card_rankSeqs`). The test units' calibration ranks are a bijection from the test sets onto the nondecreasing rank sequences, and |H| = C(n + m, m).
+- *One sandwich, three readings* (`batch_sandwich`). For any rank set I, the sorted test scores lie between calibration order statistics on at least |H ∩ I| of the test sets. That gives:
+  - functions of a batch: [B_L, B_U] at 1 − α (their Theorem 1; `batch_interval`, `batch_coverage`);
+  - simultaneous sets for several test order statistics (`batch_simultaneous`);
+  - selection with at most η false claims (`batch_exceed`, `false_claim_iff`).
+- *Ties included.* S is monotone, and a uniform tie-break, which moves no calibration order statistic, carries the statements to tied scores.
+- *Finding.* Their closed form for L(ρ) has a typo: the product runs over consecutive pairs, j = 1, …, l − 1, not j = 1, …, n.
+
 ### 2026-11-10 — slice 15: posterior conformal prediction, proved
 
 The statements are in the ledger, under "Slice 15". The new declarations are PROOF-CLOSED, with the standard three axioms only. The checks ran first.

@@ -5790,4 +5790,413 @@ theorem pcp_cluster_gap {V Kc : Type*} [Fintype V] [Fintype Kc] {S : (ι → V) 
 
 end PosteriorConformal
 
+/-! ### Slice 16: batch predictive inference
+
+Lee, Tchetgen Tchetgen and Dobriban, arXiv 2409.13990. -/
+
+section Batch
+
+variable {n m : ℕ}
+
+/-- The calibration rank of the `j`-th smallest test unit, 0-based: the calibration units (outside
+the test set `A`) below it. Units are their score ranks among the `n + m`, scores distinct. -/
+noncomputable def testRank (A : Finset (Fin (n + m))) (j : Fin m) : ℕ :=
+  if h : A.card = m then ((univ \ A).filter fun p => p < A.orderEmbOfFin h j).card else 0
+
+/-- The rank sequences: nondecreasing, each at most `n` (their `H`, shifted to 0-based). -/
+noncomputable def rankSeqs (n m : ℕ) : Finset (Fin m → ℕ) :=
+  (Fintype.piFinset fun _ : Fin m => range (n + 1)).filter Monotone
+
+/-- The units of a set below its `j`-th smallest are its `j` smallest. -/
+theorem card_filter_lt_orderEmbOfFin {N : ℕ} (A : Finset (Fin N)) {k : ℕ} (h : A.card = k)
+    (j : Fin k) : (A.filter fun p => p < A.orderEmbOfFin h j).card = j := by
+  have e : (A.filter fun p => p < A.orderEmbOfFin h j) =
+      (Finset.Iio j).map (A.orderEmbOfFin h).toEmbedding := by
+    ext p
+    simp only [mem_filter, mem_map, Finset.mem_Iio, RelEmbedding.coe_toEmbedding]
+    constructor
+    · rintro ⟨hp, hlt⟩
+      have : p ∈ Set.range (A.orderEmbOfFin h) := by
+        rw [Finset.range_orderEmbOfFin]
+        exact hp
+      obtain ⟨k', rfl⟩ := this
+      exact ⟨k', (A.orderEmbOfFin h).lt_iff_lt.1 hlt, rfl⟩
+    · rintro ⟨k', hk', rfl⟩
+      exact ⟨A.orderEmbOfFin_mem h k', (A.orderEmbOfFin h).lt_iff_lt.2 hk'⟩
+  rw [e, card_map, Fin.card_Iio]
+
+theorem card_univ_filter_lt {N : ℕ} (q : Fin N) :
+    ((univ : Finset (Fin N)).filter fun p => p < q).card = q := by
+  rw [show ((univ : Finset (Fin N)).filter fun p => p < q) = Finset.Iio q by ext; simp]
+  exact Fin.card_Iio _
+
+/-- The calibration rank is the test unit's full rank less its rank among the tests. -/
+theorem testRank_eq (A : Finset (Fin (n + m))) (h : A.card = m) (j : Fin m) :
+    testRank A j = (A.orderEmbOfFin h j : ℕ) - j := by
+  rw [testRank, dif_pos h]
+  have h1 := card_filter_lt_orderEmbOfFin A h j
+  have h2 := card_univ_filter_lt (A.orderEmbOfFin h j)
+  have hdisj : Disjoint (A.filter fun p => p < A.orderEmbOfFin h j)
+      ((univ \ A).filter fun p => p < A.orderEmbOfFin h j) := by
+    rw [disjoint_left]
+    intro p hp hq
+    simp only [mem_filter, mem_sdiff] at hp hq
+    exact hq.1.2 hp.1
+  have hunion : (univ : Finset (Fin (n + m))).filter (fun p => p < A.orderEmbOfFin h j) =
+      (A.filter fun p => p < A.orderEmbOfFin h j) ∪
+        ((univ \ A).filter fun p => p < A.orderEmbOfFin h j) := by
+    ext p
+    simp only [mem_filter, mem_union, mem_sdiff, mem_univ, true_and]
+    tauto
+  have := card_union_of_disjoint hdisj
+  rw [← hunion, h2, h1] at this
+  omega
+
+theorem le_orderEmbOfFin (A : Finset (Fin (n + m))) (h : A.card = m) (j : Fin m) :
+    (j : ℕ) ≤ A.orderEmbOfFin h j := by
+  calc (j : ℕ) = (A.filter fun p => p < A.orderEmbOfFin h j).card :=
+        (card_filter_lt_orderEmbOfFin A h j).symm
+    _ ≤ ((univ : Finset (Fin (n + m))).filter fun p => p < A.orderEmbOfFin h j).card :=
+        card_le_card fun p hp => by
+          simp only [mem_filter] at hp ⊢
+          exact ⟨mem_univ _, hp.2⟩
+    _ = A.orderEmbOfFin h j := card_univ_filter_lt _
+
+/-- The test set from a rank sequence: the units `r_j + j`. -/
+def ofRanks (r : Fin m → ℕ) : Finset (Fin (n + m)) :=
+  univ.filter fun p => ∃ j : Fin m, (p : ℕ) = r j + j
+
+theorem strictMono_add_index {r : Fin m → ℕ} (hr : Monotone r) :
+    StrictMono fun j : Fin m => r j + (j : ℕ) := fun i j hij => by
+  change r i + (i : ℕ) < r j + j
+  have := hr hij.le
+  have : (i : ℕ) < j := hij
+  omega
+
+theorem ofRanks_eq_image {r : Fin m → ℕ} (hr : ∀ j, r j ≤ n) :
+    (ofRanks r : Finset (Fin (n + m))) = univ.image fun j : Fin m =>
+      (⟨r j + j, by have := hr j; have := j.isLt; omega⟩ : Fin (n + m)) := by
+  ext p
+  simp only [ofRanks, mem_filter, mem_univ, true_and, mem_image]
+  constructor
+  · rintro ⟨j, hj⟩
+    exact ⟨j, Fin.ext hj.symm⟩
+  · rintro ⟨j, rfl⟩
+    exact ⟨j, rfl⟩
+
+theorem card_ofRanks {r : Fin m → ℕ} (hr : ∀ j, r j ≤ n) (hm : Monotone r) :
+    (ofRanks r : Finset (Fin (n + m))).card = m := by
+  rw [ofRanks_eq_image hr, card_image_of_injective _ fun i j hij =>
+    (strictMono_add_index hm).injective (congrArg Fin.val hij), card_univ, Fintype.card_fin]
+
+theorem testRank_ofRanks {r : Fin m → ℕ} (hr : ∀ j, r j ≤ n) (hm : Monotone r) :
+    testRank (ofRanks r : Finset (Fin (n + m))) = r := by
+  have hc := card_ofRanks (n := n) hr hm
+  funext j
+  rw [testRank_eq _ hc]
+  have hu := Finset.orderEmbOfFin_unique hc
+    (f := fun j : Fin m => (⟨r j + j, by have := hr j; have := j.isLt; omega⟩ : Fin (n + m)))
+    (fun j => by rw [ofRanks_eq_image hr]; exact mem_image_of_mem _ (mem_univ j))
+    (fun i j hij => strictMono_add_index hm hij)
+  rw [← congrFun hu j]
+  simp
+
+theorem ofRanks_testRank (A : Finset (Fin (n + m))) (h : A.card = m) :
+    ofRanks (testRank A) = A := by
+  ext p
+  simp only [ofRanks, mem_filter, mem_univ, true_and]
+  constructor
+  · rintro ⟨j, hj⟩
+    rw [testRank_eq A h, Nat.sub_add_cancel (le_orderEmbOfFin A h j)] at hj
+    rw [show p = A.orderEmbOfFin h j from Fin.ext hj]
+    exact A.orderEmbOfFin_mem h j
+  · intro hp
+    have : p ∈ Set.range (A.orderEmbOfFin h) := by
+      rw [Finset.range_orderEmbOfFin]
+      exact hp
+    obtain ⟨j, rfl⟩ := this
+    exact ⟨j, by rw [testRank_eq A h, Nat.sub_add_cancel (le_orderEmbOfFin A h j)]⟩
+
+/-- The calibration ranks of a test set form a rank sequence. -/
+theorem testRank_mem_rankSeqs (A : Finset (Fin (n + m))) (h : A.card = m) :
+    testRank A ∈ rankSeqs n m := by
+  rw [rankSeqs, mem_filter, Fintype.mem_piFinset]
+  refine ⟨fun j => ?_, fun i j hij => ?_⟩
+  · rw [mem_range]
+    simp only [testRank, dif_pos h]
+    have hcA : (univ \ A).card = n := by
+      rw [card_sdiff_of_subset (subset_univ A), card_univ, Fintype.card_fin, h]
+      omega
+    have := card_le_card (filter_subset (fun p => p < A.orderEmbOfFin h j) (univ \ A))
+    rw [hcA] at this
+    omega
+  · simp only [testRank, dif_pos h]
+    exact card_le_card fun p hp => by
+      simp only [mem_filter] at hp ⊢
+      exact ⟨hp.1, lt_of_lt_of_le hp.2 ((A.orderEmbOfFin h).monotone hij)⟩
+
+/-- **The ranks are a bijection from test sets onto the rank sequences** (their map `M`, with
+inverse `r ↦ r_j + j`). With the test set uniform over the `C(n + m, m)` subsets the rank sequence
+is uniform over the sequences, `|H| = C(n + m, m)`: the test sets ranked in any `I` number
+`|H ∩ I|`. -/
+theorem card_testRank_mem (I : Finset (Fin m → ℕ)) :
+    ((powersetCard m (univ : Finset (Fin (n + m)))).filter fun A => testRank A ∈ I).card =
+      (rankSeqs n m ∩ I).card := by
+  refine card_nbij' (fun A => testRank A) (fun r => ofRanks r) ?_ ?_ ?_ ?_
+  · intro A hA
+    rw [mem_coe, mem_filter, mem_powersetCard] at hA
+    exact mem_inter.2 ⟨testRank_mem_rankSeqs A hA.1.2, hA.2⟩
+  · intro r hr
+    rw [mem_coe, mem_inter, rankSeqs, mem_filter, Fintype.mem_piFinset] at hr
+    have hb : ∀ j, r j ≤ n := fun j => Nat.lt_succ_iff.1 (mem_range.1 (hr.1.1 j))
+    rw [mem_coe, mem_filter, mem_powersetCard, testRank_ofRanks hb hr.1.2]
+    exact ⟨⟨subset_univ _, card_ofRanks hb hr.1.2⟩, hr.2⟩
+  · intro A hA
+    rw [mem_coe, mem_filter, mem_powersetCard] at hA
+    exact ofRanks_testRank A hA.1.2
+  · intro r hr
+    rw [mem_coe, mem_inter, rankSeqs, mem_filter, Fintype.mem_piFinset] at hr
+    exact testRank_ofRanks (fun j => Nat.lt_succ_iff.1 (mem_range.1 (hr.1.1 j))) hr.1.2
+
+/-- `|H| = C(n + m, m)`: the rank sequences number the test sets. -/
+theorem card_rankSeqs : (rankSeqs n m).card = (n + m).choose m := by
+  have := card_testRank_mem (n := n) (m := m) (rankSeqs n m)
+  rw [inter_self, filter_true_of_mem fun A hA =>
+    testRank_mem_rankSeqs A (mem_powersetCard.1 hA).2, card_powersetCard, card_univ,
+    Fintype.card_fin] at this
+  exact this.symm
+
+/-- **The order-statistic sandwich, from above**: the `j`-th smallest test unit lies below the
+calibration unit at its calibration rank, when there is one. -/
+theorem orderEmbOfFin_lt_cal (A : Finset (Fin (n + m))) (h : A.card = m)
+    (hc : (univ \ A).card = n) (j : Fin m) (hlt : testRank A j < n) :
+    A.orderEmbOfFin h j < (univ \ A).orderEmbOfFin hc ⟨testRank A j, hlt⟩ := by
+  set ρ := testRank A j with hρ
+  set c := (univ \ A).orderEmbOfFin hc
+  have hcmem : c ⟨ρ, hlt⟩ ∈ univ \ A := (univ \ A).orderEmbOfFin_mem hc _
+  have hne : A.orderEmbOfFin h j ≠ c ⟨ρ, hlt⟩ := fun he => by
+    have := (mem_sdiff.1 hcmem).2
+    rw [← he] at this
+    exact this (A.orderEmbOfFin_mem h j)
+  rcases lt_or_gt_of_ne hne with h1 | h1
+  · exact h1
+  · exfalso
+    have hsub : insert (c ⟨ρ, hlt⟩) ((univ \ A).filter fun p => p < c ⟨ρ, hlt⟩) ⊆
+        (univ \ A).filter fun p => p < A.orderEmbOfFin h j := by
+      intro p hp
+      rw [mem_insert] at hp
+      rw [mem_filter]
+      rcases hp with rfl | hp
+      · exact ⟨hcmem, h1⟩
+      · rw [mem_filter] at hp
+        exact ⟨hp.1, hp.2.trans h1⟩
+    have hT : ((univ \ A).filter fun p => p < A.orderEmbOfFin h j).card = ρ := by
+      rw [hρ, testRank, dif_pos h]
+    have := card_le_card hsub
+    rw [card_insert_of_notMem (by simp), card_filter_lt_orderEmbOfFin, hT] at this
+    simp only at this
+    omega
+
+/-- **The order-statistic sandwich, from below**: the calibration unit just under the `j`-th
+smallest test unit's calibration rank lies below it. -/
+theorem cal_lt_orderEmbOfFin (A : Finset (Fin (n + m))) (h : A.card = m)
+    (hc : (univ \ A).card = n) (j : Fin m) (hpos : 0 < testRank A j) (hle : testRank A j ≤ n) :
+    (univ \ A).orderEmbOfFin hc ⟨testRank A j - 1, by omega⟩ < A.orderEmbOfFin h j := by
+  set ρ := testRank A j with hρ
+  set c := (univ \ A).orderEmbOfFin hc
+  have hcmem : c ⟨ρ - 1, by omega⟩ ∈ univ \ A := (univ \ A).orderEmbOfFin_mem hc _
+  have hne : c ⟨ρ - 1, by omega⟩ ≠ A.orderEmbOfFin h j := fun he => by
+    have := (mem_sdiff.1 hcmem).2
+    rw [he] at this
+    exact this (A.orderEmbOfFin_mem h j)
+  rcases lt_or_gt_of_ne hne with h1 | h1
+  · exact h1
+  · exfalso
+    have hsub : ((univ \ A).filter fun p => p < A.orderEmbOfFin h j) ⊆
+        (univ \ A).filter fun p => p < c ⟨ρ - 1, by omega⟩ := by
+      intro p hp
+      rw [mem_filter] at hp ⊢
+      exact ⟨hp.1, hp.2.trans h1⟩
+    have hT : ((univ \ A).filter fun p => p < A.orderEmbOfFin h j).card = ρ := by
+      rw [hρ, testRank, dif_pos h]
+    have := card_le_card hsub
+    rw [card_filter_lt_orderEmbOfFin, hT] at this
+    simp only at this
+    omega
+
+/-- The calibration scores in order, with `top` past the last: their `S_(r)`, with
+`S_(n+1) = sup s`. -/
+noncomputable def calScore (S : Fin (n + m) → ℝ) (top : ℝ) (A : Finset (Fin (n + m)))
+    (hc : (univ \ A).card = n) (k : ℕ) : ℝ :=
+  if hk : k < n then S ((univ \ A).orderEmbOfFin hc ⟨k, hk⟩) else top
+
+/-- The calibration score just under rank `k`: their `S_(k−1)` in the 1-based count, with
+`S_(0) = inf s`, given as `bot`. -/
+noncomputable def calScoreBelow (S : Fin (n + m) → ℝ) (bot : ℝ) (A : Finset (Fin (n + m)))
+    (hc : (univ \ A).card = n) (k : ℕ) : ℝ :=
+  if hk : 0 < k ∧ k ≤ n then
+    S ((univ \ A).orderEmbOfFin hc ⟨k - 1, by have := hk.1; have := hk.2; omega⟩)
+  else bot
+
+/-- A rank sequence's entries are at most `n`. -/
+theorem le_of_mem_rankSeqs {r : Fin m → ℕ} (hr : r ∈ rankSeqs n m) (j : Fin m) : r j ≤ n :=
+  Nat.lt_succ_iff.1 (mem_range.1 (Fintype.mem_piFinset.1 (mem_filter.1 hr).1 j))
+
+theorem calScore_mono (S : Fin (n + m) → ℝ) (hS : Monotone S) (top : ℝ) (htop : ∀ p, S p ≤ top)
+    (A : Finset (Fin (n + m))) (hc : (univ \ A).card = n) : Monotone (calScore S top A hc) := by
+  intro k k' hkk'
+  unfold calScore
+  by_cases h1 : k < n
+  · by_cases h2 : k' < n
+    · rw [dif_pos h1, dif_pos h2]
+      exact hS (((univ \ A).orderEmbOfFin hc).monotone (Fin.mk_le_mk.2 hkk'))
+    · rw [dif_pos h1, dif_neg h2]
+      exact htop _
+  · have h2 : ¬ k' < n := fun h => h1 (lt_of_le_of_lt hkk' h)
+    rw [dif_neg h1, dif_neg h2]
+
+theorem calScoreBelow_mono (S : Fin (n + m) → ℝ) (hS : Monotone S) (bot : ℝ)
+    (hbot : ∀ p, bot ≤ S p) (A : Finset (Fin (n + m))) (hc : (univ \ A).card = n) {k k' : ℕ}
+    (hkk' : k ≤ k') (hk' : k' ≤ n) :
+    calScoreBelow S bot A hc k ≤ calScoreBelow S bot A hc k' := by
+  unfold calScoreBelow
+  by_cases h1 : 0 < k ∧ k ≤ n
+  · have h2 : 0 < k' ∧ k' ≤ n := ⟨lt_of_lt_of_le h1.1 hkk', hk'⟩
+    rw [dif_pos h1, dif_pos h2]
+    exact hS (((univ \ A).orderEmbOfFin hc).monotone
+      (Fin.mk_le_mk.2 (Nat.sub_le_sub_right hkk' 1)))
+  · rw [dif_neg h1]
+    split_ifs
+    · exact hbot _
+    · exact le_rfl
+
+/-- **The ranks sandwich the sorted test scores** (the core of their Theorem 1's proof, every
+coordinate at once). Units are their positions in score order, `S` monotone between `bot` and
+`top`. Ties are broken uniformly at random, which leaves the test set uniform over the
+`C(n + m, m)` subsets and moves no calibration order statistic. For any set `I` of rank sequences,
+on at least `|H ∩ I|` of the test sets one `r ∈ I` puts the `j`-th smallest test score between
+`S_(r_j − 1)` and `S_(r_j)` for every `j`. -/
+theorem batch_sandwich (S : Fin (n + m) → ℝ) (hS : Monotone S) (bot top : ℝ)
+    (hbot : ∀ p, bot ≤ S p) (htop : ∀ p, S p ≤ top) (I : Finset (Fin m → ℕ)) :
+    (rankSeqs n m ∩ I).card ≤ ((powersetCard m (univ : Finset (Fin (n + m)))).filter fun A =>
+      ∃ h : A.card = m, ∃ hc : (univ \ A).card = n, ∃ r ∈ rankSeqs n m ∩ I, ∀ j,
+        calScoreBelow S bot A hc (r j) ≤ S (A.orderEmbOfFin h j) ∧
+        S (A.orderEmbOfFin h j) ≤ calScore S top A hc (r j)).card := by
+  rw [← card_testRank_mem I]
+  refine card_le_card fun A hA => ?_
+  rw [mem_filter, mem_powersetCard] at hA ⊢
+  have h := hA.1.2
+  have hc : (univ \ A).card = n := by
+    rw [card_sdiff_of_subset (subset_univ A), card_univ, Fintype.card_fin, h]
+    omega
+  refine ⟨hA.1, h, hc, testRank A, mem_inter.2 ⟨testRank_mem_rankSeqs A h, hA.2⟩,
+    fun j => ⟨?_, ?_⟩⟩
+  · unfold calScoreBelow
+    split_ifs with hk
+    · exact hS (cal_lt_orderEmbOfFin A h hc j hk.1 hk.2).le
+    · exact hbot _
+  · unfold calScore
+    split_ifs with hlt
+    · exact hS (orderEmbOfFin_lt_cal A h hc j hlt).le
+    · exact htop _
+
+/-- **Batch predictive inference** (their Theorem 1). The setting is `batch_sandwich`'s, with `h`
+monotone in the sorted test scores. For any set `I` of rank sequences, on at least `|H ∩ I|` of the
+test sets one `r ∈ I` puts `h(sorted test scores)` between `h(S_(r_1 − 1), …)` and
+`h(S_(r_1), …)`. With `I = {q_L ≤ h̃ ≤ q_U}` that is inside their `[B_L, B_U]`, whose min runs over
+`{h̃ ≥ q_L}` and max over `{h̃ ≤ q_U}`, both containing `I`. Their `h` on sorted vectors extends to
+`v ↦ h(v↑)`, monotone by their Condition 1. -/
+theorem batch_interval (S : Fin (n + m) → ℝ) (hS : Monotone S) (bot top : ℝ)
+    (hbot : ∀ p, bot ≤ S p) (htop : ∀ p, S p ≤ top) (hh : (Fin m → ℝ) → ℝ) (hmono : Monotone hh)
+    (I : Finset (Fin m → ℕ)) :
+    (rankSeqs n m ∩ I).card ≤ ((powersetCard m (univ : Finset (Fin (n + m)))).filter fun A =>
+      ∃ h : A.card = m, ∃ hc : (univ \ A).card = n, ∃ r ∈ rankSeqs n m ∩ I,
+        hh (fun j => calScoreBelow S bot A hc (r j)) ≤ hh (fun j => S (A.orderEmbOfFin h j)) ∧
+        hh (fun j => S (A.orderEmbOfFin h j)) ≤ hh (fun j => calScore S top A hc (r j))).card := by
+  refine (batch_sandwich S hS bot top hbot htop I).trans (card_le_card fun A hA => ?_)
+  rw [mem_filter] at hA ⊢
+  obtain ⟨hA, h, hc, r, hr, hs⟩ := hA
+  exact ⟨hA, h, hc, r, hr, hmono fun j => (hs j).1, hmono fun j => (hs j).2⟩
+
+/-- From a count of rank sequences to a fraction of test sets: `|H| = C(n + m, m)`. -/
+theorem frac_of_card {α : ℝ} {I : Finset (Fin m → ℕ)} {K : ℕ}
+    (hI : (1 - α) * (rankSeqs n m).card ≤ (rankSeqs n m ∩ I).card)
+    (hK : (rankSeqs n m ∩ I).card ≤ K) : 1 - α ≤ (K : ℝ) / (n + m).choose m := by
+  rw [le_div_iff₀ (by exact_mod_cast Nat.choose_pos (Nat.le_add_left m n)),
+    ← card_rankSeqs (n := n) (m := m)]
+  exact hI.trans (by exact_mod_cast hK)
+
+/-- **Batch coverage** (their Theorem 1): when `I` holds at least `1 − α` of the rank sequences,
+as `{q_L ≤ h̃ ≤ q_U}` does by the quantiles' definitions (at most `β` of them below `q_L`, at most
+`γ` above `q_U`, `β + γ = α`), the interval holds on at least `1 − α` of the `C(n + m, m)` test
+sets. -/
+theorem batch_coverage (S : Fin (n + m) → ℝ) (hS : Monotone S) (bot top : ℝ)
+    (hbot : ∀ p, bot ≤ S p) (htop : ∀ p, S p ≤ top) (hh : (Fin m → ℝ) → ℝ) (hmono : Monotone hh)
+    (I : Finset (Fin m → ℕ)) (α : ℝ)
+    (hI : (1 - α) * (rankSeqs n m).card ≤ (rankSeqs n m ∩ I).card) :
+    1 - α ≤ (((powersetCard m (univ : Finset (Fin (n + m)))).filter fun A =>
+      ∃ h : A.card = m, ∃ hc : (univ \ A).card = n, ∃ r ∈ rankSeqs n m ∩ I,
+        hh (fun j => calScoreBelow S bot A hc (r j)) ≤ hh (fun j => S (A.orderEmbOfFin h j)) ∧
+        hh (fun j => S (A.orderEmbOfFin h j)) ≤ hh (fun j => calScore S top A hc (r j))).card :
+          ℝ) / (n + m).choose m :=
+  frac_of_card hI (batch_interval S hS bot top hbot htop hh hmono I)
+
+/-- **Simultaneous sets** (their theorem on joint bounds for several test order statistics). With
+`I` the box `w_j ≤ r_j ≤ q_j` (a coordinate left free takes `0` and `n`), on at least `|H ∩ I|` of
+the test sets every sorted test score lies in `[S_(w_j − 1), S_(q_j)]`. Their condition
+`F_{n,m}(w; q) ≥ (1 − α) C(n + m, m)` is `|H ∩ I| ≥ (1 − α)|H|`, and `frac_of_card` gives
+`1 − α`. -/
+theorem batch_simultaneous (S : Fin (n + m) → ℝ) (hS : Monotone S) (bot top : ℝ)
+    (hbot : ∀ p, bot ≤ S p) (htop : ∀ p, S p ≤ top) (w q : Fin m → ℕ) :
+    (rankSeqs n m ∩ (rankSeqs n m).filter fun r => ∀ j, w j ≤ r j ∧ r j ≤ q j).card ≤
+      ((powersetCard m (univ : Finset (Fin (n + m)))).filter fun A =>
+        ∃ h : A.card = m, ∃ hc : (univ \ A).card = n, ∀ j,
+          calScoreBelow S bot A hc (w j) ≤ S (A.orderEmbOfFin h j) ∧
+          S (A.orderEmbOfFin h j) ≤ calScore S top A hc (q j)).card := by
+  refine (batch_sandwich S hS bot top hbot htop _).trans (card_le_card fun A hA => ?_)
+  rw [mem_filter] at hA ⊢
+  obtain ⟨hA, h, hc, r, hr, hs⟩ := hA
+  obtain ⟨hrH, hrI⟩ := mem_inter.1 hr
+  have hb := (mem_filter.1 hrI).2
+  refine ⟨hA, h, hc, fun j => ⟨?_, ?_⟩⟩
+  · exact (calScoreBelow_mono S hS bot hbot A hc (hb j).1 (le_of_mem_rankSeqs hrH j)).trans
+      (hs j).1
+  · exact (hs j).2.trans (calScore_mono S hS top htop A hc (hb j).2)
+
+/-- **Exceedances** (their quantile corollary, one-sided, and their selection corollary). On at
+least `|H ∩ {r_ζ ≤ k}|` of the test sets, at most `m − 1 − ζ` test scores exceed `S_(k)`, `ζ`
+0-based: their `η` false claims at `T̂ = S_(q_η)`, with 1-based `ζ = m − η`. -/
+theorem batch_exceed (S : Fin (n + m) → ℝ) (hS : Monotone S) (bot top : ℝ)
+    (hbot : ∀ p, bot ≤ S p) (htop : ∀ p, S p ≤ top) (ζ : Fin m) (k : ℕ) :
+    (rankSeqs n m ∩ (rankSeqs n m).filter fun r => r ζ ≤ k).card ≤
+      ((powersetCard m (univ : Finset (Fin (n + m)))).filter fun A =>
+        ∃ h : A.card = m, ∃ hc : (univ \ A).card = n,
+          (univ.filter fun j : Fin m => calScore S top A hc k < S (A.orderEmbOfFin h j)).card ≤
+            m - 1 - ζ).card := by
+  refine (batch_sandwich S hS bot top hbot htop _).trans (card_le_card fun A hA => ?_)
+  rw [mem_filter] at hA ⊢
+  obtain ⟨hA, h, hc, r, hr, hs⟩ := hA
+  have hk := (mem_filter.1 (mem_inter.1 hr).2).2
+  refine ⟨hA, h, hc, ?_⟩
+  have hsub : (univ.filter fun j : Fin m => calScore S top A hc k < S (A.orderEmbOfFin h j)) ⊆
+      Finset.Ioi ζ := by
+    intro j hj
+    rw [mem_filter] at hj
+    rw [Finset.mem_Ioi]
+    refine not_le.1 fun hjζ => ?_
+    have := (hS ((A.orderEmbOfFin h).monotone hjζ)).trans
+      ((hs ζ).2.trans (calScore_mono S hS top htop A hc hk))
+    exact absurd hj.2 (not_lt.2 this)
+  exact (card_le_card hsub).trans (Fin.card_Ioi ζ).le
+
+/-- Their selection score `s = μ̂ · 1{y ≤ c}`: at a threshold `T ≥ 0` (a score's value, when
+`μ̂ ≥ 0`), a false claim, `μ̂ > T` while `y ≤ c`, is exactly a score above `T`. -/
+theorem false_claim_iff {μ T y c : ℝ} (hT : 0 ≤ T) :
+    (T < μ ∧ y ≤ c) ↔ T < if y ≤ c then μ else 0 := by
+  split_ifs with h
+  · exact ⟨fun h' => h'.1, fun h' => ⟨h', h⟩⟩
+  · exact ⟨fun h' => absurd h'.2 h, fun h' => absurd h' (not_lt.2 hT)⟩
+
+end Batch
+
 end Conformal

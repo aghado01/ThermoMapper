@@ -2,7 +2,7 @@
 
 Pins the contract of the engine's conformal layer, one layer over retained draws and pointwise densities for every model with a pointwise density ([E16](../../../issues/regression/bass/extensions-brief.md#conformal-bayes-the-consumer)). The layer owns coverage and the score owns width. These are the finite statements of that split. They are the sibling of [GuardedEstimator](../BASS/guarded-estimator-lemmas.md): there, means valid whatever the emulator does; here, prediction sets valid whatever the model does. Written from the [chip brief](conformal-chip-brief.md).
 
-**Status (2026-11-10).** Proved in `lean/Enthymemata/ConformalValidity.lean`, namespace `Conformal`, with no apologies (PROOF-CLOSED, 349 declarations counting E35's M-1 and M-2 and slices 9, 10, 12, 13, 14 and 15 at the end of this page; `#print axioms` shows `propext`, `Classical.choice`, `Quot.sound` only):
+**Status (2026-11-10).** Proved in `lean/Enthymemata/ConformalValidity.lean`, namespace `Conformal`, with no apologies (PROOF-CLOSED, 378 declarations counting E35's M-1 and M-2 and slices 9, 10, 12, 13, 14, 15 and 16 at the end of this page; `#print axioms` shows `propext`, `Classical.choice`, `Quot.sound` only):
 - CB-1: `card_rankLe_le`, `coverage_orderings`, `coverage_orderings_eq`, `coverage_strict_le`, `coverage_orderings_le`, `rank_uniform`, `coverage_tieBreak`, `coverage_given`, `coverage_law`, `coverage_stratum`;
 - CB-2: `split_coverage`, `exchangeable_given_training`, `cqr_ordConnected`;
 - CB-4: `sum_jointU`, `post_addOneIn`, `integratedScore_equivariant`, `latentScore_equivariant`, `latentScore_eq`, `sum_jointU_addOneIn`, `integratedScore_le_latentScore`, `accepts_latent_of_mixed`, `mixed_counterexample`;
@@ -809,3 +809,49 @@ Zhang and Candès (arXiv 2409.19712v2), read in TeX: §1.2, §2, Theorems 1, 3 a
 **Checks.**
 - Conditional and marginal validity on 1,500 random (data, kernel) pairs.
 - The halved cluster gap on 400 finite mixture laws, computed exactly.
+
+## Slice 16 — batch predictive inference
+
+Lee, Tchetgen Tchetgen and Dobriban (arXiv 2409.13990v5), read in TeX: §2, Condition 1, Algorithm 1, Theorem 1 and its proof sketch, the quantile corollary, the selection corollary, and the theorem and corollary on simultaneous bounds. Proved on 2026-11-10 in `ConformalValidity.lean`, section `Batch`, PROOF-CLOSED, with the standard three axioms only. The checks (section "Slice 16") ran first.
+
+**Setting.**
+- The n + m units are their positions in score order, S monotone between `bot` and `top`. Any bounds on all n + m scores do, as inf s and sup s do.
+- Ties are broken uniformly at random. That leaves the test set uniform over the C(n + m, m) subsets and moves no calibration order statistic. The procedures read only those order statistics, so their sets are the paper's, ties included.
+- Every statement holds given the n + m score values, with only the test set's position random.
+
+**The ranks are uniform on H** (`card_testRank_mem`, `card_rankSeqs`).
+- The test units' calibration ranks, r_j = a_j − j for the sorted test positions a_j (0-based), are a bijection from the test sets onto H = {0 ≤ r_1 ≤ … ≤ r_m ≤ n}. The inverse is r ↦ {r_j + j}.
+- So the rank sequence is uniform on H, and |H| = C(n + m, m). Their sketch states this step as (R_(n+1), …, R_(n+m)) ~ Unif(H).
+
+**The sandwich** (`orderEmbOfFin_lt_cal`, `cal_lt_orderEmbOfFin`, `batch_sandwich`).
+- In their 1-based count, S_(r_j − 1) ≤ S^test_(j) ≤ S_(r_j) for every j at once.
+- So for any set I of rank sequences, on at least |H ∩ I| of the test sets one r ∈ I sandwiches every sorted test score. Each result below is this sandwich with a particular I.
+
+**Functions of a batch** (`batch_interval`, `batch_coverage`; their Theorem 1).
+- *The claim.* For h monotone, one r ∈ I has h(S_(r − 1)) ≤ h(sorted test scores) ≤ h(S_(r)).
+- *Their interval.* Take I = {q_L ≤ h̃ ≤ q_U}. By the definitions of Q′_β and Q_{1−γ}, at most β of H lies below q_L and at most γ above q_U, so |H ∩ I| ≥ (1 − α)|H| with α = β + γ. Their B_L is a min over {h̃ ≥ q_L} and B_U a max over {h̃ ≤ q_U}, both containing I. So [B_L, B_U] covers on at least 1 − α of the test sets (`frac_of_card`).
+- *Their h.* Their h, defined on sorted vectors, extends to v ↦ h(v↑), which is monotone by their Condition 1.
+
+**Simultaneous sets** (`batch_simultaneous`; their theorem on joint bounds).
+- With I the box w_j ≤ r_j ≤ q_j, every sorted test score lies in [S_(w_j − 1), S_(q_j)] on at least |H ∩ I| of the test sets. A coordinate left free takes 0 and n.
+- Their condition F_{n,m}(w; q) ≥ (1 − α) C(n + m, m) is |H ∩ I| ≥ (1 − α)|H|.
+- *A typo in their count.* Their closed form for L(ρ) has its product over j = 1, …, n. It holds with the product over consecutive pairs, j = 1, …, l − 1, which the checks confirm.
+
+**Selection with false claims controlled** (`batch_exceed`, `false_claim_iff`; their quantile and selection corollaries).
+- *The claim.* With I = {r_ζ ≤ k}, at most m − 1 − ζ test scores exceed S_(k), with ζ 0-based.
+- *Their rule.* Their selection score is s = μ̂ · 1{y ≤ c}. At a threshold T ≥ 0, a false claim (μ̂ > T while y ≤ c) is exactly a score above T. So with T̂ = S_(q_η) and 1-based ζ = m − η, the number of false claims is at most η on at least 1 − α of the test sets.
+- *The quantile.* q_η is the (1 − α) quantile of the law of r_(ζ). The checks confirm their closed form for that law.
+
+**Not formalized.**
+- The closed forms for |{r ∈ H : r_ζ = k}| and L(ρ) as Lean statements; the checks confirm them.
+- The upper bound 1 − α + ε in the quantile corollary.
+- Their propositions on NP-hardness, on optimality for the quantile, and on k-FWER through p-values.
+
+**Checks.**
+- The bijection onto H and |H| = C(n + m, m), for n ≤ 5 and m ≤ 4.
+- Their law of r_(ζ) and L(ρ) in closed form, on 1,626 (n, m, t, ρ).
+- On 400 (n, m, scores, h̃) cases, half with tied scores, over every test set:
+  - the sandwich;
+  - [B_L, B_U], built as in their Algorithm 1, covering at least 1 − β − γ;
+  - the interval, joint-box and exceedance counts each at least their rank counts.
+- Their selection rule on 180 data sets with scores tied at zero: at most η false claims on at least 1 − α of the test sets.

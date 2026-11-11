@@ -2669,4 +2669,116 @@ print(f"Slice 15: PCP's randomized weights give miscoverage <= alpha given the d
       f"{max(ratio) if ratio else 0:.3f} of ours)")
 
 print()
+print("=== Slice 16: batch predictive inference ===")
+# Lee, Tchetgen Tchetgen and Dobriban. N = n + m units; the m test units are a uniform m-subset. With
+# distinct scores, the sorted test ranks a_1 < ... < a_m map to the calibration ranks r_j = a_j - j + 1,
+# a bijection onto H = {1 <= r_1 <= ... <= r_m <= n + 1}, so the ranks are uniform on H, and
+# S_(r_j - 1) < S_test_(j) <= S_(r_j). With ties the same holds after a uniform tie-break, which the
+# procedures never see: they read calibration order statistics only. So any rank set I covers on at
+# least |I| of the C(n + m, m) test sets: the interval, the joint box, the exceedance count.
+
+
+def multichoose(a, b):                                  # their aHb: multisets of size b from a types
+    return math.comb(a + b - 1, b) if a >= 1 else int(b == 0)
+
+
+n_bat = n_law = 0
+for n in range(1, 6):
+    for m in range(1, 5):
+        N = n + m
+        H = list(itertools.combinations_with_replacement(range(1, n + 2), m))
+        assert len(H) == math.comb(n + m, m)
+        imgs = [tuple(a - j for j, a in enumerate(A)) for A in itertools.combinations(range(1, N + 1), m)]
+        assert sorted(imgs) == sorted(H) and len(set(imgs)) == len(imgs)   # bijection onto H
+        # their law of r_(zeta), and their count L(rho) of H at fixed coordinates t_1 < ... < t_l
+        for zeta in range(1, m + 1):
+            for k in range(1, n + 2):
+                cnt = sum(1 for r in H if r[zeta - 1] == k)
+                assert cnt == math.comb(k + zeta - 2, zeta - 1) * math.comb(n + m - k - zeta + 1, m - zeta)
+        for l in range(1, m + 1):
+            for ts in itertools.combinations(range(1, m + 1), l):
+                for rho in itertools.combinations_with_replacement(range(1, n + 2), l):
+                    cnt = sum(1 for r in H if all(r[t - 1] == x for t, x in zip(ts, rho)))
+                    f = multichoose(rho[0], ts[0] - 1) * multichoose(n - rho[-1] + 2, m - ts[-1])
+                    for j in range(l - 1):                  # their product, over consecutive pairs
+                        f *= multichoose(rho[j + 1] - rho[j] + 1, ts[j + 1] - ts[j] - 1)
+                    assert cnt == f
+                    n_law += 1
+        rr = random.Random(1600 + 10 * n + m)
+        for trial in range(20):
+            ties = trial % 2 == 1
+            scores = sorted(rr.choices(range(6), k=N)) if ties else sorted(rr.sample(range(100), N))
+            htil = {r: rr.randint(0, 5) for r in H}          # a rank-ordering function
+            vals = sorted(htil.values())
+            beta, gamma = Q(rr.randint(0, 3), 10), Q(rr.randint(0, 3), 10)   # alpha = beta + gamma
+            NH = len(H)
+            ku, kl = math.ceil((1 - gamma) * NH), math.ceil((1 - beta) * NH)
+            qU = vals[ku - 1]                                # Q_{1 - gamma}
+            qL = vals[NH - kl]                               # Q'_beta: the kl-th largest
+            IU = [r for r in H if htil[r] <= qU]
+            IL = [r for r in H if htil[r] >= qL]
+            I = [r for r in IU if htil[r] >= qL]
+            assert len(IU) >= (1 - gamma) * NH and len(IL) >= (1 - beta) * NH
+            assert len(I) >= (1 - beta - gamma) * NH        # the Lean's hypothesis, alpha = beta + gamma
+            hfun = lambda xs: sum(xs) + max(xs)              # monotone in each sorted coordinate
+            w = [rr.randint(1, n + 1) for _ in range(m)]     # a box of ranks, w_j <= r_j <= q_j
+            q = [rr.randint(x, n + 1) for x in w]
+            box = sum(1 for r in H if all(w[j] <= r[j] <= q[j] for j in range(m)))
+            zeta, k = rr.randint(1, m), rr.randint(1, n + 1)
+            below = sum(1 for r in H if r[zeta - 1] <= k)
+            cover = joint = exceed = 0
+            for A in itertools.combinations(range(N), m):
+                test = sorted(scores[a] for a in A)
+                cal = [scores[i] for i in range(N) if i not in A]
+                r = tuple(sum(1 for c in cal if c < t) + 1 for t in test)
+                assert r in H
+                calx = [-10 ** 6] + cal + [10 ** 6]             # S_(0) = inf, S_(n+1) = sup
+                assert all(calx[r[j] - 1] < t <= calx[r[j]] for j, t in enumerate(test))
+                BL = min(hfun([calx[x - 1] for x in rr_]) for rr_ in IL)
+                BU = max(hfun([calx[x] for x in rr_]) for rr_ in IU)
+                cover += BL <= hfun(test) <= BU
+                joint += all(calx[w[j] - 1] <= test[j] <= calx[q[j]] for j in range(m))
+                exceed += sum(1 for t in test if t > calx[k]) <= m - zeta
+            assert Q(cover, math.comb(N, m)) >= 1 - beta - gamma and cover >= len(I)
+            assert joint >= box and exceed >= below
+            n_bat += 1
+
+# Their selection rule: s = mu * 1{y <= c} with mu >= 0, T = S_(q_eta) at the (1 - alpha) quantile of
+# the law of r_(m - eta); at most eta false claims on at least 1 - alpha of the test sets.
+n_sel = 0
+for n in range(1, 7):
+    for m in range(1, 4):
+        N = n + m
+        rr = random.Random(1700 + 10 * n + m)
+        for trial in range(10):
+            mu = [rr.randint(0, 5) for _ in range(N)]
+            y = [rr.randint(0, 3) for _ in range(N)]
+            c = 1
+            S = [mu[i] * (y[i] <= c) for i in range(N)]
+            alpha = Q(rr.randint(1, 5), 10)
+            eta = rr.randint(0, m - 1)
+            zeta = m - eta
+            cum, qe = Q(0), n + 1
+            for kk in range(1, n + 2):
+                cum += Q(math.comb(kk + zeta - 2, zeta - 1) * math.comb(n + m - kk - zeta + 1, m - zeta),
+                         math.comb(n + m, m))
+                if cum >= 1 - alpha:
+                    qe = kk
+                    break
+            ok = 0
+            for A in itertools.combinations(range(N), m):      # A: the test units
+                cal = sorted(S[i] for i in range(N) if i not in A)
+                T = cal[qe - 1] if qe <= n else 10 ** 6        # S_(q_eta), S_(n+1) = sup
+                assert all((mu[i] > T and y[i] <= c) == (S[i] > T) for i in A)   # false_claim_iff
+                ok += sum(1 for i in A if mu[i] > T and y[i] <= c) <= eta
+            assert Q(ok, math.comb(N, m)) >= 1 - alpha
+            n_sel += 1
+print(f"Slice 16: the calibration ranks are a bijection from m-subsets onto H (|H| = C(n + m, m)) for "
+      f"n <= 5, m <= 4; their law of r_(zeta) and count L(rho) in closed form on {n_law} (n, m, t, rho); "
+      f"on {n_bat} cases, half with tied scores, over every test set: the sandwich, [B_L, B_U] (min over "
+      f"h~ >= q_L, max over h~ <= q_U) covering >= 1 - beta - gamma, and the interval, joint-box and "
+      f"exceedance counts at least their rank counts; selection with at most eta false claims on "
+      f">= 1 - alpha of the test sets, on {n_sel} data sets with tied zero scores")
+
+print()
 print("All assertions hold.")
