@@ -276,21 +276,90 @@ Each report gives the commits, gate results, coverage and width by fit, cost, de
 
 Newest first.
 
-### In progress — Slice 11, BGP's drawn f (started 2026-11-11)
+### 2026-11-11 — Slice 11, BGP's drawn f: the retained-parameters content the full step takes
 
-Started at the main session's word (resume order 11, 12b, 13).
+Built at the main session's word of 2026-11-11 (the resume order 11, 12b, 13), from E16's completion plan.
 
-**Plan.**
-- `BgpSampler.DrawFunction(result, xCases, seed)` returns a `BgpDrawnFunction`. For each retained draw (t, η, s²), it draws g = m + f jointly at the distinct mapped inputs, the training inputs first and then the cases'. The law is the kriging mean and s² times the universal-kriging covariance (`GpRegression.JointPosteriorInFrame`). Each accepted state is factored once, and each draw takes its own normals.
-- The training density (`PointwiseLogDensity`) and the candidate density (`CandidateLogDensity`) come from that one object. Both are in-sample N(y | g(x), σ²), with every latent conditioned and both forms served.
-- A case at a training input reads that input's g, so its term is the training term, bit for bit.
-- *Gates:*
-  - candidates at training inputs, bit for bit, log CDF included, with the full step taking the pair;
-  - the draws against the universal-kriging moments from the bordered system;
-  - the refusals;
-  - qualification: held-out coverage on slice 5's truth, the split form beside it at equal data, and the cost row.
+**Landed** on `main`, nothing pushed:
+- `5c25b48`, with its tests.
+  - `BgpSampler.DrawFunction(result, xCases, seed)` returns a `BgpDrawnFunction`, whose `PointwiseLogDensity(units, cdf)` and `CandidateLogDensity(grids, strata, cdf, cases)` serve both forms. It also exposes `AtObservation`, `AtCase` and `NoiseVariance`.
+  - `GpRegression.JointPosteriorInFrame`, internal; the GP also keeps its responses as given.
+  - The collapsed content's docstrings, and its seam's refusal reason, now point to the drawn function.
+  - `BgpDrawnFunctionTests`.
+- *Nothing moves for existing calls.* The collapsed content, its seam and the run are unchanged; only the refusal's wording changed.
 
-**State.** The code and tests are committed in `5c25b48`. The Commit selection passed 149 of 149. Qualification gave coverage 0.889 (se 0.012) on the full step against 0.873 on the split form at equal data, and the cost row is read. The whole assembly is running at `5c25b48`; the report follows it.
+**What it computes.**
+- *The draw.* For each retained draw (t, η, s²), g = m + f is drawn at the distinct mapped inputs, the training inputs first and then the cases'.
+  - Its law is the kriging mean and s² times the universal-kriging covariance, the constant mean's flat prior included.
+  - s² is the run's own exact draw given (t, η), so (t, η, s², g) is a draw from the joint posterior.
+  - A draw that repeats its predecessor's state shares the mean and the factor, and takes its own normals. The normals come from a stream per chain, derived from the seed.
+- *The terms:* in sample, N(y | g(x), σ²) with σ² = s²η, for the training units and the candidates alike. Every latent is reported conditioned, none left out.
+- *A case at a training input* reads that input's g, so its term is the training term, bit for bit. Two units at one input share one value.
+- *Pairing.* The training density and the candidates come from one drawn function. A second call draws g afresh, and its candidates would not be jointly drawn with the first call's training terms. The docstring says so; the layer cannot tell.
+
+**Gates.**
+- *Bit for bit at the training inputs,* known σ² and unknown scale (n 40, S 300, every draw and unit), the log CDF included. Duplicate cases share g. The full step and its predictive distribution take the pair, and the collapsed content stays refused. One seed repeats the draws, and another draws afresh.
+- *The draws against the GP's conditional moments* at one fixed state, 6,000 draws, six points, three of them new, one outside the data's range. The reference is the bordered kriging system [[R, 1], [1ᵀ, 0]] solved by elimination, an algebra the engine does not use.
+  - Means fall within 4.5 standard errors.
+  - Variances fall within 4.5·√(2/S), with ratios 0.98 to 1.02.
+  - Correlations hold to their tolerance, from −0.03 to 0.91.
+- *The pivoted factor* reproduces a near-singular covariance (30 inputs, a bandwidth of four spacings, three cases): rank 24 of 33, largest gap 5.4·10⁻¹⁴ against the largest variance 0.128.
+- *The refusals:* inputs of another dimension; a case not drawn; a grid count unlike the cases'; a CDF over units of two observations. With no cases, the training density stands alone.
+- *Per commit,* the selected classes and the pinned tier: 149 of 149. *At the slice's end,* the whole assembly: 3,175 of 3,175 at `5c25b48`.
+
+**Held-out coverage** (behind `BASS_QUALIFICATION=1`). Slice 5's truth outside the model: f = sin(2πx) + x/2, with noise 0.2ζ plus, one time in seven, 0.8·Exp(1). 20 fits of 99 points, unknown scale, 50 held-out cases per fit at their true value, and 20 on a grid for the width; the se is the fits' spread.
+
+| Form | Coverage (se) | Mean width | Sets in two pieces | Open at the grid's ends |
+|---|---|---|---|---|
+| The full step on the drawn function (m 100, k 10) | 0.889 (0.012) | 1.017 | 0 of 400 | 0 |
+| The split form on the same 99 points, 50 to fit and 49 to calibrate (m 50, k 5) | 0.873 (0.017) | 1.084 | — | 0 |
+| Slice 5's split form, 60 to fit and 99 more to calibrate (m 100), for reference | 0.903 (0.014) | 1.12 | 0 of 400 | 0 |
+
+- *Both cover within error.* At equal data the full step's sets are 6% narrower than the split form's, which spends half the points on calibration.
+- *The add-one-in weights degenerate at some held-out cases:* the least ESS at the truth is 1.0, at the contamination's outliers, as on BASS fits.
+
+**The cost row** (n 400, S 1,000 with 240 distinct states, a grid of 200 per case, cycle clock, indicative, the machine shared):
+
+| Cases (points) | The drawn function (per state) | Its training density | Its candidates | The full step | The split form's seam | Its step |
+|---|---|---|---|---|---|---|
+| 1 (401) | 40.4 s (168 ms) | 3.0 ms | 1.4 ms | 74 ms | 13.9 s | 4.2 ms |
+| 50 (450) | 57.3 s (239 ms) | 7.9 ms | 63.6 ms | 3.41 s | 16.6 s | 119 ms |
+
+- *The drawn function costs about three times the split form's seam.* Each state pays one O(n³) refit, as the seam does, plus a solve per point and the pivoted factor.
+- *It is paid once per call,* for every case it was drawn at.
+
+**Defects found: none in this slice's code.** Two findings during the build, before any commit.
+- *The shared `CholeskyDecomposition` diverges on this covariance.* My first draw used it, and g came back NaN.
+  - Its floor sets a pivot at or below 10⁻¹² to 10⁻¹². On a covariance whose spectrum falls below rounding, the rows under a floored pivot divide their rounding by 10⁻⁶. The next pivots then went to −3.7·10¹⁵⁷, with 55 entries of the factor infinite.
+  - `LogDet` stayed finite (−683.6). Only `Status.Finite` reported it, so a caller that checks the log determinant misses it.
+  - The drawn function now uses Cholesky with diagonal pivoting, stopped at 10⁻¹² of the largest variance (Harbrecht, Peters and Schneider 2012).
+  - The shared factor is not changed: it belongs to the linear algebra's owner (below).
+- *A docstring was wrong after the build:* the collapsed content said BGP's "one content" never draws f. It now points to the drawn function.
+
+**Decided in building it.**
+- *g is drawn jointly at every input,* not g(X) first and then g(x*) given g(X). The noise-free conditional of a smooth kernel is the near-singular solve the pivoted factor avoids.
+- *The inputs are deduplicated on their mapped values,* so a repeated input is one coordinate, not a singular pair.
+- *The training density depends on the cases drawn,* though its law does not, so the pair comes from one object.
+- *The terms read the responses as given,* kept by the GP, so a training value read as a candidate reproduces its term exactly.
+
+**Follow-ups, each with the decision it would change.**
+- *Drawing g during the run,* while each state's factor exists, as the run keeps its fit variance at its test points (slice 6·0). It would save the drawn function's O(n³) refit per state, nearly all of its cost at small T. It decides whether the run takes the cases in advance for the full step's content.
+- *The shared factor's floor.*
+  - A caller that reads `LogDet` and not `Status` can sample from an infinite factor. It decides whether `CholeskyDecomposition` refuses a non-finite factor, or offers a pivoted one. If it does, callers that rely on the soft floor change.
+  - This belongs to the linear algebra's owner, not this layer.
+
+**Doc changes owed** (for the offline docs pass; chips leave `docs/` alone).
+- *`docs/Maths/Regression/ConformalPrediction.md`:*
+  - line 35: BGP now serves both forms through its drawn function;
+  - the seam table's BGP row (line 444): add `DrawFunction` and its seams, which the full step takes;
+  - line 461: two contents, the collapsed and the drawn;
+  - the coverage and cost tables: the rows above;
+  - the "not built" line (852): built.
+- *`docs/Maths/Regression/BGP.md`, "Terms" (line 9):* the retained-parameters content.
+  - `DrawFunction`, its law and its pairing rule;
+  - the deduplicated inputs and the pivoted factor's tolerance;
+  - the bit-for-bit candidate, and the cost.
+- *`docs/Maths/LinearAlgebra.md`, the Cholesky section (line 197):* a floored pivot can make the factor's later rows diverge, with `LogDet` finite. `Status.Finite` is the check. The pivoted factor in BGP's drawn function is the alternative for semidefinite covariances.
 
 ### 2026-11-11 — Slice 10, density and CDF error diagnostics
 
