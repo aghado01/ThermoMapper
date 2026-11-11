@@ -208,6 +208,20 @@ The user asked for this on 2026-11-08 ("Yes, start it"), relayed by the BASS ext
 
 Newest first.
 
+### 2026-11-10 — slice 13: the tournament correction, proved
+
+The statements are in the ledger, under "Slice 13". There are 15 new declarations, 330 in the file, PROOF-CLOSED, with the standard three axioms only. The checks ran first.
+
+- *Theorem 1 is slice 9's cross-fitted rule* with the pair fit `tournFit` (the fit to the rest, plus the pair as an unordered multiset of values).
+  - Their threshold, (1 − α)(n + 1) strict wins, is the rule at k = ⌊αm⌋ (`tournament_count_iff`).
+  - Coverage is ≥ 1 − (2k − 1)/m with fits symmetric given their seeds, up to relabeling (`tournament_coverage`), or with chains that read their units in index order and need not mix (`tournament_orderReading`).
+- *What the C# needs.* The pair reaches the fit as values. A fit that marks which unit is the test refuses it on every data set in the checks.
+- *Theorem 2, per data set* (`coverage_tournament_stable`): for every a, the share accepted is ≥ 1 − (k + a + 2F/(a + 1))/m.
+  - *Finding:* the reference R can be any scores of the data set, not only their one-out score.
+  - *Finding:* optimized over a, the cost is about α + 2√(2ν), below their α + 3√ν: 0.227 against 0.300 at m = 20, ν = 0.01.
+
+**Gates.** The module build is clean, and all 9 main results print the standard axioms.
+
 ### 2026-11-10 — item 1: slice 10's grid reading, proved
 
 The statements are in the ledger under slice 10, "The grid reading". There are 11 new declarations, 315 in the file, PROOF-CLOSED, with the standard three axioms only. The checks ran first, and every assertion holds.

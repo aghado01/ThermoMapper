@@ -2,7 +2,7 @@
 
 Pins the contract of the engine's conformal layer, one layer over retained draws and pointwise densities for every model with a pointwise density ([E16](../../../issues/regression/bass/extensions-brief.md#conformal-bayes-the-consumer)). The layer owns coverage and the score owns width. These are the finite statements of that split. They are the sibling of [GuardedEstimator](../BASS/guarded-estimator-lemmas.md): there, means valid whatever the emulator does; here, prediction sets valid whatever the model does. Written from the [chip brief](conformal-chip-brief.md).
 
-**Status (2026-11-06).** Proved in `lean/Enthymemata/ConformalValidity.lean`, namespace `Conformal`, with no apologies (PROOF-CLOSED, 315 declarations counting E35's M-1 and M-2 and slices 9, 10 and 12 at the end of this page; `#print axioms` shows `propext`, `Classical.choice`, `Quot.sound` only):
+**Status (2026-11-06).** Proved in `lean/Enthymemata/ConformalValidity.lean`, namespace `Conformal`, with no apologies (PROOF-CLOSED, 330 declarations counting E35's M-1 and M-2 and slices 9, 10, 12 and 13 at the end of this page; `#print axioms` shows `propext`, `Classical.choice`, `Quot.sound` only):
 - CB-1: `card_rankLe_le`, `coverage_orderings`, `coverage_orderings_eq`, `coverage_strict_le`, `coverage_orderings_le`, `rank_uniform`, `coverage_tieBreak`, `coverage_given`, `coverage_law`, `coverage_stratum`;
 - CB-2: `split_coverage`, `exchangeable_given_training`, `cqr_ordConnected`;
 - CB-4: `sum_jointU`, `post_addOneIn`, `integratedScore_equivariant`, `latentScore_equivariant`, `latentScore_eq`, `sum_jointU_addOneIn`, `integratedScore_le_latentScore`, `accepts_latent_of_mixed`, `mixed_counterexample`;
@@ -717,3 +717,39 @@ The in-sample and leave-one-out predictives differ by one unit's weight, so thei
   - For Hoff's score the literal latent posterior is (b), so there is nothing to read.
   - The conditioned reading is valid only when every unit reads alike, with the candidate's latent drawn per draw.
   - For CB-4(c), the drawn latent costs Σ w̄² Var on the candidate, which a closed-form conditional mean removes.
+
+## Slice 13 — the tournament correction
+
+Bhattacharyya, Zhang and Barber, arXiv 2605.29200v5, read in TeX: §2–§3, Theorems 1 to 3 and their proofs. Proved on 2026-11-10 in `ConformalValidity.lean`, section `Tournament`, PROOF-CLOSED, with the standard three axioms only. The checks (section "Slice 13") ran first.
+
+**The rule is slice 9's cross-fitted rule.**
+- Each training unit i plays a game against the test unit. Both are scored by one approximate fit, D₋ᵢ (every training unit but i) plus the pair {zᵢ, z_test}. The test unit is refused when it wins at least (1 − α)(n + 1) games, a win being a strictly higher nonconformity.
+- In conformity terms, a win is `strangerThan`, and ties win nothing. Their threshold is `AcceptsPairwise` at k = ⌊αm⌋, with m = n + 1 (`tournament_count_iff`).
+- *The pair fit* (`tournFit`) is the fit to the rest, then the scored value and the pair as an unordered multiset of values. `pairScore` of it is their s_approx(zᵢ; D₋ᵢⱼ + {zᵢ, zⱼ}).
+
+**Theorem 1 and its randomized form: coverage ≥ 1 − (2k − 1)/m, so ≥ 1 − 2α.**
+- *With a symmetric fit* (`tournament_coverage`, through `crossFit_coverage`): the fit to the rest is symmetric in its training units given its randomness, up to a relabeling, so seeds that travel with the units qualify. This is their row and column exchangeability of the seed matrix.
+- *With an order-reading fit* (`tournament_orderReading`, through slice 9's `coverage_orderReading`): it needs no symmetry and no mixing. A chain that sweeps its training units in index order with a fixed seed, with the left-out places closed up, qualifies (`tournFit_orderReading`).
+- *What the pair needs.* The fit receives the pair as values, so it cannot know which of the two units is the test (`tournFit_comp`). A fit that hands the pair over as (training, test), or otherwise marks the test, breaks the guarantee: in the checks such a fit refuses the test unit on every data set.
+- *Their symmetric-in-the-pair assumption* is one way to meet this condition. A fit with roles (scored unit, opponent) by position would also qualify; roles (training, test) would not.
+
+**Theorem 2, the 2ε-inflated rule under stability** (`coverage_tournament_stable`, `card_refused_by_le`), per data set:
+- The test unit is accepted with share at least 1 − (k + a + 2F/(a + 1))/m, over the orderings, for every a.
+- F counts the ordered pairs whose score strays from a reference R by more than ε (`strayCount`).
+- *The argument.* Where neither side of a game strays, an inflated win needs R(u) < R(j). So a refused unit is among the k + a lowest by R, or has more than a stray games, and a Markov count bounds those.
+- *Finding: R can be any reference scores of the data set.* It need be neither symmetric nor a valid score. Their R is the one-out score s_approx(zᵢ; D₋ᵢ + {zᵢ}), and any choice that makes F small serves.
+- *Under an exchangeable law,* with each ordered pair straying with chance at most ν (their Assumption 1), E F ≤ m(m − 1)ν. So the miscoverage is at most k/m + a/m + 2(m − 1)ν/(a + 1), for every a.
+- *Finding: the constant.* Optimized over a, this is about α + 2√(2ν), below their α + 3√ν: 0.227 against 0.300 at m = 20, ν = 0.01, and 0.0273 against 0.0300 at m = 1000, ν = 10⁻⁴. Their proof fixes the Markov threshold at 2√ν(n + 1) rather than optimizing it.
+- The step from the data set to the law is the averaging every CB statement uses, and it is not formalized here.
+
+**What the C# may claim.**
+- 1 − 2α, or 1 − (2k − 1)/m exactly, at k = ⌊α(n + 1)⌋, counting strictly higher nonconformity as a win. This needs:
+  - each game's pair fit to receive the pair as values, without marking the test;
+  - its fit to the rest to be symmetric given its seeds, or to read its training units in index order with the left-out places closed up. It need not mix.
+- 1 − α − 3√ν, or the sharper form above, for the 2ε-inflated set, under their stability with the stated ν.
+
+**Checks.**
+- The index identity on 5,000 random (m, α, count) triples.
+- Coverage over every ordering on 313 (data, k) cases, with an order-reading, non-symmetric pair fit. The least slack was 0: the bound is attained.
+- The fit that marks the test unit, which refuses it on every data set.
+- The count bound on 3,000 random matrices, with arbitrary references.

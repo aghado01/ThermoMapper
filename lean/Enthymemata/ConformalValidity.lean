@@ -5113,4 +5113,275 @@ theorem coverage_grid_excluding {W Z : Type*} [Fintype W] {C : Finset ι} {t : �
 
 end GridReading
 
+/-! ### Slice 13: the tournament correction (Bhattacharyya, Zhang and Barber, arXiv 2605.29200) -/
+
+section Tournament
+
+variable {ι : Type*} [Fintype ι] [DecidableEq ι]
+
+/-- **The tournament correction's pair fit.** The fit to the units `T`, then the scored value with
+the units `T` leaves out handed over as an unordered multiset of values. On the leave-two-out set
+`univ \ {i, j}`, `pairScore` of it is their `s_approx(z_i; D_{−ij} + {z_i, z_j})`, a conformity in
+place of their nonconformity. -/
+def tournFit {Z β α : Type*} (fit : Finset ι → (ι → Z) → β) (g : β → Z → Multiset Z → α)
+    (T : Finset ι) (z : ι → Z) (p : Z) : α :=
+  g (fit T z) p ((univ \ T).val.map z)
+
+theorem compl_image_val_map {Z : Type*} (σ : Equiv.Perm ι) (T : Finset ι) (z : ι → Z) :
+    (univ \ T.image σ).val.map z = (univ \ T).val.map (z ∘ σ) := by
+  have h : univ \ T.image σ = (univ \ T).map σ.toEmbedding := by
+    ext x
+    simp only [mem_sdiff, mem_univ, true_and, mem_image, mem_map, Equiv.coe_toEmbedding]
+    constructor
+    · intro hx
+      exact ⟨σ.symm x, fun h => hx ⟨σ.symm x, h, σ.apply_symm_apply x⟩, σ.apply_symm_apply x⟩
+    · rintro ⟨a, ha, rfl⟩ ⟨b, hb, hba⟩
+      exact ha (σ.injective hba ▸ hb)
+  rw [h, Finset.map_val, Multiset.map_map]
+  rfl
+
+/-- The pair fit inherits the fit's relabeling: the pair is passed as values, not positions. -/
+theorem tournFit_comp {Z β α : Type*} {fit fit' : Finset ι → (ι → Z) → β}
+    (g : β → Z → Multiset Z → α) {σ : Equiv.Perm ι} {z : ι → Z} {T : Finset ι}
+    (h : fit' T (z ∘ σ) = fit (T.image σ) z) :
+    tournFit fit' g T (z ∘ σ) = tournFit fit g (T.image σ) z := by
+  funext p
+  simp only [tournFit, h, compl_image_val_map]
+
+/-- **The tournament correction covers at least `1 − (2k − 1)/|C|`**, so `1 − 2α` at
+`k = ⌊α|C|⌋` (`one_sub_two_mul_le`): their Theorem 1, randomized scores included (their Theorem
+3). Each pair's fit to the rest is symmetric in its training units given its randomness, up to a
+relabeling `act` (seeds that travel with the units qualify); the pair enters only through `g`, as
+an unordered multiset of values. -/
+theorem tournament_coverage {W Z β α : Type*} [Fintype W] [Fintype Z] [LinearOrder α]
+    {C : Finset ι} {t : ι} (ht : t ∈ C) (P : W → (ι → Z) → ℝ) (hP0 : ∀ w z, 0 ≤ P w z)
+    (hP1 : ∑ w, ∑ z, P w z = 1) (act : Equiv.Perm ι → W ≃ W)
+    (hP : ∀ σ ∈ permsOn C, ∀ w z, P (act σ w) (z ∘ σ) = P w z)
+    (fit : W → Finset ι → (ι → Z) → β) (g : β → Z → Multiset Z → α)
+    (hfit : ∀ σ ∈ permsOn C, ∀ w T z, fit (act σ w) T (z ∘ σ) = fit w (T.image σ) z) (k : ℕ) :
+    1 - ((2 * k - 1 : ℕ) : ℝ) / C.card ≤
+      ∑ w, ∑ z, P w z *
+        if AcceptsPairwise k C (pairScore (tournFit (fit w) g) z) t then 1 else 0 :=
+  crossFit_coverage ht P hP0 hP1 act hP (fun w => tournFit (fit w) g)
+    (fun σ hσ w T z => tournFit_comp g (hfit σ hσ w T z)) k
+
+/-- **Each pair's chain need not be symmetric, only read its units' order.** -/
+theorem tournFit_orderReading {n : ℕ} {Z β α : Type*}
+    {fit : Finset (Fin (n + 1)) → (Fin (n + 1) → Z) → β} (g : β → Z → Multiset Z → α)
+    (h : OrderReading fit) : OrderReading (tournFit fit g) :=
+  fun σ T z hmono => tournFit_comp g (h σ T z hmono)
+
+/-- **The tournament correction with fits that read their units' order**: a chain sweeping its
+training units in index order with a fixed seed, the left-out places closed up, need be neither
+symmetric nor mixed. The test unit is unit `0`. -/
+theorem tournament_orderReading {n : ℕ} {W Z β α : Type*} [Fintype W] [Fintype Z] [LinearOrder α]
+    (P : W → (Fin (n + 1) → Z) → ℝ) (hP0 : ∀ w z, 0 ≤ P w z) (hP1 : ∑ w, ∑ z, P w z = 1)
+    (hP : ∀ σ : Equiv.Perm (Fin (n + 1)), ∀ w z, P w (z ∘ σ) = P w z)
+    (fit : W → Finset (Fin (n + 1)) → (Fin (n + 1) → Z) → β) (g : β → Z → Multiset Z → α)
+    (hfit : ∀ w, OrderReading (fit w)) (k : ℕ) :
+    1 - ((2 * k - 1 : ℕ) : ℝ) / (n + 1) ≤
+      ∑ w, ∑ z, P w z *
+        if AcceptsPairwise k univ (pairScore (tournFit (fit w) g) z) 0 then 1 else 0 :=
+  coverage_orderReading P hP0 hP1 hP (fun w => tournFit (fit w) g)
+    (fun w => tournFit_orderReading g (hfit w)) k
+
+omit [Fintype ι] [DecidableEq ι] in
+/-- **Their threshold is the cross-fitted rule's level.** They refuse when the test unit wins at
+least `(1 − α)m` games, a win being a strictly higher nonconformity: a strictly lower conformity, so
+ties win nothing, as in `strangerThan`. With `c` wins that is `c + ⌊αm⌋ ≥ m`, the cross-fitted rule
+at `k = ⌊αm⌋`. -/
+theorem tournament_count_iff {c m : ℕ} {α : ℝ} (hα : 0 ≤ α) :
+    (c : ℝ) < (1 - α) * m ↔ c + ⌊α * m⌋₊ < m := by
+  have h0 : (0 : ℝ) ≤ α * m := mul_nonneg hα (Nat.cast_nonneg _)
+  constructor
+  · intro h
+    have hcm : c < m := by
+      by_contra hc
+      have : (m : ℝ) ≤ c := by exact_mod_cast not_lt.1 hc
+      nlinarith
+    have h2 : α * m < ((m - c : ℕ) : ℝ) := by
+      rw [Nat.cast_sub hcm.le]
+      linarith
+    have := (Nat.floor_lt h0).2 h2
+    omega
+  · intro h
+    have h1 : ⌊α * m⌋₊ < m - c := by omega
+    have h2 := (Nat.floor_lt h0).1 h1
+    rw [Nat.cast_sub (by omega)] at h2
+    linarith
+
+/-! #### The `2ε`-inflated rule under stability -/
+
+omit [Fintype ι] in
+/-- The units of `C` that `u` is stranger than by more than `δ`: `s u j + δ < s j u`. -/
+noncomputable def strangerThanBy (C : Finset ι) (s : ι → ι → ℝ) (δ : ℝ) (u : ι) : Finset ι :=
+  C.filter fun j => s u j + δ < s j u
+
+omit [Fintype ι] in
+/-- **The inflated tournament rule**: their `2ε`-inflated set at `δ = 2ε`. -/
+def AcceptsPairwiseBy (k : ℕ) (C : Finset ι) (s : ι → ι → ℝ) (δ : ℝ) (u : ι) : Prop :=
+  (strangerThanBy C s δ u).card + k < C.card
+
+omit [Fintype ι] in
+noncomputable instance (k : ℕ) (C : Finset ι) (s : ι → ι → ℝ) (δ : ℝ) (u : ι) :
+    Decidable (AcceptsPairwiseBy k C s δ u) :=
+  inferInstanceAs (Decidable (_ < _))
+
+omit [Fintype ι] in
+/-- The ordered pairs whose score strays from a reference `R` by more than `ε`. -/
+noncomputable def strayCount (C : Finset ι) (s : ι → ι → ℝ) (R : ι → ℝ) (ε : ℝ) : ℕ :=
+  ∑ u ∈ C, (C.filter fun j => j ≠ u ∧ ε < |s u j - R u|).card
+
+omit [Fintype ι] in
+/-- The games of `u` in which either side strays. -/
+noncomputable def pairFails (C : Finset ι) (s : ι → ι → ℝ) (R : ι → ℝ) (ε : ℝ) (u : ι) : ℕ :=
+  (C.filter fun j => j ≠ u ∧ (ε < |s u j - R u| ∨ ε < |s j u - R j|)).card
+
+omit [Fintype ι] in
+/-- **The inflated rule's refusals, counted.** For any reference scores `R` and every `a`, at most
+`k + a + 2F/(a + 1)` units are refused, `F` the stray pairs. Where neither side of a game strays,
+an inflated win needs `R u < R j`; so a refused unit either sits among the `k + a` lowest by `R`, or
+has more than `a` stray games, and Markov counts those. -/
+theorem card_refused_by_le (C : Finset ι) (s : ι → ι → ℝ) (R : ι → ℝ) {ε : ℝ} (hε : 0 ≤ ε)
+    (k a : ℕ) :
+    ((C.filter fun u => ¬ AcceptsPairwiseBy k C s (2 * ε) u).card : ℝ) ≤
+      (k + a : ℝ) + 2 * (strayCount C s R ε : ℝ) / (a + 1) := by
+  classical
+  have hunit : ∀ u ∈ C, ¬ AcceptsPairwiseBy k C s (2 * ε) u →
+      rankLe C R u ≤ k + pairFails C s R ε u := by
+    intro u _ hna
+    rw [AcceptsPairwiseBy, not_lt] at hna
+    have h1 : (strangerThanBy C s (2 * ε) u).card ≤
+        (C.filter fun j => R u < R j).card + pairFails C s R ε u := by
+      refine (card_le_card fun j hj => ?_).trans (card_union_le _ _)
+      rw [strangerThanBy, mem_filter] at hj
+      rw [mem_union, mem_filter, mem_filter]
+      by_cases hf : j ≠ u ∧ (ε < |s u j - R u| ∨ ε < |s j u - R j|)
+      · exact Or.inr ⟨hj.1, hf⟩
+      · left
+        refine ⟨hj.1, ?_⟩
+        have hju : j ≠ u := by
+          rintro rfl
+          linarith [hj.2]
+        have hnot : ¬ (ε < |s u j - R u| ∨ ε < |s j u - R j|) := fun h => hf ⟨hju, h⟩
+        rw [not_or, not_lt, not_lt] at hnot
+        have h1 := abs_le.1 hnot.1
+        have h2 := abs_le.1 hnot.2
+        linarith [hj.2]
+    have h2 : (C.filter fun j => R u < R j).card + rankLe C R u = C.card := by
+      unfold rankLe
+      have := C.card_filter_add_card_filter_not (fun j => R j ≤ R u)
+      rw [filter_congr fun j _ => show ¬ R j ≤ R u ↔ R u < R j from not_le] at this
+      omega
+    omega
+  have hcover : (C.filter fun u => ¬ AcceptsPairwiseBy k C s (2 * ε) u) ⊆
+      (C.filter fun u => rankLe C R u ≤ k + a) ∪ C.filter fun u => a + 1 ≤ pairFails C s R ε u := by
+    intro u hu
+    rw [mem_filter] at hu
+    rw [mem_union, mem_filter, mem_filter]
+    have := hunit u hu.1 hu.2
+    by_cases hfa : pairFails C s R ε u ≤ a
+    · exact Or.inl ⟨hu.1, by omega⟩
+    · exact Or.inr ⟨hu.1, by omega⟩
+  have hmarkov : (a + 1) * (C.filter fun u => a + 1 ≤ pairFails C s R ε u).card ≤
+      ∑ u ∈ C, pairFails C s R ε u := by
+    calc (a + 1) * (C.filter fun u => a + 1 ≤ pairFails C s R ε u).card
+        = ∑ _u ∈ C.filter (fun u => a + 1 ≤ pairFails C s R ε u), (a + 1) := by
+          rw [sum_const, smul_eq_mul, mul_comm]
+      _ ≤ ∑ u ∈ C.filter (fun u => a + 1 ≤ pairFails C s R ε u), pairFails C s R ε u :=
+          sum_le_sum fun u hu => (mem_filter.1 hu).2
+      _ ≤ ∑ u ∈ C, pairFails C s R ε u :=
+          sum_le_sum_of_subset_of_nonneg (filter_subset _ _) fun _ _ _ => Nat.zero_le _
+  have hfails : ∀ u ∈ C, pairFails C s R ε u ≤
+      (C.filter fun j => j ≠ u ∧ ε < |s u j - R u|).card +
+        (C.filter fun j => j ≠ u ∧ ε < |s j u - R j|).card := by
+    intro u _
+    refine (card_le_card fun j hj => ?_).trans (card_union_le _ _)
+    rw [mem_filter] at hj
+    rw [mem_union, mem_filter, mem_filter]
+    rcases hj.2.2 with h | h
+    · exact Or.inl ⟨hj.1, hj.2.1, h⟩
+    · exact Or.inr ⟨hj.1, hj.2.1, h⟩
+  have hB : ∑ u ∈ C, (C.filter fun j => j ≠ u ∧ ε < |s j u - R j|).card = strayCount C s R ε := by
+    unfold strayCount
+    simp only [card_filter]
+    rw [sum_comm]
+    refine sum_congr rfl fun u _ => sum_congr rfl fun j _ => ?_
+    by_cases h : u = j
+    · simp [h]
+    · simp [h, Ne.symm h]
+  have hsumF : ∑ u ∈ C, pairFails C s R ε u ≤ 2 * strayCount C s R ε := by
+    calc ∑ u ∈ C, pairFails C s R ε u
+        ≤ ∑ u ∈ C, ((C.filter fun j => j ≠ u ∧ ε < |s u j - R u|).card +
+            (C.filter fun j => j ≠ u ∧ ε < |s j u - R j|).card) := sum_le_sum hfails
+      _ = strayCount C s R ε + strayCount C s R ε := by
+          rw [sum_add_distrib, hB]
+          rfl
+      _ = 2 * strayCount C s R ε := by ring
+  have htot := (card_le_card hcover).trans (card_union_le _ _)
+  have hc1 := card_rankLe_le C R (k + a)
+  have hN : ((C.filter fun u => a + 1 ≤ pairFails C s R ε u).card : ℝ) ≤
+      2 * (strayCount C s R ε : ℝ) / (a + 1) := by
+    rw [le_div_iff₀ (by positivity : (0 : ℝ) < a + 1)]
+    have : (C.filter fun u => a + 1 ≤ pairFails C s R ε u).card * (a + 1) ≤
+        2 * strayCount C s R ε := by
+      rw [mul_comm]
+      exact hmarkov.trans hsumF
+    exact_mod_cast this
+  have h1 : ((C.filter fun u => ¬ AcceptsPairwiseBy k C s (2 * ε) u).card : ℝ) ≤
+      ((C.filter fun u => rankLe C R u ≤ k + a).card : ℝ) +
+        ((C.filter fun u => a + 1 ≤ pairFails C s R ε u).card : ℝ) := by
+    exact_mod_cast htot
+  have h2 : ((C.filter fun u => rankLe C R u ≤ k + a).card : ℝ) ≤ k + a := by
+    exact_mod_cast hc1
+  linarith
+
+theorem acceptsPairwiseBy_comp {k : ℕ} {C : Finset ι} {σ : Equiv.Perm ι} (hσ : σ ∈ permsOn C)
+    (s : ι → ι → ℝ) (δ : ℝ) (u : ι) :
+    AcceptsPairwiseBy k C (fun i j => s (σ i) (σ j)) δ u ↔ AcceptsPairwiseBy k C s δ (σ u) := by
+  have h : (strangerThanBy C (fun i j => s (σ i) (σ j)) δ u).card =
+      (strangerThanBy C s δ (σ u)).card := by
+    apply card_equiv σ
+    intro j
+    simp only [strangerThanBy, mem_filter, mem_iff_of_mem_permsOn hσ]
+  simp only [AcceptsPairwiseBy, h]
+
+/-- **The `2ε`-inflated tournament rule under stability**, per data set (their Theorem 2). Over the
+orderings of a data set, with a pairwise-equivariant score, the test unit is accepted at least
+`1 − (k + a + 2F/(a + 1))/|C|` of the time, for every `a` and **any** reference scores `R` of the
+data set, `F` the ordered pairs whose score strays from `R` by more than `ε`. Under an exchangeable
+law in which each ordered pair strays with chance at most `ν` (their assumption, with their
+one-out scores for `R`), `E F ≤ |C|(|C| − 1)ν`, so the miscoverage is at most
+`k/|C| + a/|C| + 2(|C| − 1)ν/(a + 1)` for every `a`; optimized over `a` this is about
+`α + 2√(2ν)`, below their `α + 3√ν`. -/
+theorem coverage_tournament_stable {Z : Type*} {C : Finset ι} {t : ι} (ht : t ∈ C)
+    {S : (ι → Z) → ι → ι → ℝ} (hS : PairEquivariant C S) (z : ι → Z) (R : ι → ℝ) {ε : ℝ}
+    (hε : 0 ≤ ε) (k a : ℕ) :
+    1 - ((k + a : ℝ) + 2 * (strayCount C (S z) R ε : ℝ) / (a + 1)) / C.card ≤
+      (((permsOn C).filter fun σ : Equiv.Perm ι =>
+        AcceptsPairwiseBy k C (S (z ∘ σ)) (2 * ε) t).card : ℝ) / (permsOn C).card := by
+  have hc : (0 : ℝ) < C.card := by exact_mod_cast card_pos.2 ⟨t, ht⟩
+  have hfilt : ((permsOn C).filter fun σ : Equiv.Perm ι =>
+      AcceptsPairwiseBy k C (S (z ∘ σ)) (2 * ε) t) =
+      (permsOn C).filter fun σ : Equiv.Perm ι => AcceptsPairwiseBy k C (S z) (2 * ε) (σ t) := by
+    refine filter_congr fun σ hσ => ?_
+    have : S (z ∘ σ) = fun i j => S z (σ i) (σ j) :=
+      funext fun i => funext fun j => hS σ hσ z i j
+    rw [this, acceptsPairwiseBy_comp hσ]
+  rw [hfilt, ratio_permsOn ht (fun u => AcceptsPairwiseBy k C (S z) (2 * ε) u)]
+  have hsplit := C.card_filter_add_card_filter_not
+    (fun u => AcceptsPairwiseBy k C (S z) (2 * ε) u)
+  have href := card_refused_by_le C (S z) R hε k a
+  have e : ((C.filter fun u => AcceptsPairwiseBy k C (S z) (2 * ε) u).card : ℝ) =
+      C.card - ((C.filter fun u => ¬ AcceptsPairwiseBy k C (S z) (2 * ε) u).card : ℝ) := by
+    have : ((C.filter fun u => AcceptsPairwiseBy k C (S z) (2 * ε) u).card : ℝ) +
+        ((C.filter fun u => ¬ AcceptsPairwiseBy k C (S z) (2 * ε) u).card : ℝ) = C.card := by
+      exact_mod_cast hsplit
+    linarith
+  rw [e, sub_div, div_self hc.ne']
+  have := div_le_div_of_nonneg_right href hc.le
+  linarith
+
+end Tournament
+
 end Conformal

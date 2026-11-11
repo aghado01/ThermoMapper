@@ -2408,4 +2408,104 @@ for N, k, trials in ((3, 1, 40), (4, 1, 8), (4, 2, 8)):
 
 
 print()
+print("=== Slice 13: the tournament correction ===")
+import math
+
+# (a) The index: their rule refuses when the test wins at least (1 - alpha)(n + 1) games, a win
+# being strictly higher nonconformity; that is the cross-fitted rule at k = floor(alpha m), m = n + 1.
+rr = random.Random(1301)
+n_idx = 0
+for trial in range(5000):
+    m = rr.randint(1, 40)
+    alpha = Q(rr.randint(0, 200), 200)
+    c = rr.randint(0, m + 2)
+    assert (c < (1 - alpha) * m) == (c + math.floor(alpha * m) < m)
+    n_idx += 1
+
+
+# (b) Coverage over every ordering, with the pair fit a fit to the rest plus the pair as an
+# unordered multiset. The fit reads its training units in index order (a weighted mean with
+# weights by index rank: order-reading, not symmetric), as a sampler sweeping in order does.
+def fit_ordered(x, T):
+    T = sorted(T)
+    w = [Q(j + 1) for j in range(len(T))]
+    return sum(wj * x[i] for wj, i in zip(w, T)) / sum(w) if T else Q(0)
+
+
+def tourn_scores(x, g):
+    m = len(x)
+    S = {}
+    for i in range(m):
+        for j in range(m):
+            if i != j:
+                T = [u for u in range(m) if u not in (i, j)]
+                S[(i, j)] = g(fit_ordered(x, T), x[i], tuple(sorted((x[i], x[j]))))
+    return S
+
+
+def accepts_pairwise_py(k, S, u, m, delta=Q(0)):
+    stranger = sum(1 for j in range(m) if j != u and S[(u, j)] + delta < S[(j, u)])
+    return stranger + k < m
+
+
+def g_bayesish(b, p, pair):
+    # conformity: closeness to the fit, with the pair's spread as an add-one-in style weight
+    return -abs(p - b) * (1 + Q(abs(pair[0] - pair[1]), 5))
+
+
+n_tour, worst = 0, Q(1)
+for m in (3, 4, 5):
+    for z in multisets(range(4), m):
+        for k in range(0, m // 2 + 1):
+            G = list(itertools.permutations(range(m)))
+            acc = Q(sum(1 for p in G if accepts_pairwise_py(k, tourn_scores(tuple(z[q] for q in p), g_bayesish), 0, m)),
+                    len(G))
+            bound = 1 - Q(max(2 * k - 1, 0), m)
+            assert acc >= bound
+            worst = min(worst, acc - bound)
+            n_tour += 1
+
+
+# (c) The pair fit must not know which unit is the test: one that marks the test down (here it
+# always scores the test unit, unit 0, lower) refuses it on every data set.
+m, k = 4, 1
+refused = 0
+for z in multisets(range(3), m):
+    x = tuple(Q(v) for v in z)
+    S = {}
+    for i in range(m):
+        for j in range(m):
+            if i != j:
+                T = [u for u in range(m) if u not in (i, j)]
+                S[(i, j)] = -abs(x[i] - fit_ordered(x, T)) - (10 if i == 0 else 0)
+    refused += not accepts_pairwise_py(k, S, 0, m)
+assert refused == len(multisets(range(3), m))
+
+# (d) Stability, per data set and with any reference vector R: the 2-eps-inflated rule refuses at
+# most (k + a) + 2F/(a + 1) units for every a, F the ordered pairs with |S(u, j) - R(u)| > eps.
+n_stab = 0
+for trial in range(3000):
+    m = rr.randint(2, 6)
+    S = {(u, j): Q(rr.randint(-6, 6), 4) for u in range(m) for j in range(m) if u != j}
+    R = [Q(rr.randint(-6, 6), 4) for _ in range(m)]
+    eps = Q(rr.randint(0, 4), 8)
+    F = sum(1 for (u, j), v in S.items() if abs(v - R[u]) > eps)
+    for k in range(0, m + 1):
+        refused = sum(1 for u in range(m) if not accepts_pairwise_py(k, S, u, m, 2 * eps))
+        for a in range(0, m + 1):
+            assert refused <= (k + a) + Q(2 * F, a + 1)
+    n_stab += 1
+# their constant against the optimized one: miss <= k/m + min_a [a/m + 2 (m - 1) nu/(a + 1)]
+rows = []
+for m, nu in ((20, 0.01), (100, 0.001), (100, 0.01), (1000, 0.0001)):
+    best = min(a / m + 2 * (m - 1) * nu / (a + 1) for a in range(0, m + 1))
+    rows.append(f"m {m}, nu {nu}: {best:.4f} against 3 sqrt(nu) = {3 * math.sqrt(nu):.4f}")
+print(f"Slice 13: the index identity on {n_idx} random (m, alpha, count); the tournament covers >= "
+      f"1 - (2k - 1)/m over every ordering on {n_tour} (data, k) cases with an order-reading pair fit "
+      f"(least slack {worst}); a pair fit that knows the test refuses it on every data set; the "
+      f"inflated rule's count bound on {n_stab} random matrices with arbitrary references; optimized "
+      f"stability cost: " + "; ".join(rows))
+
+
+print()
 print("All assertions hold.")
