@@ -1,6 +1,43 @@
 # Conformal validity in the Lean harness — chip brief
 
-CB-1 to CB-4 were proved on 2026-11-06, E35's M-1 and M-2 on 2026-11-08, and E16 slice 9's jackknife+ and asymmetric CQR on 2026-11-09. Their reports are below. E16 slices 10 and 12 were commissioned on 2026-11-10.
+CB-1 to CB-4 were proved on 2026-11-06, E35's M-1 and M-2 on 2026-11-08, and E16 slice 9's jackknife+ and asymmetric CQR on 2026-11-09. Their reports are below. E16 slices 10 and 12 were commissioned and proved on 2026-11-10, and the Lean for slices 13 to 16 and 18 was commissioned the same day.
+
+## Slice 10's grid reading, and the Lean for E16 slices 13 to 16 and 18 (2026-11-10)
+
+Status: commissioned 2026-11-10 by the user ("lets also send the pending lean work to conformal lean chip"), relayed by the main session.
+
+**Why now.** These slices are Lean first (decision 7 on the [layer plan](../../../issues/regression/conformal-layer-brief.md#e16s-completion-the-plan-slices-7-onward)). The C# order of 13 to 18 waits for slice 10's BASS reading (decision 10). The Lean runs ahead of it, in the plan's order, so whichever slice the user picks first has its statements ready.
+
+**How.**
+- The method, environment, gates and reporting are as for slices 10 and 12 below: checks first, exhaustive at small n, then the Lean.
+- A statement that proves false, or holds only with a further hypothesis, is a finding.
+- One report per item, under "Reports". Tell the requesting session tersely when each lands.
+- No `docs/` edits.
+
+**Sources.** Before starting each item, check its sources are on disk: `gauntlet/conformal-bayes` with its `inventory.jsonl`, and `PDFs/Bayesian`.
+- List any missing sources in one message to the main session, which asks the user to fetch them.
+- Meanwhile, work on the items whose sources are present.
+- Read a paper before stating what it says.
+
+**Order:**
+1. **Slice 10's grid reading, formalized.** Slice 10's C# is next in the C# queue, and it reports two things the realized-ordering section checks but does not formalize:
+   - the margin over the grid: the largest kept reading, the largest |D(y)| over every grid value, and 2ν;
+   - the PIT's linearity between grid values.
+
+   Prove them, or record exactly what reading the maximum over the grid needs.
+2. **Slice 13, the tournament correction** (Bhattacharyya, Zhang and Barber, arXiv 2605.29200, whose theorems the CB-3 prior art already read).
+   - *The statements:* coverage at least 1 − 2α whatever the draws, from leave-one-out fits each symmetric in its data; and the 2ε-inflated form's 1 − α − 3√ν under their stability.
+   - *What the C# may claim:* the symmetry each leave-one-out chain needs (it treats its data symmetrically but need not mix), and the comparison rule's exact indices and ties under CB-1's convention.
+3. **Slice 14, shift.**
+   - *Covariate shift:* weighted conformal with a stated likelihood ratio (Tibshirani, Barber, Candès and Ramdas 2019), and the loss with an estimated ratio.
+   - *Beyond exchangeability:* Barber, Candès, Ramdas and Tibshirani's weights and their coverage-gap term (2202.13415).
+   - *Label shift.*
+   - *The check:* at equal weights on exchangeable data, CB-1 is recovered.
+4. **Slice 15, approximate conditional coverage:** Zhang and Candès's posterior conformal prediction. Marginal coverage exact; the per-cluster statement with its hypotheses.
+5. **Slice 16, batches** (Lee, Tchetgen Tchetgen and Dobriban): sets for functions of a batch, simultaneous sets, and selection with false claims controlled. The finite core is m test units placed uniformly among n + m (`powersetCard`).
+6. **Slice 18, the guarantee read out:**
+   - Snell and Griffiths's posterior over the loss a calibration set implies, for small m, and its calibration over replicated calibration sets;
+   - proper scores (Gressmann et al.) where a finite propriety statement fits.
 
 ## E16 slices 10 and 12 — the full step's error, Hoff's score and the latent posterior (2026-11-10)
 
