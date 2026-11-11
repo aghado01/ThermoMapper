@@ -53,7 +53,7 @@ internal static class BassCandidates
         if (law is null && block is null && BassPointwise.Moved(model, pooled))
             throw new NotSupportedException("The draws' working responses moved, so the training terms condition on each observation's offset and weights; "
                                             + "a candidate has neither, and the conformal layer reads every unit by one density (CB-4).");
-        (CaseInputs inputs, _) = cases.Prepare(model.Transform, model.Inputs, unseenLevels);
+        (CaseInputs inputs, _) = cases.Prepare(model.Transform, model.Inputs, unseenLevels, model.Data.Groupings);
         var surface = new BassSurface(model.Basis, terms, inputs, null);
         int n = surface.Cases;
         if (grids.Count != n) throw new ArgumentException($"One grid per case is required: {grids.Count} grids for {n} cases.", nameof(grids));
@@ -153,7 +153,7 @@ internal static class BassCandidates
         if (anyNew)
         {
             // A new group's effect is integrated where the training units' are conditioned on (agreed with the conformal layer, E21's slice 5).
-            LatentTreatment treatment = fresh!.All(x => x) ? LatentTreatment.Integrated : LatentTreatment.Mixed;
+            LatentTreatment treatment = groups!.All(group => group.All(g => g < 0)) ? LatentTreatment.Integrated : LatentTreatment.Mixed;
             for (int i = 0; i < latents.Count; i++)
                 if (latents[i].Name == BassPointwise.GroupEffects) latents[i] = latents[i] with { Treatment = treatment };
         }

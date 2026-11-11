@@ -267,7 +267,12 @@ public sealed record PredictionCases
         }
         if (levels is null) return null;
         var labels = new string[Cases];
-        for (int i = 0; i < Cases; i++) labels[i] = parent is null ? levels.Levels[i] : $"{parent.Levels[i]}/{levels.Levels[i]}";
+        for (int i = 0; i < Cases; i++)
+        {
+            string child = levels.Levels[i];
+            labels[i] = parent is null ? $"unparented:{child.Length}:{child}"
+                : $"parented:{parent.Levels[i].Length}:{parent.Levels[i]}{child.Length}:{child}";
+        }
         return labels;
     }
 

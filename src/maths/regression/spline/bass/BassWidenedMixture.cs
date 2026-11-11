@@ -55,7 +55,8 @@ internal static class BassWidenedMixture
             double value = h(u);
             return double.IsNaN(value) ? double.NegativeInfinity : value;
         }
-        // The scan, widened on the side its best point sits on until that point is interior.
+        // Keep the overall bracket when extending it: a peak at a shared endpoint must become interior,
+        // rather than alternating between two adjacent intervals with the same best point.
         double lo = -ScanHalf, hi = ScanHalf, best = 0.0, top = double.NegativeInfinity;
         while (true)
         {
@@ -65,8 +66,8 @@ internal static class BassWidenedMixture
                 if (value > top) (top, best) = (value, u);
             }
             if (!double.IsFinite(top)) return double.NegativeInfinity;
-            if (best - lo < ScanStep && lo > -ScanLimit) { hi = lo; lo -= 2.0 * ScanHalf; continue; }
-            if (hi - best < ScanStep && hi < ScanLimit) { lo = hi; hi += 2.0 * ScanHalf; continue; }
+            if (best - lo < ScanStep && lo > -ScanLimit) { lo = Math.Max(-ScanLimit, lo - 2.0 * ScanHalf); continue; }
+            if (hi - best < ScanStep && hi < ScanLimit) { hi = Math.Min(ScanLimit, hi + 2.0 * ScanHalf); continue; }
             break;
         }
         // A golden section in the scan's bracket about its best point.

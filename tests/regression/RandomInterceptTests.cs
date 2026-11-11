@@ -396,8 +396,12 @@ public sealed class RandomInterceptTests(ITestOutputHelper output)
         Assert.Contains(retained.Latents, r => r is { Scope: LatentScope.Group, Treatment: LatentTreatment.Conditioned } && r.Name.Contains("group effects"));
         Assert.DoesNotContain(retained.Latents, r => r.Name.Contains("offset"));
         Assert.Contains("random intercepts", Assert.Throws<NotSupportedException>(() => fit.PointwiseLogDensity(model.Data, content: PointwiseContent.CollapsedPredictive)).Message);
-        Assert.Contains("random-intercept", Assert.Throws<NotSupportedException>(() =>
-            fit.CandidateLogDensity(model.Data, PredictionCases.Of(model.Data), [.. y.Select(v => new[] { v })])).Message);
+        var cases = PredictionCases.Of(model.Data);
+        var cells = fit.GroupCells(model.Data, cases);
+        var candidates = fit.CandidateLogDensity(model.Data, cases, [.. y.Select(v => new[] { v })], strata: cells.Candidates);
+        for (int s = 0; s < pooled.Length; s++)
+            for (int i = 0; i < y.Length; i++)
+                Assert.Equal(BitConverter.DoubleToInt64Bits(retained.Values[s, i]), BitConverter.DoubleToInt64Bits(candidates.Values[s, i]));
     }
 
     // f at case i from the draw's coefficients and the terms' columns, as evaluated.

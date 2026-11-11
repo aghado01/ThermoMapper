@@ -32,7 +32,7 @@ public sealed record BassGroupCells(int[] Training, int[]? Candidates, bool[]? N
         for (int i = 0; i < training.Length; i++)
         {
             key.Clear();
-            for (int k = 0; k < block.Count; k++) key.Append(block.Layout(k).GroupOf(i)).Append('|');
+            for (int k = 0; k < block.Count; k++) AppendKey(key, "known", block.Layout(k).GroupOf(i).ToString(System.Globalization.CultureInfo.InvariantCulture));
             training[i] = Number(numbers, key.ToString());
         }
         int trainingCells = numbers.Count;
@@ -49,19 +49,23 @@ public sealed record BassGroupCells(int[] Training, int[]? Candidates, bool[]? N
             for (int k = 0; k < block.Count; k++)
             {
                 int g = groups[k][t];
-                if (g >= 0) key.Append(g);
+                if (g >= 0) AppendKey(key, "known", g.ToString(System.Globalization.CultureInfo.InvariantCulture));
                 else
                 {
                     fresh[t] = true;
                     // A new level is keyed by its name, so its cases share a cell; a grouping left out keys the case alone.
-                    key.Append(labels[k] is { } named ? "new:" + named[t] : "case:" + t);
+                    if (labels[k] is { } named) AppendKey(key, "new", named[t]);
+                    else AppendKey(key, "case", t.ToString(System.Globalization.CultureInfo.InvariantCulture));
                 }
-                key.Append('|');
             }
             candidates[t] = Number(numbers, key.ToString());
         }
         return new BassGroupCells(training, candidates, fresh, trainingCells);
     }
+
+    // Length framing keeps arbitrary level names (including separators and type prefixes) distinct.
+    private static void AppendKey(StringBuilder key, string kind, string value)
+        => key.Append(kind).Append(':').Append(value.Length).Append(':').Append(value).Append('|');
 
     // The cell of `key`, numbered on its first appearance.
     private static int Number(Dictionary<string, int> numbers, string key)
