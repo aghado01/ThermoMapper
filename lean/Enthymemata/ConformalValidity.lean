@@ -4906,4 +4906,211 @@ theorem pit_read_excluding {W Z : Type*} [Fintype W] {C : Finset ι} {t : ι} (h
 
 end ReadingExcluded
 
+/-! ### Slice 10's grid reading: the PIT between grid values, and the margin over the grid -/
+
+section GridReading
+
+variable {ι : Type*} [Fintype ι] [DecidableEq ι]
+
+/-- The chance that `V`, uniform on `(0, 1]`, is at most `a`. -/
+noncomputable def unitClamp (a : ℝ) : ℝ := max 0 (min 1 a)
+
+omit [Fintype ι] [DecidableEq ι] in
+/-- **The full step's PIT CDF**: `P(PIT ≤ x)` given the scores, the PIT being `(R − 1 + V)/|C|`,
+with `R` the randomized rank (`tieRankProb`) and `V` uniform on `(0, 1]`. -/
+noncomputable def pitCdf (C : Finset ι) (s : ι → ℝ) (u : ι) (x : ℝ) : ℝ :=
+  ∑ r ∈ Finset.Icc 1 C.card, tieRankProb C s u r * unitClamp (C.card * x - r + 1)
+
+omit [Fintype ι] [DecidableEq ι] in
+/-- `P(R ≤ k)` as a sum over the ranks `1..|C|`. -/
+theorem pitRankLe_eq_sum_ite (C : Finset ι) (s : ι → ℝ) (u : ι) (k : ℕ) :
+    pitRankLe C s u k =
+      ∑ r ∈ Finset.Icc 1 C.card, tieRankProb C s u r * (if r ≤ k then 1 else 0) := by
+  classical
+  have hz : ∀ r, C.card < r → tieRankProb C s u r = 0 := fun r hr => by
+    unfold tieRankProb
+    rw [if_neg]
+    rintro ⟨-, h⟩
+    have := card_filter_le C (fun j => s j ≤ s u)
+    unfold rankLe at h
+    omega
+  unfold pitRankLe
+  simp only [mul_ite, mul_one, mul_zero]
+  rw [← sum_filter]
+  refine (sum_subset (fun r hr => ?_) fun r hr hn => hz r ?_).symm
+  · rw [mem_filter, Finset.mem_Icc] at hr
+    exact Finset.mem_Icc.2 ⟨hr.1.1, hr.2⟩
+  · rw [Finset.mem_Icc] at hr
+    by_contra hle
+    exact hn (mem_filter.2 ⟨Finset.mem_Icc.2 ⟨hr.1, not_lt.1 hle⟩, hr.2⟩)
+
+omit [Fintype ι] [DecidableEq ι] in
+/-- **The PIT is linear between grid values**: at `x = (k + θ)/|C|`, `θ ∈ [0, 1]`,
+`P(PIT ≤ x) = (1 − θ) P(R ≤ k) + θ P(R ≤ k + 1)`. -/
+theorem pitCdf_interp (C : Finset ι) (s : ι → ℝ) {u : ι} (hu : u ∈ C) (k : ℕ) {θ : ℝ}
+    (h0 : 0 ≤ θ) (h1 : θ ≤ 1) :
+    pitCdf C s u ((k + θ) / C.card) =
+      (1 - θ) * pitRankLe C s u k + θ * pitRankLe C s u (k + 1) := by
+  have hc : (0 : ℝ) < C.card := by exact_mod_cast card_pos.2 ⟨u, hu⟩
+  have e : (C.card : ℝ) * ((k + θ) / C.card) = k + θ := by field_simp
+  rw [pitRankLe_eq_sum_ite, pitRankLe_eq_sum_ite, mul_sum, mul_sum, ← sum_add_distrib]
+  unfold pitCdf
+  rw [e]
+  refine sum_congr rfl fun r _ => ?_
+  rcases lt_trichotomy r (k + 1) with hlt | heq | hgt
+  · have hr : r ≤ k := by omega
+    have hrr : (r : ℝ) ≤ k := by exact_mod_cast hr
+    have hcl : unitClamp ((k : ℝ) + θ - r + 1) = 1 := by
+      unfold unitClamp
+      rw [min_eq_left (by linarith), max_eq_right zero_le_one]
+    rw [hcl, if_pos hr, if_pos (by omega)]
+    ring
+  · subst heq
+    have hcl : unitClamp ((k : ℝ) + θ - ((k + 1 : ℕ) : ℝ) + 1) = θ := by
+      unfold unitClamp
+      push_cast
+      rw [show (k : ℝ) + θ - (k + 1) + 1 = θ by ring, min_eq_right h1, max_eq_right h0]
+    rw [hcl, if_neg (by omega), if_pos le_rfl]
+    ring
+  · have hrr : (k : ℝ) + 2 ≤ r := by exact_mod_cast (show k + 2 ≤ r by omega)
+    have hcl : unitClamp ((k : ℝ) + θ - r + 1) = 0 := by
+      unfold unitClamp
+      rw [min_eq_right (by linarith), max_eq_left (by linarith)]
+    rw [hcl, if_neg (by omega), if_neg (by omega)]
+    ring
+
+/-- The interpolation's departure from the diagonal is at most the larger at its ends. -/
+theorem interp_dev_le (k : ℕ) {m θ A B : ℝ} (hm : 0 < m) (h0 : 0 ≤ θ) (h1 : θ ≤ 1) :
+    |(1 - θ) * A + θ * B - (k + θ) / m| ≤ max |A - k / m| |B - (k + 1) / m| := by
+  have e : (1 - θ) * A + θ * B - (k + θ) / m =
+      (1 - θ) * (A - k / m) + θ * (B - (k + 1) / m) := by
+    field_simp
+    ring
+  rw [e]
+  calc |(1 - θ) * (A - k / m) + θ * (B - (k + 1) / m)|
+      ≤ |(1 - θ) * (A - k / m)| + |θ * (B - (k + 1) / m)| := abs_add_le _ _
+    _ = (1 - θ) * |A - k / m| + θ * |B - (k + 1) / m| := by
+        rw [abs_mul, abs_mul, abs_of_nonneg (by linarith : (0 : ℝ) ≤ 1 - θ), abs_of_nonneg h0]
+    _ ≤ (1 - θ) * max |A - k / m| |B - (k + 1) / m| +
+          θ * max |A - k / m| |B - (k + 1) / m| :=
+        add_le_add (mul_le_mul_of_nonneg_left (le_max_left _ _) (by linarith))
+          (mul_le_mul_of_nonneg_left (le_max_right _ _) h0)
+    _ = max |A - k / m| |B - (k + 1) / m| := by ring
+
+/-- **The PIT averaged over the draws and the orderings is linear between grid values too**, so
+`sup_x |P(PIT ≤ x) − x|` is the largest departure at the grid values `k/|C|`
+(`interp_dev_le`), and bounds on the grid values (`pit_excluding`, `pit_read_excluding`)
+interpolate. -/
+theorem avg_pitCdf_interp {W : Type*} [Fintype W] {C : Finset ι} {t : ι} (ht : t ∈ C)
+    (p : W → ℝ) (ŝ : W → Equiv.Perm ι → ι → ℝ) (k : ℕ) {θ : ℝ} (h0 : 0 ≤ θ) (h1 : θ ≤ 1) :
+    ∑ w, p w * ((∑ σ ∈ permsOn C, pitCdf C (ŝ w σ) t ((k + θ) / C.card)) / (permsOn C).card) =
+      (1 - θ) * ∑ w, p w * ((∑ σ ∈ permsOn C, pitRankLe C (ŝ w σ) t k) / (permsOn C).card) +
+        θ * ∑ w, p w * ((∑ σ ∈ permsOn C, pitRankLe C (ŝ w σ) t (k + 1)) /
+          (permsOn C).card) := by
+  simp only [pitCdf_interp _ _ ht k h0 h1]
+  rw [mul_sum, mul_sum, ← sum_add_distrib]
+  refine sum_congr rfl fun w _ => ?_
+  rw [sum_add_distrib, ← mul_sum, ← mul_sum]
+  ring
+
+/-- The largest of `f` over the arrangements that put each grid value at the test position. -/
+noncomputable def gridMax {Z : Type*} (G : Finset Z) (hG : G.Nonempty) (f : (ι → Z) → ℝ)
+    (t : ι) (x : ι → Z) : ℝ :=
+  G.sup' hG fun y => f (Function.update x t y)
+
+omit [Fintype ι] in
+/-- **The reading at the true value is one of the grid's**, when the grid holds that value. -/
+theorem le_gridMax {Z : Type*} {G : Finset Z} (hG : G.Nonempty) (f : (ι → Z) → ℝ) {t : ι}
+    {x : ι → Z} (hx : x t ∈ G) : f x ≤ gridMax G hG f t x := by
+  unfold gridMax
+  have h := le_sup' (fun y => f (Function.update x t y)) hx
+  simp only [Function.update_eq_self] at h
+  exact h
+
+omit [Fintype ι] in
+/-- **The grid's report is free of the test unit's own value.** -/
+theorem gridMax_update {Z : Type*} {G : Finset Z} (hG : G.Nonempty) (f : (ι → Z) → ℝ) (t : ι)
+    (x : ι → Z) (y : Z) : gridMax G hG f t (Function.update x t y) = gridMax G hG f t x := by
+  unfold gridMax
+  simp only [Function.update_idem]
+
+omit [Fintype ι] in
+/-- The engine's report over a grid: the largest reading at a value whose turn is kept, and the
+largest flagged count, both over the grid's values. -/
+noncomputable def gridReport {Z : Type*} (C : Finset ι) (t : ι) (grid : (ι → Z) → Finset Z)
+    (hne : ∀ x, (grid x).Nonempty) (eng : (ι → Z) → ℝ) (flagged : (ι → Z) → Finset ι)
+    (x : ι → Z) : ℝ :=
+  gridMax (grid x) (hne x) (fun x' => if t ∈ flagged x' then 0 else eng x') t x +
+    gridMax (grid x) (hne x) (fun x' => ((C.filter fun u => u ∈ flagged x').card : ℝ)) t x
+
+/-- **The margin over the grid.** The engine reads `eng w x` from an arrangement `x` (the data with
+the test unit's value at `t`), and flags the positions `flagged w x`. The realized ordering's flag
+on its test unit is the data set's `D`, and the flagged count covers `|D|`. The grid holds the
+value the test unit takes, possibly built from the rest of the data (the test unit's covariate).
+Then coverage is at least one, less the average over the orderings of the grid's report
+(`gridReport`: the largest kept reading plus the largest flagged count, over the grid's values) over
+`|C|`, less `2ν`. With the grid fixed, the report is free of the test unit's own value
+(`gridMax_update`), so it is read from the data. A grid that misses the value the test unit takes
+can miss its reading. -/
+theorem coverage_grid_excluding {W Z : Type*} [Fintype W] {C : Finset ι} {t : ι} (ht : t ∈ C)
+    {S : (ι → Z) → ι → ℝ} (hS : Equivariant C S) (z : ι → Z) (p : W → ℝ) (hp0 : ∀ w, 0 ≤ p w)
+    (hp1 : ∑ w, p w = 1) (ŝ : W → Equiv.Perm ι → ι → ℝ) (ε : W → ι → ℝ) (D : W → Finset ι)
+    {ν : ℝ} (hfail : ∑ w, p w * (((permsOn C).filter fun σ : Equiv.Perm ι => σ t ∉ D w ∧
+        ¬ ∀ j ∈ C, |ŝ w σ j - S (z ∘ σ) j| ≤ ε w (σ j)).card : ℝ) ≤ ν * (permsOn C).card)
+    (k : ℕ) (grid : (ι → Z) → Finset Z) (hne : ∀ x, (grid x).Nonempty)
+    (hgrid : ∀ σ ∈ permsOn C, (z ∘ σ) t ∈ grid (z ∘ σ)) (eng : W → (ι → Z) → ℝ)
+    (heng0 : ∀ w x, 0 ≤ eng w x) (flagged : W → (ι → Z) → Finset ι)
+    (hflag : ∀ w, ∀ σ ∈ permsOn C, (σ t ∈ D w ↔ t ∈ flagged w (z ∘ σ)))
+    (hcount : ∀ w, ∀ σ ∈ permsOn C, (C.filter fun u => u ∈ D w).card ≤
+      (C.filter fun u => u ∈ flagged w (z ∘ σ)).card)
+    (hread : ∀ w, ∀ σ ∈ permsOn C, t ∉ flagged w (z ∘ σ) →
+      (∀ j ∈ C, |ŝ w σ j - S (z ∘ σ) j| ≤ ε w (σ j)) →
+      ((C.filter fun u => u ∈ D w ∨ ¬ Accepts k C (S z) u ∨
+        Fragile k C (S z) (ε w) u).card : ℝ) ≤ eng w (z ∘ σ)) :
+    1 - ∑ w, p w * ((∑ σ ∈ permsOn C,
+        gridReport C t grid hne (eng w) (flagged w) (z ∘ σ) / C.card) / (permsOn C).card) -
+        2 * ν ≤
+      ∑ w, p w * ((((permsOn C).filter fun σ : Equiv.Perm ι =>
+        Accepts k C (ŝ w σ) t).card : ℝ) / (permsOn C).card) := by
+  have hc : (0 : ℝ) < C.card := by exact_mod_cast card_pos.2 ⟨t, ht⟩
+  have hg : (0 : ℝ) < (permsOn C).card := by exact_mod_cast card_permsOn_pos C
+  have key := coverage_read_excluding ht hS z p hp0 hp1 ŝ ε D hfail k
+    (fun w σ => eng w (z ∘ σ)) (fun w σ => heng0 w _)
+    (fun w σ hσ hk hh => hread w σ hσ (fun hf => hk ((hflag w σ hσ).2 hf)) hh)
+  have hb : ∀ w, (∑ σ ∈ permsOn C, if σ t ∈ D w then 0 else eng w (z ∘ σ) / C.card) /
+      (permsOn C).card + ((C.filter fun u => u ∈ D w).card : ℝ) / C.card ≤
+      (∑ σ ∈ permsOn C, gridReport C t grid hne (eng w) (flagged w) (z ∘ σ) / C.card) /
+        (permsOn C).card := by
+    intro w
+    have e : ((C.filter fun u => u ∈ D w).card : ℝ) / C.card =
+        (∑ _σ ∈ permsOn C, ((C.filter fun u => u ∈ D w).card : ℝ) / C.card) /
+          (permsOn C).card := by
+      rw [sum_const, nsmul_eq_mul, mul_div_cancel_left₀ _ hg.ne']
+    rw [e, ← add_div, ← sum_add_distrib]
+    refine div_le_div_of_nonneg_right (sum_le_sum fun σ hσ => ?_) hg.le
+    have h1 := le_gridMax (hne (z ∘ σ)) (fun x' => if t ∈ flagged w x' then 0 else eng w x')
+      (hgrid σ hσ)
+    have h2 := le_gridMax (hne (z ∘ σ))
+      (fun x' => ((C.filter fun u => u ∈ flagged w x').card : ℝ)) (hgrid σ hσ)
+    have h3 : ((C.filter fun u => u ∈ D w).card : ℝ) ≤
+        ((C.filter fun u => u ∈ flagged w (z ∘ σ)).card : ℝ) := by
+      exact_mod_cast hcount w σ hσ
+    unfold gridReport
+    rw [add_div]
+    refine add_le_add ?_ (div_le_div_of_nonneg_right (h3.trans h2) hc.le)
+    by_cases hD : σ t ∈ D w
+    · have hf := (hflag w σ hσ).1 hD
+      simp only [hf, ↓reduceIte] at h1
+      rw [if_pos hD]
+      exact div_nonneg h1 hc.le
+    · have hf : t ∉ flagged w (z ∘ σ) := fun h => hD ((hflag w σ hσ).2 h)
+      simp only [hf, ↓reduceIte] at h1
+      rw [if_neg hD]
+      exact div_le_div_of_nonneg_right h1 hc.le
+  have hsum := sum_le_sum fun w (_ : w ∈ univ) => mul_le_mul_of_nonneg_left (hb w) (hp0 w)
+  simp only [mul_add, sum_add_distrib] at hsum
+  linarith
+
+end GridReading
+
 end Conformal

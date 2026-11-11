@@ -2024,6 +2024,108 @@ print(f"Slice 10, reading from the realized ordering: {n_read} random data sets 
       f"below) the count on kept orderings whose bounds hold: count <= average kept reading + B (D share + nu), "
       f"and >= average kept reading - B nu; on {n_eng} (data, D, k) cases the engine's own reading gives "
       f"coverage >= 1 - average kept reading/m - |D|/m - 2 nu")
+# Slice 10's grid reading (2026-11-10). (a) The PIT between grid values: with the randomized rank
+# R = B + J and V uniform, P(PIT <= x) = sum_r P(R = r) clamp(m x - r + 1, 0, 1); at
+# x = (k + theta)/m it is (1 - theta) P(R <= k) + theta P(R <= k + 1), so its departure from x is at
+# most the larger at the two grid values. (b) The margin over the grid: the engine's report at the
+# realized data is the largest kept reading and the largest flagged count over every value the test
+# unit can take; both are free of the test unit's own value, and they bound the per-data-set
+# reading form. A grid that misses a value the test unit can take can miss the reading there.
+def clamp01(a):
+    return max(Q(0), min(Q(1), a))
+
+
+def pit_cdf(s, u, C, x):
+    m = len(C)
+    return sum(tieprob(s, u, C, r) * clamp01(m * x - r + 1) for r in range(1, m + 1))
+
+
+def pit_rank_le(s, u, C, k):
+    return sum((tieprob(s, u, C, r) for r in range(1, k + 1)), Q(0))
+
+
+n_lin = 0
+for N in (3, 4, 5):
+    C = list(range(N))
+    for z in multisets(range(3), N):
+        s = score_ecdf(z)
+        for u in C:
+            for k in range(N):
+                for th in (Q(0), Q(1, 3), Q(1, 2), Q(5, 7), Q(1)):
+                    x = (k + th) / N
+                    val = pit_cdf(s, u, C, x)
+                    lo, hi = pit_rank_le(s, u, C, k), pit_rank_le(s, u, C, k + 1)
+                    assert val == (1 - th) * lo + th * hi
+                    assert abs(val - x) <= max(abs(lo - Q(k, N)), abs(hi - Q(k + 1, N)))
+                    n_lin += 1
+# averaged over orderings, with a noisy estimate in each: the same interpolation
+for N in (3, 4):
+    C, t = list(range(N)), N - 1
+    G = perms_on(N, C)
+    for z in multisets(range(3), N)[::3]:
+        ests = {}
+        for p in G:
+            base = score_ecdf(compose(z, p))
+            ests[p] = tuple(v + Q(random.Random(hash((p, i, 13))).randint(-10, 10), 400) for i, v in enumerate(base))
+        for k in range(N):
+            for th in (Q(1, 4), Q(2, 3)):
+                x = (k + th) / N
+                avg = sum(pit_cdf(ests[p], t, C, x) for p in G) / len(G)
+                lo = sum(pit_rank_le(ests[p], t, C, k) for p in G) / len(G)
+                hi = sum(pit_rank_le(ests[p], t, C, k + 1) for p in G) / len(G)
+                assert avg == (1 - th) * lo + th * hi
+                n_lin += 1
+
+nu = Q(1, 10)
+n_grid, n_free, misses = 0, 0, 0
+for N in (3, 4):
+    C, t = list(range(N)), N - 1
+    G = perms_on(N, C)
+    eps = tuple(Q(1, 40) for _ in C)
+
+    def flagged(x):
+        return {i for i, v in enumerate(x) if v == 2}  # a symmetric rule: the far value's turns
+
+    def good(x):
+        return tuple(v - eps[i] if i == t else v + eps[i] for i, v in enumerate(score_sq(x)))
+
+    def reading(x, k):
+        e, Dx = good(x), flagged(x)
+        return (k + sum(1 for i in C if fragile_est(k, e, i, C, eps))
+                + sum(1 for i in C if i in Dx and accepts_inflated(k, e, i, C, eps)))
+
+    def upd(x, y):
+        return x[:t] + (y,) + x[t + 1:]
+
+    def grid_read(x, k, grid):
+        return max(reading(upd(x, y), k) if t not in flagged(upd(x, y)) else 0 for y in grid)
+
+    def grid_flags(x, grid):
+        return max(len(flagged(upd(x, y))) for y in grid)
+
+    for z in multisets(range(3), N):
+        for k in range(N):
+            hits = sum((1 - nu) * accepts(k, good(compose(z, p)), t, C)
+                       for p in G if t not in flagged(compose(z, p))) / len(G)
+            rep = sum(grid_read(compose(z, p), k, range(3)) + grid_flags(compose(z, p), range(3))
+                      for p in G) / len(G)
+            assert hits >= 1 - rep / N - 2 * nu
+            for p in G:
+                x = compose(z, p)
+                if t not in flagged(x):
+                    assert reading(x, k) <= grid_read(x, k, range(3))
+                    if reading(x, k) > grid_read(x, k, (0, 2)):
+                        misses += 1
+                assert len(flagged(x)) <= grid_flags(x, range(3))
+                assert all(grid_read(upd(x, y), k, range(3)) == grid_read(x, k, range(3)) for y in range(3))
+                n_free += 1
+            n_grid += 1
+assert misses > 0
+print(f"Slice 10's grid reading: the PIT's CDF interpolates linearly between grid values on {n_lin} "
+      f"(data, unit, level) cases, so its departure is at most the larger at the ends; on {n_grid} "
+      f"(data, k) cases coverage >= 1 - avg(largest kept reading + largest flagged count over every "
+      f"value)/m - 2 nu, and the report is free of the test unit's own value ({n_free} arrangements); a grid "
+      f"missing a value the test unit can take misses its reading in {misses} arrangements")
 # What the margin can then read at m = 100: one unit far out (in D, and in the exact low tail),
 # whose turn widens every carried bound to 3 against 0.002 over the kept turns.
 mr = random.Random(20261110)

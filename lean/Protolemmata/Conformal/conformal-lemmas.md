@@ -2,7 +2,7 @@
 
 Pins the contract of the engine's conformal layer, one layer over retained draws and pointwise densities for every model with a pointwise density ([E16](../../../issues/regression/bass/extensions-brief.md#conformal-bayes-the-consumer)). The layer owns coverage and the score owns width. These are the finite statements of that split. They are the sibling of [GuardedEstimator](../BASS/guarded-estimator-lemmas.md): there, means valid whatever the emulator does; here, prediction sets valid whatever the model does. Written from the [chip brief](conformal-chip-brief.md).
 
-**Status (2026-11-06).** Proved in `lean/Enthymemata/ConformalValidity.lean`, namespace `Conformal`, with no apologies (PROOF-CLOSED, 304 declarations counting E35's M-1 and M-2 and slices 9, 10 and 12 at the end of this page; `#print axioms` shows `propext`, `Classical.choice`, `Quot.sound` only):
+**Status (2026-11-06).** Proved in `lean/Enthymemata/ConformalValidity.lean`, namespace `Conformal`, with no apologies (PROOF-CLOSED, 315 declarations counting E35's M-1 and M-2 and slices 9, 10 and 12 at the end of this page; `#print axioms` shows `propext`, `Classical.choice`, `Quot.sound` only):
 - CB-1: `card_rankLe_le`, `coverage_orderings`, `coverage_orderings_eq`, `coverage_strict_le`, `coverage_orderings_le`, `rank_uniform`, `coverage_tieBreak`, `coverage_given`, `coverage_law`, `coverage_stratum`;
 - CB-2: `split_coverage`, `exchangeable_given_training`, `cqr_ordConnected`;
 - CB-4: `sum_jointU`, `post_addOneIn`, `integratedScore_equivariant`, `latentScore_equivariant`, `latentScore_eq`, `sum_jointU_addOneIn`, `integratedScore_le_latentScore`, `accepts_latent_of_mixed`, `mixed_counterexample`;
@@ -582,6 +582,36 @@ The main session's verification raised two points about the engine's reading. Bo
 **Checks** (`conformal-checks.py`, slice 10, "reading from the realized ordering").
 - 400 random data sets with arbitrary readings on left-out and failed orderings: both reading bounds hold.
 - On the 261 (data, D, k) cases of the exclusion check, the engine's own reading from every kept ordering gives coverage ≥ 1 − average reading/m − |D|/m − 2ν.
+
+### The grid reading (added 2026-11-10)
+
+Formalized for slice 10's C#. It covers what the realized-ordering section checked but did not prove. Sections `GridReading` in `ConformalValidity.lean`, and "Slice 10's grid reading" in the checks.
+
+**The PIT between grid values.**
+- *The CDF* (`pitCdf`): P(PIT ≤ x) = Σ_r P(R = r) · clamp(m x − r + 1, 0, 1), with PIT = (R − 1 + V)/m.
+- *It is linear between grid values* (`pitCdf_interp`): at x = (k + θ)/m, with θ ∈ [0, 1], it equals (1 − θ) P(R ≤ k) + θ P(R ≤ k + 1).
+  - The same holds averaged over the draws and the orderings (`avg_pitCdf_interp`).
+- *So the largest departure sits at a grid value* (`interp_dev_le`): |P(PIT ≤ x) − x| ≤ max(|P(R ≤ k) − k/m|, |P(R ≤ k + 1) − (k + 1)/m|).
+  - sup_x |P(PIT ≤ x) − x| is the largest departure over the grid values k/m.
+  - Bounds at the grid values (`pit_excluding`, `pit_read_excluding`) interpolate.
+
+**The margin over the grid** (`coverage_grid_excluding`).
+- *The engine's inputs.* It reads `eng w x` from an arrangement x (the data, with the test unit's value at its position), and flags positions `flagged w x`. The realized ordering's flag on its test unit is the data set's D, and the flagged count covers |D|.
+- *The report* (`gridReport`): the largest reading at a grid value whose turn is kept, plus the largest flagged count, both over the grid's values.
+- *The claim:* coverage is at least 1 − (the orderings' average report)/m − 2ν.
+- *The report is read from the data.* The reading at the true value is one of the grid's (`le_gridMax`). With the grid fixed, the report is free of the test unit's own value (`gridMax_update`).
+- *What the maximum needs: the grid must hold the value the test unit takes.*
+  - The grid may be built from the rest of the data, for example over y at the test unit's own x.
+  - In the checks, a grid that missed one value missed its reading in 222 of 1,620 arrangements.
+  - So on a response with finitely many values, the grid takes all of them.
+  - On a continuous response, the maximum over a fixed grid is a reading at the grid's points, not a bound. Each count is constant between the y where some comparison between estimates flips, or a flag changes. So a sound reading needs a grid value in each such interval: the breakpoints of the readings and flags themselves. Slice 8's boundary refinement locates the crossings of π(y), not these.
+- *The PIT's counts over the grid* follow by the same steps: `le_read_excluding` or `read_le_excluding`, with `le_gridMax` bounding the reading at the true value.
+
+**Checks.**
+- The interpolation, and the departure bound at the ends, on 4,339 (data, unit, level) cases, ties included, averaged over orderings with noisy estimates too.
+- The grid report's coverage bound on 90 (data, k) cases.
+- The report's freedom from the test unit's value on 1,620 arrangements.
+- The grid that misses a value, as above.
 
 ## Slice 12 — Hoff's score and the latent posterior
 

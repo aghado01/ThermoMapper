@@ -208,6 +208,20 @@ The user asked for this on 2026-11-08 ("Yes, start it"), relayed by the BASS ext
 
 Newest first.
 
+### 2026-11-10 — item 1: slice 10's grid reading, proved
+
+The statements are in the ledger under slice 10, "The grid reading". There are 11 new declarations, 315 in the file, PROOF-CLOSED, with the standard three axioms only. The checks ran first, and every assertion holds.
+
+- *The PIT between grid values.* It is linear: at (k + θ)/m it equals (1 − θ) P(R ≤ k) + θ P(R ≤ k + 1), per ordering and averaged (`pitCdf_interp`, `avg_pitCdf_interp`). So sup_x |P(PIT ≤ x) − x| is the largest departure at the grid values (`interp_dev_le`).
+- *The margin over the grid* (`coverage_grid_excluding`): coverage is at least 1 − (average over orderings of [largest kept reading + largest flagged count over the grid])/m − 2ν.
+- *Finding: the maximum needs the grid to hold the value the test unit takes.*
+  - The grid may be built from the data, for example over y at the test unit's own x.
+  - On a continuous response, a fixed grid's maximum is a reading at its points, not a bound.
+  - A sound reading needs a grid value in each interval where the counts are constant. Their breakpoints are where estimate comparisons or flags change, which are not slice 8's crossings of π(y).
+  - In the checks, a grid that missed one value missed its reading in 222 of 1,620 arrangements.
+
+**Gates.** The module build is clean, the barrel is green, and meta-ci −NoBuild passes. D: had 38 GB free.
+
 ### 2026-11-10 — slice 10's follow-up: D's rule, and reading from the realized ordering
 
 The main session verified slice 10 (dfe5c99) and raised two points about the engine's reading. Both are settled in the ledger, under "Reading from the realized ordering" in the slice 10 section. There are 5 new declarations, 304 in the file, PROOF-CLOSED, with the standard three axioms only. The checks ran first, and every assertion holds.
