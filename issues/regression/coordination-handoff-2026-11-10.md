@@ -49,14 +49,23 @@ A separate limitation in the existing shared weight reader affects all its calle
   - *Lean:* `git archive <commit> lean` with a junction to the real `lean/.lake/packages`; then the checks script, the module build, `#print axioms` and `meta-ci -NoBuild`. **Remove the junction with `cmd /c rmdir <junction>` before deleting the snapshot**, or the real packages go with it.
   - The scripts used are recorded in the earlier handoff.
 
-## Paused at the quota: resume these first
+## Where each workstream stands (2026-11-11)
 
-| Session | Work | State in the tree | Next |
-|---|---|---|---|
-| [E8](claude://claude.ai/epitaxy/local_66d45fa0-e3f5-4429-b588-1786ae46c0ef) ([brief](bass/active-subspace-brief.md)) | Slice 7a, the frame and the projected data. The plan was approved as recommended (`72ec20f`) | Committed as WIP at the user's word (`bd5dc9c`): `sensitivity/BassActiveSubspace.cs` and the new `spline/bass/projection/`. It compiles; it is untested | 7a, then 7b and 7c, each verified |
-| [Conformal slices](claude://claude.ai/epitaxy/local_69bae1e5-39ad-45c0-8df2-e8e705b21e42) ([brief](conformal-layer-brief.md)) | Slice 10, the full step's Monte Carlo error, which had just started | Nothing in the tree | Slice 10 under the rules beside decision 9, the grid rule (`1d76a22`) included; then slices 11 and 12b (decision 10) |
-| [GBASS](claude://claude.ai/epitaxy/local_add4be38-7ddb-4981-8b14-6f8ac64f7dab) ([brief](bass/ridge-blocks-brief.md)) | E21 slice 4 is done and verified (`4f5bf3f`, `94133f8`, `1940cc0`, `397ca88`, report `2cd9711`; 2,278 of 2,278 on a clean snapshot of `2cd9711`). The b = 1 collapse becomes an opt-in, at the user's word (`2d97551`) | The opt-in change, if the chip has started it | The opt-in as its own commit, verified; then slice 5, the candidate seam, agreed with the conformal chip |
-| [Conformal Lean](claude://claude.ai/epitaxy/local_21649695-833f-41ac-8d7c-326b4f691dda) ([brief](../../lean/Protolemmata/Conformal/conformal-chip-brief.md)) | **Done.** Slice 18 landed in `4383916` after these rows were written, completing all six items of the commission | Nothing | Verify slice 18 (unverified). The sources it wants fetched are in "Waiting on the user" |
+**Claude's chips after the first handoff (2026-11-10, evening).**
+- *GBASS:*
+  - landed E21 slice 4's report (`2cd9711`), verified here at 2,278 of 2,278;
+  - landed the b = 1 opt-in (`aa0d0ee`, `7b0a85d`), verified here at 2,280 of 2,280;
+  - agreed slice 5's seam with the conformal chip (`36bc980`, `b839d58`).
+- *The Claude conformal chip* posted slice 10's two-part plan (`ee923f5`).
+- *Both chips* then hit the weekly limit, which resets on November 14. The Sol workers above finished E21 slice 5 and conformal 10a and 10b from that state.
+
+| Workstream | State | Next |
+|---|---|---|
+| E8 ([brief](bass/active-subspace-brief.md)), [Claude chip](claude://claude.ai/epitaxy/local_66d45fa0-e3f5-4429-b588-1786ae46c0ef) | Slice 7a is WIP at `bd5dc9c`. The review above found the analysis's input-scale contract unenforced | 7a's gates (finish order item 3), then 7b and 7c |
+| Conformal ([brief](conformal-layer-brief.md)) | 12a and 10a/10b done and signed off | Slices 11 and 12b (decision 10). The C# order of 13–18 is now the user's (waiting list, item 6) |
+| E21 ([brief](bass/ridge-blocks-brief.md)) | Slices 0–5 done and verified. New-group coverage stays open, as the layer's follow-up | The u–s funnel fix (waiting list, item 1) |
+| E34 ([brief](bass/multi-output-brief.md)), [Claude chip](claude://claude.ai/epitaxy/local_26b4e7ee-1be4-482b-a19d-995477d32291) | Slice 5 landed (`4135eb9`, `cb4849b`, `6f2d3ea`), not yet verified here | Verify slice 5, then slice 4, now unblocked |
+| Conformal Lean ([brief](../../lean/Protolemmata/Conformal/conformal-chip-brief.md)), [Claude chip](claude://claude.ai/epitaxy/local_21649695-833f-41ac-8d7c-326b4f691dda) | The commission is complete: slices 10, 12, 13–16 and 18 | Verify slice 18 (`4383916`). Its sources are on the waiting list |
 
 **E21 slice 4's finding, settled.** The first, successive-conditional Geweke design failed on ln s and is on record as unqualified.
 - *The cause* is the u–s funnel: ln s's integrated autocorrelation time is about 19,000 sweeps, and z falls as the chain grows.
@@ -107,7 +116,12 @@ A separate limitation in the existing shared weight reader affects all its calle
    - *Its findings:* Snell and Griffiths's Theorem 4.3 is false as stated (a point-mass prior on all-zero losses breaks it), and Gressmann's proof of Proposition 2.5(i) has two sign slips while the statement stands.
 4. **Slice 12a's k̂ diagnostic:** opt-in (recommended; it costs about 200× the score) or on by default.
 5. **The original side-session notes** in `%APPDATA%\Claude\side-session-notes\`: delete them or keep them. Copies are in the repository; three PyTeXML notes were left there.
-6. **Conformal slices 13–18's C# order,** after slice 10's BASS reading. The tournament correction (13) is the candidate if the margin still reads nothing on BASS.
+6. **Conformal slices 13–18's C# order: ready to decide, now that slice 10's BASS reading is in.**
+   - *The reading* (the [slice 10 report](conformal-layer-brief.md#2026-11-11--slice-10-density-and-cdf-error-diagnostics)): the margin still reads nothing on BASS fits with the degenerate turns left out.
+     - The Kept diagnostic is negative on the Gaussian and Student-t fits at every ESS floor: −0.50 to −0.25 and −0.64 to −0.40.
+     - The carried diagnostic is near 0.
+     - The own-turn proxy is not a guaranteed superset, missing 3, 1 and 3 turns at floors 10, 100 and 400.
+   - *The recommendation:* by decision 10's rule, the tournament correction (13), whose Lean is verified (`f998131`), comes first. It is the full-data guarantee that does not lean on mixing.
 7. **Lean for the active-subspace geometry** (proposed 2026-11-10):
    - E36's direction moves;
    - the matrix Poincaré check's reduction and the product law's constant;
