@@ -268,6 +268,33 @@ Under "Reports" below, newest first, per slice: what landed by commit; the gates
 
 Newest first.
 
+### In progress — Slice 10, the full step's error completed (started 2026-11-10)
+
+Started at the main session's word after slice 12a's verification, under decision 10's rules and the grid rule (1d76a22). Updated in place until the report replaces it.
+
+**Plan, in two parts, one commit each.**
+- *10a, the density score's margin with the degenerate turns left out.* A new `MarginBounds.Kept`.
+  - *D(y), one rule for every turn:* a turn degenerates when its weights' ESS falls below `ConformalOptions.DegenerateEss` (100 by default). The ESS is Kish's times the relative efficiency along the chains.
+  - *The candidate's own turn* is read directly from its held add-one-in weights.
+  - *A data unit's own turn* is read through a proxy, the union of three flags:
+    - its ESS without the candidate: Kish(W) · rel · efficiency, with rel = 1/(E[p]·E[1/p]) under the held draws;
+    - its PSIS leave-one-out k̂ above the threshold;
+    - at kept y, its ESS with the candidate: rel = 1/(Σ w̃ p · Σ w̃/p), from one more product.
+  - *The bounds* each unit carries are taken over the turns outside the y-free flags. ĉ(y) = k + the band under those bounds + D's data units that the inflated rule accepts, read at kept y only.
+  - *The report:* 1 − (max over kept y of ĉ + max over every y of |D(y)|)/m − 2ν. The inflated set's is 1 − (k + max |D|)/m − ν.
+  - *The grid rule:* an opt-in probe (`ConformalOptions.MarginProbe`) bisects every cell whose readings differ at its ends, reusing the stratum's scorer, so a value sits in each interval found. Any margin mode can take it.
+  - *Gates:*
+    - the proxy against exact own turns, by refits on the conjugate model;
+    - dominance and coverage under error on exact draws;
+    - the BASS reading beside the carried margin's (decision 10's question), at several ESS floors;
+    - whether the margin can serve Hoff's score, recorded.
+- *10b, the CDF score's margin* on the full step's distribution (an options overload):
+  - the equi-tailed set's union band and inflated tails;
+  - the PIT's counts per level, as bounds on P(PIT ≤ k/m);
+  - read with D and the grid as in 10a.
+
+**State.** 10a is being written. Nothing committed yet.
+
 ### 2026-11-10 — Slice 12a, Hoff's leave-one-out score as the full step's opt-in
 
 Built at the user's decision 9 and commission of 2026-11-10, relayed by the main session, against the Lean's slice 12.
