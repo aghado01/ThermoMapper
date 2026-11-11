@@ -152,25 +152,122 @@ Each slice reports here and to the main session:
 
 Newest first.
 
-### In progress: slice 4, random effects under GBASS's noises (GBASS chip, updated 2026-11-10)
+### Slice 4: random effects under GBASS's noises (GBASS chip, 2026-11-10)
 
-Hand-over state, updated in place until the slice's report replaces it.
-- *Committed:* `4f5bf3f` (code and tests; the per-commit selection 2230 of 2230), `94133f8` (the ledger entry).
-  - decision 7's form B: u a latent read as the offset Z̃u, with σ² on the record;
-  - u's block after the coefficients, s's step on u's prior, the b = 1 collapsed structure step;
-  - the GLS intercept direction c = L·1 under weights.
-  Files: `BassRandomEffects.cs`, `BassRandomEffectsNoise.cs` (new), `BassObservationModel.cs`, `BassDesign.cs`, `BassNoise.cs`, `BassSweep.cs`, `BassModel.cs`, `BassConfig.cs`, `BassState.cs`, `BassPriorSampler.cs`, `BassRandomIntercepts.cs`, `posterior/BassPrediction.cs`. Tests: `RandomEffectsNoiseTests.cs` and `RandomEffectsNoiseQualificationTests.cs` (both new), and `RandomInterceptTests.cs`.
-- *Passed:*
-  - dense algebra to 10⁻¹⁵;
-  - the design on the integrated reading as the GLS fit;
-  - the sweep's order and a fit;
-  - resume bit for bit, after a stale-prior-Gram defect was found and fixed;
-  - three noise pins without a block bit for bit;
-  - the focused classes, 63 of 63.
-- *Found in the first qualification run:* the successive-conditional Geweke chain undershoots E[ln s] in every row, by 0.03 to 0.15 (|z| 0.5 to 5.1), always toward small s. Under the half-Cauchy s with u a latent, excursions to large s, where the data pin u, outlast the batches. u0 and Σu² have no variance under that s. The Geweke rows now take K = 10 sweeps from each of 40,000 independent exact draws of the joint, where mixing cannot bias the test, and they read u bounded or in logs (uncommitted test edit).
-- *Running or next:* (the fresh-eyes review of `4f5bf3f` found nothing to fix)
-  - the qualification, rerunning from the snapshot build, log `artifacts/chip-ridge-blocks/qual/s4_qual2.log`: Geweke at b = 1 with and without the collapse and below 1, a ladder and SMC end to end, the mixing measurement, recovery;
-  - the slice-end run, then the report.
+**Landed** in `4f5bf3f` (the block under the noises, its tests), `94133f8` (the notation ledger), `1940cc0` (the exact-start Geweke rows, committed as WIP by the main session at the user's word), `397ca88` (the mixing measurement lengthened to 40,000 sweeps per chain), and the commit that carries this report. Decision 7 as the user amended it on 2026-11-10 ("B, with the refinement").
+
+**The form.**
+- *u is a latent on every rung.* Under a noise the reading carries u as the offset Z̃u beside σβv (`RandomEffectsLatent`, `WorkingResponse.Effects`). σ² stays on the record, as a skew already keeps it (`VarianceMeanMixture.RecordsSigma2`), because u's prior scales with σ². Every rung tempers the likelihood given u and the latents, so ladders, SMC and the reference rung are exact.
+- *u's block* (`BassGroupEffectsBlock`, right after the coefficients) draws u from N(K·Z̃ᵀ(bW)e, σ²K) at the rung's power, with K = (S⁻² + Z̃ᵀ(bW)Z̃)⁻¹, through the weighted whitening at bW. The sweep's fit is handed on with Z̃u in it, so v's, σ²'s, the shape's and interweaving's blocks read the residual net of u. σ²'s and interweaving's priors add u's energy Σ‖u_k‖²/s_k² on Σq_k coordinates.
+- *s's step* (`BassLatentGroupScaleBlock`, in τ's slot) is a Metropolis step on ln s_k against its half-Cauchy and N(u_k; 0, σ²s_k²), with no refit and h = 2.4/√(2q_k + the prior's curvature).
+- *At b = 1 only* (`BassCollapsedStructureBlock`), the chain follows the u-integrated reading at the current weights (`VarianceMeanMixture.Integrated`). It takes one reversible-jump move on that marginal, draws a and then u, and follows the reading given u again. A plain chain takes this step in place of its move step, and a replica or a particle takes it after its own moves.
+- *Retained draws* keep their latents, their u and their scales (`BassDraw.Groups`), and a draw's reading is rebuilt with its u. Prediction now adds a population case's own effect under a noise law too, and the mean surface's E[u | ·] reads the draw's weights.
+
+**Found.**
+1. *The collapse alone is exact only at b = 1* (reported before the amendment). The core tempers a state's evaluation analytically in b, with u integrated out of the likelihood. The noise's blocks condition on u, and at b < 1 their conditionals belong to tempering the likelihood given u. Hence form B, with the collapse kept at b = 1.
+2. *Under weights, the GLS intercept direction is c = L·1, not W^½·1.* The conventions centre u with unweighted counts, so L = V_w^(−½)W^½ moves the constant. The design's weighted path takes L and centres against c, with the GLS mean and mass cᵀc (`WeightedWhitening`); at W = I this is the unweighted block's. On the dense checks, c departs from W^½·1 by 0.27 to 0.68.
+3. *A stale prior Gram across readings* (fixed). A design keeps its prior Gram when it follows a reweighting, which holds only while the prior's side does not change with the reading. The integrated reading's prior first read V^(−½)z and the reading given u read the raw z, so a chain moving between them carried a Gram that depended on its history. A resumed chain parted from the continuing one at its first draw. Under B the coefficient prior belongs to the model given u, so both readings now read the raw columns, and resume is bit for bit.
+4. *The u–s funnel under form B.* With u a latent, s moves only through u, and where the data pin u, at large s, s barely moves. Geweke's successive-conditional chain, which redraws y each step, has to cross that funnel; a fit on fixed data stays near where its data put u. See the Geweke gate below. A step on s with u integrated (at b = 1), or an interweaving move on (s, u), would address it. Both are design changes, so neither is built.
+5. *The design's layout rule* refused a reading that gains or loses a whitening. Under weights every column is evaluated afresh on a reweighting, so a weighted design now passes between the two.
+6. *The column-mean cache* was keyed by the weight array alone. Under a weighted whitening the GLS centring moves with the scales too, so the cache is now keyed by the whitening.
+
+**Gates.**
+- *Dense algebra:* with and without a slope, at b = 1 and 0.3: xᵀC⁻¹y, the mass, the mean, ln|V_w| and u's conditional mean agree with dense algebra to 1.4·10⁻¹⁴ at worst. c departs from W^½·1 by 0.27 to 0.68.
+- *The design on the integrated reading is the GLS fit:* on three terms the residual against a dense GLS fit is ‖r‖² = 1.1·10⁻¹⁵, and the mean, the mass and Σ ln w − ln|V_w| agree to 7·10⁻¹⁵.
+- *The sweep's order and a fit:* a chain runs the collapsed moves, τ, the group scale, the coefficients, u, the latent scales, then σ². A replica runs the same order after its own moves. 42 of 300 collapsed moves were accepted in a fit.
+- *Resume, bit for bit:* a tempered fit with a drawn scale and the reference rung. A probe covered plain chains, ladders with and without the reference rung, and held and drawn scales.
+- *Noise fits without a block, bit for bit:* three pins taken on HEAD before the change (t `5471c4bcad7d0b09`, skewed horseshoe `afd1aa3f399ea35f`, tempered Normal-Wald `98b9820e14563b71`).
+- *Geweke, first design (successive-conditional), unqualified and kept on record.* Each row ran 300,000 marginal-conditional draws against 450,000 steps of one chain. The z for each function was the mean difference over √(variance/300,000 + the square of the 50-batch se). The functions were M, ln τ, ln σ², mean ln v, β, ln s, u0, Σu², atan f0, atan f6 and z0², with bar |z| < 4.
+
+  | row | worst \|z\| | ln s: draws, chain, z | other \|z\| ≥ 3 |
+  |---|---|---|---|
+  | t, b = 1, collapse | 1.94 (pass) | −0.0001, −0.031, 0.52 | — |
+  | t + interweave, b = 1, collapse | **4.51** | −0.0001, −0.127, 4.51 | — |
+  | quantile, b = 1, collapse | 3.53 (pass) | −0.0005, −0.081, 3.53 | — |
+  | Normal-Wald, b = 1, collapse | **5.12** | −0.0000, −0.149, 5.12 | ln σ² 3.33, Σu² 3.14 |
+  | t, b = 1, plain | **4.30** | −0.0001, −0.130, 4.30 | — |
+  | t, b = 0.5, replica | **4.02** | −0.0020, −0.111, 4.02 | — |
+
+  The Normal-Wald at 0.5 and both horseshoe rows were stopped unrun under this design. Every chain's mean of ln s fell below the prior's 0. Σu² and u0 have no finite variance under the half-Cauchy s, so their z values cannot be read.
+- *Why, on a probe of the t plain row's chain run four times as long* (1.8 million steps, another start):
+  - ln s's autocorrelation is 0.965 at lag 1, 0.48 at lag 100, 0.28 at lag 10,000 and 0.04 at lag 50,000.
+  - The batch-means IAT keeps growing with the batch: 444 at 1,000, 3,210 at 9,000 (the test's batches), 8,523 at 30,000, and 19,374 and 18,547 at 90,000 and 180,000. The ESS over 1.8 million steps is about 95, so the test's se was too small by a factor of about 2.4.
+  - z shrinks as the chain grows: 3.09, 1.77 and 1.09 after 450,000, 900,000 and 1.8 million steps on 50 batches (1.68, 0.97 and 0.78 on 10). The mean falls from 0.83 to 0.35 to 0.14: the sign follows the start, and the size follows the chain's length.
+  - The chain spends 0.150 of its steps at s > 5, against the prior's 0.126, in 22,584 excursions, the longest 63,563 steps. At s < 0.2 it spends 0.122 against 0.126, the longest excursion 205 steps. The large-s tail is the funnel's.
+- *Geweke, exact starts (the gate):* 10 sweeps at b from each of 40,000 independent draws of the tilted joint. Each function's change has mean 0 under invariance, and the z reads the paired changes, so mixing cannot bias it. The functions are the first design's, with u0 read as atan u0 and Σu² as ln Σu² and as u's energy Σu²/(σ²s²). All nine rows pass |z| < 4:
+
+  | row | worst \|z\| (function) | ln s z |
+  |---|---|---|
+  | t, b = 1, collapse | 0.91 | −0.06 |
+  | t, b = 1, plain | 1.98 (atan f0) | 0.83 |
+  | t, b = 0.5, replica | 1.32 | −1.07 |
+  | quantile, b = 1, collapse | 2.58 (atan f0) | −0.28 |
+  | Normal-Wald, b = 1, collapse | 1.13 | −0.94 |
+  | Normal-Wald, b = 0.5, replica | 2.64 (u energy) | 0.51 |
+  | skewed horseshoe + β·v move, b = 1, collapse | 2.14 (β) | −1.33 |
+  | skewed horseshoe + β·v move, b = 0.75, replica | 3.17 (ln Σu²) | −2.05 |
+  | t + interweave, b = 1, collapse | 2.81 (atan f0, f6 and u0 together: one effect) | 0.05 |
+
+  The two horseshoe rows also read the β·v orbit with the block.
+- *The exact-start gate's power, on a probe.* s's step was replaced by a mutant whose target carries an extra s^(−ε); under the half-Cauchy this moves E[ln s] by −ε·π²/4. On the t plain row:
+  - At ε = 0.053, the −0.13 shift behind the first design's z 5.1, ln s's change is −0.0270 ± 0.0054, z −5.00.
+  - At ε = 0.02 (−0.049) it is −0.0074 ± 0.0054, z −1.36.
+  - Unmutated it is 0.0043 ± 0.0054, z 0.80.
+
+  Ten sweeps carry about a fifth of a stationary shift. So the gate sees the failure's size, and misses a bias of a third of it.
+- *A ladder and SMC end to end* (n = 120, t₄, twelve unbalanced levels):
+  - ln p(y): ladder −114.98 ± 1.08, SMC −114.41 ± 0.09.
+  - ln s: ladder 0.956 ± 0.007 and SMC 0.960 ± 0.003, against chains' 0.952 ± 0.002.
+  - M: ladder 4.218 ± 0.021 and SMC 4.189 ± 0.003, against chains' 4.201 ± 0.016.
+- *Recovery under heavy-tailed noise* (t₃, effects generated outside the model, four sets): f + u RMSE 0.098, 0.107, 0.141 and 0.098 with the block, against 0.365, 0.643, 1.086 and 0.493 without. The effects' 90% intervals cover 46 of 48, and the standardized errors' mean square is 0.76.
+- *Mixing, the collapse against form B without it:* n = 300, t₄, twelve unbalanced levels, with four chains of 2,000 + 40,000 sweeps per arm on two seeds, plus a probe on other chain seeds.
+  - *Both arms reach the same posterior.* M reads 4.365 ± 0.022 collapsed against 4.299 ± 0.020 plain (seed 11), 4.307 ± 0.048 against 4.262 ± 0.017 (seed 23), and 4.290 ± 0.026 against 4.303 ± 0.051 (probe). ln s and ln σ² agree within 0.003.
+  - *Bulk ESS per sweep, collapsed over plain:* ln σ² 1.17, 1.15 and 1.60; ln s 1.02, 1.02 and 1.04; u0 0.75 and 1.06; M 0.55, 0.61 and 1.20.
+  - *Time per sweep, collapsed over plain:* 1.76, 4.40 and 2.24, on the cycle clock with the machine under load.
+  - *ESS per second, collapsed over plain:* ln σ² 0.67 and 0.26, ln s 0.58 and 0.23, u0 0.43 and 0.24, M 0.31 and 0.14.
+  - The first reading kept 8,000 sweeps per chain and gave M ESS 28 against 90 to 99. That was too short for M, whose IAT is about a thousand sweeps, so the test now keeps 40,000.
+- *Per commit:* 2230 of 2230 (`4f5bf3f`'s files on its parent). *Slice end:* 3095 of 3095, on a snapshot of `397ca88`.
+
+**For the user: keep or drop the b = 1 collapse?** Both arms reach the same posterior, so this is a question of cost. On this data, a grouping unrelated to the inputs, the collapse gives:
+- ln σ² 15 to 60% more ESS per sweep;
+- nothing on ln s;
+- an unsettled change on M, 0.55 to 1.2 per sweep;
+- 1.8 to 4.4 times the time per sweep.
+
+Net, it reaches 0.14 to 0.71 of form B's ESS per second.
+- *Keep* (decision 7's amendment as it stands): this keeps the structure step on the u-marginal at b = 1. Its gain is expected where u and the basis compete for the same variation, such as a grouping aligned with an input or a few large groups; that case is not measured here. It costs this slowdown on every fit with random effects under a noise.
+- *Drop:* plain chains take form B's move step, and a ladder's cold rung and SMC's final stage lose their extra step. The untested gain is lost, and fits run at the plain sweep's cost. The step stays reachable through `BassSweepSlots.Blocks(…, collapse: true)` until a cleanup.
+- *Opt-in,* the middle way: a sampling option, off by default, measured on a confounded dataset before any default changes.
+
+**Decisions taken beyond this brief.**
+- The Geweke gate reads exact starts, not a successive-conditional chain, for the reasons and with the power above. u0 and Σu² are read bounded and in logs.
+- The coefficient prior reads the raw columns under a noise, on both readings (finding 3).
+- σ² is kept on the record under random effects without a skew, and an improper σ² prior is refused with random effects, since u's prior scales with σ².
+
+**Coordination.**
+- E34's chip had the change's shape before the edits.
+- The case-weights chip (`local_57bad71b`) committed its `BassModel.cs` hunk by private index (`7343bc8`) and withdrew its `BassSweep.cs` line.
+- E8's chip edits none of these files.
+- `posterior/BassPrediction.cs` is the conformal chip's. Its tree was clean, the edit is two noise-path lines, and the chip was told.
+
+**Doc changes owed** (chips leave `docs/` alone):
+- `docs/Maths/RandomEffects.md`, a new section "Under GBASS's noises":
+  - form B and the b = 1 collapse;
+  - u's block, and s's step on u's prior;
+  - σ² on the record;
+  - the GLS intercept direction c = L·1, with the dense checks;
+  - the prior on raw columns under a noise, against the whitened design under Gaussian noise;
+  - the readers;
+  - the u–s funnel;
+  - the exact-start Geweke design and its power;
+  - the mixing measurement.
+- `docs/Maths/VarianceMeanMixtures.md`: one line in the status list saying the noises take random effects, pointing to RandomEffects.md.
+- `docs/Maths/regression/…` (the split BayesianRegression pages): the GBMARS row's "random effects under the noises".
+
+**Follow-ups, with the decision each would change.**
+- *The u–s funnel* (finding 4): a step on s with u integrated at b = 1, or an interweaving move on (s, u). It would change whether s mixes where the data pin u at large s. Fits on fixed data mixed ln s well in the measurement (ESS about 30,000 from 160,000 sweeps), so the funnel is the Geweke chain's and weak data's. A design change for the user.
+- *Case weights with random effects*: `BassData.cs` refuses them because the block's whitening read precision weights alone. `WeightedWhitening` at precision weights is that GLS, so the refusal could lift for precision weights. That is the weighted-fits chip's call.
+- *The collapse's cost*: on the integrated reading every column is evaluated afresh, with tables off under a whitening. That is likely most of the 2.2× per sweep; it was not measured apart. If the collapse is kept, tables on weighted whitenings would change its ESS per second.
 
 ### Slice 2 — named crossed and nested Gaussian intercepts (2026-11-09)
 
