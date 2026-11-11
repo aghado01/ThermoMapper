@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.Linq;
 using Maths.Regression.Spline.Bass.Presentation;
 using Maths.Regression.Spline.Bass.Sensitivity;
 using Maths.Samplers.Ensemble;
@@ -64,6 +65,13 @@ public sealed record BassFit(
         BassModel model = ModelOn(data);
         if (cdf && content != PointwiseContent.RetainedParameters)
             throw new ArgumentException("The CDF is the retained parameters' own; the collapsed content's terms leave each unit out.", nameof(cdf));
+        // Under random effects a stratum lies inside one cell (E21's slice 5). A partition without strata reads as one stratum, which LOO and
+        // WAIC pass, so the check reads a partition that gives more than one.
+        if (model.RandomEffects is not null && units is not null && units.StratumOf.Distinct().Skip(1).Any())
+        {
+            int[] cells = BassGroupCells.Of(model, null, UnseenLevel.Refuse).Training;
+            BassGroupCells.CheckStrata(units.StratumOf, u => units.Members[u].Select(i => cells[i]), nameof(units));
+        }
         PointwiseLogDensity density = BassPointwise.LogDensity(model, Terms, Draws, units, content, DrawWeights, quadrature);
         return cdf ? density with { LogCdf = BassCandidates.UnitLogCdf(model, Terms, Draws, density.Units) } : density;
     }
@@ -90,10 +98,20 @@ public sealed record BassFit(
                                                    IReadOnlyList<double>? caseWeights = null)
     {
         BassModel model = ModelOn(data);
-        if (model.RandomEffects is not null)
-            throw new NotSupportedException("A random-intercept fit's candidate density is not built: a new case's group effect, and the exchangeability across groups the conformal layer reads, need a reading of their own (E21).");
         return BassCandidates.LogDensity(model, Terms, Draws, DrawWeights, cases, grids, strata, unseenLevels, quadrature, cdf, caseWeights);
     }
+
+    /// <summary>
+    /// The cells of a random-effect fit on <paramref name="data"/>, the data the fit was run on (<see cref="BassGroupCells"/>): one level of
+    /// every grouping jointly, each training case's and, when <paramref name="cases"/> are given, each candidate's, with new groups marked.
+    /// Cases are exchangeable only within a cell, so the conformal layer's strata are taken from these, on the training density
+    /// (<see cref="UnitPartition"/>'s strata) and on the candidates alike (E21's slice 5).
+    /// </summary>
+    /// <param name="data">The data the fit was run on.</param>
+    /// <param name="cases">The candidates' cases, their groups read as prediction reads them; null for the training cases' cells alone.</param>
+    /// <param name="unseenLevels">What a level no training case took does: refused by default; placed outside every subset, a new group.</param>
+    public BassGroupCells GroupCells(BassData data, PredictionCases? cases = null, UnseenLevel unseenLevels = UnseenLevel.Refuse)
+        => BassGroupCells.Of(ModelOn(data), cases, unseenLevels);
 
     /// <summary>
     /// The residual-dependence check (<see cref="BassResidualDependence.Of"/>) along a declared <paramref name="index"/>

@@ -250,6 +250,27 @@ public sealed record PredictionCases
         return groups;
     }
 
+    /// <summary>
+    /// Each case's level of <paramref name="grouping"/> as named, under its parent's when <paramref name="block"/> nests it, so two cases
+    /// share a label when they share a group, a new one included (E21's slice 5, <see cref="BassGroupCells"/>); null when no column gives
+    /// the grouping.
+    /// </summary>
+    internal string[]? GroupLabelsOf(RandomEffectGrouping block, CategoricalPredictor grouping)
+    {
+        ArgumentNullException.ThrowIfNull(block);
+        ArgumentNullException.ThrowIfNull(grouping);
+        CategoricalColumn? levels = null, parent = null;
+        foreach (PredictionColumn c in _columns)
+        {
+            if (c.Name == grouping.Name) levels = c as CategoricalColumn;
+            if (block.ParentName is { } parentName && c.Name == parentName) parent = c as CategoricalColumn;
+        }
+        if (levels is null) return null;
+        var labels = new string[Cases];
+        for (int i = 0; i < Cases; i++) labels[i] = parent is null ? levels.Levels[i] : $"{parent.Levels[i]}/{levels.Levels[i]}";
+        return labels;
+    }
+
     /// <summary>The cases of <paramref name="predictors"/>, as <see cref="Of(BassData)"/> reads a data set's.</summary>
     public static PredictionCases Of(IReadOnlyList<BassPredictor> predictors)
     {

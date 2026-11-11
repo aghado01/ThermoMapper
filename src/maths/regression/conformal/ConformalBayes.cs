@@ -64,7 +64,32 @@ public sealed record ConformalOptions
     /// score reads its one k̂ per grid value either way.
     /// </summary>
     public bool LeaveOneOutParetoK { get; init; }
+
+    /// <summary>
+    /// Under <see cref="MarginBounds.Kept"/>, the floor below which a turn's weights degenerate: a turn whose ESS, Kish's times the
+    /// relative efficiency along the chains, falls below it is left out of the bounds the units carry, and its unit is charged to the
+    /// miscoverage instead (<c>coverage_close_excluding</c>). 100 by default: below about a hundred effective draws a self-normalized
+    /// estimate's normal approximation, which the bounds read, is not trusted. Read only under that mode.
+    /// </summary>
+    public double DegenerateEss { get; init; } = 100.0;
+
+    /// <summary>
+    /// The margin read between grid values, opt-in (the grid rule of slice 10, <c>coverage_grid_excluding</c>). The margin's maximum
+    /// over a fixed grid is a reading at its values, not a bound: its counts are constant between the values of y where an estimate
+    /// comparison or a flag changes, and the report needs a value in each such interval. With a probe the step bisects every grid
+    /// cell whose readings differ at its ends, to the tolerance, scoring each probe with the stratum's own scorer, and the margin's
+    /// counts take the probes' readings (<see cref="ConformalMargin.Refined"/>). Changes between ends that read alike are unobserved,
+    /// as slice 8's crossings are. Needs the margin (<see cref="MarginBounds"/>).
+    /// </summary>
+    public MarginRefinement? MarginRefinement { get; init; }
 }
+
+/// <summary>
+/// How the margin is read between grid values (<see cref="ConformalOptions.MarginRefinement"/>): <paramref name="At"/> gives the
+/// candidate seam at test case t and response y, a single case on the one-value grid [y] in t's stratum and over the same draws, as
+/// the engine's seam builds it; <paramref name="Tolerance"/> is the response width at which a cell is no longer split.
+/// </summary>
+public sealed record MarginRefinement(Func<int, double, CandidateLogDensity> At, double Tolerance);
 
 /// <summary>The full step's conformity score (<see cref="ConformalOptions.Score"/>).</summary>
 public enum FullStepScore
@@ -106,6 +131,24 @@ public enum MarginBounds
     /// candidate's one more (n × S)·(S × G) product per batch.
     /// </summary>
     Carried,
+
+    /// <summary>
+    /// Carried over the kept turns only, the turns whose weights do not degenerate, with the degenerate ones charged to the
+    /// miscoverage (slice 10, <c>coverage_close_excluding</c>, <c>coverage_read_excluding</c>). A turn degenerates when its ESS falls
+    /// below <see cref="ConformalOptions.DegenerateEss"/>, one rule for every unit's own turn, the candidate's included:
+    /// <list type="bullet">
+    /// <item>the candidate's own turn at y is the held one, read from its add-one-in weights;</item>
+    /// <item>a training unit's own turn, where it is the candidate and (x, y) a training unit, is not held, so it is read through a proxy
+    /// meant to flag at least as often (the Lean's soundness condition): its ESS without the candidate, Kish(W)/(E[p]·E[1/p]) under the
+    /// held draws times its efficiency; its PSIS leave-one-out k̂ above the threshold, where E[1/p] is not to be trusted; and where the
+    /// candidate's turn is kept, its ESS with the candidate, Kish(W)/(Σ w̃ p · Σ w̃/p), from one more product per batch.</item>
+    /// </list>
+    /// The bounds are carried over the turns the first two flags keep. At y where the candidate's turn is kept the reading is
+    /// ĉ(y) = k + the band + the flagged units the inflated rule accepts (<c>card_excluded_le_estimated</c>); where it is flagged, nothing
+    /// is read. The plain set's coverage under error is 1 − (k + the largest of the rest over kept y + the largest |D(y)| over every
+    /// y)/m − 2ν; the inflated set's 1 − (k + the largest |D(y)|)/m − ν.
+    /// </summary>
+    Kept,
 }
 
 /// <summary>
@@ -122,6 +165,13 @@ public enum InflationBounds
     /// than the per-position set, kept for comparison.</summary>
     Uniform,
 }
+
+/// <summary>
+/// The margin's counts read between grid values (<see cref="ConformalOptions.MarginRefinement"/>): <paramref name="Count"/> as
+/// <see cref="ConformalMargin.Count"/> and <paramref name="Flagged"/> as <see cref="ConformalMargin.FlaggedCount"/> (0 under the bounds
+/// that flag nothing), each the largest over the grid's values and every probe; <paramref name="Probes"/> the probes scored.
+/// </summary>
+public sealed record MarginRefined(int Count, int Flagged, int Probes);
 
 /// <summary>Lower and upper response coordinates. On a sampled set they bound a run of accepted grid values.</summary>
 public readonly record struct GridInterval(double Lower, double Upper);
@@ -175,18 +225,53 @@ public sealed record ConformalMargin(double Multiple, double[] CandidateErrors, 
     /// rather than read as zero or as clear. The inflated rule's readings are here either way.</summary>
     public bool Computed => Bounds is not null;
 
-    /// <summary>m̂: the largest band over the grid's values inside some draw's support, since any of them may be the truth; null
-    /// when the margin was not computed.</summary>
+    /// <summary>
+    /// m̂: the largest band over the grid's values inside some draw's support, since any of them may be the truth; under
+    /// <see cref="MarginBounds.Kept"/> the largest of the band plus <see cref="DegenerateAccepted"/> over the values whose candidate turn
+    /// is kept, 0 where none is. With <see cref="Refined"/>, over the probes as well. Null when the margin was not computed.
+    /// </summary>
     public int? Count
     {
         get
         {
             if (Fragile is null) return null;
+            if (Refined is { } refined) return refined.Count;
             int most = 0;
-            foreach (int f in Fragile) most = Math.Max(most, f);
+            for (int g = 0; g < Fragile.Length; g++) most = Math.Max(most, Fragile[g] + (DegenerateAccepted?[g] ?? 0));
             return most;
         }
     }
+
+    /// <summary>Under <see cref="MarginBounds.Kept"/>, |D(y)| at each grid value: the candidate's own turn when flagged, and the training
+    /// units the proxy flags; null under the other bounds.</summary>
+    public int[]? Flagged { get; init; }
+
+    /// <summary>Under <see cref="MarginBounds.Kept"/>, whether the candidate's own turn at each grid value is flagged, so nothing is read
+    /// there (<see cref="Fragile"/> −1); null under the other bounds.</summary>
+    public bool[]? CandidateFlagged { get; init; }
+
+    /// <summary>Under <see cref="MarginBounds.Kept"/>, at each grid value whose candidate turn is kept, the flagged training units the
+    /// inflated rule would accept as the test unit: those whose degenerate turn can cost coverage (<c>card_excluded_le_estimated</c>);
+    /// 0 where the turn is flagged; null under the other bounds.</summary>
+    public int[]? DegenerateAccepted { get; init; }
+
+    /// <summary>The largest |D(y)| over every grid value, and over the probes with <see cref="Refined"/>; null under the bounds other
+    /// than <see cref="MarginBounds.Kept"/>.</summary>
+    public int? FlaggedCount
+    {
+        get
+        {
+            if (Flagged is null) return null;
+            if (Refined is { } refined) return refined.Flagged;
+            int most = 0;
+            foreach (int f in Flagged) most = Math.Max(most, f);
+            return most;
+        }
+    }
+
+    /// <summary>The margin read between grid values (<see cref="ConformalOptions.MarginRefinement"/>): its counts over the grid and the
+    /// probes; null when not asked for.</summary>
+    public MarginRefined? Refined { get; init; }
 
     /// <summary>The grid values the inflated rule accepts whose weights' k̂ exceeds the threshold; a k̂ not read (NaN) counts as none.</summary>
     public int Untrusted(int level)
@@ -257,10 +342,23 @@ public sealed record ConformalSet(int Case, int Stratum, int Units, int Level, d
     /// 1 − (k + m̂)/m − ν for the plain rule (<c>coverage_close</c> with <c>card_fragile_le_estimated</c>), NaN when the margin was
     /// not asked for (<see cref="ConformalMargin.Computed"/>); 1 − k/m − ν for the inflated one (<c>coverage_inflated</c>). 1 for
     /// the whole space; 1 − k/m with no margin reading at all, the split form's, whose guarantee holds for any fit
-    /// (<c>split_coverage</c>).
+    /// (<c>split_coverage</c>). Under <see cref="MarginBounds.Kept"/>, with D̂ the largest |D(y)| over the grid
+    /// (<see cref="ConformalMargin.FlaggedCount"/>): 1 − (k + m̂ + D̂)/m − 2ν for the plain rule, the second ν the realized ordering's
+    /// own bounds failing (<c>coverage_read_excluding</c>, <c>coverage_grid_excluding</c>); 1 − (k + D̂)/m − ν for the inflated one
+    /// (<c>coverage_inflated_excluding</c>).
     /// </summary>
-    public double CoverageUnderError => WholeSpace ? 1.0 : Margin is null ? Coverage
-        : Inflated ? Coverage - ErrorLevel : Margin.Count is int count ? 1.0 - (double)(Level + count) / Units - ErrorLevel : double.NaN;
+    public double CoverageUnderError
+    {
+        get
+        {
+            if (WholeSpace) return 1.0;
+            if (Margin is null) return Coverage;
+            if (Margin.FlaggedCount is int flagged)
+                return Inflated ? Coverage - (double)flagged / Units - ErrorLevel
+                     : 1.0 - (double)(Level + Margin.Count!.Value + flagged) / Units - 2.0 * ErrorLevel;
+            return Inflated ? Coverage - ErrorLevel : Margin.Count is int count ? 1.0 - (double)(Level + count) / Units - ErrorLevel : double.NaN;
+        }
+    }
 
     /// <summary>Whether grid value <paramref name="g"/> is in the set: the inflated rule's under <see cref="Inflated"/>, the plain
     /// rule's otherwise.</summary>
@@ -802,15 +900,17 @@ public static class ConformalBayes
         public Reading(int count)
             : this(new int[count], new int[count], new double[count], new double[count], new double[count], new double[count],
                    new double[count], new double[count], new int[count], new int[count], new double[count], new double[count],
-                   new double[count], 0) { }
+                   new double[count], new int[count], new bool[count], new int[count], 0) { }
 
         private Reading(int[] below, int[] tied, double[] own, double[] ess, double[] candidateErrors, double[] uniformErrors,
                         double[] candidateCarried, double[] carriedUniform, int[] fragile, int[] inflatedRanks, double[] paretoK,
-                        double[] efficiency, double[] logPredictive, int start)
+                        double[] efficiency, double[] logPredictive, int[] flagged, bool[] candidateFlagged, int[] degenerateAccepted,
+                        int start)
         {
             Below = below; Tied = tied; Own = own; Ess = ess; CandidateErrors = candidateErrors; UniformErrors = uniformErrors;
             CandidateCarried = candidateCarried; CarriedUniform = carriedUniform; Fragile = fragile; InflatedRanks = inflatedRanks;
-            ParetoK = paretoK; Efficiency = efficiency; LogPredictive = logPredictive; Start = start;
+            ParetoK = paretoK; Efficiency = efficiency; LogPredictive = logPredictive; Flagged = flagged; CandidateFlagged = candidateFlagged;
+            DegenerateAccepted = degenerateAccepted; Start = start;
         }
 
         public int[] Below { get; }
@@ -826,12 +926,16 @@ public static class ConformalBayes
         public double[] ParetoK { get; }
         public double[] Efficiency { get; }   // the relative efficiency of each candidate's density along the chains
         public double[] LogPredictive { get; }   // ln of the draws' predictive density at each candidate, ln Σ_s W_s p(y | θ_s)
+        public int[] Flagged { get; }   // under the kept turns' bounds: |D(y)|
+        public bool[] CandidateFlagged { get; }   // under the kept turns' bounds: the candidate's own turn flagged
+        public int[] DegenerateAccepted { get; }   // under the kept turns' bounds: flagged units the inflated rule accepts
 
         /// <summary>The first grid value of this slice.</summary>
         public int Start { get; }
 
         public Reading Slice(int start) => new(Below, Tied, Own, Ess, CandidateErrors, UniformErrors, CandidateCarried, CarriedUniform, Fragile,
-                                               InflatedRanks, ParetoK, Efficiency, LogPredictive, start);
+                                               InflatedRanks, ParetoK, Efficiency, LogPredictive, Flagged, CandidateFlagged, DegenerateAccepted,
+                                               start);
     }
 
     /// <summary>
@@ -851,18 +955,32 @@ public static class ConformalBayes
         private readonly IReadOnlyList<int>? _chains;
         private readonly double[] _left, _leftSquared, _top;   // P and P², units × draws; each unit's largest log term
         private readonly int _s, _level;
-        private readonly bool _plain;
+        private readonly bool _plain, _kept;
         private readonly MarginBounds? _margin;
         private readonly InflationBounds _inflation;
+        private readonly double _degenerateEss;
         private double[] _weights = [], _weightsSquared = [], _likelihoods = [], _logNorm = [], _candidateTop = [], _squareSums = [],
-                         _ownFirst = [], _ownSecond = [], _product = [], _first = [], _second = [], _cross = [], _column = [];
+                         _ownFirst = [], _ownSecond = [], _product = [], _first = [], _second = [], _cross = [], _column = [],
+                         _inverseProduct = [], _lowered = [];
+        private bool[] _unitFlagged = [];
         private PackedColumns? _right, _rightSquared, _rightWeighted;
 
+        // Under the kept turns' bounds: each unit's own turn flagged without the candidate, by the proxy's first two flags; their
+        // count; each unit's inverse likelihoods exp(bottom − ℓ) and smallest log term, for its turn's ESS with the candidate; and the
+        // draws' own Kish ESS.
+        private bool[] _freeFlagged = [];
+        private int _freeCount;
+        private double[] _inverse = [], _bottom = [];
+        private double _drawEss;
+
         public StratumScorer(double[,] ll, int[] rows, double[]? logWeights, int[] members, IReadOnlyList<int>? chains, int level, double multiple,
-                             MarginBounds? margin = null, InflationBounds inflation = InflationBounds.PerPosition, bool plain = false)
+                             MarginBounds? margin = null, InflationBounds inflation = InflationBounds.PerPosition, bool plain = false,
+                             double degenerateEss = 100.0)
         {
             _plain = plain;
             _margin = margin;
+            _kept = margin == MarginBounds.Kept && !plain;
+            _degenerateEss = degenerateEss;
             _inflation = inflation;
             _ll = ll;
             _rows = rows;
@@ -944,6 +1062,7 @@ public static class ConformalBayes
                 _weightSquares[i] = squares;
                 _unitEfficiency[i] = _chains is null ? 1.0 : PredictiveChecks.RelativeEfficiency(row, _chains);
             }
+            if (_kept) FlagTurns(weight);
             int block = Math.Min(Batch, n);
             var first = new double[s * block];
             var second = new double[s * block];
@@ -974,10 +1093,62 @@ public static class ConformalBayes
                             ? g3[at] / (a * a) - 2.0 * g2[at] / (tau * a) + _weightSquares[i] / (tau * tau)
                             : RelativeInLogs(i, d => _ll[_rows[d], unit]);
                         double error = double.IsNaN(relative) ? double.PositiveInfinity : PredictiveChecks.LogScaleError(Math.Max(0.0, relative), _unitEfficiency[i]);
-                        if (error > _unitWorst[j]) _unitWorst[j] = error;
+                        if (error > _unitWorst[j] && !(_kept && _freeFlagged[i])) _unitWorst[j] = error;
                     }
             }
             UnitCarriedErrors = [.. _unitWorst.Select(e => Multiple * e)];
+        }
+
+        /// <summary>Under the kept turns' bounds, the training units whose own turn the proxy flags without the candidate; empty
+        /// otherwise.</summary>
+        public bool[] FreeFlagged => _freeFlagged;
+
+        // The proxy's first two flags for each unit's own turn, read once per stratum: its ESS without the candidate, Kish(W)·rel times
+        // its relative efficiency, with rel = 1/(E[p]·E[1/p]) under the held draws, the relative ESS of p(zᵢ | θ) as weights over draws
+        // from the posterior without unit i; and its PSIS leave-one-out k̂, whose ratios W_s/p(zᵢ | θ_s) carry that E[1/p] and above the
+        // threshold say it is not to be trusted. A unit with zero density under a draw is flagged: its turn's weights are unbounded.
+        // Also each unit's inverse likelihoods for the third flag, read per candidate.
+        private void FlagTurns(double[] weight)
+        {
+            int n = _members.Length, s = _s;
+            double total = 0.0, squares = 0.0;
+            foreach (double w in weight)
+            {
+                total += w;
+                squares += w * w;
+            }
+            _drawEss = total * total / squares;
+            double threshold = PredictiveChecks.ParetoKThreshold(Math.Max(2, s));
+            _freeFlagged = new bool[n];
+            _inverse = new double[(long)n * s];
+            _bottom = new double[n];
+            var ratios = new double[s];
+            for (int i = 0; i < n; i++)
+            {
+                int unit = _members[i];
+                double bottom = double.PositiveInfinity;
+                for (int d = 0; d < s; d++) bottom = Math.Min(bottom, _ll[_rows[d], unit]);
+                _bottom[i] = bottom;
+                if (double.IsNegativeInfinity(bottom))
+                {
+                    _freeFlagged[i] = true;
+                    continue;
+                }
+                double inverseSum = 0.0;
+                for (int d = 0; d < s; d++)
+                {
+                    double q = Math.Exp(bottom - _ll[_rows[d], unit]);
+                    _inverse[(long)i * s + d] = q;
+                    inverseSum += weight[d] * q;
+                    ratios[d] = (_logWeights is null ? 0.0 : _logWeights[d]) - _ll[_rows[d], unit];
+                }
+                // ln(E[p]·E[1/p]) = ln(τ/ΣW) + top + ln(Σ W·q/ΣW) − bottom, at least 0.
+                double logProduct = Math.Log(_tau![i]) + _top[i] + Math.Log(inverseSum) - bottom - 2.0 * Math.Log(total);
+                double ess = _drawEss * Math.Exp(-Math.Max(0.0, logProduct)) * _unitEfficiency![i];
+                double k = PredictiveChecks.ParetoK(ratios, _unitEfficiency[i]);
+                _freeFlagged[i] = !(ess >= _degenerateEss) || !(k <= threshold);
+            }
+            foreach (bool f in _freeFlagged) if (f) _freeCount++;
         }
 
         // The relative variance Σ_s ψ_s² of the self-normalized estimate of exp(term) under unit i's weights, read in logs over the

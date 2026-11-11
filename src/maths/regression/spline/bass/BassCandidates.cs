@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.Linq;
 using Maths.Distributions;
 using Maths.Regression.Conformal;
 
@@ -15,7 +16,12 @@ namespace Maths.Regression.Spline.Bass;
 /// case weights (<see cref="CaseWeights"/>) reads each new case's weight as its training rows read theirs, N(y | f, σ²/w) at a
 /// precision and w copies of N(y | f, σ²) when the weights count rows, in the pointwise terms' arithmetic, so a training case's
 /// candidate is its column bit for bit; a working response that moves per draw stays refused. A
-/// candidate is one observation of a scalar response, so it pairs with the default units. A law whose density is an integral over
+/// candidate is one observation of a scalar response, so it pairs with the default units. Under random effects (E21's slice 5) a case
+/// in a level some training case took reads the draw's effects, f + Σₖ z̃ₖ·u_{k,g}, as the training terms read theirs, so a training
+/// case's candidate is its column bit for bit; a case in a new group (a level no training case took, placed outside every subset, or
+/// its grouping's column left out) integrates that group's effect from its prior, N(y | f + the known effects, σ²(1 + Σ s_k²·z̃_k²))
+/// under Gaussian noise, and under a noise the mixture over v of N(σβv, σ²(c·v + Σ s_k²·z̃_k²)), by quadrature in ln v on <c>quadrature</c>
+/// (<see cref="BassWidenedMixture"/>). Such a call serves the split form only, and its strata lie inside cells (<see cref="BassGroupCells"/>). A law whose density is an integral over
 /// the latent (<see cref="IBassNoiseLaw.DensityByQuadrature"/>) costs draws × candidates integrals, so it is taken on
 /// <c>quadrature</c> alone, as the pointwise path takes it. On <c>cdf</c> each draw's log CDF rides beside the density, from the same law
 /// at the draw (<see cref="IBassNoiseLaw.At"/>) or N(f, σ²), and <see cref="UnitLogCdf"/> gives the training units' (E16, slice 4).
@@ -42,13 +48,35 @@ internal static class BassCandidates
         if (!weighted && caseWeights is not null)
             throw new ArgumentException("This fit's terms read no weight, so a new case's would state nothing: give none.", nameof(caseWeights));
         (List<BassDraw> pooled, int[] chains) = BassDrawFit.Pool(draws, terms, false, nameof(draws));
-        if (law is null && BassPointwise.Moved(model, pooled))
+        RandomEffectsBlock? block = model.RandomEffects;
+        // Under random effects the training terms read the response at f + u_g; the whitening is the block's integral, not an offset.
+        if (law is null && block is null && BassPointwise.Moved(model, pooled))
             throw new NotSupportedException("The draws' working responses moved, so the training terms condition on each observation's offset and weights; "
                                             + "a candidate has neither, and the conformal layer reads every unit by one density (CB-4).");
         (CaseInputs inputs, _) = cases.Prepare(model.Transform, model.Inputs, unseenLevels);
         var surface = new BassSurface(model.Basis, terms, inputs, null);
         int n = surface.Cases;
         if (grids.Count != n) throw new ArgumentException($"One grid per case is required: {grids.Count} grids for {n} cases.", nameof(grids));
+        int[][]? groups = null;
+        bool[]? fresh = null;
+        if (block is not null)
+        {
+            BassGroupCells cells = BassGroupCells.Of(model, cases, unseenLevels);
+            int[] cellOf = cells.Candidates!;
+            if (strata is null && Math.Max(cells.TrainingCells, cellOf.Length == 0 ? 0 : cellOf.Max() + 1) > 1)
+                throw new ArgumentException("Under random effects cases are exchangeable only within a cell, one level of every grouping jointly, and these "
+                                            + "cases and the training cases span more than one: give each case its cell's stratum (BassFit.GroupCells).", nameof(strata));
+            if (strata is not null)
+            {
+                if (strata.Length != n) throw new ArgumentException("One stratum per case is required.", nameof(strata));
+                BassGroupCells.CheckStrata(strata, t => [cellOf[t]], nameof(strata));
+            }
+            groups = [.. Enumerable.Range(0, block.Count).Select(k => cases.GroupsOf(block.Layout(k), block.Groupings[k], unseenLevels))];
+            fresh = cells.NewGroup!;
+            if (law is not null && fresh.Any(x => x) && !quadrature)
+                throw new NotSupportedException("A new group under a noise is the mixture over v of N(σβv, σ²(c·v + Σ s²z̃²)), an integral over v for every "
+                                                + "draw and candidate (BassWidenedMixture); pass quadrature: true to take it.");
+        }
         double[]? w = caseWeights is null ? null : Checked(caseWeights, n);
         var offsets = new int[n + 1];
         for (int t = 0; t < n; t++)
@@ -57,10 +85,24 @@ internal static class BassCandidates
         var values = new double[pooled.Count, offsets[n]];
         double[,]? logCdfs = cdf ? new double[pooled.Count, offsets[n]] : null;
         var f = new double[n];
+        double[]? widened = fresh is not null && fresh.Any(x => x) ? new double[n] : null;
         for (int s = 0; s < pooled.Count; s++)
         {
             BassDraw draw = pooled[s];
             surface.Evaluate(draw.Structure.TermIds, draw.Coefficients, f);
+            if (groups is not null)
+            {
+                // The known groups' effects as the training fit adds them (BassDrawFit.Evaluate); a new group's prior variance s_k²·z̃_k² in σ²'s units.
+                BassGroupDraw[] effects = block!.Ordered(draw.Groups ?? throw new ArgumentException("A random-effect fit's draw carries its named groups.", nameof(draws)));
+                if (widened is not null) Array.Clear(widened);
+                for (int k = 0; k < groups.Length; k++)
+                    for (int t = 0; t < n; t++)
+                    {
+                        double z = block.Layout(k).Multiplier(inputs, t);
+                        if (groups[k][t] >= 0) f[t] += z*effects[k].Effects[groups[k][t]];
+                        else widened![t] += effects[k].Scale * effects[k].Scale * z * z;
+                    }
+            }
             double sigma2 = draw.Sigma2;
             ObservationLatents? globals = law is null ? null : draw.LatentsOn(model);
             IContinuousDistribution? noise = cdf && law is not null ? law.At(sigma2, globals) : null;
@@ -69,6 +111,32 @@ internal static class BassCandidates
             {
                 double[] grid = grids[t];
                 int at = offsets[t];
+                if (fresh is not null && fresh[t] && law is not null)
+                {
+                    // A new group under a noise: the mixture over v of N(σβv, σ²(c·v + Σ s_k²·z̃_k²)), by quadrature in ln v.
+                    var mixture = (VarianceMeanMixture)model.Observation;
+                    IMixingLaw mixing = mixture.MixingAt(globals);
+                    double unit = sigma2 * mixture.VarianceScale, drift = Math.Sqrt(sigma2) * (globals?.Skew ?? 0.0), extra = sigma2 * widened![t];
+                    for (int g = 0; g < grid.Length; g++)
+                    {
+                        double e = grid[g] - f[t];
+                        values[s, at + g] = BassWidenedMixture.LogDensity(mixing, e, unit, drift, extra);
+                        if (logCdfs is not null) logCdfs[s, at + g] = BassWidenedMixture.LogCdf(mixing, e, unit, drift, extra);
+                    }
+                    continue;
+                }
+                if (fresh is not null && fresh[t])
+                {
+                    // A new group under Gaussian noise: N(y | f + the known effects, σ²(1 + Σ s_k²·z̃_k²)).
+                    double variance = sigma2 * (1.0 + widened![t]), wide = -0.5 * Math.Log(2.0 * Math.PI * variance), sd = Math.Sqrt(variance);
+                    for (int g = 0; g < grid.Length; g++)
+                    {
+                        double e = grid[g] - f[t];
+                        values[s, at + g] = BassPointwise.NormalTerm(e, variance, wide);
+                        if (logCdfs is not null) logCdfs[s, at + g] = Normal.StandardLogCdf(e / sd);
+                    }
+                    continue;
+                }
                 for (int g = 0; g < grid.Length; g++)
                 {
                     double e = grid[g] - f[t];
@@ -81,9 +149,25 @@ internal static class BassCandidates
             }
         }
         List<LatentReport> latents = BassPointwise.Latents(model, pooled, collapsed: false);
-        return weights is null
+        bool anyNew = fresh is not null && fresh.Any(x => x);
+        if (anyNew)
+        {
+            // A new group's effect is integrated where the training units' are conditioned on (agreed with the conformal layer, E21's slice 5).
+            LatentTreatment treatment = fresh!.All(x => x) ? LatentTreatment.Integrated : LatentTreatment.Mixed;
+            for (int i = 0; i < latents.Count; i++)
+                if (latents[i].Name == BassPointwise.GroupEffects) latents[i] = latents[i] with { Treatment = treatment };
+        }
+        CandidateLogDensity density = weights is null
             ? new CandidateLogDensity(values, grids, latents, strata, chains) { LogCdf = logCdfs }
             : new CandidateLogDensity(values, grids, latents, strata) { Weights = weights, LogCdf = logCdfs };
+        if (!anyNew) return density;
+        return density with
+        {
+            NewGroup = fresh,
+            Forms = ConformalForms.Split,
+            FormsReason = "a new group's effect is integrated from its prior while the training units' terms condition on theirs, so the full step's "
+                          + "in-sample scores would read the candidate by another density, which undercovers (CB-4).",
+        };
     }
 
     /// <summary>
@@ -104,12 +188,14 @@ internal static class BassCandidates
             if (units.Members[u].Length != 1) throw new ArgumentException($"Unit {u} holds {units.Members[u].Length} observations; a CDF orders one value.", nameof(units));
         IBassNoiseLaw? law = model.Observation.Law;
         (List<BassDraw> pooled, _) = BassDrawFit.Pool(draws, terms, false, nameof(draws));
-        if (law is null && BassPointwise.Moved(model, pooled))
+        bool effects = model.RandomEffects is not null;
+        if (law is null && !effects && BassPointwise.Moved(model, pooled))
             throw new NotSupportedException("The draws' working responses moved, so the training terms condition on each observation's offset and weights; "
                                             + "a candidate has neither, and the conformal layer reads every unit by one distribution (CB-4).");
         var fit = new BassDrawFit(model, terms);
-        ReadOnlySpan<double> y = law is null ? model.Working.Values : model.Data.Response.Values;
-        double[]? weights = law is null ? model.Working.WeightArray : null;
+        // Under random effects the fit reads the response itself at f + u_g, as the training terms do; the working response is whitened.
+        ReadOnlySpan<double> y = law is null && !effects ? model.Working.Values : model.Data.Response.Values;
+        double[]? weights = law is null && !effects ? model.Working.WeightArray : null;
         bool counts = model.Working.Meaning == WeightMeaning.Replication;
         var logCdfs = new double[pooled.Count, units.Units];
         var f = new double[n];

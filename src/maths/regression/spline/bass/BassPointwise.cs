@@ -102,6 +102,9 @@ public static class BassPointwise
             : new PointwiseLogDensity(values, partition, latents) { Weights = weights };
     }
 
+    /// <summary>The group effects' name in the latent report, which the candidate density reports integrated for a new group.</summary>
+    internal const string GroupEffects = "the group effects u_g";
+
     /// <summary>
     /// How the terms treat each latent, for <paramref name="pooled"/>'s draws: the structure, τ, σ²'s rate, the coefficients and σ² global
     /// and conditioned on, or the last two integrated given the rest for the collapsed content; a noise law's latent per observation
@@ -115,11 +118,11 @@ public static class BassPointwise
         var latents = new List<LatentReport> { new("structure", LatentScope.Global, LatentTreatment.Conditioned) };
         if (model.Target.SamplesTau) latents.Add(new LatentReport("prior precision τ", LatentScope.Global, LatentTreatment.Conditioned));
         if (model.Target.Sigma2Rate is not null) latents.Add(new LatentReport("σ²'s rate", LatentScope.Global, LatentTreatment.Conditioned));
-        if (model.RandomEffects is not null)   // the whitening is the block's integral, not an offset conditioned on
-            latents.Add(new LatentReport("the group effects u_g", LatentScope.Group, LatentTreatment.Conditioned));
-        else if (model.Observation.Law is not null)
+        if (model.RandomEffects is not null)   // each draw's effects, read at its levels; the whitening is the block's integral, not an offset
+            latents.Add(new LatentReport(GroupEffects, LatentScope.Group, LatentTreatment.Conditioned));
+        if (model.Observation.Law is not null)   // under a noise, beside the group effects too (E21's slice 5)
             latents.Add(new LatentReport("the noise's latent per observation", LatentScope.Observation, LatentTreatment.Integrated));
-        else if (Moved(model, pooled))
+        else if (model.RandomEffects is null && Moved(model, pooled))
             latents.Add(new LatentReport("the working response's offset and weights", LatentScope.Observation, LatentTreatment.Conditioned));
         latents.Add(new LatentReport("coefficients a", LatentScope.Global, treatment));
         latents.Add(new LatentReport("noise variance σ²", LatentScope.Global, treatment));

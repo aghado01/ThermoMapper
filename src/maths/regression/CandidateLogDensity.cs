@@ -128,6 +128,19 @@ public sealed record CandidateLogDensity
     /// <summary>Why a form is left out of <see cref="Forms"/>; null where the seam serves both.</summary>
     public string? FormsReason { get; init; }
 
+    /// <summary>
+    /// Each case: whether its term integrates a group effect from its prior, a group no training unit holds, where the training units'
+    /// terms condition on theirs (E21's slice 5); null where every case's groups are known. A call holding one serves the split form only
+    /// (<see cref="Forms"/>).
+    /// </summary>
+    public bool[]? NewGroup
+    {
+        get;
+        init => field = value is null || value.Length == Grids.Count
+            ? value is null ? null : (bool[])value.Clone()
+            : throw new ArgumentException($"One flag per case is required: {value.Length} flags for {Grids.Count} cases.", nameof(NewGroup));
+    }
+
     /// <summary>Refuses the seam in <paramref name="form"/> when it does not serve it, quoting the engine's reason.</summary>
     internal void CheckServes(ConformalForms form, string parameter)
     {
