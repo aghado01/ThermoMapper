@@ -2,7 +2,7 @@
 
 Pins the contract of the engine's conformal layer, one layer over retained draws and pointwise densities for every model with a pointwise density ([E16](../../../issues/regression/bass/extensions-brief.md#conformal-bayes-the-consumer)). The layer owns coverage and the score owns width. These are the finite statements of that split. They are the sibling of [GuardedEstimator](../BASS/guarded-estimator-lemmas.md): there, means valid whatever the emulator does; here, prediction sets valid whatever the model does. Written from the [chip brief](conformal-chip-brief.md).
 
-**Status (2026-11-06).** Proved in `lean/Enthymemata/ConformalValidity.lean`, namespace `Conformal`, with no apologies (PROOF-CLOSED, 330 declarations counting E35's M-1 and M-2 and slices 9, 10, 12 and 13 at the end of this page; `#print axioms` shows `propext`, `Classical.choice`, `Quot.sound` only):
+**Status (2026-11-10).** Proved in `lean/Enthymemata/ConformalValidity.lean`, namespace `Conformal`, with no apologies (PROOF-CLOSED, 340 declarations counting E35's M-1 and M-2 and slices 9, 10, 12, 13 and 14 at the end of this page; `#print axioms` shows `propext`, `Classical.choice`, `Quot.sound` only):
 - CB-1: `card_rankLe_le`, `coverage_orderings`, `coverage_orderings_eq`, `coverage_strict_le`, `coverage_orderings_le`, `rank_uniform`, `coverage_tieBreak`, `coverage_given`, `coverage_law`, `coverage_stratum`;
 - CB-2: `split_coverage`, `exchangeable_given_training`, `cqr_ordConnected`;
 - CB-4: `sum_jointU`, `post_addOneIn`, `integratedScore_equivariant`, `latentScore_equivariant`, `latentScore_eq`, `sum_jointU_addOneIn`, `integratedScore_le_latentScore`, `accepts_latent_of_mixed`, `mixed_counterexample`;
@@ -753,3 +753,36 @@ Bhattacharyya, Zhang and Barber, arXiv 2605.29200v5, read in TeX: §2–§3, The
 - Coverage over every ordering on 313 (data, k) cases, with an order-reading, non-symmetric pair fit. The least slack was 0: the bound is attained.
 - The fit that marks the test unit, which refuses it on every data set.
 - The count bound on 3,000 random matrices, with arbitrary references.
+
+## Slice 14 — shift
+
+**Sources, read in TeX:**
+- Tibshirani, Barber, Candès and Ramdas 2019 (arXiv 1904.06019v3): §3, Appendix A, Corollary 1, Lemma 3, Theorem 2.
+- Barber, Candès, Ramdas and Tibshirani 2023 (arXiv 2202.13415v5): §3–§4, Theorem 2 and its proof, Lemma 1.
+- Podkopaev and Ramdas 2021 (arXiv 2103.03323v4): §2.2, Theorem 2, Corollary 1, label-conditional conformal.
+
+Proved on 2026-11-10 in `ConformalValidity.lean`, section `Shift`, PROOF-CLOSED, with the standard three axioms only. The checks (section "Slice 14") ran first.
+
+**The weighted rule, in conformity form.** A unit u is refused when the weight of the units scoring at most its score, itself included, is at most α (`weightLe`). This is their quantile with the candidate's mass at +∞, and ties count for the candidate.
+
+**The weighted quantile lemma** (`sum_weight_refused_le`). The refused units carry weight at most α, for any nonnegative weights: they all score at most the highest refused unit, whose weight-below is at most α.
+- *At equal weights it is CB-1* (`weighted_eq_cb1`): accepted iff ⌊αm⌋ < rankLe. This is the commission's check.
+
+**Covariate and label shift** (`coverage_weighted`), per data set.
+- *The setting.* The test unit comes from the shifted law, with likelihood ratio w against the training law: w(x) under covariate shift (their Corollary 1), w(y) under label shift (Podkopaev and Ramdas, Theorem 2). Over the orderings of a data set, the test unit lands on unit u with weight w(z_u).
+- *The claim.* The rule with the units' normalized weights refuses it with weight at most α of the total.
+- *Label-conditional conformal* is CB-1 within each label's stratum (`coverage_stratum`). It holds under any shift of the label proportions and needs no weights.
+
+**The loss with an estimated ratio** (`sum_weight_refused_estimated_le`). Our statement, since the papers give none in finite samples; Podkopaev and Ramdas's Corollary 1 is asymptotic and needs no jump at 1 − α.
+- *The claim.* Per data set, the rule run with estimated weights p̂ refuses true weight at most α + Σ_u (p_u − p̂_u)⁺, the total variation between the normalized true and estimated weights of the data set's units. So the coverage loss is at most the expected total variation over data sets.
+
+**Beyond exchangeability** (`refused_le_swap_tv`, their Theorem 2, on a finite law). The law of the data is any law P, and the score is symmetric.
+- *The weights* are fixed by position, nonnegative and summing to one, with the test position's weight the largest, which is their wᵢ ≤ 1.
+- *The claim.* P(refused) ≤ α + Σ_K q_K · TV(P, P ∘ swap(K, test)).
+- *The proof is theirs.* A refused test unit makes unit K strange once K and the test are swapped (`weightLe_swap_le`, using q_K ≤ q_test). The swap costs the total-variation distance (TV), and the weighted lemma bounds the strange units.
+- *The form proved* uses TV between the swapped data laws. Their sharper form uses TV between the swapped score vectors, which needs pushforward laws, and is not formalized.
+
+**Checks.**
+- The weighted lemma on 4,000 random (scores, weights) with ties, and CB-1 at equal weights.
+- Shift on 3,000 data sets, including the loss with estimated weights.
+- The nonexchangeable bound on 300 random finite laws.

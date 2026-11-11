@@ -2508,4 +2508,91 @@ print(f"Slice 13: the index identity on {n_idx} random (m, alpha, count); the to
 
 
 print()
+print("=== Slice 14: shift ===")
+
+
+# The weighted rule (Tibshirani et al. 2019; Podkopaev and Ramdas 2021; Barber et al. 2023), in
+# conformity form: u is refused when the weight of the units scoring at most its score, itself
+# included, is at most alpha. With unit weights q this is CB-1 at k = floor(alpha m).
+def wsum(s, q, u, C):
+    return sum(q[j] for j in C if s[j] <= s[u])
+
+
+def w_refused(alpha, s, q, u, C):
+    return wsum(s, q, u, C) <= alpha
+
+
+rr = random.Random(1401)
+n_lem = 0
+for trial in range(4000):
+    m = rr.randint(1, 6)
+    C = list(range(m))
+    s = [rr.randint(0, 3) for _ in C]
+    q = [Q(rr.randint(0, 5)) for _ in C]
+    alpha = Q(rr.randint(0, 12), 4)
+    assert sum(q[u] for u in C if w_refused(alpha, s, q, u, C)) <= alpha  # any weights >= 0
+    if all(v == 1 for v in q):
+        a01 = alpha / m if m else alpha
+        k = math.floor(a01 * m)
+        assert all(w_refused(a01 * m, s, q, u, C) == (not accepts(k, s, u, C)) for u in C)
+    n_lem += 1
+
+# Covariate / label shift: the test unit's value from the shifted law, weight w(z) = dP~/dP; over a
+# data set the test lands on unit u with chance w(z_u)/sum w. The weighted rule refuses with chance
+# at most alpha; with estimated weights w_hat, at most alpha + TV(p, p_hat) of the normalized weights.
+n_shift = 0
+for trial in range(3000):
+    m = rr.randint(2, 6)
+    C = list(range(m))
+    s = [rr.randint(0, 4) for _ in C]
+    w = [Q(rr.randint(1, 6)) for _ in C]
+    wh = [Q(rr.randint(1, 6)) for _ in C]
+    alpha = Q(rr.randint(1, 9), 10)
+    p = [x / sum(w) for x in w]
+    ph = [x / sum(wh) for x in wh]
+    miss = sum(p[u] for u in C if w_refused(alpha, s, p, u, C))
+    assert miss <= alpha
+    miss_hat = sum(p[u] for u in C if w_refused(alpha, s, ph, u, C))
+    tv = sum(max(Q(0), p[u] - ph[u]) for u in C)
+    assert miss_hat <= alpha + tv
+    n_shift += 1
+
+# Beyond exchangeability (Barber, Candes, Ramdas and Tibshirani, Theorem 2), on a finite law: fixed
+# position weights q (the test's the largest), a symmetric score; then
+# P(test refused) <= alpha + sum_K q_K TV(P, P o swap(K, test)).
+n_bcrt, worst = 0, None
+Zv = (0, 1, 2)
+for trial in range(300):
+    m = rr.choice((2, 3))
+    C, t = list(range(m)), m - 1
+    raw = [Q(rr.randint(0, 3)) for _ in range(m)]
+    q = [x for x in raw[:-1]] + [max(raw)]
+    q = [x / sum(q) for x in q] if sum(q) > 0 else [Q(1, m)] * m
+    alpha = Q(rr.randint(1, 4), 5)
+    data = list(itertools.product(Zv, repeat=m))
+    P = {z: Q(rr.randint(0, 4)) for z in data}
+    tot = sum(P.values())
+    if tot == 0:
+        continue
+    P = {z: v / tot for z, v in P.items()}
+
+    def score(z):
+        return tuple(-abs(z[i] - Q(sum(z), len(z))) for i in range(len(z)))  # symmetric
+
+    def swap(z, K):
+        z = list(z)
+        z[K], z[t] = z[t], z[K]
+        return tuple(z)
+
+    refuse = sum(P[z] for z in data if w_refused(alpha, score(z), q, t, C))
+    gap = sum(q[K] * sum(max(Q(0), P[z] - P[swap(z, K)]) for z in data) for K in C)
+    assert refuse <= alpha + gap
+    n_bcrt += 1
+print(f"Slice 14: the weighted rule refuses at most alpha of the weight on {n_lem} random (scores, weights) "
+      f"with ties, and is CB-1 at equal weights; covariate and label shift on {n_shift} data sets, with "
+      f"estimated weights costing at most TV of the normalized weights; the nonexchangeable bound "
+      f"alpha + sum_K q_K TV(P, P o swap) on {n_bcrt} random finite laws")
+
+
+print()
 print("All assertions hold.")

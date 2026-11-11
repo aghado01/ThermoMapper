@@ -5384,4 +5384,237 @@ theorem coverage_tournament_stable {Z : Type*} {C : Finset ι} {t : ι} (ht : t 
 
 end Tournament
 
+/-! ### Slice 14: shift -/
+
+section Shift
+
+variable {ι : Type*} [Fintype ι] [DecidableEq ι]
+
+/-- Summing over the orderings what the test unit lands on: each unit of `C` is landed on by
+`|orderings|/|C|` of them. -/
+theorem card_mul_sum_permsOn {C : Finset ι} {t : ι} (ht : t ∈ C) (f : ι → ℝ) :
+    (C.card : ℝ) * ∑ σ ∈ permsOn C, f (σ t) = (permsOn C).card * ∑ u ∈ C, f u := by
+  have hfib : ∀ σ ∈ permsOn C, f (σ t) = ∑ u ∈ C, if σ t = u then f u else 0 := fun σ hσ => by
+    rw [sum_ite_eq, if_pos ((mem_iff_of_mem_permsOn hσ t).2 ht)]
+  rw [sum_congr rfl hfib, sum_comm, mul_sum, mul_sum]
+  refine sum_congr rfl fun u hu => ?_
+  rw [← sum_filter, sum_const, nsmul_eq_mul]
+  have h := card_mul_card_filter_permsOn ht (fun v => v = u)
+  simp only [filter_eq', if_pos hu, card_singleton, mul_one] at h
+  have h' : (C.card : ℝ) * (((permsOn C).filter fun σ : Equiv.Perm ι => σ t = u).card : ℝ) =
+      (permsOn C).card := by exact_mod_cast h
+  calc (C.card : ℝ) * ((((permsOn C).filter fun σ : Equiv.Perm ι => σ t = u).card : ℝ) * f u)
+      = ((C.card : ℝ) * (((permsOn C).filter fun σ : Equiv.Perm ι => σ t = u).card : ℝ)) * f u :=
+        by ring
+    _ = (permsOn C).card * f u := by rw [h']
+
+omit [Fintype ι] in
+/-- The weight of the units of `C` scoring at most `u`'s score, `u` included. The weighted rule
+(Tibshirani, Barber, Candès and Ramdas 2019; Podkopaev and Ramdas 2021; Barber, Candès, Ramdas and
+Tibshirani 2023) refuses `u` when this is at most `α`: their quantile with the candidate's mass at
+`+∞`, in conformity form, ties counted for the candidate. -/
+noncomputable def weightLe (C : Finset ι) (s q : ι → ℝ) (u : ι) : ℝ :=
+  ∑ j ∈ C.filter (fun j => s j ≤ s u), q j
+
+omit [Fintype ι] [DecidableEq ι] in
+/-- **The weighted quantile lemma** (their Lemma 3; Barber et al.'s strange points): the units the
+weighted rule refuses carry weight at most `α`, for any nonnegative weights. The refused units are
+those scoring at most the highest refused one, whose weight-below is at most `α`. -/
+theorem sum_weight_refused_le (C : Finset ι) (s q : ι → ℝ) (hq : ∀ j ∈ C, 0 ≤ q j) {α : ℝ}
+    (hα : 0 ≤ α) : ∑ u ∈ C.filter (fun u => weightLe C s q u ≤ α), q u ≤ α := by
+  rcases (C.filter fun u => weightLe C s q u ≤ α).eq_empty_or_nonempty with h | h
+  · rw [h, sum_empty]
+    exact hα
+  · obtain ⟨u, hu, hmax⟩ := (C.filter fun u => weightLe C s q u ≤ α).exists_max_image s h
+    have hsub : (C.filter fun u => weightLe C s q u ≤ α) ⊆ C.filter fun j => s j ≤ s u :=
+      fun v hv => mem_filter.2 ⟨(mem_filter.1 hv).1, hmax v hv⟩
+    calc ∑ v ∈ C.filter (fun u => weightLe C s q u ≤ α), q v
+        ≤ ∑ j ∈ C.filter (fun j => s j ≤ s u), q j :=
+          sum_le_sum_of_subset_of_nonneg hsub fun j hj _ => hq j (mem_filter.1 hj).1
+      _ = weightLe C s q u := rfl
+      _ ≤ α := (mem_filter.1 hu).2
+
+omit [Fintype ι] [DecidableEq ι] in
+theorem weightLe_const (C : Finset ι) (s : ι → ℝ) (c : ℝ) (u : ι) :
+    weightLe C s (fun _ => c) u = rankLe C s u * c := by
+  simp only [weightLe, sum_const, nsmul_eq_mul, rankLe]
+
+omit [Fintype ι] [DecidableEq ι] in
+/-- **At equal weights the weighted rule is CB-1**, at `k = ⌊α|C|⌋`. -/
+theorem weighted_eq_cb1 (C : Finset ι) (s : ι → ℝ) {α : ℝ} (hα : 0 ≤ α) (hC : 0 < C.card)
+    (u : ι) : α < weightLe C s (fun _ => (1 : ℝ) / C.card) u ↔ Accepts ⌊α * C.card⌋₊ C s u := by
+  have hc : (0 : ℝ) < C.card := by exact_mod_cast hC
+  rw [weightLe_const, Accepts, Nat.floor_lt (mul_nonneg hα (Nat.cast_nonneg _)), mul_one_div,
+    lt_div_iff₀ hc]
+
+theorem weightLe_comp {C : Finset ι} {σ : Equiv.Perm ι} (hσ : σ ∈ permsOn C) (s q : ι → ℝ)
+    (u : ι) : weightLe C (s ∘ σ) (q ∘ σ) u = weightLe C s q (σ u) := by
+  unfold weightLe
+  exact sum_equiv σ (fun j => by simp only [mem_filter, Function.comp_apply,
+    mem_iff_of_mem_permsOn hσ]) fun j _ => rfl
+
+/-- **Weighted conformal under covariate or label shift**, per data set. The test unit's value
+comes from the shifted law, with likelihood ratio `w` against the training law: `w(x)` for
+covariate shift (Tibshirani et al., Corollary 1), `w(y)` for label shift (Podkopaev and Ramdas,
+Theorem 2). Over the orderings of a data set the test unit lands on unit `u` with weight
+`w(z_u)`. The weighted rule, with the units' normalized weights, refuses it with weight at most
+`α` of the total. -/
+theorem coverage_weighted {Z : Type*} {C : Finset ι} {t : ι} (ht : t ∈ C)
+    {S : (ι → Z) → ι → ℝ} (hS : Equivariant C S) (z : ι → Z) (w : Z → ℝ) (hw : ∀ v, 0 ≤ w v)
+    {α : ℝ} (hα : 0 ≤ α) :
+    ∑ σ ∈ permsOn C, (if α < weightLe C (S (z ∘ σ))
+        (fun j => w (z (σ j)) / ∑ i ∈ C, w (z i)) t then 0 else w (z (σ t))) ≤
+      α * ∑ σ ∈ permsOn C, w (z (σ t)) := by
+  have hc : (0 : ℝ) < C.card := by exact_mod_cast card_pos.2 ⟨t, ht⟩
+  have hpt : ∀ σ ∈ permsOn C, (if α < weightLe C (S (z ∘ σ))
+      (fun j => w (z (σ j)) / ∑ i ∈ C, w (z i)) t then 0 else w (z (σ t))) =
+      (fun u => if α < weightLe C (S z) (fun j => w (z j) / ∑ i ∈ C, w (z i)) u then 0
+        else w (z u)) (σ t) := by
+    intro σ hσ
+    have hfun : S (z ∘ σ) = S z ∘ σ := funext fun i => hS σ hσ z i
+    rw [hfun, show (fun j => w (z (σ j)) / ∑ i ∈ C, w (z i)) =
+      (fun j => w (z j) / ∑ i ∈ C, w (z i)) ∘ σ from rfl, weightLe_comp hσ]
+  rw [sum_congr rfl hpt]
+  have hkey : ∑ u ∈ C, (if α < weightLe C (S z) (fun j => w (z j) / ∑ i ∈ C, w (z i)) u then 0
+      else w (z u)) ≤ α * ∑ i ∈ C, w (z i) := by
+    have e : ∀ u ∈ C, (if α < weightLe C (S z) (fun j => w (z j) / ∑ i ∈ C, w (z i)) u then 0
+        else w (z u)) = if weightLe C (S z) (fun j => w (z j) / ∑ i ∈ C, w (z i)) u ≤ α
+          then w (z u) else 0 := fun u _ => by
+      split_ifs with h1 h2 h2 <;> first | rfl | (exfalso; linarith)
+    rw [sum_congr rfl e, ← sum_filter]
+    rcases (sum_nonneg fun i (_ : i ∈ C) => hw (z i)).eq_or_lt with h0 | hpos
+    · have hz : ∀ i ∈ C, w (z i) = 0 :=
+        (sum_eq_zero_iff_of_nonneg fun i _ => hw (z i)).1 h0.symm
+      rw [sum_eq_zero fun u hu => hz u (mem_filter.1 hu).1]
+      exact le_of_eq (by rw [← h0, mul_zero])
+    · have hne := hpos.ne'
+      have hl := sum_weight_refused_le C (S z) (fun j => w (z j) / ∑ i ∈ C, w (z i))
+        (fun j _ => div_nonneg (hw _) hpos.le) hα
+      have e2 : ∑ u ∈ C.filter (fun u => weightLe C (S z)
+          (fun j => w (z j) / ∑ i ∈ C, w (z i)) u ≤ α), w (z u) =
+          (∑ i ∈ C, w (z i)) * ∑ u ∈ C.filter (fun u => weightLe C (S z)
+            (fun j => w (z j) / ∑ i ∈ C, w (z i)) u ≤ α), w (z u) / ∑ i ∈ C, w (z i) := by
+        rw [mul_sum]
+        exact sum_congr rfl fun u _ => by field_simp
+      rw [e2, mul_comm α]
+      exact mul_le_mul_of_nonneg_left hl hpos.le
+  refine (mul_le_mul_iff_of_pos_left hc).1 ?_
+  rw [card_mul_sum_permsOn ht (fun u => if α < weightLe C (S z)
+      (fun j => w (z j) / ∑ i ∈ C, w (z i)) u then 0 else w (z u)), mul_left_comm,
+    card_mul_sum_permsOn ht (fun u => w (z u))]
+  have hG : (0 : ℝ) ≤ (permsOn C).card := Nat.cast_nonneg _
+  calc ((permsOn C).card : ℝ) * ∑ u ∈ C, (if α < weightLe C (S z)
+        (fun j => w (z j) / ∑ i ∈ C, w (z i)) u then 0 else w (z u))
+      ≤ (permsOn C).card * (α * ∑ i ∈ C, w (z i)) := mul_le_mul_of_nonneg_left hkey hG
+    _ = α * ((permsOn C).card * ∑ u ∈ C, w (z u)) := by ring
+
+omit [Fintype ι] [DecidableEq ι] in
+/-- **The loss with estimated weights**, per data set: the units the rule refuses under estimated
+weights `ph` carry true weight `p` at most `α` plus `Σ (p − ph)⁺`, the total variation between the
+normalized true and estimated weights. Our statement: the papers give no finite bound with
+estimated weights (Podkopaev and Ramdas's Corollary 1 is asymptotic). -/
+theorem sum_weight_refused_estimated_le (C : Finset ι) (s p ph : ι → ℝ)
+    (hph : ∀ j ∈ C, 0 ≤ ph j) {α : ℝ} (hα : 0 ≤ α) :
+    ∑ u ∈ C.filter (fun u => weightLe C s ph u ≤ α), p u ≤
+      α + ∑ u ∈ C, max 0 (p u - ph u) := by
+  have h1 := sum_weight_refused_le C s ph hph hα
+  have h2 : ∑ u ∈ C.filter (fun u => weightLe C s ph u ≤ α), p u ≤
+      ∑ u ∈ C.filter (fun u => weightLe C s ph u ≤ α), ph u +
+        ∑ u ∈ C.filter (fun u => weightLe C s ph u ≤ α), max 0 (p u - ph u) := by
+    rw [← sum_add_distrib]
+    exact sum_le_sum fun u _ => by linarith [le_max_right 0 (p u - ph u)]
+  have h3 : ∑ u ∈ C.filter (fun u => weightLe C s ph u ≤ α), max 0 (p u - ph u) ≤
+      ∑ u ∈ C, max 0 (p u - ph u) :=
+    sum_le_sum_of_subset_of_nonneg (filter_subset _ _) fun _ _ _ => le_max_left _ _
+  linarith
+
+/-- Swapping a unit with the test position moves weight between them only. -/
+theorem weightLe_swap_le (s q : ι → ℝ) (K t : ι) (hq : q K ≤ q t) :
+    weightLe univ (s ∘ Equiv.swap K t) q K ≤ weightLe univ s q t := by
+  have hcomp : weightLe univ (s ∘ Equiv.swap K t) q K =
+      weightLe univ s (q ∘ Equiv.swap K t) t := by
+    have h := weightLe_comp (mem_permsOn_univ (Equiv.swap K t)) s (q ∘ Equiv.swap K t) K
+    simp only [Equiv.swap_apply_left] at h
+    rw [← h]
+    congr 1
+    funext j
+    simp [Function.comp_apply, Equiv.swap_apply_self]
+  rw [hcomp]
+  by_cases hKt : K = t
+  · subst hKt
+    simp [Equiv.swap_self]
+  unfold weightLe
+  rw [sum_filter, sum_filter, ← sub_nonneg, ← sum_sub_distrib,
+    Fintype.sum_eq_add K t hKt fun j hj => by
+      simp [Equiv.swap_apply_of_ne_of_ne hj.1 hj.2]]
+  simp only [Function.comp_apply, Equiv.swap_apply_left, Equiv.swap_apply_right, le_refl,
+    ↓reduceIte]
+  split_ifs <;> linarith
+
+/-- **Beyond exchangeability** (Barber, Candès, Ramdas and Tibshirani 2023, Theorem 2), on a
+finite law. `P` is any law of the data, the score symmetric in the units (`Equivariant univ`), and
+the weights fixed by position, nonnegative and summing to one, the test position's the largest.
+Then the weighted rule refuses the test unit with chance at most `α` plus
+`Σ_K q_K · TV(P, P ∘ swap(K, t))`. With `P` exchangeable the swaps cost nothing: their
+coverage gap is the weighted swap distances. -/
+theorem refused_le_swap_tv {Z : Type*} [Fintype Z] {S : (ι → Z) → ι → ℝ}
+    (hS : Equivariant univ S) (P : (ι → Z) → ℝ) (hP0 : ∀ z, 0 ≤ P z) (q : ι → ℝ)
+    (hq0 : ∀ i, 0 ≤ q i) (hq1 : ∑ i, q i = 1) (t : ι) (hqt : ∀ i, q i ≤ q t) {α : ℝ}
+    (hα : 0 ≤ α) :
+    ∑ z, P z * (if weightLe univ (S z) q t ≤ α then 1 else 0) ≤
+      α * ∑ z, P z + ∑ K, q K * ∑ z, max 0 (P (z ∘ Equiv.swap K t) - P z) := by
+  have hstep : ∀ z K, weightLe univ (S z) q t ≤ α →
+      weightLe univ (S (z ∘ Equiv.swap K t)) q K ≤ α := by
+    intro z K h
+    have hfun : S (z ∘ Equiv.swap K t) = S z ∘ Equiv.swap K t :=
+      funext fun i => hS _ (mem_permsOn_univ _) z i
+    rw [hfun]
+    exact (weightLe_swap_le (S z) q K t (hqt K)).trans h
+  have hinv : ∀ K (z : ι → Z), (z ∘ Equiv.swap K t) ∘ Equiv.swap K t = z := fun K z => by
+    funext j
+    simp [Function.comp_apply, Equiv.swap_apply_self]
+  have hK : ∀ K, ∑ z, P z * (if weightLe univ (S (z ∘ Equiv.swap K t)) q K ≤ α then 1 else 0) ≤
+      ∑ z, P z * (if weightLe univ (S z) q K ≤ α then 1 else 0) +
+        ∑ z, max 0 (P (z ∘ Equiv.swap K t) - P z) := by
+    intro K
+    have hre := sum_comp_perm (fun z => P (z ∘ Equiv.swap K t) *
+      (if weightLe univ (S z) q K ≤ α then (1 : ℝ) else 0)) (Equiv.swap K t)
+    simp only [hinv] at hre
+    rw [hre, ← sum_add_distrib]
+    refine sum_le_sum fun z _ => ?_
+    split_ifs
+    · linarith [le_max_right 0 (P (z ∘ Equiv.swap K t) - P z)]
+    · linarith [le_max_left 0 (P (z ∘ Equiv.swap K t) - P z)]
+  have hlem : ∀ z, ∑ K, q K * (if weightLe univ (S z) q K ≤ α then 1 else 0) ≤ α := by
+    intro z
+    have := sum_weight_refused_le univ (S z) q (fun j _ => hq0 j) hα
+    rw [sum_filter] at this
+    simpa only [mul_ite, mul_one, mul_zero] using this
+  calc ∑ z, P z * (if weightLe univ (S z) q t ≤ α then 1 else 0)
+      = ∑ K, q K * ∑ z, P z * (if weightLe univ (S z) q t ≤ α then 1 else 0) := by
+        rw [← sum_mul, hq1, one_mul]
+    _ ≤ ∑ K, q K * ∑ z, P z *
+          (if weightLe univ (S (z ∘ Equiv.swap K t)) q K ≤ α then 1 else 0) := by
+        refine sum_le_sum fun K _ => mul_le_mul_of_nonneg_left
+          (sum_le_sum fun z _ => mul_le_mul_of_nonneg_left ?_ (hP0 z)) (hq0 K)
+        split_ifs with h1 h2 <;> first | exact absurd (hstep z K h1) h2 | norm_num
+    _ ≤ ∑ K, q K * (∑ z, P z * (if weightLe univ (S z) q K ≤ α then 1 else 0) +
+          ∑ z, max 0 (P (z ∘ Equiv.swap K t) - P z)) :=
+        sum_le_sum fun K _ => mul_le_mul_of_nonneg_left (hK K) (hq0 K)
+    _ = ∑ z, P z * ∑ K, q K * (if weightLe univ (S z) q K ≤ α then 1 else 0) +
+          ∑ K, q K * ∑ z, max 0 (P (z ∘ Equiv.swap K t) - P z) := by
+        simp only [mul_add, sum_add_distrib]
+        congr 1
+        simp only [mul_sum]
+        rw [sum_comm]
+        exact sum_congr rfl fun z _ => sum_congr rfl fun K _ => by ring
+    _ ≤ ∑ z, P z * α + ∑ K, q K * ∑ z, max 0 (P (z ∘ Equiv.swap K t) - P z) := by
+        exact add_le_add (sum_le_sum fun z _ => mul_le_mul_of_nonneg_left (hlem z) (hP0 z)) le_rfl
+    _ = α * ∑ z, P z + ∑ K, q K * ∑ z, max 0 (P (z ∘ Equiv.swap K t) - P z) := by
+        rw [mul_sum]
+        congr 1
+        exact sum_congr rfl fun z _ => by ring
+
+end Shift
+
 end Conformal

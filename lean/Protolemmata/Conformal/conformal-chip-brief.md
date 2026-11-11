@@ -208,6 +208,15 @@ The user asked for this on 2026-11-08 ("Yes, start it"), relayed by the BASS ext
 
 Newest first.
 
+### 2026-11-10 — slice 14: shift, proved
+
+The statements are in the ledger, under "Slice 14". The new declarations are PROOF-CLOSED, with the standard three axioms only. The checks ran first.
+
+- *The weighted quantile lemma.* The refused units carry weight at most α, for any nonnegative weights. At equal weights the rule is CB-1, which was the commission's check.
+- *Covariate and label shift, per data set* (`coverage_weighted`): with the likelihood ratio at the units, the refused weight is at most α of the total.
+- *The loss with an estimated ratio* (our statement; the papers' result is asymptotic): at most α + TV(p, p̂) of the data set's normalized weights.
+- *Beyond exchangeability* (their Theorem 2, on a finite law): P(refused) ≤ α + Σ_K q_K · TV(P, P ∘ swap). This form uses the TV of the data laws; their score-vector form is not formalized.
+
 ### 2026-11-10 — slice 13: the tournament correction, proved
 
 The statements are in the ledger, under "Slice 13". There are 15 new declarations, 330 in the file, PROOF-CLOSED, with the standard three axioms only. The checks ran first.
