@@ -37,6 +37,7 @@ These are the main session's, taken in commissioning. Each goes on the page with
    - *At K = 1* it is IG(c, c·s²), the scalar default exactly. That reduction is a gate.
    - *Units:* because S_Y → LᵀS_YL when Y → YL, the structure posterior is invariant to any invertible rescaling or mixing of the outputs. This settles the entry's output-units choice.
    - *Its correlations:* under a diagonal S_Y each prior correlation has density ∝ (1 − ρ²)^(c − 1), Huang and Wand's Property 3 at their ν = 2c, so at c = 10⁻³ nearly all its mass sits at ±1. The data overrule it at moderate n/K. It stays the default provisionally, for the reduction and the invariance; slice 3 measures it at small n/K.
+   - *Decided by the user, 2026-11-10,* on slice 3's numbers: ScaledToResponse stays the default, and Huang and Wand's prior at ν = 2 stays the opt-in. The resolution log names it when N/K < 10, under ScaledToResponse and Standardized, whose correlations sit near ±1. Slice 3 measured, at N/K = 3 and 5, correlation coverage of 87 to 93.5% under the default against 93 to 96% under Huang and Wand, with joint predictive coverage within 1.25 pp. Kept: the exact K = 1 reduction to scalar BASS, and the invariance to mixing the outputs that slice 5's joint PCA option reads. The alternatives put to the user were the switch to Huang and Wand by default, and keeping the default with no hint.
    - *Options:* a declared Ψ₀ in the outputs' units; standardized outputs (scale-invariant only); and Huang and Wand's prior at ν = 2.
      - *Huang and Wand's:* Σ | a ∼ IW(ν + K − 1, 2ν diag(1/a)) with a_k ∼ IG(½, 1/A_k²), A_k each output's root mean square about its level. It is the engine's hierarchical σ² prior carried to K rates, each moved by a slice step as τ is, and the collapse holds given them. It gives uniform correlations, and it is equivariant under rescaling and permuting the outputs, not under mixing them.
      - *When:* slice 2, since its rates are state coordinates that every sampler and resume carry, as the scalar rate is (added 2026-11-08 by the main session; the slice the chip's choice).
@@ -116,6 +117,49 @@ Commissioned by the user on 2026-11-10: this chip takes the last two slices, whi
 Under "Reports" below, newest first, per slice: what landed by commit; the gates' numbers; decisions taken beyond this brief; what was left unbuilt and why; follow-ups with the decision each would change.
 
 ## Reports
+
+### Slice 5: the PCA mode's joint option (chip, 2026-11-10)
+
+**Landed:** `4135eb9`: `BassComponents.FitJoint` and `AssembleJoint`, the joint fit of a decomposition's r scores as r outputs of one structure (decision 8), with the truncation residuals as before; `BassBasisFit.Joint` and `JointData`; each component a view of the joint fit; `BassJointDraws.Shared`; and the three readers of the components' noise (prediction, pointwise density, calibration emulator) reading Σ whole. Gates in `MultiOutputBasisTests`. No shared runtime file was touched (`BassConfig`, `BassModel`, `BassResolved` and `BassSweep` are unchanged).
+
+**Gates:**
+
+| Gate | Result |
+| --- | --- |
+| Rank 1 against a component fitted apart, one seed (MCMC) | structures, τ, σ² = Σ₀₀ and the coefficients draw for draw, to 2.8·10⁻¹³; prediction: latent 7·10⁻¹⁵, predictive 3·10⁻¹⁴, Rao–Blackwellized mean surface 0, covariance 6·10⁻¹⁷; pointwise density 5.8·10⁻¹³ (coefficients) and 1.1·10⁻¹³ (y space); the emulator's noise to 10⁻¹² |
+| Equivariance on the scores: K and W against KL⁻ᵀ and LᵀW for a full 3 × 3 L (ln\|det L\| = 1.015), continuous inputs, n = 60 | 240 draws: structures equal and τ to the bit; the target's shift −N ln\|det L\| at every visited state to 4.5·10⁻¹⁵; the Rao–Blackwellized mean surface to 1.2·10⁻¹⁵; each draw's matrix-t conditional, location ·L and output scale Lᵀ·L, to 6·10⁻¹⁶, its row scale and ν equal |
+| Independent scores against components fitted apart: three surfaces outside the model, noise sd 0.10, 0.15, 0.12, n = 200 | the two fits' posterior mean surfaces apart by RMSE 0.017, 0.021, 0.049; their errors to the truth 0.030/0.032, 0.029/0.022, 0.032/0.041 (joint/apart); E[Σ_kk]/E[σ²_k] 1.001, 1.030, 1.036; Σ's correlations −0.05 ± 0.07, 0.03 ± 0.07, 0.07 ± 0.08 |
+| Correlated scores (ρ = 0.6 and −0.28), n = 120 | each Σ entry within 1.1 posterior sd of the truth (the gate allows 4; the farthest Σ₂₂, 0.0195 ± 0.0027 against 0.0225) |
+| The noise readers under correlated scores | the prediction's `NoiseCovariances` each draw's Σ, and `Covariance` the moments built from the draws to 10⁻¹²; the sampled noise's second moment against E[Σ] over 300 draws × 40 cases, every entry within 1.3 standard errors; the pointwise density against dense Gaussians, 0 in coefficient space and 4.8·10⁻¹⁴ in y space; the emulator's noise against (y_s ∘ K)Σ(y_s ∘ K)ᵀ to 10⁻¹⁴; a unit splitting a case's components refused |
+| Weighted draws (SMC, rank 2) | one resample of the joint population, the same draw for both components (400 joint draws from 226 particles); the views carry the joint fit's weights; the prediction reads each joint draw's Σ |
+| Views | the scalar config without `OutputCovariance` and with the births that ran, a fingerprint on the component's own data, σ² = Σ_kk, no Σ or several outputs' coefficients, no evidence or checkpoint; traces, metadata and Sobol run on them |
+| Refusals | random intercepts (with slice 4's reason); a joint fit run on other data than the decomposition's scores |
+| The cost row (qualification, wall clock, indicative): one thread, the components in sequence, n = 300, M_max = 15, 900 sweeps, medians of three after a warm pass | joint/apart 0.99, 0.84, 0.63 at r = 2, 3, 5 |
+
+The commit selection with the pinned tier on a snapshot of `4135eb9`'s parent and these files: 2,275 of 2,275 (13 min 10 s). The whole regression assembly (Slice scope, slow tier included) on a snapshot of `4135eb9`: 3,015 of 3,015 (27 min 20 s).
+
+**Decisions beyond the brief, with their alternatives:**
+- *An entry beside the components' fit,* `BassComponents.FitJoint` and `AssembleJoint`, not a config field. A `BassConfig` field would sit in a shared file and set a model's config by what its caller does with a decomposition; a flag on `Fit` would also need refusing its per-component configs.
+- *The components as views of the joint fit.* Each is a `BassFit` over the joint draws, column k of the coefficients with Σ_kk as σ², so every reader of the components' surfaces (Sobol, effects, active and co-active subspaces, adequacy, the emulator's surfaces, traces, metadata, summaries) reads a joint fit unchanged and exactly. The matrix-normal coefficients' conditional mean does not depend on Σ, so a view's scalar model gives column k of the joint conditional mean. The readers of the noise read Σ whole. Alternatives: a joint path in each of the eleven readers, or a separate joint basis type that duplicates them.
+- *What a view holds:* the joint config without Σ's prior, with the births that ran (an empty mixture where a scalar default would add one), a fingerprint on its component's data, the joint fit's diagnostics and weights; the evidence, the checkpoint and the residual check stay on `Joint`.
+- *The pairing:* every joint draw one draw of the joint fit for all components (`BassJointDraws.Shared`), weighted populations resampled once; at rank 1 it is the pairing of a component fitted apart.
+- *The seed:* the joint fit at the seed tree's child 0, a component fitted apart's first, so rank 1 under MCMC is the separate fit draw for draw.
+- *The density's units:* under the joint option a coefficient-space unit holds whole cases, since a case's components share Σ, as y space already requires; a partition splitting them is refused.
+- *The emulator's noise:* `ComponentNoise` with each draw's own factor (y_s ∘ K)L and unit variances, not a new noise kind; the calibration covariance's factor cache keys on reference, so it reassembles once per draw, O(m(r + n)).
+- *The prediction's sampled noise* is Lz on the same r normals in the same order (at r = 1 it is √Σ₀₀·z bit for bit); `NoiseCovariances` sits beside `NoiseVariances`, whose readers keep its diagonal.
+- *The equivariance gate on continuous inputs, with the target's shift read at every state.* On gridded inputs, hinges at different knots can span one column space: the target ties exactly, and rounding breaks the tie differently in each basis (`ReversibleJumpChain` draws a uniform only when log α < 0), so the chains part with no defect behind it. Seen on the components fixture (z0 on six values, z1 on four) at draw 13: the two structures' marginals equal to 10⁻¹³, and the shift exact at all three structures read.
+
+**Unbuilt, and why:** noise by row and random intercepts under the joint option (slice 4, decisions 6 and 7, which `FitJoint` refuses with that reason); per-component configs (one structure takes one config).
+
+**Follow-ups, with the decision each would change:**
+- *Several outputs' SMC at K = 1 is not scalar SMC draw for draw* (stage counts 81, 82 apart against 79, 82 jointly on the components fixture, 200 particles, two replicates), while MCMC is. Slice 2 gated it against the enumerated law and evidence, so it reads as a path difference, not a law defect. Whether K = 1 should reduce to scalar SMC bit for bit is slice 2's decision; if yes, the stage schedule's reading of the K × K target at K = 1 is where to look.
+- *The cost row runs the components in sequence.* With free cores, components fitted apart run side by side and the wall-clock trade turns. A decision between the two modes on cost would need the parallel row.
+
+**Doc changes owed:**
+- `docs/Maths/Regression/MultiOutput.md`: a section on the PCA mode's joint option. The scores as r outputs with the truncation residuals as before; decision 2's equivariance makes the structure and τ posterior depend on the scores' span alone; the trade of one structure for per-component sparsity; the views and what they hold; the noise readers (N(wᵢ | w(xᵢ), Σ), KΣKᵀ, (y_s ∘ K)L); the pairing and the seed; the density's whole-case units; the cost row; the refusals; and the tie note behind the equivariance gate.
+- `docs/Maths/Regression/BASS.md`, "BASS: decomposition, components and prediction": the joint option beside the components fitted apart, `BassBasisFit.Joint` and `JointData`, and `BassBasisPrediction.NoiseCovariances`.
+- `docs/Maths/Regression/Regression.md`, the calibration emulator's component noise: under the joint option the factor is each draw's own, (y_s ∘ K)L with unit variances.
+- The crossings of D07's K and its y-space Σ with E34's K and Σ are in the notation ledger (2026-11-10).
 
 ### Slice 3: joint readouts and covariance-prior coverage (chip, 2026-11-09)
 

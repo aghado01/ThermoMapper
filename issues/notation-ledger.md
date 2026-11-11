@@ -11,6 +11,14 @@ Splits in the module's language (symbols, identifiers, terms), logged as session
 
 ## Entries
 
+### D07's K and its y-space Σ beside E34's K and Σ, met under the joint option (2026-11-10)
+
+- **Kind:** one name for several concepts.
+- **Readings:**
+  - K, D07's basis matrix, m × r (`src/maths/regression/spline/bass/output/BassDecomposition.cs:60`, `LinearReconstruction`; `BassBasisFit.Predict`'s y = y_m + y_s ∘ (K(w(x) + ε) + e), `src/maths/regression/spline/bass/output/BassComponents.cs:93`), beside K, E34's count of outputs (`MultiOutputResponse.Outputs`), which under the joint option is the decomposition's rank r (`BassComponents.FitJoint`, `src/maths/regression/spline/bass/output/BassComponents.cs:272`). The slice 5 code writes r for the count and keeps K for the basis.
+  - Σ, the y-space covariance diag(v) + K diag(σ²)Kᵀ in `BassBasisDensity`'s comments (`src/maths/regression/spline/bass/posterior/BassBasisDensity.cs:168`), beside Σ, E34's noise covariance across outputs, which under the joint option is the components' noise covariance and enters that y-space covariance as KΣKᵀ.
+- **Found:** 2026-11-10, E34's slice 5.
+
 ### E34's predictive degrees ν, case-row scale V_* and case count q (2026-11-09)
 
 - **Kind:** one name for several concepts.
