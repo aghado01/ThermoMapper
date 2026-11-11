@@ -244,6 +244,8 @@ Net, it reaches 0.14 to 0.71 of form B's ESS per second.
 - *Drop:* plain chains take form B's move step, and a ladder's cold rung and SMC's final stage lose their extra step. The untested gain is lost, and fits run at the plain sweep's cost. The step stays reachable through `BassSweepSlots.Blocks(…, collapse: true)` until a cleanup.
 - *Opt-in,* the middle way: a sampling option, off by default, measured on a confounded dataset before any default changes.
 
+**The user's call, 2026-11-10: opt-in** (decision 7). Landed in `aa0d0ee`: `BassSampling.CollapseEffectsInMoves`, off by default. Every chain, ladder replica and SMC particle builds its sweep from `BassSweepSlots.Blocks`, which takes the collapsed step only when asked. Without the option every sampler's sweep is form B's, block by block. A chain, a ladder and SMC fit with the option stated off are their default fits bit for bit, and with it on they differ. The tempered resume runs bit for bit both ways. The option is refused under Gaussian noise and without random effects, and is left out of the serialized form when off. Per commit: 2280 of 2280.
+
 **Decisions taken beyond this brief.**
 - The Geweke gate reads exact starts, not a successive-conditional chain, for the reasons and with the power above. u0 and Σu² are read bounded and in logs.
 - The coefficient prior reads the raw columns under a noise, on both readings (finding 3).
