@@ -152,6 +152,26 @@ Each slice reports here and to the main session:
 
 Newest first.
 
+### In progress: slice 4, random effects under GBASS's noises (GBASS chip, updated 2026-11-10)
+
+Hand-over state, updated in place until the slice's report replaces it.
+- *Built, uncommitted:*
+  - decision 7's form B: u a latent read as the offset Z̃u, with σ² on the record;
+  - u's block after the coefficients, s's step on u's prior, the b = 1 collapsed structure step;
+  - the GLS intercept direction c = L·1 under weights.
+  Files: `BassRandomEffects.cs`, `BassRandomEffectsNoise.cs` (new), `BassObservationModel.cs`, `BassDesign.cs`, `BassNoise.cs`, `BassSweep.cs`, `BassModel.cs`, `BassConfig.cs`, `BassState.cs`, `BassPriorSampler.cs`, `BassRandomIntercepts.cs`, `posterior/BassPrediction.cs`. Tests: `RandomEffectsNoiseTests.cs` and `RandomEffectsNoiseQualificationTests.cs` (both new), and `RandomInterceptTests.cs`.
+- *Passed:*
+  - dense algebra to 10⁻¹⁵;
+  - the design on the integrated reading as the GLS fit;
+  - the sweep's order and a fit;
+  - resume bit for bit, after a stale-prior-Gram defect was found and fixed;
+  - three noise pins without a block bit for bit;
+  - the focused classes, 63 of 63.
+- *Running or next:*
+  - the per-commit selection, then the commit;
+  - the qualification: Geweke at b = 1 with and without the collapse and below 1, a ladder and SMC end to end, the mixing measurement, recovery;
+  - the slice-end run, then the report.
+
 ### Slice 2 — named crossed and nested Gaussian intercepts (2026-11-09)
 
 The scoped commit `feat(bass): support named crossed and nested intercept blocks` carries the named data, configuration and retained-effect collections, both centring conventions, joint whitening and per-group scale steps. The [report](ridge-multiple-groupings-report.md) records the E34 reconciliation, API and checkpoint migration, dense references, nonlinear recovery and rank-cost rows. The independent unequal-scale review led to the reduced weighted-factor SVD and stable gain in decision 4. Combined qualification passed 66/66, including deterministic covariance and actual draws at scales differing by 10⁶, one-group hash pins, grouped resume and E34 output-rate resume. Commit passed 2,037/2,037 and full Slice passed 2,874/2,874, with no skips. The current-main test assembly also compiled with zero errors. [Receipts](../../../artifacts/e21-ridge-s2-qualification/) ([tracked inputs](../receipts/e21-ridge-s2-qualification/)) retain the baseline, source hashes, settings and TRXs.
