@@ -276,6 +276,27 @@ Each report gives the commits, gate results, coverage and width by fit, cost, de
 
 Newest first.
 
+### In progress — Slice 12b, CB-4's latent-posterior reading (started 2026-11-11)
+
+Started at the main session's word after slice 11's verification.
+
+**Plan.**
+- *The layer.* `ConformalOptions.ObservationLatents` takes `LatentReading.Integrated` (CB-4(b), the default) or `Conditioned` (CB-4(c), the opt-in).
+  - Under `Conditioned` the training units read their retained latents, f(zᵢ | θ_s, v_s,i).
+  - The candidate seam carries `ConditionedValues` = ln f(y | θ_s, v′_s), with v′ drawn from p(v′ | θ_s, y), or its conditional mean. Its `Values` stay ln g, which the add-one-in weights read.
+  - Refused under `Conditioned`: the margin (its carried bounds read the training terms as weights) and Hoff's score (the conditioned Hoff reading is not built). The predictive distribution keeps refusing conditioned latents.
+- *BARS.*
+  - The conditioned training content reads each draw's retained weights: w, or 1/(c·v) under a noise.
+  - The candidate seam draws each candidate's latent from its exact conditional: the robust weights' resamplers, and the t, exponential and GIG mixings. GBP's slice step is refused.
+- *BASS:* asked the GBASS chip which of us builds its side, and whether `BassPointwise` and `BassCandidates` are free.
+- *Gates:*
+  - CB-1 by enumeration with (c), on a finite model with exact weighted draws and the conditional-mean reading;
+  - the drawn reading's mean against the conditional mean;
+  - the refusals;
+  - qualification: coverage and width of (c) against (b) on BARS t-weight fits, under t noise (right) and slice 5's contaminated truth (wrong), with the ESS and k̂, plus the cost row.
+
+**State.** Being written. Nothing committed.
+
 ### 2026-11-11 — Slice 11, BGP's drawn f: the retained-parameters content the full step takes
 
 Built at the main session's word of 2026-11-11 (the resume order 11, 12b, 13), from E16's completion plan.
