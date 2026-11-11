@@ -87,6 +87,17 @@ It does not reach a curve's or a parameter's own intervals: those stay with E15'
 7. **Lean first** for the slices that bring new guarantees (9, 10, 12 to 16, 18). Each guarantee is stated, checked numerically and proved in `ConformalValidity.lean`, by the conformal-Lean chip, before its C#, as CB-1 to CB-4 and E35's M-1 and M-2 were.
 8. **The order** ("ok"): slices 7 to 12 now, in order. Slices 13 to 18 are held as a queue that the user orders by need.
 
+**Decided by the user on 2026-11-10, relayed by the main session:**
+9. **Slice 12 builds Hoff's leave-one-out score as an opt-in** ("Yes, opt-in"). The full step's default score stays Fong and Holmes's in-sample score.
+   - *Why opt-in:* the Lean measured a small gain in its finite model, sets 0.2 to 0.5% smaller than the in-sample score's at exact coverage. Each data unit needs its own weight g(z_new | θ)/g(zᵢ | θ), with PSIS's instability.
+   - *What slice 12 measures:* the width against the in-sample score on BASS fits. Any question of a default comes back with those numbers.
+   - *The Lean's finding:* under CB-1's tie rule on discrete data, the in-sample set can be the smaller one.
+
+**The Lean for slices 10 and 12 is done and verified** (`dfe5c99`, `a708eb2`, `f82ae97`, `f692e37`; verified on 3b61763). The rules the C# implements are in the [Lean chip's reports](../../lean/Protolemmata/Conformal/conformal-chip-brief.md#reports) and the ledger's [slice 10](../../lean/Protolemmata/Conformal/conformal-lemmas.md#slice-10--the-full-steps-error-completed) and slice 12 sections.
+- *Slice 10, the excluded set:* it is read per grid value y over all m units, the candidate included. The data units' flags come from conservative proxies.
+- *Slice 10, the reading:* only at kept y. The largest excluded share over the grid is charged, and 2ν in place of ν.
+- *Slice 12:* the draw identity cᵢ = A/B̂ᵢ, with the candidate at A. The latent-posterior reading draws the candidate's latent per draw, or uses its closed-form conditional mean.
+
 ## The slices
 
 One commit per concern; tests with the code they test; each slice ends with its gates and a fresh-eyes review before the next starts.
