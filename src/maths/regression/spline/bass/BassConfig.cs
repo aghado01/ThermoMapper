@@ -236,6 +236,8 @@ public sealed record BassConfig
         if (run.BatchSize < 0) throw Bad("Sampling.BatchSize", "must not be negative");
         if (!(run.MinEssPerChain >= 0.0 && double.IsFinite(run.MinEssPerChain))) throw Bad("Sampling.MinEssPerChain", "must be finite and not negative");
         if (run.StoppingScope is not (BassStoppingScope.All or BassStoppingScope.Predictive)) throw Bad("Sampling.StoppingScope", "is not a known scope");
+        if (run.CollapseEffectsInMoves && !(HasRandomEffects && Noise is not null))
+            throw Bad("Sampling.CollapseEffectsInMoves", "reads random effects under a noise: under Gaussian noise u is always integrated, and without random effects there is nothing to integrate");
         if (run.MonitoredPoints is { } points)
         {
             if (points.Count == 0) throw Bad("Sampling.MonitoredPoints", "must hold a point, or be null for the defaults");
@@ -653,6 +655,18 @@ public sealed record BassSampling
     /// </summary>
     [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
     public BirthMixture? Births { get; init; }
+
+    /// <summary>
+    /// Under a noise with random effects, whether the structure step at b = 1 (a chain's, a ladder's cold rung's, SMC's last stage's)
+    /// reads the likelihood with u integrated at the current weights and draws u from its conditional right after
+    /// (<see cref="BassCollapsedStructureBlock"/>; E21's decision 7, an opt-in since 2026-11-10). False, the default, keeps every rung's
+    /// moves on the likelihood given u (form B). Both forms leave the same posterior. On a grouping unrelated to the inputs the collapse
+    /// ran at 0.14 to 0.71 of form B's ESS per second. Its gain is expected where u and the basis compete for the same variation, which is
+    /// not yet measured. Random effects under a noise only: under Gaussian noise u is always integrated. Left out of the serialized form
+    /// when false.
+    /// </summary>
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingDefault)]
+    public bool CollapseEffectsInMoves { get; init; }
 
     /// <summary>Parallel tempering within each chain; null, the default, runs untempered (D05).</summary>
     public TemperingSpec? Tempering { get; init; }

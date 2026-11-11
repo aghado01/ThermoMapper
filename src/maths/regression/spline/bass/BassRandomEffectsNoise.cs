@@ -11,7 +11,8 @@ namespace Maths.Regression.Spline.Bass;
 // Random effects under GBASS's noises (E21's slice 4; decision 7 as the user amended it on 2026-11-10). u is a latent on every rung,
 // which the reading takes as the offset Z̃u beside σβv, with σ² on the record: each rung's kernel then tempers the likelihood given u
 // and the latents, as the noise's blocks do, so ladders, SMC and the reference rung are exact. At b = 1 the structure step may integrate
-// u and draw it afresh before any block reads it, the partially collapsed order of the β·v move's fix.
+// u and draw it afresh before any block reads it, the partially collapsed order of the β·v move's fix: an opt-in since 2026-11-10
+// (BassSampling.CollapseEffectsInMoves), off by default, on slice 4's measurement.
 
 /// <summary>
 /// u's block (the coefficients' slot, after a): u from its conditional given a, σ², the latents and the scales, at the rung's power b,
@@ -126,7 +127,8 @@ public sealed class BassLatentGroupScaleBlock : IBlock<ReversibleJumpChain<BassS
 }
 
 /// <summary>
-/// The structure step at b = 1 under a noise with random effects (decision 7's amendment): the chain follows the u-integrated reading at the
+/// The structure step at b = 1 under a noise with random effects, when <see cref="BassSampling.CollapseEffectsInMoves"/> asks for it
+/// (decision 7, an opt-in since 2026-11-10; off by default, form B's move step in its place): the chain follows the u-integrated reading at the
 /// current weights (<see cref="VarianceMeanMixture.Integrated"/>), takes one reversible-jump move on that marginal, draws a and then u from
 /// their conditionals (<see cref="BassStructureMoves.DrawSweepFit"/>), and follows the reading with u as its offset again. A step on the
 /// u-marginal followed by u's draw before any block reads it: the partially collapsed order, so the rung's kernel leaves its target over

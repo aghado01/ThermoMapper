@@ -19,8 +19,8 @@ namespace Maths.Regression.Tests;
 /// E21's slice 4 behind <c>BASS_QUALIFICATION</c> = 1: random effects under GBASS's noises, u a latent on every rung and integrated by the
 /// structure step at b = 1 (decision 7 as amended on 2026-11-10).
 /// <list type="bullet">
-/// <item><b>Geweke's joint-distribution test of one sweep:</b> at b = 1 a chain's sweep with the collapsed step, and without it (the
-/// reference form B); below 1 a replica's sweep, its own move then the blocks, against the tilted joint whose b-rung that kernel leaves
+/// <item><b>Geweke's joint-distribution test of one sweep:</b> at b = 1 a chain's sweep with the opt-in collapsed step
+/// (<see cref="BassSampling.CollapseEffectsInMoves"/>), and without it (form B, the default); below 1 a replica's sweep, its own move then the blocks, against the tilted joint whose b-rung that kernel leaves
 /// invariant, as a ladder's rung and an SMC stage run it. Under t, the asymmetric Laplace, the skewed Normal-Wald, the skewed horseshoe with
 /// its move along β·v, and t interwoven; s drawn, u and s among the functions.</item>
 /// <item><b>A ladder and SMC end to end:</b> their evidence against each other and their posterior means of ln s and M against long

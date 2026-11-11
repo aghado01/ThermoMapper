@@ -6,6 +6,7 @@ using Maths.Regression.GPrior;
 using Maths.Regression.Spline.Bass;
 using Maths.Rng;
 using Maths.Samplers;
+using Maths.Samplers.Blocks;
 using Maths.Samplers.Ensemble;
 using Maths.Samplers.Rjmcmc;
 using Xunit;
@@ -15,15 +16,18 @@ namespace Maths.Regression.Tests;
 
 /// <summary>
 /// E21's slice 4, random effects under GBASS's noises (<c>issues/regression/bass/ridge-blocks-brief.md</c>, decision 7 as amended on
-/// 2026-11-10): u is a latent the reading carries as the offset Z̃u, with σ² on the record; at b = 1 the structure step integrates it under
-/// the weights and draws it afresh.
+/// 2026-11-10): u is a latent the reading carries as the offset Z̃u, with σ² on the record; at b = 1, when the fit opts in
+/// (<see cref="BassSampling.CollapseEffectsInMoves"/>), the structure step integrates it under the weights and draws it afresh.
 /// <list type="bullet">
 /// <item><b>The weighted whitening against dense algebra:</b> L = V_w^(−½)W^½ gives xᵀC⁻¹y with C = W⁻¹ + Z̃S²Z̃ᵀ, the GLS intercept's mass
 /// and mean through c = L·1 (the convention centres u with unweighted counts, so c is not W^½·1), ln|V_w| = ln|C| + Σ ln wᵢ, and u's
 /// conditional mean, at the weights and at the rung's bW; at W = I the unweighted block's whitening.</item>
 /// <item><b>The design on the integrated reading is the GLS fit:</b> its residual squares, mean, mass and Σ ln w against dense algebra.</item>
 /// <item><b>The model under a noise:</b> σ² on the record, u = 0 at the start, the sweep's blocks in their order, a fit's draws carrying
-/// u and s; a tempered fit with a drawn scale and the reference rung resumes bit for bit; fits without a block keep their draws.</item>
+/// u and s; a tempered fit with a drawn scale and the reference rung resumes bit for bit, with the collapse and without; fits without a
+/// block keep their draws.</item>
+/// <item><b>The collapse is an opt-in:</b> every sampler's sweep without it is form B's, block by block; a chain, a ladder and SMC each
+/// take it when asked; it is refused where it reads nothing and left out of the serialized form when off.</item>
 /// </list>
 /// The joint law by Geweke at b = 1 and below, the mixing measurement and recovery are behind <c>BASS_QUALIFICATION</c>
 /// (<c>RandomEffectsNoiseQualificationTests</c>).
@@ -262,8 +266,8 @@ public sealed class RandomEffectsNoiseTests(ITestOutputHelper output)
         string[] replica = [.. BassSweepSlots.Blocks(model, BassSweepSlot.Tau).Select(b => b.Name)];
         output.WriteLine($"chain: {string.Join(", ", chain)}");
         output.WriteLine($"replica: {string.Join(", ", replica)}");
-        Assert.Equal("collapsed moves", chain[0]);
-        Assert.Equal("collapsed moves", replica[0]);
+        Assert.Equal("moves", chain[0]);   // form B by default: the move step on the likelihood given u
+        Assert.Equal("tau", replica[0]);
         Assert.True(Array.IndexOf(chain, "group effects") == Array.IndexOf(chain, "coefficients") + 1, "u is drawn right after a");
         Assert.Contains("group scale g1", chain);
         Assert.DoesNotContain("group scale g2", chain);
@@ -273,9 +277,7 @@ public sealed class RandomEffectsNoiseTests(ITestOutputHelper output)
         Assert.All(draws, d => Assert.Equal(2, d.Groups!.Count));
         Assert.True(draws.Select(d => d.Groups![0].Effects[0]).Distinct().Count() > draws.Length / 2, "u moves");
         Assert.True(draws.Select(d => d.Groups![0].Scale).Distinct().Count() > 10, "s moves");
-        MoveStat collapsed = fit.Diagnostics.Chains[0].Blocks!.Single(k => k.Key == "collapsed moves");
-        output.WriteLine($"collapsed moves accepted {collapsed.Accepted} of {collapsed.Attempts}");
-        Assert.True(collapsed.Accepted > 0);
+        Assert.DoesNotContain(fit.Diagnostics.Chains[0].Blocks!, k => k.Key == "collapsed moves");
         // Each draw's effects keep the convention, and its reading rebuilds with its u.
         RandomEffectsBlock block = model.RandomEffects!;
         foreach (BassDraw d in draws.Take(20))
@@ -291,15 +293,21 @@ public sealed class RandomEffectsNoiseTests(ITestOutputHelper output)
         }
     }
 
-    [Fact]
-    public void ATemperedFitUnderANoise_WithADrawnScale_ResumesBitForBit()
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public void ATemperedFitUnderANoise_WithADrawnScale_ResumesBitForBit(bool collapse)
     {
         (BassModel model, BassConfig config) = NoiseModel();
         var spec = new TemperingSpec { Levels = 3, HotEnd = 0.2, ReferenceRung = true };
         BassConfig whole = config with
         {
             Sigma2 = Sigma2Prior.InverseGamma(3.0, 0.5),
-            Sampling = new BassSampling { Chains = 2, MasterSeed = 31, BurnIn = 100, Samples = 120, Thin = 2, Tempering = spec, ReportEvidence = true },
+            Sampling = new BassSampling
+            {
+                Chains = 2, MasterSeed = 31, BurnIn = 100, Samples = 120, Thin = 2, Tempering = spec, ReportEvidence = true,
+                CollapseEffectsInMoves = collapse,
+            },
         };
         BassConfig half = whole with { Sampling = whole.Sampling with { Samples = 60 } };
         BassFit full = Bass.Fit(whole, model.Data);
@@ -314,6 +322,61 @@ public sealed class RandomEffectsNoiseTests(ITestOutputHelper output)
                     Assert.Equal(full.Draws[c][d].Groups![k].Effects, resumed.Draws[c][d].Groups![k].Effects);
                 }
         Assert.True(double.IsFinite(full.Evidence!.LogEvidence));
+    }
+
+    // The b = 1 collapse is an opt-in (decision 7, amended 2026-11-10). Chains, ladder replicas and SMC particles all take their sweep from
+    // BassSweepSlots.Blocks, so without the option each is form B's, block by block; with it, each sampler takes the collapsed step.
+    [Fact]
+    public void TheCollapse_IsAnOptIn_AndEveryFitWithoutIt_TakesFormBsSweep()
+    {
+        (BassModel model, BassConfig config) = NoiseModel();
+        BassConfig opted = config with { Sampling = config.Sampling with { CollapseEffectsInMoves = true } };
+        BassModel collapsing = BassModel.Create(opted, model.Data);
+        static string[] Read(IEnumerable<IBlock<ReversibleJumpChain<BassState>>> blocks) => [.. blocks.Select(b => $"{b.GetType().Name}:{b.Name}")];
+        foreach (BassSweepSlot first in new[] { BassSweepSlot.Structure, BassSweepSlot.Tau })
+        {
+            string[] plain = Read(BassSweepSlots.Blocks(model, first));
+            Assert.Equal(Read(BassSweepSlots.Blocks(model, first, collapse: false)), plain);
+            Assert.DoesNotContain(plain, b => b.StartsWith(nameof(BassCollapsedStructureBlock), StringComparison.Ordinal));
+            string[] collapsed = Read(BassSweepSlots.Blocks(collapsing, first));
+            Assert.Equal(Read(BassSweepSlots.Blocks(collapsing, first, collapse: true)), collapsed);
+            Assert.StartsWith(nameof(BassCollapsedStructureBlock), collapsed[0], StringComparison.Ordinal);
+            Assert.Equal(plain.Skip(first == BassSweepSlot.Structure ? 1 : 0), collapsed.Skip(1));
+        }
+
+        // Each sampler: off, stated or not, is one fit; on differs, so the option reaches it.
+        var chains = new BassSampling { Chains = 2, MasterSeed = 7, BurnIn = 150, Samples = 150 };
+        BassConfig proper = config with { Sigma2 = Sigma2Prior.InverseGamma(3.0, 0.5) };
+        foreach ((string name, BassSampling sampling) in new (string, BassSampling)[]
+                 {
+                     ("chain", chains),
+                     ("ladder", chains with { Tempering = new TemperingSpec { Levels = 3, HotEnd = 0.2, ReferenceRung = true } }),
+                     ("SMC", new BassSampling { Chains = 1, MasterSeed = 7, Smc = new SmcSpec { Particles = 60, Replicates = 2, MutationSteps = 2 } }),
+                 })
+        {
+            BassFit byDefault = Bass.Fit(proper with { Sampling = sampling }, model.Data);
+            BassFit stated = Bass.Fit(proper with { Sampling = sampling with { CollapseEffectsInMoves = false } }, model.Data);
+            BassFit on = Bass.Fit(proper with { Sampling = sampling with { CollapseEffectsInMoves = true } }, model.Data);
+            BassRunTests.AssertSameFit(byDefault, stated);
+            BassDraw[] a = [.. byDefault.Draws.SelectMany(c => c)], b = [.. on.Draws.SelectMany(c => c)];
+            Assert.True(a.Zip(b).Any(p => !p.First.Groups![0].Effects.SequenceEqual(p.Second.Groups![0].Effects)), $"{name}: the option reaches the sampler");
+            if (name == "chain")
+            {
+                Assert.Equal(Read(BassSweepSlots.Blocks(BassModel.Create(proper with { Sampling = sampling }, model.Data))).Select(k => k.Split(':')[1]),
+                             byDefault.Diagnostics.Chains[0].Blocks!.Select(k => k.Key));
+                MoveStat moves = on.Diagnostics.Chains[0].Blocks!.Single(k => k.Key == "collapsed moves");
+                output.WriteLine($"collapsed moves accepted {moves.Accepted} of {moves.Attempts}");
+                Assert.True(moves.Accepted > 0);
+            }
+        }
+
+        // Off is left out of the serialized form, so configs and fingerprints from before the option read as they did; on round-trips.
+        Assert.DoesNotContain(nameof(BassSampling.CollapseEffectsInMoves), config.ToJson());
+        Assert.Contains($"\"{nameof(BassSampling.CollapseEffectsInMoves)}\":true", opted.ToJson());
+        Assert.Equal(opted, BassConfig.FromJson(opted.ToJson()));
+        // Refused where it reads nothing: under Gaussian noise u is always integrated, and without random effects there is no u.
+        Assert.Contains("CollapseEffectsInMoves", Assert.Throws<ArgumentException>(() => (opted with { Noise = null }).Validate()).Message);
+        Assert.Contains("CollapseEffectsInMoves", Assert.Throws<ArgumentException>(() => (opted with { RandomIntercepts = null }).Validate()).Message);
     }
 
     // Noise fits without a block keep their draws: pinned by hash on HEAD before the change.

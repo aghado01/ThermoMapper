@@ -543,15 +543,17 @@ public static class BassSweepSlots
 
     /// <summary>
     /// The blocks of a sweep of <paramref name="model"/> from slot <paramref name="first"/> on, each reading the chain's own target: the
-    /// structure's move step, τ's slice step when τ is sampled and a drawn group scale's step (<see cref="BassGroupScaleBlock"/>), then
+    /// structure's move step (under a noise with random effects and <see cref="BassSampling.CollapseEffectsInMoves"/>, the collapsed step at
+    /// b = 1, <see cref="BassCollapsedStructureBlock"/>), τ's slice step when τ is sampled and a drawn group scale's step (<see cref="BassGroupScaleBlock"/>), then
     /// the observation model's blocks for the slots after τ, and last
     /// in the scale slot σ²'s rate's step under a hierarchical prior, so it reads a σ² the model has just drawn. A chain starts at
     /// the structure slot; a tempering replica or an SMC particle, whose moves the engine runs itself, at τ's.
     /// </summary>
     public static List<IBlock<ReversibleJumpChain<BassState>>> Blocks(BassModel model, BassSweepSlot first = BassSweepSlot.Structure)
-        => Blocks(model, first, collapse: true);
+        => Blocks(model, first, collapse: model?.Config.Sampling?.CollapseEffectsInMoves == true);
 
-    // `collapse` false keeps every structure step on the likelihood given u: the mixing measurement's reference (E21's slice 4).
+    // `collapse` true takes the b = 1 collapsed step under a noise with random effects (BassSampling.CollapseEffectsInMoves, E21's
+    // decision 7); false keeps every structure step on the likelihood given u, form B. The Geweke rows and the mixing measurement read both.
     internal static List<IBlock<ReversibleJumpChain<BassState>>> Blocks(BassModel model, BassSweepSlot first, bool collapse)
     {
         ArgumentNullException.ThrowIfNull(model);
