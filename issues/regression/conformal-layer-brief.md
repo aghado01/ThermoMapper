@@ -1,6 +1,6 @@
 # The conformal layer: E16's build (chip brief)
 
-Date: 2026-11-06. Status: slices 0, 1 and 2 built 2026-11-06, the fallback signal read from the inflated set on 2026-11-07 at the user's call, with a split-half comparator measured beside it; on 2026-11-07 both became diagnostics on every set, with no trigger, at the user's decision; slice 3, the split form, built 2026-11-07 at the user's go-ahead (reports below); slice 4 read on 2026-11-07 (the in-sample predictive CDF is not monotone in y where the draws' predictives separate) and built on 2026-11-08 at the user's decision: the split form's predictive distribution by default, the full step's as an opt-in with its flag; CB-3's per-unit bounds built on 2026-11-08 at the user's order, a slice between 4 and 5, and the margin made opt-in the same day at the user's decision; the next wave approved by the user on 2026-11-08 ("Yes, start it", relayed by the main session): slice 5, the other engines' candidate seams, built the same day (report below) and verified by the main session; E35 as slice 6, its plan below, built the same day (6·0 to 6c). On 2026-11-08 the user asked for E16 to be completed after E35 (relayed by the main session): its plan, slices 7 onward, is below. E35 was verified by the main session on 2026-11-09. Slice 7 landed in e3071cf after those three calls. Slice 8 landed in 331f9e7 and received coordinating sign-off on the combined archive 69398e4. The first proved slice 9 increment landed in 3fbe41b following Lean 4084c55 and received coordinating sign-off on bccb661. The equal-fold CV+ follow-up landed in dd2532c following Lean 33665cf and 17ba5c9; it passed final qualification and awaits coordinating review. Written at the user's request from [E16](bass/extensions-brief.md#conformal-bayes-the-consumer) and the [conformal Lean contract](../../lean/Protolemmata/Conformal/conformal-lemmas.md).
+Date: 2026-11-06. Status: slices 0, 1 and 2 built 2026-11-06, the fallback signal read from the inflated set on 2026-11-07 at the user's call, with a split-half comparator measured beside it; on 2026-11-07 both became diagnostics on every set, with no trigger, at the user's decision; slice 3, the split form, built 2026-11-07 at the user's go-ahead (reports below); slice 4 read on 2026-11-07 (the in-sample predictive CDF is not monotone in y where the draws' predictives separate) and built on 2026-11-08 at the user's decision: the split form's predictive distribution by default, the full step's as an opt-in with its flag; CB-3's per-unit bounds built on 2026-11-08 at the user's order, a slice between 4 and 5, and the margin made opt-in the same day at the user's decision; the next wave approved by the user on 2026-11-08 ("Yes, start it", relayed by the main session): slice 5, the other engines' candidate seams, built the same day (report below) and verified by the main session; E35 as slice 6, its plan below, built the same day (6·0 to 6c). On 2026-11-08 the user asked for E16 to be completed after E35 (relayed by the main session): its plan, slices 7 onward, is below. E35 was verified by the main session on 2026-11-09. Slice 7 landed in e3071cf after those three calls. Slice 8 landed in 331f9e7 and received coordinating sign-off on the combined archive 69398e4. The first proved slice 9 increment landed in 3fbe41b following Lean 4084c55 and received coordinating sign-off on bccb661. The equal-fold CV+ follow-up landed in dd2532c following Lean 33665cf and 17ba5c9; it passed final qualification and awaits coordinating review. Slice 12a, Hoff's leave-one-out score as the full step's opt-in, landed in ab21104 at the user's decision 9 and awaits verification; slices 10, 11 and 12b follow in that order, each after the last is verified (decision 10). Written at the user's request from [E16](bass/extensions-brief.md#conformal-bayes-the-consumer) and the [conformal Lean contract](../../lean/Protolemmata/Conformal/conformal-lemmas.md).
 
 ## Why
 
@@ -267,6 +267,110 @@ Under "Reports" below, newest first, per slice: what landed by commit; the gates
 ## Reports
 
 Newest first.
+
+### 2026-11-10 — Slice 12a, Hoff's leave-one-out score as the full step's opt-in
+
+Built at the user's decision 9 and commission of 2026-11-10, relayed by the main session, against the Lean's slice 12.
+
+**Landed** on `main`, nothing pushed:
+- `ab21104`, with its tests:
+  - `FullStepScore` (`InSample`, the default; `LeaveOneOut`) on `ConformalOptions.Score`;
+  - `ConformalOptions.LeaveOneOutParetoK`, off by default;
+  - `LeaveOneOutScorer` (internal), beside the in-sample `StratumScorer`, which is untouched;
+  - `ConformalBayes.Scores(…, score)`;
+  - `HoffScoreTests`.
+  - `ConformalBayesTests`' discrete-model helpers became internal, for reuse.
+- *Nothing moves with the option off.* The in-sample path's code is unchanged, so every hash and fingerprint holds. The one shared change is that `ConformalMargin.Untrusted` counts a k̂ not read (NaN) as none; the in-sample path never leaves a NaN where the inflated rule accepts.
+
+**What it computes** (each test names its declaration).
+- *The candidate* scores ln A = ln Σ_s W̄_s p(y | θ_s) (`hoffScore_none`).
+- *A data unit* scores ln A − ln B̂ᵢ, with B̂ᵢ = Σ_s W̄_s p(y | θ_s)/p(zᵢ | θ_s) (`hoffScore_some`).
+  - As ln cᵢ = −ln Σ_s w̃_s/p(zᵢ | θ_s), it is one (n × S)·(S × G) product of the units' inverse likelihoods, each scaled by its smallest log term, against the add-one-in weights.
+  - An entry below 10⁻¹⁰⁰ is summed again in logs.
+- *Ties.* A unit within 10⁻⁹ of the candidate is read again as Bᵢ = Σ_s W_s e^(ℓ_new − ℓᵢ)/Σ_s W_s in draw order, so a unit whose column equals the candidate's ties exactly (`hoff_accepts_iff`, `hoff_coverage`).
+- *The error, by the shift form* (`coverage_close_shift`, `coverage_inflated_shift`). A data unit's bound is ln B̂ᵢ's Monte Carlo error, its relative variance G₂/G₁² − 2G₃/G₁ + Σ W̄² from two more products. The candidate's position bound is 0, since Â is common to every unit.
+- *Diagnostics per grid value:*
+  - the least Kish ESS of the data units' weights, G₁²/G₂;
+  - asked for, the largest k̂ among the deciding units, those within their own bound of the candidate, where the inflated rule accepts; −∞ where no unit decides.
+
+**Refused, or not computed, with the reason.**
+- *The margin* (`MarginBounds`) is refused: its carried bounds are built for the in-sample score's weights, and each data unit here has its own.
+- *The fallback rule* (`FallbackShare`) is refused: it reads the margin's trust in the add-one-in weights' k̂.
+- *The split-half reading* is not computed (NaN): it reads the in-sample score's halves.
+- *The full step's predictive distribution* is unaffected: it takes no options, and its score is the in-sample predictive CDF.
+- *A unit with zero density under a retained draw* is refused: its weight there is unbounded, and the n-unit posterior gives that draw no mass.
+
+**Gates.**
+- *The discrete model with exact posterior weights* (504 data set and candidate pairs of four units). Each score is Hoff's ratio p(z)/p(z₋ᵢ) to 10⁻¹², and the set accepts exactly when at least k units have Bᵢ ≥ 1.
+- *CB-1 by enumeration, the option on:* 53 distinct data sets, 398 with ties, 4 skipped as within 10⁻⁹. Coverage is at least 1 − k/m on every set, and exactly that with distinct scores; equal units tie exactly.
+- *The conjugate model, 40,000 exact draws.* The draw identity holds to 10⁻⁹ against a direct B̂ᵢ. Every unit meets the closed-form leave-one-out predictive within 1.5 of its own reported error, and the candidate meets the closed-form predictive within 0.01.
+- *Equivariance:* permuting the units permutes the scores bit for bit (`hoffScore_equivariant`).
+- *A seeded sweep* (60 trials). Log terms reach −700, draw weights reach far into a tail, and strata hold one unit. Every score matches a log-sum-exp reference to 10⁻⁹, and 60 of 60 exact ties hold.
+- *The inflated rule under the shift form,* S 40, 4,000 replications: plain coverage 0.895, inflated 0.917 per position and 0.947 uniform, against 1 − k/m − ν = 0.89.
+- *The option's refusals,* and k̂ NaN unless asked for.
+- *Per commit,* the selected classes and the pinned tier: 959 of 959. *At the slice's end,* the whole assembly: 3,073 of 3,073 at `ab21104`.
+
+**Decision 9's measurement** (behind `BASS_QUALIFICATION=1`; a reading, no default proposed).
+
+*The conjugate model,* n 19, m 20, k 2. Coverage is over 4,000 replications and widths over 1,000, with the paired difference's standard error:
+
+| Truth | S | Coverage, in-sample / Hoff | Width, in-sample / Hoff | Hoff − in-sample (se) |
+|---|---|---|---|---|
+| The model's own prior predictive | 400 | 0.899 / 0.896 | 3.593 / 3.588 | −0.0045 (0.0072), −0.12% |
+| The model's own prior predictive | 4,000 | 0.900 / 0.897 | 3.594 / 3.590 | −0.0035 (0.0073), −0.10% |
+| Outside the model | 400 | 0.909 / 0.910 | 5.393 / 5.461 | +0.068 (0.012), +1.27% |
+| Outside the model | 4,000 | 0.910 / 0.910 | 5.398 / 5.465 | +0.067 (0.012), +1.24% |
+
+- *Under the model's own law,* `hoff_expectedSize_le`'s setting, the two scores are indistinguishable at n 19. The Lean's finite model found 0.2 to 0.5% at m 3 and 4, and expected the gap to shrink with n.
+- *Under a truth outside the model,* Hoff's sets are 1.2% wider, about five standard errors.
+- *The widths agree at S 400 and S 4,000,* so the gap is the score's, not Monte Carlo error.
+
+*BASS fits,* slice 4's: n 99, m 100, k 10, 20 fits, 50 held-out cases each, widths on 20 cases a fit. k̂ was read, over the deciding units:
+
+| Fit | Coverage, in-sample / Hoff (se) | Width, in-sample / Hoff | Hoff's weights: least ESS, below 50 | Full step's time, in-sample / Hoff, over 20 fits |
+|---|---|---|---|---|
+| Healthy Gaussian | 0.889 / 0.896 (0.012) | 1.291 / 1.302, +0.9% | 1.0; 994 of 1,000 | 27 / 202 s |
+| Student t | 0.895 / 0.900 (0.010) | 1.124 / 1.148, +2.1% | 14.4; 6 of 1,000 | 25 / 135 s |
+| Wrong fit (blind to x₀) | 0.885 / 0.887 (0.009) | 2.520 / 2.521, +0.05% | 4.0; 317 of 1,000 | 32 / 55 s |
+
+- *Both scores cover within error on every fit.* Hoff's sets are 0.05 to 2.1% wider.
+- *The healthy Gaussian fit's per-unit weights degenerate* at nearly every true value. Its add-one-in weights already did, in slice 1's reading.
+- *k̂ above its threshold* came at 322, 213 and 104 of the inflated sets holding the truth, for the healthy, Student t and wrong fit.
+
+**The cost row** (n 1,000, G 200, cycle clock, indicative, the machine loaded by other sessions):
+
+| S | The full step, in-sample | Hoff's, k̂ off | Hoff's, k̂ on (one call) | Hoff's training side | Hoff's readings per grid |
+|---|---|---|---|---|---|
+| 1,000 | 412 ms | 176 ms | 50.6 s | 49 ms | 138 ms |
+| 4,000 | 636 ms | 371 ms | 35.3 s | 98 ms | 244 ms |
+
+- *Hoff's score itself costs less than the in-sample step,* which also reads the split-half halves.
+- *k̂ over the deciding units is the payload.* In the cost row's synthetic likelihoods, which are no posterior, 47,000 to 109,000 units decide across the accepted values.
+
+**Defects found: none in the layer.** Two of my readings changed during the slice, before any commit.
+- *The first k̂ read every data unit,* fifteen times the in-sample step on the BASS fits and hours at n 1,000. It now reads the deciding units only.
+- *k̂ became an opt-in,* by the user's standing guidance that a payload making a path expensive becomes opt-in on that path, keeping its output. **This departs from the plan's wording,** "the weights' PSIS k̂ … as the add-one-in path reports them". It is for the main session and the user: k̂ can be default-on again by one line, at the cost above.
+
+**Decided in building it.**
+- *A scorer of its own beside the in-sample one,* so the default path is untouched bit for bit.
+- *The reported ESS* is the least over the data units' weights.
+- *The error's relative efficiency* is the candidate's density's along the chains, as the in-sample path's is; each unit's own ratio's efficiency would cost S per unit and candidate.
+- *Zero density under a draw is refused,* not read as an infinite weight.
+
+**Follow-ups, each with the decision it would change.**
+- *The margin for Hoff's score:* carried bounds of ln B̂ᵢ over the orderings. Slice 10 records whether the margin can now serve it. If it can, the refusal lifts; if not, it stays.
+- *Each unit's own relative efficiency* in its error. It would decide whether the bounds read each ratio's chain efficiency, at S per unit and candidate.
+- *k̂ by default under Hoff's score:* the one-line change above, if the user wants it on despite the cost.
+- *Open, no decision waiting:* the gap's dependence on n under the model's own law.
+
+**Doc changes owed** (for the offline docs pass; chips leave `docs/` alone).
+- *`docs/Maths/ConformalPrediction.md`, a subsection on the full step's score choice:*
+  - Fong and Holmes's in-sample score, the default, against Hoff's leave-one-out score, the opt-in;
+  - the rule A/B̂ᵢ and `hoff_accepts_iff`; the shift form's bounds; ties exact;
+  - the diagnostics and the k̂ opt-in with its cost;
+  - the refusals;
+  - decision 9's measurement, both tables, with the implication: alike under the model's own law at n 19, up to 2% wider outside it, and dearer only through k̂.
+- *Its API rows:* `ConformalOptions.Score`, `FullStepScore`, `ConformalOptions.LeaveOneOutParetoK`, `ConformalBayes.Scores(…, score)`, and the `ConformalSet` fields' meaning under the option (`CandidateScores` is ln A, `EffectiveSampleSizes` the least unit's).
 
 ### 2026-11-10 — Weighted BASS candidates: `Bass.Fit`'s case-weights entry, then the seam's weighted reading
 
