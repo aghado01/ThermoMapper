@@ -44,7 +44,7 @@ Written by the coordinating session (`local_b6732445`) at the user's quota pause
 | Conformal Lean, slice 10's grid reading | `bb5df90` | Yes |
 | Conformal Lean, slice 13, the tournament correction | `f998131` | Yes |
 | Conformal Lean, slice 14, shift | `27a6662` | Yes |
-| Conformal Lean, slices 15 (PCP) and 16 (batches) | `60d1c8c`, `77773c8` | **Running.** Receipts in `artifacts/verify-lean-77773c8/receipts/`; then remove its junction as above |
+| Conformal Lean, slices 15 (PCP) and 16 (batches) | `60d1c8c`, `77773c8` | Yes: checks pass, the build is clean, all 32 results on the standard axioms (one uses only two of them), and meta-ci passes |
 | Conformal slice 12a, Hoff's score as an opt-in | `ab21104`, `cbd9b7d` | Yes: 2,313 of 2,313 with weighted fits, at `cbd9b7d` |
 | Weighted fits through `Bass.Fit`, and their candidates | `7343bc8`, `c1bbf51`, `97b2fc4` | Yes (the same run) |
 | E8 slice 6, the readout follow-ups | `276af70`, `e9d8827`, `30df59e`, `9a669b6`, `3c26660` | Yes: 2,278 of 2,278 at `3c26660` |
