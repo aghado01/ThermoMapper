@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.Linq;
+using System.Runtime.CompilerServices;
 using Maths.Distributions;
 using Maths.LinAlg;
 using Maths.Regression.Subspaces;
@@ -30,6 +31,7 @@ internal static partial class BassActiveSubspaces
 {
     private const int Batch = 64;                  // a scalar fit's draws read from the gradient readout at once
     private const long BatchValues = 1L << 22;     // a functional or basis fit's batch: about this many partials at once
+    private const long GramCacheValues = 1L << 22; // the matrix check's Grams kept per structure within a readout: a constant budget
 
     // What a readout shares: the inputs, the law (a product measure, or a joint sample's cases and weights), the continuous predictors,
     // the metric's map and the route.
@@ -66,14 +68,15 @@ internal static partial class BassActiveSubspaces
         BassInputs inputs = BassInputs.Prepare(data, fit.Transform);
         Frame frame = FrameOf(inputs, fit.Transform, fit.Config.Structure.Degree, spec.Measures, spec.Sample, spec.Metric, spec.Route, spec.Points, spec.Dimension);
         bool functional = data.Response is FunctionalResponse;
-        int m = data.Response.Locations;
         if (!functional && spec.OutputMetric is not null) throw new ArgumentException("An output metric applies to a functional fit's outputs; this fit's response is scalar.", nameof(spec));
+        OutputInputs? at = Locations(spec.OutputMetric, fit.Transform);
+        int m = at?.Locations ?? data.Response.Locations;
         Patterns(patterns, functional, m);
         double[,] w = Metric(spec.OutputMetric, m);
         double[,]? s0 = patterns > 0 ? PsdRoot(w) : null;
         BassDraw[] pooled = [.. fit.Draws.SelectMany(c => c)];
         (int[] selected, double[] weights) = Draws3.Select(spec.Draws, pooled.Length, fit.DrawWeights, nameof(spec));
-        Func<int, Surface> surface = functional ? DirectFunctional(fit, data, inputs, pooled) : d => Scalar(fit, pooled[d]);
+        Func<int, Surface> surface = functional ? DirectFunctional(fit, data, inputs, pooled, at) : d => Scalar(fit, pooled[d]);
         BassMoments? moments = frame.Measure is null ? null : BassMoments.On(inputs, frame.Degree, frame.Measure);
 
         var cMetric = new double[selected.Length][,];
@@ -111,7 +114,8 @@ internal static partial class BassActiveSubspaces
             for (int start = 0; start < selected.Length; start += batch)
             {
                 int[] chunk = selected[start..Math.Min(selected.Length, start + batch)];
-                BassGradient g = fit.Gradient(data, points.Cases, chunk);
+                BassGradient g = at is null ? fit.Gradient(data, points.Cases, chunk)
+                                            : BassGradients.Of(fit.ModelFor(data), fit.Terms, fit.Draws, fit.DrawWeights, points.Cases, chunk, spec.OutputMetric!.Locations);
                 for (int b = 0; b < chunk.Length; b++)
                 {
                     int bb = b;
@@ -140,6 +144,7 @@ internal static partial class BassActiveSubspaces
     {
         ArgumentNullException.ThrowIfNull(fit);
         ArgumentNullException.ThrowIfNull(spec);
+        TrainingLocationsOnly(spec.OutputMetric);
         (BassInputs inputs, BassFit first, int degree) = BasisInputs(fit);
         Frame frame = FrameOf(inputs, first.Transform, degree, spec.Measures, spec.Sample, spec.Metric, spec.Route, spec.Points, spec.Dimension);
         int m = fit.Decomposition.Locations;
@@ -208,6 +213,7 @@ internal static partial class BassActiveSubspaces
         ArgumentNullException.ThrowIfNull(fit);
         ArgumentNullException.ThrowIfNull(direct);
         ArgumentNullException.ThrowIfNull(spec);
+        TrainingLocationsOnly(spec.OutputMetric);
         Fingerprint(direct, directData);
         if (directData.Response is not FunctionalResponse)
             throw new ArgumentException("Adequacy reads a direct-mode functional fit beside the basis fit; this fit's response is scalar.", nameof(directData));
@@ -316,32 +322,88 @@ internal static partial class BassActiveSubspaces
         return (check, check is null ? MatrixPoincareStatus.NotApplicable : MatrixPoincareStatus.Computed);
     }
 
-    // The matrix Poincaré check per draw under a product law of uniform laws over continuous inputs alone: Cov(Rf) = (RH)Σ_B(RH)ᵀ against
-    // E[RJ D JᵀRᵀ] = (RH)K_D(RH)ᵀ, Σ_B the terms' covariances, K_D their gradients' Gram under D = diag((b − a)²/π²) in box units.
+    // The matrix Poincaré check per draw under a product law over continuous inputs alone, each with a known Poincaré constant
+    // (PoincareConstant): Cov(Rf) = (RH)Σ_B(RH)ᵀ against E[RJ D JᵀRᵀ] = (RH)K_D(RH)ᵀ, Σ_B the terms' covariances, K_D their gradients' Gram
+    // under D, the constants in box units. Σ_B and K_D depend on a draw's terms alone, which draws repeat, so they are kept per structure
+    // within the readout up to a constant budget of values (slice 6): a pure cache, filled in draw order and never evicted, whose entries
+    // are what a miss computes, so the ratios are the same bits whether a draw hits it or not.
     private static MatrixPoincareCheck? MatrixCheck(Frame frame, BassMoments moments, (BassTerm[] Terms, double[,] M)[] forms, double[][,] hs, double[,] root)
     {
-        ProductMeasure measure = frame.Measure!;
         if (frame.Inputs.Cases.CategoricalCount > 0) return null;
         int p = frame.P;
         var d = new double[p, p];
         for (int i = 0; i < p; i++)
         {
-            int v = frame.Variables[i];
-            if (measure.Declared[v] is not UniformMeasure) return null;
-            ContinuousMeasure law = measure.Continuous(v)!;
-            d[i, i] = (law.Upper - law.Lower) * (law.Upper - law.Lower) / (Math.PI * Math.PI);
+            if (PoincareConstant(frame, i) is not { } constant) return null;
+            d[i, i] = constant;
         }
+        var grams = new Dictionary<BassTerm[], (double[,] Covariance, double[,] Bound)>(Structure.Instance);
+        long kept = 0;
         var ratios = new double[forms.Length];
         int violations = 0;
         for (int s = 0; s < forms.Length; s++)
         {
             BassTerm[] terms = forms[s].Terms;
+            if (!grams.TryGetValue(terms, out (double[,] Covariance, double[,] Bound) gram))
+            {
+                gram = (moments.CovarianceGram(terms), moments.GradientGram(terms, d));
+                long size = 2L * terms.Length * terms.Length;
+                if (kept + size <= GramCacheValues)
+                {
+                    grams[terms] = gram;
+                    kept += size;
+                }
+            }
             double[,] rh = Multiply(root, hs[s]);
-            double[,] covariance = Sandwich(rh, moments.CovarianceGram(terms)), bound = Sandwich(rh, moments.GradientGram(terms, d));
+            double[,] covariance = Sandwich(rh, gram.Covariance), bound = Sandwich(rh, gram.Bound);
             ratios[s] = MatrixPoincare.Ratio(covariance, bound);
             if (!(ratios[s] <= 1.0 + 1e-9)) violations++;
         }
         return new MatrixPoincareCheck(Array.AsReadOnly(ratios), violations);
+    }
+
+    // Continuous predictor i's Poincaré constant in box units (slice 6), or null where none is known here: (b − a)²/π² for a uniform law
+    // on [a, b]; min(σ², (b − a)²/π²) for a normal N(μ, σ²) truncated to [a, b], a mixture of one normal component, which is log-concave
+    // with potential curvature 1/σ², so the Bakry–Émery bound σ² holds, and on an interval the weighted Payne–Weinberger bound (both cited
+    // from memory). A mixture of several components, a Student t and an empirical marginal have none here.
+    private static double? PoincareConstant(Frame frame, int i)
+    {
+        int v = frame.Variables[i];
+        ContinuousMeasure law = frame.Measure!.Continuous(v)!;
+        double interval = (law.Upper - law.Lower) * (law.Upper - law.Lower) / (Math.PI * Math.PI);
+        switch (frame.Measure.Declared[v])
+        {
+            case UniformMeasure:
+                return interval;
+            case MixtureMeasure { Components: [NormalComponent normal] }:
+                double sd = normal.Sd / frame.Widths[i];
+                return Math.Min(sd * sd, interval);
+            default:
+                return null;
+        }
+    }
+
+    // Draws' term lists compared by their terms' identities: a fit's term table hands out one instance per term, so the draws of one
+    // structure meet here; equal terms from other instances only miss.
+    private sealed class Structure : IEqualityComparer<BassTerm[]>
+    {
+        public static readonly Structure Instance = new();
+
+        public bool Equals(BassTerm[]? a, BassTerm[]? b)
+        {
+            if (ReferenceEquals(a, b)) return true;
+            if (a is null || b is null || a.Length != b.Length) return false;
+            for (int i = 0; i < a.Length; i++)
+                if (!ReferenceEquals(a[i], b[i])) return false;
+            return true;
+        }
+
+        public int GetHashCode(BassTerm[] terms)
+        {
+            var hash = new HashCode();
+            foreach (BassTerm t in terms) hash.Add(RuntimeHelpers.GetHashCode(t));
+            return hash.ToHashCode();
+        }
     }
 
     // A·M·Aᵀ.
@@ -440,17 +502,71 @@ internal static partial class BassActiveSubspaces
     {
         ArgumentNullException.ThrowIfNull(other);
         ArgumentNullException.ThrowIfNull(spec);
+        return CoActive(DirectSide(fit, data, spec.Output, "Output"), DirectSide(other, otherData, spec.OtherOutput, "OtherOutput"), spec);
+    }
+
+    // A fit paired with a basis fit on the same inputs (slice 6): f as above, g = a_gᵀy over the basis fit's joint draws.
+    public static CoActiveAnalysis CoActive(BassFit fit, BassData data, BassBasisFit other, CoActiveSpec spec)
+    {
+        ArgumentNullException.ThrowIfNull(other);
+        ArgumentNullException.ThrowIfNull(spec);
+        return CoActive(DirectSide(fit, data, spec.Output, "Output"), BasisSide(other, spec.OtherOutput, "OtherOutput"), spec);
+    }
+
+    // Two basis fits on the same inputs (slice 6), each through its output functional over its joint draws.
+    public static CoActiveAnalysis CoActive(BassBasisFit fit, BassBasisFit other, CoActiveSpec spec)
+    {
+        ArgumentNullException.ThrowIfNull(fit);
+        ArgumentNullException.ThrowIfNull(other);
+        ArgumentNullException.ThrowIfNull(spec);
+        return CoActive(BasisSide(fit, spec.Output, "Output"), BasisSide(other, spec.OtherOutput, "OtherOutput"), spec);
+    }
+
+    // One side of a pair of fits (slice 6): its inputs and degree, its pooled draws (a basis fit's joint draws) with their weights, each
+    // draw as terms and H, the output functional it is read through (null for a scalar fit), its outputs per point for batching, and its
+    // gradient along the functional at shared points for a chunk of draws, per draw of the chunk.
+    private sealed record Side(BassInputTransform Transform, BassInputs Inputs, int Degree, int Count, IReadOnlyList<double>? Weights,
+                               Func<int, Surface> Surface, double[]? Output, long Width,
+                               Func<PointSet, int[], Func<int, Func<int, int, double>>> Gradient);
+
+    private static Side DirectSide(BassFit fit, BassData data, IReadOnlyList<double>? output, string name)
+    {
         Fingerprint(fit, data);
-        Fingerprint(other, otherData);
-        BassInputs inputs = BassInputs.Prepare(data, fit.Transform), otherInputs = BassInputs.Prepare(otherData, other.Transform);
-        SameInputs(fit.Transform, inputs, other.Transform, otherInputs);
-        if (other.Config.Structure.Degree != fit.Config.Structure.Degree)
-            throw new ArgumentException("The two fits' hinges have different degrees; the cross moments need one.", nameof(other));
-        double[]? a = OutputOf(spec.Output, data, "Output"), b = OutputOf(spec.OtherOutput, otherData, "OtherOutput");
-        Frame frame = FrameOf(inputs, fit.Transform, fit.Config.Structure.Degree, spec.Measures, spec.Sample, spec.Metric, spec.Route, spec.Points, 1);
-        BassDraw[] pooledF = [.. fit.Draws.SelectMany(c => c)], pooledG = [.. other.Draws.SelectMany(c => c)];
-        (int[] selF, double[] wF) = Draws3.Select(spec.Draws, pooledF.Length, fit.DrawWeights, nameof(spec));
-        (int[] selG, double[] wG) = Draws3.Select(spec.OtherDraws, pooledG.Length, other.DrawWeights, nameof(spec));
+        BassInputs inputs = BassInputs.Prepare(data, fit.Transform);
+        double[]? a = OutputOf(output, data, name);
+        BassDraw[] pooled = [.. fit.Draws.SelectMany(c => c)];
+        return new Side(fit.Transform, inputs, fit.Config.Structure.Degree, pooled.Length, fit.DrawWeights, Surfaces(fit, data, inputs, pooled), a,
+                        data.Response.Locations, (points, chunk) =>
+                        {
+                            BassGradient g = fit.Gradient(data, points.Cases, chunk);
+                            return b => Directional(g, b, a);
+                        });
+    }
+
+    // A basis fit's side: H = G·c over its joint draws, read through a_g; its gradient a_gᵀJ = (Gᵀa_g)ᵀJ_w, the components' gradients weighted.
+    private static Side BasisSide(BassBasisFit fit, IReadOnlyList<double>? output, string name)
+    {
+        double[] a = Functional(output ?? throw new ArgumentException($"A basis fit is read through an output functional: {name} is required.", name),
+                                fit.Decomposition.Locations, name);
+        (BassInputs inputs, BassFit first, int degree) = BasisInputs(fit);
+        (_, Func<int, Surface> surface) = BasisSurfaces(fit, null, name);
+        double[] alpha = ComponentFunctional(fit, a);
+        return new Side(first.Transform, inputs, degree, fit.JointDraws.Count, null, surface, a, fit.Components.Count, (points, chunk) =>
+        {
+            BassGradient[] g = ComponentGradients(fit, points, chunk);
+            return b => (r, i) => Along(alpha, g, b, r, i);
+        });
+    }
+
+    // A pair of fits' co-active readout: on the same inputs at one degree, draws paired by position with product weights.
+    private static CoActiveAnalysis CoActive(Side f, Side g, CoActiveSpec spec)
+    {
+        SameInputs(f.Transform, f.Inputs, g.Transform, g.Inputs);
+        if (g.Degree != f.Degree)
+            throw new ArgumentException("The two fits' hinges have different degrees; the cross moments need one.", "other");
+        Frame frame = FrameOf(f.Inputs, f.Transform, f.Degree, spec.Measures, spec.Sample, spec.Metric, spec.Route, spec.Points, 1);
+        (int[] selF, double[] wF) = Draws3.Select(spec.Draws, f.Count, f.Weights, nameof(spec));
+        (int[] selG, double[] wG) = Draws3.Select(spec.OtherDraws, g.Count, g.Weights, nameof(spec));
         if (selF.Length != selG.Length)
             throw new ArgumentException($"The two fits' draws pair by position, so their selections need one length: {selF.Length} and {selG.Length}.", nameof(spec));
         double[] weights = [.. wF.Select((x, s) => x * wG[s])];
@@ -458,26 +574,25 @@ internal static partial class BassActiveSubspaces
         CoActiveError[]? errors = null;
         if (frame.Route == ActiveSubspaceRoute.Exact)
         {
-            var moments = BassMoments.On(inputs, frame.Degree, frame.Measure!);
-            Func<int, Surface> sf = Surfaces(fit, data, inputs, pooledF), sg = Surfaces(other, otherData, otherInputs, pooledG);
+            var moments = BassMoments.On(f.Inputs, frame.Degree, frame.Measure!);
             for (int s = 0; s < pairs.Length; s++)
             {
-                Surface f = sf(selF[s]), g = sg(selG[s]);
-                pairs[s] = Pair(moments, frame, f.Terms, Read(a, f.H), g.Terms, Read(b, g.H));
+                Surface sf = f.Surface(selF[s]), sg = g.Surface(selG[s]);
+                pairs[s] = Pair(moments, frame, sf.Terms, Read(f.Output, sf.H), sg.Terms, Read(g.Output, sg.H));
             }
         }
         else
         {
             PointSet points = PointsOf(frame, spec.Points, spec.Seed);
             errors = new CoActiveError[pairs.Length];
-            long m = Math.Max(data.Response.Locations, otherData.Response.Locations);
+            long m = Math.Max(f.Width, g.Width);
             int batch = (int)Math.Clamp(BatchValues / (points.N * m * frame.P), 1, Batch);
             for (int start = 0; start < pairs.Length; start += batch)
             {
                 int end = Math.Min(pairs.Length, start + batch);
-                BassGradient gf = fit.Gradient(data, points.Cases, selF[start..end]), gg = other.Gradient(otherData, points.Cases, selG[start..end]);
+                Func<int, Func<int, int, double>> gf = f.Gradient(points, selF[start..end]), gg = g.Gradient(points, selG[start..end]);
                 for (int s = 0; s < end - start; s++)
-                    (pairs[start + s], errors[start + s]) = SampledPair(frame, points, Directional(gf, s, a), Directional(gg, s, b));
+                    (pairs[start + s], errors[start + s]) = SampledPair(frame, points, gf(s), gg(s));
             }
         }
         return new CoActiveAnalysis(Array.AsReadOnly(frame.Names), Array.AsReadOnly(frame.Excluded), frame.Route, spec.Metric, frame.Map, frame.Measure,
@@ -657,17 +772,22 @@ internal static partial class BassActiveSubspaces
 
     private static double[] Coefficients(BassDraw draw) => draw.Coefficients[1..];
 
-    // A direct functional fit's draws: each term's output-side factors at the training output locations, its output normalizer
-    // included, times its coefficient (BassSensitivity's conditioned form, at every training location).
-    private static Func<int, Surface> DirectFunctional(BassFit fit, BassData data, BassInputs inputs, BassDraw[] pooled)
+    // A direct functional fit's draws: each term's output-side factors at the training output locations, or at declared ones (slice 6),
+    // its output normalizer included, times its coefficient (BassSensitivity's conditioned form, at every location).
+    private static Func<int, Surface> DirectFunctional(BassFit fit, BassData data, BassInputs inputs, BassDraw[] pooled, OutputInputs? at = null)
     {
         var response = (FunctionalResponse)data.Response;
-        int m = response.Locations, degree = fit.Config.Structure.Degree;
+        int m = at?.Locations ?? response.Locations, degree = fit.Config.Structure.Degree;
         IReadOnlyList<RangeScale> outputs = fit.Transform.OutputVariables;
         var columns = new double[outputs.Count][];
         for (int q = 0; q < outputs.Count; q++)
         {
             columns[q] = new double[m];
+            if (at is not null)
+            {
+                at.Variable(q).CopyTo(columns[q]);
+                continue;
+            }
             ReadOnlySpan<double> values = response.OutputVariables[q].Values.Span;
             for (int l = 0; l < m; l++) columns[q][l] = outputs[q].Scale(values[l]);
         }
@@ -893,6 +1013,35 @@ internal static partial class BassActiveSubspaces
                 throw new ArgumentException(why);
     }
 
+    // A declared output metric's locations through the output variables' scales (slice 6), refused outside their boxes, which a product
+    // law's readout never reaches either; null keeps the training locations.
+    private static OutputInputs? Locations(OutputMetric? metric, BassInputTransform transform)
+    {
+        if (metric?.Locations is not { } given) return null;
+        (OutputInputs at, _) = PredictionCases.PrepareLocations(transform, given);
+        int beyond = 0;
+        for (int l = 0; l < at.Locations; l++)
+        {
+            bool inside = true;
+            for (int d = 0; d < at.Count; d++)
+            {
+                double x = at.Variable(d)[l];
+                inside &= x >= 0.0 && x <= 1.0;
+            }
+            if (!inside) beyond++;
+        }
+        if (beyond > 0)
+            throw new ArgumentException($"{beyond} of the output metric's {at.Locations} locations lie outside the output variables' boxes.", nameof(metric));
+        return at;
+    }
+
+    // A basis exists only at its training output locations.
+    private static void TrainingLocationsOnly(OutputMetric? metric)
+    {
+        if (metric?.Locations is not null)
+            throw new ArgumentException("A basis exists only at its training output locations; an output metric's Locations apply to a direct fit.", nameof(metric));
+    }
+
     // W_y over m locations: the identity when none is declared; refused unless m × m, symmetric and positive semidefinite.
     private static double[,] Metric(OutputMetric? declared, int m)
     {
@@ -903,7 +1052,7 @@ internal static partial class BassActiveSubspaces
             return identity;
         }
         double[,] w = declared.Matrix ?? throw new ArgumentException("The output metric needs a matrix.");
-        if (w.GetLength(0) != m || w.GetLength(1) != m) throw new ArgumentException($"The output metric is {m} × {m}, one row per training output location.");
+        if (w.GetLength(0) != m || w.GetLength(1) != m) throw new ArgumentException($"The output metric is {m} × {m}, one row per output location.");
         for (int i = 0; i < m; i++)
             for (int j = 0; j < m; j++)
                 if (!double.IsFinite(w[i, j]) || w[i, j] != w[j, i]) throw new ArgumentException("The output metric is finite and symmetric.");
@@ -1134,9 +1283,9 @@ internal static partial class BassActiveSubspaces
 
     // ── Decision 6 ────────────────────────────────────────────────────────────────────────────────────────────────────
 
-    // Poincaré per draw and continuous input with a uniform law, from totals Σ_ab M_ab·T_ab(v) over the term pairs' totals, the moment
-    // route's on either route; and SG-4(b) where the Jacobi measure is given. C and its errors come in the metric, which a product law
-    // makes diagonal, so the box's C_vv is C_vv/L_vv².
+    // Poincaré per draw and continuous input with a known constant (a uniform law, or since slice 6 a truncated normal), from totals
+    // Σ_ab M_ab·T_ab(v) over the term pairs' totals, the moment route's on either route; and SG-4(b) where the Jacobi measure is given.
+    // C and its errors come in the metric, which a product law makes diagonal, so the box's C_vv is C_vv/L_vv².
     private static PoincareCheck Poincare(Frame frame, BassMoments moments, (BassTerm[] Terms, double[,] M)[] forms, double[][,] cMetric,
                                           double[][,]? error, double[,]? jacobi)
     {
@@ -1162,17 +1311,15 @@ internal static partial class BassActiveSubspaces
         int violations = 0;
         for (int i = 0; i < p; i++)
         {
-            int v = frame.Variables[i];
-            bool uniform = frame.Measure!.Declared[v] is UniformMeasure;
-            ContinuousMeasure m = frame.Measure.Continuous(v)!;
-            double constant = uniform ? (m.Upper - m.Lower) * (m.Upper - m.Lower) / (Math.PI * Math.PI) : double.NaN;
+            double? known = PoincareConstant(frame, i);
+            double constant = known ?? double.NaN;
             double toBox = 1.0 / (frame.L[i, i] * frame.L[i, i]);
             for (int d = 0; d < draws; d++)
             {
                 double t = total[d, i];
                 bound[d, i] = constant * cMetric[d][i, i] * toBox;
-                ratio[d, i] = uniform ? (bound[d, i] > 0.0 ? t / bound[d, i] : (t > 0.0 ? double.PositiveInfinity : 0.0)) : double.NaN;
-                if (uniform)
+                ratio[d, i] = known is not null ? (bound[d, i] > 0.0 ? t / bound[d, i] : (t > 0.0 ? double.PositiveInfinity : 0.0)) : double.NaN;
+                if (known is not null)
                 {
                     // Rounding on the exact route; three standard errors of the bound on the sampled route.
                     double slack = error is null ? 1e-9 * Math.Max(Math.Abs(t), Math.Abs(bound[d, i]))

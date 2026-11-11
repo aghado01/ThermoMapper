@@ -33,8 +33,10 @@ public sealed record BassGradient(IReadOnlyList<string> Inputs, IReadOnlyList<do
 /// <summary>The gradient readout's computation (<see cref="BassGradient"/>).</summary>
 internal static class BassGradients
 {
+    // outputLocations: a direct functional fit's locations, as prediction's OutputLocations takes them (E8, slice 6); the training ones
+    // when null, and refused for a scalar fit.
     public static BassGradient Of(BassModel model, BassTermTable terms, IReadOnlyList<IReadOnlyList<BassDraw>> draws, IReadOnlyList<double>? drawWeights,
-                                  PredictionCases cases, IReadOnlyList<int>? selection)
+                                  PredictionCases cases, IReadOnlyList<int>? selection, IReadOnlyList<ContinuousColumn>? outputLocations = null)
     {
         ArgumentNullException.ThrowIfNull(cases);
         (List<BassDraw> pooled, _) = BassDrawFit.Pool(draws, terms, false, nameof(draws));
@@ -43,9 +45,11 @@ internal static class BassGradients
         OutputInputs? locations = null;
         if (model.Data.Response is FunctionalResponse functional)
         {
-            ContinuousColumn[] given = Array.ConvertAll([.. functional.OutputVariables], v => new ContinuousColumn(v.Name, v.Values.ToArray()));
+            IReadOnlyList<ContinuousColumn> given = outputLocations
+                ?? Array.ConvertAll([.. functional.OutputVariables], v => new ContinuousColumn(v.Name, v.Values.ToArray()));
             (locations, _) = PredictionCases.PrepareLocations(model.Transform, given);
         }
+        else if (outputLocations is not null) throw new ArgumentException("A scalar fit has no output locations.", nameof(outputLocations));
         var surface = new BassSurface(model.Basis, terms, caseInputs, locations);
 
         // Each continuous predictor's position among the continuous predictors, its name and its box's width.

@@ -110,15 +110,19 @@ public enum MatrixPoincareStatus
     /// <summary>Not asked: <see cref="ActiveSubspaceSpec.MatrixPoincare"/> is off, its default.</summary>
     NotAsked,
 
-    /// <summary>Asked, but the law is not a product of uniform laws over continuous inputs alone, which the bound needs.</summary>
+    /// <summary>Asked, but the law is not a product over continuous inputs alone of laws with a Poincaré constant here: a uniform law,
+    /// or a truncated normal (<see cref="MatrixPoincareCheck"/>).</summary>
     NotApplicable,
 }
 
 /// <summary>
 /// The matrix Poincaré check per draw (E8, slice 5): the largest generalized eigenvalue of the outputs' covariance Cov_ρ(f) against
 /// E[J D Jᵀ], D the inputs' Poincaré constants in box units, both under the output metric's root; at most 1 when Efron–Stein and each
-/// input's Poincaré inequality hold. Read from the moment route under a product law whose every input is continuous and uniform; a
-/// ratio above 1 + 10⁻⁹ is a violation, which is a defect.
+/// input's Poincaré inequality hold. Read from the moment route under a product law whose every input is continuous with a known
+/// constant (slice 6): (b − a)²/π² for a uniform law on [a, b]; min(σ², (b − a)²/π²) for a normal N(μ, σ²) truncated to [a, b], a
+/// mixture of one normal component, since it is log-concave with potential curvature 1/σ² (Bakry–Émery) on an interval (the weighted
+/// Payne–Weinberger bound), both cited from memory. A ratio above 1 + 10⁻⁹ is a violation, which is a defect. The term-pair Grams it
+/// reads are cached per structure within a readout (slice 6).
 /// </summary>
 /// <param name="Ratios">Each draw's ratio.</param>
 /// <param name="Violations">The ratios above one beyond rounding.</param>
@@ -126,12 +130,20 @@ public sealed record MatrixPoincareCheck(IReadOnlyList<double> Ratios, int Viola
 
 /// <summary>
 /// The output metric W_y of a functional fit's C = E[JᵀW_yJ] (E8, slice 3; F-X6's Q): a symmetric positive semidefinite m × m matrix over
-/// the training output locations, saying which output units and which correlations count. The identity sums the locations' C;
-/// quadrature weights on the diagonal integrate over the output grid. A basis fit's C is then Σ_kk′ (GᵀW_yG)_kk′ E[∇w_k∇w_k′ᵀ], with
-/// G = diag(y_s)K the reconstruction's map.
+/// the output locations, saying which output units and which correlations count. The identity sums the locations' C; quadrature weights
+/// on the diagonal integrate over the output grid. A basis fit's C is then Σ_kk′ (GᵀW_yG)_kk′ E[∇w_k∇w_k′ᵀ], with G = diag(y_s)K the
+/// reconstruction's map.
+/// <para>The locations are the training ones unless <see cref="Locations"/> declares others (slice 6): a direct fit's output-side factors
+/// are hinges in the output variables, defined across their box, so its J reads at any location there. A basis exists only at its
+/// training locations, so a basis fit refuses them.</para>
 /// </summary>
 public sealed record OutputMetric(double[,] Matrix)
 {
+    /// <summary>The locations <see cref="Matrix"/> is over, one column per output variable matched by name, in the variables' own units,
+    /// as prediction's <c>OutputLocations</c> takes them, each inside the variable's box (its declared domain, else its training range);
+    /// the training locations when null.</summary>
+    public IReadOnlyList<ContinuousColumn>? Locations { get; init; }
+
     /// <summary>W_y = diag(<paramref name="weights"/>), nonnegative.</summary>
     public static OutputMetric Diagonal(IReadOnlyList<double> weights)
     {
@@ -210,8 +222,8 @@ public sealed record CoActiveError(double[,] Cf, double[,] Cg, double[,] Cfg);
 
 /// <summary>
 /// Decision 6's per-draw consistency checks, reported and not enforced, for each draw and continuous predictor in the readout's
-/// order. Poincaré on a uniform input on [a, b]: total(v) ≤ ((b − a)²/π²)·C_vv in box units (NaN where the input's law is not
-/// uniform); for a functional fit, with W_y = RᵀR, total(v) is Σ_r of the outputs Ry's totals, which each meet it, so the sum meets
+/// order. Poincaré on a uniform input on [a, b]: total(v) ≤ ((b − a)²/π²)·C_vv in box units, and since slice 6 on a normal truncated to
+/// [a, b] with min(σ², (b − a)²/π²) as the constant (<see cref="MatrixPoincareCheck"/>); NaN where no constant is known here; for a functional fit, with W_y = RᵀR, total(v) is Σ_r of the outputs Ry's totals, which each meet it, so the sum meets
 /// C = E[JᵀW_yJ]'s. On a scalar Legendre fit under the product uniform law on the boxes, SG-4(b)'s total(v) ≤ ½·E[x_v(1 − x_v)(∂_v f)²]
 /// as well. A ratio above one beyond rounding, or beyond three Monte Carlo errors on the sampled route, is a violation, which is a defect.
 /// </summary>
@@ -246,4 +258,9 @@ public sealed record ActiveSubspaceAnalysis(
     IReadOnlyList<string> Inputs, IReadOnlyList<string> Excluded, ActiveSubspaceRoute Route, InputMetric Metric, double[,] Map,
     ProductMeasure? Measure, int Points, SubspacePosterior Posterior, double[][,]? MonteCarloError, PoincareCheck? Poincare,
     IReadOnlyList<int> DrawIndex, RankPosterior? Ranks = null, OutputPosterior? Outputs = null, MatrixPoincareCheck? MatrixPoincare = null,
-    MatrixPoincareStatus MatrixPoincareStatus = MatrixPoincareStatus.NotApplicable);
+    MatrixPoincareStatus MatrixPoincareStatus = MatrixPoincareStatus.NotApplicable)
+{
+    /// <summary>The activity scores (slice 6), in the metric: C's diagonal always, and its truncation at k, and at each draw's k_s under a
+    /// rank rule (<see cref="ActivityScores"/>). Read from <see cref="Posterior"/> and <see cref="Ranks"/> when asked.</summary>
+    public ActivityScores Activity => ActivityScores.Of(Posterior, Ranks);
+}
