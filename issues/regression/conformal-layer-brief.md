@@ -276,26 +276,95 @@ Each report gives the commits, gate results, coverage and width by fit, cost, de
 
 Newest first.
 
-### In progress — Slice 12b, CB-4's latent-posterior reading (started 2026-11-11)
+### 2026-11-11 — Slice 12b, CB-4's latent-posterior reading as the full step's opt-in
 
-Started at the main session's word after slice 11's verification.
+Built at the main session's word of 2026-11-11, after slice 11's verification, against the Lean's CB-4(c) and slice 12 ("CB-4(c) read from draws").
 
-**Plan.**
-- *The layer.* `ConformalOptions.ObservationLatents` takes `LatentReading.Integrated` (CB-4(b), the default) or `Conditioned` (CB-4(c), the opt-in).
-  - Under `Conditioned` the training units read their retained latents, f(zᵢ | θ_s, v_s,i).
-  - The candidate seam carries `ConditionedValues` = ln f(y | θ_s, v′_s), with v′ drawn from p(v′ | θ_s, y), or its conditional mean. Its `Values` stay ln g, which the add-one-in weights read.
-  - Refused under `Conditioned`: the margin (its carried bounds read the training terms as weights) and Hoff's score (the conditioned Hoff reading is not built). The predictive distribution keeps refusing conditioned latents.
-- *BARS.*
-  - The conditioned training content reads each draw's retained weights: w, or 1/(c·v) under a noise.
-  - The candidate seam draws each candidate's latent from its exact conditional: the robust weights' resamplers, and the t, exponential and GIG mixings. GBP's slice step is refused.
-- *BASS:* asked the GBASS chip which of us builds its side, and whether `BassPointwise` and `BassCandidates` are free.
-- *Gates:*
-  - CB-1 by enumeration with (c), on a finite model with exact weighted draws and the conditional-mean reading;
-  - the drawn reading's mean against the conditional mean;
-  - the refusals;
-  - qualification: coverage and width of (c) against (b) on BARS t-weight fits, under t noise (right) and slice 5's contaminated truth (wrong), with the ESS and k̂, plus the cost row.
+**Landed** on `main`, nothing pushed:
+- `c5a3f1f`, with its tests.
+  - *The layer:* `ConformalOptions.ObservationLatents` (`LatentReading.Integrated`, the default; `Conditioned`, the opt-in), and `ConformalBayes.Scores(…, latents)`.
+  - *The seam:* `CandidateLogDensity.ConditionedValues`, the candidate's term at its latent drawn from its conditional given its value. Its `Values` stay the integrated terms, which the add-one-in weights read.
+  - *BARS:* `observationLatents` (and `seed` for the candidates) on `PointwiseLogDensity` and `CandidateLogDensity`, covering the robust weights and the noise laws. The draws keep W = 1/(c·v).
+  - *BASS:* the same on `BassFit.PointwiseLogDensity` and `CandidateLogDensity`, through `BassPointwise` and `BassCandidates`. The draws keep their `ObservationLatents`, and under random effects the residual is net of the draw's group effects. The GBASS chip confirmed both files were free; it gave the recipe and declined to build this side.
+  - `LatentPosteriorReadingTests`.
+- *Nothing moves with the option off.* The default path's arithmetic is unchanged, and the engines' new parameters default to the integrated reading. The default's refusal of conditioned latents now names the option.
 
-**State.** The code and tests are committed in `c5a3f1f`, covering the layer, BARS and BASS (the GBASS chip confirmed its files free and declined to build BASS's side). The Commit selection passed 2,659 of 2,659. The measurements are read: BARS coverage 0.885 and 0.895 under the latent-posterior reading, widths 0.6% narrower; BASS's Student t fit 0.896, 0.3% wider. The whole assembly is running at `c5a3f1f`, and the report follows it.
+**What it computes.**
+- *The training units* read their retained latents: ln N(eᵢ | m·vᵢ, s²·vᵢ), with s² = σ²c and m = σβ, at each draw's own vᵢ.
+- *The candidate* draws v′ per draw and per grid value from its exact conditional given its residual, p(v′ | θ_s, y): the t, exponential and GIG mixings, and BARS's two robust-weight resamplers. Its term at that v′ is `ConditionedValues`.
+- *The weights* are the integrated g(y | θ_s), as by default. So every unit's weighted reading is CB-4(c)'s latent-posterior score (`latentScore_some_draws`, `latentScore_none_draws`).
+- *The candidate's own score and its bound* read the conditioned terms under the same weights. Its error therefore carries the drawn latent's Σ w̃² Var(f | θ, y) (`drawnLatent_mean_var`). The weights' ESS, efficiency and k̂ stay the integrated weights'.
+- *A density with no observation latent reads alike either way.* A Gaussian BARS fit gives no conditioned matrix, and its sets are the default's, bit for bit.
+
+**Refused, each with its reason.**
+- Under the option:
+  - the margin: its carried bounds read the training terms as each unit's turn's weights, which are now f, not g;
+  - Hoff's score: the conditioned Hoff reading, `hoffCondScore`, is not built;
+  - a training density whose observation latents are integrated: the reading would be the default's under another name;
+  - a seam without `ConditionedValues`;
+  - latent reports that differ;
+  - the CDF options overload.
+- In the engines:
+  - the CDF under the conditioned reading;
+  - a noise without an exact conditional draw (GBP's slice step is a step from the current value, not a draw);
+  - BASS's new groups, whose integrated effect makes the latent's conditional given y not the latent's alone;
+  - the collapsed content.
+
+**Gates.**
+- *The layer reads CB-4(c) exactly.* On a finite model (θ ∈ (0, 1), a latent bit per unit, y ∈ (0, 1, 2)), the exact joint posterior is given as weighted draws, every (θ, v) combination, with the candidate's conditional-mean reading. Every unit's score and the candidate's equal the closed form Σ_θ p(θ | all) Σ_v q f²/g to 10⁻¹² (`latentScore_eq`).
+- *CB-1 by enumeration,* every data set of three units and a candidate, k 1 of m 4, bound 0.75.
+  - The latent-posterior reading covers 0.785 under an iid law outside the model and 0.799 under the model's own.
+  - The integrated reading covers 0.872 and 0.871.
+- *The drawn reading against the conditional mean,* 40,000 latents at one draw and residual, against quadrature over ln v from the latent's prior:
+  - BARS's t weights: 0.142497 against 0.142573, se 0.000214;
+  - BARS's t noise: 0.139793 against 0.139892, se 0.000213;
+  - BARS's skewed GIG: 0.257875 against 0.257964, se 0.000310.
+- *BARS's seams,* t weights and t noise. Each training term is its draw's Normal at its retained latent, written out. The candidates' values are the integrated terms, and one seed repeats the draws. The full step takes the conditioned pair under the option, and each mix is refused.
+- *BASS's seams,* Student t noise. Each training term is N(e | σβv, σ²c·v) at the draw's retained latent and fit, written out. Each candidate's conditioned term is reproduced from the seam's own stream in draw, case and grid order. The values stay the integrated terms. Mixes and the CDF are refused.
+- *Per commit,* the selected classes and the pinned tier: 2,659 of 2,659. *At the slice's end,* the whole assembly: 3,214 of 3,214 at `c5a3f1f`.
+
+**The measurement** (behind `BASS_QUALIFICATION=1`; a reading, no default proposed): 20 fits of 99 points (m 100, k 10), 50 held-out cases each at the truth and 20 on a grid. Both readings run on the same fits and cases, with the width difference paired.
+
+| Fit and truth | Coverage, integrated / latent-posterior (se) | Width, integrated / latent-posterior | Latent-posterior less integrated (se) | Least ESS at the truth |
+|---|---|---|---|---|
+| BARS, t₄ weights; truth t₄ noise, the model's own | 0.886 / 0.885 (0.014) | 0.869 / 0.864 | −0.6% (0.2%) | 249 |
+| BARS, t₄ weights; truth slice 5's contaminated, outside the model | 0.895 / 0.895 (0.009) | 0.967 / 0.960 | −0.6% (0.3%) | 125 |
+| BASS, Student t noise (slice 4's fit); truth outside every model | 0.895 / 0.896 (0.013) | 1.124 / 1.127 | +0.3% (0.1%) | 161 |
+
+- *Both readings cover within error on every fit.* The width gap is small, and its sign varies with the fit: on BARS the latent-posterior sets are 0.6% narrower (two to three se); on BASS they are 0.3% wider (three se).
+- *Hoff's per-unit weights degenerated on this BASS fit* (least ESS 14.4, slice 12a). The latent-posterior reading's weights are the integrated add-one-in weights, least ESS 161.
+- *In the finite model,* where y moves strongly with the latent, the Lean measured the latent-posterior sets 1.2 to 4.3% larger. The sign of the gap is the model's.
+- *No k̂ above its threshold at the truth* on BARS, under either reading.
+
+**The cost row** (BARS, n 400, S 1,000, 20 cases of 200, cycle clock, indicative, the machine shared):
+- the training density: 306 ms integrated, 124 ms conditioned;
+- the candidates: 815 ms integrated, 659 ms with the drawn latents;
+- the full step: 1,617 ms integrated, 1,375 ms latent-posterior.
+
+The conditioned terms are Normal, cheaper than t's marginal. The drawn latents cost less than that saving.
+
+**Defects found: none.** One gap was closed in review, before any commit: the distribution's options overload would have ignored the reading silently, and it now refuses it.
+
+**Decided in building it.**
+- *The option names the reading,* `LatentReading`, and the engines take `LatentTreatment`. This keeps the engines free of the conformal layer's types.
+- *The drawn reading only,* the plan's construct. The conditional-mean reading, which removes the drawn latent's variance, is a follow-up.
+- *Drawn per grid value,* each candidate value with its own latent, on one stream per call in draw, case and grid order.
+- *The split-half diagnostic reads the conditioned terms* as the full step does.
+
+**Follow-ups, each with the decision it would change.**
+- *The conditional-mean reading,* ln E[f | θ, y], in closed form for the GIG family (Bessel K ratios), the t and the robust weights, and by quadrature for GBP. It would remove Σ w̃² Var from the candidate's bound and admit GBP. It decides whether the mixing laws gain a conditional-mean member, which is shared by BASS and BARS.
+- *The conditioned Hoff reading* (`hoffCondScore`). It decides whether Hoff's score offers the latent-posterior reading. The Lean measured it 1.9 to 3.1% above Hoff's integrated size in the finite model.
+- *The margin under the reading.* Carried bounds would need each unit's turn's weights g beside its conditioned terms f, a second training matrix. It decides whether the reading reports a margin.
+- *BASS's new groups under the reading:* the joint conditional of the new effect and the latent given y.
+
+**Doc changes owed** (for the offline docs pass; chips leave `docs/` alone).
+- *`docs/Maths/Regression/ConformalPrediction.md`, CB-4's section:*
+  - the latent-posterior reading as an opt-in: `ConformalOptions.ObservationLatents`, `CandidateLogDensity.ConditionedValues`;
+  - what each unit reads, and the weights;
+  - the refusals and the drawn latent's variance;
+  - the enumeration and the measurement tables.
+- *The engine pages,* BARS and BASS: the `observationLatents` and `seed` parameters on the training and candidate seams, the exact-draw laws, and GBP's refusal.
+- *The API rows:* `LatentReading`, `ConformalBayes.Scores(…, latents)`.
 
 ### 2026-11-11 — Slice 11, BGP's drawn f: the retained-parameters content the full step takes
 
