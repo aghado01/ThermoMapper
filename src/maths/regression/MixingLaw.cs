@@ -30,6 +30,15 @@ public interface IMixingLaw
     /// </summary>
     double StepConditional(double current, double residual, double unitVariance, double unitDrift, double power, Xoshiro256PlusPlus rng);
 
+    /// <summary>
+    /// v's next value under its conditional given a K-vector residual (several outputs sharing one v, E34's decision 6): the likelihood
+    /// N(r | γ·v, Σ·c·v) raised to b, ∝ p(v)·v^(−bK/2)·exp(−b·<paramref name="residualEnergy"/>/(2v) − b·<paramref name="driftEnergy"/>·v/2), with
+    /// residualEnergy = rᵀΣ⁻¹r/c and driftEnergy = γᵀΣ⁻¹γ/c and K = <paramref name="dimension"/>; at K = 1 it is <see cref="StepConditional"/>'s
+    /// with r²/s² and m²/s², up to rounding.
+    /// </summary>
+    double StepConditionalForm(double current, double residualEnergy, double driftEnergy, int dimension, double power, Xoshiro256PlusPlus rng)
+        => throw new NotSupportedException($"{GetType().Name} has no step for several outputs' shared v.");
+
     /// <summary>ln ∫ N(r | m·v, s²·v) p(v) dv, the noise's log density at <paramref name="residual"/> with v integrated out.</summary>
     double MarginalLogDensity(double residual, double unitVariance, double unitDrift);
 
@@ -93,6 +102,26 @@ public sealed class StudentTMixing : IMixingLaw
         if (unitDrift != 0.0) return Skewed.SampleConditional(residual, unitVariance, unitDrift, power, rng);
         if (!double.IsFinite(residual)) throw new ArgumentOutOfRangeException(nameof(residual), "The residual must be finite.");
         return 1.0 / SamplePrecision(residual, unitVariance, power, rng);
+    }
+
+    /// <summary>v drawn exactly from its conditional given several outputs' residual (<see cref="IMixingLaw.StepConditionalForm"/>): at a zero
+    /// drift the precision's Gamma((ν + bK)/2, (ν + b·E_r)/2), the skewed t's GIG otherwise.</summary>
+    public double StepConditionalForm(double current, double residualEnergy, double driftEnergy, int dimension, double power, Xoshiro256PlusPlus rng)
+    {
+        ArgumentNullException.ThrowIfNull(rng);
+        CheckForm(residualEnergy, driftEnergy, dimension, power);
+        if (driftEnergy != 0.0) return Skewed.StepConditionalForm(current, residualEnergy, driftEnergy, dimension, power, rng);
+        double half = 0.5 * DegreesOfFreedom;
+        return 1.0 / ConjugateUpdates.NormalPrecision(half, half, power * dimension, power * residualEnergy).Sample(rng);
+    }
+
+    // The energies are non-negative and finite, K is at least 1 and the power lies in [0, 1].
+    internal static void CheckForm(double residualEnergy, double driftEnergy, int dimension, double power)
+    {
+        if (!(residualEnergy >= 0.0 && double.IsFinite(residualEnergy))) throw new ArgumentOutOfRangeException(nameof(residualEnergy), "rᵀΣ⁻¹r/c is non-negative and finite.");
+        if (!(driftEnergy >= 0.0 && double.IsFinite(driftEnergy))) throw new ArgumentOutOfRangeException(nameof(driftEnergy), "γᵀΣ⁻¹γ/c is non-negative and finite.");
+        if (dimension < 1) throw new ArgumentOutOfRangeException(nameof(dimension), "K is at least 1.");
+        if (!(power >= 0.0 && power <= 1.0)) throw new ArgumentOutOfRangeException(nameof(power), "The power lies in [0, 1].");
     }
 
     /// <summary>
@@ -172,6 +201,15 @@ public sealed class ExponentialMixing : IMixingLaw
     /// <inheritdoc/>
     public double StepConditional(double current, double residual, double unitVariance, double unitDrift, double power, Xoshiro256PlusPlus rng)
         => SampleConditional(residual, unitVariance, unitDrift, power, rng);
+
+    /// <summary>v drawn exactly from its conditional given several outputs' residual (<see cref="IMixingLaw.StepConditionalForm"/>):
+    /// GIG(1 − bK/2, 2 + b·E_γ, b·E_r).</summary>
+    public double StepConditionalForm(double current, double residualEnergy, double driftEnergy, int dimension, double power, Xoshiro256PlusPlus rng)
+    {
+        ArgumentNullException.ThrowIfNull(rng);
+        StudentTMixing.CheckForm(residualEnergy, driftEnergy, dimension, power);
+        return GeneralizedInverseGaussian.Of(1.0 - 0.5 * power * dimension, 2.0 + power * driftEnergy, power * residualEnergy).Sample(rng);
+    }
 
     /// <summary>v drawn exactly from its conditional (<see cref="IMixingLaw.StepConditional"/>), the current value not read.</summary>
     public double SampleConditional(double residual, double unitVariance, double unitDrift, double power, Xoshiro256PlusPlus rng)
@@ -254,6 +292,15 @@ public sealed class GigMixing : IMixingLaw
         if (!double.IsFinite(residual) || !double.IsFinite(unitDrift)) throw new ArgumentOutOfRangeException(nameof(residual), "The residual and the drift must be finite.");
         return GeneralizedInverseGaussian.Of(Prior.P - 0.5 * power, Prior.A + power * unitDrift * unitDrift / unitVariance,
                                              Prior.B + power * residual * residual / unitVariance).Sample(rng);
+    }
+
+    /// <summary>v drawn exactly from its conditional given several outputs' residual (<see cref="IMixingLaw.StepConditionalForm"/>):
+    /// GIG(p − bK/2, a + b·E_γ, b′ + b·E_r).</summary>
+    public double StepConditionalForm(double current, double residualEnergy, double driftEnergy, int dimension, double power, Xoshiro256PlusPlus rng)
+    {
+        ArgumentNullException.ThrowIfNull(rng);
+        StudentTMixing.CheckForm(residualEnergy, driftEnergy, dimension, power);
+        return GeneralizedInverseGaussian.Of(Prior.P - 0.5 * power * dimension, Prior.A + power * driftEnergy, Prior.B + power * residualEnergy).Sample(rng);
     }
 
     /// <inheritdoc/>
@@ -343,6 +390,23 @@ public sealed class GbpMixing : IMixingLaw
         double logFront = Math.Log(power) - Math.Log(2.0 * unitVariance);
         var density = new LogConditional(pa - 0.5 * power, Prior.A + Prior.B, Prior.P,
                                          logFront + 2.0 * Math.Log(Math.Abs(residual)), logFront + 2.0 * Math.Log(Math.Abs(unitDrift)));
+        double u = Math.Log(current), logTarget = density.At(u);
+        SliceSampler.Step(ref u, ref logTarget, Width, MaxSteps, density, rng);
+        return Math.Exp(u);
+    }
+
+    /// <summary>One slice step on u = ln v given several outputs' residual (<see cref="IMixingLaw.StepConditionalForm"/>): the slope pa − bK/2 and
+    /// the terms b·E_r/2·e⁻ᵘ and b·E_γ/2·eᵘ; improper at a zero residual where pa ≤ bK/2.</summary>
+    public double StepConditionalForm(double current, double residualEnergy, double driftEnergy, int dimension, double power, Xoshiro256PlusPlus rng)
+    {
+        ArgumentNullException.ThrowIfNull(rng);
+        if (!(current > 0.0 && double.IsFinite(current))) throw new ArgumentOutOfRangeException(nameof(current), "v must be positive and finite.");
+        StudentTMixing.CheckForm(residualEnergy, driftEnergy, dimension, power);
+        double pa = Prior.P * Prior.A;
+        if (residualEnergy == 0.0 && !(pa > 0.5 * power * dimension))
+            throw new ArgumentOutOfRangeException(nameof(residualEnergy), "At a residual of 0 v's conditional is improper where pa ≤ bK/2: the noise has its pole there.");
+        double logFront = Math.Log(power) - Math.Log(2.0);
+        var density = new LogConditional(pa - 0.5 * power * dimension, Prior.A + Prior.B, Prior.P, logFront + Math.Log(residualEnergy), logFront + Math.Log(driftEnergy));
         double u = Math.Log(current), logTarget = density.At(u);
         SliceSampler.Step(ref u, ref logTarget, Width, MaxSteps, density, rng);
         return Math.Exp(u);
