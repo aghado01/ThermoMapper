@@ -254,11 +254,14 @@ public sealed record PoincareCheck(double[,] Total, double[,] Bound, double[,] R
 /// <param name="MatrixPoincare">The matrix Poincaré check (slice 5); null unless asked and the law is a product of uniform laws over
 /// continuous inputs alone.</param>
 /// <param name="MatrixPoincareStatus">Whether the matrix check was read, not asked, or not applicable.</param>
+/// <param name="Boxes">Each continuous predictor's box in its own units, in <paramref name="Inputs"/>' order: its declared domain, or else
+/// its training range, the box units C and <paramref name="Map"/> are read in (slice 7a). A frame taken from C holds only in these
+/// boxes, so a projection refuses a fit whose boxes differ.</param>
 public sealed record ActiveSubspaceAnalysis(
     IReadOnlyList<string> Inputs, IReadOnlyList<string> Excluded, ActiveSubspaceRoute Route, InputMetric Metric, double[,] Map,
     ProductMeasure? Measure, int Points, SubspacePosterior Posterior, double[][,]? MonteCarloError, PoincareCheck? Poincare,
     IReadOnlyList<int> DrawIndex, RankPosterior? Ranks = null, OutputPosterior? Outputs = null, MatrixPoincareCheck? MatrixPoincare = null,
-    MatrixPoincareStatus MatrixPoincareStatus = MatrixPoincareStatus.NotApplicable)
+    MatrixPoincareStatus MatrixPoincareStatus = MatrixPoincareStatus.NotApplicable, IReadOnlyList<InputDomain>? Boxes = null)
 {
     /// <summary>The activity scores (slice 6), in the metric: C's diagonal always, and its truncation at k, and at each draw's k_s under a
     /// rank rule (<see cref="ActivityScores"/>). Read from <see cref="Posterior"/> and <see cref="Ranks"/> when asked.</summary>

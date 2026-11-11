@@ -136,7 +136,7 @@ internal static partial class BassActiveSubspaces
         var analysis = new ActiveSubspaceAnalysis(Array.AsReadOnly(frame.Names), Array.AsReadOnly(frame.Excluded), frame.Route, spec.Metric, frame.Map,
                                                   frame.Measure, PointCount(frame, spec.Points), posterior, error, poincare, Array.AsReadOnly(selected),
                                                   spec.Rank is null ? null : RankPosterior.Of(draws, weights, spec.Rank),
-                                                  factors is null ? null : OutputPosterior.Of(factors, weights, patterns), matrix, status);
+                                                  factors is null ? null : OutputPosterior.Of(factors, weights, patterns), matrix, status, Boxes(frame));
         return (analysis, factors);
     }
 
@@ -204,7 +204,7 @@ internal static partial class BassActiveSubspaces
         return new ActiveSubspaceAnalysis(Array.AsReadOnly(frame.Names), Array.AsReadOnly(frame.Excluded), frame.Route, spec.Metric, frame.Map,
                                           frame.Measure, PointCount(frame, spec.Points), posterior, error, poincare, Array.AsReadOnly(selected),
                                           spec.Rank is null ? null : RankPosterior.Of(draws, weights, spec.Rank),
-                                          factors is null ? null : OutputPosterior.Of(factors, weights, spec.OutputPatterns), matrix, status);
+                                          factors is null ? null : OutputPosterior.Of(factors, weights, spec.OutputPatterns), matrix, status, Boxes(frame));
     }
 
     // Basis adequacy (slice 5): the direct fit's G against the basis's span, both under the spec's output metric.
@@ -985,6 +985,10 @@ internal static partial class BassActiveSubspaces
         if (!(weights.Sum(x => x * x) < 1.0)) throw new ArgumentException("A joint sample needs two points of positive weight.", nameof(sample));
         return (cases, weights, box);
     }
+
+    // Each continuous predictor's box in its own units, in the readout's order: the units C is read in (slice 7a).
+    private static IReadOnlyList<InputDomain> Boxes(Frame frame)
+        => Array.AsReadOnly([.. frame.Variables.Select(v => { var s = (RangeScale)frame.Transform.Predictors[v]; return new InputDomain(s.Min, s.Max); })]);
 
     private static PointSet PointsOf(Frame frame, int n, int seed)
     {

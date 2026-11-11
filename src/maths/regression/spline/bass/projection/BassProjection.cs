@@ -20,7 +20,11 @@ namespace Maths.Regression.Spline.Bass;
 /// <item><b>The domains.</b> The input box [0, 1]^p maps onto a zonotope whose bounding box is
 /// [Σᵢ min(0, aᵢⱼ), Σᵢ max(0, aᵢⱼ)] per active variable, each end padded by 10⁻¹⁴ of Σᵢ|aᵢⱼ| so that a case's rounding never leaves
 /// it. Each active variable takes it as its declared domain (the user's decision 4), so every image of the input box lies in the
-/// refit's box. In high p it can be far wider than the projected data's spread, which <see cref="Spreads"/> reports.</item>
+/// refit's box. In high p it can be far wider than the projected data's spread, which <see cref="Spreads"/> reports: about 4 times at
+/// p = 40 for a dense direction (slice 7a's gate). BASS's default g-form and count support read nothing of that scale, the fit draw
+/// for draw the same as on the training range; the column-mass support and the raw ridge read it, so their fits move with it.</item>
+/// <item><b>The input-scale contract.</b> The frame is in the analysis's box units, so it holds only for a fit that scales every input
+/// by the same box (<see cref="ActiveSubspaceAnalysis.Boxes"/>); <see cref="Of"/> refuses any other.</item>
 /// <item><b>The law.</b> The analysis's law pushes forward to the active variables, in general not as a product, so the refit's
 /// readouts take E8's sampled route on a pushforward joint sample (<see cref="Pushforward(int, int)"/>).</item>
 /// </list>
@@ -86,9 +90,11 @@ public sealed class BassProjection
 
     /// <summary>
     /// The frame of <paramref name="analysis"/>'s E[C] at dimension <paramref name="dimension"/>, for the fit whose transform is
-    /// <paramref name="transform"/> (a fit's <see cref="BassFit.Transform"/>, or a basis fit's component's). Refused: an analysis
-    /// whose continuous and categorical predictors are not the transform's, in its order, d outside 1 to p, and names that are not
-    /// d distinct new ones.
+    /// <paramref name="transform"/> (a fit's <see cref="BassFit.Transform"/>, or a basis fit's component's). The frame is in the
+    /// analysis's box units, so the transform must scale every input by the same box (<see cref="ActiveSubspaceAnalysis.Boxes"/>) and
+    /// hold the categorical levels its law reads. Refused: an analysis whose continuous and categorical predictors are not the
+    /// transform's, in its order; an analysis without its boxes, or read in other boxes; a law over other levels; d outside 1 to p;
+    /// and names that are not d distinct new ones.
     /// </summary>
     public static BassProjection Of(BassInputTransform transform, ActiveSubspaceAnalysis analysis, int dimension, IReadOnlyList<string>? names = null)
     {
@@ -99,6 +105,20 @@ public sealed class BassProjection
         if (!continuous.SequenceEqual(analysis.Inputs) || !categorical.SequenceEqual(analysis.Excluded))
             throw new ArgumentException("The analysis was read on other inputs: its continuous and categorical predictors must be the fit's, in its order.", nameof(analysis));
         int p = continuous.Length;
+        RangeScale[] boxes = [.. transform.Predictors.OfType<RangeScale>()];
+        if (analysis.Boxes is not { } read || read.Count != p)
+            throw new ArgumentException("The analysis does not record the boxes its C was read in, so its frame cannot be placed: read it through a fit's ActiveSubspace.", nameof(analysis));
+        for (int i = 0; i < p; i++)
+            if (read[i].Lower != boxes[i].Min || read[i].Upper != boxes[i].Max)
+                throw new ArgumentException($"The analysis read '{continuous[i]}' in the box {read[i]}, and this fit scales it by [{boxes[i].Min:R}, {boxes[i].Max:R}]: " +
+                                            "the frame is in the analysis's box units, so the fit must share its boxes.", nameof(transform));
+        if (analysis.Measure is { } law)
+        {
+            TrainingLevels[] levels = [.. transform.Predictors.OfType<TrainingLevels>()];
+            for (int c = 0; c < levels.Length; c++)
+                if (law.Probabilities(law.OfCategorical(c))!.Count != levels[c].Levels.Count)
+                    throw new ArgumentException($"The analysis's law reads '{levels[c].Name}' over other levels than this fit's.", nameof(transform));
+        }
         if (dimension < 1 || dimension > p) throw new ArgumentOutOfRangeException(nameof(dimension), $"d is from 1 to the {p} continuous predictors.");
         string[] active = names is null ? [.. Enumerable.Range(1, dimension).Select(j => $"u{j}")] : [.. names];
         if (active.Length != dimension || active.Distinct(StringComparer.Ordinal).Count() != dimension || active.Any(string.IsNullOrWhiteSpace))
@@ -128,8 +148,7 @@ public sealed class BassProjection
             double pad = 1e-14 * size;
             domains[j] = new InputDomain(lo - pad, hi + pad);
         }
-        RangeScale[] scales = [.. transform.Predictors.OfType<RangeScale>()];
-        return new BassProjection(transform, scales, continuous, categorical, active, analysis.Metric, frame, a, eigenvalues, gaps, domains, analysis.Measure);
+        return new BassProjection(transform, boxes, continuous, categorical, active, analysis.Metric, frame, a, eigenvalues, gaps, domains, analysis.Measure);
     }
 
     /// <summary>The active variables' values at <paramref name="cases"/>: one row per case, one column per active variable.</summary>
