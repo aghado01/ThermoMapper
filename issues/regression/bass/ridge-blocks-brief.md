@@ -72,6 +72,11 @@ y = α + Σⱼ βⱼBⱼ(x) + Σₖ Z̃ₖuₖ + ε, ε ~ N(0, σ²W⁻¹) (W = 
      - *The evidence is unchanged:* both tempering paths end at p(y).
      - *The Gaussian collapse stays as built.*
      - *Slice 4's finding 2:* under weights, the centring convention uses the GLS intercept direction c = L·1, not unweighted counts.
+   - **Amended again by the user on 2026-11-10 ("Make it opt-in"), on slice 4's measurement.**
+     - *What was measured.* The b = 1 collapse reaches the same posterior but runs at 0.14 to 0.71 of plain form B's ESS per second.
+     - *The default.* Plain form B at every rung.
+     - *The collapse* becomes a sampling option, off by default. Its gain is expected where u and the basis compete for the same variation, so it is measured on a confounded dataset (a grouping aligned with an input, or a few large groups) before any default changes.
+     - *Still with the user:* the u–s funnel's fix (ln s's integrated autocorrelation time is about 19,000 sweeps), by a step on s with u integrated, exact at b = 1 only, or by interweaving u's centred and non-centred forms, exact at every rung.
 8. **The candidate seam: a case in a known group and in a new one,** its shape agreed with the conformal chip before slice 5 opens. The proposal:
    - *A known group:* log p(y | x_t, θ_s) = the training terms' density at f + Σₖ u_{k,g(t)}, conditioned on the draw's effects, as the hierarchical P-spline's new point on a seen curve is. The groups are offered as strata for Mondrian sets.
    - *A new group:* the draw's population predictive with its effects integrated: N(y | f, σ²(1 + Σₖ sₖ²·z̃ₖ²)) under Gaussian BASS. Under a noise, y | v ~ N(f + σβv, σ²(cv + Σ s²z̃²)) is a mixture over v again, read by quadrature on v or refused at first.
