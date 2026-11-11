@@ -93,6 +93,8 @@ It does not reach a curve's or a parameter's own intervals: those stay with E15'
    - *What slice 12 measures:* the width against the in-sample score on BASS fits. Any question of a default comes back with those numbers.
    - *The Lean's finding:* under CB-1's tie rule on discrete data, the in-sample set can be the smaller one.
 
+10. **The queue, on the conformal chip** (the user, 2026-11-10): slice 12a (Hoff's score, building), then slice 10, slice 11, and slice 12b (CB-4's latent-posterior reading). Each slice is reported and verified before the next starts. Slices 13 to 18 stay held until the user orders them by need; 13 to 16 and 18 take their Lean first (decision 7).
+
 **The Lean for slices 10 and 12 is done and verified** (`dfe5c99`, `a708eb2`, `f82ae97`, `f692e37`; verified on 3b61763). The rules the C# implements are in the [Lean chip's reports](../../lean/Protolemmata/Conformal/conformal-chip-brief.md#reports) and the ledger's [slice 10](../../lean/Protolemmata/Conformal/conformal-lemmas.md#slice-10--the-full-steps-error-completed) and slice 12 sections.
 - *Slice 10, the excluded set:* it is read per grid value y over all m units, the candidate included. The data units' flags come from conservative proxies.
 - *Slice 10, the reading:* only at kept y. The largest excluded share over the grid is charged, and 2ν in place of ν.
