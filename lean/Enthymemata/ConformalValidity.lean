@@ -5617,4 +5617,177 @@ theorem refused_le_swap_tv {Z : Type*} [Fintype Z] {S : (ι → Z) → ι → �
 
 end Shift
 
+/-! ### Slice 15: posterior conformal prediction (Zhang and Candès, arXiv 2409.19712) -/
+
+section PosteriorConformal
+
+variable {ι : Type*} [Fintype ι] [DecidableEq ι]
+
+/-- **Posterior conformal prediction, given the draw** (their Theorem 1), per data set. The test
+unit's value `v` sends a draw `L` with chance `κ v L` (their multinomial `L*` of `π(X_{n+1})`).
+Given the data set and `L`, the test unit is unit `u` with chance proportional to `κ (z_u) L`,
+their posterior weights `w*`, and the weighted rule with those weights refuses it with at most `α`
+of that chance. -/
+theorem coverage_pcp {Z Λ : Type*} {C : Finset ι} {t : ι} (ht : t ∈ C) {S : (ι → Z) → ι → ℝ}
+    (hS : Equivariant C S) (z : ι → Z) (κ : Z → Λ → ℝ) (hκ : ∀ v L, 0 ≤ κ v L) {α : ℝ}
+    (hα : 0 ≤ α) (L : Λ) :
+    ∑ σ ∈ permsOn C, (if α < weightLe C (S (z ∘ σ))
+        (fun j => κ (z (σ j)) L / ∑ i ∈ C, κ (z i) L) t then 0 else κ (z (σ t)) L) ≤
+      α * ∑ σ ∈ permsOn C, κ (z (σ t)) L :=
+  coverage_weighted ht hS z (fun v => κ v L) (fun v => hκ v L) hα
+
+/-- **And marginally**: summed over the draws, the refused chance is at most `α`. -/
+theorem coverage_pcp_marginal {Z Λ : Type*} [Fintype Λ] {C : Finset ι} {t : ι} (ht : t ∈ C)
+    {S : (ι → Z) → ι → ℝ} (hS : Equivariant C S) (z : ι → Z) (κ : Z → Λ → ℝ)
+    (hκ : ∀ v L, 0 ≤ κ v L) (hκ1 : ∀ v, ∑ L, κ v L = 1) {α : ℝ} (hα : 0 ≤ α) :
+    ∑ L, ∑ σ ∈ permsOn C, (if α < weightLe C (S (z ∘ σ))
+        (fun j => κ (z (σ j)) L / ∑ i ∈ C, κ (z i) L) t then 0 else κ (z (σ t)) L) ≤
+      α * (permsOn C).card := by
+  calc ∑ L, ∑ σ ∈ permsOn C, (if α < weightLe C (S (z ∘ σ))
+        (fun j => κ (z (σ j)) L / ∑ i ∈ C, κ (z i) L) t then 0 else κ (z (σ t)) L)
+      ≤ ∑ L, α * ∑ σ ∈ permsOn C, κ (z (σ t)) L :=
+        sum_le_sum fun L _ => coverage_pcp ht hS z κ hκ hα L
+    _ = α * (permsOn C).card := by
+        rw [← mul_sum, sum_comm]
+        simp only [hκ1, sum_const, nsmul_eq_mul, mul_one]
+
+/-- The law of independent units, unit `i` with law `m i`. -/
+def prodLaw {V : Type*} (m : ι → V → ℝ) (z : ι → V) : ℝ := ∏ i, m i (z i)
+
+/-- Independent units: summing a product of per-unit factors over every data set. -/
+theorem sum_prodLaw {V : Type*} [Fintype V] (c : ι → V → ℝ) :
+    ∑ z : ι → V, ∏ i, c i (z i) = ∏ i, ∑ v, c i v := by
+  have h := Finset.prod_univ_sum (t := fun _ : ι => (univ : Finset V)) (f := c)
+  rw [Fintype.piFinset_univ] at h
+  exact h.symm
+
+/-- Splitting a product over every unit at two distinct units. -/
+theorem prod_split_two (x : ι → ℝ) {K t : ι} (hKt : K ≠ t) :
+    ∏ i, x i = x K * (x t * ∏ i ∈ (univ.erase K).erase t, x i) := by
+  rw [← mul_prod_erase univ _ (mem_univ K),
+    ← mul_prod_erase (univ.erase K) _ (mem_erase.2 ⟨Ne.symm hKt, mem_univ t⟩)]
+
+omit [Fintype ι] [DecidableEq ι] in
+theorem max_sub_add_max_sub (a b : ℝ) : max 0 (b - a) + max 0 (a - b) = |a - b| := by
+  rcases le_total a b with h | h
+  · rw [max_eq_right (sub_nonneg.2 h), max_eq_left (sub_nonpos.2 h),
+      abs_of_nonpos (sub_nonpos.2 h)]
+    ring
+  · rw [max_eq_left (sub_nonpos.2 h), max_eq_right (sub_nonneg.2 h),
+      abs_of_nonneg (sub_nonneg.2 h)]
+    ring
+
+/-- **Swapping two independent units costs at most the L1 distance of their laws**, `2 TV`
+(Barber et al.'s Lemma 1, without its square term). -/
+theorem swap_tv_prodLaw_le {V : Type*} [Fintype V] (m : ι → V → ℝ) (hm0 : ∀ i v, 0 ≤ m i v)
+    (hm1 : ∀ i, ∑ v, m i v = 1) (K t : ι) :
+    ∑ z, max 0 (prodLaw m (z ∘ Equiv.swap K t) - prodLaw m z) ≤ ∑ v, |m K v - m t v| := by
+  by_cases hKt : K = t
+  · subst hKt
+    simp only [Equiv.swap_self, Equiv.coe_refl, Function.comp_id, sub_self, max_self,
+      sum_const_zero]
+    exact sum_nonneg fun v _ => abs_nonneg _
+  have hR : ∀ z : ι → V, 0 ≤ ∏ i ∈ (univ.erase K).erase t, m i (z i) :=
+    fun z => prod_nonneg fun i _ => hm0 i (z i)
+  have hrest : ∀ (c : ι → V → ℝ) (z : ι → V),
+      (∀ i, i ≠ K → i ≠ t → c i = m i) →
+      ∏ i ∈ (univ.erase K).erase t, c i (z i) = ∏ i ∈ (univ.erase K).erase t, m i (z i) :=
+    fun c z hc => prod_congr rfl fun i hi => by
+      rw [mem_erase, mem_erase] at hi
+      rw [hc i hi.2.1 hi.1]
+  have rest_swap : ∀ z : ι → V, ∏ i ∈ (univ.erase K).erase t, m i ((z ∘ Equiv.swap K t) i) =
+      ∏ i ∈ (univ.erase K).erase t, m i (z i) := fun z => prod_congr rfl fun i hi => by
+    rw [mem_erase, mem_erase] at hi
+    simp [Function.comp_apply, Equiv.swap_apply_of_ne_of_ne hi.2.1 hi.1]
+  let g₁ : ι → V → ℝ := fun i v =>
+    if i = K then max 0 (m t v - m K v) else if i = t then m K v else m i v
+  let g₂ : ι → V → ℝ := fun i v =>
+    if i = K then m K v else if i = t then max 0 (m K v - m t v) else m i v
+  have hg₁ : ∀ i, i ≠ K → i ≠ t → g₁ i = m i := fun i h1 h2 => by
+    funext v
+    simp [g₁, h1, h2]
+  have hg₂ : ∀ i, i ≠ K → i ≠ t → g₂ i = m i := fun i h1 h2 => by
+    funext v
+    simp [g₂, h1, h2]
+  have hpoint : ∀ z : ι → V, max 0 (prodLaw m (z ∘ Equiv.swap K t) - prodLaw m z) ≤
+      ∏ i, g₁ i (z i) + ∏ i, g₂ i (z i) := by
+    intro z
+    rw [prodLaw, prodLaw, prod_split_two (fun i => m i ((z ∘ Equiv.swap K t) i)) hKt,
+      prod_split_two (fun i => m i (z i)) hKt, prod_split_two (fun i => g₁ i (z i)) hKt,
+      prod_split_two (fun i => g₂ i (z i)) hKt, rest_swap, hrest g₁ z hg₁, hrest g₂ z hg₂]
+    simp only [Function.comp_apply, Equiv.swap_apply_left, Equiv.swap_apply_right, g₁, g₂,
+      if_neg (Ne.symm hKt), ↓reduceIte]
+    have hA := hm0 K (z t)
+    have hB := hm0 K (z K)
+    refine max_le (add_nonneg (mul_nonneg (le_max_left _ _) (mul_nonneg hA (hR z)))
+      (mul_nonneg hB (mul_nonneg (le_max_left _ _) (hR z)))) ?_
+    have q1 := mul_le_mul_of_nonneg_left (le_max_right 0 (m t (z K) - m K (z K))) hA
+    have q2 := mul_le_mul_of_nonneg_left (le_max_right 0 (m K (z t) - m t (z t))) hB
+    nlinarith [mul_le_mul_of_nonneg_right q1 (hR z), mul_le_mul_of_nonneg_right q2 (hR z)]
+  have hone : ∀ (c : ι → V → ℝ), (∀ i, i ≠ K → i ≠ t → c i = m i) →
+      ∏ i ∈ (univ.erase K).erase t, ∑ v, c i v = 1 := fun c hc =>
+    prod_eq_one fun i hi => by
+      rw [mem_erase, mem_erase] at hi
+      rw [hc i hi.2.1 hi.1, hm1]
+  have s1 : ∑ z : ι → V, ∏ i, g₁ i (z i) = ∑ v, max 0 (m t v - m K v) := by
+    rw [sum_prodLaw, prod_split_two (fun i => ∑ v, g₁ i v) hKt, hone g₁ hg₁]
+    simp only [g₁, if_neg (Ne.symm hKt), ↓reduceIte, hm1, mul_one]
+  have s2 : ∑ z : ι → V, ∏ i, g₂ i (z i) = ∑ v, max 0 (m K v - m t v) := by
+    rw [sum_prodLaw, prod_split_two (fun i => ∑ v, g₂ i v) hKt, hone g₂ hg₂]
+    simp only [g₂, if_neg (Ne.symm hKt), ↓reduceIte, hm1, one_mul, mul_one]
+  calc ∑ z, max 0 (prodLaw m (z ∘ Equiv.swap K t) - prodLaw m z)
+      ≤ ∑ z : ι → V, (∏ i, g₁ i (z i) + ∏ i, g₂ i (z i)) := sum_le_sum fun z _ => hpoint z
+    _ = ∑ v, |m K v - m t v| := by
+        rw [sum_add_distrib, s1, s2, ← sum_add_distrib]
+        exact sum_congr rfl fun v _ => max_sub_add_max_sub (m K v) (m t v)
+
+omit [Fintype ι] [DecidableEq ι] in
+/-- Two mixtures of the same components are at most the L1 distance of their weights apart. -/
+theorem mixture_l1_le {V Kc : Type*} [Fintype V] [Fintype Kc] (f : Kc → V → ℝ)
+    (hf0 : ∀ k v, 0 ≤ f k v) (hf1 : ∀ k, ∑ v, f k v = 1) (a b : Kc → ℝ) :
+    ∑ v, |∑ k, a k * f k v - ∑ k, b k * f k v| ≤ ∑ k, |a k - b k| := by
+  calc ∑ v, |∑ k, a k * f k v - ∑ k, b k * f k v|
+      = ∑ v, |∑ k, (a k - b k) * f k v| := by
+        refine sum_congr rfl fun v _ => ?_
+        rw [← sum_sub_distrib]
+        exact congrArg _ (sum_congr rfl fun k _ => by ring)
+    _ ≤ ∑ v, ∑ k, |a k - b k| * f k v := sum_le_sum fun v _ =>
+        (abs_sum_le_sum_abs _ _).trans (le_of_eq (sum_congr rfl fun k _ => by
+          rw [abs_mul, abs_of_nonneg (hf0 k v)]))
+    _ = ∑ k, |a k - b k| := by
+        rw [sum_comm]
+        exact sum_congr rfl fun k _ => by rw [← mul_sum, hf1, mul_one]
+
+/-- **PCP's per-cluster gap** (Zhang and Candès, Theorem 3), on a finite space, with half their
+constant. Given the covariates the residuals are independent, unit `i`'s law the mixture
+`Σ_k π_k(i) f_k`; the weights are fixed, nonnegative, summing to one, the test's the largest; the
+score is symmetric. Then the miscoverage is at most `α + Σ_K q_K Σ_k |π_k(K) − π_k(t)|`. They
+state `α + 2 Σ_K q_K Σ_k |π_k(K) − π_k(t)|`; through Barber et al.'s swap bound the swap costs
+the L1 distance of the two units' laws, at most that of their weights, once. -/
+theorem pcp_cluster_gap {V Kc : Type*} [Fintype V] [Fintype Kc] {S : (ι → V) → ι → ℝ}
+    (hS : Equivariant univ S) (f : Kc → V → ℝ) (hf0 : ∀ k v, 0 ≤ f k v)
+    (hf1 : ∀ k, ∑ v, f k v = 1) (π : ι → Kc → ℝ) (hπ0 : ∀ i k, 0 ≤ π i k)
+    (hπ1 : ∀ i, ∑ k, π i k = 1) (q : ι → ℝ) (hq0 : ∀ i, 0 ≤ q i) (hq1 : ∑ i, q i = 1) (t : ι)
+    (hqt : ∀ i, q i ≤ q t) {α : ℝ} (hα : 0 ≤ α) :
+    ∑ z, prodLaw (fun i v => ∑ k, π i k * f k v) z *
+        (if weightLe univ (S z) q t ≤ α then 1 else 0) ≤
+      α + ∑ K, q K * ∑ k, |π K k - π t k| := by
+  have hm0 : ∀ i v, 0 ≤ ∑ k, π i k * f k v :=
+    fun i v => sum_nonneg fun k _ => mul_nonneg (hπ0 i k) (hf0 k v)
+  have hm1 : ∀ i, ∑ v, ∑ k, π i k * f k v = 1 := fun i => by
+    rw [sum_comm]
+    simp only [← mul_sum, hf1, mul_one, hπ1]
+  have hP1 : ∑ z, prodLaw (fun i v => ∑ k, π i k * f k v) z = 1 := by
+    simp only [prodLaw]
+    rw [sum_prodLaw (fun i v => ∑ k, π i k * f k v)]
+    simp only [hm1, prod_const_one]
+  have h := refused_le_swap_tv hS (prodLaw fun i v => ∑ k, π i k * f k v)
+    (fun z => prod_nonneg fun i _ => hm0 i (z i)) q hq0 hq1 t hqt hα
+  rw [hP1, mul_one] at h
+  refine h.trans (add_le_add le_rfl (sum_le_sum fun K _ =>
+    mul_le_mul_of_nonneg_left ?_ (hq0 K)))
+  exact (swap_tv_prodLaw_le _ hm0 hm1 K t).trans (mixture_l1_le f hf0 hf1 (π K) (π t))
+
+end PosteriorConformal
+
 end Conformal

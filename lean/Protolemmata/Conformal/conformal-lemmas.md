@@ -2,7 +2,7 @@
 
 Pins the contract of the engine's conformal layer, one layer over retained draws and pointwise densities for every model with a pointwise density ([E16](../../../issues/regression/bass/extensions-brief.md#conformal-bayes-the-consumer)). The layer owns coverage and the score owns width. These are the finite statements of that split. They are the sibling of [GuardedEstimator](../BASS/guarded-estimator-lemmas.md): there, means valid whatever the emulator does; here, prediction sets valid whatever the model does. Written from the [chip brief](conformal-chip-brief.md).
 
-**Status (2026-11-10).** Proved in `lean/Enthymemata/ConformalValidity.lean`, namespace `Conformal`, with no apologies (PROOF-CLOSED, 340 declarations counting E35's M-1 and M-2 and slices 9, 10, 12, 13 and 14 at the end of this page; `#print axioms` shows `propext`, `Classical.choice`, `Quot.sound` only):
+**Status (2026-11-10).** Proved in `lean/Enthymemata/ConformalValidity.lean`, namespace `Conformal`, with no apologies (PROOF-CLOSED, 349 declarations counting E35's M-1 and M-2 and slices 9, 10, 12, 13, 14 and 15 at the end of this page; `#print axioms` shows `propext`, `Classical.choice`, `Quot.sound` only):
 - CB-1: `card_rankLe_le`, `coverage_orderings`, `coverage_orderings_eq`, `coverage_strict_le`, `coverage_orderings_le`, `rank_uniform`, `coverage_tieBreak`, `coverage_given`, `coverage_law`, `coverage_stratum`;
 - CB-2: `split_coverage`, `exchangeable_given_training`, `cqr_ordConnected`;
 - CB-4: `sum_jointU`, `post_addOneIn`, `integratedScore_equivariant`, `latentScore_equivariant`, `latentScore_eq`, `sum_jointU_addOneIn`, `integratedScore_le_latentScore`, `accepts_latent_of_mixed`, `mixed_counterexample`;
@@ -786,3 +786,26 @@ Proved on 2026-11-10 in `ConformalValidity.lean`, section `Shift`, PROOF-CLOSED,
 - The weighted lemma on 4,000 random (scores, weights) with ties, and CB-1 at equal weights.
 - Shift on 3,000 data sets, including the loss with estimated weights.
 - The nonexchangeable bound on 300 random finite laws.
+
+## Slice 15 — posterior conformal prediction
+
+Zhang and Candès (arXiv 2409.19712v2), read in TeX: §1.2, §2, Theorems 1, 3 and 4, Proposition 2, and the proof of Theorem 3. Proved on 2026-11-10 in `ConformalValidity.lean`, section `PosteriorConformal`, PROOF-CLOSED, with the standard three axioms only. The checks (section "Slice 15") ran first.
+
+**Marginal coverage: exact, and conditional on the draw** (their Theorem 1).
+- *Their construction.* The test unit's value sends a draw L ~ κ(· | z) (their L* ~ Multinomial(m, π(X_{n+1}))). Given the data set and L, the test unit is unit u with chance ∝ κ(L | z_u), which is their posterior weight w*.
+- *The claim.* The weighted rule with those weights refuses with at most α of that chance, given L (`coverage_pcp`). It is slice 14's `coverage_weighted` with the weight function κ(L | ·). Summed over the draws, the marginal statement follows (`coverage_pcp_marginal`).
+- *Estimated π.* Their Proposition 2, with π̂ fitted symmetrically, is the same statement with the fitted kernel inside the equivariant score and weights.
+
+**The per-cluster statement** (`pcp_cluster_gap`; their Theorem 3, on a finite space).
+- *Hypotheses.*
+  - Given the covariates, the residuals are independent, unit i's law being the mixture Σ_k π_k(i) f_k.
+  - The weights are fixed given the covariates, nonnegative and summing to one, with the test's the largest. Their KL weights qualify.
+  - The score is symmetric.
+- *The claim.* The miscoverage given the covariates is at most α + Σ_K q_K Σ_k |π_k(K) − π_k(test)|.
+- *Finding: half their constant.* They state α + 2 Σ_K q_K Σ_k |…|. Through slice 14's `refused_le_swap_tv`, a swap costs Σ_v |m_K(v) − m_t(v)|, the L1 distance of the two units' laws (`swap_tv_prodLaw_le`, Barber et al.'s Lemma 1 without its square term). That is at most the L1 distance of their mixing weights (`mixture_l1_le`), once rather than twice.
+- *How loose it is.* In the checks, on 400 finite mixture laws, the largest miscoverage seen used 14% of even the halved gap.
+- *Their Theorem 4,* the multiplicative form under positive memberships, is not formalized.
+
+**Checks.**
+- Conditional and marginal validity on 1,500 random (data, kernel) pairs.
+- The halved cluster gap on 400 finite mixture laws, computed exactly.

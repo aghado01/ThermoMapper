@@ -2595,4 +2595,78 @@ print(f"Slice 14: the weighted rule refuses at most alpha of the weight on {n_le
 
 
 print()
+print("=== Slice 15: posterior conformal prediction ===")
+
+# (a) Their Theorem 1: draw L ~ kappa(. | test unit's value); given the data set and L the test
+# unit is unit u with chance proportional to kappa(L | z_u), so the weighted rule with those weights
+# refuses with chance at most alpha given L, and so marginally.
+rr = random.Random(1501)
+n_pcp = 0
+for trial in range(1500):
+    m = rr.randint(2, 6)
+    C = list(range(m))
+    s = [rr.randint(0, 4) for _ in C]
+    nL = rr.randint(1, 4)
+    kap = []
+    for u in C:
+        row = [Q(rr.randint(0, 5)) for _ in range(nL)]
+        if sum(row) == 0:
+            row[0] = Q(1)
+        kap.append([x / sum(row) for x in row])
+    alpha = Q(rr.randint(1, 9), 10)
+    tot_miss = Q(0)
+    for L in range(nL):
+        wts = [kap[u][L] for u in C]
+        if sum(wts) == 0:
+            continue
+        q = [x / sum(wts) for x in wts]
+        miss_L = sum(q[u] for u in C if w_refused(alpha, s, q, u, C))
+        assert miss_L <= alpha                       # given L
+        tot_miss += sum(wts) / m * miss_L            # P(L) * P(miss | L), test uniform on units
+    assert tot_miss <= alpha                         # marginal
+    n_pcp += 1
+
+# (b) Their Theorem 3 on a finite space: given the covariates, residuals independent with
+# R_i ~ sum_k pi_k(X_i) f_k; fixed weights, the test's the largest. The miscoverage is at most
+# alpha + sum_K q_K sum_k |pi_k(X_K) - pi_k(X_t)|, half their constant 2.
+n_mix, ratio = 0, []
+Vv = (0, 1, 2)
+for trial in range(400):
+    m = rr.choice((2, 3))
+    C, t = list(range(m)), m - 1
+    Kc = rr.choice((1, 2, 3))
+    f = []
+    for k in range(Kc):
+        row = [Q(rr.randint(0, 4)) for _ in Vv]
+        if sum(row) == 0:
+            row[0] = Q(1)
+        f.append([x / sum(row) for x in row])
+    pis = []
+    for i in range(m):
+        row = [Q(rr.randint(0, 4)) for _ in range(Kc)]
+        if sum(row) == 0:
+            row[0] = Q(1)
+        pis.append([x / sum(row) for x in row])
+    mix = [[sum(pis[i][k] * f[k][v] for k in range(Kc)) for v in Vv] for i in range(m)]
+    raw = [Q(rr.randint(0, 3)) for _ in range(m - 1)]
+    q = raw + [max(raw + [Q(1)])]
+    q = [x / sum(q) for x in q]
+    alpha = Q(rr.randint(1, 4), 5)
+    miss = Q(0)
+    for r in itertools.product(range(len(Vv)), repeat=m):
+        pr = prod(mix[i][r[i]] for i in range(m))
+        s = tuple(-Vv[r[i]] for i in range(m))      # conformity: minus the residual
+        if w_refused(alpha, s, q, t, C):
+            miss += pr
+    gap = sum(q[K] * sum(abs(pis[K][k] - pis[t][k]) for k in range(Kc)) for K in C)
+    assert miss <= alpha + gap
+    if gap > 0 and miss > alpha:
+        ratio.append(float((miss - alpha) / gap))
+    n_mix += 1
+print(f"Slice 15: PCP's randomized weights give miscoverage <= alpha given the draw and marginally on "
+      f"{n_pcp} random (data, kernel); the cluster gap alpha + sum_K q_K sum_k |pi_k(X_K) - pi_k(X_t)| "
+      f"holds on {n_mix} finite mixture laws, half their constant (largest gap used: "
+      f"{max(ratio) if ratio else 0:.3f} of ours)")
+
+print()
 print("All assertions hold.")

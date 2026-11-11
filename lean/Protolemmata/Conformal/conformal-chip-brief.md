@@ -208,6 +208,14 @@ The user asked for this on 2026-11-08 ("Yes, start it"), relayed by the BASS ext
 
 Newest first.
 
+### 2026-11-10 — slice 15: posterior conformal prediction, proved
+
+The statements are in the ledger, under "Slice 15". The new declarations are PROOF-CLOSED, with the standard three axioms only. The checks ran first.
+
+- *Marginal coverage is exact, and holds conditional on the draw* (their Theorem 1; `coverage_pcp`, `coverage_pcp_marginal`). It is slice 14's weighted rule with the posterior weights κ(L | z_u).
+- *The per-cluster statement* (their Theorem 3; `pcp_cluster_gap`): given the covariates, with independent mixture residuals and fixed weights largest at the test, the miscoverage is at most α + Σ_K q_K Σ_k |π_k(K) − π_k(t)|.
+- *Finding:* this is half their constant of 2, through slice 14's swap bound.
+
 ### 2026-11-10 — slice 14: shift, proved
 
 The statements are in the ledger, under "Slice 14". The new declarations are PROOF-CLOSED, with the standard three axioms only. The checks ran first.
