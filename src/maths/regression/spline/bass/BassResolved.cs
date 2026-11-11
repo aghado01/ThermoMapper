@@ -464,6 +464,10 @@ public sealed record BassResolved
 
     // Several outputs on one basis (E34's slice 1): each output's mean and centre level, S_Y, Σ's prior carried from Sigma2's
     // ScaledToResponse(c) as decision 2's IW(K − 1 + 2c, 2c·S_Y), and the refusals of what later slices bring.
+    /// <summary>The cases per output below which the log names Huang and Wand's prior under decision 2's (E34's slice 3; the user's call,
+    /// 2026-11-10).</summary>
+    internal const int SmallCasesPerOutput = 10;
+
     private static BassResolvedOutputs ResolveOutputs(BassConfig config, MultiOutputResponse response, WorkingResponse fitted, List<BassAutoPick> log)
     {
         int k = response.Outputs, n = response.Cases;
@@ -532,6 +536,13 @@ public sealed record BassResolved
             OutputCovariancePriorKind.HuangWand => "conditional IW with one gamma rate per output; the marginal standard deviations have half-t laws",
             _ => "declared in the outputs' own units",
         }));
+        // Decision 2, the user's call (2026-11-10): ScaledToResponse stays the default, and where few cases per output leave its
+        // correlations to the prior, the log names the opt-in that covers them (E34's slice 3).
+        if (chosen.Kind is OutputCovariancePriorKind.ScaledToResponse or OutputCovariancePriorKind.Standardized && n < SmallCasesPerOutput * k)
+            log.Add(new("OutputCovariance", $"{chosen}, N/K = {Text(n)}/{Text(k)}",
+                        $"below N/K = {SmallCasesPerOutput} this prior's correlation intervals undercover: its correlations put nearly all their mass near ±1, " +
+                        "and at N/K = 3 and 5 they covered 87 to 93.5% where OutputCovariancePrior.HuangWand(2)'s covered 93 to 96%, joint prediction " +
+                        "moving by 1.25 pp or less (E34's slice 3); HuangWand(2) is the opt-in when the correlations are read"));
         return new BassResolvedOutputs(response.Names, [.. means], levels, squares, prior, chosen.ResolveRates(squares));
     }
 

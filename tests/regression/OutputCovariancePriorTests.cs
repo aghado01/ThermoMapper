@@ -120,4 +120,25 @@ public sealed class OutputCovariancePriorTests
         Assert.True(compared > 20, $"only {compared} structures loaded");
         Assert.True(worst < 1e-12, $"worst relative gap {worst:E2}");
     }
+
+    // Decision 2, the user's call (2026-11-10): ScaledToResponse stays the default, and below N/K = 10 the log names Huang and Wand's
+    // prior, under the forms whose correlations sit near ±1; a declared prior and Huang and Wand's own take no hint.
+    [Fact]
+    public void Resolution_NamesHuangWand_BelowTenCasesPerOutput()
+    {
+        static BassAutoPick? Hint(BassConfig config, int n, int k)
+        {
+            (List<BassPredictor> predictors, double[,] y) = MultiOutputCoreTests.Data(n, k, 7);
+            var data = new BassData(predictors, new MultiOutputResponse(y, [.. Enumerable.Range(0, k).Select(l => $"y{l}")]));
+            return BassModel.Create(config, data).Resolved.AutoPicks.SingleOrDefault(p => p.Setting == "OutputCovariance");
+        }
+        var plain = new BassConfig();
+        BassAutoPick hint = Hint(plain, 25, 3)!;
+        Assert.Contains("N/K = 25/3", hint.Value);
+        Assert.Contains("HuangWand(2)", hint.Reason);
+        Assert.Null(Hint(plain, 30, 3));   // N/K = 10
+        Assert.NotNull(Hint(plain with { OutputCovariance = OutputCovariancePrior.Standardized() }, 25, 3));
+        Assert.Null(Hint(plain with { OutputCovariance = OutputCovariancePrior.HuangWand() }, 25, 3));
+        Assert.Null(Hint(plain with { OutputCovariance = OutputCovariancePrior.InverseWishart(5.0, new double[,] { { 1, 0, 0 }, { 0, 1, 0 }, { 0, 0, 1 } }) }, 25, 3));
+    }
 }
