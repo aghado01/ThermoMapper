@@ -85,6 +85,9 @@ public sealed class BassProjection
     /// <summary>Each active variable's declared domain, the zonotope's bounding box.</summary>
     public IReadOnlyList<InputDomain> Domains { get; }
 
+    /// <summary>Each projected continuous input's box width in its own units, the analysis's: x_box = (x − lower)/width.</summary>
+    public IReadOnlyList<double> Widths => Array.AsReadOnly([.. _scales.Select(s => s.Max - s.Min)]);
+
     /// <summary>The analysis's product law, in the native fit's transformed units; null when it read a joint sample.</summary>
     public ProductMeasure? Measure { get; }
 
