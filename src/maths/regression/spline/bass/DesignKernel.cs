@@ -205,8 +205,14 @@ public sealed record HingeDesignFactor(int Variable, int Sign, int Knot, double 
 /// <summary>
 /// A standardized shifted Legendre polynomial ψ_α as a factor (E19): one piece over the line, whose expansion about any centre
 /// <see cref="ShiftedLegendre.Coefficients"/> writes, so <see cref="PiecewisePolynomial"/> takes its moments under any measure
-/// as it does a hinge's. Under the uniform measure on [0, 1] its mean is 0 for α ≥ 1 and its pairs are orthonormal; the
-/// expansion's coefficients grow with α, so a moment past degree 15 or so loses digits to cancellation.
+/// as it does a hinge's. The expansion's coefficients grow with α, so such a moment past degree 15 or so loses digits to cancellation.
+/// <para>Under a uniform law the moments skip the expansion (E8, slice 6), so high degrees keep full precision:</para>
+/// <list type="bullet">
+/// <item>On [0, 1], in closed form. The ψ_α are orthonormal, E[ψ_α] = δ_α0, and ψ′_α = 2√(2α + 1)·Σ_{k&lt;α, α−k odd} √(2k + 1)·ψ_k, so
+/// E[ψ′_α] = 2√(2α + 1) for odd α, E[ψ′_αψ_β] = 2√((2α + 1)(2β + 1)) for β &lt; α with α − β odd, and
+/// E[ψ′_αψ′_β] = 2n(n + 1)·√((2α + 1)(2β + 1)) with n = min(α, β) for α ≡ β (mod 2), each 0 otherwise.</item>
+/// <item>On another interval, by the Gauss–Legendre rule exact for the integrand's degree, each factor by its recurrence.</item>
+/// </list>
 /// </summary>
 public sealed record LegendreDesignFactor(int Variable, int Degree) : DesignFactor(Variable)
 {
@@ -220,6 +226,13 @@ public sealed record LegendreDesignFactor(int Variable, int Degree) : DesignFact
     public override double Mean(ProductMeasure measure, out double error)
     {
         ContinuousMeasure m = measure.Continuous(Variable)!;
+        if (m.Measure is Uniform)
+        {
+            error = 0.0;
+            if (OnBox(m)) return Degree == 0 ? 1.0 : 0.0;
+            int a = Degree;
+            return Rule(m, a, x => ShiftedLegendre.Value(a, x));
+        }
         (double mean, error) = Product(Degree, 0, 0.0, 0.0).Expectation(m.Measure, m.Lower, m.Upper);
         return mean;
     }
@@ -230,6 +243,19 @@ public sealed record LegendreDesignFactor(int Variable, int Degree) : DesignFact
     {
         if (other is not LegendreDesignFactor b || b.Variable != Variable) throw new ArgumentException("A Legendre factor pairs with a Legendre factor on its variable.", nameof(other));
         ContinuousMeasure m = measure.Continuous(Variable)!;
+        if (m.Measure is Uniform)
+        {
+            error = 0.0;
+            int a = Degree, c = b.Degree;
+            if (OnBox(m))
+            {
+                // E[(ψ_a − m_a)(ψ_b − m_b)] = δ_ab − m_a·δ_b0 − m_b·δ_a0 + m_a·m_b, with E[ψ] = δ_·0.
+                double cross0 = a == c ? 1.0 : 0.0;
+                return (cross0, cross0 - meanThis * (c == 0 ? 1.0 : 0.0) - meanOther * (a == 0 ? 1.0 : 0.0) + meanThis * meanOther);
+            }
+            return (Rule(m, a + c, x => ShiftedLegendre.Value(a, x) * ShiftedLegendre.Value(c, x)),
+                    Rule(m, a + c, x => (ShiftedLegendre.Value(a, x) - meanThis) * (ShiftedLegendre.Value(c, x) - meanOther)));
+        }
         (double cross, double ec) = Product(Degree, b.Degree, 0.0, 0.0).Expectation(m.Measure, m.Lower, m.Upper);
         (double covariance, double ev) = Product(Degree, b.Degree, meanThis, meanOther).Expectation(m.Measure, m.Lower, m.Upper);
         error = Math.Max(ec, ev);
@@ -240,6 +266,13 @@ public sealed record LegendreDesignFactor(int Variable, int Degree) : DesignFact
     public override double SlopeMean(ContinuousMeasure measure, out double error)
     {
         ArgumentNullException.ThrowIfNull(measure);
+        if (measure.Measure is Uniform)
+        {
+            error = 0.0;
+            int a = Degree;
+            if (OnBox(measure)) return a % 2 == 1 ? 2.0 * Math.Sqrt(2.0 * a + 1.0) : 0.0;
+            return Rule(measure, a, x => ShiftedLegendre.Derivative(a, x));
+        }
         (double mean, error) = Slopes(Degree, true, 0, false).Expectation(measure.Measure, measure.Lower, measure.Upper);
         return mean;
     }
@@ -249,10 +282,38 @@ public sealed record LegendreDesignFactor(int Variable, int Degree) : DesignFact
     {
         ArgumentNullException.ThrowIfNull(measure);
         if (other is not LegendreDesignFactor b || b.Variable != Variable) throw new ArgumentException("A Legendre factor pairs with a Legendre factor on its variable.", nameof(other));
+        if (measure.Measure is Uniform)
+        {
+            error = 0.0;
+            int a = Degree, c = b.Degree;
+            if (OnBox(measure))
+            {
+                double root = Math.Sqrt((2.0 * a + 1.0) * (2.0 * c + 1.0));
+                int n = Math.Min(a, c);
+                double cross0 = c < a && (a - c) % 2 == 1 ? 2.0 * root : 0.0;
+                double slope0 = n >= 1 && (a - c) % 2 == 0 ? 2.0 * n * (n + 1.0) * root : 0.0;
+                return (cross0, slope0);
+            }
+            return (Rule(measure, a + c, x => ShiftedLegendre.Derivative(a, x) * ShiftedLegendre.Value(c, x)),
+                    Rule(measure, a + c, x => ShiftedLegendre.Derivative(a, x) * ShiftedLegendre.Derivative(c, x)));
+        }
         (double cross, double ec) = Slopes(Degree, true, b.Degree, false).Expectation(measure.Measure, measure.Lower, measure.Upper);
         (double slope, double es) = Slopes(Degree, true, b.Degree, true).Expectation(measure.Measure, measure.Lower, measure.Upper);
         error = Math.Max(ec, es);
         return (cross, slope);
+    }
+
+    // The uniform law on the box [0, 1], where the closed forms hold.
+    private static bool OnBox(ContinuousMeasure m) => m.Lower == 0.0 && m.Upper == 1.0;
+
+    // E[g] under the uniform law on [lower, upper] for a polynomial g of degree at most `degree`: the Gauss–Legendre rule of
+    // ⌈(degree + 1)/2⌉ nodes, exact for it, mapped onto the interval; the weights sum to 2, so the mean is half their sum.
+    private static double Rule(ContinuousMeasure m, int degree, Func<double, double> g)
+    {
+        GaussLegendre rule = GaussLegendre.Of(Math.Max(1, (degree + 2) / 2));
+        double half = 0.5 * (m.Upper - m.Lower), centre = 0.5 * (m.Upper + m.Lower), s = 0.0;
+        for (int k = 0; k < rule.Count; k++) s += rule.Weights[k] * g(centre + half * rule.Nodes[k]);
+        return 0.5 * s;
     }
 
     // (ψ_a − m_a)(ψ_b − m_b) as one piece, b = 0 standing for the constant 1 with no offset: a single factor's mean.
