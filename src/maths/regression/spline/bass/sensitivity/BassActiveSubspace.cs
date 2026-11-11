@@ -1240,7 +1240,7 @@ internal static partial class BassActiveSubspaces
 
     // N points from the product law, as cases in the inputs' own units, drawn once from the seed: each continuous input from its law in
     // box units (an empirical marginal by its atoms), mapped back through the box; each categorical one by its level probabilities.
-    private static PredictionCases Points(BassInputTransform transform, ProductMeasure measure, int n, int seed)
+    internal static PredictionCases Points(BassInputTransform transform, ProductMeasure measure, int n, int seed)
     {
         var rng = new Xoshiro256PlusPlus(seed);
         var columns = new List<PredictionColumn>();
