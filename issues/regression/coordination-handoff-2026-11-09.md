@@ -70,7 +70,7 @@ Links open each session in the app.
 
 1. ~~**SMC's trap remedy**~~ **Decided 2026-11-09** in the KHAOS session ("Build the cap, opt-in"): `SmcSpec.StepCap`, opt-in (`0ffc0e0`, docs `5a6cb1d`). The evidence stays flagged. The coordinating session has not rerun it from a snapshot.
 2. ~~**The residual birth as a candidate for KHAOS under the raw ridge**~~ **Decided 2026-11-09** in the KHAOS session, after the pre-registered five-fixture measurement (four gains, no loss; `b81d3ab`, `7c148e1`). It is now KHAOS's raw-ridge default on scalar responses (`0738183`, docs `233c0e0`). Non-scalar responses keep the fit's own birth and log why (`a980d1f`). Hinge fits are unchanged.
-3. **E34's default prior on Σ.** The default is the IW that reduces to scalar BASS's at K = 1; it puts a correlation's prior mass near ±1 at small n/K. Slice 3 measures coverage against Huang and Wand at ν = 2 for n/K from 3 to 30, and the default question comes back with those numbers.
+3. **E34's default prior on Σ.** *Moved to the [E34 thread](claude://claude.ai/epitaxy/local_26b4e7ee-1be4-482b-a19d-995477d32291) on 2026-11-10, where the chip puts it to the user with slice 3's numbers.* The default is the IW that reduces to scalar BASS's at K = 1; it puts a correlation's prior mass near ±1 at small n/K. Slice 3 measures coverage against Huang and Wand at ν = 2 for n/K from 3 to 30, and the default question comes back with those numbers.
 4. **GBASS's open decisions** ([gbass-noise-brief.md](bass/gbass-noise-brief.md)):
    - the flat histogram under a noise: the walker carries a and σ², a Metropolis step on each latent, or keep it refused;
    - quantile BASS's intervals undercover (63.8% at nominal 90%), which belongs to E15;
