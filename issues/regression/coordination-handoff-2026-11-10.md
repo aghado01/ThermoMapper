@@ -23,16 +23,15 @@ Written by the coordinating session (`local_b6732445`) at the user's quota pause
 |---|---|---|---|
 | [E8](claude://claude.ai/epitaxy/local_66d45fa0-e3f5-4429-b588-1786ae46c0ef) ([brief](bass/active-subspace-brief.md)) | Slice 7a, the frame and the projected data. The plan was approved as recommended (`72ec20f`) | Committed as WIP at the user's word (`bd5dc9c`): `sensitivity/BassActiveSubspace.cs` and the new `spline/bass/projection/`. It compiles; it is untested | 7a, then 7b and 7c, each verified |
 | [Conformal slices](claude://claude.ai/epitaxy/local_69bae1e5-39ad-45c0-8df2-e8e705b21e42) ([brief](conformal-layer-brief.md)) | Slice 10, the full step's Monte Carlo error, which had just started | Nothing in the tree | Slice 10 under the rules beside decision 9, the grid rule (`1d76a22`) included; then slices 11 and 12b (decision 10) |
-| [GBASS](claude://claude.ai/epitaxy/local_add4be38-7ddb-4981-8b14-6f8ac64f7dab) ([brief](bass/ridge-blocks-brief.md)) | E21 slice 4, random effects under the noises. The code is committed (`4f5bf3f`, ledger `94133f8`) | Committed as WIP at the user's word (`1940cc0`): the brief's "In progress" entry and `RandomEffectsNoiseQualificationTests.cs`, whose Geweke rows were rewritten as exact-start tests. It compiles; the qualification is unfinished | Finish the qualification on the four conditions below, report, be verified; then slice 5, the candidate seam, agreed with the conformal chip |
+| [GBASS](claude://claude.ai/epitaxy/local_add4be38-7ddb-4981-8b14-6f8ac64f7dab) ([brief](bass/ridge-blocks-brief.md)) | E21 slice 4 is done and verified (`4f5bf3f`, `94133f8`, `1940cc0`, `397ca88`, report `2cd9711`; 2,278 of 2,278 on a clean snapshot of `2cd9711`). The b = 1 collapse becomes an opt-in, at the user's word (`2d97551`) | The opt-in change, if the chip has started it | The opt-in as its own commit, verified; then slice 5, the candidate seam, agreed with the conformal chip |
 | [Conformal Lean](claude://claude.ai/epitaxy/local_21649695-833f-41ac-8d7c-326b4f691dda) ([brief](../../lean/Protolemmata/Conformal/conformal-chip-brief.md)) | **Done.** Slice 18 landed in `4383916` after these rows were written, completing all six items of the commission | Nothing | Verify slice 18 (unverified). The sources it wants fetched are in "Waiting on the user" |
 
-**E21 slice 4's open finding.** The first qualification run failed Geweke on ln s in nearly every row, with z up to 5.1. The chip reads it as slow mixing of the half-Cauchy scale, not a kernel defect. Verification needs four things:
-1. the failing successive-chain rows kept on record as unqualified;
-2. exact-start rows covering the same functions, ln s included, with enough replicates to see a bias of that size;
-3. evidence of slow mixing: ln s's autocorrelation, and z shrinking with the chain's length;
-4. if the cause is the u–s funnel under form B, the remedy goes to the user as a design change (a step on s with u integrated at b = 1, or interweaving).
+**E21 slice 4's finding, settled.** The first, successive-conditional Geweke design failed on ln s and is on record as unqualified.
+- *The cause* is the u–s funnel: ln s's integrated autocorrelation time is about 19,000 sweeps, and z falls as the chain grows.
+- *The gate* is now exact-start rows: 9 of 9 pass, and they catch a bias of the failing size at z −5.00.
+- *The fix* for the funnel is the user's call (waiting list, item 1).
 
-**E34 waits.** Its slice 4, noise by row and random intercepts, starts after E21 slice 4 is verified.
+**E34 can start its slice 4** (noise by row and random intercepts), now that E21 slice 4 is verified. Its chip is idle.
 
 ## Landed on 2026-11-10
 
@@ -50,7 +49,7 @@ Written by the coordinating session (`local_b6732445`) at the user's quota pause
 | E8 slice 6, the readout follow-ups | `276af70`, `e9d8827`, `30df59e`, `9a669b6`, `3c26660` | Yes: 2,278 of 2,278 at `3c26660` |
 | E8 slice 7's plan; the BPPR draft brief | `5816337`, `72ec20f`; `57e1ef6` | Plan read and approved by the user. The brief awaits the user |
 | E34 slice 5, the PCA mode's joint option; decision 2's hint | `4135eb9`, `cb4849b`, `6f2d3ea` | **Not yet.** The chip ran the whole assembly, 3,015 of 3,015 |
-| E21 slice 4's code | `4f5bf3f`, `94133f8` | **Not yet:** its qualification is unfinished |
+| E21 slice 4, random effects under the noises | `4f5bf3f`, `94133f8`, `1940cc0`, `397ca88`, `2cd9711` | Yes: 2,278 of 2,278 at `2cd9711` |
 | KHAOS: SMC's step cap, the residual birth as raw-ridge default | `0ffc0e0`, `5a6cb1d`, `0738183`, `233c0e0`, `a980d1f` | Not rerun (the user: "Not now") |
 
 ## Decided on 2026-11-10
@@ -65,23 +64,24 @@ Written by the coordinating session (`local_b6732445`) at the user's quota pause
 
 ## Waiting on the user
 
-1. **The BPPR brief** ([bppr-brief.md](bass/bppr-brief.md)): six open decisions, each with a recommendation the coordinating session agrees with.
+1. **E21's u–s funnel fix:** commission it or not. ln s's integrated autocorrelation time is about 19,000 sweeps under every random-effects fit with a noise. The remedies are a step on s with u integrated, exact at b = 1 only, or interweaving u's centred and non-centred forms, exact at every rung (the coordinating session's recommendation).
+2. **The BPPR brief** ([bppr-brief.md](bass/bppr-brief.md)): six open decisions, each with a recommendation the coordinating session agrees with.
    - The coordinating session also recommends that the moves' balance go Lean first.
    - The power spherical paper (arXiv 2006.04437) is not on disk.
    - Approval gives the go-ahead to install `BayesPPR` 0.2.0 from CRAN.
-2. **Sources for the conformal Lean's slice 18.**
+3. **Sources for the conformal Lean's slice 18.**
    - *Wanted:* Vlassis and Thomas (arXiv 2607.08415), who prove Gaffke's conjecture, and Angelopoulos et al., Conformal Risk Control (arXiv 2208.02814).
    - *Optional:* Gneiting and Raftery 2007.
    - *Its findings:* Snell and Griffiths's Theorem 4.3 is false as stated (a point-mass prior on all-zero losses breaks it), and Gressmann's proof of Proposition 2.5(i) has two sign slips while the statement stands.
-3. **Slice 12a's k̂ diagnostic:** opt-in (recommended; it costs about 200× the score) or on by default.
-4. **The original side-session notes** in `%APPDATA%\Claude\side-session-notes\`: delete them or keep them. Copies are in the repository; three PyTeXML notes were left there.
-5. **Conformal slices 13–18's C# order,** after slice 10's BASS reading. The tournament correction (13) is the candidate if the margin still reads nothing on BASS.
-6. **Lean for the active-subspace geometry** (proposed 2026-11-10):
+4. **Slice 12a's k̂ diagnostic:** opt-in (recommended; it costs about 200× the score) or on by default.
+5. **The original side-session notes** in `%APPDATA%\Claude\side-session-notes\`: delete them or keep them. Copies are in the repository; three PyTeXML notes were left there.
+6. **Conformal slices 13–18's C# order,** after slice 10's BASS reading. The tournament correction (13) is the candidate if the margin still reads nothing on BASS.
+7. **Lean for the active-subspace geometry** (proposed 2026-11-10):
    - E36's direction moves;
    - the matrix Poincaré check's reduction and the product law's constant;
    - P̄'s readings under mixed ranks;
    - rotate-and-refit's non-invariance.
-7. **Carried from 2026-11-09:**
+8. **Carried from 2026-11-09:**
    - GBASS's open decisions;
    - `RungWorkers`' default and the GC pass;
    - the Lean promotion review;
