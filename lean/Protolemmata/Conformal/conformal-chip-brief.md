@@ -171,6 +171,55 @@ The user asked for this on 2026-11-08 ("Yes, start it"), relayed by the BASS ext
 
 Newest first.
 
+### 2026-11-10 — slice 10's follow-up: D's rule, and reading from the realized ordering
+
+The main session verified slice 10 (dfe5c99) and raised two points about the engine's reading. Both are settled in the ledger, under "Reading from the realized ordering" in the slice 10 section. There are 5 new declarations, 304 in the file, PROOF-CLOSED, with the standard three axioms only. The checks ran first, and every assertion holds.
+
+**1. D is each unit's own turn, the candidate's included.** Your reading is right.
+- D(y) is read per (data set, y) over all m units, by one per-turn rule.
+  - The candidate's own turn is the held ordering at y, read by its own held weights.
+  - A data unit's own turn is the ordering in which it is the candidate.
+- A D from the data units' turns alone never contains the test unit, and it fails `coverage_close_excluding`'s hypothesis.
+- The engine reads data units' own-turn flags only through a proxy.
+  - A proxy is sound if its set contains every unit whose own turn degenerates. Extra flags only charge more.
+  - A proxy that misses one is not sound.
+  - At a far y, a data unit's own turn has the far candidate inside its fit. So the proxy must not inherit the candidate's held weight.
+
+**2. At a flagged y the realized ordering reads nothing, and the reading moves to the kept orderings with D charged again.**
+- At a flagged y, every unit's estimate shares the candidate's add-one-in weights, so no unit can be read there. Charging the candidate as one unit of D and reading the rest from that ordering is not sound.
+- *Proved per data set* (`le_read_excluding`, `read_le_excluding`, `coverage_read_excluding`, `coverage_read_twoSided_excluding`, `pit_read_excluding`). Each ordering reads its own estimates, and a left-out ordering reads nothing.
+  - *Coverage:* at least 1 − (average reading)/m − |D|/m − 2ν.
+  - *The PIT:* between (average lower reading)/m − 2ν and (average upper reading)/m + |D|/m + 2ν.
+  - D is charged once inside the count and once for the orderings that read nothing.
+  - The second ν is the realized ordering's own bounds failing.
+- *Over the grid* (as the layer already reads, not formalized):
+  - the margin is 1 − max over kept y of ĉ(y)/m − max over all grid y of |D(y)|/m − 2ν;
+  - the PIT's bounds are [min over kept y of (lower)/m − max_y |D(y)|/m − 2ν, max over kept y of (upper)/m + max_y |D(y)|/m + 2ν].
+- *The maximum does not collapse because the grid reaches far out.* Flagged y drop out of the maximum, and a far y costs its one flagged unit in max_y |D(y)|. The report collapses only if the flagged count is large at some grid value.
+- *Other readings.* A reading per y is not a coverage statement. Reading over the candidates outside D is sound only with D's share charged.
+
+**Rules for the C# worker,** replacing slice 10's "report from the observed ordering's estimates":
+- *D(y):* all m units. The candidate's own turn is read directly from its held weights. Each data unit is read through a proxy that flags at least whenever its own turn would.
+- *Read at kept y only:* the band from ĉ(y) = k + |M̂_D| + |D's units the inflated rule accepts| (2k and the union band for the equi-tailed set), and the PIT's counts likewise.
+- *Charge* max over the grid of |D(y)|/m, and 2ν in place of ν.
+
+**Files.**
+- `ConformalValidity.lean`, section `ReadingExcluded`.
+- `conformal-checks.py`, slice 10, "reading from the realized ordering".
+- `conformal-lemmas.md`: the slice 10 section and the status line.
+- This brief.
+
+**Gates.**
+- `lake build Enthymemata.ConformalValidity`: clean.
+- `lake build Enthymemata`: green.
+- `scripts/meta-ci.ps1 -NoBuild`: PASS.
+- `#print axioms` on all 5: the standard three.
+- D: had 38 GB free.
+
+**Open, no decision waiting:** how the C# proxies a data unit's own-turn flag. Its soundness can be checked on fixtures against refits.
+
+**What stopped me:** nothing.
+
 ### 2026-11-10 — slice 12: Hoff's score and the latent posterior, proved
 
 Slice 12 is proved in `ConformalValidity.lean`: 60 new declarations, 299 in the file, PROOF-CLOSED, with the standard three axioms only. The ledger's [slice 12 section](conformal-lemmas.md#slice-12--hoffs-score-and-the-latent-posterior) has the statements. The checks ran first, in CB-4's model and in exact arithmetic, and every assertion holds.
