@@ -1,6 +1,6 @@
 # Active subspaces on the BASS core: E8's build (chip brief)
 
-Date: 2026-11-08. Status: slices 0–6 complete; slice 7's plan approved by the user (2026-11-10); slice 7a (`7b2ca7a`) verified 2026-11-11; slice 7b landed (`70a2aa2`) and waits for its verification, its prior-rule handling for the user; 7c follows. Commissioned by the user on 2026-11-08 ("kick off e8"), after KHAOS's last slice; slice 5, the Grassmann discussion's items the user settled, commissioned 2026-11-08 ("ill take as recommended"). Every slice landed and was verified by the coordinating session on 2026-11-08: slice 0 (`15fb495`, `9e3028d`, `aa62879`), slice 1 (`95294f8`, `9dfcc6d`, `1385b86`), slice 2 (`8c7db77`, `3cdc2e8`), slice 3 (`84fe230`, `1049055`), slice 4 (`20aeb06`, `bc72014`) and slice 5 (`def59f3`, `9d2ff23`, `95d2900`, `a54a537`). The follow-ups, commissioned 2026-11-10: slice 6 (`276af70`, `e9d8827`, `30df59e`, `9a669b6`, report `3c26660`) verified by the coordinating session on 2026-11-10; slice 7's plan (below, "Slice 7's plan") waits for the user's decisions; E36's brief follows its verification. Written by the main session from [E8's entry](extensions-brief.md#active-subspace-analysis), [gap G3](lineage-gaps-register.md#g3-sobol-indices-and-active-subspaces-have-different-standing), [the lineage review's separability question](lineage-review.md#separability-is-what-the-closed-forms-rest-on), the [Astra notes](../discussion/astra-grassman-stiefel-pca-extensions.md), and the [Grassmann discussion](../discussion/grassmann-stiefel-subspaces-brief.md)'s report so far. Reports go under "Reports" below, newest first.
+Date: 2026-11-08. Status: slices 0–6 complete; slice 7's plan approved by the user (2026-11-10); slice 7a (`7b2ca7a`) verified 2026-11-11; slice 7b (`70a2aa2`) verified 2026-11-11; slice 7c landed (`015d977`) and waits for its verification; the prior-rule handling (column mass, raw ridge) waits for the user. Commissioned by the user on 2026-11-08 ("kick off e8"), after KHAOS's last slice; slice 5, the Grassmann discussion's items the user settled, commissioned 2026-11-08 ("ill take as recommended"). Every slice landed and was verified by the coordinating session on 2026-11-08: slice 0 (`15fb495`, `9e3028d`, `aa62879`), slice 1 (`95294f8`, `9dfcc6d`, `1385b86`), slice 2 (`8c7db77`, `3cdc2e8`), slice 3 (`84fe230`, `1049055`), slice 4 (`20aeb06`, `bc72014`) and slice 5 (`def59f3`, `9d2ff23`, `95d2900`, `a54a537`). The follow-ups, commissioned 2026-11-10: slice 6 (`276af70`, `e9d8827`, `30df59e`, `9a669b6`, report `3c26660`) verified by the coordinating session on 2026-11-10; slice 7's plan (below, "Slice 7's plan") waits for the user's decisions; E36's brief follows its verification. Written by the main session from [E8's entry](extensions-brief.md#active-subspace-analysis), [gap G3](lineage-gaps-register.md#g3-sobol-indices-and-active-subspaces-have-different-standing), [the lineage review's separability question](lineage-review.md#separability-is-what-the-closed-forms-rest-on), the [Astra notes](../discussion/astra-grassman-stiefel-pca-extensions.md), and the [Grassmann discussion](../discussion/grassmann-stiefel-subspaces-brief.md)'s report so far. Reports go under "Reports" below, newest first.
 
 ## Why
 
@@ -204,6 +204,49 @@ Nothing is built until the user decides the items marked **Decision** below. The
 Under "Reports" below, newest first, per slice: what landed by commit; the gates' numbers; decisions taken beyond this brief; what was left unbuilt and why; follow-ups with the decision each would change.
 
 ## Reports
+
+### Slice 7c: the comparison (2026-11-11)
+
+**Landed:** `015d977`.
+
+**What was built:**
+- *`BassProjectedFit.Compare(native, data, analysis, spec)`* returns a `BassProjectionComparison`.
+  - *Per fit (`ProjectionFitReport`):* the basis functions per draw under the draws' weights; PSIS-LOO on the fit's own data; the evidence when the run was tempered to an exact reference rung; and, with held-out cases and responses, the RMSE and 100·(1 − RMSE/sd).
+  - *Against the frame:* the refit's mapped E[C], its leading k eigenvectors against the frame's for k = 1 to d (`RefitToFrame`); and each native draw's leading d eigenvectors against the frame (`FrameSpread`).
+  - *The caveat:* the data-reuse caveat is a property of every report (decision 5).
+  - *Refused:* an analysis the frame was not read from, held-out cases without responses, and one fold.
+- *Cross-fitting, opt-in* (`ProjectionComparisonSpec.Folds`, decision 5): `CrossFitReport`.
+  - K folds by a seeded shuffle, of sizes differing by at most one.
+  - Per fold, a native fit on the other folds reads the fold's frame, the refit runs on those folds, and both are scored on the fold held out; each fold's frame is kept.
+  - Every fold's data take the full data's boxes as declared domains, so the frames share their coordinates (7a's contract).
+  - It reads data without groupings or case weights, whose subsetting is not built, and refuses the rest.
+- The fit records no run time, so time stays in 7b's cost row.
+
+**Gates:**
+
+| Gate | Reading |
+| --- | --- |
+| Each criterion against its direct computation, on the six-input ridge with 500 held-out cases: basis functions, PSIS-LOO, held-out RMSE and percentage; no evidence untempered; each native draw's spread against its principal angles | to 10⁻¹², the same bits, 10⁻¹², 10⁻⁹; null; the same bits |
+| The refit's mapped subspace against the frame at k = d | 0 to 10⁻¹² |
+| The caveat; the refusals | present in the report; each refused |
+| Cross-fitting's folds, K = 3 on 200 cases | disjoint, covering every case, of 66, 67 and 67 |
+| Frames from the other folds alone: fold 0's responses raised by 50 | fold 0's frame the same bits; folds 1 and 2's frames moved; fold 0's scores moved |
+| Out of sample on the ridge | refit RMSE 0.118 (77.1%) against native 0.187 (63.6%) |
+| An additive function with no low-dimensional structure, Σᵢ sin(2πxᵢ) on four inputs, d = 1: E[C]'s eigenvalues over the first 1, 0.99, 0.98, 0.92 | out of sample the refit does not win: 1.177 (11.1%) against native 0.090 (93.2%) |
+| Fitting untouched | the Commit scope 46 of 46 (the two classes the files reach, and the pinned tier) |
+
+**Readings on the ridge** (in-sample, with the caveat):
+- Native: 9.5 basis functions, LOO elpd 94.2, held-out RMSE 0.116 (76.6%).
+- Refit: 4.1 basis functions, LOO elpd 191.1, held-out RMSE 0.079 (84.1%).
+- The native draws sit a median 2.0° and at most 4.3° from the frame, while the frame is 6.0° from the true direction (7b's gate). On this fixture the posterior's spread about the frame understates the frame's error, which a frame read from more data or another summary would narrow. It is a reading, not a gate.
+
+**Decisions beyond the brief:**
+1. *Cross-fitting's held-out score is the posterior mean's RMSE and percentage,* the paper's measure. A held-out log predictive density would need each noise law's density at new cases, which the candidate seam (`CandidateLogDensity`) reads for the conformal layer; it is a follow-up if wanted.
+2. *Every fold's data take the full data's boxes,* so a fold's frame and refit read held-out cases inside their boxes.
+
+**Left unbuilt:** cross-fitting with groupings or case weights; a held-out log predictive density; basis fits through a projection; the prior-rule handling, which waits for the user.
+
+**Doc changes owed:** `docs/Maths/Regression/ActiveSubspaces.md`, slice 7's section: the comparison, cross-fitting and the caveat, with these readings.
 
 ### Slice 7b: the projected refit (2026-11-11)
 
