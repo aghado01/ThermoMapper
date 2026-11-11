@@ -6,6 +6,7 @@ using System.Threading.Tasks;
 using Maths.Regression.Spline.Bass.Presentation;
 using Maths.Regression.Spline.Bass.Sensitivity;
 using Maths.Rng;
+using Maths.Samplers.Ensemble;
 
 namespace Maths.Regression.Spline.Bass;
 
@@ -13,27 +14,59 @@ namespace Maths.Regression.Spline.Bass;
 /// A basis fit (R's <c>bassPCA</c> and <c>bassBasis</c>; P02, P03): the decomposition, the shared predictors and one
 /// <see cref="BassFit"/> per component, each fitted to its coefficient response as a scalar response, with the joint
 /// draws that pair them (<see cref="BassJointDraws"/>). Immutable; the components' models are built once, on first use.
+/// <para>
+/// Under the joint option (E34's decision 8, <see cref="BassComponents.FitJoint"/>) the scores are fitted together as several
+/// outputs on one structure, <see cref="Joint"/>, and each component is a view of it: the joint fit's draws with component k's
+/// coefficients and Σ_kk as σ². The readers of the components' surfaces read the views as they read components fitted apart; the
+/// readers of their noise read Σ whole, its covariances across the components included.
+/// </para>
 /// </summary>
 public sealed class BassBasisFit
 {
     private readonly BassPredictor[] _predictors;
     private readonly BassFit[] _components;
     private readonly Lazy<BassModel>[] _models;
+    private readonly Lazy<BassDraw[]>? _jointPooled;
 
-    internal BassBasisFit(BassDecomposition decomposition, BassPredictor[] predictors, BassFit[] components, BassJointDraws joint, int masterSeed)
+    internal BassBasisFit(BassDecomposition decomposition, BassPredictor[] predictors, BassFit[] components, BassJointDraws joint, int masterSeed,
+                          BassFit? jointFit = null, BassModel[]? models = null)
     {
         Decomposition = decomposition;
         _predictors = predictors;
         _components = components;
         JointDraws = joint;
         MasterSeed = masterSeed;
+        Joint = jointFit;
         _models = new Lazy<BassModel>[components.Length];
         for (int k = 0; k < components.Length; k++)
         {
             int component = k;
-            _models[k] = new Lazy<BassModel>(() => BassModel.Create(_components[component].Config, ComponentData(component)));
+            _models[k] = models is null
+                ? new Lazy<BassModel>(() => BassModel.Create(_components[component].Config, ComponentData(component)))
+                : new Lazy<BassModel>(() => models[component]);
         }
+        if (jointFit is not null) _jointPooled = new Lazy<BassDraw[]>(() => [.. jointFit.Draws.SelectMany(chain => chain)]);
     }
+
+    /// <summary>
+    /// The fit of every component's coefficient response together, as several outputs on one structure with their noise covariance
+    /// Σ integrated (E34's decision 8; <see cref="BassComponents.FitJoint"/>), whose views <see cref="Components"/> holds; null for
+    /// components fitted apart. Its own readers (<see cref="BassMultiOutput"/>) read it on <see cref="JointData"/>, and
+    /// <see cref="Bass.Resume"/> continues it.
+    /// </summary>
+    public BassFit? Joint { get; }
+
+    /// <summary>The shared predictors and every component's coefficient response as one response of several outputs, the components
+    /// in order and named w0, w1, …: the data <see cref="Joint"/> was run on.</summary>
+    public BassData JointData() => BassComponents.JointData(Decomposition, _predictors);
+
+    /// <summary>Joint draw <paramref name="jointDraw"/>'s noise covariance across the components, Σ (r × r), under the joint option;
+    /// null for components fitted apart, whose noises are independent.</summary>
+    internal double[,]? NoiseCovariance(int jointDraw)
+        => _jointPooled is null ? null : _jointPooled.Value[JointDraws.Draw(0, jointDraw)].Sigma;
+
+    /// <summary>The lower Cholesky factor of <see cref="NoiseCovariance"/>, L with LLᵀ = Σ; null for components fitted apart.</summary>
+    internal double[,]? NoiseRoot(int jointDraw) => NoiseCovariance(jointDraw) is { } sigma ? BassComponents.Root(sigma) : null;
 
     /// <summary>The decomposition.</summary>
     public BassDecomposition Decomposition { get; }
@@ -226,6 +259,121 @@ public static class BassComponents
         }
         BassJointDraws joint = BassJointDraws.Pair(fits, SeedTree.Derive(masterSeed, r + 1)[r]);
         return new BassBasisFit(decomposition, shared, fits, joint, masterSeed);
+    }
+
+    /// <summary>
+    /// Fits every component of <paramref name="decomposition"/> together (E34's decision 8): the r coefficient responses as r outputs
+    /// of one fit on <paramref name="predictors"/> under <paramref name="config"/>, one structure for all of them with their noise
+    /// covariance Σ integrated (<see cref="MultiOutputResponse"/>), the truncation residuals as for components fitted apart. Under
+    /// decision 2's Σ prior the structure's and τ's posterior depend on the scores' span alone, not on the basis that spans it; the
+    /// trade is one structure for every component in place of a structure each. The joint fit runs at the seed tree's child 0, a
+    /// component fitted apart's first, so a rank-1 decomposition fits as <see cref="Fit(BassDecomposition, IReadOnlyList{BassPredictor}, BassConfig, BassRunOptions?)"/> does.
+    /// </summary>
+    public static BassBasisFit FitJoint(BassDecomposition decomposition, IReadOnlyList<BassPredictor> predictors, BassConfig config,
+                                        BassRunOptions? run = null)
+    {
+        ArgumentNullException.ThrowIfNull(decomposition);
+        ArgumentNullException.ThrowIfNull(config);
+        if (config.HasRandomEffects)
+            throw new ArgumentException("The config declares random intercepts; a decomposition's components share predictors and no grouping (E21), " +
+                                        "and several outputs' block arrives with E34's slice 4.", nameof(config));
+        int r = decomposition.Rank;
+        BassPredictor[] shared = Checked(predictors, decomposition.Cases);
+        BassConfig seeded = config with { Sampling = config.Sampling with { MasterSeed = SeedTree.Derive(config.Sampling.MasterSeed, r)[0] } };
+        BassFit joint = Bass.Fit(seeded, JointData(decomposition, shared), run);
+        return AssembleJoint(decomposition, shared, joint, config.Sampling.MasterSeed);
+    }
+
+    /// <summary>
+    /// The basis fit of a joint fit already run, <paramref name="joint"/> on <paramref name="decomposition"/>'s scores as several
+    /// outputs (refused when its fingerprint says otherwise), as <see cref="FitJoint"/> assembles it: one view per component, and the
+    /// joint draws each one of <paramref name="joint"/>'s draws, the pairing's stream derived from <paramref name="masterSeed"/>.
+    /// </summary>
+    public static BassBasisFit AssembleJoint(BassDecomposition decomposition, IReadOnlyList<BassPredictor> predictors, BassFit joint, int masterSeed)
+    {
+        ArgumentNullException.ThrowIfNull(decomposition);
+        ArgumentNullException.ThrowIfNull(joint);
+        int r = decomposition.Rank;
+        BassPredictor[] shared = Checked(predictors, decomposition.Cases);
+        BassData data = JointData(decomposition, shared);
+        if (Bass.Fingerprint(joint.Config, data) != joint.Identity.Fingerprint)
+            throw new ArgumentException("The joint fit was run on other data or another config than the decomposition's scores.", nameof(joint));
+        var views = new BassFit[r];
+        var models = new BassModel[r];
+        for (int k = 0; k < r; k++) (views[k], models[k]) = View(joint, k, ComponentDataOf(decomposition, shared, k));
+        BassJointDraws pairs = BassJointDraws.Shared(joint, r, SeedTree.Derive(masterSeed, r + 1)[r]);
+        return new BassBasisFit(decomposition, shared, views, pairs, masterSeed, joint, models);
+    }
+
+    /// <summary>The shared predictors and the r coefficient responses as one response of r outputs, named w0, w1, … in component
+    /// order: the data a joint fit runs on.</summary>
+    internal static BassData JointData(BassDecomposition decomposition, BassPredictor[] predictors)
+    {
+        int r = decomposition.Rank, n = decomposition.Cases;
+        var y = new double[n, r];
+        for (int k = 0; k < r; k++)
+        {
+            double[] w = decomposition.CoefficientResponse(k);
+            for (int i = 0; i < n; i++) y[i, k] = w[i];
+        }
+        return new BassData(predictors, new MultiOutputResponse(y, [.. Enumerable.Range(0, r).Select(k => $"w{k}")]));
+    }
+
+    private static BassData ComponentDataOf(BassDecomposition decomposition, BassPredictor[] predictors, int component)
+        => new(predictors, new ScalarResponse(decomposition.CoefficientResponse(component)));
+
+    // Component k of a joint fit as a fit of its own response: the joint draws with column k of the coefficients and Σ_kk as σ², on a
+    // scalar config whose model reads what the components' readers read (the basis, the inputs, the coefficients' conditional means,
+    // which do not depend on Σ). Σ's prior is the joint fit's, so the view's config drops it, and its births are the ones that ran. The
+    // evidence, the checkpoint and the residual check are the joint fit's, so the view holds none.
+    private static (BassFit View, BassModel Model) View(BassFit joint, int k, BassData data)
+    {
+        BassSampling sampling = joint.Config.Sampling;
+        BirthMixture? births = sampling.Births ?? (joint.Resolved.Births is null ? new BirthMixture() : null);
+        BassConfig config = joint.Config with { OutputCovariance = null, Sampling = sampling with { Births = births } };
+        BassModel model = BassModel.Create(config, data);
+        var stores = new DrawStore<BassDraw>[joint.Draws.Count];
+        for (int c = 0; c < stores.Length; c++)
+        {
+            var store = new DrawStore<BassDraw>();
+            foreach (BassDraw draw in joint.Draws[c]) store.Add(ViewDraw(draw, k));
+            stores[c] = store;
+        }
+        BassFit view = joint with
+        {
+            Config = config, Resolved = model.Resolved, Identity = joint.Identity with { Fingerprint = Bass.Fingerprint(config, data) },
+            Draws = stores, Evidence = null, ResidualDependence = null, Checkpoint = null,
+        };
+        return (view, model);
+    }
+
+    private static BassDraw ViewDraw(BassDraw draw, int k)
+    {
+        double[,] a = draw.OutputCoefficients ?? throw new ArgumentException("A joint fit's draw holds several outputs' coefficients.");
+        double[,] sigma = draw.Sigma ?? throw new ArgumentException("A joint fit's draw holds Σ.");
+        var coefficients = new double[a.GetLength(0)];
+        for (int j = 0; j < coefficients.Length; j++) coefficients[j] = a[j, k];
+        return new BassDraw(draw.Structure, draw.Tau, sigma[k, k], coefficients, draw.Lambda);
+    }
+
+    // The lower Cholesky factor of a drawn Σ, positive definite by construction.
+    internal static double[,] Root(double[,] sigma)
+    {
+        int r = sigma.GetLength(0);
+        var l = new double[r, r];
+        for (int i = 0; i < r; i++)
+            for (int j = 0; j <= i; j++)
+            {
+                double sum = sigma[i, j];
+                for (int q = 0; q < j; q++) sum -= l[i, q] * l[j, q];
+                if (i == j)
+                {
+                    if (!(sum > 0.0)) throw new InvalidOperationException("A draw of Σ is not positive definite in doubles.");
+                    l[i, i] = Math.Sqrt(sum);
+                }
+                else l[i, j] = sum / l[j, j];
+            }
+        return l;
     }
 
     private static BassPredictor[] Checked(IReadOnlyList<BassPredictor> predictors, int cases)

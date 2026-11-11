@@ -118,7 +118,8 @@ public sealed class BassFitEmulator : ICalibrationEmulator
 
 /// <summary>
 /// A <see cref="BassBasisFit"/> as a calibration emulator (C-X2): joint draw s's components at θ reconstructed,
-/// y_m + y_s ∘ K w_s(θ) (D07), with the component noise (y_s ∘ K)·diag(σ²_{s,k})·(y_s ∘ K)ᵀ and the decomposition's
+/// y_m + y_s ∘ K w_s(θ) (D07), with the component noise (y_s ∘ K)·diag(σ²_{s,k})·(y_s ∘ K)ᵀ, or (y_s ∘ K)·Σ_s·(y_s ∘ K)ᵀ under
+/// the joint option (E34's decision 8), and the decomposition's
 /// truncation residuals y_s ∘ eᵢ. The basis exists at its training locations, so the observations are one case; a
 /// predictor that is not a parameter is fixed by <c>fixedInputs</c>'s one row. Prediction equals
 /// <see cref="BassBasisFit.Predict"/>'s latent draw bit for bit.
@@ -176,6 +177,21 @@ public sealed class BassBasisEmulator : ICalibrationEmulator
     {
         Check(draw);
         var variances = new double[_pooled.Length];
+        if (_fit.NoiseRoot(draw) is { } root)
+        {
+            // The joint option (E34's decision 8): (y_s ∘ K)Σ(y_s ∘ K)ᵀ as ((y_s ∘ K)L)((y_s ∘ K)L)ᵀ, a factor of this draw's own.
+            int m = _factor.GetLength(0), r = variances.Length;
+            var factor = new double[m, r];
+            for (int l = 0; l < m; l++)
+                for (int q = 0; q < r; q++)
+                {
+                    double a = 0.0;
+                    for (int j = q; j < r; j++) a += _factor[l, j] * root[j, q];
+                    factor[l, q] = a;
+                }
+            Array.Fill(variances, 1.0);
+            return new ComponentNoise(factor, variances);
+        }
         for (int k = 0; k < variances.Length; k++) variances[k] = _pooled[k][_fit.JointDraws.Draw(k, draw)].Sigma2;
         return new ComponentNoise(_factor, variances);
     }

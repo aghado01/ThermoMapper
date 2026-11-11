@@ -72,7 +72,8 @@ public abstract record EmulatorNoise
 
 /// <summary>
 /// A basis emulator's component noise, (y_s ∘ K)·diag(σ²_{e,k})·(y_s ∘ K)ᵀ: a low-rank term over the basis in physical
-/// units. <paramref name="Factor"/> (m × r) is shared by every draw and read only.
+/// units. <paramref name="Factor"/> (m × r) is read only; components fitted apart share it across draws, while a joint fit's
+/// (E34's decision 8) is each draw's own, (y_s ∘ K)L with LLᵀ = Σ and unit variances.
 /// </summary>
 public sealed record ComponentNoise(double[,] Factor, double[] Variances) : EmulatorNoise;
 

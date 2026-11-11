@@ -18,7 +18,9 @@ namespace Maths.Regression.Spline.Bass;
 /// an equal-weight component beside them is thinned evenly over its pooled draws. The joint draws then weigh equally and
 /// carry no chains.</item>
 /// </list>
-/// The components must share their chain count when every one is equal-weight.
+/// The components must share their chain count when every one is equal-weight. A joint fit of the scores as several outputs
+/// (E34's decision 8, <see cref="BassComponents.FitJoint"/>) has one posterior over every component, so its joint draws are its
+/// own draws, each the same for every component (<see cref="Shared"/>).
 /// </summary>
 public sealed class BassJointDraws
 {
@@ -75,6 +77,22 @@ public sealed class BassJointDraws
             }
         }
         return weighted ? Resample(components, pooled, seed, scheme) : ByChain(components);
+    }
+
+    /// <summary>
+    /// The joint draws of <paramref name="components"/> components read from one fit of their scores as several outputs (E34's
+    /// decision 8): each joint draw is one of <paramref name="joint"/>'s draws, the same for every component. The pairing is
+    /// <see cref="Pair"/>'s on that fit alone, so equal-weight draws keep their chains and weighted ones are resampled once, from
+    /// <paramref name="seed"/>'s first stream; at one component it is the pairing of a component fitted apart.
+    /// </summary>
+    internal static BassJointDraws Shared(BassFit joint, int components, int seed, ResamplingScheme scheme = ResamplingScheme.Multinomial)
+    {
+        ArgumentNullException.ThrowIfNull(joint);
+        if (components < 1) throw new ArgumentOutOfRangeException(nameof(components), "Joint draws need a component.");
+        BassJointDraws one = Pair([joint], seed, scheme);
+        var draws = new int[components][];
+        for (int k = 0; k < components; k++) draws[k] = one._draws[0];
+        return new BassJointDraws(draws, one.ChainLengths is { } lengths ? [.. lengths] : null, one.Resampled);
     }
 
     private static BassJointDraws ByChain(IReadOnlyList<BassFit> components)

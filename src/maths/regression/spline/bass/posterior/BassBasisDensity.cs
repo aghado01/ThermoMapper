@@ -34,6 +34,9 @@ public enum BasisDensitySpace
 /// location by location, read back from W and the in-sample residuals; a unit must hold whole cases, since the
 /// locations of a case are correlated through K. The component noise and the truncation residual of a case are
 /// integrated; the density is refused where a location's truncation variance is zero, as at a constant column.</item>
+/// <item><b>Under the joint option</b> (E34's decision 8, <see cref="BassBasisFit.Joint"/>) a case's component noises share Σ:
+/// in coefficient space a case's density is N(wᵢ | w(xᵢ), Σ), so a unit holds whole cases there too, and in y-space the
+/// component term is KΣKᵀ.</item>
 /// </list>
 /// </summary>
 internal static class BassBasisDensity
@@ -73,12 +76,23 @@ internal static class BassBasisDensity
             }
         }
 
-        double[,] values = coefficients ? Coefficients(decomposition, fitted, sigma2, partition)
-                                        : Response(decomposition, fitted, sigma2, partition);
-        var latents = new List<LatentReport> { new("component structures", LatentScope.Global, LatentTreatment.Conditioned) };
-        if (samplesTau) latents.Add(new LatentReport("component prior precisions τ_k", LatentScope.Global, LatentTreatment.Conditioned));
+        // Under the joint option the components' noises share Σ (E34's decision 8): each joint draw's factor L, LLᵀ = Σ.
+        double[][,]? roots = null;
+        if (fit.Joint is not null)
+        {
+            roots = new double[s][,];
+            for (int d = 0; d < s; d++) roots[d] = fit.NoiseRoot(d)!;
+        }
+
+        double[,] values = coefficients ? Coefficients(decomposition, fitted, sigma2, roots, partition)
+                                        : Response(decomposition, fitted, sigma2, roots, partition);
+        var latents = new List<LatentReport>
+        {
+            new(roots is null ? "component structures" : "the components' shared structure", LatentScope.Global, LatentTreatment.Conditioned),
+        };
+        if (samplesTau) latents.Add(new LatentReport(roots is null ? "component prior precisions τ_k" : "the shared prior precision τ", LatentScope.Global, LatentTreatment.Conditioned));
         latents.Add(new LatentReport("component coefficients", LatentScope.Global, LatentTreatment.Conditioned));
-        latents.Add(new LatentReport("component noise variances σ_k²", LatentScope.Global, LatentTreatment.Conditioned));
+        latents.Add(new LatentReport(roots is null ? "component noise variances σ_k²" : "the components' noise covariance Σ", LatentScope.Global, LatentTreatment.Conditioned));
         if (!coefficients)
         {
             latents.Add(new LatentReport("component noise ε", LatentScope.Group, LatentTreatment.Integrated));
@@ -87,9 +101,12 @@ internal static class BassBasisDensity
         return new PointwiseLogDensity(values, partition, latents, joint.ChainLengths);
     }
 
-    // Σ over each unit's (case, component) observations of log N(w_ik | w_k(xᵢ), σ_k²).
-    private static double[,] Coefficients(BassDecomposition decomposition, double[,,] fitted, double[,] sigma2, UnitPartition partition)
+    // Σ over each unit's (case, component) observations of log N(w_ik | w_k(xᵢ), σ_k²); under the joint option, over each unit's
+    // cases of log N(wᵢ | w(xᵢ), Σ), so a unit holds whole cases.
+    private static double[,] Coefficients(BassDecomposition decomposition, double[,,] fitted, double[,] sigma2, double[][,]? roots,
+                                          UnitPartition partition)
     {
+        if (roots is not null) return JointCoefficients(decomposition, fitted, roots, partition);
         int s = fitted.GetLength(0), n = fitted.GetLength(1), r = fitted.GetLength(2);
         var values = new double[s, partition.Units];
         var log = new double[n * r];
@@ -111,10 +128,47 @@ internal static class BassBasisDensity
         return values;
     }
 
+    // The joint option's coefficient-space density: log N(wᵢ | w(xᵢ), Σ) = −(r/2) ln 2π − Σ_k ln L_kk − ½‖L⁻¹(wᵢ − w(xᵢ))‖², per case.
+    private static double[,] JointCoefficients(BassDecomposition decomposition, double[,,] fitted, double[][,] roots, UnitPartition partition)
+    {
+        int s = fitted.GetLength(0), n = fitted.GetLength(1), r = fitted.GetLength(2);
+        int[] caseUnit = new int[n];
+        for (int i = 0; i < n; i++)
+        {
+            caseUnit[i] = partition.UnitOf[i * r];
+            for (int k = 1; k < r; k++)
+                if (partition.UnitOf[i * r + k] != caseUnit[i])
+                    throw new ArgumentException($"Case {i}'s components fall in more than one unit; under the joint option their noises share Σ, so a unit holds whole cases.", "units");
+        }
+        var values = new double[s, partition.Units];
+        var u = new double[r];
+        for (int d = 0; d < s; d++)
+        {
+            double[,] root = roots[d];
+            double logDet = 0.0;
+            for (int k = 0; k < r; k++) logDet += Math.Log(root[k, k]);
+            double constant = -0.5 * r * Math.Log(2.0 * Math.PI) - logDet;
+            for (int i = 0; i < n; i++)
+            {
+                double q = 0.0;
+                for (int k = 0; k < r; k++)   // u = L⁻¹e by forward substitution
+                {
+                    double e = decomposition.Coefficient(k, i) - fitted[d, i, k];
+                    for (int j = 0; j < k; j++) e -= root[k, j] * u[j];
+                    u[k] = e / root[k, k];
+                    q += u[k] * u[k];
+                }
+                values[d, caseUnit[i]] += constant - 0.5 * q;
+            }
+        }
+        return values;
+    }
+
     // Each case's y-space log density under the diagonal Gaussian, summed over a unit's cases: the standardized
     // covariance Σ = diag(v) + K diag(σ²) Kᵀ held as a diagonal plus a low-rank term (calibration's form), so no m × m
-    // matrix is formed; the physical density subtracts Σ log y_s.
-    private static double[,] Response(BassDecomposition decomposition, double[,,] fitted, double[,] sigma2, UnitPartition partition)
+    // matrix is formed; the physical density subtracts Σ log y_s. Under the joint option the low-rank term is (KL)(KL)ᵀ, LLᵀ the
+    // components' noise covariance.
+    private static double[,] Response(BassDecomposition decomposition, double[,,] fitted, double[,] sigma2, double[][,]? roots, UnitPartition partition)
     {
         TruncationResiduals truncation = decomposition.Truncation;
         double[,] inSample = truncation.InSample
@@ -157,10 +211,28 @@ internal static class BassBasisDensity
         var x = new double[m];
         var weights = new double[r];
         double constant = -0.5 * m * Math.Log(2.0 * Math.PI) - logScales;
+        double[,]? kl = roots is null ? null : new double[m, r];
         for (int d = 0; d < s; d++)
         {
-            for (int q = 0; q < r; q++) weights[q] = sigma2[d, q];
-            var sigma = new DiagonalPlusLowRank(v, k, weights);
+            DiagonalPlusLowRank sigma;
+            if (roots is null)
+            {
+                for (int q = 0; q < r; q++) weights[q] = sigma2[d, q];
+                sigma = new DiagonalPlusLowRank(v, k, weights);
+            }
+            else
+            {
+                double[,] root = roots[d];
+                for (int l = 0; l < m; l++)
+                    for (int q = 0; q < r; q++)
+                    {
+                        double a = 0.0;
+                        for (int j = q; j < r; j++) a += k[l, j] * root[j, q];
+                        kl![l, q] = a;
+                    }
+                Array.Fill(weights, 1.0);
+                sigma = new DiagonalPlusLowRank(v, kl!, weights);
+            }
             for (int i = 0; i < n; i++)
             {
                 for (int l = 0; l < m; l++)
