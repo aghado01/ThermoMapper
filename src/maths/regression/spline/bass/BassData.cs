@@ -8,15 +8,17 @@ namespace Maths.Regression.Spline.Bass;
 /// indices and predictions refer to them by name and position, and one response. Mixed predictor types are
 /// first-class. Every value is copied and checked at construction, so a fit, its fingerprint and its retained draws
 /// never see one change under them (the contract shapes, decided 2026-10-28).
-/// <para>Refused here, with a reason: no predictor; a name used twice, output variables included; a predictor whose
-/// length is not the response's case count. Each predictor and response refuses its own defects. A zero or constant
+/// <para>Refused here, with a reason: no predictor; a name used twice, output variables included; a predictor or case weights
+/// whose length is not the response's case count. Each predictor, response and weighting refuses its own defects. A zero or constant
 /// response depends on the intercept convention, so <see cref="BassResolved"/> refuses it (D03).</para>
 /// </summary>
 public sealed record BassData
 {
-    /// <summary>The predictors, response and named groupings read by random intercepts (E21). Groupings are categorical columns
-    /// beside the predictors, and terms read only the predictors. Each collection is copied in the caller's order.</summary>
-    public BassData(IReadOnlyList<BassPredictor> predictors, BassResponse response, IReadOnlyList<CategoricalPredictor>? groupings = null)
+    /// <summary>The predictors, response and named groupings read by random intercepts (E21), and the case weights (null, the
+    /// default, is none). Groupings are categorical columns beside the predictors, and terms read only the predictors. Each
+    /// collection is copied in the caller's order.</summary>
+    public BassData(IReadOnlyList<BassPredictor> predictors, BassResponse response, IReadOnlyList<CategoricalPredictor>? groupings = null,
+                    CaseWeights? weights = null)
     {
         ArgumentNullException.ThrowIfNull(predictors);
         ArgumentNullException.ThrowIfNull(response);
@@ -43,10 +45,16 @@ public sealed record BassData
             if (!names.Add(grouping.Name)) throw new ArgumentException($"The name '{grouping.Name}' is used twice.", nameof(groupings));
             groupCopy[k] = grouping;
         }
+        if (weights is not null && weights.Count != response.Cases)
+            throw new ArgumentException($"The case weights hold {weights.Count} values for {response.Cases} cases.", nameof(weights));
         Predictors = Array.AsReadOnly(copy);
         Response = response;
         Groupings = Array.AsReadOnly(groupCopy);
+        Weights = weights;
     }
+
+    /// <summary>The case weights and what they state; null when the data declare none, which is unit weights.</summary>
+    public CaseWeights? Weights { get; }
 
     /// <summary>The predictors, in the caller's order.</summary>
     public IReadOnlyList<BassPredictor> Predictors { get; }
@@ -56,6 +64,70 @@ public sealed record BassData
 
     /// <summary>The response.</summary>
     public BassResponse Response { get; }
+}
+
+/// <summary>
+/// Case weights: one positive, finite weight per case, with what each states (<see cref="WeightMeaning"/>) and which columns the
+/// coefficient prior reads under them (<see cref="WeightedPriorGram"/>). A fit hands them to the Gaussian core as its working
+/// response's weights, so σ²'s shape, the marginal, the draws and the pointwise terms read them as the weighted core does.
+/// <see cref="WeightMeaning.Replication"/> states aggregated rows or a resampling's counts (E18), and integer weights fit as the
+/// duplicated rows; <see cref="WeightMeaning.Precision"/> states a known relative precision, yᵢ ~ N(fᵢ, σ²/wᵢ).
+/// <para>The prior reads the weighted columns by default. Case weights are data, fixed through the run, so that prior is the GLS
+/// g-prior at the unit block's cost, and under replication it alone makes integer weights duplicated rows through the marginal;
+/// <see cref="WeightedPriorGram.Unweighted"/> keeps D03's prior on the columns as they stand. Refused: no weights, a weight that is not
+/// positive and finite, and <see cref="WeightedPriorGram.Frozen"/>, which freezes a W that moves, where case weights do not.</para>
+/// </summary>
+public sealed record CaseWeights
+{
+    private readonly double[] _values;
+
+    /// <summary>The weights <paramref name="values"/>, copied, each stating <paramref name="meaning"/>, with the coefficient prior on
+    /// <paramref name="priorGram"/>'s columns.</summary>
+    public CaseWeights(double[] values, WeightMeaning meaning, WeightedPriorGram priorGram = WeightedPriorGram.Weighted)
+    {
+        ArgumentNullException.ThrowIfNull(values);
+        if (values.Length == 0) throw new ArgumentException("The case weights hold no values.", nameof(values));
+        if (meaning is not (WeightMeaning.Precision or WeightMeaning.Replication)) throw new ArgumentOutOfRangeException(nameof(meaning));
+        if (priorGram is not (WeightedPriorGram.Weighted or WeightedPriorGram.Unweighted))
+            throw new ArgumentException("Case weights take the prior on the weighted columns or the unweighted ones; the frozen Gram is for weights "
+                                        + "that move, and fixed weights are their own W₀.", nameof(priorGram));
+        _values = (double[])values.Clone();
+        for (int i = 0; i < _values.Length; i++)
+            if (!(_values[i] > 0.0 && double.IsFinite(_values[i])))
+                throw new ArgumentException($"Case {i}'s weight is {_values[i]:R}; a weight is positive and finite.", nameof(values));
+        Meaning = meaning;
+        PriorGram = priorGram;
+    }
+
+    /// <summary>The weights, in case order.</summary>
+    public ReadOnlyMemory<double> Values => _values;
+
+    /// <summary>What each weight states.</summary>
+    public WeightMeaning Meaning { get; }
+
+    /// <summary>Which columns the coefficient prior reads.</summary>
+    public WeightedPriorGram PriorGram { get; }
+
+    /// <summary>The cases weighted.</summary>
+    public int Count => _values.Length;
+
+    // The working response a fit of `config` on `data` starts on: `observation`'s, or, for data that declare case weights, the response under
+    // them. Case weights take Gaussian noise on a scalar response; the rest is refused with its reason.
+    internal static WorkingResponse Working(BassConfig config, BassData data, IBassObservationModel observation)
+    {
+        if (data.Weights is not { } weights) return observation.Working(data.Response);
+        if (observation is not GaussianObservation)
+            throw new NotSupportedException("Case weights take Gaussian noise: a noise's latents hand the core weights of their own, and their "
+                                            + "product with the case weights is not built.");
+        if (config.HasRandomEffects)
+            throw new NotSupportedException("Case weights under random effects are not built: the block's whitening reads precision weights "
+                                            + "alone, and the frozen reference a drawn scale reads would have to read them.");
+        if (data.Response is not ScalarResponse)
+            throw new NotSupportedException("Case weights take a scalar response. A curve's weight stands at each of its locations, which the "
+                                            + "direct design holds stacked, and a replicated curve's count would have to reach the support; "
+                                            + "several outputs read the response itself (E34). Not built.");
+        return new WorkingResponse(data.Response, weights: weights._values, meaning: weights.Meaning, priorGram: weights.PriorGram);
+    }
 }
 
 /// <summary>A named predictor column, continuous or categorical, one value per case.</summary>

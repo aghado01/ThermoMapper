@@ -44,7 +44,8 @@ public sealed class BassModel
     }
 
     /// <summary><see cref="Create(BassConfig, BassData, TemperedForm?)"/> with <paramref name="observation"/> as the noise
-    /// the Gaussian core fits (F-X1), for a config that declares none; Gaussian BASS is the overload above.</summary>
+    /// the Gaussian core fits (F-X1), for a config that declares none; Gaussian BASS is the overload above. The data's case
+    /// weights (<see cref="BassData.Weights"/>) are the working response's, under Gaussian noise alone.</summary>
     public static BassModel Create(BassConfig config, BassData data, IBassObservationModel observation, TemperedForm? form = null)
     {
         ArgumentNullException.ThrowIfNull(config);
@@ -61,7 +62,7 @@ public sealed class BassModel
         if (config.Sampling.Births?.Residual is not null && !System.Linq.Enumerable.Any(data.Predictors, p => p is ContinuousPredictor))
             throw new ArgumentException("E4's residual birth (Sampling.Births.Residual) adds continuous factors, and the data hold no continuous "
                                         + "predictor.", nameof(config));
-        WorkingResponse working = observation.Working(data.Response);
+        WorkingResponse working = CaseWeights.Working(config, data, observation);
         WorkingResponse baseReading = working;
         RandomEffectsBlock? block = null;
         if (config.HasRandomEffects)

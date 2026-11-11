@@ -21,7 +21,8 @@ public static class Bass
     /// Fits <paramref name="config"/> to <paramref name="data"/>: <see cref="BassSampling.BurnIn"/> sweeps per chain, then
     /// <see cref="BassSampling.Samples"/> retained draws <see cref="BassSampling.Thin"/> sweeps apart, or fewer when the
     /// R̂ stop is met. <paramref name="run"/>'s options never change the result. A failure the chains share, such as a
-    /// start the prior sampler refuses, is thrown as itself rather than wrapped by the fan-out.
+    /// start the prior sampler refuses, is thrown as itself rather than wrapped by the fan-out. The data's case weights
+    /// (<see cref="BassData.Weights"/>) are fitted as the weighted core reads them (<see cref="CaseWeights"/>).
     /// </summary>
     public static BassFit Fit(BassConfig config, BassData data, BassRunOptions? run = null) => Run(config, data, run, null);
 
@@ -115,7 +116,8 @@ public static class Bass
     /// config's canonical JSON (<see cref="BassConfig.ToJson"/>) and the data's exact bits, predictors in order with
     /// their kinds and names, then the response and its output variables. The config is all values, so the
     /// fingerprint covers every setting, not only the components' types. A declared domain (<see cref="InputDomain"/>)
-    /// follows its column's values, and only when declared, so data that declare none keep their fingerprint.
+    /// follows its column's values, and case weights (<see cref="CaseWeights"/>) come last with their meaning and prior,
+    /// each only when declared, so data that declare neither keep their fingerprint.
     /// </summary>
     public static string Fingerprint(BassConfig config, BassData data)
     {
@@ -158,6 +160,8 @@ public static class Bass
                 if (v.Domain is { } domain) f.Add("domain").Add(domain.Lower).Add(domain.Upper);
             }
         }
+        if (data.Weights is { } weights)
+            f.Add("weights").Add(weights.Meaning.ToString()).Add(weights.PriorGram.ToString()).Add(weights.Values.Span);
         return f.ToString();
     }
 }
