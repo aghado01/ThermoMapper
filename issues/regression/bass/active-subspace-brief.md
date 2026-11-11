@@ -83,6 +83,33 @@ The user settled the [discussion](../discussion/grassmann-stiefel-subspaces-brie
   - That routine is the stable one (atan2 of cosines and residual sines) that the IRLS scale session is landing on main, under the user's settlement of 2026-11-08.
   - If it has not landed when the slice reaches this step, the rest proceeds and this step waits. Regression keeps no copy of it.
 
+### The follow-ups, commissioned (2026-11-10)
+
+Commissioned by the user on 2026-11-10 ("lets send the E8 follow-ups to E8 slice"). Already done elsewhere: per-draw k and the angles (slice 5), `khaos_helpers.R`'s copies, and test-select's name reading. `DenseEigen`'s relative threshold stays the user's LinAlg decision.
+
+**Slice 6, the readout follow-ups.** Build these:
+1. *A basis fit paired with another fit* (slice 3's follow-up): one overload on each class, in the terms-and-H form.
+2. *The co-active projection mean,* by slice 3's rule: top-q by |λ| per pair, P̄ over the pairs, and the concordance's sign beside it.
+3. *Output locations beyond the training ones* for a direct fit: `OutputMetric` gains its locations.
+4. *The matrix Poincaré check's cost.* Cache the term-pair Grams (Σ_B, K_D) per structure. It is a pure cache, sized by a constant and never by hit history. Measure the check against the readout. Whether it defaults on again comes back to the user with those numbers.
+5. *Poincaré constants for log-concave laws,* so the matrix check covers truncated normals: D takes σ² per such input.
+6. *Activity scores.* C's diagonal is reported always, as the paper's sum over every eigenpair. Constantine's truncation at k is reported beside it when a rank or rank rule is given.
+7. *Legendre moments at high degree:* expand in the Legendre basis under a uniform law, where the integrals are exact rationals, so that high-degree KHAOS fits keep 10⁻¹⁴. The KHAOS chip is idle. Check `git diff` on the moment service first.
+
+**Slice 7, rotate-and-refit: plan first.** It changes the model, so write the plan as a section here before building, with the decisions for the user. Then wait for the user's call. The plan covers:
+- the frame: the ordered eigenvectors of P̄ or of E[C], with no Stiefel code unless a simplicity rotation is wanted;
+- the rotated inputs' box and law, and how BASS's knot prior and the moment service read them;
+- what the refit reports beside the unrotated fit (evidence, recovery);
+- what a user declares.
+
+**E36 (BPPR) and the directional hinge: a build brief for the user.** Draft `issues/regression/bass/bppr-brief.md` in the shape of this brief: decisions, slices and gates. Draw it from [E36's entry](extensions-brief.md#projection-pursuit-ridges-on-the-bass-core-bppr-e36), the Grassmann discussion's settlement of its direction prior, and the read-only `gcbeck/bppr` clone (GPL-3.0, ideas only; validate against the paper as if no repo existed). The directional hinge enters as a term type behind `IDesignKernel` (F-X3). Nothing is built until the user approves the brief.
+
+**For all three:**
+- *Order:* slice 6, then slice 7's plan, then E36's brief. Each is reported and verified before the next.
+- *Other writers:* the GBASS chip (E21 slice 4, the noise and block files), the E34 chip (its slice 5, the PCA mode) and the conformal chip (`ConformalBayes.cs`). On shared files (`BassConfig.cs`, `BassModel.cs`, `BassResolved.cs`, `BassSweep.cs`, the moment service), message the other chip before editing and commit each such edit by itself.
+- *Docs:* chips leave `docs/` alone (AGENTS.md, 2026-11-10). This replaces the `docs/Maths` gate below and the shared-docs line under Working rules: list the doc changes owed in each report.
+- *Messages* are terse, and no session reads another's transcript.
+
 ## Gates common to every slice
 
 - **Fitting untouched.** E8 reads fits, so no draw moves: the pinned tier at each commit, the whole assembly at the slice's end ([targeted runs](../../../CONTRIBUTING.md#testing-standards)).
