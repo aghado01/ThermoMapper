@@ -1,10 +1,10 @@
 # Conformal validity in the Lean harness — chip brief
 
-CB-1 to CB-4 were proved on 2026-11-06, E35's M-1 and M-2 on 2026-11-08, and E16 slice 9's jackknife+ and asymmetric CQR on 2026-11-09. Their reports are below. E16 slices 10 and 12 were commissioned and proved on 2026-11-10, and the Lean for slices 13 to 16 and 18 was commissioned the same day.
+CB-1 to CB-4 were proved on 2026-11-06, E35's M-1 and M-2 on 2026-11-08, and E16 slice 9's jackknife+ and asymmetric CQR on 2026-11-09. Their reports are below. E16 slices 10 and 12 were commissioned and proved on 2026-11-10, and the Lean for slices 13 to 16 and 18 was commissioned and proved the same day.
 
 ## Slice 10's grid reading, and the Lean for E16 slices 13 to 16 and 18 (2026-11-10)
 
-Status: commissioned 2026-11-10 by the user ("lets also send the pending lean work to conformal lean chip"), relayed by the main session.
+Status: commissioned 2026-11-10 by the user ("lets also send the pending lean work to conformal lean chip"), relayed by the main session. All six items were proved on 2026-11-10 and reported under Reports.
 
 **Why now.** These slices are Lean first (decision 7 on the [layer plan](../../../issues/regression/conformal-layer-brief.md#e16s-completion-the-plan-slices-7-onward)). The C# order of 13 to 18 waits for slice 10's BASS reading (decision 10). The Lean runs ahead of it, in the plan's order, so whichever slice the user picks first has its statements ready.
 
@@ -208,10 +208,14 @@ The user asked for this on 2026-11-08 ("Yes, start it"), relayed by the BASS ext
 
 Newest first.
 
-### In progress — slice 18
+### 2026-11-10 — slice 18: the guarantee read out, proved
 
-Updated 2026-11-10, in place.
-- *Slice 18:* the Lean compiles against the module, and its checks pass on their own. The drafts, splice script and axioms probe are in `artifacts/chip-conformal-lean/`, which is untracked. It splices next.
+The statements are in the ledger, under "Slice 18". The new declarations are PROOF-CLOSED, with the standard three axioms only. The checks ran first.
+
+- *The posterior's mean is calibrated* (`crc_orderings`). Snell and Griffiths's Proposition 3.2 is conformal risk control: over the orderings of any data set, the test unit's loss at λ_crc averages at most α.
+- *Finding: their Theorem 4.3 fails as stated.* Its proof uses the spacings' prior law as their posterior given the losses. A point-mass prior consistent with all-zero losses gives Pr(L ≤ b | ℓ) = 0 < Pr(L⁺ ≤ b).
+- *The β-bound's calibration over replicated calibration sets is Gaffke's bound and conjecture.* Vlassis and Thomas proved it in 2026 (arXiv 2607.08415, not on disk). We prove one unit (`gaffke_one`); the checks find it exact and nearly tight for n ≤ 5. `fail_le_fixed` carries it to their data-chosen threshold.
+- *Proper scores* (Gressmann et al.). The log-loss and the integrated squared loss are strictly proper on finitely many outcomes, with gap Σ (p − q)² for the latter. Their proof of Proposition 2.5 (i) has two sign slips; the statement stands.
 
 ### 2026-11-10 — slice 16: batch predictive inference, proved
 

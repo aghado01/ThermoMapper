@@ -2,6 +2,7 @@ import Mathlib.Algebra.BigOperators.Field
 import Mathlib.Algebra.BigOperators.Ring.Finset
 import Mathlib.Algebra.Order.BigOperators.Group.Finset
 import Mathlib.Algebra.Order.BigOperators.Ring.Finset
+import Mathlib.Analysis.SpecialFunctions.Log.Basic
 import Mathlib.Data.Finset.Card
 import Mathlib.Data.Finset.Max
 import Mathlib.Data.Fintype.BigOperators
@@ -6198,5 +6199,279 @@ theorem false_claim_iff {μ T y c : ℝ} (hT : 0 ≤ T) :
   · exact ⟨fun h' => absurd h'.2 h, fun h' => absurd h' (not_lt.2 hT)⟩
 
 end Batch
+
+/-! ### Slice 18: the guarantee read out
+
+Snell and Griffiths, arXiv 2502.13228, the posterior over the loss; Gressmann et al., arXiv
+1801.00753, proper scores. -/
+
+section LossPosterior
+
+variable {ι : Type*} [Fintype ι] [DecidableEq ι]
+
+/-- A sum over `C` is the same after a permutation that fixes everything outside `C`. -/
+theorem sum_comp_of_mem_permsOn {C : Finset ι} {σ : Equiv.Perm ι} (hσ : σ ∈ permsOn C)
+    (f : ι → ℝ) : ∑ u ∈ C, f (σ u) = ∑ u ∈ C, f u := by
+  refine sum_nbij' σ σ.symm (fun u hu => ?_) (fun u hu => ?_) (fun u _ => by simp)
+    (fun u _ => by simp) (fun u _ => rfl)
+  · exact (mem_iff_of_mem_permsOn hσ u).2 hu
+  · exact (mem_iff_of_mem_permsOn hσ (σ.symm u)).1 (by simpa using hu)
+
+/-- The first threshold on a grid meeting a criterion, the last when none does: the `inf` of a
+conformal risk control rule. -/
+noncomputable def firstFeasible {k : ℕ} (P : Fin (k + 1) → Prop) [DecidablePred P] :
+    Fin (k + 1) :=
+  if h : (univ.filter P).Nonempty then (univ.filter P).min' h else Fin.last k
+
+theorem firstFeasible_le {k : ℕ} {P : Fin (k + 1) → Prop} [DecidablePred P] {l : Fin (k + 1)}
+    (hl : P l) : firstFeasible P ≤ l := by
+  have hm : l ∈ univ.filter P := mem_filter.2 ⟨mem_univ _, hl⟩
+  unfold firstFeasible
+  rw [dif_pos ⟨l, hm⟩]
+  exact min'_le _ _ hm
+
+theorem firstFeasible_spec {k : ℕ} {P : Fin (k + 1) → Prop} [DecidablePred P]
+    (hlast : P (Fin.last k)) : P (firstFeasible P) := by
+  have hne : (univ.filter P).Nonempty := ⟨_, mem_filter.2 ⟨mem_univ _, hlast⟩⟩
+  unfold firstFeasible
+  rw [dif_pos hne]
+  exact (mem_filter.1 (min'_mem _ hne)).2
+
+/-- A weaker criterion is met no later. -/
+theorem firstFeasible_mono {k : ℕ} {P R : Fin (k + 1) → Prop} [DecidablePred P] [DecidablePred R]
+    (hPR : ∀ l, P l → R l) : firstFeasible R ≤ firstFeasible P := by
+  by_cases h : (univ.filter P).Nonempty
+  · have hP : P (firstFeasible P) := by
+      unfold firstFeasible
+      rw [dif_pos h]
+      exact (mem_filter.1 (min'_mem _ h)).2
+    exact firstFeasible_le (hPR _ hP)
+  · have : firstFeasible P = Fin.last k := by
+      unfold firstFeasible
+      rw [dif_neg h]
+    rw [this]
+    exact Fin.le_last _
+
+theorem firstFeasible_congr {k : ℕ} {P R : Fin (k + 1) → Prop} [DecidablePred P]
+    [DecidablePred R] (hPR : ∀ l, P l ↔ R l) : firstFeasible P = firstFeasible R :=
+  le_antisymm (firstFeasible_mono fun l h => (hPR l).2 h)
+    (firstFeasible_mono fun l h => (hPR l).1 h)
+
+/-- The conformal risk control rule (Angelopoulos et al.; Snell and Griffiths's `λ_crc`, the
+`inf` over `λ` of `E(L⁺) ≤ α`): the first threshold at which the calibration units' losses, with
+`B` standing in for the test unit, total at most `α` per unit of `C`. -/
+noncomputable def crcRule {Z : Type*} {k : ℕ} (C : Finset ι) (t : ι) (ℓ : Z → Fin (k + 1) → ℝ)
+    (B α : ℝ) (z : ι → Z) : Fin (k + 1) :=
+  firstFeasible fun l => ∑ i ∈ C.erase t, ℓ (z i) l + B ≤ α * C.card
+
+/-- **Conformal risk control, over orderings** (Snell and Griffiths's Proposition 3.2, through
+Angelopoulos et al.'s theorem): the posterior mean `E(L⁺)` is calibrated over replicated calibration
+sets. Losses nonincreasing in the threshold, at most `B`, and at most `α` at the last threshold.
+Averaged over the orderings of any data set, the test unit's loss at the rule's threshold is at
+most `α`. -/
+theorem crc_orderings {Z : Type*} {k : ℕ} {C : Finset ι} {t : ι} (ht : t ∈ C)
+    (ℓ : Z → Fin (k + 1) → ℝ) (hanti : ∀ v, Antitone (ℓ v)) {B α : ℝ} (hB : ∀ v l, ℓ v l ≤ B)
+    (hlast : ∀ v, ℓ v (Fin.last k) ≤ α) (z : ι → Z) :
+    ∑ σ ∈ permsOn C, ℓ (z (σ t)) (crcRule C t ℓ B α (z ∘ σ)) ≤ α * (permsOn C).card := by
+  set lo := firstFeasible fun l => ∑ u ∈ C, ℓ (z u) l ≤ α * C.card with hlo
+  have hlo_spec : ∑ u ∈ C, ℓ (z u) lo ≤ α * C.card := by
+    refine firstFeasible_spec (P := fun l => ∑ u ∈ C, ℓ (z u) l ≤ α * C.card) ?_
+    calc ∑ u ∈ C, ℓ (z u) (Fin.last k) ≤ ∑ u ∈ C, α := sum_le_sum fun u _ => hlast (z u)
+      _ = α * C.card := by rw [sum_const, nsmul_eq_mul, mul_comm]
+  have hstep : ∀ σ ∈ permsOn C,
+      ℓ (z (σ t)) (crcRule C t ℓ B α (z ∘ σ)) ≤ ℓ (z (σ t)) lo := by
+    intro σ hσ
+    have hor : (firstFeasible fun l => ∑ u ∈ C, ℓ ((z ∘ σ) u) l ≤ α * C.card) = lo := by
+      rw [hlo]
+      refine firstFeasible_congr fun l => ?_
+      rw [show ∑ u ∈ C, ℓ ((z ∘ σ) u) l = ∑ u ∈ C, ℓ (z u) l from
+        sum_comp_of_mem_permsOn hσ (fun u => ℓ (z u) l)]
+    have hle : lo ≤ crcRule C t ℓ B α (z ∘ σ) := by
+      rw [← hor]
+      unfold crcRule
+      refine firstFeasible_mono fun l hl => ?_
+      beta_reduce at hl ⊢
+      rw [← add_sum_erase C _ ht]
+      have := hB ((z ∘ σ) t) l
+      linarith
+    exact hanti _ hle
+  have hC : (0 : ℝ) < C.card := by exact_mod_cast card_pos.2 ⟨t, ht⟩
+  have hsum : (C.card : ℝ) * ∑ σ ∈ permsOn C, ℓ (z (σ t)) lo =
+      (permsOn C).card * ∑ u ∈ C, ℓ (z u) lo := card_mul_sum_permsOn ht (fun u => ℓ (z u) lo)
+  have h1 := sum_le_sum hstep
+  have h2 : (C.card : ℝ) * ∑ σ ∈ permsOn C, ℓ (z (σ t)) lo ≤
+      (C.card : ℝ) * (α * (permsOn C).card) := by
+    rw [hsum]
+    calc ((permsOn C).card : ℝ) * ∑ u ∈ C, ℓ (z u) lo ≤ (permsOn C).card * (α * C.card) :=
+          mul_le_mul_of_nonneg_left hlo_spec (Nat.cast_nonneg _)
+      _ = C.card * (α * (permsOn C).card) := by ring
+  have h3 := le_of_mul_le_mul_left h2 hC
+  linarith
+
+omit [Fintype ι] [DecidableEq ι] in
+/-- **The `β`-bound's calibration at one calibration unit** (Gaffke's bound, which is Snell and
+Griffiths's `b*_β`). With one loss `ℓ` their posterior is `L⁺ = ℓ + U (B − ℓ)`, `U` uniform, so
+`b*_β = ℓ + β (B − ℓ)`. For a loss law on finitely many values at most `B`, the bound is at least
+the mean loss `J` with chance at least `β`. Gaffke proved two units, and Vlassis and Thomas (arXiv
+2607.08415) every number. -/
+theorem gaffke_one {κ : Type*} [Fintype κ] (p v : κ → ℝ) (hp : ∀ k, 0 ≤ p k)
+    (hp1 : ∑ k, p k = 1) {B β : ℝ} (hv : ∀ k, v k ≤ B) (hβ : β ≤ 1) :
+    β ≤ ∑ k, p k * if (∑ k', p k' * v k') ≤ v k + β * (B - v k) then 1 else 0 := by
+  classical
+  set J := ∑ k', p k' * v k' with hJ
+  set G := univ.filter fun k => J ≤ v k + β * (B - v k) with hG
+  set F := univ.filter fun k => ¬ (J ≤ v k + β * (B - v k)) with hF
+  have hsplit : ∀ f : κ → ℝ, ∑ k, f k = ∑ k ∈ G, f k + ∑ k ∈ F, f k :=
+    fun f => (sum_filter_add_sum_filter_not univ _ f).symm
+  have hrhs : ∑ k, p k * (if J ≤ v k + β * (B - v k) then 1 else 0) = 1 - ∑ k ∈ F, p k := by
+    have h1 := hsplit p
+    rw [hp1] at h1
+    simp only [mul_ite, mul_one, mul_zero]
+    rw [← sum_filter]
+    linarith
+  rw [hrhs]
+  set P := ∑ k ∈ F, p k with hP
+  have hJB : J ≤ B :=
+    calc J = ∑ k, p k * v k := rfl
+      _ ≤ ∑ k, p k * B := sum_le_sum fun k _ => mul_le_mul_of_nonneg_left (hv k) (hp k)
+      _ = B := by rw [← sum_mul, hp1, one_mul]
+  have hb : J ≤ ∑ k ∈ F, p k * v k + B * (1 - P) := by
+    have h1 := hsplit fun k => p k * v k
+    have h2 := hsplit p
+    rw [hp1] at h2
+    have h3 : ∑ k ∈ G, p k * v k ≤ ∑ k ∈ G, p k * B :=
+      sum_le_sum fun k _ => mul_le_mul_of_nonneg_left (hv k) (hp k)
+    rw [← sum_mul, show ∑ k ∈ G, p k = 1 - P by linarith] at h3
+    have : J = ∑ k ∈ G, p k * v k + ∑ k ∈ F, p k * v k := h1
+    nlinarith
+  by_cases hP0 : P = 0
+  · rw [hP0]
+    linarith
+  obtain ⟨k, hkF, hpk⟩ : ∃ k ∈ F, 0 < p k := by
+    by_contra hc
+    exact hP0 (sum_eq_zero fun k hk => le_antisymm (not_lt.1 fun h => hc ⟨k, hk, h⟩) (hp k))
+  have hstrict : ∑ k ∈ F, p k * (v k + β * (B - v k)) < ∑ k ∈ F, p k * J :=
+    sum_lt_sum (fun k hk => mul_le_mul_of_nonneg_left (not_le.1 (mem_filter.1 hk).2).le (hp k))
+      ⟨k, hkF, mul_lt_mul_of_pos_left (not_le.1 (mem_filter.1 hkF).2) hpk⟩
+  have hexp : ∑ k ∈ F, p k * (v k + β * (B - v k)) =
+      (1 - β) * ∑ k ∈ F, p k * v k + β * B * P := by
+    rw [hP, mul_sum, mul_sum, ← sum_add_distrib]
+    exact sum_congr rfl fun k _ => by ring
+  rw [hexp, ← sum_mul] at hstrict
+  have hmul := mul_le_mul_of_nonneg_left hb (sub_nonneg.2 hβ)
+  by_contra hc
+  have hc' : 1 - P < β := not_le.1 hc
+  nlinarith [mul_nonneg (sub_nonneg.2 hJB) (sub_nonneg.2 hc'.le)]
+
+/-- **A data-chosen threshold fails only where a fixed one does** (the step behind Snell and
+Griffiths's `λ^β_hpd` controlling the risk). With the bound `b` nonincreasing in the threshold,
+`l` chosen with `b l ≤ α`, and `l₀` the last threshold whose risk `J` exceeds `α`: risk above `α`
+at `l` puts the bound below the risk at `l₀`, an event of chance at most `1 − β` by the fixed
+threshold's calibration. -/
+theorem fail_le_fixed {Λ : Type*} [Preorder Λ] {J b : Λ → ℝ} (hb : Antitone b) {α : ℝ}
+    {l l₀ : Λ} (hl : b l ≤ α) (hJ₀ : α < J l₀) (hl₀ : ∀ l', α < J l' → l' ≤ l₀)
+    (hfail : α < J l) : b l₀ < J l₀ :=
+  lt_of_le_of_lt ((hb (hl₀ l hfail)).trans hl) hJ₀
+
+end LossPosterior
+
+section ProperScores
+
+variable {κ : Type*} [Fintype κ]
+
+/-- Gibbs' inequality, one outcome at a time: `p log q − p log p ≤ q − p`, for `p, q ≥ 0` with
+`q > 0` where `p > 0`. -/
+theorem gibbs_term {p q : ℝ} (hp : 0 ≤ p) (hq : 0 ≤ q) (hpq : 0 < p → 0 < q) :
+    p * Real.log q - p * Real.log p ≤ q - p := by
+  rcases hp.lt_or_eq with h | h
+  · have hq' := hpq h
+    have hlog := Real.log_le_sub_one_of_pos (div_pos hq' h)
+    rw [Real.log_div hq'.ne' h.ne'] at hlog
+    have h2 := mul_le_mul_of_nonneg_left hlog h.le
+    have h3 : p * (q / p - 1) = q - p := by field_simp
+    rw [h3] at h2
+    linarith
+  · rw [← h]
+    simpa using hq
+
+/-- Strictly, where `p ≠ q`. -/
+theorem gibbs_term_lt {p q : ℝ} (hp : 0 ≤ p) (hq : 0 ≤ q) (hpq : 0 < p → 0 < q) (hne : p ≠ q) :
+    p * Real.log q - p * Real.log p < q - p := by
+  rcases hp.lt_or_eq with h | h
+  · have hq' := hpq h
+    have hne1 : q / p ≠ 1 := fun h1 => hne ((div_eq_one_iff_eq h.ne').1 h1).symm
+    have hlog := Real.log_lt_sub_one_of_pos (div_pos hq' h) hne1
+    rw [Real.log_div hq'.ne' h.ne'] at hlog
+    have h2 := mul_lt_mul_of_pos_left hlog h
+    have h3 : p * (q / p - 1) = q - p := by field_simp
+    rw [h3] at h2
+    linarith
+  · subst h
+    have : 0 < q := lt_of_le_of_ne hq hne
+    simpa using this
+
+/-- **The log-loss is proper** (Gressmann et al.'s Proposition 2.5 (i), through Gibbs' inequality):
+for a law `p` on finitely many outcomes and a prediction `q` (nonnegative, total at most one,
+positive where `p` is), the expected log-loss of `q` is at least that of `p`. -/
+theorem logLoss_proper (p q : κ → ℝ) (hp : ∀ y, 0 ≤ p y) (hp1 : ∑ y, p y = 1)
+    (hq : ∀ y, 0 ≤ q y) (hq1 : ∑ y, q y ≤ 1) (hpq : ∀ y, 0 < p y → 0 < q y) :
+    ∑ y, p y * -Real.log (p y) ≤ ∑ y, p y * -Real.log (q y) := by
+  have h := sum_le_sum fun y (_ : y ∈ univ) => gibbs_term (hp y) (hq y) (hpq y)
+  rw [sum_sub_distrib, sum_sub_distrib, hp1] at h
+  simp only [mul_neg, sum_neg_distrib]
+  linarith
+
+/-- **Strictly proper**: for `q` a law other than `p`, strictly. -/
+theorem logLoss_strict (p q : κ → ℝ) (hp : ∀ y, 0 ≤ p y) (hp1 : ∑ y, p y = 1)
+    (hq : ∀ y, 0 ≤ q y) (hq1 : ∑ y, q y = 1) (hpq : ∀ y, 0 < p y → 0 < q y) (hne : p ≠ q) :
+    ∑ y, p y * -Real.log (p y) < ∑ y, p y * -Real.log (q y) := by
+  obtain ⟨y₀, hy₀⟩ := Function.ne_iff.1 hne
+  have h := sum_lt_sum (fun y (_ : y ∈ univ) => gibbs_term (hp y) (hq y) (hpq y))
+    ⟨y₀, mem_univ _, gibbs_term_lt (hp y₀) (hq y₀) (hpq y₀) hy₀⟩
+  rw [sum_sub_distrib, sum_sub_distrib, hp1, hq1] at h
+  simp only [mul_neg, sum_neg_distrib]
+  linarith
+
+/-- **The integrated squared loss's gap** (Gressmann et al.'s Lemma 2.4 (ii)): with
+`L(q, y) = −2 q(y) + ‖q‖²`, the multi-class Brier loss, the expected loss of `q` exceeds that of
+the law `p` by `Σ (p − q)²`. -/
+theorem gneitingLoss_gap (p q : κ → ℝ) (hp1 : ∑ y, p y = 1) :
+    ∑ y, p y * (-2 * q y + ∑ j, q j ^ 2) - ∑ y, p y * (-2 * p y + ∑ j, p j ^ 2) =
+      ∑ y, (p y - q y) ^ 2 := by
+  have key : ∀ r : κ → ℝ,
+      ∑ y, p y * (-2 * r y + ∑ j, r j ^ 2) = -2 * ∑ y, p y * r y + ∑ j, r j ^ 2 := by
+    intro r
+    rw [show (∑ y, p y * (-2 * r y + ∑ j, r j ^ 2)) =
+        ∑ y, (-2 * (p y * r y) + p y * ∑ j, r j ^ 2) from sum_congr rfl fun y _ => by ring,
+      sum_add_distrib, ← mul_sum, ← sum_mul, hp1, one_mul]
+  rw [key, key]
+  have h1 : ∑ y, (p y - q y) ^ 2 = ∑ y, p y * p y - 2 * ∑ y, p y * q y + ∑ y, q y ^ 2 := by
+    rw [mul_sum, ← sum_sub_distrib, ← sum_add_distrib]
+    exact sum_congr rfl fun y _ => by ring
+  have h2 : ∑ y, p y ^ 2 = ∑ y, p y * p y := sum_congr rfl fun y _ => by ring
+  rw [h1, h2]
+  ring
+
+/-- **Strictly proper** (Gressmann et al.'s Proposition 2.5 (ii)), on finitely many outcomes. -/
+theorem gneitingLoss_strict (p q : κ → ℝ) (hp1 : ∑ y, p y = 1) (hne : p ≠ q) :
+    ∑ y, p y * (-2 * p y + ∑ j, p j ^ 2) < ∑ y, p y * (-2 * q y + ∑ j, q j ^ 2) := by
+  obtain ⟨y₀, hy₀⟩ := Function.ne_iff.1 hne
+  have hpos : 0 < ∑ y, (p y - q y) ^ 2 :=
+    sum_pos' (fun y _ => sq_nonneg _)
+      ⟨y₀, mem_univ _, lt_of_le_of_ne (sq_nonneg _) (pow_ne_zero 2 (sub_ne_zero.2 hy₀)).symm⟩
+  have := gneitingLoss_gap p q hp1
+  linarith
+
+/-- **Proper scores rank conditional predictions** (Gressmann et al.'s Proposition 2.7): a loss
+proper for every law of a class has the true conditional laws minimizing the expected loss over
+features too. -/
+theorem proper_conditional {χ : Type*} [Fintype χ] (L : (κ → ℝ) → κ → ℝ)
+    (law : (κ → ℝ) → Prop) (hL : ∀ p q, law p → law q → ∑ y, p y * L p y ≤ ∑ y, p y * L q y)
+    (w : χ → ℝ) (hw : ∀ x, 0 ≤ w x) (P R : χ → κ → ℝ) (hP : ∀ x, law (P x))
+    (hR : ∀ x, law (R x)) :
+    ∑ x, w x * ∑ y, P x y * L (P x) y ≤ ∑ x, w x * ∑ y, P x y * L (R x) y :=
+  sum_le_sum fun x _ => mul_le_mul_of_nonneg_left (hL _ _ (hP x) (hR x)) (hw x)
+
+end ProperScores
 
 end Conformal

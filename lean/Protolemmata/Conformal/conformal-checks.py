@@ -2781,4 +2781,186 @@ print(f"Slice 16: the calibration ranks are a bijection from m-subsets onto H (|
       f">= 1 - alpha of the test sets, on {n_sel} data sets with tied zero scores")
 
 print()
+print("=== Slice 18: the guarantee read out ===")
+# Snell and Griffiths: the posterior over the loss is L+ = sum_i U_i l_(i), l_(n+1) = B, U ~ Dir(1, ..., 1).
+# P(L+ > x) is the divided difference of (t - x)_+^n on the knots l_(1), ..., l_(n), B (confluent at
+# ties), computed exactly. Their b*_beta is Gaffke's bound; its calibration over replicated calibration
+# sets, P(J <= b*_beta) >= beta, is Gaffke's conjecture, proved by Vlassis and Thomas (arXiv 2607.08415).
+
+
+def plus_pow_dd(knots, x, pw):
+    """[knots] (t - x)_+^pw for sorted knots, confluent divided differences, exact."""
+    memo = {}
+
+    def rec(i, j):
+        if (i, j) not in memo:
+            if knots[i] == knots[j]:
+                k, a = j - i, knots[i]
+                if k > pw or a <= x:
+                    val = Q(0)
+                else:
+                    val = Q(math.comb(pw, k)) * (a - x) ** (pw - k)
+            else:
+                val = (rec(i + 1, j) - rec(i, j - 1)) / (knots[j] - knots[i])
+            memo[(i, j)] = val
+        return memo[(i, j)]
+    return rec(0, len(knots) - 1)
+
+
+def lplus_cdf(ls, B, x):
+    """P(L+ <= x) given the observed losses ls."""
+    knots = sorted(ls) + [B]
+    if knots[0] == knots[-1]:
+        return Q(int(knots[0] <= x))
+    return 1 - plus_pow_dd(knots, x, len(knots) - 1)
+
+
+def multinomial(combo, probs):
+    pr = Q(math.factorial(len(combo)))
+    for i, p in enumerate(probs):
+        c = combo.count(i)
+        pr *= p ** c / math.factorial(c)
+    return pr
+
+
+# The machinery: E(L+) = mean of the knots (their recovery of conformal risk control), through
+# E = a_min + [knots] (t - a_min)_+^(n+1) / (n + 1); the distinct-knot formula; the ends of the cdf.
+rr = random.Random(1800)
+n_dd = 0
+for trial in range(400):
+    n = rr.randint(1, 6)
+    ls = [Q(rr.randint(0, 8), 8) for _ in range(n)]
+    knots = sorted(ls) + [Q(1)]
+    if knots[0] == knots[-1]:
+        continue
+    a0 = knots[0]
+    assert a0 + plus_pow_dd(knots, a0, n + 1) / (n + 1) == sum(knots) / (n + 1)
+    assert lplus_cdf(ls, Q(1), knots[0] - Q(1, 100)) == 0 and lplus_cdf(ls, Q(1), knots[-1]) == 1
+    x = Q(rr.randint(0, 80), 80)
+    if len(set(knots)) == len(knots):
+        expl = sum((a - x) ** n / math.prod(a - b for b in knots if b != a) for a in knots if a > x)
+        assert 1 - lplus_cdf(ls, Q(1), x) == expl
+    n_dd += 1
+
+# n = 1: L+ = l + U (B - l), so b*_beta = l + beta (B - l), the Lean's gaffke_one.
+for l in (Q(0), Q(1, 3), Q(3, 4)):
+    for beta in (Q(1, 2), Q(9, 10)):
+        assert lplus_cdf([l], Q(1), l + beta * (1 - l)) == beta
+
+# The calibration over replicated calibration sets, exactly: a loss law on finitely many values in
+# [0, B], every calibration multiset of size n; J <= b*_beta exactly when P(L+ <= J) <= beta.
+n_cal, slack_min = 0, None
+for n in range(1, 6):
+    rr = random.Random(1810 + n)
+    for trial in range(30):
+        vals = sorted(set(Q(rr.randint(0, 10), 10) for _ in range(rr.randint(2, 4))))
+        B = Q(1)
+        w = [rr.randint(1, 6) for _ in vals]
+        probs = [Q(x, sum(w)) for x in w]
+        J = sum(p * v for p, v in zip(probs, vals))
+        outcomes = []
+        for combo in itertools.combinations_with_replacement(range(len(vals)), n):
+            ls = [vals[i] for i in combo]
+            V = None if all(l == B for l in ls) else lplus_cdf(ls, B, J)   # all at B: L+ = B >= J
+            outcomes.append((multinomial(combo, probs), V))
+        assert sum(pr for pr, _ in outcomes) == 1
+        for beta in (Q(1, 2), Q(3, 4), Q(9, 10), Q(19, 20)):
+            cov = sum(pr for pr, V in outcomes if V is None or V <= beta)
+            assert cov >= beta, (n, vals, probs, beta, cov)
+            if n == 1:                                       # the Lean's statement, read directly
+                assert cov == sum(p for p, v in zip(probs, vals) if J <= v + beta * (B - v))
+            slack_min = cov - beta if slack_min is None else min(slack_min, cov - beta)
+        n_cal += 1
+
+# Their Theorem 4.3 takes p(t | l) to be the Dirichlet law, which it is before l is seen. A point-mass
+# prior on the step quantile function, 0 on [0, 1/10] and B = 1 above (J = 9/10), is consistent with
+# all-zero losses; its posterior has J = 9/10 surely, so Pr(L <= b | l) = 0 for b < 9/10, while
+# Pr(L+ <= b) = 1 - (1 - b)^n > 0.
+for n in range(1, 6):
+    for b in (Q(1, 4), Q(1, 2), Q(4, 5)):
+        p_plus = lplus_cdf([Q(0)] * n, Q(1), b)
+        assert p_plus == 1 - (1 - b) ** n and p_plus > 0
+
+# Conformal risk control over orderings: losses nonincreasing in the threshold, 0 at the last; the
+# rule's first threshold with (sum over calibration + B) / N <= alpha; the test unit's loss averages
+# at most alpha over the choice of test unit, which is the average over orderings.
+n_crc = 0
+for N in range(2, 7):
+    rr = random.Random(1850 + N)
+    for trial in range(60):
+        K = rr.randint(1, 4)
+        B, alpha = Q(1), Q(rr.randint(1, 9), 10)
+        curves = [sorted((Q(rr.randint(0, 10), 10) for _ in range(K)), reverse=True) + [Q(0)]
+                  for _ in range(rr.randint(1, 4))]
+        z = [rr.randrange(len(curves)) for _ in range(N)]
+        tot = Q(0)
+        for t in range(N):
+            cal = [z[i] for i in range(N) if i != t]
+            lam = next((l for l in range(K + 1) if sum(curves[c][l] for c in cal) + B <= alpha * N), K)
+            tot += curves[z[t]][lam]
+        assert tot / N <= alpha
+        n_crc += 1
+
+# Their HPD rule end to end, exactly: lambda_hat = the first threshold with P(L+ <= alpha) >= beta.
+# Risk above alpha there implies the fixed threshold l0 (the last with risk above alpha) has its bound
+# at most alpha (fail_le_fixed), and that fixed failure has chance at most 1 - beta.
+n_hpd, worst = 0, Q(0)
+for n in range(1, 5):
+    rr = random.Random(1870 + n)
+    for trial in range(25):
+        K = 3
+        curves = [sorted((Q(rr.randint(0, 10), 10) for _ in range(K)), reverse=True) + [Q(0)]
+                  for _ in range(rr.randint(2, 3))]
+        w = [rr.randint(1, 5) for _ in curves]
+        probs = [Q(x, sum(w)) for x in w]
+        Jl = [sum(p * c[l] for p, c in zip(probs, curves)) for l in range(K + 1)]
+        alpha, beta = Q(rr.randint(2, 6), 10), rr.choice([Q(1, 2), Q(3, 4), Q(9, 10)])
+        l0 = max((l for l in range(K + 1) if Jl[l] > alpha), default=None)
+        fail = fixed = Q(0)
+        for combo in itertools.combinations_with_replacement(range(len(curves)), n):
+            pr = multinomial(combo, probs)
+            F = [lplus_cdf([curves[c][l] for c in combo], Q(1), alpha) for l in range(K + 1)]
+            lam = next((l for l in range(K + 1) if F[l] >= beta), K)
+            if Jl[lam] > alpha:
+                fail += pr
+                assert l0 is not None and lam <= l0 and F[l0] >= beta
+            if l0 is not None and F[l0] >= beta:
+                fixed += pr
+        assert fail <= fixed <= 1 - beta
+        worst = max(worst, fail)
+        n_hpd += 1
+
+# Proper scores (Gressmann et al.): the integrated squared loss -2 q(y) + |q|^2 exceeds the law's by
+# sum (p - q)^2, exactly; the log-loss obeys Gibbs (floats), strictly at q != p.
+n_prop = 0
+rr = random.Random(1890)
+for trial in range(300):
+    m = rr.randint(2, 5)
+    pw = [rr.randint(0, 5) for _ in range(m)]
+    pw[0] = pw[0] or 1
+    p = [Q(x, sum(pw)) for x in pw]
+    qw = [rr.randint(1, 5) for _ in range(m)]
+    q = [Q(x, sum(qw)) for x in qw]
+    gn = lambda r, y: -2 * r[y] + sum(x * x for x in r)
+    gap = sum(p[y] * gn(q, y) for y in range(m)) - sum(p[y] * gn(p, y) for y in range(m))
+    assert gap == sum((p[y] - q[y]) ** 2 for y in range(m))
+    ll = lambda r: sum(-float(p[y]) * math.log(float(r[y])) for y in range(m) if p[y] > 0)
+    assert (ll(q) - ll(p) > 0) if p != q else abs(ll(q) - ll(p)) < 1e-12
+    for y in range(m):                                   # the termwise bound behind Gibbs
+        lhs = (float(p[y]) * (math.log(float(q[y])) - math.log(float(p[y])))) if p[y] > 0 else 0.0
+        assert lhs <= float(q[y] - p[y]) + 1e-12
+    n_prop += 1
+# Their proof of (i) writes Gibbs as E[log p_Y(Y)] <= E[log p(Y)], and Jensen as log E Z <= E log Z;
+# both hold with the loss's minus sign, and the written directions fail at once:
+pl, ql = [0.5, 0.5], [0.9, 0.1]
+assert sum(a * math.log(a) for a in pl) > sum(a * math.log(b) for a, b in zip(pl, ql))
+assert math.log(0.5 * 0.9 + 0.5 * 0.1) > 0.5 * math.log(0.9) + 0.5 * math.log(0.1)
+print(f"Slice 18: the posterior L+ exactly, its machinery on {n_dd} knot sets (mean, ends, distinct-knot "
+      f"formula); its beta-bound calibrated over replicated calibration sets on {n_cal} loss laws, n <= 5, "
+      f"beta in {{1/2, 3/4, 9/10, 19/20}} (least slack {float(slack_min):.4f}), n = 1 as the Lean states it; "
+      f"their Theorem 4.3 failing under a point-mass prior; conformal risk control over orderings on {n_crc} "
+      f"data sets; the HPD rule failing at most where the fixed threshold does, within 1 - beta, on {n_hpd} "
+      f"laws (worst failure {float(worst):.4f}); the squared loss's gap and Gibbs on {n_prop} law pairs")
+
+print()
 print("All assertions hold.")

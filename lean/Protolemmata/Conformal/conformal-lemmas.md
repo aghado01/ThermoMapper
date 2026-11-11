@@ -2,7 +2,7 @@
 
 Pins the contract of the engine's conformal layer, one layer over retained draws and pointwise densities for every model with a pointwise density ([E16](../../../issues/regression/bass/extensions-brief.md#conformal-bayes-the-consumer)). The layer owns coverage and the score owns width. These are the finite statements of that split. They are the sibling of [GuardedEstimator](../BASS/guarded-estimator-lemmas.md): there, means valid whatever the emulator does; here, prediction sets valid whatever the model does. Written from the [chip brief](conformal-chip-brief.md).
 
-**Status (2026-11-10).** Proved in `lean/Enthymemata/ConformalValidity.lean`, namespace `Conformal`, with no apologies (PROOF-CLOSED, 378 declarations counting E35's M-1 and M-2 and slices 9, 10, 12, 13, 14, 15 and 16 at the end of this page; `#print axioms` shows `propext`, `Classical.choice`, `Quot.sound` only):
+**Status (2026-11-10).** Proved in `lean/Enthymemata/ConformalValidity.lean`, namespace `Conformal`, with no apologies (PROOF-CLOSED, 395 declarations counting E35's M-1 and M-2 and slices 9, 10, 12, 13, 14, 15, 16 and 18 at the end of this page; `#print axioms` shows `propext`, `Classical.choice`, `Quot.sound` only):
 - CB-1: `card_rankLe_le`, `coverage_orderings`, `coverage_orderings_eq`, `coverage_strict_le`, `coverage_orderings_le`, `rank_uniform`, `coverage_tieBreak`, `coverage_given`, `coverage_law`, `coverage_stratum`;
 - CB-2: `split_coverage`, `exchangeable_given_training`, `cqr_ordConnected`;
 - CB-4: `sum_jointU`, `post_addOneIn`, `integratedScore_equivariant`, `latentScore_equivariant`, `latentScore_eq`, `sum_jointU_addOneIn`, `integratedScore_le_latentScore`, `accepts_latent_of_mixed`, `mixed_counterexample`;
@@ -855,3 +855,59 @@ Lee, Tchetgen Tchetgen and Dobriban (arXiv 2409.13990v5), read in TeX: §2, Cond
   - [B_L, B_U], built as in their Algorithm 1, covering at least 1 − β − γ;
   - the interval, joint-box and exceedance counts each at least their rank counts.
 - Their selection rule on 180 data sets with scores tied at zero: at most η false claims on at least 1 − α of the test sets.
+
+## Slice 18 — the guarantee read out
+
+Snell and Griffiths (arXiv 2502.13228v2), read in TeX: §3–§4, Propositions 3.1–3.2, Theorems 4.1 and 4.3, Lemma 4.2, Corollary 4.4, the appendix proofs, and §5.1. Gressmann et al. (arXiv 1801.00753v3), read in TeX: §2.5, Definitions 2.2–2.3, Lemma 2.4, Propositions 2.5–2.7. Proved on 2026-11-10 in `ConformalValidity.lean`, sections `LossPosterior` and `ProperScores`, PROOF-CLOSED, with the standard three axioms only. The checks (section "Slice 18") ran first.
+
+**The posterior over the loss.**
+- *Their construction.* Take n calibration losses ℓ_(1) ≤ … ≤ ℓ_(n), set ℓ_(n+1) = B, and let L⁺ = Σ U_i ℓ_(i) with U ~ Dir(1, …, 1).
+- *Its exact law, for small n.* The checks compute it exactly: P(L⁺ > x) is the divided difference of (t − x)_+^n on the knots, confluent where they tie.
+- *Its mean is conformal risk control* (`crc_orderings`; their Proposition 3.2, through Angelopoulos et al.).
+  - E(L⁺) = (Σ ℓ_i + B)/(n + 1). The rule λ_crc takes the first threshold with E(L⁺) ≤ α.
+  - Over the orderings of any data set, the test unit's loss at that threshold averages at most α. So the posterior mean is calibrated over replicated calibration sets.
+  - *Hypotheses.* Losses are nonincreasing in λ on a grid, at most B, and at most α at the last threshold.
+
+**Finding: their Theorem 4.3 does not hold as stated.**
+- *The gap.* Its proof replaces p(t_{1:n} | ℓ_{1:n}) with the Dirichlet law of the spacings. That is their law before ℓ is seen, not after.
+- *A counterexample.*
+  - Put a point-mass prior on the quantile function that is 0 on [0, 1/10] and B = 1 above, so J = 9/10. It is consistent with all-zero losses.
+  - Its posterior gives Pr(L ≤ b | ℓ) = 0 for b < 9/10, while Pr(L⁺ ≤ b) = 1 − (1 − b)^n > 0.
+  - So inf_π Pr(L ≤ b | ℓ) ≥ Pr(L⁺ ≤ b) fails.
+- *What stands.* Their Theorem 4.1, the right-rectangle bound given the quantile levels.
+
+**The β-bound's calibration is frequentist, and known.**
+- *Identification.* b*_β is Gaffke's (2005) upper bound for the mean of a bounded variable, which Learned-Miller and Thomas rediscovered.
+- *Status.* Its calibration over replicated calibration sets, P(J ≤ b*_β) ≥ β, was Gaffke's conjecture. Gaffke proved two units; Vlassis and Thomas (arXiv 2607.08415, 2026) proved every number, for independent nonnegative variables (here B − ℓ). Neither paper is on disk; this comes from abstracts found by web search.
+- *One unit* (`gaffke_one`, our proof).
+  - With one loss, b*_β = ℓ + β (B − ℓ).
+  - The miss set's mass P satisfies P (B − J) ≤ (1 − β)(B − J) by a Markov-type step, strictly when P > 0. So P ≤ 1 − β.
+- *How tight it is.* The checks find exact calibration on 150 loss laws, n ≤ 5, β ∈ {1/2, 3/4, 9/10, 19/20}. The least slack is 0.0005, so the bound is nearly tight.
+
+**Their HPD rule** (`fail_le_fixed`).
+- λ^β_hpd takes the first threshold with b*_β(λ) ≤ α.
+- Its risk exceeds α only when the fixed threshold λ₀, the last with risk above α, has b*_β(λ₀) < J(λ₀). So its failure chance is at most 1 − β, by the calibration at λ₀.
+- Their §5.1 shows this in simulation and does not state the step from a fixed λ to a chosen one.
+
+**Proper scores** (Gressmann et al.).
+- *The log-loss* (`logLoss_proper`, `logLoss_strict`; their Proposition 2.5 (i)).
+  - It is Gibbs' inequality on finitely many outcomes, strict at q ≠ p for q a law.
+  - q must be positive where p is: Lean's log 0 is 0, where their loss is +∞.
+- *The integrated squared loss* (`gneitingLoss_gap`, `gneitingLoss_strict`; their Lemma 2.4 (ii) and Proposition 2.5 (ii)). The gap is Σ (p − q)².
+- *Conditional predictions* (`proper_conditional`; their Proposition 2.7).
+- *Finding: two sign slips in their proof of Proposition 2.5 (i).* Jensen is written log E Z ≤ E log Z, and Gibbs as E[log p_Y(Y)] ≤ E[log p(Y)]. Both hold for the loss −log, which is the reverse of what is written. The statement itself stands.
+
+**Not formalized.**
+- The calibration for n ≥ 2 (Vlassis and Thomas's theorem).
+- Their Theorem 4.1 on [0, 1], and Lemma 4.2 (Dirichlet spacings).
+- The density case of the proper scores, and their Proposition 2.6 (the log-loss is the only strictly local, strictly proper loss).
+
+**Checks.**
+- The exact law of L⁺ on 393 knot sets: its mean, its ends, and the distinct-knot formula.
+- At n = 1, b*_β = ℓ + β(B − ℓ).
+- The calibration over replicated calibration sets, as above. At n = 1 it is checked as the Lean states it.
+- Their Theorem 4.3 failing under the point-mass prior.
+- Conformal risk control over orderings on 300 data sets.
+- The HPD rule exactly, end to end, on 100 laws: it fails at most where the fixed threshold does, within 1 − β (worst failure 0.15).
+- The squared loss's gap exactly, and Gibbs in floats, on 300 law pairs.
+- The written directions in their proof failing at once.
