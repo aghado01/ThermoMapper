@@ -1,6 +1,6 @@
 # Active subspaces on the BASS core: E8's build (chip brief)
 
-Date: 2026-11-08. Status: slices 0–6 complete; slice 7's plan approved by the user (2026-11-10); slice 7a landed (`7b2ca7a`) and waits for its verification; 7b and 7c follow. Commissioned by the user on 2026-11-08 ("kick off e8"), after KHAOS's last slice; slice 5, the Grassmann discussion's items the user settled, commissioned 2026-11-08 ("ill take as recommended"). Every slice landed and was verified by the coordinating session on 2026-11-08: slice 0 (`15fb495`, `9e3028d`, `aa62879`), slice 1 (`95294f8`, `9dfcc6d`, `1385b86`), slice 2 (`8c7db77`, `3cdc2e8`), slice 3 (`84fe230`, `1049055`), slice 4 (`20aeb06`, `bc72014`) and slice 5 (`def59f3`, `9d2ff23`, `95d2900`, `a54a537`). The follow-ups, commissioned 2026-11-10: slice 6 (`276af70`, `e9d8827`, `30df59e`, `9a669b6`, report `3c26660`) verified by the coordinating session on 2026-11-10; slice 7's plan (below, "Slice 7's plan") waits for the user's decisions; E36's brief follows its verification. Written by the main session from [E8's entry](extensions-brief.md#active-subspace-analysis), [gap G3](lineage-gaps-register.md#g3-sobol-indices-and-active-subspaces-have-different-standing), [the lineage review's separability question](lineage-review.md#separability-is-what-the-closed-forms-rest-on), the [Astra notes](../discussion/astra-grassman-stiefel-pca-extensions.md), and the [Grassmann discussion](../discussion/grassmann-stiefel-subspaces-brief.md)'s report so far. Reports go under "Reports" below, newest first.
+Date: 2026-11-08. Status: slices 0–6 complete; slice 7's plan approved by the user (2026-11-10); slice 7a (`7b2ca7a`) verified 2026-11-11; slice 7b landed (`70a2aa2`) and waits for its verification, its prior-rule handling for the user; 7c follows. Commissioned by the user on 2026-11-08 ("kick off e8"), after KHAOS's last slice; slice 5, the Grassmann discussion's items the user settled, commissioned 2026-11-08 ("ill take as recommended"). Every slice landed and was verified by the coordinating session on 2026-11-08: slice 0 (`15fb495`, `9e3028d`, `aa62879`), slice 1 (`95294f8`, `9dfcc6d`, `1385b86`), slice 2 (`8c7db77`, `3cdc2e8`), slice 3 (`84fe230`, `1049055`), slice 4 (`20aeb06`, `bc72014`) and slice 5 (`def59f3`, `9d2ff23`, `95d2900`, `a54a537`). The follow-ups, commissioned 2026-11-10: slice 6 (`276af70`, `e9d8827`, `30df59e`, `9a669b6`, report `3c26660`) verified by the coordinating session on 2026-11-10; slice 7's plan (below, "Slice 7's plan") waits for the user's decisions; E36's brief follows its verification. Written by the main session from [E8's entry](extensions-brief.md#active-subspace-analysis), [gap G3](lineage-gaps-register.md#g3-sobol-indices-and-active-subspaces-have-different-standing), [the lineage review's separability question](lineage-review.md#separability-is-what-the-closed-forms-rest-on), the [Astra notes](../discussion/astra-grassman-stiefel-pca-extensions.md), and the [Grassmann discussion](../discussion/grassmann-stiefel-subspaces-brief.md)'s report so far. Reports go under "Reports" below, newest first.
 
 ## Why
 
@@ -204,6 +204,56 @@ Nothing is built until the user decides the items marked **Decision** below. The
 Under "Reports" below, newest first, per slice: what landed by commit; the gates' numbers; decisions taken beyond this brief; what was left unbuilt and why; follow-ups with the decision each would change.
 
 ## Reports
+
+### Slice 7b: the projected refit (2026-11-11)
+
+**Landed:** `70a2aa2`.
+
+**What was built:**
+- *`BassProjectedFit.Of(projection, data, config)`* refits on the projected data (`BassProjection.Project`).
+- *`Predict(cases)`* takes cases in the original units.
+- *`Gradient(cases, draws)`* gives the partials in the original inputs by the chain rule through u = Aᵀx_box, ∂f/∂x_i = Σⱼ (a_ij/width_i)·∂f/∂u_j. `BassProjection.Widths` gives each input's box width for it.
+- *`ActiveSubspace(spec)`* returns a `ProjectedActiveSubspace`:
+  - the refit's E8 analysis in u, on the sampled route at a pushforward joint sample: the spec's `Sample` in the original inputs pushed forward, or `Points` drawn from the analysis's law;
+  - each draw's C mapped to the original inputs in the analysis's metric, C = W₁D·C_u·DW₁ᵀ (D the inverse of u's box widths, since LᵀA = W₁), with its two summaries.
+  - Refused: a declared product law on u, another metric, the exact route, and k above d.
+- *Held:* the handling of the column-mass support and the raw ridge, which read the bounding box's scale (7a's gate). It waits for the user's answer, so a projected fit takes them today as any fit does.
+
+**Gates** (a ridge of six inputs from outside the model, g(wᵀx) with g(u) = sin(4u) + u², w ∝ (3, −2, 1, 0.5, 0, 0), 200 cases, noise sd 0.05, each input's domain [0, 1]):
+
+| Gate | Reading |
+| --- | --- |
+| The gradient against central differences of each draw's prediction, 20 points, 5 draws, 6 inputs | 7.2·10⁻⁹ of the gradient's size |
+| The mapped C off span(W₁), 80 draws | 1.9·10⁻¹⁶ of its size |
+| The mapped C against C read directly from the original-input gradient at the native points the pushforward came from | 4.7·10⁻¹⁴ |
+| The ridge recovered at d = 1: the frame's angle to w; held-out RMSE against g at 1,000 points; basis functions per draw | 6.0°; refit 0.082 against native 0.124; 4.1 against 9.5 |
+| The readout's refusals | each refused |
+| Fitting untouched | the Commit scope 48 of 48 (the two classes the new files reach, and the pinned tier) |
+
+**Exploration, not validation** (the qualification switch): 2307.11241 §4.1.3's function, a Latin hypercube of 500 on [0, 1]⁶, refitted at d = 1 to 6. The percentage of g's sd accounted for at 2,000 held-out points, 100·(1 − RMSE/sd):
+
+| | d = 1 | d = 2 | d = 3 | d = 4 | d = 5 | d = 6 |
+| --- | --- | --- | --- | --- | --- | --- |
+| Here | 91.71 | 96.63 | 96.59 | 98.67 | 98.54 | 98.59 |
+| The paper | 91.06 | 98.37 | 99.03 | 99.39 | 99.45 | 99.45 |
+
+- The native fit reads 97.36. The square-rooted eigenvalues over the first read 1, 0.155, 0.083, 0.067, 0.051 and 0.044, against the paper's 1, 0.125, 0.057, 0.046, 0.037 and 0.036.
+- The paper does not define its percentage, nor its chains or basis size; these fits are modest (30 basis functions at most, 2 chains of 40 kept draws).
+- The refit meets the paper at d = 1 and falls short from d = 2 on, where the frame's second direction, read from a 500-case native fit, carries the error.
+
+**The cost row** (thread cycles, indicative, a loaded machine): on the ridge's data, the native fit takes 0.14 s and the refit 0.15 s; the projected readout at 4,096 points costs 1.04 ms per draw.
+
+**Decisions beyond the brief:**
+1. *The readout's spec is the refit's,* with its sample in the original inputs pushed forward, so one record serves both coordinates.
+2. *The gradient's out-of-range flag is the refit's:* a case outside an active variable's training range.
+3. *The projected fit takes a `BassFit`'s data.* A basis fit's components refit the same way through `BassComponents`, which is not built here.
+
+**Left unbuilt:**
+- The prior-rule handling, which waits for the user.
+- Basis fits through a projection.
+- An iteration of the frame on the refit (the paper's conclusion), which the mapped C would serve.
+
+**Doc changes owed:** `docs/Maths/Regression/ActiveSubspaces.md`, slice 7's section: the refit, its chain rule, its readout and the exploration's table.
 
 ### Slice 7a: the frame and the projected data (2026-11-11)
 
