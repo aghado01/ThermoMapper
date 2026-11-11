@@ -37,7 +37,7 @@ On an independent archive of `e5183dc`, all eight E21 diagnostic bodies passed w
 - **Repository rules.** Work on `main`, commit by pathspec (`git commit -m … -- <paths>`), leave nothing staged, push nothing.
   - Commit messages carry no attribution lines (CLAUDE.md).
   - Leave out of every commit `issues/regression/bass/basin-hold-validation.csv` and `path-profile-validation.csv`, and the user's own notes (`issues/regression/discussion/opus-open-items-11082026.md`, `issues/geometry/gemini-abliteralus-thermomapper.md`).
-- **The chips' hand-over notes** are in `C:\Users\azrie\AppData\Roaming\Claude\side-session-notes\local_b6732445-a9c0-404a-81ad-1ab68d7b1dd2\`, one per chip and slice (for example `e34-multi-output-slice-1.md` and `gbass-noise-slices-6-7.md`). That folder belongs to this session, so a new parent should read from it and tell the chips where to write next.
+- **The chips' hand-over notes** were written to the desktop app's side-session notes folder, outside the repository. On 2026-11-10 they were copied into [handover-notes/](handover-notes/README.md). From then on, hand-over state goes in each brief's report as an "In progress" entry ([AGENTS.md](../../AGENTS.md#docops--conventions-for-issues)).
 - **The extension index:** [extensions-checklist.md](bass/extensions-checklist.md), [extensions-brief.md](bass/extensions-brief.md), and the build order in [lineage-review.md](bass/lineage-review.md#build-order).
 
 ## Repository state at handoff

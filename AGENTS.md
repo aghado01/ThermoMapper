@@ -146,5 +146,12 @@ other directly when they need to coordinate. Sessions do not read each other's
 transcripts. An event points the orchestrator to the report it needs to read
 to supervise.
 
+**Notes stay in the repository.** A chip's hand-over state (what is
+uncommitted, what is running, what comes next) goes in its brief's report as
+an "In progress" entry. It is updated in place, then folded into the slice's
+report when the slice lands. Probe code and its data go to `artifacts/`. No
+session writes notes or probes outside the repository, including the desktop
+app's side-session notes folder.
+
 
 NO COMMITS "Co-Authored-By: Claude Opus 5.5" OR THE LIKE. KEEP COMMITS INFORMATIVE TO THE WORK. 
