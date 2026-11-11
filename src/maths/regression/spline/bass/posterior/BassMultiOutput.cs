@@ -48,7 +48,11 @@ public static class BassMultiOutput
             throw new ArgumentException("Several outputs have named columns, without functional locations or truncation noise.", nameof(options));
         var pooled = fit.Draws.SelectMany(c => c).ToArray();
         var (selected, weights) = Draws3.Select(options.Draws, pooled.Length, fit.DrawWeights, nameof(options));
-        var (inputs, outside) = cases.Prepare(model.Transform, model.Inputs, options.UnseenLevels);
+        var (inputs, outside) = cases.Prepare(model.Transform, model.Inputs, options.UnseenLevels, model.Data.Groupings);
+        // Random intercepts (E34's slice 4): a case of an observed level reads its draw's u_g in R^K; one of the population, u = 0 in f, and its
+        // own effect ~ N(0, s^2 Sigma) in the predictive draw, as scalar prediction reads one response's.
+        RandomEffectsBlock? block = model.RandomEffects;
+        int[][]? groups = block is null ? null : [.. Enumerable.Range(0, block.Count).Select(g => cases.GroupsOf(block.Layout(g), block.Groupings[g], options.UnseenLevels))];
         var surface = new BassSurface(model.Basis, fit.Terms, inputs, null);
         int n = surface.Cases, k = data.Response.Outputs;
         var latent = new double[selected.Length, n, k];
@@ -63,10 +67,15 @@ public static class BassMultiOutput
                 throw new ArgumentException("A several-output draw must carry its coefficients and covariance.", nameof(fit));
             sigma[d] = (double[,])s.Clone();
             Array.Resize(ref coefficients, a.GetLength(0));
+            BassGroupDraw[]? effects = groups is null ? null : block!.Ordered(draw.Groups ?? throw new ArgumentException("A draw under random intercepts carries its effects.", nameof(fit)));
             for (int l = 0; l < k; l++)
             {
                 for (int j = 0; j < coefficients.Length; j++) coefficients[j] = a[j, l];
                 surface.Evaluate(draw.Structure.TermIds, coefficients, column);
+                if (effects is not null)
+                    for (int g = 0; g < groups!.Length; g++)
+                        for (int i = 0; i < n; i++)
+                            if (groups[g][i] >= 0) column[i] += block!.Layout(g).Multiplier(inputs, i) * effects[g].OutputEffects![l][groups[g][i]];
                 for (int i = 0; i < n; i++) latent[d, i, l] = column[i];
             }
             if (predictive is null) continue;
@@ -76,28 +85,40 @@ public static class BassMultiOutput
                 for (int l = 0; l < k; l++) z[l] = Normal.SampleStandard(rng);
                 for (int l = 0; l < k; l++) { double noise = 0; for (int j = 0; j <= l; j++) noise += root[l, j] * z[j]; predictive[d, i, l] = latent[d, i, l] + noise; }
             }
+            if (effects is null) continue;
+            for (int g = 0; g < groups!.Length; g++)   // a population case's own effect, after every case's noise
+                for (int i = 0; i < n; i++)
+                {
+                    if (groups[g][i] >= 0) continue;
+                    for (int l = 0; l < k; l++) z[l] = Normal.SampleStandard(rng);
+                    double scale = effects[g].Scale * block!.Layout(g).Multiplier(inputs, i);
+                    for (int l = 0; l < k; l++) { double own = 0; for (int j = 0; j <= l; j++) own += root[l, j] * z[j]; predictive[d, i, l] += scale * own; }
+                }
         }
-        double[,]? rb = options.MeanSurface ? MeanSurface(model, fit, pooled, selected, weights, surface) : null;
+        double[,]? rb = options.MeanSurface ? MeanSurface(model, fit, pooled, selected, weights, surface, groups, inputs) : null;
         double nu = model.Resolved.Outputs!.Prior.DegreesOfFreedom + data.Response.Cases - (model.Target.Intercept == GPriorCentre.Flat ? 1 : 0);
         return new BassOutputPrediction(((MultiOutputResponse)data.Response).Names, selected, weights, latent, predictive, sigma, outside, rb, nu > k + 1);
     }
 
     // Only coefficient means are needed here; no case-by-case row covariance is constructed.
-    private static double[,] MeanSurface(BassModel model, BassFit fit, BassDraw[] pooled, int[] selected, double[] weights, BassSurface surface)
+    private static double[,] MeanSurface(BassModel model, BassFit fit, BassDraw[] pooled, int[] selected, double[] weights, BassSurface surface,
+                                         int[][]? groups = null, CaseInputs? inputs = null)
     {
         int k = model.Data.Response.Outputs, rows = model.Data.Response.Cases;
         bool flat = model.Target.Intercept == GPriorCentre.Flat;
         if (!(model.Resolved.Outputs!.Prior.DegreesOfFreedom + rows - (flat ? 1 : 0) > k))
             throw new InvalidOperationException("The posterior surface has no finite mean.");
-        var designs = new Dictionary<string, (BassDesign Design, BassStructureFit Fit, double[] Means)>();
+        var designs = new Dictionary<(string, WorkingResponse), (BassDesign Design, BassStructureFit Fit, double[] Means)>();
         var result = new double[surface.Cases, k]; var buffer = new double[surface.Cases];
         for (int d = 0; d < selected.Length; d++)
         {
-            var draw = pooled[selected[d]]; var ids = draw.Structure.TermIds; string key = string.Join(',', ids);
+            var draw = pooled[selected[d]]; var ids = draw.Structure.TermIds;
+            WorkingResponse reading = draw.WorkingOn(model);   // under random intercepts, the reading at the draw's s (E34's slice 4)
+            var key = (string.Join(',', ids), reading);
             if (!designs.TryGetValue(key, out var cached))
             {
                 var design = model.NewDesign();
-                if (design.Load(ids.Select(id => fit.Terms[id]).ToArray()) is { } refusal) throw new ArgumentException($"The retained structure was refused ({refusal}).", nameof(fit));
+                if (design.Load(ids.Select(id => fit.Terms[id]).ToArray(), reading) is { } refusal) throw new ArgumentException($"The retained structure was refused ({refusal}).", nameof(fit));
                 var means = new double[ids.Length]; var training = new double[rows];
                 for (int j = 0; j < ids.Length; j++) { model.Basis.CaseColumn(fit.Terms[ids[j]], model.Inputs.Cases, training); means[j] = model.Working.ColumnMean(training, null); }
                 cached = (design, BassStructureFit.Of(design, 0), means); designs.Add(key, cached);
@@ -105,18 +126,34 @@ public static class BassMultiOutput
             double precision = draw.Tau / model.Target.CoefficientConstant;
             double[,]? pencilMean = cached.Fit.Outputs!.Prior?.Conditional(precision, 1).Mean;
             var coefficients = new double[ids.Length + 1]; int offset = flat ? 0 : 1;
+            bool moved = !reading.IsResponseItself;
+            double[] outputMeans = moved ? reading.OutputMeans.ToArray() : model.Resolved.Outputs.Means;
+            var all = groups is null ? null : new double[ids.Length + 1, k];
+            var columns = new double[k][];
             for (int l = 0; l < k; l++)
             {
-                coefficients[0] = flat ? model.Resolved.Outputs.Means[l] : pencilMean is not null ? pencilMean[0, l]
-                    : model.Resolved.Outputs.Levels[l] + (model.Resolved.Outputs.Means[l] - model.Resolved.Outputs.Levels[l]) / (1 + precision);
+                double mean = outputMeans[l], level = moved ? (model.Target.Intercept == GPriorCentre.Zero ? 0.0 : mean) : model.Resolved.Outputs.Levels[l];
+                coefficients[0] = flat ? mean : pencilMean is not null ? pencilMean[0, l] : level + (mean - level) / (1 + precision);
                 for (int j = 0; j < ids.Length; j++)
                 {
                     double value = pencilMean is not null ? pencilMean[j + offset, l] : cached.Design.OutputCoefficients![j, l] / (1 + precision);
                     coefficients[j + 1] = value; coefficients[0] -= cached.Means[j] * value;
                 }
                 surface.Evaluate(ids, coefficients, buffer);
-                for (int i = 0; i < surface.Cases; i++) result[i, l] += weights[d] * buffer[i];
+                columns[l] = (double[])buffer.Clone();
+                if (all is not null) for (int j = 0; j < coefficients.Length; j++) all[j, l] = coefficients[j];
             }
+            if (all is not null)   // E[u | S, tau, Y], linear in the coefficients: the effects' conditional mean at their conditional means
+            {
+                RandomEffectsBlock intercepts = model.BlockAt(draw)!;   // at the draw's scales
+                double[][][] u = intercepts.MeanOutputEffects(model, [.. ids.Select(id => fit.Terms[id])], all);
+                for (int l = 0; l < k; l++)
+                    for (int g = 0; g < groups!.Length; g++)
+                        for (int i = 0; i < surface.Cases; i++)
+                            if (groups[g][i] >= 0) columns[l][i] += intercepts.Layout(g).Multiplier(inputs!, i) * u[l][g][groups[g][i]];
+            }
+            for (int l = 0; l < k; l++)
+                for (int i = 0; i < surface.Cases; i++) result[i, l] += weights[d] * columns[l][i];
         }
         return result;
     }
@@ -127,6 +164,9 @@ public static class BassMultiOutput
         ArgumentNullException.ThrowIfNull(cases);
         BassModel model = Model(fit, data); options ??= new BassPredictOptions();
         if (options.OutputLocations is not null) throw new ArgumentException("Several outputs have no output locations.", nameof(options));
+        if (model.RandomEffects is not null)
+            throw new NotSupportedException("Under random intercepts a new case's row correlates with the training rows through u, which the matrix-t's row "
+                                            + "scale does not carry; Predict reads each draw's effects (E34's slice 4).");
         var pooled = fit.Draws.SelectMany(c => c).ToArray();
         var (selected, weights) = Draws3.Select(options.Draws, pooled.Length, fit.DrawWeights, nameof(options));
         var (inputs, outside) = cases.Prepare(model.Transform, model.Inputs, options.UnseenLevels);

@@ -146,7 +146,8 @@ public sealed class BassDesign
     // A move to another working response, pending: what it reads, and the current structure's fit on it. The columns and the factor
     // are null when only the offset moved, which keeps them.
     private sealed record Followed(BassDesignResponse Response, List<double[]>? Columns, List<BassPriorColumn>? Priors, BorderedCholesky? Factor, double[] B,
-                                   double[] Beta, double[] Residual, double ResidualSquares, double FittedSquares, RidgeSpectrum? Spectrum, PriorPencil? Pencil);
+                                   double[] Beta, double[] Residual, double ResidualSquares, double FittedSquares, RidgeSpectrum? Spectrum, PriorPencil? Pencil,
+                                   DesignOutputs? Outputs = null);
 
     private readonly BassBasis _basis;
     private readonly BassAdmission _rules;
@@ -175,7 +176,7 @@ public sealed class BassDesign
     private BorderedCholesky? _strict;
     private Pending? _pending;
     private RidgeSpectrum? _spectrum;   // the current structure's, under the ridge; null until read
-    private readonly DesignOutputs? _outputs;   // several outputs' statistics, in place of the scalar ones (E34); null for one response
+    private DesignOutputs? _outputs;   // several outputs' statistics, in place of the scalar ones (E34); null for one response; re-read when the reading moves
     private OutputPencil? _outputPencil;
 
     // Lever 1 of the efficiency pass: the cross products of a one-way hinge with the held columns, from prefix tables. A table is a pure
@@ -322,18 +323,25 @@ public sealed class BassDesign
             }
             _priorGram = new double[0, 0];
         }
-        if (data.Response is MultiOutputResponse outputs)
+        if (data.Response is MultiOutputResponse)
         {
-            if (_functional || working.Whitening is not null)
-                throw new NotSupportedException("Several outputs need an unweighted case design without random intercepts.");
+            // Several outputs (E34) read each output as the scalar design reads its response; under a random-effect block (slice 4) its
+            // whitening and the g-form, under weights the g-form on the weighted Gram.
+            if (_functional) throw new NotSupportedException("Several outputs need a case design.");
+            if (working.Weighted is not null)
+                throw new NotSupportedException("Several outputs under a noise's weights with random effects arrive with E34's slice 4, its last stage.");
+            if ((working.Whitening is not null || working.WeightArray is not null) && (_ridge || _priorColumns is not null || !_precision.Unit && !ReferenceEquals(_precision, BassPriorPrecision.Gram)))
+                throw new NotSupportedException("Several outputs take the g-form on the reading's own Gram under a random-effect block or weights; the "
+                                                + "normalized ridge, KHAOS's priors and a prior apart from the weights arrive with the noise by row (E34's slice 4).");
             if (_ridge)
             {
                 _priorColumns = [];
                 _priorMass = _rows;
                 _priorGram = new double[0, 0];
             }
-            _outputs = new DesignOutputs(outputs, working.OutputMeans);
-            _response = new BassDesignResponse(working, new double[_rows], null, 0.0, 0.0);
+            double[]? roots = working.WeightArray is { } w ? [.. w.Select(Math.Sqrt)] : null;
+            _outputs = new DesignOutputs(ReadOutputs(working, roots));
+            _response = new BassDesignResponse(working, new double[_rows], roots, 0.0, 0.0);
         }
         else _response = Read(working);
         _residual = (double[])_response.Y.Clone();
@@ -346,9 +354,9 @@ public sealed class BassDesign
     {
         if (_outputs is not null)
         {
-            if (!working.IsResponseItself || !working.Response.Values.SequenceEqual(_response.Working.Response.Values))
-                throw new NotSupportedException("Several outputs can restore their unchanged response; moving it requires the row-noise extension.");
-            return new BassDesignResponse(working, new double[_rows], null, 0, 0);
+            // Several outputs (E34): the K-output side reads the outputs (ReadOutputs); this carries the reading and W^½.
+            double[]? several = sameWeights?.Roots ?? (working.WeightArray is { } w ? [.. w.Select(Math.Sqrt)] : null);
+            return new BassDesignResponse(working, new double[_rows], several, 0, 0);
         }
         ReadOnlySpan<double> values = working.Values;
         double mean = working.ResponseMean;
@@ -377,6 +385,25 @@ public sealed class BassDesign
         }
         double level = _priorColumns is null || _intercept == GPriorCentre.Zero ? 0.0 : working.Reference?.Level ?? PairwiseSum.Of(values) / _rows;
         return new BassDesignResponse(working, y, roots, level, _output.Dot(y, y));
+    }
+
+    // Several outputs (E34): each output read as Read reads a scalar response, ỹ_k = W^½(y_k − ȳ_k) on the reading's values (the block's
+    // whitening in its offset) and means, at unit weights y_k − ȳ_k.
+    private double[][] ReadOutputs(WorkingResponse working, double[]? roots)
+    {
+        int k = ((MultiOutputResponse)working.Response).Outputs;
+        ReadOnlySpan<double> values = working.Values, means = working.OutputMeans;
+        var reads = new double[k][];
+        for (int l = 0; l < k; l++)
+        {
+            var y = new double[_rows];
+            double mean = means[l];
+            for (int i = 0; i < _rows; i++) y[i] = values[i * k + l] - mean;
+            if (roots is not null)
+                for (int i = 0; i < _rows; i++) y[i] *= roots[i];
+            reads[l] = y;
+        }
+        return reads;
     }
 
     /// <summary>M, the terms.</summary>
@@ -615,7 +642,6 @@ public sealed class BassDesign
     public DesignProposal ProposeFollow(WorkingResponse working)
     {
         ArgumentNullException.ThrowIfNull(working);
-        if (_outputs is not null) throw new NotSupportedException("Several outputs read the response itself in E34's slice 1; it does not move.");
         _pending = null;
         bool reweighted = Reweights(working);
         BassDesignResponse response = Read(working, reweighted ? null : _response);
@@ -658,8 +684,17 @@ public sealed class BassDesign
         var residual = new double[_rows];
         Fit(columns, _h, beta, residual, response.Y);
         double rss = _output.Dot(residual, residual), q = m == 0 ? 0.0 : PairwiseSum.Dot(b, beta);
-        var account = new DesignProposal(null, m, rss, q, minAngle, double.NaN, (RidgeColumns?)pencil ?? spectrum);
-        var followed = new Followed(response, reweighted ? columns : null, reweighted ? priors : null, reweighted ? factor : null, b, beta, residual, rss, q, spectrum, pencil);
+        // Several outputs (E34's slice 4): every output read again on the new reading and refitted on these columns and factor.
+        DesignOutputs? outputs = null;
+        if (_outputs is not null)
+        {
+            outputs = new DesignOutputs(ReadOutputs(working, response.Roots));
+            outputs.Load(columns);
+            outputs.Refit(factor, columns);
+        }
+        var account = new DesignProposal(null, m, rss, q, minAngle, double.NaN, (RidgeColumns?)pencil ?? spectrum, outputs?.Forms);
+        var followed = new Followed(response, reweighted ? columns : null, reweighted ? priors : null, reweighted ? factor : null, b, beta, residual, rss, q, spectrum, pencil,
+                                    outputs);
         _pending = new Pending(Move.Follow, -1, null, null, null, 0.0, null, account, Response: followed);
         return account;
     }
@@ -750,6 +785,11 @@ public sealed class BassDesign
         _residual = f.Residual;
         ResidualSquares = f.ResidualSquares;
         FittedSquares = f.FittedSquares;
+        if (f.Outputs is { } outputs)
+        {
+            _outputs = outputs;
+            _outputPencil = null;
+        }
     }
 
     /// <summary>
@@ -762,6 +802,7 @@ public sealed class BassDesign
         ArgumentNullException.ThrowIfNull(terms);
         _pending = null;
         BassDesignResponse response = working is null || ReferenceEquals(working, _response.Working) ? _response : Read(working, Reweights(working) ? null : _response);
+        bool reread = _outputs is not null && !ReferenceEquals(response, _response);   // several outputs read on a new reading (E34's slice 4)
         if (terms.Count > _rules.MaxBasis) return BassRefusal.Cap;
         var seen = new HashSet<BassTerm>();
         var columns = new List<double[]>(terms.Count);
@@ -808,6 +849,7 @@ public sealed class BassDesign
             _priorGram = priorGram;
             _pencil = pencil;
         }
+        if (reread) _outputs = new DesignOutputs(ReadOutputs(response.Working, response.Roots));
         _outputs?.Load(columns);
         Refit();
         return null;
@@ -877,6 +919,7 @@ public sealed class BassDesign
         snapshot.Residual.CopyTo(_residual, 0);
         ResidualSquares = snapshot.ResidualSquares;
         FittedSquares = snapshot.FittedSquares;
+        if (_outputs is not null) _outputs = new DesignOutputs(ReadOutputs(_response.Working, _response.Roots));   // the restored reading's outputs (E34's slice 4)
         _outputs?.Restore(snapshot.Outputs ?? throw new ArgumentException("The snapshot holds one response's statistics, and the design several outputs'.", nameof(snapshot)));
     }
 

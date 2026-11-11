@@ -156,7 +156,13 @@ public sealed class BassTarget : ISamplingTarget<BassState>
         if (Refusal(fit) is { } reason) throw new ArgumentException($"The structure lies outside F ({reason}).", nameof(fit));
         OutputForms forms = fit.Outputs ?? throw new ArgumentException("A structure of several outputs carries their forms.", nameof(fit));
         if (forms.Prior is { } pencil) return pencil.At(forms.Residual, Observations, tau / CoefficientConstant, inverseTemperature);
-        return OutputMarginal.CentredAt(fit.Terms, forms.Residual, forms.Fitted, Observations, outputs.Means, Intercept, tau / CoefficientConstant, inverseTemperature);
+        // The reading the forms are on (E34's slice 4): its weights' mass, Σ ln wᵢ and count, a random-effect block's −ln|V| among them, and
+        // its outputs' means; at the response itself, the resolution's means and unit weights.
+        WorkingResponse? reading = fit.Working;
+        if (reading is null || reading.IsResponseItself)
+            return OutputMarginal.CentredAt(fit.Terms, forms.Residual, forms.Fitted, Observations, outputs.Means, Intercept, tau / CoefficientConstant, inverseTemperature);
+        return OutputMarginal.CentredAt(fit.Terms, forms.Residual, forms.Fitted, Observations, reading.OutputMeans.ToArray(), Intercept, tau / CoefficientConstant,
+                                        inverseTemperature, weights: reading.Weighting);
     }
 
     /// <summary>The prior on structures.</summary>

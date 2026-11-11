@@ -377,6 +377,7 @@ public sealed class BassGroupScaleBlock : IBlock<ReversibleJumpChain<BassState>>
     private readonly BassGroupScalePrior _prior;
     private readonly int _group;
     private readonly string _name;
+    private readonly int _outputs;   // K: one s for every output carries K outputs' information about ln s (E34's slice 4); 1 for one response
 
     internal BassGroupScaleBlock(BassModel model, int group = 0)
     {
@@ -385,6 +386,7 @@ public sealed class BassGroupScaleBlock : IBlock<ReversibleJumpChain<BassState>>
             ?? throw new ArgumentException("The group scale's step needs random intercepts.", nameof(model));
         if ((uint)group >= (uint)blocks.Count) throw new ArgumentOutOfRangeException(nameof(group));
         _group = group;
+        _outputs = model.Data.Response is MultiOutputResponse several ? several.Outputs : 1;
         _prior = blocks.Specifications[group].ScalePrior
                  ?? throw new ArgumentException("The group scale's step needs a drawn scale (RandomIntercepts[].ScalePrior).", nameof(model));
         _name = blocks.Count == 1 ? "group scale" : $"group scale {blocks.Specifications[group].Grouping}"
@@ -416,7 +418,7 @@ public sealed class BassGroupScaleBlock : IBlock<ReversibleJumpChain<BassState>>
     // h = Step/√C at the block's s.
     internal double Scale(RandomEffectsBlock block)
     {
-        double c = block.ScaleInformation(_group) + _prior.CurvatureInLog(block.Scales.Span[_group]);
+        double c = _outputs * block.ScaleInformation(_group) + _prior.CurvatureInLog(block.Scales.Span[_group]);
         return Step / Math.Sqrt(double.IsFinite(c) ? Math.Max(c, 1.0) : 1.0);
     }
 

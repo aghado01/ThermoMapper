@@ -159,7 +159,8 @@ public sealed record BassResolved
         if (config.HasRandomEffects)
         {
             IBassRandomEffect[] blocks = config.EffectSpecifications;
-            if (response is not ScalarResponse) throw new ArgumentException("Random effects currently serve a scalar Gaussian response.", nameof(data));
+            if (response is not (ScalarResponse or MultiOutputResponse))
+                throw new ArgumentException("Random effects serve a scalar response, or several outputs with one s for every output (E34's decision 7).", nameof(data));
             RandomEffectsBlock effects = working?.Whitening ?? RandomEffectsBlock.Of(data.Groupings, blocks, data.Predictors.OfType<ContinuousPredictor>().ToArray());
             foreach (CategoricalPredictor grouping in data.Groupings)
                 if (!blocks.Any(b => b.Grouping == grouping.Name || b.ParentGrouping == grouping.Name))
@@ -464,6 +465,21 @@ public sealed record BassResolved
 
     // Several outputs on one basis (E34's slice 1): each output's mean and centre level, S_Y, Σ's prior carried from Sigma2's
     // ScaledToResponse(c) as decision 2's IW(K − 1 + 2c, 2c·S_Y), and the refusals of what later slices bring.
+    // Each output's mean over the raw response's N cases.
+    private static double[] RawMeans(MultiOutputResponse response)
+    {
+        int k = response.Outputs, n = response.Cases;
+        ReadOnlySpan<double> values = response.Values;
+        var means = new double[k];
+        var column = new double[n];
+        for (int l = 0; l < k; l++)
+        {
+            for (int i = 0; i < n; i++) column[i] = values[i * k + l];
+            means[l] = PairwiseSum.Of(column) / n;
+        }
+        return means;
+    }
+
     /// <summary>The cases per output below which the log names Huang and Wand's prior under decision 2's (E34's slice 3; the user's call,
     /// 2026-11-10).</summary>
     internal const int SmallCasesPerOutput = 10;
@@ -472,7 +488,9 @@ public sealed record BassResolved
     {
         int k = response.Outputs, n = response.Cases;
         if (config.Noise is not null) throw new ArgumentException("Several outputs take Gaussian noise in E34's slice 1; the noise by row (decision 6) arrives in slice 4.", "config");
-        if (config.HasRandomEffects) throw new ArgumentException("Several outputs' random effects arrive in E34's slice 4.", "config");
+        if (config.HasRandomEffects && config.Coefficients.Form is not GForm)
+            throw new ArgumentException("Several outputs with random intercepts take the g-form (E34's slice 4); the normalized ridge and KHAOS's priors "
+                                        + "would rebuild their pencil on every step of s and are not built under a block.", "config");
         // Σ's prior: the declared one, or Sigma2's ScaledToResponse(c) carried to K outputs.
         OutputCovariancePrior chosen = config.OutputCovariance
             ?? (config.Sigma2.Kind == Sigma2PriorKind.ScaledToResponse
@@ -480,11 +498,14 @@ public sealed record BassResolved
                 : throw new ArgumentException($"Several outputs carry Sigma2's ScaledToResponse(c) to Σ's prior (E34's decision 2), and Sigma2 is {config.Sigma2}; "
                                               + "declare OutputCovariance (decision 2's, standardized or a declared IW); Huang and Wand's prior arrives in slice 2.", "config"));
 
-        ReadOnlySpan<double> means = fitted.OutputMeans;
+        // The moments the priors read, as scalar BASS's s² reads them: the reading's, a held s's whitening among them; under a drawn s, whose
+        // reading moves with s, the response's own (scalar BASS's frozen reference, which several outputs take as the raw response).
+        bool drawnScale = config.HasRandomEffects && config.EffectSpecifications.Any(e => e.ScalePrior is not null);
+        ReadOnlySpan<double> means = drawnScale ? RawMeans(response) : fitted.OutputMeans;
         var levels = new double[k];
         for (int l = 0; l < k; l++) levels[l] = config.Intercept == GPriorCentre.Zero ? 0.0 : means[l];
         // S_Y: scalar BASS's s² carried to K outputs, each entry by its arithmetic, the products about the levels over n.
-        ReadOnlySpan<double> values = response.Values;
+        ReadOnlySpan<double> values = drawnScale ? response.Values : fitted.Values;
         var squares = new double[k, k];
         var products = new double[n];
         for (int a = 0; a < k; a++)

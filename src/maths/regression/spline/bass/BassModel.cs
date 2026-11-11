@@ -53,9 +53,11 @@ public sealed class BassModel
         ArgumentNullException.ThrowIfNull(observation);
         if (config.Noise is { } declared && !(observation is VarianceMeanMixture mixture && mixture.Noise == declared))
             throw new ArgumentException("The config declares its noise, so the observation model is the config's.", nameof(observation));
-        if (data.Response is MultiOutputResponse && (observation is not GaussianObservation || config.HasRandomEffects))
-            throw new ArgumentException("Several outputs take Gaussian noise without random intercepts in E34's slice 1; the noise by row and the random "
-                                        + "intercepts (decisions 6 and 7) arrive in slice 4.", nameof(config));
+        if (data.Response is MultiOutputResponse && observation is not GaussianObservation)
+            throw new ArgumentException("Several outputs take Gaussian noise; the noise by row (E34's decision 6) arrives with slice 4's later stages.", nameof(config));
+        if (data.Response is MultiOutputResponse && config.RandomSlopes is { Count: > 0 })
+            throw new ArgumentException("Several outputs take random intercepts with one s for every output (E34's decision 7); random slopes for several "
+                                        + "outputs are not commissioned.", nameof(config));
         if (config.Sampling.Births?.Residual is not null && data.Response is not ScalarResponse)
             throw new ArgumentException("E4's residual birth (Sampling.Births.Residual) reads a scalar response's residual; a direct functional "
                                         + "response's, or several outputs', is a matrix, which no score here reads.", nameof(config));
@@ -74,7 +76,9 @@ public sealed class BassModel
             block = RandomEffectsBlock.Of(data.Groupings, effects, data.Predictors.OfType<ContinuousPredictor>().ToArray());
             // A drawn s moves the whitened reading, so the priors read the response's own moments, frozen, as a fit without the block
             // reads them: a prior that read the reading at s would read a parameter (PriorsReadResponse).
-            if (effects.Any(s => s.ScalePrior is not null) && working.Reference is null && working.IsResponseItself && working.Latents is null)
+            // Several outputs take no reference: their resolution reads the raw response under a drawn s itself (E34's slice 4).
+            if (effects.Any(s => s.ScalePrior is not null) && working.Reference is null && working.IsResponseItself && working.Latents is null
+                && data.Response is not MultiOutputResponse)
                 baseReading = new WorkingResponse(working.Response, output: working.Output, meaning: working.Meaning, priorGram: working.PriorGram,
                     reference: config.Intercept == GPriorCentre.Zero
                     ? BassPriorReference.About(working.Values, 0.0)
@@ -166,10 +170,15 @@ public sealed class BassModel
     /// Whether the priors read the working response as it stands: no <see cref="BassPriorReference"/>, with level centring or a σ² prior
     /// that reads s². A working response that moves is not data, so such a prior would read parameters, with conditionals that share no
     /// joint, and a chain of this model refuses to move (<see cref="BassStructureMoves.ProposeFollow"/>). The routes that read nothing
-    /// are a flat or zero intercept with a σ² prior that reads no s² (Jeffreys, a declared inverse gamma, a held σ²).
+    /// are a flat or zero intercept with a σ² prior that reads no s² (Jeffreys, a declared inverse gamma, a held σ²). Several outputs under a
+    /// drawn s and Gaussian noise read the raw response itself, as scalar BASS's frozen reference does (E34's slice 4): their S_Y, means and
+    /// levels are the response's, and level centring's centre, the reading's mean, is the raw mean, since V^(−½)·1 = 1.
     /// </summary>
-    public bool PriorsReadResponse => Working.Reference is null && (Config.Intercept == GPriorCentre.Mean ||
+    public bool PriorsReadResponse => Working.Reference is null && !OutputsReadTheResponse && (Config.Intercept == GPriorCentre.Mean ||
         (Data.Response is MultiOutputResponse ? Config.OutputCovariance?.ReadsResponse ?? true : Config.Sigma2.ReadsResponse));
+
+    // Several outputs under a drawn s and Gaussian noise, whose resolution reads the raw response (E34's slice 4).
+    private bool OutputsReadTheResponse => Data.Response is MultiOutputResponse && ScaleDrawn && Observation is GaussianObservation;
 
     /// <summary>M_max, the basis cap.</summary>
     public int MaxBasis => Resolved.MaxBasis;

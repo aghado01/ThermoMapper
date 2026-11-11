@@ -257,18 +257,19 @@ public sealed class WorkingResponse
         if (logJacobian != 0.0) Weighting = Weighting with { SumLogWeights = Weighting.SumLogWeights + logJacobian };
         if (response is MultiOutputResponse outputs)
         {
-            // Several outputs (E34) read the response itself in slice 1: an offset, weights, latents, a frozen reference and a log-Jacobian
-            // arrive with the noise and the random intercepts (slice 4).
-            if (!offset.IsEmpty || !weights.IsEmpty || latents is not null || reference is not null || logJacobian != 0.0 || priorGram != WeightedPriorGram.Unweighted)
-                throw new NotSupportedException("Several outputs read the response itself: offsets, weights, latents and a frozen reference arrive with E34's noise (slice 4).");
+            // Several outputs (E34): an offset per value (a block's whitening, case by case and output by output), one weight per case that
+            // its outputs share, and a log-Jacobian per output; each output's mean is the scalar reading's, under W. Latents and a frozen
+            // reference arrive with the noise by row (E34's slice 4, its later stages).
+            if (latents is not null || reference is not null || priorGram == WeightedPriorGram.Frozen)
+                throw new NotSupportedException("Several outputs take latents and a frozen reference with the noise by row (E34's slice 4).");
             _outputMeans = new double[outputs.Outputs];
-            ReadOnlySpan<double> values = outputs.Values;
+            ReadOnlySpan<double> values = Values;
             int k = outputs.Outputs;
             var column = new double[n];
             for (int l = 0; l < k; l++)
             {
                 for (int i = 0; i < n; i++) column[i] = values[i * k + l];
-                _outputMeans[l] = PairwiseSum.Of(column) / n;
+                _outputMeans[l] = MeanOf(_weights, column, Weighting, n);
             }
             _responseMean = double.NaN;
             return;
@@ -326,8 +327,8 @@ public sealed class WorkingResponse
     private static (double[]? Offset, double[]? Shifted) Shifted(BassResponse response, ReadOnlySpan<double> offset)
     {
         if (offset.IsEmpty) return (null, null);
-        int n = response.Observations;
-        if (offset.Length != n) throw new ArgumentException($"The offset has {offset.Length} values for {n} observations.", nameof(offset));
+        int n = response.Values.Length;   // the observations; several outputs' values, case by case and output by output (E34)
+        if (offset.Length != n) throw new ArgumentException($"The offset has {offset.Length} values for {n} values of the response.", nameof(offset));
         double[] copied = offset.ToArray();
         var shifted = new double[n];
         ReadOnlySpan<double> y = response.Values;

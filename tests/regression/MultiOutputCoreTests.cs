@@ -345,9 +345,10 @@ public sealed class MultiOutputCoreTests(ITestOutputHelper output)
         Assert.Throws<ArgumentException>(() => new MultiOutputResponse(y, ["a", "b", "a"]));
         Assert.Throws<ArgumentException>(() => new MultiOutputResponse(y, ["a", "", "c"]));
 
-        // A working response that moves, and the scalar marginal.
+        // Latents on the working response, and the scalar marginal. Weights and an offset are read since slice 4 (MultiOutputRandomEffectsTests);
+        // latents arrive with the noise by row.
         BassModel model = BassModel.Create(new BassConfig(), data);
-        Assert.Throws<NotSupportedException>(() => new WorkingResponse(data.Response, weights: Enumerable.Repeat(1.5, 40).ToArray()));
+        Assert.Throws<NotSupportedException>(() => new WorkingResponse(data.Response, latents: new ObservationLatents(Enumerable.Repeat(1.0, 40).ToArray(), 0.0, null, null)));
         Assert.Throws<InvalidOperationException>(() => model.Working.ResponseMean);
         Assert.Throws<InvalidOperationException>(() => model.Target.Marginal(BassStructureFit.Of(model.NewDesign(), 0.0), 1.0));
     }

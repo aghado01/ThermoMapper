@@ -14,6 +14,11 @@ public sealed record BassGroupDraw(string Grouping, double Scale, double[] Effec
     /// <summary>The slope's continuous input; absent for an intercept block.</summary>
     [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
     public string? Input { get; init; }
+
+    /// <summary>Several outputs' effects (E34's slice 4), one array per output over the observed levels, u_g ∈ ℝᴷ with one s for every output;
+    /// <see cref="Effects"/> is then empty. Absent for one response.</summary>
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public double[][]? OutputEffects { get; init; }
 }
 
 /// <summary>Named Gaussian intercept and slope blocks, jointly integrated through their row covariance.</summary>
@@ -139,7 +144,8 @@ public sealed class RandomEffectsBlock
         {
             string name = _specifications[k].Grouping;
             if (!named.TryGetValue((name, _layouts[k].Input), out BassGroupDraw? group)) throw new ArgumentException($"The draw has no effects for grouping '{name}' on input '{_layouts[k].Input}'.", nameof(groups));
-            if (group.Effects is null || group.Effects.Length != _layouts[k].Levels)
+            if (group.OutputEffects is { } several ? Array.Exists(several, e => e is null || e.Length != _layouts[k].Levels)
+                                                   : group.Effects is null || group.Effects.Length != _layouts[k].Levels)
                 throw new ArgumentException($"The draw's effects do not match the observed levels of '{name}'.", nameof(groups));
             if (!(group.Scale > 0) || !double.IsFinite(group.Scale)) throw new ArgumentException($"The draw's scale of '{name}' must be finite and positive.", nameof(groups));
             ordered[k] = group;
@@ -157,8 +163,8 @@ public sealed class RandomEffectsBlock
     public WorkingResponse Whitened(WorkingResponse working)
     {
         ArgumentNullException.ThrowIfNull(working);
-        if (!working.IsUnweighted || working.Latents is not null || !working.Offset.IsEmpty || working.Response is not ScalarResponse)
-            throw new ArgumentException("Random effects whiten a scalar response under unit weights, with no offset or latents.", nameof(working));
+        if (!working.IsUnweighted || working.Latents is not null || !working.Offset.IsEmpty || working.Response is not (ScalarResponse or MultiOutputResponse))
+            throw new ArgumentException("Random effects whiten a scalar response or several outputs under unit weights, with no offset or latents.", nameof(working));
         return WhitenResponse(working);
     }
 
@@ -167,7 +173,19 @@ public sealed class RandomEffectsBlock
     {
         ReadOnlySpan<double> y = working.Response.Values;
         double[] white = y.ToArray();
-        Whiten(white);
+        if (working.Response is MultiOutputResponse outputs)
+        {
+            // Several outputs (E34's slice 4): V^(−½) on each output's column, the rows' covariance V ⊗ Σ under one s for every output.
+            int k = outputs.Outputs, n = outputs.Cases;
+            var column = new double[n];
+            for (int l = 0; l < k; l++)
+            {
+                for (int i = 0; i < n; i++) column[i] = white[i * k + l];
+                Whiten(column);
+                for (int i = 0; i < n; i++) white[i * k + l] = column[i];
+            }
+        }
+        else Whiten(white);
         var offset = new double[y.Length];
         for (int i = 0; i < y.Length; i++) offset[i] = y[i] - white[i];
         return new WorkingResponse(working.Response, offset, output: working.Output, meaning: working.Meaning, priorGram: working.PriorGram,
@@ -220,6 +238,84 @@ public sealed class RandomEffectsBlock
             return new WeightedWhitening(this, reading.Weights).MeanEffects(Residual(model, terms, coefficients, values));
         }
         return MeanEffects(model, terms, coefficients);
+    }
+
+    /// <summary>
+    /// Several outputs' group effects at composition (E34's slice 4, decision 7): u (levels × K per grouping) from its conditional given the
+    /// coefficients and Σ, MN(M, K_u, Σ), with u_g ∈ ℝᴷ ~ N(0, s²Σ) a priori. M's column l is the scalar conditional mean on output l's residual
+    /// over the unwhitened columns, and the spread is the scalar block's standardized noise drawn once per output, in output order, mixed across
+    /// the outputs by Σ's factor <paramref name="sigmaRoot"/>: at K = 1, mean + √Σ₀₀·noise on the scalar draw's stream.
+    /// <paramref name="coefficients"/> is (M + 1) × K, the intercepts first and the terms in <paramref name="terms"/>' order.
+    /// </summary>
+    internal BassGroupDraw[] DrawOutputGroups(BassModel model, IReadOnlyList<BassTerm> terms, double[,] coefficients, double[,] sigmaRoot, Xoshiro256PlusPlus rng)
+    {
+        double[][] residuals = OutputResiduals(model, terms, coefficients);
+        int k = residuals.Length;
+        var means = new double[k][][];
+        var noises = new double[k][][];
+        for (int l = 0; l < k; l++)
+        {
+            means[l] = OutputMeanOf(residuals[l]);
+            noises[l] = _single is { } one ? [one.DrawEffects(new double[one.Levels], 1.0, rng)] : _general!.DrawEffects(new double[residuals[l].Length], 1.0, rng);
+        }
+        var groups = new BassGroupDraw[Count];
+        for (int g = 0; g < Count; g++)
+        {
+            int levels = means[0][g].Length;
+            var effects = new double[k][];
+            for (int l = 0; l < k; l++)
+            {
+                var u = new double[levels];
+                for (int h = 0; h < levels; h++)
+                {
+                    double mixed = 0.0;
+                    for (int q = 0; q <= l; q++) mixed += sigmaRoot[l, q] * noises[q][g][h];
+                    u[h] = means[l][g][h] + mixed;
+                }
+                effects[l] = u;
+            }
+            groups[g] = new BassGroupDraw(_specifications[g].Grouping, _scales[g], []) { Input = _layouts[g].Input, OutputEffects = effects };
+        }
+        return groups;
+    }
+
+    /// <summary>Several outputs' effects' conditional mean given <paramref name="coefficients"/> ((M + 1) × K): per output the scalar block's, on
+    /// its residual over the unwhitened columns; [output][grouping][level].</summary>
+    internal double[][][] MeanOutputEffects(BassModel model, IReadOnlyList<BassTerm> terms, double[,] coefficients)
+    {
+        double[][] residuals = OutputResiduals(model, terms, coefficients);
+        return [.. residuals.Select(OutputMeanOf)];
+    }
+
+    private double[][] OutputMeanOf(double[] residual)
+        => _single is { } one ? [one.EffectMean(one.GroupSums(residual))] : _general!.MeanEffects(residual);
+
+    // Each output's y_l − α_l − Σⱼ β_jl·Bⱼ on the unwhitened case columns.
+    private static double[][] OutputResiduals(BassModel model, IReadOnlyList<BassTerm> terms, double[,] coefficients)
+    {
+        var response = (MultiOutputResponse)model.Data.Response;
+        int k = response.Outputs, n = response.Cases;
+        if (coefficients.GetLength(0) != terms.Count + 1 || coefficients.GetLength(1) != k)
+            throw new ArgumentException("Give the intercepts and one row per term, one column per output.", nameof(coefficients));
+        ReadOnlySpan<double> values = response.Values;
+        var residuals = new double[k][];
+        for (int l = 0; l < k; l++)
+        {
+            var r = new double[n];
+            for (int i = 0; i < n; i++) r[i] = values[i * k + l] - coefficients[0, l];
+            residuals[l] = r;
+        }
+        var column = new double[n];
+        for (int j = 0; j < terms.Count; j++)
+        {
+            model.Basis.CaseColumn(terms[j], model.Inputs.Cases, column);
+            for (int l = 0; l < k; l++)
+            {
+                double beta = coefficients[j + 1, l];
+                for (int i = 0; i < n; i++) residuals[l][i] -= beta * column[i];
+            }
+        }
+        return residuals;
     }
 
     // The effects as named retained records, at this block's scales.

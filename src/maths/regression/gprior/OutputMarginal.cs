@@ -22,15 +22,17 @@ public sealed class OutputMarginal
     private readonly double[,] _slope;
     private readonly double _determinantSlope;
     private readonly int _spent;   // observations a flat intercept's integral spends: 0 or 1
+    private readonly double _count;   // the observations ν counts: N under precision weights, as the scalar block's
 
     private OutputMarginal(double[,] s, double[,] slope, double logDeterminantTerm, double determinantSlope,
-                           int rows, double tau, double inverseTemperature, int spent)
+                           int rows, double tau, double inverseTemperature, int spent, double? count = null)
     {
         _s = s;
         _slope = slope;
         _determinantSlope = determinantSlope;
         LogDeterminantTerm = logDeterminantTerm;
         Rows = rows;
+        _count = count ?? rows;
         Tau = tau;
         InverseTemperature = inverseTemperature;
         _spent = spent;
@@ -42,10 +44,13 @@ public sealed class OutputMarginal
     /// <paramref name="rows"/> observations, with the intercept placed by <paramref name="intercept"/>: level centring, inside the g-prior
     /// and centred on ȳ (or on <paramref name="levels"/>, frozen apart from the response, whose gap's energy then joins F); the zero
     /// centre, inside and centred at 0; or Liang's flat intercept, apart and integrated. The median centre is the robust path's and is
-    /// refused, as the scalar block refuses it. Unweighted.
+    /// refused, as the scalar block refuses it. <paramref name="weights"/> carries the reading's row weights as the scalar block takes them
+    /// (<see cref="GPriorWeights"/>; E34's slice 4): their mass in the intercept's direction, their Σ ln wᵢ (a random-effect block's −ln|V|
+    /// among them) once per output, and the count ν reads; the forms and means are then the weighted reading's. Null is unit weights.
     /// </summary>
     public static OutputMarginal CentredAt(int centredColumns, double[,] residualForm, double[,] centredFittedForm, int rows, double[] responseMeans,
-                                           GPriorCentre intercept, double tau, double inverseTemperature = 1.0, double[]? levels = null)
+                                           GPriorCentre intercept, double tau, double inverseTemperature = 1.0, double[]? levels = null,
+                                           GPriorWeights? weights = null)
     {
         ArgumentNullException.ThrowIfNull(residualForm);
         ArgumentNullException.ThrowIfNull(centredFittedForm);
@@ -81,6 +86,8 @@ public sealed class OutputMarginal
                 _ => throw new ArgumentOutOfRangeException(nameof(intercept)),
             };
         }
+        GPriorWeights w = weights ?? GPriorWeights.Unit(rows);
+        double mass = w.Mass, logWeights = k * 0.5 * w.SumLogWeights;   // each output's likelihood carries ½Σ ln wᵢ
         double shrink = tau / (tau + b);
         var s = new double[k, k];
         var slope = new double[k, k];
@@ -89,21 +96,21 @@ public sealed class OutputMarginal
             {
                 double r = residualForm[a, d], f = centredFittedForm[a, d];
                 if (r != residualForm[d, a] || f != centredFittedForm[d, a]) throw new ArgumentException("The forms are symmetric.", nameof(residualForm));
-                s[a, d] = s[d, a] = b * (r + shrink * (f + rows * gap[a] * gap[d]));
-                slope[a, d] = slope[d, a] = r + shrink * shrink * (f + rows * gap[a] * gap[d]);
+                s[a, d] = s[d, a] = b * (r + shrink * (f + mass * gap[a] * gap[d]));
+                slope[a, d] = slope[d, a] = r + shrink * shrink * (f + mass * gap[a] * gap[d]);
             }
         for (int a = 0; a < k; a++)
             if (!(residualForm[a, a] >= 0.0) || !(centredFittedForm[a, a] >= 0.0)) throw new ArgumentOutOfRangeException(nameof(residualForm), "A form's diagonal is not negative.");
 
         if (intercept != GPriorCentre.Flat)
-            return new OutputMarginal(s, slope, k * (0.5 * (centredColumns + 1) * Math.Log(shrink)),
-                                      -0.5 * k * (centredColumns + 1) / (tau + b), rows, tau, b, 0);
+            return new OutputMarginal(s, slope, k * (0.5 * (centredColumns + 1) * Math.Log(shrink)) + b * logWeights,
+                                      -0.5 * k * (centredColumns + 1) / (tau + b) + logWeights, rows, tau, b, 0, w.Count);
         // The flat intercept's integral (2π)^(K/2)|Σ|^(½)(Nb)^(−K/2): ½ln 2π moves into the count's 2π term, −½ln(Nb) stays here.
         if (!(b > 0.0))
             throw new ArgumentOutOfRangeException(nameof(inverseTemperature),
                 "b = 0 is out of reach on the flat intercept's integrated form, whose (2π|Σ|/(Nb))^(K/2) diverges there.");
-        return new OutputMarginal(s, slope, k * (0.5 * centredColumns * Math.Log(shrink) - 0.5 * Math.Log(rows * b)),
-                                  -0.5 * k * (centredColumns / (tau + b) + 1.0 / b), rows, tau, b, 1);
+        return new OutputMarginal(s, slope, k * (0.5 * centredColumns * Math.Log(shrink) - 0.5 * Math.Log(mass * b)) + b * logWeights,
+                                  -0.5 * k * (centredColumns / (tau + b) + 1.0 / b) + logWeights, rows, tau, b, 1, w.Count);
     }
 
     /// <summary>K, the outputs.</summary>
@@ -119,7 +126,7 @@ public sealed class OutputMarginal
     public double InverseTemperature { get; }
 
     /// <summary>ν, the count Σ's posterior adds: Nb, or Nb − 1 under the flat intercept.</summary>
-    public double DegreesOfFreedom => Rows * InverseTemperature - _spent;
+    public double DegreesOfFreedom => _count * InverseTemperature - _spent;
 
     /// <summary>The K × K scale S = b(R + τ/(τ + b)·(F + E)), copied.</summary>
     public double[,] S => (double[,])_s.Clone();
@@ -236,7 +243,7 @@ public sealed class OutputMarginal
             factor.SolveInPlace(column);
             trace += column[a];
         }
-        return _determinantSlope + 0.5 * Rows * (digamma - k * LogPi - factor.LogDet) - 0.5 * posterior * trace;
+        return _determinantSlope + 0.5 * _count * (digamma - k * LogPi - factor.LogDet) - 0.5 * posterior * trace;
     }
 
     // ln|A| by Cholesky, its lower triangle read; NaN when A is not positive definite.

@@ -364,7 +364,12 @@ public sealed class BassStructureMoves
             coefficients[0, l] = intercept;
         }
         double[]? rates = state.OutputRateArray is null ? null : [.. state.OutputRateArray.Select(Math.Exp)];
-        return new BassDraw(new BassStructure(sorted), tau, double.NaN, [], lambda, Sigma: sigma, OutputCoefficients: coefficients, OutputRates: rates);
+        // Random intercepts (E34's slice 4, decision 7): u_g ∈ ℝᴷ at the reading's block from its conditional given the coefficients and Σ,
+        // drawn last, as the scalar draw draws its group effects.
+        BassGroupDraw[]? groups = _design.Working.Whitening is { } block
+            ? block.DrawOutputGroups(_model, [.. order.Select(r => state.Terms[r])], coefficients, MatrixTPredictive.Root(sigma), rng)
+            : null;
+        return new BassDraw(new BassStructure(sorted), tau, double.NaN, [], lambda, Groups: groups, Sigma: sigma, OutputCoefficients: coefficients, OutputRates: rates);
     }
 
     /// <summary>The coefficients' block's draw in this sweep (<see cref="BassCoefficientsBlock"/>), which the blocks after it read; null

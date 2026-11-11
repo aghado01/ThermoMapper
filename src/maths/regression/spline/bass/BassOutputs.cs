@@ -34,7 +34,8 @@ public sealed record OutputForms(double[,] Residual, double[,] Fitted, OutputPen
 internal sealed record DesignOutputsSnapshot(double[][] Cross, double[][] Coefficients, double[][] Residuals, double[,] Residual, double[,] Fitted);
 
 /// <summary>
-/// The K-output side of a design (E34): the outputs centred on their means, ỹ_k = y_k − ȳ_k, each term's cross products z_jᵀỹ_k, the
+/// The K-output side of a design (E34): the outputs centred on their means, ỹ_k = y_k − ȳ_k (read under the reading's weights and a
+/// random-effect block's whitening, E34's slice 4), each term's cross products z_jᵀỹ_k, the
 /// least-squares coefficients β̂ (one row per term, one column per output), the explicit residuals and the K × K forms. The design's
 /// structure, factor and admission are the scalar design's; this holds what the response adds, in place of its scalar statistics.
 /// Not thread-safe: one per design.
@@ -47,17 +48,12 @@ internal sealed class DesignOutputs
     private double[][] _residuals;           // r_k, one per output
     private double[,] _residual, _fitted;    // R and F
 
-    internal DesignOutputs(MultiOutputResponse response, ReadOnlySpan<double> means)
+    /// <summary>The K-output side on <paramref name="reads"/>, each output as the design reads it (W^½(y_k − ȳ_k) on the reading's values),
+    /// which it takes over.</summary>
+    internal DesignOutputs(double[][] reads)
     {
-        int k = response.Outputs, n = response.Cases;
-        ReadOnlySpan<double> values = response.Values;
-        _y = new double[k][];
-        for (int l = 0; l < k; l++)
-        {
-            var y = new double[n];
-            for (int i = 0; i < n; i++) y[i] = values[i * k + l] - means[l];
-            _y[l] = y;
-        }
+        int k = reads.Length;
+        _y = reads;
         _residuals = new double[k][];
         for (int l = 0; l < k; l++) _residuals[l] = (double[])_y[l].Clone();
         _residual = Gram(_residuals);

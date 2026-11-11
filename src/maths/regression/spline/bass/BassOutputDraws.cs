@@ -57,12 +57,17 @@ internal static class BassOutputDraws
             }
 
         bool flat = target.Intercept == GPriorCentre.Flat;
-        double interceptScale = Math.Sqrt((flat ? 1.0 : shrink) / n);
+        // On a moved reading (E34's slice 4: weights, a random-effect block's whitening) the intercept reads its mass and means, and level
+        // centring its own mean; at the response itself, the resolution's.
+        WorkingResponse? reading = fit.Working;
+        bool moved = reading is not null && !reading.IsResponseItself;
+        double interceptScale = Math.Sqrt((flat ? 1.0 : shrink) / (moved ? reading!.Weighting.Mass : n));
+        ReadOnlySpan<double> means = moved ? reading!.OutputMeans : outputs.Means;
         var u = new double[k];
         for (int l = 0; l < k; l++) u[l] = Normal.SampleStandard(rng);
         for (int a = 0; a < k; a++)
         {
-            double mean = outputs.Means[a], level = outputs.Levels[a];
+            double mean = means[a], level = moved ? (target.Intercept == GPriorCentre.Zero ? 0.0 : mean) : outputs.Levels[a];
             double centre = flat ? mean : level + shrink * (mean - level);
             double mixed = 0.0;
             for (int l = 0; l <= a; l++) mixed += root[a, l] * u[l];
