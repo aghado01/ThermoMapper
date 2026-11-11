@@ -4,6 +4,8 @@ Written by the coordinating session (`local_b6732445`) at the user's quota pause
 
 ## November 11 review and finish order
 
+The active Sol worker chats are [E21 grouped candidate densities](codex://threads/01a1cc3f-c2ad-7b82-a47a-177f777f4518) and [Conformal slice 10](codex://threads/01a1cc40-0194-7411-bf64-b2150765c9eb). Both run in the shared `main` checkout. Each maintains its brief's **In progress** entry and sends verification events to the [coordinating chat](codex://threads/01a1cc28-f4d3-7951-882a-65aeb6945f8c).
+
 The reviewed code is `4254f5d` on `main`. Its eight changed files cover both E21 slice 5 and conformal slice 10a. The E21 collapse opt-in had already landed in `aa0d0ee`. Form B is the default on every rung. The saved Commit selection at `7b0a85d` passed **2,280/2,280**. [Opt-in receipt](../../artifacts/verify-e21-optin-7b0a85d/commit.trx)
 
 The regression test assembly built in Release from archived sources at `4254f5d`. Of 11 selected existing cases, 10 passed. The failing test still expects a blanket refusal of grouped candidates. Six additional checks exercised the unfinished public paths against the same product code. The box-vertex check passed and five checks failed. These were focused runs. To repeat the six checks, copy the probe source into an archive's `tests/regression/` and filter the regression test project on `WipReadinessChecks`. [Existing tests](../../artifacts/verify-wip-4254f5d/baseline.trx) · [Probe source](../../artifacts/verify-wip-4254f5d/WipReadinessChecks.cs) · [Probe results](../../artifacts/verify-wip-4254f5d/probes.trx)
