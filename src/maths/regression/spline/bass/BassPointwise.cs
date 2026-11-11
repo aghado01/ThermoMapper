@@ -119,7 +119,7 @@ public static class BassPointwise
             latents.Add(new LatentReport("the group effects u_g", LatentScope.Group, LatentTreatment.Conditioned));
         else if (model.Observation.Law is not null)
             latents.Add(new LatentReport("the noise's latent per observation", LatentScope.Observation, LatentTreatment.Integrated));
-        else if (pooled.Exists(d => !ReferenceEquals(d.WorkingOn(model), model.Working)))
+        else if (Moved(model, pooled))
             latents.Add(new LatentReport("the working response's offset and weights", LatentScope.Observation, LatentTreatment.Conditioned));
         latents.Add(new LatentReport("coefficients a", LatentScope.Global, treatment));
         latents.Add(new LatentReport("noise variance σ²", LatentScope.Global, treatment));
@@ -158,14 +158,47 @@ public static class BassPointwise
             for (int i = 0; i < n; i++)
             {
                 double e = y[i] - f[i];
-                if (weights is null) log[i] = normalizer - 0.5 * e * e / sigma2;
-                else if (counts) log[i] = weights[i] * (normalizer - 0.5 * e * e / sigma2);
-                else log[i] = normalizer + 0.5 * Math.Log(weights[i]) - 0.5 * weights[i] * e * e / sigma2;
+                log[i] = weights is null ? NormalTerm(e, sigma2, normalizer) : WeightedNormalTerm(e, sigma2, normalizer, weights[i], counts);
             }
             Sum(log, partition, values, s);
         }
         return values;
     }
+
+    /// <summary>
+    /// Whether any of <paramref name="pooled"/>'s draws reads another working response than <paramref name="model"/>'s own: another
+    /// offset, other weights or meaning, latents or a whitening. A reading equal to the model's in each is the model's, as a fixed weighting's
+    /// draws are when a fit's views build its model again from the same data (<see cref="BassFit"/>), so only readings that differ by draw
+    /// are conditioned on. Each distinct reading is compared once.
+    /// </summary>
+    internal static bool Moved(BassModel model, List<BassDraw> pooled)
+    {
+        WorkingResponse own = model.Working;
+        var seen = new HashSet<WorkingResponse>(ReferenceEqualityComparer.Instance) { own };
+        foreach (BassDraw draw in pooled)
+        {
+            WorkingResponse reading = draw.WorkingOn(model);
+            if (!seen.Add(reading)) continue;
+            if (reading.Latents is not null || own.Latents is not null || reading.Whitening is not null || own.Whitening is not null
+                || reading.Meaning != own.Meaning || reading.PriorGram != own.PriorGram
+                || !reading.Offset.SequenceEqual(own.Offset) || !reading.Weights.SequenceEqual(own.Weights))
+                return true;
+        }
+        return false;
+    }
+
+    // One observation's Normal log term at residual e under σ², normalizer −½ln 2πσ²: N(y | f, σ²) at unit weight. The training and
+    // candidate densities (BassCandidates) both read these, so a training case's term is the same bits through either.
+    internal static double NormalTerm(double e, double sigma2, double normalizer) => normalizer - 0.5 * e * e / sigma2;
+
+    // The term under weight w at its meaning: w copies of N(y | f, σ²) when the weights count rows, N(y | f, σ²/w) at a precision.
+    internal static double WeightedNormalTerm(double e, double sigma2, double normalizer, double w, bool counts)
+        => counts ? w * (normalizer - 0.5 * e * e / sigma2) : normalizer + 0.5 * Math.Log(w) - 0.5 * w * e * e / sigma2;
+
+    // ln F at residual e under the Normal with sd σ and weight w at its meaning: N(f, σ²/w) at a precision, and N(f, σ²) when the weights
+    // count rows, since each copy is one observation of that law. The training units' CDF and the candidates' both read it.
+    internal static double WeightedNormalLogCdf(double e, double sigma, double w, bool counts)
+        => Normal.StandardLogCdf(counts ? e / sigma : Math.Sqrt(w) * e / sigma);
 
     // Draw s's log terms summed over each unit's observations.
     private static void Sum(double[] log, UnitPartition partition, double[,] values, int s)

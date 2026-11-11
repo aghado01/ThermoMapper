@@ -83,13 +83,16 @@ public sealed record BassFit(
     /// refused without it, as <see cref="PointwiseLogDensity"/> refuses it.</param>
     /// <param name="cdf">Adds each draw's log CDF at each candidate (<see cref="Maths.Regression.CandidateLogDensity.LogCdf"/>), for the
     /// conformal predictive distribution. A noise without a closed-form CDF builds one table of its tails per draw.</param>
+    /// <param name="caseWeights">Each case's weight, for a fit on data with case weights (<see cref="BassData.Weights"/>), read at their
+    /// meaning as the training rows' are; required by such a fit and refused by any other.</param>
     public CandidateLogDensity CandidateLogDensity(BassData data, PredictionCases cases, IReadOnlyList<double[]> grids, int[]? strata = null,
-                                                   UnseenLevel unseenLevels = UnseenLevel.Refuse, bool quadrature = false, bool cdf = false)
+                                                   UnseenLevel unseenLevels = UnseenLevel.Refuse, bool quadrature = false, bool cdf = false,
+                                                   IReadOnlyList<double>? caseWeights = null)
     {
         BassModel model = ModelOn(data);
         if (model.RandomEffects is not null)
             throw new NotSupportedException("A random-intercept fit's candidate density is not built: a new case's group effect, and the exchangeability across groups the conformal layer reads, need a reading of their own (E21).");
-        return BassCandidates.LogDensity(model, Terms, Draws, DrawWeights, cases, grids, strata, unseenLevels, quadrature, cdf);
+        return BassCandidates.LogDensity(model, Terms, Draws, DrawWeights, cases, grids, strata, unseenLevels, quadrature, cdf, caseWeights);
     }
 
     /// <summary>

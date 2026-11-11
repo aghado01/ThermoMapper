@@ -123,11 +123,7 @@ public sealed class BassConformalDistributionTests(ITestOutputHelper output)
         lowest[0, 0] = double.NegativeInfinity;
         Assert.NotNull((training with { LogCdf = lowest }).LogCdf);
         Assert.Throws<ArgumentException>(() => new CandidateLogDensity(new double[2, 1], [[0.0]], []) { LogCdf = new double[2, 1] { { 0.5 }, { -1.0 } } });
-        // A weighted fit's units read their weights, which a candidate does not carry.
-        BassConfig config = BassStudentTTests.Config(null);
-        double[] y = data.Response.Values.ToArray();
-        BassModel weighted = BassModel.Create(config, data, new BassPriorReferenceTests.Snapshot(r => new WorkingResponse(r, weights: Enumerable.Repeat(2.0, y.Length).ToArray())));
-        Assert.Throws<NotSupportedException>(() => BassCandidates.UnitLogCdf(weighted, null!, null!, UnitPartition.EachObservation(y.Length)));
+        // A weighted fit's units order their values under their weights, as its candidates under theirs (BassWeightedCandidateTests).
     }
 
     [Fact]

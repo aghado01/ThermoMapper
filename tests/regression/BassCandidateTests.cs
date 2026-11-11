@@ -88,9 +88,9 @@ public sealed class BassCandidateTests(ITestOutputHelper output)
         BassData data = BassStudentTTests.Data();
         double[] y = data.Response.Values.ToArray();
         double[][] grids = [.. y.Select(v => new[] { v })];
-        // Weights the terms read, which a new case does not carry.
+        // Weights the terms read, with none given for the new cases (BassCaseWeightsTests reads them given).
         BassModel weighted = BassModel.Create(config, data, new BassPriorReferenceTests.Snapshot(r => new WorkingResponse(r, weights: Enumerable.Repeat(2.0, y.Length).ToArray())));
-        Assert.Throws<NotSupportedException>(() => BassCandidates.LogDensity(weighted, null!, null!, null, PredictionCases.Of(data), grids, null, UnseenLevel.Refuse));
+        Assert.Throws<ArgumentException>(() => BassCandidates.LogDensity(weighted, null!, null!, null, PredictionCases.Of(data), grids, null, UnseenLevel.Refuse));
         // A curve as the unit.
         var t = new double[] { 0.0, 0.5, 1.0 };
         var x = new double[12];

@@ -11,7 +11,10 @@ namespace Maths.Regression.Spline.Bass;
 /// conformal layer (<see cref="ConformalBayes"/>) reads both. The draws are pooled in chain order with the training density's
 /// chain lengths, draw weights and latent report. The surface f at the cases is prediction's (<see cref="BassSurface"/>, the
 /// training basis at new inputs). The density is the training terms' own: N(y | f, σ²), or under a noise law the law's with each
-/// observation's latent integrated out (OQ17's scope rule, CB-4's default), at the draw's σ² and its latents' globals. A
+/// observation's latent integrated out (OQ17's scope rule, CB-4's default), at the draw's σ² and its latents' globals. A fit with
+/// case weights (<see cref="CaseWeights"/>) reads each new case's weight as its training rows read theirs, N(y | f, σ²/w) at a
+/// precision and w copies of N(y | f, σ²) when the weights count rows, in the pointwise terms' arithmetic, so a training case's
+/// candidate is its column bit for bit; a working response that moves per draw stays refused. A
 /// candidate is one observation of a scalar response, so it pairs with the default units. A law whose density is an integral over
 /// the latent (<see cref="IBassNoiseLaw.DensityByQuadrature"/>) costs draws × candidates integrals, so it is taken on
 /// <c>quadrature</c> alone, as the pointwise path takes it. On <c>cdf</c> each draw's log CDF rides beside the density, from the same law
@@ -22,7 +25,8 @@ internal static class BassCandidates
 {
     public static CandidateLogDensity LogDensity(BassModel model, BassTermTable terms, IReadOnlyList<IReadOnlyList<BassDraw>> draws,
                                                  IReadOnlyList<double>? weights, PredictionCases cases, IReadOnlyList<double[]> grids,
-                                                 int[]? strata, UnseenLevel unseenLevels, bool quadrature = false, bool cdf = false)
+                                                 int[]? strata, UnseenLevel unseenLevels, bool quadrature = false, bool cdf = false,
+                                                 IReadOnlyList<double>? caseWeights = null)
     {
         ArgumentNullException.ThrowIfNull(cases);
         ArgumentNullException.ThrowIfNull(grids);
@@ -32,16 +36,20 @@ internal static class BassCandidates
         if (law is { DensityByQuadrature: true } && !quadrature)
             throw new NotSupportedException("This noise's density is an integral over each observation's latent, draws × candidates integrals of hundreds "
                                             + "of nodes each; pass quadrature: true to take it.");
-        if (law is null && !model.Working.IsUnweighted)
-            throw new NotSupportedException("A weighted fit's terms read each observation's weight, and a new case carries none, so its candidates are not read as its units are.");
+        bool weighted = law is null && !model.Working.IsUnweighted, counts = model.Working.Meaning == WeightMeaning.Replication;
+        if (weighted && caseWeights is null)
+            throw new ArgumentException($"A weighted fit's terms read each observation's weight ({model.Working.Meaning}), so each new case needs its own.", nameof(caseWeights));
+        if (!weighted && caseWeights is not null)
+            throw new ArgumentException("This fit's terms read no weight, so a new case's would state nothing: give none.", nameof(caseWeights));
         (List<BassDraw> pooled, int[] chains) = BassDrawFit.Pool(draws, terms, false, nameof(draws));
-        if (law is null && pooled.Exists(d => !ReferenceEquals(d.WorkingOn(model), model.Working)))
+        if (law is null && BassPointwise.Moved(model, pooled))
             throw new NotSupportedException("The draws' working responses moved, so the training terms condition on each observation's offset and weights; "
                                             + "a candidate has neither, and the conformal layer reads every unit by one density (CB-4).");
         (CaseInputs inputs, _) = cases.Prepare(model.Transform, model.Inputs, unseenLevels);
         var surface = new BassSurface(model.Basis, terms, inputs, null);
         int n = surface.Cases;
         if (grids.Count != n) throw new ArgumentException($"One grid per case is required: {grids.Count} grids for {n} cases.", nameof(grids));
+        double[]? w = caseWeights is null ? null : Checked(caseWeights, n);
         var offsets = new int[n + 1];
         for (int t = 0; t < n; t++)
             offsets[t + 1] = checked(offsets[t] + (grids[t] ?? throw new ArgumentException($"Case {t}'s grid is null.", nameof(grids))).Length);
@@ -64,8 +72,11 @@ internal static class BassCandidates
                 for (int g = 0; g < grid.Length; g++)
                 {
                     double e = grid[g] - f[t];
-                    values[s, at + g] = law is null ? normalizer - 0.5 * e * e / sigma2 : law.LogDensity(e, sigma2, globals);
-                    if (logCdfs is not null) logCdfs[s, at + g] = noise is null ? Normal.StandardLogCdf(e / sigma) : LogCdf(noise, e);
+                    values[s, at + g] = law is not null ? law.LogDensity(e, sigma2, globals)
+                        : w is null ? BassPointwise.NormalTerm(e, sigma2, normalizer) : BassPointwise.WeightedNormalTerm(e, sigma2, normalizer, w[t], counts);
+                    if (logCdfs is not null)
+                        logCdfs[s, at + g] = noise is not null ? LogCdf(noise, e)
+                            : w is null ? Normal.StandardLogCdf(e / sigma) : BassPointwise.WeightedNormalLogCdf(e, sigma, w[t], counts);
                 }
             }
         }
@@ -78,8 +89,9 @@ internal static class BassCandidates
     /// <summary>
     /// Each draw's log CDF at each training unit's response, ln F(y_u | x_u, θ_s), draws × units in the pooled draws' rows, for the
     /// training density's <see cref="PointwiseLogDensity.LogCdf"/>: the surface at the training cases (<see cref="BassDrawFit"/>), under
-    /// the noise's law at the draw (<see cref="IBassNoiseLaw.At"/>) or N(f, σ²), each unit one observation. The candidates' log CDF reads
-    /// the same law, so every unit is read by one distribution (CB-4). The fits the candidate density refuses are refused here too.
+    /// the noise's law at the draw (<see cref="IBassNoiseLaw.At"/>) or N(f, σ²), each unit one observation. Under case weights it is
+    /// N(f, σ²/w) at a precision and N(f, σ²) when the weights count rows, each copy one observation of that law. The candidates' log CDF
+    /// reads the same law, so every unit is read by one distribution (CB-4). The fits the candidate density refuses are refused here too.
     /// </summary>
     public static double[,] UnitLogCdf(BassModel model, BassTermTable terms, IReadOnlyList<IReadOnlyList<BassDraw>> draws, UnitPartition units)
     {
@@ -91,14 +103,14 @@ internal static class BassCandidates
         for (int u = 0; u < units.Units; u++)
             if (units.Members[u].Length != 1) throw new ArgumentException($"Unit {u} holds {units.Members[u].Length} observations; a CDF orders one value.", nameof(units));
         IBassNoiseLaw? law = model.Observation.Law;
-        if (law is null && !model.Working.IsUnweighted)
-            throw new NotSupportedException("A weighted fit's terms read each observation's weight, and a new case carries none, so its candidates are not read as its units are.");
         (List<BassDraw> pooled, _) = BassDrawFit.Pool(draws, terms, false, nameof(draws));
-        if (law is null && pooled.Exists(d => !ReferenceEquals(d.WorkingOn(model), model.Working)))
+        if (law is null && BassPointwise.Moved(model, pooled))
             throw new NotSupportedException("The draws' working responses moved, so the training terms condition on each observation's offset and weights; "
                                             + "a candidate has neither, and the conformal layer reads every unit by one distribution (CB-4).");
         var fit = new BassDrawFit(model, terms);
         ReadOnlySpan<double> y = law is null ? model.Working.Values : model.Data.Response.Values;
+        double[]? weights = law is null ? model.Working.WeightArray : null;
+        bool counts = model.Working.Meaning == WeightMeaning.Replication;
         var logCdfs = new double[pooled.Count, units.Units];
         var f = new double[n];
         for (int s = 0; s < pooled.Count; s++)
@@ -111,10 +123,25 @@ internal static class BassCandidates
             {
                 int i = units.Members[u][0];
                 double e = y[i] - f[i];
-                logCdfs[s, u] = noise is null ? Normal.StandardLogCdf(e / sigma) : LogCdf(noise, e);
+                logCdfs[s, u] = noise is not null ? LogCdf(noise, e)
+                    : weights is null ? Normal.StandardLogCdf(e / sigma) : BassPointwise.WeightedNormalLogCdf(e, sigma, weights[i], counts);
             }
         }
         return logCdfs;
+    }
+
+    // The new cases' weights, one positive and finite value per case, copied.
+    private static double[] Checked(IReadOnlyList<double> caseWeights, int cases)
+    {
+        if (caseWeights.Count != cases)
+            throw new ArgumentException($"One weight per case is required: {caseWeights.Count} weights for {cases} cases.", nameof(caseWeights));
+        var w = new double[cases];
+        for (int t = 0; t < cases; t++)
+        {
+            w[t] = caseWeights[t];
+            if (!(w[t] > 0.0 && double.IsFinite(w[t]))) throw new ArgumentException($"Case {t}'s weight is {w[t]:R}; a weight is positive and finite.", nameof(caseWeights));
+        }
+        return w;
     }
 
     /// <summary>ln F(e) under a noise at a draw, each half on its own tail (<see cref="NoiseLogCdf"/>, which every engine's seam shares).</summary>
