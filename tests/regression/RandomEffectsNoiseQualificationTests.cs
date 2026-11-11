@@ -37,7 +37,7 @@ public sealed class RandomEffectsNoiseQualificationTests(ITestOutputHelper outpu
     private static readonly CategoricalPredictor GewekeGrouping =
         new("g", [.. Enumerable.Range(0, GewekeN).Select(i => i % 3)], ["a", "b", "c"]);
     private static readonly string[] GewekeNames =
-        ["M", "ln tau", "ln sigma2", "mean ln v", "beta", "ln s", "u0", "sum u^2", "atan f0", "atan f6", "z0^2"];
+        ["M", "ln tau", "ln sigma2", "mean ln v", "beta", "ln s", "atan u0", "ln sum u^2", "u energy", "atan f0", "atan f6", "z0^2"];
 
     private static BassData GewekeData(double[] y) => new([new ContinuousPredictor("x", GewekeX)], new ScalarResponse(y), [GewekeGrouping]);
 
@@ -99,7 +99,7 @@ public sealed class RandomEffectsNoiseQualificationTests(ITestOutputHelper outpu
     public void Geweke_TheSweepLeavesItsJointInvariant(string form, double b, string sweep, int seed)
     {
         if (!BassQualification.Enabled) return;   // heavy
-        const int draws = 300_000, steps = 450_000, batches = 50;
+        const int starts = 40_000, sweeps = 10;
         BassConfig config = GewekeConfig(form, Alpha0), tilted = GewekeConfig(form, Alpha0 - 0.5 * GewekeN * (1.0 - b));
         BassNoise noise = config.Noise!;
         double c = noise.VarianceScale;
@@ -112,7 +112,8 @@ public sealed class RandomEffectsNoiseQualificationTests(ITestOutputHelper outpu
 
         double[] Functions(Theta t, double[] y) =>
         [
-            t.State.Count, t.State.LogTau, Math.Log(t.Sigma2), t.V.Average(Math.Log), t.Beta, Math.Log(t.Scale), t.Effects[0], t.Effects.Sum(u => u * u),
+            t.State.Count, t.State.LogTau, Math.Log(t.Sigma2), t.V.Average(Math.Log), t.Beta, Math.Log(t.Scale), Math.Atan(t.Effects[0]),
+            Math.Log(t.Effects.Sum(u => u * u)), t.Effects.Sum(u => u * u) / (t.Sigma2 * t.Scale * t.Scale),
             Math.Atan(t.Fitted[0]), Math.Atan(t.Fitted[GewekeN / 2]),
             b * Math.Pow(y[0] - t.Fitted[0] - Math.Sqrt(t.Sigma2) * t.Beta * t.V[0], 2) / (t.Sigma2 * c * t.V[0]),
         ];
@@ -135,55 +136,48 @@ public sealed class RandomEffectsNoiseQualificationTests(ITestOutputHelper outpu
                 return new Theta(chain.Current, sigma2, v, beta, scale, effects, fit.Fitted);
             }
         }
-        var marginal = new double[draws][];
-        for (int k = 0; k < draws; k++)
+        // Exact starts (Geweke 2004's test with independent restarts): (θ, y) from the tilted joint, then `sweeps` sweeps at b on that y.
+        // θ after them is again a draw of θ given y, so each statistic's change has mean 0, and independent starts make its z exact whatever
+        // the chain's mixing. A successive-conditional chain read the half-Cauchy s's funnel as bias: with u a latent, s's excursions to
+        // large s, where the data pin u, outlast any batch. u0 and Σu² have no variance under that s, so they are read bounded or in logs.
+        var before = new double[starts][];
+        var change = new double[starts][];
+        for (int r = 0; r < starts; r++)
         {
-            Theta d = Draw();
-            marginal[k] = Functions(d, Respond(d));
-        }
-
-        // The successive-conditional simulator: y given θ under the tilted model, then one sweep at b on that y.
-        Theta theta = Draw();
-        var successive = new double[steps][];
-        long refused = 0;
-        for (int t = 0; t < steps; t++)
-        {
+            Theta theta = Draw();
             double[] y = Respond(theta);
+            before[r] = Functions(theta, y);
             BassModel model = BassModel.Create(config, GewekeData(y));
             var moves = new BassStructureMoves(model, theta.State.Terms, theta.State.LogTau);
             var blockRng = new Xoshiro256PlusPlus(rng.NextInt(int.MaxValue));
             var chain = new ReversibleJumpChain<BassState>(moves.Moves, model.Target, moves.Start, new Xoshiro256PlusPlus(rng.NextInt(int.MaxValue)),
                                                            new Temperature(b, TemperingPath.Likelihood));
-            if (BassStructureMoves.Follow(chain, At(model, theta.V, theta.Beta, theta.Sigma2, theta.Scale, theta.Effects)) is not null) { refused++; continue; }
-            List<IBlock<ReversibleJumpChain<BassState>>> blocks;
-            if (sweep == "replica")
+            Assert.Null(BassStructureMoves.Follow(chain, At(model, theta.V, theta.Beta, theta.Sigma2, theta.Scale, theta.Effects)));
+            List<IBlock<ReversibleJumpChain<BassState>>> blocks = sweep == "replica"
+                ? BassSweepSlots.Blocks(model, BassSweepSlot.Tau, collapse: true)
+                : BassSweepSlots.Blocks(model, BassSweepSlot.Structure, collapse: sweep == "collapse");
+            for (int k = 0; k < sweeps; k++)
             {
-                chain.Step();
-                blocks = BassSweepSlots.Blocks(model, BassSweepSlot.Tau, collapse: true);
+                if (sweep == "replica") chain.Step();
+                foreach (IBlock<ReversibleJumpChain<BassState>> block in blocks) block.Update(chain, blockRng);
             }
-            else blocks = BassSweepSlots.Blocks(model, BassSweepSlot.Structure, collapse: sweep == "collapse");
-            foreach (IBlock<ReversibleJumpChain<BassState>> block in blocks) block.Update(chain, blockRng);
             WorkingResponse reading = moves.DesignAt(chain.Current).Working;
             ObservationLatents latents = reading.Latents!;
             RandomEffectsLatent effects = reading.Effects!;
-            theta = new Theta(chain.Current, latents.Sigma2!.Value, latents.ValueArray, latents.Skew, effects.Block.Scales.Span[0],
-                              effects.Effects[0], moves.SweepFit!.Fitted);
-            successive[t] = Functions(theta, y);
+            var after = new Theta(chain.Current, latents.Sigma2!.Value, latents.ValueArray, latents.Skew, effects.Block.Scales.Span[0],
+                                  effects.Effects[0], moves.SweepFit!.Fitted);
+            double[] read = Functions(after, y);
+            change[r] = [.. read.Select((x, g) => x - before[r][g])];
         }
-        Assert.Equal(0, refused);
 
         double worst = 0;
         for (int g = 0; g < GewekeNames.Length; g++)
         {
-            double[] a = [.. marginal.Select(r => r[g])], s = [.. successive.Select(r => r[g])];
-            double meanA = a.Average(), varA = a.Sum(x => (x - meanA) * (x - meanA)) / (a.Length - 1), meanB = s.Average();
-            int size = s.Length / batches;
-            double[] means = [.. Enumerable.Range(0, batches).Select(k => s.Skip(k * size).Take(size).Average())];
-            double seB2 = means.Sum(m => (m - means.Average()) * (m - means.Average())) / (batches - 1) / batches;
-            bool constant = a.Min() == a.Max() && s.Min() == s.Max();
-            double z = constant ? (a[0] == s[0] ? 0.0 : double.PositiveInfinity) : (meanA - meanB) / Math.Sqrt(varA / a.Length + seB2);
+            double[] d = [.. change.Select(r => r[g])];
+            double mean = d.Average(), variance = d.Sum(x => (x - mean) * (x - mean)) / (d.Length - 1);
+            double z = variance == 0.0 ? (mean == 0.0 ? 0.0 : double.PositiveInfinity) : mean / Math.Sqrt(variance / d.Length);
             worst = Math.Max(worst, Math.Abs(z));
-            output.WriteLine($"{GewekeNames[g],-10} marginal-conditional {meanA,10:F5}  successive {meanB,10:F5}  z {z,6:F2}");
+            output.WriteLine($"{GewekeNames[g],-10} start {before.Average(r => r[g]),10:F5}  after {sweeps} sweeps {before.Average(r => r[g]) + mean,10:F5}  z {z,6:F2}");
         }
         output.WriteLine($"{form} at b = {b}, {sweep}, seed {seed}: worst |z| {worst:F2}");
         Assert.True(worst < 4.0, $"Geweke's worst |z| {worst:F2}");

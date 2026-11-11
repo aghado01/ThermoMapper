@@ -155,7 +155,7 @@ Newest first.
 ### In progress: slice 4, random effects under GBASS's noises (GBASS chip, updated 2026-11-10)
 
 Hand-over state, updated in place until the slice's report replaces it.
-- *Built, uncommitted:*
+- *Committed:* `4f5bf3f` (code and tests; the per-commit selection 2230 of 2230), `94133f8` (the ledger entry).
   - decision 7's form B: u a latent read as the offset Z̃u, with σ² on the record;
   - u's block after the coefficients, s's step on u's prior, the b = 1 collapsed structure step;
   - the GLS intercept direction c = L·1 under weights.
@@ -167,9 +167,9 @@ Hand-over state, updated in place until the slice's report replaces it.
   - resume bit for bit, after a stale-prior-Gram defect was found and fixed;
   - three noise pins without a block bit for bit;
   - the focused classes, 63 of 63.
-- *Running or next:*
-  - the per-commit selection, then the commit;
-  - the qualification: Geweke at b = 1 with and without the collapse and below 1, a ladder and SMC end to end, the mixing measurement, recovery;
+- *Found in the first qualification run:* the successive-conditional Geweke chain undershoots E[ln s] in every row, by 0.03 to 0.15 (|z| 0.5 to 5.1), always toward small s. Under the half-Cauchy s with u a latent, excursions to large s, where the data pin u, outlast the batches. u0 and Σu² have no variance under that s. The Geweke rows now take K = 10 sweeps from each of 40,000 independent exact draws of the joint, where mixing cannot bias the test, and they read u bounded or in logs (uncommitted test edit).
+- *Running or next:* (the fresh-eyes review of `4f5bf3f` found nothing to fix)
+  - the qualification, rerunning from the snapshot build, log `artifacts/chip-ridge-blocks/qual/s4_qual2.log`: Geweke at b = 1 with and without the collapse and below 1, a ladder and SMC end to end, the mixing measurement, recovery;
   - the slice-end run, then the report.
 
 ### Slice 2 — named crossed and nested Gaussian intercepts (2026-11-09)
