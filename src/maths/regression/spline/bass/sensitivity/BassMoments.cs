@@ -89,25 +89,29 @@ public sealed class BassMoments
     private readonly int[] _gradientVariables;
     private readonly int[] _gradientPosition;   // a variable's position among the gradient's, −1 for the others
 
-    private BassMoments(BassInputs inputs, int degree, ProductMeasure measure)
+    private BassMoments(BassInputs inputs, int degree, ProductMeasure measure, HingeNormalization normalization)
     {
         Inputs = inputs;
         Degree = degree;
         Measure = measure;
-        _kernels = new DesignKernels(inputs, degree);
+        _kernels = new DesignKernels(inputs, degree, normalization);
         _gradientVariables = [.. Enumerable.Range(0, inputs.Cases.ContinuousCount).Select(measure.OfContinuous).Order()];
         _gradientPosition = new int[measure.Count];
         Array.Fill(_gradientPosition, -1);
         for (int k = 0; k < _gradientVariables.Length; k++) _gradientPosition[_gradientVariables[k]] = k;
     }
 
-    /// <summary>The service for terms over <paramref name="inputs"/> at hinge degree <paramref name="degree"/>.</summary>
-    public static BassMoments On(BassInputs inputs, int degree, ProductMeasure measure)
+    /// <summary>
+    /// The service for terms over <paramref name="inputs"/> at hinge degree <paramref name="degree"/>, hinges normalized over
+    /// <paramref name="normalization"/>'s interval: the fit's own (<see cref="BassStructureSpec.ResolvedHingeNormalization"/>), the box
+    /// by default.
+    /// </summary>
+    public static BassMoments On(BassInputs inputs, int degree, ProductMeasure measure, HingeNormalization normalization = HingeNormalization.Box)
     {
         ArgumentNullException.ThrowIfNull(inputs);
         ArgumentNullException.ThrowIfNull(measure);
         if (degree < 1) throw new ArgumentOutOfRangeException(nameof(degree), "The degree is a positive integer.");
-        return new BassMoments(inputs, degree, measure);
+        return new BassMoments(inputs, degree, measure, normalization);
     }
 
     /// <summary>The inputs the terms' knots and levels index.</summary>
