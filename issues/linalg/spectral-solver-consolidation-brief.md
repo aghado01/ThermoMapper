@@ -370,7 +370,7 @@ The sweep recomputes both column norms for every pair ([ThinSvd.cs:110](../../sr
    - A1 and A2, with A2 adding convergence information and rewriting `EigenFastTests`;
    - C1, C2 and C3, the pure reuse;
    - D, whose expected values are settled.
-2. **After A2:** B1 and B2, which need the convergence information for qualification. C4 can land any time; C5 waits for B6.
+2. **After A2:** B1 and B2, which need the convergence information for qualification. A1, A2 and all of C and D have landed (see [Reports](#reports)).
 3. **After A1 and B2:** B3, then B5. B4 follows [Open decisions](#open-decisions) item 1.
 4. **Measurement-gated:** E, F, G1–G3. G1's EigenFast timing waits for G2.
 5. **Final cleanup commit:** delete `ScaledEigen`, PriorPencil's division, the two-matrix `Ratio` and the decided removals.
@@ -406,6 +406,46 @@ Settled in the 2026-11-12 reviews:
 ## Reports
 
 Each slice is reported here, newest first, with its commit, fixtures, commands, receipts, pins moved and doc changes owed.
+
+### C4–C5: the sampled Gram and the whitening inverse (2026-11-12)
+
+**Commit:** `72c5838`.
+
+**What changed:**
+- **C4.** `DrawSubspace.FromFactor(factor, c, dimension)` takes C as the sampled route's running sums accumulated it and keeps it as the draw's C. It no longer forms FᵀF again. The thin SVD still reads the subspace, and fewer factor rows than the dimension still fall back to `FromC`.
+- **C5.** This landed ahead of B6:
+  - `Whitening.SymmetricRoots` returns Σ^{1/2} and Σ^{-1/2} from one eigensystem. The root's bits are unchanged, and `SymmetricRoot` reads it.
+  - The readout's frame carries L⁻¹: the diagonal's reciprocals, or the inverse root.
+  - `ActiveSubspaceAnalysis.MapInverse` (internal) keeps the inverse with the map it inverts. A copy with another `Map`, or an analysis built by hand, derives it from its own map, as the projection did before.
+  - `BassProjection.InverseTranspose` is gone.
+  - B6's helper will absorb `SymmetricRoots`' loop with the other four.
+
+**Outputs:** compared against the earlier sources with the probe extended by numeric lines. Only the sampled readout moves, at rounding:
+- each draw's C, by at most 1.0·10⁻¹⁴ relative;
+- the mean C, by 5·10⁻¹⁶;
+- the eigenvalues, by 1.5·10⁻¹⁵;
+- the whitened projection, by 4.6·10⁻¹⁶.
+
+Every other probe line is the same bits: the exact, identity-metric and basis readouts, adequacy, the matrix ratios, the sampled route's Monte Carlo error and output side, and the whitening map. The probe's outputs are `artifacts/spectral-c/probe-c45-*.txt`.
+
+**Work:** two new tests in [ReadoutDecompositionTests](../../tests/regression/ReadoutDecompositionTests.cs).
+- `FromFactor_KeepsTheAccumulatedGram` checks that:
+  - the draw's C is the matrix passed in;
+  - the only decomposition is one thin SVD;
+  - the eigenvalues agree with C's own;
+  - the fallback matches `FromC`;
+  - a mis-shaped C is refused.
+- `WhitenedProjection_ReadsTheReadoutsInverseRoot` checks that:
+  - a whitened projection runs no symmetric decomposition (before: 1);
+  - L·L⁻¹ = I to 10⁻¹³;
+  - an analysis built by hand runs one, and projects alike to 10⁻¹²;
+  - a copy with a new map derives its own inverse.
+
+**Gate:** edit scope over the C4 and C5 paths, 214 classes: 2,491 passed, none failed. The one pinned test matching these names reads random effects' own `Whitening`, which this work does not touch.
+
+**Pins moved:** none.
+
+**Doc changes owed:** [ActiveSubspaces.md](../../docs/Maths/Regression/ActiveSubspaces.md), `Whitening.SymmetricRoots` and `DrawSubspace.FromFactor`'s signature.
 
 ### D: the matrix Poincaré check in term space (2026-11-12)
 
