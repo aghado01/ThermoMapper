@@ -415,6 +415,15 @@ Settled in the 2026-11-12 reviews:
 
 Each slice is reported here, newest first, with its commit, fixtures, commands, receipts, pins moved and doc changes owed.
 
+### Supervised Sol sessions
+
+| Slice | Worker chat | Report |
+|---|---|---|
+| B1 relative stopping rule and first caller migration | [B1 dense Jacobi and first caller migration](codex://threads/01a1d201-30f7-7941-aeb4-130bc14f7ae5) | [B1 stage one](spectral-b1-stage-one-report.md) |
+| F ordinary GP fit and leave-out factorization | [F GP factorization and leave-out costs](codex://threads/01a1d201-5ab1-74a2-81cd-0aa671ed7905) | [GP factorization](spectral-gp-factorization-report.md) |
+
+The [coordinating chat](codex://threads/01a1cc28-f4d3-7951-882a-65aeb6945f8c) reviews the reported commits and receipts. Each worker maintains its own report beside this brief.
+
 ### DenseEigenOptions and DenseEigenFastVariant removed (2026-11-12)
 
 **Commit:** `75f76c1`. Decided by the owner after decision 2 left the enum with one value and the record carrying nothing.
