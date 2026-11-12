@@ -24,12 +24,8 @@ namespace Maths.LinAlg
             Span<double> outEigenvalues,
             Span<double> outEigenvectors,
             int maxSweeps = 256,
-            double tol = 1e-12,
-            DenseEigenFastVariant fastVariant = DenseEigenFastVariant.Default)
+            double tol = 1e-12)
         {
-            if (!Enum.IsDefined(fastVariant))
-                throw new ArgumentOutOfRangeException(nameof(fastVariant));
-
             if (flatMatrix.Length != n * n) throw new ArgumentException("Matrix dimensions must match N x N.");
             if (outEigenvalues.Length != n) throw new ArgumentException("Eigenvalues buffer size must equal N.");
             bool vectors = outEigenvectors.Length != 0;
@@ -268,8 +264,7 @@ namespace Maths.LinAlg
             ReadOnlySpan<double> flatColumnMajorMatrix,
             int n,
             int maxSweeps = 256,
-            double tol = 1e-12,
-            DenseEigenFastVariant fastVariant = DenseEigenFastVariant.Default)
+            double tol = 1e-12)
         {
             ArrayPool<double> pool = ArrayPool<double>.Shared;
             double[] outEigVecs = pool.Rent(n * n);
@@ -283,8 +278,7 @@ namespace Maths.LinAlg
                     outEigVals,
                     outEigVecs.AsSpan(0, n * n),
                     maxSweeps,
-                    tol,
-                    fastVariant);
+                    tol);
 
                 var sortedVec = new double[n][];
                 for (int i = 0; i < n; i++)
@@ -304,8 +298,7 @@ namespace Maths.LinAlg
         public static EigenResult DecomposeSymmetric(
             double[,] matrix,
             int maxSweeps = 256,
-            double tol = 1e-12,
-            DenseEigenFastVariant fastVariant = DenseEigenFastVariant.Default)
+            double tol = 1e-12)
         {
             int n = matrix.GetLength(0);
             if (matrix.GetLength(1) != n)
@@ -322,7 +315,7 @@ namespace Maths.LinAlg
                         flatMatrix[c * n + r] = matrix[r, c];
                 }
 
-                return DecomposeSymmetric(flatMatrix.AsSpan(0, n * n), n, maxSweeps, tol, fastVariant);
+                return DecomposeSymmetric(flatMatrix.AsSpan(0, n * n), n, maxSweeps, tol);
             }
             finally
             {

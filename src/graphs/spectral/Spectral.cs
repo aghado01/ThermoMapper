@@ -38,7 +38,6 @@ public static class Spectral
         int k = 8,
         LaplacianType lapType = LaplacianType.Combinatorial,
         SolverKind solverKind = SolverKind.Dense,
-        DenseEigenOptions denseOptions = default,
         DenseLaplacianMaterialization denseMaterialization = DenseLaplacianMaterialization.Rectangular)
     {
         int n = graph.NodeCount;
@@ -61,7 +60,7 @@ public static class Spectral
             try
             {
                 GraphLaplacian.BuildDenseColumnMajor(graph, lapType, flatLaplacian.AsSpan(0, matrixSize));
-                return SpectralMath.BottomK(flatLaplacian.AsSpan(0, matrixSize), n, k, denseOptions);
+                return SpectralMath.BottomK(flatLaplacian.AsSpan(0, matrixSize), n, k);
             }
             finally
             {
@@ -70,6 +69,6 @@ public static class Spectral
         }
 
         double[,] laplacian = GraphLaplacian.BuildDense(graph, lapType);
-        return SpectralMath.BottomK(laplacian, k, denseOptions);
+        return SpectralMath.BottomK(laplacian, k);
     }
 }

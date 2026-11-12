@@ -3,16 +3,6 @@ using System.Buffers;
 
 namespace Maths.LinAlg;
 
-/// <summary>The production Jacobi's arithmetic. Its opt-in FMA variant was removed (spectral-solver brief, decision 2): fused
-/// arithmetic returns only as a kernel's own, unconditional and the same bits on every machine, if its timings favor it.</summary>
-public enum DenseEigenFastVariant
-{
-    Default = 0,
-}
-
-public readonly record struct DenseEigenOptions(
-    DenseEigenFastVariant FastVariant = DenseEigenFastVariant.Default);
-
 /// <summary>
 /// How a dense Jacobi solve ended, read from the diagonalization it returns (spectral-solver brief, A2). A solve stops after a sweep
 /// that rotates nothing. <see cref="Converged"/> holds when every off-diagonal entry passes the solver's pivot test, so it can hold
@@ -71,14 +61,12 @@ public static class DenseEigen
     public static EigenResult DecomposeSymmetric(
         double[,] matrix,
         int maxSweeps = 256,
-        double tol = 1e-12,
-        DenseEigenOptions options = default)
+        double tol = 1e-12)
     {
 #if EIGEN_REFERENCE
-        EnsureReferenceCompatible(options);
         return Eigen.DecomposeSymmetric(matrix, maxSweeps, tol);
 #else
-        return EigenFast.DecomposeSymmetric(matrix, maxSweeps, tol, options.FastVariant);
+        return EigenFast.DecomposeSymmetric(matrix, maxSweeps, tol);
 #endif
     }
 
@@ -86,14 +74,12 @@ public static class DenseEigen
         ReadOnlySpan<double> flatColumnMajorMatrix,
         int n,
         int maxSweeps = 256,
-        double tol = 1e-12,
-        DenseEigenOptions options = default)
+        double tol = 1e-12)
     {
         if (flatColumnMajorMatrix.Length != n * n)
             throw new ArgumentException("Matrix dimensions must match N x N.", nameof(flatColumnMajorMatrix));
 
 #if EIGEN_REFERENCE
-        EnsureReferenceCompatible(options);
 
         var matrix = new double[n, n];
         for (int c = 0; c < n; c++)
@@ -104,7 +90,7 @@ public static class DenseEigen
 
         return Eigen.DecomposeSymmetric(matrix, maxSweeps, tol);
 #else
-        return EigenFast.DecomposeSymmetric(flatColumnMajorMatrix, n, maxSweeps, tol, options.FastVariant);
+        return EigenFast.DecomposeSymmetric(flatColumnMajorMatrix, n, maxSweeps, tol);
 #endif
     }
 
@@ -120,13 +106,11 @@ public static class DenseEigen
         Span<double> eigenvalues,
         Span<double> eigenvectors,
         int maxSweeps = 256,
-        double tol = 1e-12,
-        DenseEigenOptions options = default)
+        double tol = 1e-12)
     {
         if (flatColumnMajorMatrix.Length != n * n)
             throw new ArgumentException("Matrix dimensions must match N x N.", nameof(flatColumnMajorMatrix));
 #if EIGEN_REFERENCE
-        EnsureReferenceCompatible(options);
         if (eigenvalues.Length != n) throw new ArgumentException("Eigenvalues buffer size must equal N.", nameof(eigenvalues));
         if (eigenvectors.Length != 0 && eigenvectors.Length != n * n)
             throw new ArgumentException("Eigenvectors buffer size must equal N * N, or 0 for eigenvalues alone.", nameof(eigenvectors));
@@ -139,7 +123,7 @@ public static class DenseEigen
             for (int j = 0; j < n; j++) result.Eigenvectors[j].CopyTo(eigenvectors.Slice(j * n, n));
         return result.Convergence;
 #else
-        return EigenFast.DecomposeSymmetricInPlace(flatColumnMajorMatrix, n, eigenvalues, eigenvectors, maxSweeps, tol, options.FastVariant);
+        return EigenFast.DecomposeSymmetricInPlace(flatColumnMajorMatrix, n, eigenvalues, eigenvectors, maxSweeps, tol);
 #endif
     }
 
@@ -154,8 +138,7 @@ public static class DenseEigen
         Span<double> eigenvalues,
         double[,]? eigenvectorColumns,
         int maxSweeps = 256,
-        double tol = 1e-12,
-        DenseEigenOptions options = default)
+        double tol = 1e-12)
     {
         ArgumentNullException.ThrowIfNull(matrix);
         int n = matrix.GetLength(0);
@@ -165,7 +148,7 @@ public static class DenseEigen
         {
             for (int c = 0; c < n; c++)
                 for (int r = 0; r < n; r++) flat[c * n + r] = matrix[r, c];
-            return DecomposeSymmetricInto(flat.AsSpan(0, n * n), n, eigenvalues, eigenvectorColumns, maxSweeps, tol, options);
+            return DecomposeSymmetricInto(flat.AsSpan(0, n * n), n, eigenvalues, eigenvectorColumns, maxSweeps, tol);
         }
         finally
         {
@@ -184,16 +167,15 @@ public static class DenseEigen
         Span<double> eigenvalues,
         double[,]? eigenvectorColumns,
         int maxSweeps = 256,
-        double tol = 1e-12,
-        DenseEigenOptions options = default)
+        double tol = 1e-12)
     {
-        if (eigenvectorColumns is null) return DecomposeSymmetric(flatColumnMajorMatrix, n, eigenvalues, Span<double>.Empty, maxSweeps, tol, options);
+        if (eigenvectorColumns is null) return DecomposeSymmetric(flatColumnMajorMatrix, n, eigenvalues, Span<double>.Empty, maxSweeps, tol);
         if (eigenvectorColumns.GetLength(0) != n || eigenvectorColumns.GetLength(1) != n)
             throw new ArgumentException("The eigenvector columns are n × n.", nameof(eigenvectorColumns));
         double[] vectors = ArrayPool<double>.Shared.Rent(n * n);
         try
         {
-            DenseEigenConvergence convergence = DecomposeSymmetric(flatColumnMajorMatrix, n, eigenvalues, vectors.AsSpan(0, n * n), maxSweeps, tol, options);
+            DenseEigenConvergence convergence = DecomposeSymmetric(flatColumnMajorMatrix, n, eigenvalues, vectors.AsSpan(0, n * n), maxSweeps, tol);
             for (int j = 0; j < n; j++)
                 for (int i = 0; i < n; i++) eigenvectorColumns[i, j] = vectors[j * n + i];
             return convergence;
@@ -201,15 +183,6 @@ public static class DenseEigen
         finally
         {
             ArrayPool<double>.Shared.Return(vectors);
-        }
-    }
-
-    private static void EnsureReferenceCompatible(DenseEigenOptions options)
-    {
-        if (options.FastVariant != DenseEigenFastVariant.Default)
-        {
-            throw new NotSupportedException(
-                "Fast-family variants are unavailable when EIGEN_REFERENCE is active.");
         }
     }
 }

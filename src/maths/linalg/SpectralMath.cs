@@ -29,10 +29,10 @@ public static class SpectralMath
     /// their eigenvectors, sorted ascending by eigenvalue.
     /// </summary>
     public static IReadOnlyList<EigenPair> BottomK(
-        double[,] matrix, int k, DenseEigenOptions options = default)
+        double[,] matrix, int k)
     {
         if (k <= 0) return Array.Empty<EigenPair>();
-        EigenResult eig = DenseEigen.DecomposeSymmetric(matrix, options: options);
+        EigenResult eig = DenseEigen.DecomposeSymmetric(matrix);
         return SelectBottomK(eig, k);
     }
 
@@ -42,11 +42,10 @@ public static class SpectralMath
     /// is the matrix dimension; the span length must equal <c>n × n</c>.
     /// </summary>
     public static IReadOnlyList<EigenPair> BottomK(
-        ReadOnlySpan<double> flatColumnMajorMatrix, int n, int k,
-        DenseEigenOptions options = default)
+        ReadOnlySpan<double> flatColumnMajorMatrix, int n, int k)
     {
         if (k <= 0) return Array.Empty<EigenPair>();
-        EigenResult eig = DenseEigen.DecomposeSymmetric(flatColumnMajorMatrix, n, options: options);
+        EigenResult eig = DenseEigen.DecomposeSymmetric(flatColumnMajorMatrix, n);
         return SelectBottomK(eig, k);
     }
 

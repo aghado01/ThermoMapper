@@ -74,14 +74,12 @@ public sealed class EigenFastTimingHarness
             crescentGraph,
             seed: FixtureGoldenHelpers.SpectralSeed,
             k: 8,
-            denseOptions: default,
             materialization: DenseLaplacianMaterialization.Rectangular));
         spectralCases.Add(MeasureSpectralCase(
             "spectral-crescent-500",
             crescentGraph,
             seed: FixtureGoldenHelpers.SpectralSeed,
             k: 8,
-            denseOptions: default,
             materialization: DenseLaplacianMaterialization.FlatColumnMajor));
 
 
@@ -92,14 +90,12 @@ public sealed class EigenFastTimingHarness
             mobiusGraph,
             seed: FixtureGoldenHelpers.SpectralSeed,
             k: 8,
-            denseOptions: default,
             materialization: DenseLaplacianMaterialization.Rectangular));
         spectralCases.Add(MeasureSpectralCase(
             "spectral-mobius-500",
             mobiusGraph,
             seed: FixtureGoldenHelpers.SpectralSeed,
             k: 8,
-            denseOptions: default,
             materialization: DenseLaplacianMaterialization.FlatColumnMajor));
 
 
@@ -138,9 +134,9 @@ public sealed class EigenFastTimingHarness
 
         builder.AppendLine();
         builder.AppendLine("spectral-dispatch-comparison");
-        builder.AppendLine("Label\tMaterialization\tFastVariant\tComputeBottomKMs\tLowestLambda\tCount");
+        builder.AppendLine("Label\tMaterialization\tComputeBottomKMs\tLowestLambda\tCount");
         foreach (SpectralBenchmarkCase item in spectralCases)
-            builder.AppendLine($"{item.Label}\t{item.Materialization}\t{item.FastVariant}\t{item.ComputeBottomKMilliseconds:F3}\t{item.LowestLambda:G17}\t{item.Count}");
+            builder.AppendLine($"{item.Label}\t{item.Materialization}\t{item.ComputeBottomKMilliseconds:F3}\t{item.LowestLambda:G17}\t{item.Count}");
 
         if (solverCases.Count > 0)
         {
@@ -316,10 +312,9 @@ public sealed class EigenFastTimingHarness
         CsrGraph graph,
         int seed,
         int k,
-        DenseEigenOptions denseOptions,
         DenseLaplacianMaterialization materialization)
     {
-        WarmUpSpectral(graph, seed, k, denseOptions, materialization);
+        WarmUpSpectral(graph, seed, k, materialization);
 
         double median = MeasureMedianMilliseconds(() =>
         {
@@ -329,7 +324,6 @@ public sealed class EigenFastTimingHarness
                 k: k,
                 lapType: LaplacianType.Combinatorial,
                 solverKind: SolverKind.Dense,
-                denseOptions: denseOptions,
                 denseMaterialization: materialization);
             _spectralSink = pairs.Count;
         }, iterations: 5);
@@ -340,14 +334,12 @@ public sealed class EigenFastTimingHarness
             k: k,
             lapType: LaplacianType.Combinatorial,
             solverKind: SolverKind.Dense,
-            denseOptions: denseOptions,
             denseMaterialization: materialization);
 
         double lowestLambda = result.Count > 0 ? result[0].Lambda : double.NaN;
         return new SpectralBenchmarkCase(
             label,
             materialization.ToString(),
-            denseOptions.FastVariant.ToString(),
             median,
             lowestLambda,
             result.Count);
@@ -363,7 +355,6 @@ public sealed class EigenFastTimingHarness
         CsrGraph graph,
         int seed,
         int k,
-        DenseEigenOptions denseOptions,
         DenseLaplacianMaterialization materialization)
     {
         IReadOnlyList<EigenPair> pairs = Spectral.ComputeBottomK(
@@ -372,7 +363,6 @@ public sealed class EigenFastTimingHarness
             k: k,
             lapType: LaplacianType.Combinatorial,
             solverKind: SolverKind.Dense,
-            denseOptions: denseOptions,
             denseMaterialization: materialization);
         _spectralSink = pairs.Count;
     }
@@ -485,7 +475,6 @@ public sealed class EigenFastTimingHarness
     private readonly record struct SpectralBenchmarkCase(
         string Label,
         string Materialization,
-        string FastVariant,
         double ComputeBottomKMilliseconds,
         double LowestLambda,
         int Count);

@@ -33,7 +33,7 @@ namespace Graphs.Observables;
 ///         signal.</item>
 ///     </list>
 ///   </item>
-///   <item>Call <see cref="DenseEigen.DecomposeSymmetric(double[,], int, double, DenseEigenOptions)"/>;
+///   <item>Call <see cref="DenseEigen.DecomposeSymmetric(double[,], int, double)"/>;
 ///     the result's eigenvalues are sorted descending.</item>
 ///   <item>Take <c>Eigenvectors[0]</c> as the per-node scalar.</item>
 ///   <item>By Perron-Frobenius (G is non-negative symmetric) the top
@@ -70,12 +70,6 @@ public sealed class AlignmentEigenCentrality : IGraphSignal<Alignments>
     /// </summary>
     public double Tolerance { get; init; } = 1e-12;
 
-    /// <summary>
-    /// Optional eigensolver options (e.g. fast-variant selection). Default
-    /// uses the dispatcher's defaults.
-    /// </summary>
-    public DenseEigenOptions EigenOptions { get; init; } = default;
-
     public double[] Compute(Alignments alignments, CsrGraph graph)
     {
         ArgumentNullException.ThrowIfNull(alignments);
@@ -111,7 +105,7 @@ public sealed class AlignmentEigenCentrality : IGraphSignal<Alignments>
         }
 
         // ── Top eigenvector via dispatched symmetric eigendecomposition ──
-        EigenResult eig = DenseEigen.DecomposeSymmetric(g, MaxSweeps, Tolerance, EigenOptions);
+        EigenResult eig = DenseEigen.DecomposeSymmetric(g, MaxSweeps, Tolerance);
         double[] top = eig.Eigenvectors[0];
         if (top.Length != n)
             throw new InvalidOperationException(

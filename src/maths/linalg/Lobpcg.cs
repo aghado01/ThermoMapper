@@ -270,7 +270,7 @@ public static class LOBPCG
 
     /// <summary>
     /// The <c>k</c> smallest eigenpairs of a dense symmetric matrix, sorted
-    /// ascending — the iterative peer of <see cref="SpectralMath.BottomK(double[,], int, DenseEigenOptions)"/>.
+    /// ascending — the iterative peer of <see cref="SpectralMath.BottomK(double[,], int)"/>.
     /// No null-space deflation (that is a graph-Laplacian concern handled by
     /// <c>Graphs.Spectral</c>); this is the plain "k smallest of an arbitrary
     /// symmetric matrix" entry. Use <see cref="Solve"/> directly if you need the

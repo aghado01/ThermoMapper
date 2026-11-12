@@ -32,7 +32,6 @@ public static class CoherentField
         LaplacianType lapType = LaplacianType.Combinatorial,
         SolverKind solverKind = SolverKind.Auto,
         int seed = 0,
-        DenseEigenOptions denseOptions = default,
         DenseLaplacianMaterialization denseMaterialization = DenseLaplacianMaterialization.Rectangular)
     {
         int n = graph.NodeCount;
@@ -45,7 +44,6 @@ public static class CoherentField
             k: basisK,
             lapType: lapType,
             solverKind: solverKind,
-            denseOptions: denseOptions,
             denseMaterialization: denseMaterialization);
 
         // Drop near-zero constant trivial modes (e.g., the algebraic multiplicity of connected components)

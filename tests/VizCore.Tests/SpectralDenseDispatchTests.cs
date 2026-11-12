@@ -25,7 +25,6 @@ public sealed class SpectralDenseDispatchTests
             k: 8,
             lapType: LaplacianType.Combinatorial,
             solverKind: SolverKind.Dense,
-            denseOptions: default,
             denseMaterialization: DenseLaplacianMaterialization.Rectangular);
 
         IReadOnlyList<EigenPair> flat = Spectral.ComputeBottomK(
@@ -34,7 +33,6 @@ public sealed class SpectralDenseDispatchTests
             k: 8,
             lapType: LaplacianType.Combinatorial,
             solverKind: SolverKind.Dense,
-            denseOptions: default,
             denseMaterialization: DenseLaplacianMaterialization.FlatColumnMajor);
 
         var run = HarnessArtifacts.Create(
