@@ -366,9 +366,10 @@ public sealed class BassStructureMoves
         double[]? rates = state.OutputRateArray is null ? null : [.. state.OutputRateArray.Select(Math.Exp)];
         // Random intercepts (E34's slice 4, decision 7): u_g ∈ ℝᴷ at the reading's block from its conditional given the coefficients and Σ,
         // drawn last, as the scalar draw draws its group effects.
-        BassGroupDraw[]? groups = _design.Working.Whitening is { } block
+        // Under a noise U is the state's latent, kept as it stands.
+        BassGroupDraw[]? groups = _design.Working.Effects?.Groups ?? (_design.Working.Whitening is { } block
             ? block.DrawOutputGroups(_model, [.. order.Select(r => state.Terms[r])], coefficients, MatrixTPredictive.Root(sigma), rng)
-            : null;
+            : null);
         // Under a noise (E34's decision 6) the draw keeps the latents alone, its reading rebuilt from them as one response's is.
         ObservationLatents? latents = _design.Working.Latents is { } held && _model.Observation.Rebuilds ? held : null;
         return new BassDraw(new BassStructure(sorted), tau, double.NaN, [], lambda, Latents: latents, Groups: groups, Sigma: sigma, OutputCoefficients: coefficients,
@@ -403,8 +404,12 @@ public sealed class BassStructureMoves
             for (int i = 0; i < n; i++)
                 for (int l = 0; l < k; l++) fitted[i * k + l] += centred[j + 1, l] * (a[i] - mean);
         }
+        working.Effects?.AddTo(fitted);   // U as a latent (E34's slice 4): the blocks after read the residual net of Z̃U
         return OutputSweepFit = new BassOutputSweepFit(state, sigma, centred, fitted);
     }
+
+    // U's block hands its fit on at the new state, Z̃U in it (E34's slice 4).
+    internal void HandOutputs(BassOutputSweepFit fit) => OutputSweepFit = fit;
 
     /// <summary>Several outputs' coefficients block's draw in this sweep (E34's decision 6); null before the first. Not state.</summary>
     internal BassOutputSweepFit? OutputSweepFit { get; private set; }

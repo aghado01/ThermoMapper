@@ -1,4 +1,6 @@
 using System;
+using System.Collections.Generic;
+using System.Linq;
 using Maths.Distributions;
 using Maths.Regression.GPrior;
 using Maths.Regression.Spline.Bars;
@@ -175,20 +177,44 @@ public sealed class BassTarget : ISamplingTarget<BassState>
     /// <summary>Several outputs' drawn skew's s, γ | Σ ~ N(0, s²Σ) (E34's decision 6); null where the skew is not drawn or the response is one.</summary>
     internal double? OutputSkewSd { get; init; }
 
-    /// <summary>Σ's prior with γ's pseudo-row, IW(ν₀ + 1, Ψ₀ + γγᵀ/s²), and ln p(γ), γ's multivariate t under IW(ν₀, Ψ₀) scaled by s:
-    /// −(K/2)ln(πs²) + ln Γ_K((ν₀+1)/2) − ln Γ_K(ν₀/2) + (ν₀/2)ln|Ψ₀| − ((ν₀+1)/2)ln|Ψ₀ + γγᵀ/s²|.</summary>
-    internal static (InverseWishart Prior, double LogSkew) WithSkew(InverseWishart prior, double[] gamma, double sd)
+    /// <summary>
+    /// Σ's prior with pseudo-rows, latents whose prior is N(0, c·Σ) per row (E34's slice 4: the skew γ, one row at c = s², and a grouping's
+    /// effects U_k, q_k rows at c = s_k²): IW(ν₀ + Σn, Ψ₀ + Σ X/c), X each one's K × K cross product, and their joint density with Σ
+    /// integrated, the matrix t
+    /// <para>ln p = −(K/2)·Σ n·ln(πc) + ln Γ_K((ν₀ + Σn)/2) − ln Γ_K(ν₀/2) + (ν₀/2)ln|Ψ₀| − ((ν₀ + Σn)/2)ln|Ψ₀ + Σ X/c|.</para>
+    /// </summary>
+    internal static (InverseWishart Prior, double LogDensity) WithPseudoRows(InverseWishart prior, IEnumerable<(double[,] Cross, int Count, double Scale2)> rows)
     {
-        int k = gamma.Length;
         double[,] scale = prior.Scale;
-        double inverse = 1.0 / (sd * sd);
-        for (int a = 0; a < k; a++)
-            for (int d = 0; d < k; d++) scale[a, d] += gamma[a] * gamma[d] * inverse;
+        int k = scale.GetLength(0), count = 0;
+        double logScales = 0.0;
+        foreach ((double[,] cross, int n, double c) in rows)
+        {
+            for (int a = 0; a < k; a++)
+                for (int d = 0; d < k; d++) scale[a, d] += cross[a, d] / c;
+            count += n;
+            logScales += n * Math.Log(Math.PI * c);
+        }
         double nu = prior.DegreesOfFreedom;
-        var updated = InverseWishart.Of(nu + 1.0, scale);
-        double logSkew = -0.5 * k * Math.Log(Math.PI * sd * sd) + SpecialFunctions.LogMultivariateGamma(k, 0.5 * (nu + 1.0))
-                         - SpecialFunctions.LogMultivariateGamma(k, 0.5 * nu) + 0.5 * nu * prior.LogDeterminantScale - 0.5 * (nu + 1.0) * updated.LogDeterminantScale;
-        return (updated, logSkew);
+        var updated = InverseWishart.Of(nu + count, scale);
+        double logDensity = -0.5 * k * logScales + SpecialFunctions.LogMultivariateGamma(k, 0.5 * (nu + count))
+                            - SpecialFunctions.LogMultivariateGamma(k, 0.5 * nu) + 0.5 * nu * prior.LogDeterminantScale - 0.5 * (nu + count) * updated.LogDeterminantScale;
+        return (updated, logDensity);
+    }
+
+    // Several outputs' pseudo-rows at `working`: γ's where the skew is drawn, each grouping's U where random intercepts are a latent.
+    internal IEnumerable<(double[,] Cross, int Count, double Scale2)> PseudoRows(WorkingResponse? working)
+    {
+        if (OutputSkewSd is double sd && working?.Latents?.OutputSkew is { } gamma)
+        {
+            int k = gamma.Length;
+            var cross = new double[k, k];
+            for (int a = 0; a < k; a++)
+                for (int d = 0; d < k; d++) cross[a, d] = gamma[a] * gamma[d];
+            yield return (cross, 1, sd * sd);
+        }
+        if (working?.Effects is { OutputEffects: not null } effects)
+            foreach ((double[,] Cross, int Count, double Scale2) row in effects.OutputPseudoRows()) yield return row;
     }
 
     /// <summary>The tempered form on the likelihood path.</summary>
@@ -441,12 +467,17 @@ public sealed class BassEvaluation : ITargetEvaluation
         _target = target;
         _logRate = logRate;
         _outputPrior = outputPrior ?? target.Outputs?.Prior;
-        // Several outputs' drawn skew (E34's decision 6): γ | Σ ~ N(0, s²Σ) enters Σ's posterior as one pseudo-row, and its multivariate t
-        // under Σ's prior joins the log prior, so the target is p(structure, τ, γ, Y | v).
-        if (target.OutputSkewSd is double sd && fit.Working?.Latents?.OutputSkew is { } gamma && _outputPrior is { } basis && !double.IsNegativeInfinity(logPrior))
+        // Several outputs' latents with a Σ-scaled prior (E34's slice 4): the drawn skew γ | Σ ~ N(0, s²Σ) and random intercepts' U_k | Σ ~
+        // N(0, s_k²·I ⊗ Σ) enter Σ's posterior as pseudo-rows, and their matrix t under Σ's prior joins the log prior, so the target is
+        // p(structure, τ, γ, U, Y | v, s).
+        if (target.Outputs is not null && fit.Working is { Latents: not null } && _outputPrior is { } basis && !double.IsNegativeInfinity(logPrior))
         {
-            (_outputPrior, double logSkew) = BassTarget.WithSkew(basis, gamma, sd);
-            logPrior += logSkew;
+            var rows = target.PseudoRows(fit.Working).ToList();
+            if (rows.Count > 0)
+            {
+                (_outputPrior, double logRows) = BassTarget.WithPseudoRows(basis, rows);
+                logPrior += logRows;
+            }
         }
         Fit = fit;
         Tau = tau;

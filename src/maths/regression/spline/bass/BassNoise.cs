@@ -526,18 +526,17 @@ public sealed class VarianceMeanMixture : IBassObservationModel, IBassNoiseLaw
     /// at that γ, and under a skew σ² from <paramref name="sigma2Prior"/>, the prior at the state (a held σ² as the config holds it).
     /// Refused under a skew whose σ² prior is improper, which has no draw.
     /// </summary>
-    internal ObservationLatents PriorLatents(int observations, InverseGamma? sigma2Prior, Xoshiro256PlusPlus rng, InverseWishart? outputPrior = null)
+    internal ObservationLatents PriorLatents(int observations, InverseGamma? sigma2Prior, Xoshiro256PlusPlus rng, double[,]? outputRoot = null)
     {
         ArgumentNullException.ThrowIfNull(rng);
         if (Outputs > 0)
         {
-            // Several outputs (E34's decision 6): γ | Σ ~ N(0, s²Σ) through a draw of Σ from its prior, the tail as one response's, each vᵢ
-            // from its law at that tail.
+            // Several outputs (E34's decision 6): γ | Σ ~ N(0, s²Σ) at the factor of the caller's draw of Σ from its prior, which random
+            // intercepts share, the tail as one response's, each vᵢ from its law at that tail.
             double[]? skewVector = null;
             if (Noise.SkewPrior is { IsHeld: false } prior)
             {
-                double[,] sigma = (outputPrior ?? throw new ArgumentException("Several outputs' skew draws Σ from its prior.", nameof(outputPrior))).Sample(rng);
-                double[,] root = GPrior.MatrixTPredictive.Root(sigma);
+                double[,] root = outputRoot ?? throw new ArgumentException("Several outputs' skew reads a draw of Σ.", nameof(outputRoot));
                 var z = new double[Outputs];
                 for (int l = 0; l < Outputs; l++) z[l] = Normal.SampleStandard(rng);
                 skewVector = new double[Outputs];
@@ -585,7 +584,7 @@ public sealed class VarianceMeanMixture : IBassObservationModel, IBassNoiseLaw
     internal WorkingResponse At(WorkingResponse from, ObservationLatents latents, bool weightsMoved = true)
     {
         (double[]? offset, double[] weights) = Reading(latents, from.Response is MultiOutputResponse several ? several.Outputs : 0);
-        return from.Moved(WithEffects(offset, from.Effects, latents.Values.Length), weightsMoved ? weights : default, latents);
+        return from.Moved(WithEffects(offset, from.Effects, from.Values.Length), weightsMoved ? weights : default, latents);
     }
 
     /// <summary>The reading of <paramref name="from"/>'s latents with <paramref name="effects"/> as its random effects: the offset σβ·v + Z̃u,
@@ -593,8 +592,8 @@ public sealed class VarianceMeanMixture : IBassObservationModel, IBassNoiseLaw
     internal WorkingResponse At(WorkingResponse from, RandomEffectsLatent effects)
     {
         ObservationLatents latents = from.Latents ?? throw new InvalidOperationException("The working response holds no latents.");
-        (double[]? offset, _) = Reading(latents);
-        return from.Reread(WithEffects(offset, effects, latents.Values.Length), latents, effects);
+        (double[]? offset, _) = Reading(latents, from.Response is MultiOutputResponse several ? several.Outputs : 0);
+        return from.Reread(WithEffects(offset, effects, from.Values.Length), latents, effects);
     }
 
     /// <summary>The u-integrated reading of <paramref name="from"/> at b = 1 (<see cref="BassCollapsedStructureBlock"/>): the offset σβ·v alone

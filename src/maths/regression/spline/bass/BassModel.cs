@@ -92,8 +92,10 @@ public sealed class BassModel
             // Under a noise u is a latent the reading carries, from 0; at unit weights it is integrated by the whitening (E21's decision 7, amended).
             if (observation is VarianceMeanMixture latentMixture)
             {
-                if (!latentMixture.RecordsSigma2) throw new ArgumentException("Random effects under a noise keep σ² on the record: build the mixture with recordsSigma2.", nameof(observation));
-                working = latentMixture.At(working, RandomEffectsLatent.Zero(block));
+                // Several outputs integrate Σ, U's prior entering its integral as pseudo-rows (E34's slice 4); one response keeps σ² on the record.
+                if (latentMixture.Outputs == 0 && !latentMixture.RecordsSigma2)
+                    throw new ArgumentException("Random effects under a noise keep σ² on the record: build the mixture with recordsSigma2.", nameof(observation));
+                working = latentMixture.At(working, latentMixture.Outputs > 0 ? RandomEffectsLatent.ZeroOutputs(block, latentMixture.Outputs) : RandomEffectsLatent.Zero(block));
             }
             else working = block.Rewhiten(baseReading);
         }
@@ -121,8 +123,9 @@ public sealed class BassModel
             throw new ArgumentException("The interweaving block moves σ², which several outputs integrate as Σ.", nameof(config));
         if (noise.SkewPrior is { Mean: not 0.0 })
             throw new ArgumentException("Several outputs' skew is γ | Σ ~ N(0, s²Σ): its prior centres on 0, the only direction every output shares.", nameof(config));
-        if (config.HasRandomEffects)
-            throw new ArgumentException("Random intercepts for several outputs under a noise arrive with E34's slice 4, stage 4.", nameof(config));
+        if (config.HasRandomEffects && config.Sampling?.CollapseEffectsInMoves == true)
+            throw new ArgumentException("Several outputs under a noise take their random intercepts as a latent on every rung (form B); the b = 1 "
+                                        + "collapse would integrate U through a weighted whitening of K outputs, which is not built.", nameof(config));
     }
 
     /// <summary>The random-intercept block (E21) the config declares, integrated out of every marginal by whitening, which the working

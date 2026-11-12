@@ -281,8 +281,17 @@ public sealed class RandomEffectsBlock
 
     /// <summary>Several outputs' effects' conditional mean given <paramref name="coefficients"/> ((M + 1) × K): per output the scalar block's, on
     /// its residual over the unwhitened columns; [output][grouping][level].</summary>
-    internal double[][][] MeanOutputEffects(BassModel model, IReadOnlyList<BassTerm> terms, double[,] coefficients)
+    internal double[][][] MeanOutputEffects(BassModel model, IReadOnlyList<BassTerm> terms, double[,] coefficients, WorkingResponse? reading = null)
     {
+        // Under a noise U is the reading's latent (E34's slice 4): each output's mean at the reading's weights, on y − vγ (the reading's values
+        // with Z̃U put back).
+        if (reading is { IsUnweighted: false, Effects: { OutputEffects: not null } latent })
+        {
+            double[] values = reading.Values.ToArray();
+            latent.AddTo(values);
+            var whitening = new WeightedWhitening(this, reading.Weights);
+            return [.. OutputResiduals(model, terms, coefficients, values).Select(r => whitening.MeanEffects(r))];
+        }
         double[][] residuals = OutputResiduals(model, terms, coefficients);
         return [.. residuals.Select(OutputMeanOf)];
     }
@@ -290,14 +299,14 @@ public sealed class RandomEffectsBlock
     private double[][] OutputMeanOf(double[] residual)
         => _single is { } one ? [one.EffectMean(one.GroupSums(residual))] : _general!.MeanEffects(residual);
 
-    // Each output's y_l − α_l − Σⱼ β_jl·Bⱼ on the unwhitened case columns.
-    private static double[][] OutputResiduals(BassModel model, IReadOnlyList<BassTerm> terms, double[,] coefficients)
+    // Each output's y_l − α_l − Σⱼ β_jl·Bⱼ on the unwhitened case columns; `of`, when given, in place of y (case by case, output by output).
+    private static double[][] OutputResiduals(BassModel model, IReadOnlyList<BassTerm> terms, double[,] coefficients, double[]? of = null)
     {
         var response = (MultiOutputResponse)model.Data.Response;
         int k = response.Outputs, n = response.Cases;
         if (coefficients.GetLength(0) != terms.Count + 1 || coefficients.GetLength(1) != k)
             throw new ArgumentException("Give the intercepts and one row per term, one column per output.", nameof(coefficients));
-        ReadOnlySpan<double> values = response.Values;
+        ReadOnlySpan<double> values = of ?? response.Values;
         var residuals = new double[k][];
         for (int l = 0; l < k; l++)
         {
@@ -316,6 +325,14 @@ public sealed class RandomEffectsBlock
             }
         }
         return residuals;
+    }
+
+    // Several outputs' effects ([grouping][output][level]) as named retained records, at this block's scales.
+    internal BassGroupDraw[] NamedOutputs(double[][][] effects)
+    {
+        var groups = new BassGroupDraw[Count];
+        for (int k = 0; k < Count; k++) groups[k] = new BassGroupDraw(_specifications[k].Grouping, _scales[k], []) { Input = _layouts[k].Input, OutputEffects = effects[k] };
+        return groups;
     }
 
     // The effects as named retained records, at this block's scales.
@@ -890,6 +907,65 @@ internal sealed record RandomEffectsLatent(RandomEffectsBlock Block, double[][] 
     /// <summary>These effects at <paramref name="block"/>'s scales (a step of s, which moves no effect).</summary>
     internal RandomEffectsLatent At(RandomEffectsBlock block) => this with { Block = block };
 
+    /// <summary>Several outputs' effects U (E34's slice 4, decision 7): [grouping][output][level], u_g ∈ ℝᴷ ~ N(0, s²Σ) in each grouping's
+    /// orthonormal contrasts; null for one response, whose effects are <see cref="Effects"/>.</summary>
+    internal double[][][]? OutputEffects { get; init; }
+
+    /// <summary>Several outputs' effects <paramref name="effects"/> ([grouping][output][level]) at <paramref name="block"/>'s scales.</summary>
+    internal static RandomEffectsLatent OfOutputs(RandomEffectsBlock block, double[][][] effects)
+        => new(block, [.. Enumerable.Range(0, block.Count).Select(_ => Array.Empty<double>())]) { OutputEffects = effects };
+
+    /// <summary>U = 0 for <paramref name="outputs"/> outputs at <paramref name="block"/>'s scales: a reading's start.</summary>
+    internal static RandomEffectsLatent ZeroOutputs(RandomEffectsBlock block, int outputs)
+        => OfOutputs(block, [.. Enumerable.Range(0, block.Count).Select(k => Enumerable.Range(0, outputs).Select(_ => new double[block.Layout(k).Levels]).ToArray())]);
+
+    /// <summary>U from its prior given Σ (its factor <paramref name="sigmaRoot"/>), at <paramref name="block"/>'s scales: each grouping's
+    /// contrasts N(0, s_k²·I ⊗ Σ), the reference rung's and SMC's draw.</summary>
+    internal static RandomEffectsLatent DrawPriorOutputs(RandomEffectsBlock block, double[,] sigmaRoot, Xoshiro256PlusPlus rng)
+    {
+        ArgumentNullException.ThrowIfNull(rng);
+        int outputs = sigmaRoot.GetLength(0);
+        var effects = new double[block.Count][][];
+        for (int k = 0; k < block.Count; k++)
+        {
+            RandomEffectGrouping layout = block.Layout(k);
+            int q = layout.Dimension;
+            double s = block.Scales.Span[k];
+            var z = new double[outputs][];
+            for (int l = 0; l < outputs; l++) z[l] = [.. Enumerable.Range(0, q).Select(_ => Normal.SampleStandard(rng))];
+            effects[k] = new double[outputs][];
+            for (int l = 0; l < outputs; l++)
+            {
+                var coordinates = new double[q];
+                for (int c = 0; c < q; c++)
+                {
+                    double mixed = 0.0;
+                    for (int m = 0; m <= l; m++) mixed += sigmaRoot[l, m] * z[m][c];
+                    coordinates[c] = s * mixed;
+                }
+                effects[k][l] = layout.Effects(coordinates);
+            }
+        }
+        return OfOutputs(block, effects);
+    }
+
+    /// <summary>Several outputs' pseudo-rows for Σ's integral: per grouping U_kᵀU_k (K × K, over its levels, its contrasts' cross product), its
+    /// q_k contrasts and s_k².</summary>
+    internal IEnumerable<(double[,] Cross, int Count, double Scale2)> OutputPseudoRows()
+    {
+        double[][][] effects = OutputEffects ?? throw new InvalidOperationException("One response's effects have no pseudo-rows.");
+        for (int k = 0; k < effects.Length; k++)
+        {
+            int outputs = effects[k].Length;
+            var cross = new double[outputs, outputs];
+            for (int a = 0; a < outputs; a++)
+                for (int d = 0; d <= a; d++)
+                    cross[a, d] = cross[d, a] = PairwiseSum.Dot(effects[k][a], effects[k][d]);
+            double s = Block.Scales.Span[k];
+            yield return (cross, Block.Layout(k).Dimension, s * s);
+        }
+    }
+
     /// <summary>Σ_k ‖u_k‖²/s_k², the prior energy over σ², and Σ_k q_k, its coordinates.</summary>
     internal (double Energy, int Count) Prior
     {
@@ -911,9 +987,25 @@ internal sealed record RandomEffectsLatent(RandomEffectsBlock Block, double[][] 
     /// <summary>Grouping k's ‖u_k‖².</summary>
     internal double Squares(int k) => Effects[k].Sum(u => u * u);
 
-    /// <summary>Adds Z̃u at each training case to <paramref name="fit"/>.</summary>
-    internal void AddTo(Span<double> fit) => Block.AddEffects(Effects, fit);
+    /// <summary>Adds Z̃u at each training case to <paramref name="fit"/>; for several outputs Z̃U, case by case and output by output.</summary>
+    internal void AddTo(Span<double> fit)
+    {
+        if (OutputEffects is not { } several)
+        {
+            Block.AddEffects(Effects, fit);
+            return;
+        }
+        int outputs = several[0].Length, n = Block.Cases;
+        if (fit.Length != n * outputs) throw new ArgumentException("Give one value per case and output.", nameof(fit));
+        var column = new double[n];
+        for (int l = 0; l < outputs; l++)
+        {
+            Array.Clear(column);
+            Block.AddEffects([.. several.Select(g => g[l])], column);
+            for (int i = 0; i < n; i++) fit[i * outputs + l] += column[i];
+        }
+    }
 
-    /// <summary>The effects as named retained records.</summary>
-    internal BassGroupDraw[] Groups => Block.Named(Effects);
+    /// <summary>The effects as named retained records; for several outputs each grouping's <see cref="BassGroupDraw.OutputEffects"/>.</summary>
+    internal BassGroupDraw[] Groups => OutputEffects is { } several ? Block.NamedOutputs(several) : Block.Named(Effects);
 }

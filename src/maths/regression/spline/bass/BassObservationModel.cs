@@ -587,11 +587,15 @@ public static class BassSweepSlots
                     if (model.RandomEffects is { } groups)
                         for (int group = 0; group < groups.Count; group++)
                             if (groups.Specifications[group].ScalePrior is not null)
-                                blocks.Add(model.EffectsAreLatent ? new BassLatentGroupScaleBlock(model, group) : new BassGroupScaleBlock(model, group));
+                                blocks.Add(!model.EffectsAreLatent ? new BassGroupScaleBlock(model, group)
+                                           : model.Data.Response is MultiOutputResponse ? new BassOutputGroupScaleBlock(model, group)
+                                           : new BassLatentGroupScaleBlock(model, group));
                     break;
                 case BassSweepSlot.Coefficients:
                     blocks.AddRange(model.Observation.Blocks(slot));
-                    if (model.EffectsAreLatent) blocks.Add(new BassGroupEffectsBlock(model));   // u given the coefficients, before any block reads it
+                    // u given the coefficients, before any block reads it; several outputs' U given Σ and A (E34's slice 4)
+                    if (model.EffectsAreLatent)
+                        blocks.Add(model.Data.Response is MultiOutputResponse ? new BassOutputGroupEffectsBlock(model) : new BassGroupEffectsBlock(model));
                     break;
                 case BassSweepSlot.Scale:
                     blocks.AddRange(model.Observation.Blocks(slot));

@@ -158,7 +158,7 @@ public static class BassMultiOutput
             if (all is not null)   // E[u | S, tau, Y], linear in the coefficients: the effects' conditional mean at their conditional means
             {
                 RandomEffectsBlock intercepts = model.BlockAt(draw)!;   // at the draw's scales
-                double[][][] u = intercepts.MeanOutputEffects(model, [.. ids.Select(id => fit.Terms[id])], all);
+                double[][][] u = intercepts.MeanOutputEffects(model, [.. ids.Select(id => fit.Terms[id])], all, reading);   // under a noise, at the draw's weights
                 for (int l = 0; l < k; l++)
                     for (int g = 0; g < groups!.Length; g++)
                         for (int i = 0; i < surface.Cases; i++)

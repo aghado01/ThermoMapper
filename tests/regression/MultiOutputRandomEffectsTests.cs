@@ -22,7 +22,7 @@ namespace Maths.Regression.Tests;
 /// <item><b>The group effects' conditional:</b> their mean and their covariance across the outputs, v_g·Σ, by Monte Carlo.</item>
 /// <item><b>The readers:</b> prediction adds an observed level's effects and draws a population case's; the matrix-t conditionals refuse a
 /// block.</item>
-/// <item><b>Refusals:</b> random slopes, the normalized ridge with a block, and a noise.</item>
+/// <item><b>Refusals:</b> random slopes, the normalized ridge with a block, and the b = 1 collapse under a noise.</item>
 /// <item><b>Geweke from exact starts</b> under a drawn s (qualification), as E21's slice 4 gates its block.</item>
 /// </list>
 /// </summary>
@@ -291,7 +291,8 @@ public sealed class MultiOutputRandomEffectsTests(ITestOutputHelper output)
         BassConfig block = Config(0.8, false);
         Assert.Throws<ArgumentException>(() => BassModel.Create(block with { RandomIntercepts = null, RandomSlopes = [new BassRandomSlope("g", "x0", RandomSlopeScale.Unit, 0.5)] }, data));
         Assert.Throws<ArgumentException>(() => BassModel.Create(block with { Coefficients = new BassCoefficientPrior(new RidgeForm(), TauPrior.UnitInformationGamma()) }, data));
-        Assert.Throws<ArgumentException>(() => BassModel.Create(block with { Noise = BassNoise.StudentT(4.0) }, data));   // until stage 4
+        // Under a noise the block is a latent on every rung (stage 4); the b = 1 collapse would need K outputs' weighted whitening.
+        Assert.Throws<ArgumentException>(() => BassModel.Create(block with { Noise = BassNoise.StudentT(4.0), Sampling = block.Sampling with { CollapseEffectsInMoves = true } }, data));
     }
 
     // ── Geweke from exact starts (qualification) ──────────────────────────────────────────────────────────────────────────────────
@@ -384,7 +385,7 @@ public sealed class MultiOutputRandomEffectsTests(ITestOutputHelper output)
     }
 
     // V = I + s²ZΠZᵀ over the cases, Π the projector onto nᵀu = 0 (observation centring), written out.
-    private static double[,] DenseV(CategoricalPredictor grouping, double s)
+    internal static double[,] DenseV(CategoricalPredictor grouping, double s)
     {
         int[] codes = grouping.Codes.ToArray();
         int n = codes.Length, l = codes.Max() + 1;
@@ -480,7 +481,7 @@ public sealed class MultiOutputRandomEffectsTests(ITestOutputHelper output)
     }
 
     // u (levels × K) ~ N(0, s²Σ) with nᵀu = 0 per output: Π z mixed by Σ's factor.
-    private static double[,] CentredEffects(int[] codes, int levels, int k, double s, double[,] root, Xoshiro256PlusPlus rng)
+    internal static double[,] CentredEffects(int[] codes, int levels, int k, double s, double[,] root, Xoshiro256PlusPlus rng)
     {
         var counts = new double[levels];
         foreach (int c in codes) counts[c]++;

@@ -107,7 +107,9 @@ public sealed record BassDraw(BassStructure Structure, double Tau, double Sigma2
             {
                 // Under a noise the random effects are the draw's latent: its u at its scales, read as the offset Z̃u (E21's slice 4).
                 if (rebuilt.Effects is not null && Groups is { } groups && model.BlockAt(this) is { } scaled && model.Observation is VarianceMeanMixture mixture)
-                    return mixture.At(rebuilt, new RandomEffectsLatent(scaled, [.. scaled.Ordered(groups).Select(g => g.Effects)]));
+                    return mixture.At(rebuilt, rebuilt.Effects.OutputEffects is not null
+                        ? RandomEffectsLatent.OfOutputs(scaled, [.. scaled.Ordered(groups).Select(g => g.OutputEffects!)])
+                        : new RandomEffectsLatent(scaled, [.. scaled.Ordered(groups).Select(g => g.Effects)]));
                 return rebuilt;
             }
             // A drawn group scale's reading, whitened at the draw's s (E21).

@@ -219,17 +219,25 @@ public sealed class BassPriorSampler : IReferenceSampler<BassState>
             }
             double logTau = DrawLogTau(rng), logRate = target.Sigma2Rate?.SampleLogRate(rng) ?? double.NaN;
             InverseGamma? sigma2Prior = target.Sigma2Rate is { } rate ? rate.PriorAt(logRate) : target.Sigma2;
-            // Several outputs (E34's decision 6): Huang and Wand's rates first, Σ's prior at them drawn for the skew's γ | Σ.
+            // Several outputs (E34's decisions 6 and 7): Huang and Wand's rates first, then, where the skew is drawn or U is a latent, one Σ from
+            // the prior at them, whose factor the skew's γ | Σ and the effects' U | Σ, s share.
             double[]? logOutputRates = target.Outputs?.Rates?.Sample(rng);
-            InverseWishart? outputPrior = target.Outputs is { } outputs ? outputs.Rates is { } rates ? rates.PriorAt(logOutputRates!) : outputs.Prior : null;
-            WorkingResponse working = mixture.At(_model.Working, mixture.PriorLatents(n, sigma2Prior, rng, outputPrior));
-            if (_model.RandomEffects is { } block)   // each drawn scale from its prior, then u from its prior given σ² (E21's slice 4)
+            double[,]? outputRoot = target.Outputs is { } outputs && (mixture.Noise.SkewDrawn || _model.RandomEffects is not null)
+                ? SigmaRoot(outputs.Rates is { } rates ? rates.PriorAt(logOutputRates!) : outputs.Prior, rng)
+                : null;
+            WorkingResponse working = mixture.At(_model.Working, mixture.PriorLatents(n, sigma2Prior, rng, outputRoot));
+            if (_model.RandomEffects is { } block)   // each drawn scale from its prior, then u from its prior given σ² (E21's slice 4) or U given Σ
             {
                 double[] scales = block.Scales.ToArray();
                 for (int k = 0; k < scales.Length; k++)
                     if (block.Specifications[k].ScalePrior is { } scalePrior) scales[k] = scalePrior.Sample(rng);
-                double sigma2 = working.Latents!.Sigma2 ?? throw new InvalidOperationException("Random effects under a noise keep σ² on the record.");
-                working = mixture.At(working, RandomEffectsLatent.DrawPrior(block.At(scales), sigma2, rng));
+                if (outputRoot is not null)
+                    working = mixture.At(working, RandomEffectsLatent.DrawPriorOutputs(block.At(scales), outputRoot, rng));
+                else
+                {
+                    double sigma2 = working.Latents!.Sigma2 ?? throw new InvalidOperationException("Random effects under a noise keep σ² on the record.");
+                    working = mixture.At(working, RandomEffectsLatent.DrawPrior(block.At(scales), sigma2, rng));
+                }
             }
             if (_design.Load(terms, working) is { } refusal)
             {
@@ -248,6 +256,23 @@ public sealed class BassPriorSampler : IReferenceSampler<BassState>
             return (state, evaluation);
         }
         throw Exhausted(intercepts, before);
+    }
+
+    // A factor of Σ drawn from `prior`. IW(ν₀, Ψ₀) with ν₀ near K − 1, as ScaledToResponse's default is, draws Σ singular to working
+    // precision; the latents that read Σ have no draw then, as a skewed scalar fit's improper σ² prior has none.
+    private static double[,] SigmaRoot(InverseWishart prior, Xoshiro256PlusPlus rng)
+    {
+        double[,] sigma = prior.Sample(rng);
+        try
+        {
+            return GPrior.MatrixTPredictive.Root(sigma);
+        }
+        catch (ArgumentException)
+        {
+            throw new InvalidOperationException($"A draw of Σ from its prior IW(ν₀ = {prior.DegreesOfFreedom:R}, Ψ₀) is singular to working precision, so the skew's "
+                                                + "γ | Σ and the effects' U | Σ have no prior draw for SMC or the reference rung: declare an OutputCovariance with ν₀ "
+                                                + "well above K − 1, as a skewed scalar fit declares a proper σ² prior.");
+        }
     }
 
     private InvalidOperationException Exhausted(long intercepts, Tally<BassRefusal> before)
