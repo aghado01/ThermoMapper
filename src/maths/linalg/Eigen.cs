@@ -10,11 +10,13 @@ namespace Maths.LinAlg
     public static class Eigen
     {
         /// <summary>
-        /// A pivot rotates when |a_pq| exceeds <paramref name="tol"/>; a sweep that rotates nothing ends the solve. The result
-        /// reports how the solve ended, read from the diagonalization it leaves.
+        /// Absolute pivots rotate at |a_pq| > tol; element-wise relative pivots use |a_pq| > tol √|a_pp a_qq| and stable algebraic
+        /// rotations. A sweep that rotates nothing ends the solve; the report tests the final state, including stalled pivots.
         /// </summary>
-        public static EigenResult DecomposeSymmetric(double[,] matrix, int maxSweeps = 256, double tol = 1e-12)
+        public static EigenResult DecomposeSymmetric(double[,] matrix, int maxSweeps = 256, double tol = 1e-12,
+            JacobiStoppingRule stoppingRule = JacobiStoppingRule.Absolute)
         {
+            JacobiPivot.Validate(stoppingRule, tol);
             int n = matrix.GetLength(0);
             if (matrix.GetLength(1) != n) throw new ArgumentException("Matrix must be square.");
             DecompositionLog.Record(DecompositionKernel.ReferenceJacobi, n, n);
@@ -23,6 +25,7 @@ namespace Maths.LinAlg
             var V = Identity(n);               // eigenvectors
             int sweeps = 0;
             long rotations = 0;
+            bool stoppedWithoutRotations = false;
 
             for (int sweep = 0; sweep < maxSweeps; sweep++)
             {
@@ -34,18 +37,38 @@ namespace Maths.LinAlg
                 {
                     for (int q = p + 1; q < n; q++)
                     {
-                        if (Math.Abs(A[p, q]) <= tol) continue;
-
-                        Rotate(A, V, p, q, n);
+                        if (stoppingRule == JacobiStoppingRule.ElementWiseRelative)
+                        {
+                            if (JacobiPivot.Passes(A[p, p], A[q, q], A[p, q], tol)) continue;
+                            if (!JacobiPivot.TryTangent(A[p, p], A[q, q], A[p, q], out double t)) continue;
+                            RotateRelative(A, V, p, q, n, t);
+                        }
+                        else
+                        {
+                            if (Math.Abs(A[p, q]) <= tol) continue;
+                            Rotate(A, V, p, q, n);
+                        }
                         sweepRotations++;
                     }
                 }
 
                 rotations += sweepRotations;
-                if (sweepRotations == 0) break;
+                if (sweepRotations == 0)
+                {
+                    stoppedWithoutRotations = true;
+                    break;
+                }
             }
             (double offDiagonalNorm, double largestOffDiagonal) = DenseEigenConvergence.OffDiagonal(A);
-            var convergence = new DenseEigenConvergence(sweeps, rotations, offDiagonalNorm, largestOffDiagonal, largestOffDiagonal <= tol);
+            bool converged = largestOffDiagonal <= tol;
+            if (stoppingRule == JacobiStoppingRule.ElementWiseRelative)
+            {
+                converged = true;
+                for (int q = 1; q < n; q++)
+                    for (int p = 0; p < q; p++) converged &= JacobiPivot.Passes(A[p, p], A[q, q], A[p, q], tol);
+            }
+            var convergence = new DenseEigenConvergence(sweeps, rotations, offDiagonalNorm, largestOffDiagonal, converged)
+            { Stalled = stoppedWithoutRotations && !converged };
 
             // Extract eigenvalues + sort descending
             var eigenvalues = new double[n];
@@ -65,6 +88,28 @@ namespace Maths.LinAlg
             }
 
             return new EigenResult(sortedEig, sortedVec) { Convergence = convergence };
+        }
+
+        private static void RotateRelative(double[,] A, double[,] V, int p, int q, int n, double t)
+        {
+            double c = 1 / Math.Sqrt(1 + t * t), s = t * c;
+            double app = A[p, p], aqq = A[q, q], apq = A[p, q];
+            A[p, p] = app - t * apq;
+            A[q, q] = aqq + t * apq;
+            A[p, q] = A[q, p] = 0;
+            for (int i = 0; i < n; i++)
+            {
+                if (i == p || i == q) continue;
+                double aip = A[i, p], aiq = A[i, q];
+                A[i, p] = A[p, i] = c * aip - s * aiq;
+                A[i, q] = A[q, i] = s * aip + c * aiq;
+            }
+            for (int i = 0; i < n; i++)
+            {
+                double vip = V[i, p], viq = V[i, q];
+                V[i, p] = c * vip - s * viq;
+                V[i, q] = s * vip + c * viq;
+            }
         }
 
         private static void Rotate(double[,] A, double[,] V, int p, int q, int n)

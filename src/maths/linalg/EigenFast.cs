@@ -12,8 +12,8 @@ namespace Maths.LinAlg
         /// <summary>
         /// v3: High-Performance Upper-Triangle Algebraic Cyclic Jacobi Solver.
         /// Zero transcendentals, zero symmetry mirroring overhead, fully vectorized.
-        /// A pivot rotates when |a_pq| is at least <paramref name="tol"/>; a sweep that rotates nothing ends the solve, so skipping a
-        /// pivot and stopping depend on the same test. Returns how the solve ended, read from the diagonalization it leaves.
+        /// Absolute pivots rotate at |a_pq| ≥ tol; element-wise relative pivots rotate at |a_pq| > tol √|a_pp a_qq|. A sweep that
+        /// rotates nothing ends the solve. An unrepresentable required rotation leaves Converged false on the final working state.
         /// Eigenvalues are written descending; eigenvectors as the columns of the flat column-major <paramref name="outEigenvectors"/>,
         /// or none when it is empty, which skips their rotations, about half the work, and leaves the eigenvalues the same bits. The
         /// working copy and the sort's scratch are pooled, so a call into caller-owned buffers allocates nothing once the pool is warm.
@@ -24,8 +24,9 @@ namespace Maths.LinAlg
             Span<double> outEigenvalues,
             Span<double> outEigenvectors,
             int maxSweeps = 256,
-            double tol = 1e-12)
+            double tol = 1e-12, JacobiStoppingRule stoppingRule = JacobiStoppingRule.Absolute)
         {
+            JacobiPivot.Validate(stoppingRule, tol);
             if (flatMatrix.Length != n * n) throw new ArgumentException("Matrix dimensions must match N x N.");
             if (outEigenvalues.Length != n) throw new ArgumentException("Eigenvalues buffer size must equal N.");
             bool vectors = outEigenvectors.Length != 0;
@@ -37,6 +38,8 @@ namespace Maths.LinAlg
             int sweeps = 0;
             long rotations = 0;
             double offDiagonalNorm, largestOffDiagonal;
+            bool converged = true;
+            bool stoppedWithoutRotations = false;
 
             try
             {
@@ -66,26 +69,31 @@ namespace Maths.LinAlg
                                 // In column-major layout, row p, col q is at location [q * n + p]
                                 double apq = A[q * n + p];
 
-                                if (Math.Abs(apq) < tol) continue;
-                                sweepRotations++;
-
                                 // Compute Algebraic Givens Rotations (No Atan2, Cos, or Sin)
                                 int pBase = p * n;
                                 int qBase = q * n;
                                 double app = A[pBase + p];
                                 double aqq = A[qBase + q];
-                                double theta = (aqq - app) / (2.0 * apq);
+                                if (stoppingRule == JacobiStoppingRule.ElementWiseRelative
+                                    ? JacobiPivot.Passes(app, aqq, apq, tol)
+                                    : Math.Abs(apq) < tol) continue;
 
                                 double t;
-                                if (Math.Abs(theta) < 1e12)
+                                if (stoppingRule == JacobiStoppingRule.ElementWiseRelative)
                                 {
-                                    double signTheta = theta >= 0.0 ? 1.0 : -1.0;
-                                    t = signTheta / (Math.Abs(theta) + Math.Sqrt(1.0 + theta * theta));
+                                    if (!JacobiPivot.TryTangent(app, aqq, apq, out t)) continue;
                                 }
                                 else
                                 {
-                                    t = 1.0 / (2.0 * theta); // Asymptotic expansion for giant theta to prevent division limits
+                                    double theta = (aqq - app) / (2.0 * apq);
+                                    if (Math.Abs(theta) < 1e12)
+                                    {
+                                        double signTheta = theta >= 0.0 ? 1.0 : -1.0;
+                                        t = signTheta / (Math.Abs(theta) + Math.Sqrt(1.0 + theta * theta));
+                                    }
+                                    else t = 1.0 / (2.0 * theta);
                                 }
+                                sweepRotations++;
 
                                 double c = 1.0 / Math.Sqrt(1.0 + t * t);
                                 double s = t * c;
@@ -184,7 +192,11 @@ namespace Maths.LinAlg
 
                         rotations += sweepRotations;
                         // Every pivot passed the test: the next sweep would rotate nothing either.
-                        if (sweepRotations == 0) break;
+                        if (sweepRotations == 0)
+                        {
+                            stoppedWithoutRotations = true;
+                            break;
+                        }
                     }
 
                     // Extract final parsed eigenvalues from the diagonal trace
@@ -194,6 +206,11 @@ namespace Maths.LinAlg
                 // The returned diagonalization's off-diagonal, read after the last sweep: a sample taken during a sweep precedes
                 // that sweep's rotations.
                 (offDiagonalNorm, largestOffDiagonal) = DenseEigenConvergence.OffDiagonal(workingArray.AsSpan(0, matrixSize), n);
+                if (stoppingRule == JacobiStoppingRule.ElementWiseRelative)
+                    for (int q = 1; q < n; q++)
+                        for (int p = 0; p < q; p++)
+                            converged &= JacobiPivot.Passes(workingArray[p * n + p], workingArray[q * n + q], workingArray[q * n + p], tol);
+                else converged = largestOffDiagonal < tol;
             }
             finally
             {
@@ -201,7 +218,8 @@ namespace Maths.LinAlg
             }
 
             SortDescending(outEigenvalues, outEigenvectors, n);
-            return new DenseEigenConvergence(sweeps, rotations, offDiagonalNorm, largestOffDiagonal, largestOffDiagonal < tol);
+            return new DenseEigenConvergence(sweeps, rotations, offDiagonalNorm, largestOffDiagonal, converged)
+            { Stalled = stoppedWithoutRotations && !converged };
         }
 
         // Eigenvalues descending with their eigenvector columns. The exchange order is the one this solver always used, so a repeated
@@ -264,7 +282,7 @@ namespace Maths.LinAlg
             ReadOnlySpan<double> flatColumnMajorMatrix,
             int n,
             int maxSweeps = 256,
-            double tol = 1e-12)
+            double tol = 1e-12, JacobiStoppingRule stoppingRule = JacobiStoppingRule.Absolute)
         {
             ArrayPool<double> pool = ArrayPool<double>.Shared;
             double[] outEigVecs = pool.Rent(n * n);
@@ -278,7 +296,7 @@ namespace Maths.LinAlg
                     outEigVals,
                     outEigVecs.AsSpan(0, n * n),
                     maxSweeps,
-                    tol);
+                    tol, stoppingRule);
 
                 var sortedVec = new double[n][];
                 for (int i = 0; i < n; i++)
@@ -298,7 +316,7 @@ namespace Maths.LinAlg
         public static EigenResult DecomposeSymmetric(
             double[,] matrix,
             int maxSweeps = 256,
-            double tol = 1e-12)
+            double tol = 1e-12, JacobiStoppingRule stoppingRule = JacobiStoppingRule.Absolute)
         {
             int n = matrix.GetLength(0);
             if (matrix.GetLength(1) != n)
@@ -315,7 +333,7 @@ namespace Maths.LinAlg
                         flatMatrix[c * n + r] = matrix[r, c];
                 }
 
-                return DecomposeSymmetric(flatMatrix.AsSpan(0, n * n), n, maxSweeps, tol);
+                return DecomposeSymmetric(flatMatrix.AsSpan(0, n * n), n, maxSweeps, tol, stoppingRule);
             }
             finally
             {
