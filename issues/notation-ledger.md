@@ -11,6 +11,15 @@ Splits in the module's language (symbols, identifiers, terms), logged as session
 
 ## Entries
 
+### E34's skew γ ∈ ℝᴷ beside the Normal–Wald's γ, scalar BASS's β and the skew prior's s (2026-11-11)
+
+- **Kind:** one name for several concepts, and one concept under two names.
+- **Readings:**
+  - γ ∈ ℝᴷ, several outputs' skew in the outputs' units, the drift per unit v a case's outputs share, γ | Σ ~ N(0, s²Σ) (`ObservationLatents.OutputSkew`, `src/maths/regression/spline/bass/BassNoise.cs:365`; `BassOutputShapeBlock`, `src/maths/regression/spline/bass/BassOutputNoise.cs:94`), beside γ, the Normal–Wald's and the generalized hyperbolic's tail parameter (`BassNoise.GammaPrior`, `BassNoise.cs:263`; `ObservationLatents.Gamma`, `BassNoise.cs:346`). Both are drawn in the same block under a skewed Normal–Wald; the code names the tail `tail` there.
+  - β, scalar BASS's skew per σ (`ObservationLatents.Skew`, `BassNoise.cs:355`, its offset σβ·v), is at K = 1 the same drift as E34's γ = σβ: one concept under two names and two scalings. The prior differs too: β ~ N(m, sd²) a priori, γ | Σ ~ N(0, s²Σ), so K = 1 under a skew is not scalar BASS draw for draw (the multi-output brief's slice 4, stage 3).
+  - s, the skew prior's scale (`BassNoisePrior.Sd` read as s in γ | Σ ~ N(0, s²Σ), `BassTarget.OutputSkewSd`), beside s, the random-effect block's scale (E21; decision 7's u_g ~ N(0, s²Σ)), and s² the response's mean square (`BassResolved.ResponseMeanSquare`).
+- **Found:** 2026-11-11, E34's slice 4, stage 3.
+
 ### E21's weighted whitening L, its intercept direction c and the effects u, beside E8's L, GBASS's c and the z parameterization's u (2026-11-10)
 
 - **Kind:** one name for several concepts.
