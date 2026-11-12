@@ -1,5 +1,7 @@
 # LinAlg eigensolvers — residuals, Jacobi stopping and the LOBPCG projected solve
 
+> The working brief is now [spectral-solver-consolidation-brief.md](spectral-solver-consolidation-brief.md) (2026-11-12). It carries this brief's witnesses and items. This file stays as the record.
+
 Queued 2026-11-09 for the next available LinAlg owner. The first two fixes can start independently of E21, E34 and conformal slice 8. Schedule comparative timings when the regression qualification runs leave the machine quiet. The [regression handoff](../regression/coordination-handoff-2026-11-09.md) tracks the separate E8 decision on a relative tolerance for small-scale matrices.
 
 ## Solver selection
