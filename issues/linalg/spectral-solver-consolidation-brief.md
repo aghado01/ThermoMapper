@@ -328,7 +328,7 @@ The analogous input-side experiment applies Gᵀ(Gv)/M for M equally weighted gr
 
 ### G1. Fused multiply-add
 
-**Current state.**
+**Before the switch removal.** Commit `ec86071` preserves both the kernel and its timing harness.
 - `DenseEigenOptions.FastVariant = Fma` turns on the x86 `Fma` intrinsics in `EigenFast`, gated on `Fma.IsSupported` ([EigenFast.cs:35](../../src/maths/linalg/EigenFast.cs)). They apply in the vectorized eigenvector update (lines 94–109) and in the vectorized segment of A above row p (lines 138–153).
 - The scalar tails and the two strided segments (lines 125–131 and 170–205) stay unfused.
 - Only the timing harness ([EigenFastTimingHarness.cs](../../tests/VizCore.Tests/EigenFastTimingHarness.cs) lines 103, 130 and 353–370) and one dispatch test ([SpectralDenseDispatchTests.cs:85](../../tests/VizCore.Tests/SpectralDenseDispatchTests.cs)) select it.
@@ -347,10 +347,9 @@ The analogous input-side experiment applies Gᵀ(Gv)/M for M equally weighted gr
 
 **Plan.**
 - Remove the `Fma` option ([Decisions](#decisions) item 2).
-- Adopt fused arithmetic, under the convention, in kernels whose loops are contiguous:
-  - `ThinSvd`'s rotations now;
-  - `EigenFast` after G2.
+- G1 stays open after the switch removal. Benchmark `ThinSvd`'s contiguous rotations now. When G2 settles the `EigenFast` layout, its report should point back here with the layout to benchmark.
 - For each kernel, one timing at regression sizes decides: fused against unfused, with residual and orthogonality checks. Regression sizes are input-space Grams up to about 100 and output dimensions up to the output-location counts. Adoption moves bits, so pins are regenerated deliberately.
+- Record the fused and unfused timings, CPU/SIMD path, input sizes and numerical checks in the G1 report, including a result that favors keeping the kernel unfused. A later layout or hardware change that alters the cost of the measured loop gives a concrete reason to rerun that comparison.
 
 ### G2. EigenFast's strided segments
 
@@ -407,7 +406,7 @@ Settled in the 2026-11-12 reviews:
   - the dense-route diagram and "Two dense routes" (stopping rule, reference status);
   - the table of which triangle each routine reads;
   - the notes on EigenFast's segments;
-  - the SIMD notes;
+  - the SIMD notes, including when to revisit FMA in another kernel. A profile showing substantial time in a multiply-add loop is a reason to compare fused and unfused arithmetic at caller sizes. Use `DenseProduct` as the worked example for matching scalar tails to the vector body, and link the G1 results for rotations when available;
   - the `FastVariant` option row.
 - [ActiveSubspaces.md](../../docs/Maths/Regression/ActiveSubspaces.md): the unit-scale paragraph, which B1 retires; the matrix Poincaré section's contract, factor form and resolution.
 - If item 1 is decided as removal: [Architecture.md](../../docs/Architecture.md) (`ExtraDefineConstants`), [Design.md](../../docs/Design.md) (the EigenFast versus Eigen entry), [README.md](../../README.md) (the reference build command).
@@ -415,6 +414,19 @@ Settled in the 2026-11-12 reviews:
 ## Reports
 
 Each slice is reported here, newest first, with its commit, fixtures, commands, receipts, pins moved and doc changes owed.
+
+### Decision 2: the FMA variant removed (2026-11-12)
+
+**Commit:** `9635dca`.
+
+**What changed:**
+- `DenseEigenFastVariant.Fma` and EigenFast's fused branches are gone. The default arithmetic is unchanged, so outputs are the same bits.
+- The timing harness drops its FMA comparison and spectral cases. `SpectralDenseDispatchTests` drops its FMA-against-default test.
+- `DenseEigenFastVariant` keeps one value, and `DenseEigenOptions` now carries nothing. Deleting both would reach `Spectral.ComputeBottomK`'s and `CoherentField`'s `denseOptions` parameters, `SpectralMath.BottomK`, and the public `AlignmentEigenCentrality.EigenOptions`. That is a removal of its own, for the owner.
+
+**Gate:** `VizCore.Tests` selection, 33 classes: 236 passed, 2 standing skips.
+
+**Doc changes owed:** [LinearAlgebra.md](../../docs/Maths/LinearAlgebra.md), the `FastVariant` option row and the notes on EigenFast's segments.
 
 ### B5–B6: carried operator images and the matrix-function helper (2026-11-12)
 
