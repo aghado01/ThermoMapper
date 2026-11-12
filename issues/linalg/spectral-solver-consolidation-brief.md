@@ -407,6 +407,48 @@ Settled in the 2026-11-12 reviews:
 
 Each slice is reported here, newest first, with its commit, fixtures, commands, receipts, pins moved and doc changes owed.
 
+### D: the matrix Poincaré check in term space (2026-11-12)
+
+**Commit:** `56ac387`.
+
+**What changed:**
+- `MatrixPoincare.Ratio(termCovariance, termBound, map)` replaces the two-matrix signature. Its contract is the least c with MΣMᵀ ≼ c·MKMᵀ.
+  - `RowSpace` decides M's rank by its thin SVD, on M itself.
+  - A map of full column rank reads the pencil over the whole term space. Otherwise both forms are restricted to range(Mᵀ).
+- `PencilRatio` judges each form on its own scale, at 8nε. An eigenvalue of K at or below 8nε of its largest counts as zero, and so does Σ's mass at or below 8nε of ‖Σ‖_F. Formed matrices pass map = I.
+- `MetricRange` gives the BASS check W_y's range as rows. It returns null when W_y is positive definite, and it is exact for a diagonal metric. A dense metric's eigenvalues at or below m·ε of the largest count as zero.
+- The check maps each draw by UᵀH.
+- `TermPencil` keeps each structure's Σ_B and K_D with its whole-space ratio, read once, for draws of full column rank. A rank-deficient draw is read over its own range. The unused `Sandwich` helper is gone.
+
+**Acceptance cases:**
+1. The four existing cases (cosines 1, halved 2, mixed field below 1, outside the range ∞): unchanged, now through map = I.
+2. The four witnesses in the table: 1, 1, 0.25 and 2.
+3. K null with Σ mass there: ∞.
+4. Both forms null, with Σ = 3·10⁻¹⁷ there: 1.
+5. The metric-range witness, W_y = diag(1, 10⁻¹⁶): `MetricRange` returns null, so the map is H. The ratio is 2, where the old root's single row reads 0.25. It is tested through the metric-to-map step the BASS caller uses, not a full readout, since real moments cannot produce Σ_B = diag(0.25, 2).
+6. The formed pair at 10⁻¹⁴ through map = I: 1.
+7. Fitted draws: no violations.
+
+Also tested:
+- a rank-deficient map off the coordinate axes, M = [1, 1]: 0.625;
+- `MetricRange` on a zero weight, a rank-one dense metric and a positive definite one;
+- the same draw read twice in one readout, and read alone: the same bits.
+
+**Effect on fitted draws:** the worst ratio is 0.8670 over 280 draws, the same as before to the digits printed. The existing check that ratios are the same read in a batch or alone still passes.
+
+**Gate:** `scripts/test-select.ps1` at edit scope over D's paths, 214 classes: 2,489 passed, none failed. No pinned-tier test reaches an active-subspace readout.
+
+**Not done:** whole-readout timings for [Open decisions](#open-decisions) item 5.
+
+**Pins moved:** none. The four quadrature cases pass map = I.
+
+**Doc changes owed:** [ActiveSubspaces.md](../../docs/Maths/Regression/ActiveSubspaces.md), the matrix Poincaré section. It needs:
+- the contract, as the least c;
+- the term-space reading and `Ratio`'s factor form;
+- the metric read through its range;
+- the two resolutions, 8nε for the forms and m·ε for a dense metric;
+- the correction itself, with the witness table.
+
 ### C1–C3: BASS readout reuse (2026-11-12)
 
 **Commit:** `23f599f`.
