@@ -276,30 +276,80 @@ Each report gives the commits, gate results, coverage and width by fit, cost, de
 
 Newest first.
 
-### In progress — Slice 13, the tournament correction (started 2026-11-11)
+### 2026-11-11 — Slice 13, the tournament correction
 
-Started at the main session's word after 12b's verification (decision 11), under the Lean's rules (`f998131`, the ledger's slice 13): each pair's fit must not know which unit is the test unit.
+Built at the main session's word of 2026-11-11, after 12b's verification (decision 11), against the Lean's slice 13 (`f998131`, section `Tournament`).
 
-**Plan.**
-- *`CrossConformal.Tournament(unitScores, candidateScores, grids, alpha, inflation)`.*
-  - Game i, at each candidate value, holds the conformity of zᵢ and of the candidate under one fit to the rest plus the pair.
-  - The candidate wins game i when it is stranger by more than δ (δ = 0 for the plain rule, 2ε for the inflated one). It is accepted when its wins plus k fall below m = n + 1, at k = ⌊αm⌋ (`tournament_count_iff`, `AcceptsPairwiseBy`).
-  - Coverage is at least 1 − (2k − 1)/m. The inflated set holds the plain one, so the bound carries to it.
-- *The density form,* from n leave-one-out chains, each given as a held-out seam and a candidate seam over its draws.
-  - The pair fit reweights fit i's draws by p(zᵢ | θ)·p(y | θ), the pair's product, formed as a sum of the two terms, so it cannot know which member is the test.
-  - Each member scores ln Σ w̃ p(· | θ) by one function with the roles swapped.
-  - Where no draw supports the pair, each member reads its own predictive under the fit to the rest.
-- *The stable bound* under the stray chance ν (`coverage_tournament_stable`, `card_refused_by_le`): 1 − min over a of [(k + a)/m + 2(m − 1)ν/(a + 1)], with their 1 − α − 3√ν.
-- *Read, not built:* the influence-function approximation (Abad et al., 2202.01315) and the RKHS approximation (Razafindrakoto et al., 2601.13102), weighed in the report.
-- *Gates:*
-  - the count rule against a direct count;
-  - the pair fit's symmetry, bit for bit;
-  - coverage over every ordering with an order-reading, non-symmetric pair fit;
-  - a fit that marks the test unit fails;
-  - the inflated set's coverage on a fixture whose ν is known;
-  - qualification: coverage with Metropolis chains stopped before mixing, beside the full step from the same stopped chains, plus BASS chains stopped early and the cost row.
+**Landed** on `main`, nothing pushed:
+- `e8cf30b`, with its tests.
+  - `CrossConformal.Tournament(unitScores, candidateScores, grids, alpha, inflation)`, the rule on given game scores.
+  - `CrossConformal.Tournament(fits, read, alpha, inflation)`, the density form from n leave-one-out fits' seams.
+  - `CrossConformal.TournamentStableCoverage(units, level, strayChance)`.
+  - `TournamentTests`.
+- *Nothing existing changes.* The tournament sits beside slice 9's pairwise rule, in `Tournament.cs`.
 
-**State.** The code and tests are committed in `e8cf30b`. The Commit selection passed 1,102 of 1,102. Qualification gave stopped Metropolis chains 0.908 against 0.909 for the full step, and stopped BASS chains 0.918 against 0.903. The whole assembly is running at `e8cf30b`; the report follows it.
+**What it computes** (Bhattacharyya, Zhang and Barber, arXiv 2605.29200, read through the Lean's statements).
+- *The games.* Each training unit i plays one game against the candidate. Both are scored by one fit to D₋ᵢ plus the pair {zᵢ, y}.
+  - The candidate wins game i when its score plus δ falls below zᵢ's: δ = 0 for the plain rule, where ties win nothing, and 2ε for the inflated one.
+  - It is accepted when its wins plus k fall below m = n + 1, with k = ⌊αm⌋ (`tournament_count_iff`, `AcceptsPairwiseBy`).
+- *Coverage* is at least 1 − (2k − 1)/m, so at least 1 − 2α (`tournament_coverage`, `tournament_orderReading`), whatever the draws. It holds when:
+  - each game's fit receives the pair as values (`tournFit_comp`); and
+  - the fits to the rest are symmetric given their seeds, or read their units in index order with the left-out place closed up, from a seed that does not move with i.
+  - A chain run on each D₋ᵢ from one seed qualifies, mixed or not.
+- *The inflated set* holds the plain one, so it keeps that bound. Under their stability it covers at least `TournamentStableCoverage` (`coverage_tournament_stable`, `card_refused_by_le`): 1 − min over a of [(k + a)/m + 2(m − 1)ν/(a + 1)], the Markov threshold optimized. At m 20, k 2 and ν 0.01 that is 0.673, against their 1 − α − 3√ν = 0.600.
+- *The pair fit from leave-one-out draws* (the density form). Fit i's draws are reweighted by p(zᵢ | θ)·p(y | θ), the two log terms summed before the draw's weight is added. Each member scores ln Σ w̃ p(· | θ) by one function with the roles swapped, so the fit cannot tell which member is the candidate.
+  - Where no draw gives the pair positive density, each member reads its own predictive under the fit to the rest.
+  - The seams are checked as slice 9's are: one exchangeable group in stratum 0.
+
+**Gates.**
+- *The count rule* matches a direct count of wins on random scores with ties, at three α and δ ∈ {0, 0.3}. The reported bound is 1 − (2k − 1)/m.
+- *The pair fit:* each member's score meets a direct sum over the draws to 10⁻¹². The density form's sets equal the score form's. Where no draw supports the pair, each member reads its own predictive.
+- *Coverage over every ordering,* exhaustive: every multiset of m values from {0, 1, 2}, every ordering, with the candidate last. The pair fit is order-reading and not symmetric: the rest weighted by place, the pair as a multiset.
+  - The least coverage over the multisets is 0.800 at m 5 and k 1, attaining 1 − (2k − 1)/m = 0.800, as the Lean's checks found.
+  - It is 0.600 at m 5 and k 2 against 0.400, and 0.667 at m 6 and k 2 against 0.500.
+- *A fit that marks the candidate* fails: coverage 0 on every multiset, as the Lean's checks predict.
+- *The inflated set where the pair scores lean against the candidate,* m 20, k 2, 40,000 replications. Each game's scores lean against the candidate by up to ε about R(z) = −|z|, and its side strays far below with chance ν 0.01. Symmetry fails, so Theorem 1 does not apply. The inflated set covers 0.910 (se 0.001) against its stable bound 0.673; the plain set covers 0.889.
+- *Per commit,* the selected classes and the pinned tier: 1,102 of 1,102. *At the slice's end,* the whole assembly: 3,244 of 3,244 at `e8cf30b`.
+
+**The measurement** (behind `BASS_QUALIFICATION=1`):
+- *Metropolis chains on Bayesian linear regression,* from β = (4, −4), every chain from the replication's seed. n 39 (m 40, k 4, 1 − (2k − 1)/m = 0.825); 800 replications at the truth and 200 on a grid for the width.
+  - Stopped before mixing: the full step 0.909 and the tournament 0.908 (se about 0.011), widths 4.374 and 4.346.
+  - Mixed: the full step 0.914 and the tournament 0.914, widths 1.729 and 1.734; the tournament's 39 chains take 160 s against the full step's 8 s over the 1,000 replications. In these fixtures the stopped chains did not make the full step undercover; the tournament's bound is the one that does not depend on that.
+- *BASS,* slice 4's chain stopped early (no burn-in, 20 draws, one chain). n 39, 25 replications of 8 held-out cases from the truth outside every model, every fit from the config's one seed: the full step 0.903 and the tournament 0.918 over 800 cases (se about 0.011), widths 2.423 and 2.397.
+
+**The cost row:** n 399, S 1,000, one grid of 200, cycle clock, indicative. The tournament's reduction from given seams takes 4.1 s against the full step's 0.16 s: it sums over each fit's draws per candidate in scalar loops, where the full step uses dense products. The n chains themselves are the engine's, n times one fit.
+
+**The approximations of the full step, weighed** (read in their TeX).
+- *Abad, Bhatt, Weller and Cherubin (2202.01315), influence functions.* They approximate each leave-one-out ERM model by its influence function, for a convex, twice-differentiable loss with its exact Hessian.
+  - Their guarantee is consistency: the score error is O(1/N) under bounded gradients and Hessians (their Theorem, through Giordano et al.).
+  - They state that finite-sample validity is not guaranteed and is only observed.
+  - For the layer's posterior engines this is no guarantee to add: the full step's add-one-in weights are already the exact Bayesian counterpart of a leave-one-in update, and they carry CB-3's error reading.
+- *Razafindrakoto, Celisse and Lacaille (2601.13102), RKHS.* For kernel regression with ridge penalty and smooth losses, approximate scores with sure bounds τ̂ᵢ(y), local in y, give a region that contains the full conformal one, so it covers at least 1 − α. Its thickness, the symmetric difference, bounds how much it adds.
+  - This is CB-3's inflated rule with deterministic bounds in place of the Monte Carlo ones.
+  - The layer's draws give only probabilistic bounds, the ν the inflated rule already charges. Its ERM setting matches none of the layer's posterior engines.
+- *What each would change.* Neither replaces the n chains for a Bayesian engine without giving up a guarantee the tournament keeps. An ERM or kernel-ridge engine in the layer would make the RKHS route worth building: one fit, a sure bound and coverage 1 − α. No such engine is planned, so nothing is proposed.
+
+**Defects found: none.** One doc figure was corrected before any commit: the stable bound's worked example now reads 0.673 against their 0.600.
+
+**Decided in building it.**
+- *The rule takes game scores,* so any engine's pair fit can feed it. The density form is the posterior engines' pair fit: their leave-one-out seams, reweighted by the pair.
+- *The pair's two log terms are summed before the draw's weight,* so the two members' weights are the same bits whichever is the candidate.
+- *A pair no draw supports* reads each member's own predictive, one function of the pair.
+- *No stable-coverage field on the set:* the bound needs the user's ν. `ConformalSet.Coverage` reports 1 − (2k − 1)/m for both rules, which the inflated set keeps.
+
+**Follow-ups, each with the decision it would change.**
+- *Leave-one-out runs from the engines,* a helper that runs a fit on each D₋ᵢ from one seed. It decides whether the tournament is a one-call path for BASS, BARS and BAPS; today the caller runs the n fits.
+- *Fewer chains:* reusing one chain's draws for many D₋ᵢ breaks the per-game fit's independence from the candidate's place. Any cheaper path needs its own Lean first, so nothing is proposed.
+
+**Doc changes owed** (for the offline docs pass; chips leave `docs/` alone).
+- *`docs/Maths/Regression/ConformalPrediction.md`, a section on the tournament correction:*
+  - the games and the rule;
+  - the two conditions: the pair as values, and fits symmetric or order-reading from one seed;
+  - the inflated set and its stable bound against their 1 − α − 3√ν;
+  - the density form's pair weighting;
+  - the gates and the measurement tables;
+  - the two approximations weighed.
+- *Its API rows:* the three `CrossConformal` members.
 
 ### 2026-11-11 — Slice 12b, CB-4's latent-posterior reading as the full step's opt-in
 
