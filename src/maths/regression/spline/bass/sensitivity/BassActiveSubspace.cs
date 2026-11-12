@@ -358,16 +358,21 @@ internal static partial class BassActiveSubspaces
     {
         if (!asked) return (null, MatrixPoincareStatus.NotAsked);
         if (forms is null) return (null, MatrixPoincareStatus.NotApplicable);
-        MatrixPoincareCheck? check = MatrixCheck(frame, moments!, forms, hs!, w.Root);
+        MatrixPoincareCheck? check = MatrixCheck(frame, moments!, forms, hs!, w.Range);
         return (check, check is null ? MatrixPoincareStatus.NotApplicable : MatrixPoincareStatus.Computed);
     }
 
     // The matrix Poincaré check per draw under a product law over continuous inputs alone, each with a known Poincaré constant
-    // (PoincareConstant): Cov(Rf) = (RH)Σ_B(RH)ᵀ against E[RJ D JᵀRᵀ] = (RH)K_D(RH)ᵀ, Σ_B the terms' covariances, K_D their gradients' Gram
+    // (PoincareConstant): Cov(Rf) = (RH)Σ_B(RH)ᵀ against E[RJ D JᵀRᵀ] = (RH)K_D(RH)ᵀ, R W_y's root, Σ_B the terms' covariances, K_D their gradients' Gram
     // under D, the constants in box units. Σ_B and K_D depend on a draw's terms alone, which draws repeat, so they are kept per structure
     // within the readout up to a constant budget of values (slice 6): a pure cache, filled in draw order and never evicted, whose entries
     // are what a miss computes, so the ratios are the same bits whether a draw hits it or not.
-    private static MatrixPoincareCheck? MatrixCheck(Frame frame, BassMoments moments, (BassTerm[] Terms, double[,] M)[] forms, double[][,] hs, double[,] root)
+    //
+    // The check is read in term space (spectral-solver brief, D): a draw's map is M = UᵀH, U an orthonormal basis of W_y's range (H itself
+    // when W_y is positive definite), and its ratio the pencil (Σ_B, K_D)'s over range(Mᵀ). When M has full column rank that is the whole
+    // term space and the ratio is its structure's, kept with the structure's forms and read once; a rank-deficient draw's is read over its
+    // own range(Mᵀ), as two such draws can share terms and differ.
+    private static MatrixPoincareCheck? MatrixCheck(Frame frame, BassMoments moments, (BassTerm[] Terms, double[,] M)[] forms, double[][,] hs, double[,]? range)
     {
         if (frame.Inputs.Cases.CategoricalCount > 0) return null;
         int p = frame.P;
@@ -377,29 +382,42 @@ internal static partial class BassActiveSubspaces
             if (PoincareConstant(frame, i) is not { } constant) return null;
             d[i, i] = constant;
         }
-        var grams = new Dictionary<BassTerm[], (double[,] Covariance, double[,] Bound)>(Structure.Instance);
+        var pencils = new Dictionary<BassTerm[], TermPencil>(Structure.Instance);
         long kept = 0;
         var ratios = new double[forms.Length];
         int violations = 0;
         for (int s = 0; s < forms.Length; s++)
         {
             BassTerm[] terms = forms[s].Terms;
-            if (!grams.TryGetValue(terms, out (double[,] Covariance, double[,] Bound) gram))
+            if (!pencils.TryGetValue(terms, out TermPencil? pencil))
             {
-                gram = (moments.CovarianceGram(terms), moments.GradientGram(terms, d));
+                pencil = new TermPencil(moments.CovarianceGram(terms), moments.GradientGram(terms, d));
                 long size = 2L * terms.Length * terms.Length;
                 if (kept + size <= GramCacheValues)
                 {
-                    grams[terms] = gram;
+                    pencils[terms] = pencil;
                     kept += size;
                 }
             }
-            double[,] rh = Multiply(root, hs[s]);
-            double[,] covariance = Sandwich(rh, gram.Covariance), bound = Sandwich(rh, gram.Bound);
-            ratios[s] = MatrixPoincare.Ratio(covariance, bound);
+            double[,] map = range is null ? hs[s] : Multiply(range, hs[s]);
+            double[,]? q = MatrixPoincare.RowSpace(map);
+            ratios[s] = q is null ? pencil.WholeSpace
+                                  : MatrixPoincare.PencilRatio(MatrixPoincare.Restrict(pencil.Covariance, q), MatrixPoincare.Restrict(pencil.Bound, q));
             if (!(ratios[s] <= 1.0 + 1e-9)) violations++;
         }
         return new MatrixPoincareCheck(Array.AsReadOnly(ratios), violations);
+    }
+
+    // A structure's term covariance Σ_B and gradient Gram K_D, with the pencil's ratio over the whole term space read on first use.
+    private sealed class TermPencil(double[,] covariance, double[,] bound)
+    {
+        private double? _wholeSpace;
+
+        public double[,] Covariance { get; } = covariance;
+
+        public double[,] Bound { get; } = bound;
+
+        public double WholeSpace => _wholeSpace ??= MatrixPoincare.PencilRatio(Covariance, Bound);
     }
 
     // Continuous predictor i's Poincaré constant in box units (slice 6), or null where none is known here: (b − a)²/π² for a uniform law
@@ -444,24 +462,6 @@ internal static partial class BassActiveSubspaces
             foreach (BassTerm t in terms) hash.Add(RuntimeHelpers.GetHashCode(t));
             return hash.ToHashCode();
         }
-    }
-
-    // A·M·Aᵀ.
-    private static double[,] Sandwich(double[,] a, double[,] m)
-    {
-        double[,] am = Multiply(a, m);
-        int r = a.GetLength(0), t = a.GetLength(1);
-        var s = new double[r, r];
-        for (int i = 0; i < r; i++)
-            for (int j = 0; j < r; j++)
-            {
-                double v = 0.0;
-                for (int k = 0; k < t; k++) v += am[i, k] * a[j, k];
-                s[i, j] = v;
-            }
-        for (int i = 0; i < r; i++)
-            for (int j = i + 1; j < r; j++) s[i, j] = s[j, i] = 0.5 * (s[i, j] + s[j, i]);
-        return s;
     }
 
     private static double[,] Multiply(double[,] a, double[,] b)
@@ -1121,19 +1121,34 @@ internal static partial class BassActiveSubspaces
         return roots;
     }
 
-    // W_y and its eigensystem, decomposed at most once per readout (spectral-solver brief, C2). Its two roots read that eigensystem, each
-    // by its own rule and each built once: R, one row per eigenvalue above 10⁻¹⁴ of the scale, for C's factor and the matrix check;
-    // and S, symmetric, every positive eigenvalue kept, for the output side.
+    // W_y and its eigensystem, decomposed at most once per readout (spectral-solver brief, C2). Its two roots and its range read that
+    // eigensystem, each by its own rule and each built once: R, one row per eigenvalue above 10⁻¹⁴ of the scale, for the sampled route's
+    // factor; S, symmetric, every positive eigenvalue kept, for the output side; and the range, for the matrix check.
     private sealed class MetricRoots(double[,] w)
     {
         private EigenResult? _eigen;
-        private double[,]? _root, _psdRoot;
+        private double[,]? _root, _psdRoot, _range;
+        private bool _rangeRead;
 
         public double[,] W { get; } = w;
 
         public double[,] Root => _root ??= RootOf(Eigen, W.GetLength(0));
 
         public double[,] PsdRoot => _psdRoot ??= PsdRootOf(Eigen, W.GetLength(0));
+
+        // W_y's range for the matrix check (spectral-solver brief, D): null when W_y is positive definite.
+        public double[,]? Range
+        {
+            get
+            {
+                if (!_rangeRead)
+                {
+                    _range = MatrixPoincare.MetricRange(W, () => Eigen);
+                    _rangeRead = true;
+                }
+                return _range;
+            }
+        }
 
         private EigenResult Eigen => _eigen ??= ScaledEigen.Of(W);
     }

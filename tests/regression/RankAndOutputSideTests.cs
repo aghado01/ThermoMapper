@@ -357,14 +357,79 @@ public sealed class RankAndOutputSideTests(ITestOutputHelper output)
         Func<double, double, double[]> mixed = (x1, x2) => [Math.Cos(pi * x1) + x2 * x2, x1 * x2];
         Func<double, double, double[,]> mixedJ = (x1, x2) => new[,] { { -pi * Math.Sin(pi * x1), 2 * x2 }, { x2, x1 } };
         (double[,] c3, double[,] b3) = Moments(mixed, mixedJ, 1.0);
-        double equal = MatrixPoincare.Ratio(c1, b1), halved = MatrixPoincare.Ratio(c2, b2), below = MatrixPoincare.Ratio(c3, b3);
-        double outside = MatrixPoincare.Ratio(new[,] { { 1.0, 0.0 }, { 0.0, 1.0 } }, new[,] { { 1.0, 0.0 }, { 0.0, 0.0 } });
+        double[,] identity = Diagonal(1.0, 1.0);
+        double equal = MatrixPoincare.Ratio(c1, b1, identity), halved = MatrixPoincare.Ratio(c2, b2, identity), below = MatrixPoincare.Ratio(c3, b3, identity);
+        double outside = MatrixPoincare.Ratio(identity, Diagonal(1.0, 0.0), identity);
         output.WriteLine($"cosines {equal:F15}; D halved {halved:F12}; a mixed field {below:F6}; outside the bound's range {outside}");
         Assert.Equal(1.0, equal, 12);
         Assert.Equal(2.0, halved, 11);
         Assert.True(below < 1.0, $"{below}");
         Assert.True(double.IsPositiveInfinity(outside));
     }
+
+    /// <summary>
+    /// The ratio in term space (spectral-solver brief, D), the least c with MΣMᵀ ≼ c·MKMᵀ, with K = I and Σ = diag(0.25, 1) unless stated.
+    /// It is scale-free, so a direction the map weights at 10⁻⁷ counts in full: 1, where a cutoff on the formed output-space matrices,
+    /// squared in M, dropped it and read 0.25. With Σ = diag(0.25, 2) that cutoff hid a violation, 2. Only a direction M does not reach
+    /// drops out, M = diag(1, 0): 0.25. A direction K does not reach is infinite when Σ has mass there, and drops out when Σ's mass there
+    /// is rounding. Formed matrices, map = I, keep a K eigenvalue at 10⁻¹⁴ of the largest: 1.
+    /// </summary>
+    [Fact]
+    public void MatrixPoincare_TermSpaceWitnesses()
+    {
+        double[,] sigma = Diagonal(0.25, 1.0), doubled = Diagonal(0.25, 2.0), k = Diagonal(1.0, 1.0);
+        Assert.Equal(1.0, MatrixPoincare.Ratio(sigma, k, Diagonal(1.0, 1.0)), 15);
+        Assert.Equal(1.0, MatrixPoincare.Ratio(sigma, k, Diagonal(1.0, 1e-7)), 15);
+        Assert.Equal(0.25, MatrixPoincare.Ratio(sigma, k, Diagonal(1.0, 0.0)), 15);
+        Assert.Equal(2.0, MatrixPoincare.Ratio(doubled, k, Diagonal(1.0, 1e-7)), 15);
+        Assert.True(double.IsPositiveInfinity(MatrixPoincare.Ratio(sigma, Diagonal(1.0, 0.0), k)));
+        Assert.Equal(1.0, MatrixPoincare.Ratio(Diagonal(1.0, 3e-17), Diagonal(1.0, 0.0), k), 15);
+        Assert.Equal(1.0, MatrixPoincare.Ratio(Diagonal(0.25, 1e-14), Diagonal(1.0, 1e-14), k), 12);
+        // A rank-deficient map whose range is no coordinate axis: M = [1, 1] reads (Σ₁₁ + Σ₂₂)/(K₁₁ + K₂₂) along (1, 1)/√2.
+        Assert.Equal(1.25 / 2.0, MatrixPoincare.Ratio(sigma, k, new[,] { { 1.0, 1.0 } }), 15);
+    }
+
+    /// <summary>
+    /// The output metric enters through its range (spectral-solver brief, D). W_y = diag(1, 10⁻¹⁶) is positive definite, and a diagonal
+    /// metric's range is exact, so the map is H itself: with H = I, Σ_B = diag(0.25, 2) and K_D = I the ratio is 2. The root the check read
+    /// before drops the eigenvalue at 10⁻¹⁶ and keeps one row, [1, 0], which reads 0.25. A metric with a zero weight drops that output;
+    /// a dense metric's range is read from its eigensystem.
+    /// </summary>
+    [Fact]
+    public void MatrixPoincare_ReadsTheOutputMetricThroughItsRange()
+    {
+        double[,] h = Diagonal(1.0, 1.0), sigma = Diagonal(0.25, 2.0), k = Diagonal(1.0, 1.0);
+        double[,] weak = Diagonal(1.0, 1e-16);
+        Assert.Null(MatrixPoincare.MetricRange(weak, () => throw new InvalidOperationException("A diagonal metric needs no eigensystem.")));
+        Assert.Equal(2.0, MatrixPoincare.Ratio(sigma, k, h), 15);
+        Assert.Equal(0.25, MatrixPoincare.Ratio(sigma, k, new[,] { { 1.0, 0.0 } }), 15);
+
+        double[,]? dropped = MatrixPoincare.MetricRange(Diagonal(1.0, 0.0), () => throw new InvalidOperationException());
+        Assert.Equal(new[,] { { 1.0, 0.0 } }, dropped);
+
+        var dense = new[,] { { 1.0, 1.0 }, { 1.0, 1.0 } };   // rank one, along (1, 1)/√2
+        double[,]? line = MatrixPoincare.MetricRange(dense, () => ScaledEigen.Of(dense));
+        Assert.NotNull(line);
+        Assert.Equal(1, line.GetLength(0));
+        Assert.Equal(1.0 / Math.Sqrt(2.0), Math.Abs(line[0, 0]), 15);
+        Assert.Equal(line[0, 0], line[0, 1], 15);
+        Assert.Null(MatrixPoincare.MetricRange(FunctionalActiveSubspaceTests.RandomMetric(5, 13), () => ScaledEigen.Of(FunctionalActiveSubspaceTests.RandomMetric(5, 13))));
+    }
+
+    /// <summary>A structure's ratio over the whole term space is kept with its forms and read once (spectral-solver brief, D): a draw read
+    /// twice in one readout, on a miss and then a hit, and the same draw read alone give the same bits.</summary>
+    [Fact]
+    public void MatrixPoincare_StructureRatio_SameBitsOnHitAndMiss()
+    {
+        BassData data = SensitivityFixture.Functional();
+        BassFit fit = SensitivityFixture.FitFunctional();
+        IReadOnlyList<double> twice = fit.ActiveSubspace(data, new ActiveSubspaceSpec { Draws = [3, 3], MatrixPoincare = true }).MatrixPoincare!.Ratios;
+        double alone = fit.ActiveSubspace(data, new ActiveSubspaceSpec { Draws = [3], MatrixPoincare = true }).MatrixPoincare!.Ratios[0];
+        Assert.Equal(twice[0], twice[1]);
+        Assert.Equal(alone, twice[0]);
+    }
+
+    private static double[,] Diagonal(double a, double b) => new[,] { { a, 0.0 }, { 0.0, b } };
 
     /// <summary>
     /// On fitted draws under the uniform law, asked: no violation for a scalar fit, a direct functional fit under a full W_y and a basis

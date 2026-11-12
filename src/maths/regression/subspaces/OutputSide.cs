@@ -126,46 +126,170 @@ public sealed class OutputPosterior
 /// <summary>
 /// The matrix Poincaré check (E8, slice 5; decision 6 in matrix form), fit-agnostic. Under a product law, Efron–Stein and each input's
 /// one-variable Poincaré inequality give Cov_ρ(f) ≼ E[J D Jᵀ], with D the diagonal of the inputs' Poincaré constants ((b − a)²/π² for a
-/// uniform input on [a, b]). The ratio is the largest generalized eigenvalue of the covariance against the bound, at most 1 when the
-/// inequality holds; the equality case is cos(πx) on [0, 1]. It is infinite where the covariance has mass outside the bound's range.
+/// uniform input on [a, b]). For f = M·b, a map M of t functions b with covariance Σ and gradient Gram K = E[∇b D ∇bᵀ], the ratio is the
+/// least c with MΣMᵀ ≼ c·MKMᵀ, at most 1 when the inequality holds; the equality case is cos(πx) on [0, 1].
+/// It is read in term space (spectral-solver brief, D): with u = Mᵀv it is the pencil (Σ, K)'s largest eigenvalue over range(Mᵀ), all of
+/// the term space when M has full column rank. The ratio is scale-free, so a direction M weights weakly counts in full, where a cutoff
+/// on the formed output-space matrices, squared in M, would drop it. It is infinite where Σ has mass in a direction of range(Mᵀ) that K
+/// does not reach.
 /// </summary>
 public static class MatrixPoincare
 {
-    /// <summary>max_v vᵀAv / vᵀBv for symmetric positive semidefinite <paramref name="covariance"/> A and <paramref name="bound"/> B.</summary>
-    public static double Ratio(double[,] covariance, double[,] bound)
+    private const double MachineEpsilon = 2.220446049250313e-16;   // 2⁻⁵²
+
+    /// <summary>
+    /// The least c with MΣMᵀ ≼ c·MKMᵀ, for symmetric positive semidefinite <paramref name="termCovariance"/> Σ and
+    /// <paramref name="termBound"/> K (t × t) and a <paramref name="map"/> M (rows × t). Formed output-space matrices A and B pass as
+    /// Σ = A, K = B and M = I. Forming a product squares its factor, so a caller holding the factor passes it rather than the product.
+    /// </summary>
+    public static double Ratio(double[,] termCovariance, double[,] termBound, double[,] map)
     {
-        ArgumentNullException.ThrowIfNull(covariance);
-        ArgumentNullException.ThrowIfNull(bound);
-        int m = bound.GetLength(0);
-        if (bound.GetLength(1) != m || covariance.GetLength(0) != m || covariance.GetLength(1) != m)
-            throw new ArgumentException("The covariance and the bound are m × m alike.", nameof(bound));
-        double scale = 0.0;
-        foreach (double x in bound) scale = Math.Max(scale, Math.Abs(x));
-        foreach (double x in covariance) scale = Math.Max(scale, Math.Abs(x));
-        if (!(scale > 0.0)) return 0.0;
-        EigenResult e = ScaledEigen.Of(bound);
+        ArgumentNullException.ThrowIfNull(termCovariance);
+        ArgumentNullException.ThrowIfNull(termBound);
+        ArgumentNullException.ThrowIfNull(map);
+        int t = termBound.GetLength(0);
+        if (termBound.GetLength(1) != t || termCovariance.GetLength(0) != t || termCovariance.GetLength(1) != t)
+            throw new ArgumentException("The covariance and the bound are t × t alike.", nameof(termBound));
+        if (map.GetLength(1) != t) throw new ArgumentException($"The map has one column per term: {map.GetLength(1)} for {t}.", nameof(map));
+        double[,]? q = RowSpace(map);
+        return q is null ? PencilRatio(termCovariance, termBound) : PencilRatio(Restrict(termCovariance, q), Restrict(termBound, q));
+    }
+
+    /// <summary>An orthonormal basis of range(Mᵀ) as columns (t × r), from M's thin SVD over its numerical rank, decided on M itself and not
+    /// its square; null when M has full column rank and range(Mᵀ) is the whole term space.</summary>
+    internal static double[,]? RowSpace(double[,] map)
+    {
+        int t = map.GetLength(1);
+        ThinSvdResult svd = ThinSvd.Decompose(map);
+        int r = svd.NumericalRank;
+        if (r == t) return null;
+        var q = new double[t, r];
+        for (int k = 0; k < r; k++)
+            for (int a = 0; a < t; a++) q[a, k] = svd.RightVectors[k][a];
+        return q;
+    }
+
+    /// <summary>QᵀAQ, symmetrized, for an orthonormal Q.</summary>
+    internal static double[,] Restrict(double[,] a, double[,] q)
+    {
+        int t = q.GetLength(0), r = q.GetLength(1);
+        var aq = new double[t, r];
+        for (int i = 0; i < t; i++)
+            for (int k = 0; k < t; k++)
+            {
+                double x = a[i, k];
+                if (x == 0.0) continue;
+                for (int j = 0; j < r; j++) aq[i, j] += x * q[k, j];
+            }
+        var restricted = new double[r, r];
+        for (int i = 0; i < r; i++)
+            for (int j = 0; j <= i; j++)
+            {
+                double s = 0.0, u = 0.0;
+                for (int k = 0; k < t; k++)
+                {
+                    s += q[k, i] * aq[k, j];
+                    u += q[k, j] * aq[k, i];
+                }
+                restricted[i, j] = restricted[j, i] = 0.5 * (s + u);
+            }
+        return restricted;
+    }
+
+    /// <summary>
+    /// sup_u uᵀAu / uᵀBu over every u, for symmetric positive semidefinite A and B of one order n. B's eigendecomposition splits the space
+    /// into B's range, where the pencil's largest eigenvalue is read, and the rest, where mass of A makes the ratio infinite. Each form is
+    /// judged on its own scale, near rounding: an eigenvalue of B at or below 8nε of B's largest counts as zero, and so does A's mass in a
+    /// direction at or below 8nε of ‖A‖_F, so a direction null in both drops out.
+    /// </summary>
+    internal static double PencilRatio(double[,] a, double[,] b)
+    {
+        int n = b.GetLength(0);
+        double frobenius = 0.0;
+        foreach (double x in a) frobenius += x * x;
+        frobenius = Math.Sqrt(frobenius);
+        if (!(frobenius > 0.0)) return 0.0;
+        double resolution = 8.0 * n * MachineEpsilon;
+        EigenResult e = ScaledEigen.Of(b);
         double top = Math.Max(e.Eigenvalues.Max(), 0.0);
         var kept = new List<int>();
-        for (int q = 0; q < m; q++)
-            if (e.Eigenvalues[q] > 1e-12 * top) kept.Add(q);
-        // The covariance outside the bound's range: any mass there makes the ratio infinite.
-        double outside = 0.0;
-        for (int q = 0; q < m; q++)
+        double outside = 0.0;   // A's mass off B's range
+        for (int q = 0; q < n; q++)
         {
-            if (kept.Contains(q)) continue;
-            outside = Math.Max(outside, Quadratic(covariance, e.Eigenvectors[q], e.Eigenvectors[q]));
+            if (e.Eigenvalues[q] > resolution * top) kept.Add(q);
+            else outside = Math.Max(outside, Quadratic(a, e.Eigenvectors[q], e.Eigenvectors[q]));
         }
-        if (outside > 1e-12 * scale) return double.PositiveInfinity;
+        if (outside > resolution * frobenius) return double.PositiveInfinity;
         int r = kept.Count;
         if (r == 0) return 0.0;
-        var reduced = new double[r, r];   // diag(β)^{-1/2} Vᵀ A V diag(β)^{-1/2} on the bound's range
+        var av = new double[r][];
+        for (int j = 0; j < r; j++) av[j] = Multiply(a, e.Eigenvectors[kept[j]]);
+        var reduced = new double[r, r];   // diag(β)^{-1/2} Vᵀ A V diag(β)^{-1/2} on B's range
         for (int i = 0; i < r; i++)
-            for (int j = 0; j < r; j++)
-                reduced[i, j] = Quadratic(covariance, e.Eigenvectors[kept[i]], e.Eigenvectors[kept[j]])
-                                / Math.Sqrt(e.Eigenvalues[kept[i]] * e.Eigenvalues[kept[j]]);
-        for (int i = 0; i < r; i++)
-            for (int j = i + 1; j < r; j++) reduced[i, j] = reduced[j, i] = 0.5 * (reduced[i, j] + reduced[j, i]);
+            for (int j = 0; j <= i; j++)
+            {
+                double[] vi = e.Eigenvectors[kept[i]], vj = e.Eigenvectors[kept[j]];
+                double s = 0.0, u = 0.0;
+                for (int k = 0; k < n; k++)
+                {
+                    s += vi[k] * av[j][k];
+                    u += vj[k] * av[i][k];
+                }
+                reduced[i, j] = reduced[j, i] = 0.5 * (s + u) / Math.Sqrt(e.Eigenvalues[kept[i]] * e.Eigenvalues[kept[j]]);
+            }
         return Math.Max(0.0, ScaledEigen.Of(reduced).Eigenvalues.Max());
+    }
+
+    /// <summary>
+    /// The rows of an orthonormal basis of a symmetric positive semidefinite output metric W's range (r × m), the map from output space to
+    /// that range; null when W is positive definite and its range is every output. Congruence by a factor of full column rank leaves the
+    /// ratio unchanged, so the check reads W through this range alone, not through a root that drops W's small eigenvalues (spectral-solver
+    /// brief, D). A diagonal W's range is exact, its outputs of positive weight; otherwise an eigenvalue of <paramref name="eigen"/> at or
+    /// below m·ε of the largest counts as zero, the resolution of a formed matrix's spectrum.
+    /// </summary>
+    internal static double[,]? MetricRange(double[,] w, Func<EigenResult> eigen)
+    {
+        int m = w.GetLength(0);
+        bool diagonal = true;
+        for (int i = 0; i < m && diagonal; i++)
+            for (int j = 0; j < m; j++)
+                if (i != j && w[i, j] != 0.0) { diagonal = false; break; }
+        var rows = new List<double[]>();
+        if (diagonal)
+        {
+            for (int l = 0; l < m; l++)
+                if (w[l, l] > 0.0)
+                {
+                    var row = new double[m];
+                    row[l] = 1.0;
+                    rows.Add(row);
+                }
+        }
+        else
+        {
+            EigenResult e = eigen();
+            double top = Math.Max(e.Eigenvalues.Max(), 0.0);
+            for (int q = 0; q < m; q++)
+                if (e.Eigenvalues[q] > m * MachineEpsilon * top) rows.Add(e.Eigenvectors[q]);
+        }
+        if (rows.Count == m) return null;
+        var range = new double[rows.Count, m];
+        for (int k = 0; k < rows.Count; k++)
+            for (int l = 0; l < m; l++) range[k, l] = rows[k][l];
+        return range;
+    }
+
+    private static double[] Multiply(double[,] a, double[] v)
+    {
+        int n = v.Length;
+        var product = new double[n];
+        for (int i = 0; i < n; i++)
+        {
+            double s = 0.0;
+            for (int k = 0; k < n; k++) s += a[i, k] * v[k];
+            product[i] = s;
+        }
+        return product;
     }
 
     private static double Quadratic(double[,] a, double[] u, double[] v)
