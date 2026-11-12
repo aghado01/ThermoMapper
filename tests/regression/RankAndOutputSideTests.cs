@@ -435,9 +435,9 @@ public sealed class RankAndOutputSideTests(ITestOutputHelper output)
         var mixed = new double[m, 2];
         mixed[0, 0] = a;
         mixed[3, 1] = b;
-        BasisAdequacy zero = BasisAdequacy.Of([inside], [1.0], span, 2);
-        BasisAdequacy known = BasisAdequacy.Of([mixed], [1.0], span, 1);
-        BasisAdequacy second = BasisAdequacy.Of([mixed], [1.0], skewed, 2);
+        BasisAdequacy zero = AdequacyOf(inside, span, 2);
+        BasisAdequacy known = AdequacyOf(mixed, span, 1);
+        BasisAdequacy second = AdequacyOf(mixed, skewed, 2);
         output.WriteLine($"inside: share {zero.Shares[0]:E2}, defect {zero.Containment[0]:E2}; outside: share {known.Shares[0]:F15} against {b * b / (a * a + b * b):F15}");
         Assert.True(zero.Shares[0] <= 1e-15 && zero.Containment[0] <= 1e-15);
         Assert.Equal(b * b / (a * a + b * b), known.Shares[0], 15);
@@ -446,6 +446,10 @@ public sealed class RankAndOutputSideTests(ITestOutputHelper output)
         Assert.Equal(known.MeanShare, second.MeanShare, 14);
         Assert.Equal(2, second.SpanRank);
     }
+
+    // One factor's adequacy against a span, its output posterior built for it.
+    private static BasisAdequacy AdequacyOf(double[,] factor, double[,] span, int dimension) =>
+        BasisAdequacy.Of([factor], OutputPosterior.Of([factor], [1.0], dimension), span, dimension);
 
     /// <summary>
     /// On fits: curves y(x, t) = a(x)φ₁(t) + b(x)φ₂(t) + 0.01 noise, φ₁ and φ₂ orthonormal over 12 locations, a = 2x₁ + x₂ and
@@ -471,7 +475,7 @@ public sealed class RankAndOutputSideTests(ITestOutputHelper output)
             var span = new double[m, rank];
             for (int l = 0; l < m; l++)
                 for (int k = 0; k < rank; k++) span[l, k] = d.Map.Scales[l] * d.Map.Basis(l, k);
-            double truth = BasisAdequacy.Of([Root(gTrue)], [1.0], span, 1).MeanShare;
+            double truth = AdequacyOf(Root(gTrue), span, 1).MeanShare;
             worst = Math.Max(worst, Math.Abs(adequacy.MeanShare - truth));
             output.WriteLine($"rank {rank}: E[G]'s share outside the span {adequacy.MeanShare:F4}, the truth's for the same span {truth:F4} " +
                              $"(for span(φ₁) {1.49 / 6.49:F4}); draws {adequacy.Shares.Min():F4} to {adequacy.Shares.Max():F4}; the leading pattern's defect {adequacy.MeanContainment:E2}");

@@ -61,8 +61,10 @@ internal static partial class BassActiveSubspaces
         return Read(fit, data, spec, spec.OutputPatterns).Analysis;
     }
 
-    // The readout, with G's per-draw factors when patterns are asked (slice 5's output side and basis adequacy).
-    private static (ActiveSubspaceAnalysis Analysis, double[][,]? Factors) Read(BassFit fit, BassData data, ActiveSubspaceSpec spec, int patterns)
+    // The readout, with G's per-draw factors when patterns are asked (slice 5's output side and basis adequacy), and the output metric
+    // with its roots, which adequacy reads again.
+    private static (ActiveSubspaceAnalysis Analysis, double[][,]? Factors, MetricRoots Metric) Read(BassFit fit, BassData data, ActiveSubspaceSpec spec,
+                                                                                                   int patterns)
     {
         Fingerprint(fit, data);
         BassInputs inputs = BassInputs.Prepare(data, fit.Transform);
@@ -73,8 +75,8 @@ internal static partial class BassActiveSubspaces
         OutputInputs? at = Locations(spec.OutputMetric, fit.Transform);
         int m = at?.Locations ?? data.Response.Locations;
         Patterns(patterns, functional, m);
-        double[,] w = Metric(spec.OutputMetric, m);
-        double[,]? s0 = patterns > 0 ? PsdRoot(w) : null;
+        MetricRoots w = Metric(spec.OutputMetric, m);
+        double[,]? s0 = patterns > 0 ? w.PsdRoot : null;
         BassDraw[] pooled = [.. fit.Draws.SelectMany(c => c)];
         (int[] selected, double[] weights) = Draws3.Select(spec.Draws, pooled.Length, fit.DrawWeights, nameof(spec));
         Func<int, Surface> surface = functional ? DirectFunctional(fit, data, inputs, pooled, at) : d => Scalar(fit, pooled[d]);
@@ -90,12 +92,13 @@ internal static partial class BassActiveSubspaces
             for (int d = 0; d < selected.Length; d++)
             {
                 Surface s = surface(selected[d]);
-                forms[d] = (s.Terms, functional ? Quadratic(s.H, w) : Outer(Row(s.H, 0)));
+                forms[d] = (s.Terms, functional ? Quadratic(s.H, w.W) : Outer(Row(s.H, 0)));
                 hs![d] = s.H;
             }
         double[][,]? error = null;
         if (frame.Route == ActiveSubspaceRoute.Exact)
         {
+            TermFactors? termFactors = factors is null ? null : new TermFactors(moments!, frame);
             for (int d = 0; d < selected.Length; d++)
             {
                 (BassTerm[] terms, double[,] mm) = forms![d];
@@ -103,13 +106,13 @@ internal static partial class BassActiveSubspaces
                                             : moments!.GradientOuterProduct(terms, Coefficients(pooled[selected[d]]));
                 cMetric[d] = Congruence(cBox, frame.L);
                 draws[d] = DrawSubspace.FromC(cMetric[d], spec.Dimension);
-                if (factors is not null) factors[d] = OutputFactor(moments, frame, terms, hs![d], s0!);
+                if (factors is not null) factors[d] = OutputFactor(termFactors!, terms, hs![d], s0!);
             }
         }
         else
         {
             error = new double[selected.Length][,];
-            double[,] root = Root(w);
+            double[,] root = w.Root;
             PointSet points = PointsOf(frame, spec.Points, spec.Seed);
             int batch = functional ? (int)Math.Max(1, BatchValues / ((long)points.N * m * frame.P)) : Batch;
             for (int start = 0; start < selected.Length; start += batch)
@@ -138,7 +141,7 @@ internal static partial class BassActiveSubspaces
                                                   frame.Measure, PointCount(frame, spec.Points), posterior, error, poincare, Array.AsReadOnly(selected),
                                                   spec.Rank is null ? null : RankPosterior.Of(draws, weights, spec.Rank),
                                                   factors is null ? null : OutputPosterior.Of(factors, weights, patterns), matrix, status, Boxes(frame));
-        return (analysis, factors);
+        return (analysis, factors, w);
     }
 
     public static ActiveSubspaceAnalysis Of(BassBasisFit fit, ActiveSubspaceSpec spec)
@@ -151,8 +154,8 @@ internal static partial class BassActiveSubspaces
                               spec.Points, spec.Dimension);
         int m = fit.Decomposition.Locations;
         Patterns(spec.OutputPatterns, true, m);
-        double[,] w = Metric(spec.OutputMetric, m);
-        double[,]? s0 = spec.OutputPatterns > 0 ? PsdRoot(w) : null;
+        MetricRoots w = Metric(spec.OutputMetric, m);
+        double[,]? s0 = spec.OutputPatterns > 0 ? w.PsdRoot : null;
         (int[] selected, Func<int, Surface> surface) = BasisSurfaces(fit, spec.Draws, nameof(spec));
         BassMoments? moments = frame.Measure is null ? null : BassMoments.On(inputs, degree, frame.Measure, frame.Hinges);
         var cMetric = new double[selected.Length][,];
@@ -164,24 +167,25 @@ internal static partial class BassActiveSubspaces
             for (int d = 0; d < selected.Length; d++)
             {
                 Surface s = surface(selected[d]);
-                forms[d] = (s.Terms, Quadratic(s.H, w));
+                forms[d] = (s.Terms, Quadratic(s.H, w.W));
                 hs![d] = s.H;
             }
         double[][,]? error = null;
         if (frame.Route == ActiveSubspaceRoute.Exact)
         {
+            TermFactors? termFactors = factors is null ? null : new TermFactors(moments!, frame);
             for (int d = 0; d < selected.Length; d++)
             {
                 cMetric[d] = Congruence(Symmetric(moments!.GradientCross(forms![d].Terms, forms[d].Terms, forms[d].M)), frame.L);
                 draws[d] = DrawSubspace.FromC(cMetric[d], spec.Dimension);
-                if (factors is not null) factors[d] = OutputFactor(moments, frame, forms[d].Terms, hs![d], s0!);
+                if (factors is not null) factors[d] = OutputFactor(termFactors!, forms[d].Terms, hs![d], s0!);
             }
         }
         else
         {
             // J = G·J_w with J_w the components' gradients, so JᵀW_yJ = J_wᵀ(GᵀW_yG)J_w: the output metric's root in component space.
             error = new double[selected.Length][,];
-            double[,] root = Root(ComponentMetric(fit, w));
+            double[,] root = Root(ComponentMetric(fit, w.W));
             int r = fit.Components.Count;
             double[,]? outputMap = s0 is null ? null : Multiply(s0, ReconstructionMap(fit));   // S·G, m × K
             PointSet points = PointsOf(frame, spec.Points, spec.Seed);
@@ -225,9 +229,11 @@ internal static partial class BassActiveSubspaces
         (BassInputs basisInputs, BassFit first, _) = BasisInputs(fit);
         SameInputs(first.Transform, basisInputs, direct.Transform, BassInputs.Prepare(directData, direct.Transform));
         int k = Math.Max(1, spec.OutputPatterns);
-        (ActiveSubspaceAnalysis analysis, double[][,]? factors) = Read(direct, directData, spec, k);
-        double[,] span = Multiply(PsdRoot(Metric(spec.OutputMetric, m)), ReconstructionMap(fit));
-        return BasisAdequacy.Of(factors!, analysis.Posterior.Weights, span, k);
+        // The direct readout's output posterior and W_y's root, as it read them (spectral-solver brief, C1 and C2): the same factors
+        // and metric, so neither is decomposed again.
+        (ActiveSubspaceAnalysis analysis, double[][,]? factors, MetricRoots w) = Read(direct, directData, spec, k);
+        double[,] span = Multiply(w.PsdRoot, ReconstructionMap(fit));
+        return BasisAdequacy.Of(factors!, analysis.Outputs!, span, k);
     }
 
     // One draw on the sampled route. At each point the outputs' Jacobian in box units (∂/∂x = width·∂/∂z) is mapped by the output
@@ -291,36 +297,68 @@ internal static partial class BassActiveSubspaces
         return (DrawSubspace.FromFactor(factor, dimension), c, e, g);
     }
 
-    // G's factor on the exact route: G = E[J W_x Jᵀ] = S·H·K·Hᵀ·S with K_ab = Σ_ij (LLᵀ)_ij E[∂ᵢB_a ∂ⱼB_b], so F = S·H·F_K with K = F_KF_Kᵀ
-    // from K's eigendecomposition, its positive part.
-    private static double[,] OutputFactor(BassMoments moments, Frame frame, BassTerm[] terms, double[,] h, double[,] s)
+    // G's factor on the exact route: G = E[J W_x Jᵀ] = S·H·K·Hᵀ·S with K_ab = Σ_ij (LLᵀ)_ij E[∂ᵢB_a ∂ⱼB_b], so F = S·H·F_K with K = F_KF_Kᵀ.
+    private static double[,] OutputFactor(TermFactors termFactors, BassTerm[] terms, double[,] h, double[,] s) =>
+        Multiply(s, Multiply(h, termFactors.Of(terms)));
+
+    // F_K with K = F_KF_Kᵀ from K's eigendecomposition, its positive part, per structure within a readout (spectral-solver brief, C3): K
+    // depends on a draw's ordered terms and the frame alone, and draws repeat structures. W_x = LLᵀ is formed once. A pure cache under a
+    // constant budget, filled in draw order and never evicted, whose entries are what a miss computes, so a draw's factor is the same bits
+    // whether it hits or not.
+    private sealed class TermFactors
     {
-        int p = frame.P, t = terms.Length;
-        var wx = new double[p, p];
-        for (int i = 0; i < p; i++)
-            for (int j = 0; j < p; j++)
-                for (int k = 0; k < p; k++) wx[i, j] += frame.L[i, k] * frame.L[j, k];
-        double[,] gram = moments.GradientGram(terms, wx);
-        EigenResult e = ScaledEigen.Of(gram);
-        double top = Math.Max(e.Eigenvalues.Max(), 0.0);
-        int[] kept = [.. Enumerable.Range(0, t).Where(q => e.Eigenvalues[q] > 1e-14 * top)];
-        var fk = new double[t, Math.Max(1, kept.Length)];
-        for (int c = 0; c < kept.Length; c++)
+        private readonly BassMoments _moments;
+        private readonly double[,] _wx;
+        private readonly Dictionary<BassTerm[], double[,]> _kept = new(Structure.Instance);
+        private long _values;
+
+        public TermFactors(BassMoments moments, Frame frame)
         {
-            double root = Math.Sqrt(e.Eigenvalues[kept[c]]);
-            for (int a = 0; a < t; a++) fk[a, c] = root * e.Eigenvectors[kept[c]][a];
+            _moments = moments;
+            int p = frame.P;
+            _wx = new double[p, p];
+            for (int i = 0; i < p; i++)
+                for (int j = 0; j < p; j++)
+                    for (int k = 0; k < p; k++) _wx[i, j] += frame.L[i, k] * frame.L[j, k];
         }
-        return Multiply(s, Multiply(h, fk));
+
+        public double[,] Of(BassTerm[] terms)
+        {
+            if (_kept.TryGetValue(terms, out double[,]? kept)) return kept;
+            double[,] fk = Compute(terms);
+            if (_values + fk.Length <= GramCacheValues)
+            {
+                _kept[terms] = fk;
+                _values += fk.Length;
+            }
+            return fk;
+        }
+
+        private double[,] Compute(BassTerm[] terms)
+        {
+            int t = terms.Length;
+            double[,] gram = _moments.GradientGram(terms, _wx);
+            EigenResult e = ScaledEigen.Of(gram);
+            double top = Math.Max(e.Eigenvalues.Max(), 0.0);
+            int[] kept = [.. Enumerable.Range(0, t).Where(q => e.Eigenvalues[q] > 1e-14 * top)];
+            var fk = new double[t, Math.Max(1, kept.Length)];
+            for (int c = 0; c < kept.Length; c++)
+            {
+                double root = Math.Sqrt(e.Eigenvalues[kept[c]]);
+                for (int a = 0; a < t; a++) fk[a, c] = root * e.Eigenvectors[kept[c]][a];
+            }
+            return fk;
+        }
     }
 
     // The matrix check when asked and applicable (a product law, which gives the moment route's forms, of uniform laws over continuous
     // inputs alone); otherwise its status says why it was not read.
     private static (MatrixPoincareCheck? Check, MatrixPoincareStatus Status) MatrixCheckIf(bool asked, Frame frame, BassMoments? moments,
-                                                                                          (BassTerm[] Terms, double[,] M)[]? forms, double[][,]? hs, double[,] w)
+                                                                                          (BassTerm[] Terms, double[,] M)[]? forms, double[][,]? hs, MetricRoots w)
     {
         if (!asked) return (null, MatrixPoincareStatus.NotAsked);
         if (forms is null) return (null, MatrixPoincareStatus.NotApplicable);
-        MatrixPoincareCheck? check = MatrixCheck(frame, moments!, forms, hs!, Root(w));
+        MatrixPoincareCheck? check = MatrixCheck(frame, moments!, forms, hs!, w.Root);
         return (check, check is null ? MatrixPoincareStatus.NotApplicable : MatrixPoincareStatus.Computed);
     }
 
@@ -452,19 +490,30 @@ internal static partial class BassActiveSubspaces
         return g;
     }
 
-    // W_y's symmetric root, positive semidefinite: S = Σ √λ_q v_qv_qᵀ, so the output side keeps the locations' coordinates.
-    private static double[,] PsdRoot(double[,] w)
+    // W_y's symmetric root, positive semidefinite: S = Σ √λ_q v_qv_qᵀ, so the output side keeps the locations' coordinates. Each
+    // eigenvector's outer product runs over its nonzero components alone: a zero component adds a signed zero to a sum that starts at +0,
+    // which leaves it unchanged, so the root is the same bits, and an identity or diagonal metric costs O(m²) here rather than O(m³).
+    private static double[,] PsdRootOf(EigenResult e, int m)
     {
-        int m = w.GetLength(0);
-        EigenResult e = ScaledEigen.Of(w);
         var s = new double[m, m];
+        var nonzero = new int[m];
         for (int q = 0; q < m; q++)
         {
             double root = Math.Sqrt(Math.Max(0.0, e.Eigenvalues[q]));
             if (root == 0.0) continue;
             double[] v = e.Eigenvectors[q];
+            int count = 0;
             for (int i = 0; i < m; i++)
-                for (int j = 0; j < m; j++) s[i, j] += root * v[i] * v[j];
+                if (v[i] != 0.0) nonzero[count++] = i;
+            for (int a = 0; a < count; a++)
+            {
+                int i = nonzero[a];
+                for (int b = 0; b < count; b++)
+                {
+                    int j = nonzero[b];
+                    s[i, j] += root * v[i] * v[j];
+                }
+            }
         }
         for (int i = 0; i < m; i++)
             for (int j = i + 1; j < m; j++) s[i, j] = s[j, i] = 0.5 * (s[i, j] + s[j, i]);
@@ -1054,29 +1103,48 @@ internal static partial class BassActiveSubspaces
     }
 
     // W_y over m locations: the identity when none is declared; refused unless m × m, symmetric and positive semidefinite.
-    private static double[,] Metric(OutputMetric? declared, int m)
+    private static MetricRoots Metric(OutputMetric? declared, int m)
     {
         if (declared is null)
         {
             var identity = new double[m, m];
             for (int l = 0; l < m; l++) identity[l, l] = 1.0;
-            return identity;
+            return new MetricRoots(identity);
         }
         double[,] w = declared.Matrix ?? throw new ArgumentException("The output metric needs a matrix.");
         if (w.GetLength(0) != m || w.GetLength(1) != m) throw new ArgumentException($"The output metric is {m} × {m}, one row per output location.");
         for (int i = 0; i < m; i++)
             for (int j = 0; j < m; j++)
                 if (!double.IsFinite(w[i, j]) || w[i, j] != w[j, i]) throw new ArgumentException("The output metric is finite and symmetric.");
-        Root(w);
-        return w;
+        var roots = new MetricRoots(w);
+        _ = roots.Root;   // refuses a metric with a negative eigenvalue beyond rounding; the readout reads the root kept here
+        return roots;
     }
+
+    // W_y and its eigensystem, decomposed at most once per readout (spectral-solver brief, C2). Its two roots read that eigensystem, each
+    // by its own rule and each built once: R, one row per eigenvalue above 10⁻¹⁴ of the scale, for C's factor and the matrix check;
+    // and S, symmetric, every positive eigenvalue kept, for the output side.
+    private sealed class MetricRoots(double[,] w)
+    {
+        private EigenResult? _eigen;
+        private double[,]? _root, _psdRoot;
+
+        public double[,] W { get; } = w;
+
+        public double[,] Root => _root ??= RootOf(Eigen, W.GetLength(0));
+
+        public double[,] PsdRoot => _psdRoot ??= PsdRootOf(Eigen, W.GetLength(0));
+
+        private EigenResult Eigen => _eigen ??= ScaledEigen.Of(W);
+    }
+
+    // R with W = RᵀR for a symmetric W, read from a fresh eigendecomposition.
+    private static double[,] Root(double[,] w) => RootOf(ScaledEigen.Of(w), w.GetLength(0));
 
     // R with W_y = RᵀR, from W_y's eigendecomposition, one row per positive eigenvalue; refused where W_y has a negative eigenvalue
     // beyond rounding.
-    private static double[,] Root(double[,] w)
+    private static double[,] RootOf(EigenResult e, int m)
     {
-        int m = w.GetLength(0);
-        EigenResult e = ScaledEigen.Of(w);
         double top = Math.Max(e.Eigenvalues.Max(x => Math.Abs(x)), double.Epsilon);
         var rows = new List<double[]>();
         for (int q = 0; q < m; q++)

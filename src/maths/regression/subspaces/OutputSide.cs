@@ -197,13 +197,19 @@ public sealed record BasisAdequacy(IReadOnlyList<double> Shares, IReadOnlyList<d
 {
     /// <summary>
     /// Adequacy of the factors <paramref name="factors"/> (G_s = F_sF_sᵀ, m × c_s) against the column span of <paramref name="span"/>
-    /// (m × K, any basis of it), with <paramref name="dimension"/> leading patterns, under <paramref name="weights"/>.
+    /// (m × K, any basis of it), with <paramref name="dimension"/> leading patterns. <paramref name="outputs"/> is these factors' output
+    /// posterior with those patterns, <see cref="OutputPosterior.Of"/>, whose weights the shares are averaged under: taken as read, so
+    /// a caller that has built it does not decompose the factors again (spectral-solver brief, C1).
     /// </summary>
-    public static BasisAdequacy Of(IReadOnlyList<double[,]> factors, IReadOnlyList<double> weights, double[,] span, int dimension)
+    public static BasisAdequacy Of(IReadOnlyList<double[,]> factors, OutputPosterior outputs, double[,] span, int dimension)
     {
         ArgumentNullException.ThrowIfNull(factors);
+        ArgumentNullException.ThrowIfNull(outputs);
         ArgumentNullException.ThrowIfNull(span);
-        OutputPosterior g = OutputPosterior.Of(factors, weights, dimension);
+        if (outputs.Weights.Count != factors.Count) throw new ArgumentException("The output posterior is these factors'.", nameof(outputs));
+        if (outputs.MeanPatterns.GetLength(1) > dimension)
+            throw new ArgumentException($"The output posterior reads {outputs.MeanPatterns.GetLength(1)} patterns; adequacy reads {dimension}.", nameof(outputs));
+        OutputPosterior g = outputs;
         int m = span.GetLength(0);
         (_, double[][] q) = OutputPosterior.Left(span);   // an orthonormal basis of the span
         var shares = new double[factors.Count];
