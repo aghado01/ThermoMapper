@@ -1333,9 +1333,10 @@ public sealed class BassDesign
     }
 
     // The border of a one-way hinge against the current columns, each entry the column's prefix table at the hinge's knot (built here the
-    // first time it is needed) over c, the hinge's peak. The diagonal is the column's own dot. Null where tables do not serve this
-    // proposal: a design too small or with too many variables for them to pay, a direct design, a prior apart from the Gram, weights that
-    // count rows, degree three or more, a term of order two or more or with a categorical or functional part, or a variable past the budget.
+    // first time it is needed) over c, the hinge's peak as the kernel reads it (its normalization). The diagonal is the column's own dot.
+    // Null where tables do not serve this proposal: a design too small or with too many variables for them to pay, a direct design, a
+    // prior apart from the Gram, weights that count rows, degree three or more, a term of order two or more or with a categorical or
+    // functional part, or a variable past the budget.
     // `approximate` is true with a column to read from: the entries are the dots' within rounding, not in bits. Under weights the table is over
     // roots∘z, since Σ rootᵢ zᵢ = 0 drops the new column's centring.
     private double[]? TableBorder(BassTerm term, double[] column, out double diagonal, out bool approximate)
@@ -1349,7 +1350,7 @@ public sealed class BassDesign
             return null;
         HingeFactor f = term.Continuous[0];
         if (f.Variable >= TableVariables() || OrderOf(f.Variable) is not { } order) return null;
-        double sign = f.Sign, c = Hinge.Power(degree, (sign + 1.0) / 2.0 - sign * order.Knots[f.Knot]);
+        double c = Hinge.Power(degree, _basis.Kernels.ContinuousPeak(term));   // the kernel's own c, so the tables follow its normalization
         int variables = _basis.Inputs.Cases.ContinuousCount;
         double[]? roots = _response.Roots;
         var u = new double[_terms.Count];

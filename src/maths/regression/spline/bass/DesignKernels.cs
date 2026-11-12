@@ -14,14 +14,29 @@ namespace Maths.Regression.Spline.Bass;
 /// </summary>
 public sealed class DesignKernels
 {
-    /// <summary>The kernels of <paramref name="inputs"/> at hinge degree <paramref name="degree"/>.</summary>
-    public DesignKernels(BassInputs inputs, int degree)
+    private readonly ContinuousHingeKernel _continuous;
+
+    /// <summary>
+    /// The kernels of <paramref name="inputs"/> at hinge degree <paramref name="degree"/>, each hinge product normalized to a maximum
+    /// of one over <paramref name="normalization"/>'s interval: the box, R's rule, by default.
+    /// </summary>
+    public DesignKernels(BassInputs inputs, int degree, HingeNormalization normalization = HingeNormalization.Box)
     {
         ArgumentNullException.ThrowIfNull(inputs);
         if (degree < 1) throw new ArgumentOutOfRangeException(nameof(degree), "The degree is a positive integer.");
-        Case = [new ContinuousHingeKernel(inputs, degree), new CategoricalSubsetKernel(inputs), new LegendreProductKernel(inputs)];
-        Output = [new FunctionalHingeKernel(inputs, degree)];
+        if (normalization is not (HingeNormalization.Box or HingeNormalization.TrainingRange))
+            throw new ArgumentOutOfRangeException(nameof(normalization), $"No hinge normalization {normalization}.");
+        Normalization = normalization;
+        _continuous = new ContinuousHingeKernel(inputs, degree, normalization);
+        Case = [_continuous, new CategoricalSubsetKernel(inputs), new LegendreProductKernel(inputs)];
+        Output = [new FunctionalHingeKernel(inputs, degree, normalization)];
     }
+
+    /// <summary>The interval each hinge product is normalized over.</summary>
+    public HingeNormalization Normalization { get; }
+
+    // The base of c for the term's continuous hinges, Πⱼ peakⱼ: what the prefix tables divide by, so their entries take the kernel's rule.
+    internal double ContinuousPeak(BassTerm term) => _continuous.Peak(term.Continuous);
 
     /// <summary>The case-side kernels, in the order a column applies them.</summary>
     public IReadOnlyList<IDesignKernel<CaseInputs>> Case { get; }
@@ -30,14 +45,18 @@ public sealed class DesignKernels
     public IReadOnlyList<IDesignKernel<OutputInputs>> Output { get; }
 }
 
-// A hinge product Πⱼ (sⱼ(xⱼ − tⱼ))₊^q / c, c its largest value over [0, 1] (R's makeBasis): the continuous and the
-// functional part differ in the variables they read, and share the arithmetic.
+// A hinge product Πⱼ (sⱼ(xⱼ − tⱼ))₊^q / c, c its largest value over each variable's normalization interval: the box [0, 1] (R's
+// makeBasis), or the training range, the variable's knots' ends, which no declared domain moves. The continuous and the functional
+// part differ in the variables they read, and share the arithmetic.
 internal abstract class HingeProductKernel<TPoints> : IDesignKernel<TPoints>
 {
-    protected HingeProductKernel(BassInputs inputs, int degree)
+    private readonly HingeNormalization _normalization;
+
+    protected HingeProductKernel(BassInputs inputs, int degree, HingeNormalization normalization)
     {
         Inputs = inputs;
         Degree = degree;
+        _normalization = normalization;
     }
 
     protected BassInputs Inputs { get; }
@@ -71,13 +90,7 @@ internal abstract class HingeProductKernel<TPoints> : IDesignKernel<TPoints>
     {
         IReadOnlyList<HingeFactor> factors = Part(term);
         if (factors.Count == 0) return;
-        double peak = 1.0;
-        foreach (HingeFactor f in factors)
-        {
-            double t = Knots(f.Variable)[f.Knot], s = f.Sign;
-            peak *= (s + 1.0) / 2.0 - s * t;
-        }
-        double c = Hinge.Power(Degree, peak);
+        double c = Hinge.Power(Degree, Peak(factors));
         bool divide = c != 0.0;   // a hinge facing its end of the range: zero there, so R leaves c at 1
         int last = factors.Count - 1;
         for (int k = 0; k <= last; k++)
@@ -95,14 +108,18 @@ internal abstract class HingeProductKernel<TPoints> : IDesignKernel<TPoints>
 
     public double Scale(BassTerm term) => Hinge.Normalizer(Degree, Peak(Part(term)));
 
-    // Πⱼ ((sⱼ + 1)/2 − sⱼtⱼ) over the factors in variable order.
-    private double Peak(IReadOnlyList<HingeFactor> factors)
+    // Πⱼ peakⱼ over the factors in order (Hinge.Peak), each over its variable's interval: on the box the same bits as R's
+    // Πⱼ ((sⱼ + 1)/2 − sⱼtⱼ). Under the training range the evaluated column is the same function of the raw inputs whatever box
+    // the transform reads, since each ratio (xⱼ − tⱼ)/(Uⱼ − tⱼ) cancels the box's affine map; c itself moves with the box.
+    internal double Peak(IReadOnlyList<HingeFactor> factors)
     {
         double peak = 1.0;
         foreach (HingeFactor f in factors)
         {
-            double s = f.Sign;
-            peak *= (s + 1.0) / 2.0 - s * Knots(f.Variable)[f.Knot];
+            ReadOnlySpan<double> knots = Knots(f.Variable);
+            peak *= _normalization == HingeNormalization.TrainingRange
+                ? Hinge.Peak(f.Sign, knots[f.Knot], knots[0], knots[^1])
+                : Hinge.Peak(f.Sign, knots[f.Knot], 0.0, 1.0);
         }
         return peak;
     }
@@ -124,25 +141,24 @@ internal abstract class HingeProductKernel<TPoints> : IDesignKernel<TPoints>
             }
         }
         if (factors.Count == 0) return;
-        double peak = 1.0;
         foreach (HingeFactor f in factors)
         {
-            double t = Knots(f.Variable)[f.Knot], s = f.Sign;
-            peak *= (s + 1.0) / 2.0 - s * t;
+            double t = Knots(f.Variable)[f.Knot];
             ReadOnlySpan<double> x = Values(at, f.Variable);
             if (f.Variable == differentiate)
                 for (int i = 0; i < column.Length; i++) column[i] *= Hinge.Derivative(Degree, f.Sign, t, x[i]);
             else
                 for (int i = 0; i < column.Length; i++) column[i] *= Hinge.Value(Degree, f.Sign, t, x[i]);
         }
-        double c = Hinge.Power(Degree, peak);
+        double c = Hinge.Power(Degree, Peak(factors));
         if (c == 0.0) return;   // a hinge facing its end of the range: zero there, so R leaves c at 1
         for (int i = 0; i < column.Length; i++) column[i] /= c;
     }
 }
 
 // The continuous predictors' hinge product, on the case side.
-internal sealed class ContinuousHingeKernel(BassInputs inputs, int degree) : HingeProductKernel<CaseInputs>(inputs, degree)
+internal sealed class ContinuousHingeKernel(BassInputs inputs, int degree, HingeNormalization normalization)
+    : HingeProductKernel<CaseInputs>(inputs, degree, normalization)
 {
     protected override IReadOnlyList<HingeFactor> Part(BassTerm term) => term.Continuous;
 
@@ -173,7 +189,8 @@ internal sealed class ContinuousHingeKernel(BassInputs inputs, int degree) : Hin
 }
 
 // The output variables' hinge product, on the output side of a direct functional response.
-internal sealed class FunctionalHingeKernel(BassInputs inputs, int degree) : HingeProductKernel<OutputInputs>(inputs, degree)
+internal sealed class FunctionalHingeKernel(BassInputs inputs, int degree, HingeNormalization normalization)
+    : HingeProductKernel<OutputInputs>(inputs, degree, normalization)
 {
     protected override IReadOnlyList<HingeFactor> Part(BassTerm term) => term.Functional;
 

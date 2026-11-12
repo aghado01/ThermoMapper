@@ -405,6 +405,10 @@ internal static class Hinge
 
     public static double Value(int degree, int sign, double knot, double x) => Power(degree, Math.Max(sign * (x - knot), 0.0));
 
+    // A factor's largest value at q = 1 over [lower, upper]: upper − t facing up, t − lower facing down. On the box, [0, 1], the same bits
+    // as R's (s + 1)/2 − s·t: 1 − t, and 0 − (−t) = t.
+    public static double Peak(int sign, double knot, double lower, double upper) => sign > 0 ? upper - knot : knot - lower;
+
     // column[i] *= Value(degree, sign, knot, x[i]), then column[i] /= divisor when `divide`: the scalar form's operations per element,
     // in its order, four lanes at a time for degrees one and two. The lanes' subtract, multiply, compare, select and divide are exact
     // per lane, so the bits are the scalar loop's on any hardware, and Math.Max's rules are kept: a NaN stays, a negative or −0 becomes +0.
@@ -447,8 +451,8 @@ internal static class Hinge
         return u > 0.0 ? degree * sign * Power(degree - 1, u) : 0.0;
     }
 
-    // 1/c with c the product's largest value on [0, 1], (Πⱼ ((sⱼ + 1)/2 − sⱼtⱼ))^q; 1 where c is 0, a hinge facing its end
-    // of the range, which is zero there and which R leaves at c = 1.
+    // 1/c with c the product's largest value over its normalization interval, (Πⱼ peakⱼ)^q (Peak); 1 where c is 0, a hinge facing
+    // its end of the range, which is zero there and which R leaves at c = 1.
     public static double Normalizer(int degree, double peak)
     {
         double c = Power(degree, peak);

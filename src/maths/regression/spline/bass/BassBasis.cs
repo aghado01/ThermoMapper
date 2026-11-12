@@ -24,14 +24,17 @@ public readonly record struct TermSupport(int CaseNonzero, double CaseMass, int 
 /// </summary>
 public sealed class BassBasis
 {
-    /// <summary>The basis of <paramref name="inputs"/> at hinge degree <paramref name="degree"/>.</summary>
-    public BassBasis(BassInputs inputs, int degree)
+    /// <summary>
+    /// The basis of <paramref name="inputs"/> at hinge degree <paramref name="degree"/>, its hinges normalized over
+    /// <paramref name="normalization"/>'s interval, the box by default.
+    /// </summary>
+    public BassBasis(BassInputs inputs, int degree, HingeNormalization normalization = HingeNormalization.Box)
     {
         ArgumentNullException.ThrowIfNull(inputs);
         if (degree < 1) throw new ArgumentOutOfRangeException(nameof(degree), "The degree is a positive integer.");
         Inputs = inputs;
         Degree = degree;
-        Kernels = new DesignKernels(inputs, degree);
+        Kernels = new DesignKernels(inputs, degree, normalization);
     }
 
     /// <summary>The training inputs.</summary>
