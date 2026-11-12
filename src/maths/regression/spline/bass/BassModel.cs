@@ -102,7 +102,7 @@ public sealed class BassModel
         BassResolved resolved = BassResolved.Resolve(config, data, working);
         BassInputTransform transform = BassInputTransform.Fit(data);
         BassInputs inputs = BassInputs.Prepare(data, transform);
-        var basis = new BassBasis(inputs, config.Structure.Degree);
+        var basis = new BassBasis(inputs, config.Structure.Degree, config.Structure.ResolvedHingeNormalization);
         BassAdmission admission = BassAdmission.From(config, resolved);
         BassStructurePrior prior = BassStructurePrior.From(config, resolved, inputs);
         BassTermProposal? proposal = config.Structure.Legendre is null ? BassTermProposal.From(config, prior) : null;
