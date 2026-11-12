@@ -171,7 +171,11 @@ public sealed record BassConfig
             if (s.Degree != 1) throw Bad("Structure.Degree", "is the hinges' power, which a Legendre basis does not read; its degrees are capped by Structure.Legendre.MaxDegree");
             if (s.Support.Kind == SupportKind.ColumnMass)
                 throw Bad("Structure.Support.Kind", "is the column mass, which reads hinges normalized to a maximum of one; a Legendre column sums to about zero, so a Legendre basis takes the count");
+            if (s.HingeNormalization is not null)
+                throw Bad("Structure.HingeNormalization", "sets the interval hinges are normalized over, which a Legendre basis has none of; its columns are orthonormal on the box");
         }
+        if (s.HingeNormalization is not (null or HingeNormalization.Box or HingeNormalization.TrainingRange))
+            throw Bad("Structure.HingeNormalization", "is not a known interval");
 
         BassCountPrior count = Count ?? throw Bad("Count", "is missing");
         if (!(count.Shape > 0.0 && double.IsFinite(count.Shape))) throw Bad("Count.Shape", "must be positive and finite");
@@ -487,6 +491,39 @@ public sealed record BassStructureSpec
     /// </summary>
     [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
     public LegendreBasis? Legendre { get; init; }
+
+    /// <summary>
+    /// The interval each hinge product is normalized to a maximum of one over (E8's slice 7d). Null, the default, is the box, R's
+    /// rule; a projected fit resolves null to the training range instead (<see cref="BassProjectedFit.Of"/>). It moves what reads a
+    /// column's scale, the column-mass support and the raw ridge; the g-form's marginal and the count support read neither. A Legendre basis has no hinges, so it refuses the setting. Left out of
+    /// the serialized form when null, so a config's form and fingerprint stand as they were.
+    /// </summary>
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public HingeNormalization? HingeNormalization { get; init; }
+
+    /// <summary>The hinge normalization in force: <see cref="HingeNormalization"/>, or the box where it is null.</summary>
+    [JsonIgnore]
+    public HingeNormalization ResolvedHingeNormalization => HingeNormalization.GetValueOrDefault();
+}
+
+/// <summary>
+/// The interval a hinge product Πⱼ (sⱼ(xⱼ − tⱼ))₊^q is normalized to a maximum of one over, in the transform's box units (E8's
+/// slice 7d). The box is the default; the training range is a projected fit's.
+/// </summary>
+public enum HingeNormalization
+{
+    /// <summary>
+    /// The box, [0, 1] in the transform's units: the declared domain where one is given, else the training range. R's
+    /// <c>makeBasis</c>; a declared domain wider than the data makes every column small where the data are.
+    /// </summary>
+    Box = 0,
+
+    /// <summary>
+    /// Each variable's training range, its knots' ends [L, U]: a factor's peak is U − t facing up and t − L facing down. The
+    /// evaluated column is then the same function of the raw inputs under any declared domain, so the column mass and the raw ridge
+    /// read the data's scale. Beyond the training range a column exceeds one: a linear hinge at t reaches (x − t)/(U − t) there.
+    /// </summary>
+    TrainingRange = 1,
 }
 
 /// <summary>What a term's support is measured by (D06).</summary>
@@ -495,7 +532,8 @@ public enum SupportKind
     /// <summary>Its nonzero points, every source's rule (R's <c>npart</c>): the default.</summary>
     Count,
 
-    /// <summary>Its column mass Σᵢ B(xᵢ), hinges normalized to a maximum of one: BARS's Q6 rule, an option.</summary>
+    /// <summary>Its column mass Σᵢ B(xᵢ), hinges normalized to a maximum of one over <see cref="BassStructureSpec.HingeNormalization"/>'s
+    /// interval: BARS's Q6 rule, an option.</summary>
     ColumnMass,
 }
 
