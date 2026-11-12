@@ -1,6 +1,6 @@
 # Active subspaces on the BASS core: E8's build (chip brief)
 
-Date: 2026-11-08. Status: slices 0–6 complete; slice 7's plan approved by the user (2026-11-10); slice 7a (`7b2ca7a`) verified 2026-11-11; slice 7b (`70a2aa2`) verified 2026-11-11; slice 7c landed (`015d977`) and waits for its verification; the prior-rule handling (column mass, raw ridge) waits for the user. Commissioned by the user on 2026-11-08 ("kick off e8"), after KHAOS's last slice; slice 5, the Grassmann discussion's items the user settled, commissioned 2026-11-08 ("ill take as recommended"). Every slice landed and was verified by the coordinating session on 2026-11-08: slice 0 (`15fb495`, `9e3028d`, `aa62879`), slice 1 (`95294f8`, `9dfcc6d`, `1385b86`), slice 2 (`8c7db77`, `3cdc2e8`), slice 3 (`84fe230`, `1049055`), slice 4 (`20aeb06`, `bc72014`) and slice 5 (`def59f3`, `9d2ff23`, `95d2900`, `a54a537`). The follow-ups, commissioned 2026-11-10: slice 6 (`276af70`, `e9d8827`, `30df59e`, `9a669b6`, report `3c26660`) verified by the coordinating session on 2026-11-10; slice 7's plan (below, "Slice 7's plan") waits for the user's decisions; E36's brief follows its verification. Written by the main session from [E8's entry](extensions-brief.md#active-subspace-analysis), [gap G3](lineage-gaps-register.md#g3-sobol-indices-and-active-subspaces-have-different-standing), [the lineage review's separability question](lineage-review.md#separability-is-what-the-closed-forms-rest-on), the [Astra notes](../discussion/astra-grassman-stiefel-pca-extensions.md), and the [Grassmann discussion](../discussion/grassmann-stiefel-subspaces-brief.md)'s report so far. Reports go under "Reports" below, newest first.
+Date: 2026-11-08. Status: slices 0–6 complete; slice 7's plan approved by the user (2026-11-10); slice 7a (`7b2ca7a`) verified 2026-11-11; slice 7b (`70a2aa2`) verified 2026-11-11; slice 7c (`015d977`) verified 2026-11-11; slice 7d, the training-range hinge rule the user chose for projected fits (2026-11-11), landed (`566c1f1` to `6aff134`) and waits for its verification. Commissioned by the user on 2026-11-08 ("kick off e8"), after KHAOS's last slice; slice 5, the Grassmann discussion's items the user settled, commissioned 2026-11-08 ("ill take as recommended"). Every slice landed and was verified by the coordinating session on 2026-11-08: slice 0 (`15fb495`, `9e3028d`, `aa62879`), slice 1 (`95294f8`, `9dfcc6d`, `1385b86`), slice 2 (`8c7db77`, `3cdc2e8`), slice 3 (`84fe230`, `1049055`), slice 4 (`20aeb06`, `bc72014`) and slice 5 (`def59f3`, `9d2ff23`, `95d2900`, `a54a537`). The follow-ups, commissioned 2026-11-10: slice 6 (`276af70`, `e9d8827`, `30df59e`, `9a669b6`, report `3c26660`) verified by the coordinating session on 2026-11-10; slice 7's plan (below, "Slice 7's plan") waits for the user's decisions; E36's brief follows its verification. Written by the main session from [E8's entry](extensions-brief.md#active-subspace-analysis), [gap G3](lineage-gaps-register.md#g3-sobol-indices-and-active-subspaces-have-different-standing), [the lineage review's separability question](lineage-review.md#separability-is-what-the-closed-forms-rest-on), the [Astra notes](../discussion/astra-grassman-stiefel-pca-extensions.md), and the [Grassmann discussion](../discussion/grassmann-stiefel-subspaces-brief.md)'s report so far. Reports go under "Reports" below, newest first.
 
 ## Why
 
@@ -204,6 +204,72 @@ Nothing is built until the user decides the items marked **Decision** below. The
 Under "Reports" below, newest first, per slice: what landed by commit; the gates' numbers; decisions taken beyond this brief; what was left unbuilt and why; follow-ups with the decision each would change.
 
 ## Reports
+
+### Slice 7d: hinges normalized over the training range (2026-11-11)
+
+**Asked for:** the user's answer to the held column-mass and raw-ridge question (2026-11-11), option 1 of three:
+- the zonotope's bounding box stays the projected fit's domain;
+- its hinges default to normalization over the training range;
+- the box stays BASS's default, and Legendre columns keep the box.
+
+The user's spec added three corrections, all taken:
+- κ itself still moves with the box. What becomes invariant is the evaluated hinge, (x − t)₊/(U − t) for an upward one.
+- An interaction takes the product of the per-coordinate peaks, not a maximum over rows.
+- Columns, derivatives, the analytic moments and the prefix tables follow one rule. `TableBorder` had rebuilt the box's peak on its own.
+
+**Landed:** `566c1f1` (the setting, `BassConfig.cs`), `33fb0bd` (the kernels, the basis and the prefix tables), `de754ed` (`BassModel.cs`), `8836784` (the moment service), `6aff134` (the readouts, the projected fit's default and the gates).
+
+**What was built:**
+- *The setting, `BassStructureSpec.HingeNormalization`:* `Box` or `TrainingRange`.
+  - Null means the box, R's rule, and is left out of the serialized form, so every existing config keeps its form and fingerprint.
+  - `ResolvedHingeNormalization` gives the value in force.
+  - A Legendre basis refuses the setting, since it has no hinges.
+- *One rule, `HingeProductKernel.Peak`:* each factor's peak is taken over its variable's interval: U − t facing up, t − L facing down (`Hinge.Peak`). The term's peak is the product over its factors.
+  - On the box this is the same bits as R's (s + 1)/2 − s·t.
+  - The training range is the variable's knots' ends, which `BassInputs` already holds.
+  - Columns, derivatives, κ (`Scale`, which the moments read) and the prefix tables (`DesignKernels.ContinuousPeak`) all read it.
+  - The output side's functional hinges read the same setting.
+- *Threaded through* `BassBasis`, `BassModel`, the moment service (`BassMoments.On`), and every readout that rebuilds kernels or moments from a fit: Sobol indices, effects, active subspaces, co-active pairs and basis fits.
+  - Two fits paired by a co-active readout must share the normalization, as they already share the degree; so must a basis fit's components.
+- *`BassProjectedFit.Of`:* a hinge config with the setting unset is resolved to the training range, and the refit's config records it. A stated setting is kept.
+
+**Gates:**
+
+| Gate | Reading |
+| --- | --- |
+| Decision 4's p = 40 data with training-range hinges: the bounding-box fit against the fit whose domain is the training range, draw for draw | g-form with count support: 0 of 60 draws differ, means to 3.2·10⁻¹⁵. Column-mass support: 0 of 60, 4.0·10⁻¹⁴ (60 of 60 and 33% under the box). Raw ridge: 0 of 60, 1.5·10⁻¹⁴ (60 of 60 and 2.4% under the box) |
+| The same three fits with the training range as the domain, where the training range is the box | the box rule's structures and posterior means, bit for bit |
+| No declared domain, degrees 1 and 2: every one-way hinge at every knot and both signs, plus 300 two- and three-way products | columns, derivatives and κ the box rule's bits |
+| Domains declared wider than the data at both ends, degrees 1 and 2: training-range columns against the box rule's on the same data undeclared, at the 200 training cases and at 300 cases spread over the domains | 1,492 terms agree to 9.6·10⁻¹⁴ (degree 1) and 1.9·10⁻¹³ (degree 2) of their size; raw-unit derivatives to the same. κ differs by (W/w)^q, the ratio of domain width to training width, so κ moves with the box while the column does not |
+| The moments under the training range | means, cross moments and the gradient Gram equal the box rule's scaled by κ's ratios, to 10⁻¹²; two one-way means agree with quadrature to 10 digits |
+| The prefix tables under declared domains | 7,900 border entries against the dots: worst 9.3·10⁻¹⁴ of √G_jj, within lever 1's bound |
+| A hinge facing out at its training end | its training-range peak is 0, so R's guard leaves κ = 1; zero at every training case, positive beyond them; its birth refused under both rules |
+| The setting | Legendre refuses it; null is not serialized; a stated value round-trips; two fits with different normalizations are refused as a co-active pair; the projected fit resolves null to the training range and keeps a stated box |
+| Fitting untouched | the whole assembly 3,269 of 3,269 |
+
+**What the readings mean:**
+- *Extrapolation under the raw ridge.* Beyond the training range, a training-range column exceeds one.
+  - In the declared-domain gate, a knot near the training end reached 16,124 at the domain's end (degree 1). Under the raw ridge, the prior variance there grows with the column's square.
+  - In the user's example (training range [4, 6], domain [0, 10], an upward linear hinge at 5), the column is 1 at 6 and 5 at 10 under the training range, and 0.2 and 1 under the box.
+  - The factor of 25 in prior variance between 10 and 6 comes from the hinge's shape and holds under either rule. What the rule moves is where the coefficient's unit sits: at the data's end, or at the domain's.
+  - The g-form's posterior function does not depend on the rule.
+- *The guard.* A factor facing out at its training end has peak 0, and R's rule leaves c at 1. Beyond the data, such a column is therefore in the box's units.
+  - Its column is zero at every training case, so neither support rule admits it.
+  - The declared-domain gate counts 8 such terms separately.
+
+**Decisions beyond the brief:**
+1. *The setting is nullable, and null means the box.* No existing config's serialized form or fingerprint moves, and a projected fit can tell an unset setting from a stated box.
+2. *Functional hinges follow the same setting,* so there is one hinge rule. A projected fit has none, since its outputs are not projected.
+3. *The lower-level constructors* (`BassBasis`, `DesignKernels`, `BassMoments.On`) take the normalization as a trailing parameter that defaults to the box. The test sites that build them directly stay as they were, and every source site passes the fit's own setting.
+4. *Shared files* (`BassConfig.cs`, `BassModel.cs`, the moment service): no other writer was active. Every linked session was idle and none of the files had uncommitted changes, so I sent no messages. Each file's edit is its own commit.
+
+**Left unbuilt:** none of the user's spec.
+
+**Follow-up, the user's call:** making the training range BASS's default for any fit whose declared domain is wider than its data. It would move existing results under column mass and the raw ridge.
+
+**Doc changes owed:**
+- `docs/Maths/Regression/BASS.md`: the basis section (the normalization interval and the setting) and the column-mass option (normalized over that interval).
+- `docs/Maths/Regression/ActiveSubspaces.md`, slice 7's section: the projected fit's default, and decision 4's gate under it.
 
 ### Slice 7c: the comparison (2026-11-11)
 
