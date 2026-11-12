@@ -206,6 +206,13 @@ The user asked for this on 2026-11-08 ("Yes, start it"), relayed by the BASS ext
 
 ## Reports
 
+### 2026-11-11 — slice 18's sources, on disk (main session)
+
+The user placed the sources slice 18 wanted. Reading them against slice 18's findings waits for the user's go-ahead.
+- Vlassis and Thomas, arXiv 2607.08415: `gauntlet/conformal-bayes/2607.08415v1/` (PDF, TeX).
+- Angelopoulos et al., Conformal Risk Control, arXiv 2208.02814: `gauntlet/conformal-bayes/2208.02814v4/`.
+- Gneiting and Raftery 2007 (JASA): `PDFs/Bayesian/Gneiting2007jasa.pdf`.
+
 Newest first.
 
 ### 2026-11-10 — slice 18: the guarantee read out, proved

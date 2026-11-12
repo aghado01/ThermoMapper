@@ -1,5 +1,7 @@
 # Regression coordination: handoff (2026-11-10)
 
+> **Superseded** by the [2026-11-11 handoff](coordination-handoff-2026-11-11.md) for the current state. This file keeps the November 11 Sol review and the record of what landed on 2026-11-10.
+
 Written by the coordinating session (`local_b6732445`) at the user's quota pause. It supersedes the [2026-11-09 handoff](coordination-handoff-2026-11-09.md) for the current state. That file keeps the earlier record and the verification routine. The briefs are the record; this file points into them.
 
 ## November 11 review and finish order

@@ -24,7 +24,7 @@ BASS's terms are axis-aligned. A response that bends along a diagonal, such as o
   - *A slip in the text:* Algorithm 4 writes the change step's bounds with Q and q where eq. (UL) uses q and p₀ (a symbol crossing; the formulas agree).
 - **R's `BayesPPR` 0.2.0.** Its manual is in `PDFs/Bayesian/BayesPPR.pdf`. It is not installed here (checked 2026-11-10); pinning it is decision 8.
 - **`gcbeck/bppr`** (C++20, GPL-3.0), read-only at `D:\aghado01\packages\bayesian-related\bppr-gcbeck` (`1b0d47a`). E36's entry records its reading: a repulsive direction prior det(ΘᵀΘ) whose normalizer c_M is missing as written; reshaped quantile knots; online updates. Ideas only; its claims count as a paper's, with no code to run as an oracle.
-- **The power spherical law** (De Cao and Aziz 2020, arXiv 2006.04437, the paper's reference for it) is **not held**. Its sampler and density are cited from memory until slice 0 reads it; the main session asks the user if it is wanted on disk.
+- **The power spherical law** (De Cao and Aziz 2020, arXiv 2006.04437, the paper's reference for it) is on disk since 2026-11-11: `D:\aghado01\codex-scientiae\supellex-private\gauntlet\bayesian\2006.04437v2\` (PDF and TeX). Its sampler and density are cited from memory until slice 0 reads it.
 
 ## What is already built
 
