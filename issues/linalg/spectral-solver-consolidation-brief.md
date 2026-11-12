@@ -407,6 +407,55 @@ Settled in the 2026-11-12 reviews:
 
 Each slice is reported here, newest first, with its commit, fixtures, commands, receipts, pins moved and doc changes owed.
 
+### B5–B6: carried operator images and the matrix-function helper (2026-11-12)
+
+**Commits:** `f253ec6` (B6), `9988a7f` (B5).
+
+**B6, what changed:** `MatrixFunctions` in LinAlg provides:
+- `Symmetric(eigen, f)`: f(A) = V·f(Λ)·Vᵀ, symmetrized, skipping zero weights and zero components, which leaves every sum unchanged;
+- `FactorColumns` and `FactorRows`: V·f(Λ) over the eigenpairs a caller selects.
+
+The five hand-written loops now call it:
+- the whitening root and its inverse;
+- the output metric's symmetric root (`PsdRootOf`) and row root (`RootOf`);
+- OutputFactor's term factor;
+- the analysis's derived inverse map.
+
+Each caller keeps its own cutoff and refusal rules. The readout probe after B6 is identical to the probe after B2. The one change in value: the derived inverse of a hand-built analysis is now symmetrized, a change at rounding level. `MatrixFunctionsTests` checks the root, the inverse and the factors against a matrix of known spectrum.
+
+**B6, gate:** run from a `git archive` snapshot of `f253ec6`, edit scope, 214 classes: 2,491 passed.
+
+**B5, what changed:** after the first iteration, LOBPCG carries X and AX from the trial step. The operator and the k-dimensional Rayleigh–Ritz step no longer run again on them. A residual below the tolerance on carried images is confirmed on a fresh application before the solve stops, so the reported residual is the returned pairs'.
+
+**B5, measurements:** reuse probe `artifacts/spectral-b/LobpcgReuseProbe.cs.txt`, receipts `reuse-{fresh,carried}-{1,2}.txt`. Two rounds each, 12 warm-up solves; the time column is the better minimum of the two rounds.
+
+| Fixture | Applications, fresh → carried | Iterations | Minimum time, fresh → carried |
+|---|---|---|---|
+| Crescent, 500 nodes, k = 8, Jacobi preconditioner | 945 → 663 | 36 → 35 | 34.0 → 25.8 ms |
+| Same, null space deflated | 907 → 641 | 34 → 33 | 32.8 → 24.8 ms |
+| Möbius, 500 nodes, k = 8, Jacobi preconditioner | 1,076 → 756 | 42 → 42 | 36.7 → 29.7 ms |
+| Same, null space deflated | 955 → 691 | 35 → 35 | 31.8 → 25.3 ms |
+| Dense 256, k = 8 | 2,980 → 2,125 | 110 → 111 | 184 → 138 ms |
+
+- **Effect:** applications fall 28–30% and minimum times 13–32%. Reported residuals match independently recomputed ones in every run.
+- **One case is slower in iterations.** On a constrained, preconditioned dense case (n = 80, k = 5, the lowest eigenvector as the constraint), carried takes 98 iterations to fresh's 87, at about 15 operator applications per iteration against 20. Both stall at the same residual floor when asked for 10⁻¹⁰: 7.0·10⁻⁹ carried, 8.7·10⁻⁹ fresh. Both lean on the constraint alike: 3.8·10⁻⁹ and 4.6·10⁻⁹. The floor comes from the constraint being an approximate eigenvector, not from carrying.
+- **Adopted:** the whole solve benefits and the convergence checks hold.
+
+**B5, tests:**
+- `Solve_RayleighRitzRunsOnTheDenseDispatch` now counts I projection solves for a solve converged at iteration I, and 4 for one capped at three iterations.
+- `Solve_CarriedImages_ReportTheReturnedPairsResidual` checks a constrained, preconditioned solve at a tolerance of 10⁻⁷:
+  - the reported residual equals the operator applied to its pairs, to 10⁻¹²;
+  - the eigenvalues match the dense spectrum to 10⁻⁹;
+  - orthogonality to the constraint holds to 10⁻⁸.
+
+**B5, gate:** `VizCore.Tests` selection, 29 classes: 204 passed, 2 standing skips. `TDA.Mapper.Tests`: 14 passed.
+
+**Pins moved:** none.
+
+**Doc changes owed:** [LinearAlgebra.md](../../docs/Maths/LinearAlgebra.md):
+- `MatrixFunctions`;
+- LOBPCG's iteration with carried images and the confirmation on a fresh application before stopping.
+
 ### B2–B3: caller-owned dense solves and the production Rayleigh–Ritz step (2026-11-12)
 
 **Commits:** `84f001e` (B2), `1adf27d` (B3).
