@@ -12,6 +12,38 @@ public readonly record struct DenseEigenOptions(
     DenseEigenFastVariant FastVariant = DenseEigenFastVariant.Default);
 
 /// <summary>
+/// How a dense Jacobi solve ended, read from the diagonalization it returns (spectral-solver brief, A2). A solve stops after a sweep
+/// that rotates nothing. <see cref="Converged"/> holds when every off-diagonal entry passes the solver's pivot test, so it can hold
+/// while <see cref="OffDiagonalNorm"/> exceeds the tolerance: many entries, each below it.
+/// </summary>
+/// <param name="Sweeps">Sweeps run, the last one included.</param>
+/// <param name="Rotations">Rotations applied over all sweeps.</param>
+/// <param name="OffDiagonalNorm">off(A) = (Σ_{i≠j} a_ij²)^½ of the returned diagonalization VᵀAV, as the solver holds it.</param>
+/// <param name="LargestOffDiagonal">max_{i≠j} |a_ij| of the returned diagonalization.</param>
+/// <param name="Converged">Whether every off-diagonal entry passes the pivot test: below the tolerance for <see cref="EigenFast"/>, at
+/// or below it for the reference <see cref="Eigen"/>.</param>
+public readonly record struct DenseEigenConvergence(int Sweeps, long Rotations, double OffDiagonalNorm, double LargestOffDiagonal, bool Converged)
+{
+    // off(A) and the largest entry from the strict upper triangle of a symmetric A, read by entry(row, column); scaled by the
+    // largest entry so the sum of squares stays in range.
+    internal static (double Norm, double Largest) OffDiagonal(int n, Func<int, int, double> entry)
+    {
+        double largest = 0.0;
+        for (int q = 1; q < n; q++)
+            for (int p = 0; p < q; p++) largest = Math.Max(largest, Math.Abs(entry(p, q)));
+        if (!(largest > 0.0) || double.IsInfinity(largest)) return (largest, largest);
+        double squares = 0.0;
+        for (int q = 1; q < n; q++)
+            for (int p = 0; p < q; p++)
+            {
+                double scaled = entry(p, q) / largest;
+                squares += scaled * scaled;
+            }
+        return (largest * Math.Sqrt(2.0 * squares), largest);
+    }
+}
+
+/// <summary>
 /// Compile-time dispatch point for dense symmetric eigendecomposition.
 /// </summary>
 public static class DenseEigen

@@ -13,8 +13,10 @@ namespace Maths.LinAlg
         /// <summary>
         /// v3: High-Performance Upper-Triangle Algebraic Cyclic Jacobi Solver.
         /// Zero transcendentals, zero symmetry mirroring overhead, fully vectorized.
+        /// A pivot rotates when |a_pq| is at least <paramref name="tol"/>; a sweep that rotates nothing ends the solve, so skipping a
+        /// pivot and stopping depend on the same test. Returns how the solve ended, read from the diagonalization it leaves.
         /// </summary>
-        public static void DecomposeSymmetricInPlace(
+        public static DenseEigenConvergence DecomposeSymmetricInPlace(
             ReadOnlySpan<double> flatMatrix,
             int n,
             Span<double> outEigenvalues,
@@ -30,9 +32,13 @@ namespace Maths.LinAlg
             if (outEigenvalues.Length != n) throw new ArgumentException("Eigenvalues buffer size must equal N.");
             if (outEigenvectors.Length != n * n) throw new ArgumentException("Eigenvectors buffer size must equal N * N.");
 
+            DecompositionLog.Record(DecompositionKernel.FastJacobi, n, n);
             int matrixSize = n * n;
             double[] workingArray = ArrayPool<double>.Shared.Rent(matrixSize);
             bool useFma = fastVariant == DenseEigenFastVariant.Fma && Fma.IsSupported;
+            int sweeps = 0;
+            long rotations = 0;
+            double offDiagonalNorm, largestOffDiagonal;
 
             try
             {
@@ -48,7 +54,8 @@ namespace Maths.LinAlg
 
                     for (int sweep = 0; sweep < maxSweeps; sweep++)
                     {
-                        double offDiagNormSq = 0.0;
+                        sweeps = sweep + 1;
+                        long sweepRotations = 0;
 
                         // Sweep all unique pairs (p, q) over the strict upper triangle
                         for (int p = 0; p < n - 1; p++)
@@ -57,9 +64,9 @@ namespace Maths.LinAlg
                             {
                                 // In column-major layout, row p, col q is at location [q * n + p]
                                 double apq = A[q * n + p];
-                                offDiagNormSq += apq * apq;
 
                                 if (Math.Abs(apq) < tol) continue;
+                                sweepRotations++;
 
                                 // Compute Algebraic Givens Rotations (No Atan2, Cos, or Sin)
                                 int pBase = p * n;
@@ -211,12 +218,19 @@ namespace Maths.LinAlg
                             }
                         }
 
-                        if (Math.Sqrt(offDiagNormSq) < tol) break;
+                        rotations += sweepRotations;
+                        // Every pivot passed the test: the next sweep would rotate nothing either.
+                        if (sweepRotations == 0) break;
                     }
 
                     // Extract final parsed eigenvalues from the diagonal trace
                     for (int i = 0; i < n; i++) outEigenvalues[i] = A[i * n + i];
                 }
+
+                // The returned diagonalization's off-diagonal, read after the last sweep: a sample taken during a sweep precedes
+                // that sweep's rotations.
+                double[] working = workingArray;
+                (offDiagonalNorm, largestOffDiagonal) = DenseEigenConvergence.OffDiagonal(n, (p, q) => working[q * n + p]);
             }
             finally
             {
@@ -245,6 +259,8 @@ namespace Maths.LinAlg
                     }
                 }
             }
+
+            return new DenseEigenConvergence(sweeps, rotations, offDiagonalNorm, largestOffDiagonal, largestOffDiagonal < tol);
         }
 
         /// <summary>
@@ -264,7 +280,7 @@ namespace Maths.LinAlg
 
             try
             {
-                DecomposeSymmetricInPlace(
+                DenseEigenConvergence convergence = DecomposeSymmetricInPlace(
                     flatColumnMajorMatrix,
                     n,
                     outEigVals,
@@ -280,7 +296,7 @@ namespace Maths.LinAlg
                     outEigVecs.AsSpan(i * n, n).CopyTo(sortedVec[i]);
                 }
 
-                return new EigenResult(outEigVals, sortedVec);
+                return new EigenResult(outEigVals, sortedVec) { Convergence = convergence };
             }
             finally
             {

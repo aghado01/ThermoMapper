@@ -23,6 +23,11 @@ internal static class ScaledEigen
         for (int i = 0; i < p; i++)
             for (int j = 0; j < m.GetLength(1); j++) unit[i, j] = m[i, j] / scale;
         EigenResult e = DenseEigen.DecomposeSymmetric(unit, tol: 1e-14);
-        return new EigenResult([.. e.Eigenvalues.Select(x => x * scale)], e.Eigenvectors);
+        DenseEigenConvergence c = e.Convergence;
+        return e with
+        {
+            Eigenvalues = [.. e.Eigenvalues.Select(x => x * scale)],
+            Convergence = c with { OffDiagonalNorm = c.OffDiagonalNorm * scale, LargestOffDiagonal = c.LargestOffDiagonal * scale },
+        };
     }
 }

@@ -36,6 +36,7 @@ namespace Maths.LinAlg
             int m = a.GetLength(0), n = a.GetLength(1);
             foreach (double value in a)
                 if (!double.IsFinite(value)) throw new ArgumentException("The matrix has a non-finite entry.", nameof(a));
+            DecompositionLog.Record(DecompositionKernel.ThinSvd, m, n);
             if (m >= n)
             {
                 var columns = new double[n][];

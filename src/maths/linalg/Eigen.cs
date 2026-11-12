@@ -9,33 +9,43 @@ namespace Maths.LinAlg
     /// </summary>
     public static class Eigen
     {
+        /// <summary>
+        /// A pivot rotates when |a_pq| exceeds <paramref name="tol"/>; a sweep that rotates nothing ends the solve. The result
+        /// reports how the solve ended, read from the diagonalization it leaves.
+        /// </summary>
         public static EigenResult DecomposeSymmetric(double[,] matrix, int maxSweeps = 256, double tol = 1e-12)
         {
             int n = matrix.GetLength(0);
             if (matrix.GetLength(1) != n) throw new ArgumentException("Matrix must be square.");
+            DecompositionLog.Record(DecompositionKernel.ReferenceJacobi, n, n);
 
             var A = (double[,])matrix.Clone(); // working copy
             var V = Identity(n);               // eigenvectors
+            int sweeps = 0;
+            long rotations = 0;
 
             for (int sweep = 0; sweep < maxSweeps; sweep++)
             {
-                double maxOffDiag = 0.0;
+                sweeps = sweep + 1;
+                long sweepRotations = 0;
 
                 // Classical cyclic Jacobi sweep over all off-diagonal pairs.
                 for (int p = 0; p < n - 1; p++)
                 {
                     for (int q = p + 1; q < n; q++)
                     {
-                        double abs = Math.Abs(A[p, q]);
-                        if (abs > maxOffDiag) maxOffDiag = abs;
-                        if (abs <= tol) continue;
+                        if (Math.Abs(A[p, q]) <= tol) continue;
 
                         Rotate(A, V, p, q, n);
+                        sweepRotations++;
                     }
                 }
 
-                if (maxOffDiag < tol) break;
+                rotations += sweepRotations;
+                if (sweepRotations == 0) break;
             }
+            (double offDiagonalNorm, double largestOffDiagonal) = DenseEigenConvergence.OffDiagonal(n, (p, q) => A[p, q]);
+            var convergence = new DenseEigenConvergence(sweeps, rotations, offDiagonalNorm, largestOffDiagonal, largestOffDiagonal <= tol);
 
             // Extract eigenvalues + sort descending
             var eigenvalues = new double[n];
@@ -54,7 +64,7 @@ namespace Maths.LinAlg
                     sortedVec[i][j] = V[j, idx[i]]; // columns
             }
 
-            return new EigenResult(sortedEig, sortedVec);
+            return new EigenResult(sortedEig, sortedVec) { Convergence = convergence };
         }
 
         private static void Rotate(double[,] A, double[,] V, int p, int q, int n)
@@ -94,6 +104,10 @@ namespace Maths.LinAlg
         }
     }
 
-    public record EigenResult(double[] Eigenvalues, double[][] Eigenvectors); // Eigenvectors as rows for convenience in PCA
+    public record EigenResult(double[] Eigenvalues, double[][] Eigenvectors) // Eigenvectors as rows for convenience in PCA
+    {
+        /// <summary>How the solve that produced this result ended; the default when its producer reports none.</summary>
+        public DenseEigenConvergence Convergence { get; init; }
+    }
 
 }
