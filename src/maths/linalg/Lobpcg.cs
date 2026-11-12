@@ -176,17 +176,30 @@ public static class LOBPCG
         int conjugateCols = 0;
         int completedIterations = 0;
 
+        // After the first iteration X is the previous trial subspace's Ritz basis, and AX its images rotated with it (spectral-solver
+        // brief, B5): neither the operator nor the k-dimensional Rayleigh–Ritz step runs again on them. The carried images drift with
+        // rounding, so a residual below the tolerance is confirmed on a fresh application before the solve stops.
+        bool carried = false;
         for (int iter = 0; iter < maxIter; iter++)
         {
             completedIterations = iter + 1;
 
-            op.Apply(x, ax, k);
-            RotateToExtremalRitzBasis(x, ax, n, k, k, theta, xWork, axWork, wantLargest, ritz);
-            Swap(ref x, ref xWork);
-            Swap(ref ax, ref axWork);
+            if (!carried)
+            {
+                op.Apply(x, ax, k);
+                RotateToExtremalRitzBasis(x, ax, n, k, k, theta, xWork, axWork, wantLargest, ritz);
+                Swap(ref x, ref xWork);
+                Swap(ref ax, ref axWork);
+            }
 
             ComputeResidualBlock(ax, x, theta, residual, n, k);
             lastResidual = ComputeMaxColumnNorm(residual, n, k);
+            if (lastResidual < tol && carried)
+            {
+                op.Apply(x, ax, k);
+                ComputeResidualBlock(ax, x, theta, residual, n, k);
+                lastResidual = ComputeMaxColumnNorm(residual, n, k);
+            }
             if (lastResidual < tol)
             {
                 converged = true;
@@ -226,6 +239,7 @@ public static class LOBPCG
 
             Swap(ref x, ref xWork);
             Swap(ref ax, ref axWork);
+            carried = true;
         }
 
         // At the iteration cap the block was updated after its residual was measured: measure the block returned, so the

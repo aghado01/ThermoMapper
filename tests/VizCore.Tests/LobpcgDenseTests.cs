@@ -84,9 +84,10 @@ public sealed class LobpcgDenseTests
     }
 
     /// <summary>
-    /// The Rayleigh–Ritz step runs on the production dense kernel (spectral-solver brief, B3): a solve that converges at iteration I
-    /// decomposes 2I − 1 projections, two per iteration but the last, and none of them by the reference Jacobi; a capped solve two per
-    /// iteration. The build's dense dispatch decides the kernel, the reference one only under EIGEN_REFERENCE.
+    /// The Rayleigh–Ritz step runs on the production dense kernel (spectral-solver brief, B3), and after the first iteration only on
+    /// the trial subspace, the operator images carried (B5): a solve that converges at iteration I decomposes I projections, the first
+    /// iteration's and one trial projection per iteration after it, none of them by the reference Jacobi; a solve capped at three
+    /// decomposes four. The build's dense dispatch decides the kernel, the reference one only under EIGEN_REFERENCE.
     /// </summary>
     [Fact]
     public void Solve_RayleighRitzRunsOnTheDenseDispatch()
@@ -113,10 +114,56 @@ public sealed class LobpcgDenseTests
 
         Assert.True(converged.Converged);
         Assert.All(convergedWork.Concat(cappedWork), d => Assert.Equal(dense, d.Kernel));
-        Assert.Equal(2 * converged.Iterations - 1, convergedWork.Count);
+        Assert.Equal(converged.Iterations, convergedWork.Count);
         Assert.False(capped.Converged);
-        Assert.Equal(6, cappedWork.Count);
+        Assert.Equal(4, cappedWork.Count);
         Assert.InRange(Math.Abs(converged.ResidualNorm - MaxResidual(matrix, converged)), 0.0, 1e-12);
+    }
+
+    /// <summary>
+    /// With the operator images carried across iterations (spectral-solver brief, B5), the residual reported is still the returned
+    /// pairs': a solve below the tolerance on its carried images is confirmed on a fresh application. Checked on a constrained and
+    /// preconditioned run, where the carried images pass through the deflation and the preconditioner. The constraint is the lowest
+    /// eigenvector, an invariant subspace as a Laplacian's null vector is, so the solve finds the next five eigenpairs: they match the
+    /// dense spectrum, stay orthogonal to the constraint, and the reported residual matches the operator applied to them independently.
+    /// The constraint is itself an approximate eigenvector, which leaves a residual floor near 10⁻⁸ that fresh and carried images reach
+    /// alike (7.0·10⁻⁹ carried, 8.7·10⁻⁹ fresh, after 2000 iterations at a tolerance of 10⁻¹⁰), so the tolerance here is 10⁻⁷; and the
+    /// pairs lean on it alike, by 3.8·10⁻⁹ carried and 4.6·10⁻⁹ fresh, so orthogonality is read at 10⁻⁸.
+    /// </summary>
+    [Fact]
+    public void Solve_CarriedImages_ReportTheReturnedPairsResidual()
+    {
+        const int n = 80;
+        double[,] matrix = BuildRandomSymmetricMatrix(size: n, seed: 23);
+        for (int i = 0; i < n; i++) matrix[i, i] += 4.0 + i * 0.05;   // a varied diagonal for the preconditioner to read
+        EigenResult full = DenseEigen.DecomposeSymmetric(matrix);
+        double[] constraint = full.Eigenvectors[n - 1];
+        var options = new LOBPCG.Options
+        {
+            MaxIterations = 2000, Tolerance = 1e-7, Constraints = constraint, ConstraintColumns = 1,
+            Preconditioner = new DiagonalPreconditioner(matrix),
+        };
+        LOBPCG.Result result = LOBPCG.Solve(new DenseSymmetricOperator(matrix), 5, options);
+
+        Assert.True(result.Converged, $"iterations {result.Iterations}, residual {result.ResidualNorm:E3}, independent {MaxResidual(matrix, result):E3}");
+        Assert.InRange(result.ResidualNorm, 0.0, 1e-7);
+        Assert.InRange(Math.Abs(result.ResidualNorm - MaxResidual(matrix, result)), 0.0, 1e-12);
+        for (int j = 0; j < 5; j++)
+        {
+            Assert.InRange(Math.Abs(result.Eigenpairs[j].Lambda - full.Eigenvalues[n - 2 - j]), 0.0, 1e-9);
+            Assert.InRange(Math.Abs(result.Eigenpairs[j].Vector.Zip(constraint, (a, b) => a * b).Sum()), 0.0, 1e-8);
+        }
+    }
+
+    // D⁻¹ for the matrix's diagonal D.
+    private sealed class DiagonalPreconditioner(double[,] matrix) : IPreconditioner
+    {
+        public void Apply(ReadOnlySpan<double> residualBlock, Span<double> resultBlock, int columns)
+        {
+            int n = matrix.GetLength(0);
+            for (int c = 0; c < columns; c++)
+                for (int i = 0; i < n; i++) resultBlock[c * n + i] = residualBlock[c * n + i] / matrix[i, i];
+        }
     }
 
     private static double MaxResidual(double[,] matrix, LOBPCG.Result result) =>
