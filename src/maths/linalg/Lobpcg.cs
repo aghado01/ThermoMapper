@@ -109,6 +109,10 @@ public static class LOBPCG
     }
 
     /// <summary>Computed eigenpairs plus convergence telemetry.</summary>
+    /// <param name="Eigenpairs">The k extremal eigenpairs, ascending for the smallest and descending for the largest.</param>
+    /// <param name="Iterations">Outer iterations run.</param>
+    /// <param name="ResidualNorm">The largest residual ‖Ax − θx‖ over the returned pairs.</param>
+    /// <param name="Converged">Whether <paramref name="ResidualNorm"/> is below the tolerance.</param>
     public sealed record Result(
         IReadOnlyList<EigenPair> Eigenpairs,
         int Iterations,
@@ -221,6 +225,16 @@ public static class LOBPCG
 
             Swap(ref x, ref xWork);
             Swap(ref ax, ref axWork);
+        }
+
+        // At the iteration cap the block was updated after its residual was measured: measure the block returned, so the
+        // residual and the converged flag describe the eigenpairs handed back.
+        if (!converged)
+        {
+            op.Apply(x, ax, k);
+            ComputeResidualBlock(ax, x, theta, residual, n, k);
+            lastResidual = ComputeMaxColumnNorm(residual, n, k);
+            converged = lastResidual < tol;
         }
 
         var outputList = new List<EigenPair>(k);
