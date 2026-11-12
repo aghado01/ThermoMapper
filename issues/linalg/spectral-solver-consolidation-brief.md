@@ -85,7 +85,12 @@ A pivot is skipped when |a_pq| < tol ([EigenFast.cs:62](../../src/maths/linalg/E
 
 **Fix:** a sweep that performs no rotations ends the solve. Skipping a pivot and stopping the solve then depend on the same test.
 
-**Convergence information.** The dense result reports the sweeps run, the rotations applied, the final off-diagonal norm and a converged flag, as LOBPCG's `Result` already does ([Lobpcg.cs:112](../../src/maths/linalg/Lobpcg.cs)). `EigenResult` ([Eigen.cs:97](../../src/maths/linalg/Eigen.cs)) currently carries none. This is the "deterministic check of work performed" the fix needs. It also serves every later slice's routine checks. No separate solve counter is needed. B3 removes the reference solves from production code, and B4 makes the compiler enforce it. C shows its reuse by comparing results.
+**Convergence information.** The dense result reports how the solve ended, as LOBPCG's `Result` already does ([Lobpcg.cs:112](../../src/maths/linalg/Lobpcg.cs)). Both quantities below are measured on the returned state, after the last sweep. A sample taken during a sweep precedes that sweep's rotations, so it cannot describe a sweep that rotated.
+- **Sweeps and rotations.** These are the "deterministic check of work performed" the fix needs.
+- **off(A) = (Σ_{i≠j} a_ij²)^½ and the largest off-diagonal entry** of the returned diagonalization.
+- **`Converged`** holds when every off-diagonal entry passes the pivot test: below the tolerance for EigenFast, at or below it for the reference. It can hold while off(A) exceeds the tolerance. On the witness every pivot passes while off(A) ≈ 1.57·10⁻¹¹.
+
+**Counting work.** Equal outputs also pass while duplicate work remains. `DecompositionLog` records each decomposition at its executing kernel (reference Jacobi, EigenFast, `ThinSvd`), with the matrix's shape, inside a scope on the async flow that opened it. Counting at the kernel rather than at `DenseEigen` records each solve once, and separate kernels make "zero reference solves" checkable. C's fixture counts the decompositions its reuse removes. B3 removes the reference solves from production code, and B4 makes the compiler enforce it.
 
 **Tests.** [EigenFastTests](../../tests/VizCore.Tests/EigenFastTests.cs) currently compares `EigenFast` against the reference in all seven of its tests. They become property tests:
 - residual ‖AV − VΛ‖ and orthogonality ‖VᵀV − I‖ on the existing fixtures;
@@ -105,15 +110,16 @@ One parity test against the reference remains as a qualification.
 
 Applied inside the solver, a relative rule retires `ScaledEigen`, PriorPencil's division, MoMPCA's computed tolerance and the raw constants. RidgeSpectrum's column standardization ([CollapsedGPrior.cs:1029–1032](../../src/maths/regression/gprior/CollapsedGPrior.cs)) defines the normalized ridge prior. It is statistics, so it stays with that caller, as do each caller's input checks.
 
-The rule replaces the absolute one for every caller rather than being added as an option. The option would have existed only to keep pinned tests still.
+**Scope is an owner decision ([Open decisions](#open-decisions) item 3).** Whether the relative rule replaces the absolute one for every caller, or callers migrate to it one at a time, is open. Pinned tests are no reason to keep an option, since they are rewritten where a slice moves them. But replacing the rule changes the meaning of exposed tolerances. `AlignmentEigenCentrality.Tolerance` ([AlignmentEigenCentrality.cs:68](../../src/graphs/observables/AlignmentEigenCentrality.cs)) is public and documented as an absolute bound.
 
-**The design decision is which relative rule ([Open decisions](#open-decisions) item 3):**
+**The numerical decision is which relative rule ([Open decisions](#open-decisions) item 4):**
 - **Relative to the matrix norm**, |a_pq| ≤ tol·‖A‖_F, as LAPACK does. Eigenvalue errors are about tol·‖A‖ in absolute terms.
-- **Element-wise**, |a_pq| ≤ tol·√|a_pp·a_qq| (Demmel and Veselić, cited from memory). Small eigenvalues of graded positive definite matrices keep their relative accuracy, which is what E8's spectra and the prior pencil read. It needs a floor of a small multiple of ε‖A‖, so that indefinite matrices with zeros on the diagonal still stop.
+- **Element-wise**, |a_pq| ≤ tol·√|a_pp·a_qq| ([Demmel and Veselić 1992](https://epubs.siam.org/doi/10.1137/0613074)). Small eigenvalues of graded positive definite matrices keep their relative accuracy, which is what E8's spectra and the prior pencil read. Indefinite matrices with zeros on the diagonal still need a way to stop.
 
-The recommendation is the element-wise rule with the floor.
+**The floor cannot be a plain maximum with ε‖A‖.** Take a unit diagonal entry beside the independent block 10⁻²⁰·[[1, 0.5], [0.5, 1]]. A pivot floor of ε‖A‖ skips the block's only rotation and returns two eigenvalues of 10⁻²⁰, where the correct values are 0.5·10⁻²⁰ and 1.5·10⁻²⁰. The whole-matrix residual still looks excellent. Whatever stopping guard the rule takes for indefinite inputs must pass this witness. The recommendation is the element-wise rule with such a guard.
 
 **Qualification:**
+- The witness above. Gate on the relative error of the weak eigenvalues as well as on residuals.
 - Rescale fixed matrices across many orders of magnitude, very small to very large, and check residuals in the original units.
 - Rerun E8's equivariance sweep.
 - Compare pencil evidence and ridge shrinkage with the current paths.
@@ -178,7 +184,11 @@ A LinAlg helper provides the symmetric form and the factor form from one eigensy
 
 ## C. BASS sensitivity: reuse what one readout has already computed
 
-This work is independent of A and B and can run beside them. All sites are in [BassActiveSubspace.cs](../../src/maths/regression/spline/bass/sensitivity/BassActiveSubspace.cs) unless named.
+This work is independent of A and B and can run beside them. All sites are in [BassActiveSubspace.cs](../../src/maths/regression/spline/bass/sensitivity/BassActiveSubspace.cs) unless named. The line numbers here predate C's commits.
+
+Two acceptance checks apply to each item:
+- **Outputs:** a bit-level comparison of readouts before and after, or a stated tolerance where an item says so.
+- **Work:** a fixture that counts the decompositions removed, through `DecompositionLog`. Equal outputs alone also pass while the duplicate work is still present.
 
 ### C1. The adequacy posterior is built twice
 
@@ -265,6 +275,12 @@ For the second row, 0.25 fails the contract along e₂: the bound would need 10�
 - A direction null in both forms drops out, so the ratio stays finite. Σ_B can carry rounding noise in such a direction, because `CovarianceGram` computes E[ab] − E[a]E[b] ([BassMoments.cs:296–303](../../src/maths/regression/spline/bass/sensitivity/BassMoments.cs)).
 - Each form is judged against its own largest eigenvalue, near rounding level, and no squared quantity is involved. The acceptance cases fix the constants.
 
+**The output metric enters through its range, not its root.** `MatrixCheckIf` builds M from `Root(W_y)` (BassActiveSubspace.cs:323), which drops eigenvalues at or below 10⁻¹⁴ of the scale (line 1084). So a direction can disappear before any solver runs. Congruence by a factor R of full column rank leaves the ratio unchanged, because range(Rᵀ) = range(W_y). The check therefore depends on W_y only through that range.
+- C's probe agrees: the ratios under the identity metric and under a random full metric match to about 10⁻¹³ on every draw.
+- The second review's witness, through the BASS caller: W_y = diag(1, 10⁻¹⁶), H = I, K_D = I and Σ_B = diag(0.25, 2). The declared metric gives a ratio of 2. The truncated root keeps one row, [1, 0], and gives 0.25 even with an exact term-space solver.
+
+The check takes M = UᵀH, with U an orthonormal basis of W_y's resolved range, or H itself when W_y is positive definite, and no square roots of small eigenvalues. A diagonal metric's range is exact: the locations with positive weight. That is what lets the witness return 2. For a general formed W_y, resolving its range is a rank decision at the eigensolver's resolution, about m·ε·‖W_y‖.
+
 **Public entry.** `Ratio(termCovariance, termBound, map)` replaces the two-matrix signature. Formed matrices pass map = I, which is how the cosine cases in `MatrixPoincare_EqualityOnCosines_AndAMisScaledBoundFails` (line 322) migrate. Its contract states the resolution for formed inputs: a caller holding a factor passes the factor, since forming the product squares it.
 
 **Acceptance cases:**
@@ -272,9 +288,11 @@ For the second row, 0.25 fails the contract along e₂: the bound would need 10�
 2. the four witnesses in the table;
 3. K_D null with Σ_B mass there (∞);
 4. both forms null, with rounding noise in Σ_B (finite);
-5. `MatrixPoincare_HoldsOnFittedDraws` (line 375), no violations, with the per-structure cache hit and missed in the same run.
+5. through the BASS caller, W_y = diag(1, 10⁻¹⁶) with H = I, K_D = I and Σ_B = diag(0.25, 2): ratio 2. A direction must not disappear in the metric's root;
+6. through map = I, the formed pair Σ = diag(0.25, 10⁻¹⁴) and K = diag(1, 10⁻¹⁴): ratio 1. A direction must not disappear at the term-space cutoff, which bounds that cutoff's constant;
+7. `MatrixPoincare_HoldsOnFittedDraws` (line 375), no violations, with the per-structure cache hit and missed in the same run.
 
-**What the check measures in BASS.** For a product law the theorem gives Σ_B ≼ K_D exactly for every structure. So with exact moments, every ratio is at most 1, and a ratio above 1 can come only from wrong moments or a wrong Poincaré constant. In BASS the check therefore verifies the moment service and the constants. When M has full rank, the per-draw ratios repeat per-structure values ([Open decisions](#open-decisions) item 4).
+**What the check measures in BASS.** For a product law the theorem gives Σ_B ≼ K_D exactly for every structure. So with exact moments, every ratio is at most 1, and a ratio above 1 can come only from wrong moments or a wrong Poincaré constant. In BASS the check therefore verifies the moment service and the constants. When M has full column rank, a draw's ratio is its structure's. Two rank-deficient draws can share terms and still see different ratios, so results are cached per structure only for full-rank draws, and reporting stays per draw ([Open decisions](#open-decisions) item 5).
 
 ## E. E8 leading output patterns: the one regression candidate for LOBPCG
 
@@ -362,15 +380,16 @@ The sweep recomputes both column norms for every pair ([ThinSvd.cs:110](../../sr
 Owner: Azriel. Slices leave these in place until decided.
 
 1. **Remove the `EIGEN_REFERENCE` build?** What's lost: running the whole system on the reference solver to compare results on a numerical discrepancy. The test oracle covers targeted qualification either way. Affects [DenseEigen.cs](../../src/maths/linalg/DenseEigen.cs), [SpectralDenseDispatchTests.cs:65](../../tests/VizCore.Tests/SpectralDenseDispatchTests.cs), the harness's `#if` blocks, and the docs listed below.
-2. **Remove `DenseEigenFastVariant.Fma`?** What's lost: the FMA rotation path, which production never selects. Recommended: remove, and add FMA back under G1's convention.
-3. **Which relative stopping rule for B1?** Recommended: element-wise with a floor.
-4. **Matrix Poincaré reporting.** Report ratios per structure, with a map from draws to structures, rather than repeating them per draw? And once D makes the check cheap, should it be on by default?
+   Recommended by both reviews: retire it once B3 has migrated both production callers, keeping the reference as the test oracle.
+2. **Remove `DenseEigenFastVariant.Fma`?** What's lost: the FMA rotation path, which production never selects. Recommended: retire the switch, and let G1's timings decide whether fused arithmetic belongs in either kernel.
+3. **B1's scope.** Should the relative rule replace the absolute one for every caller, or should callers migrate to it one at a time? What changes: the meaning of exposed tolerances such as `AlignmentEigenCentrality.Tolerance`.
+4. **Which relative stopping rule for B1?** Recommended: element-wise, with a stopping guard for indefinite inputs that passes the 10⁻²⁰ witness.
+5. **Matrix Poincaré reporting and default.** Recommended: cache full-rank results per structure; keep reporting per draw, since rank-deficient draws that share terms can differ; keep the check opt-in until whole-readout timings justify changing the default.
 
 Settled in the 2026-11-12 reviews:
-- D's expected values;
+- D's expected values, the table's and the two added witnesses';
 - the test rule in [Working rules](#working-rules);
-- the scope of bit-identical acceptance;
-- B1 replacing the absolute rule for every caller.
+- the scope of bit-identical acceptance.
 
 ## Doc changes owed
 
@@ -387,3 +406,77 @@ Settled in the 2026-11-12 reviews:
 ## Reports
 
 Each slice is reported here, newest first, with its commit, fixtures, commands, receipts, pins moved and doc changes owed.
+
+### C1–C3: BASS readout reuse (2026-11-12)
+
+**Commit:** `23f599f`.
+
+**What changed:**
+- **C1.** `Adequacy` passes `Read`'s output posterior to `BasisAdequacy.Of`, whose signature is now `Of(factors, outputs, span, dimension)`. It refuses a posterior with a different draw count or more patterns. The unit tests build the posterior through a helper.
+- **C2.** `MetricRoots` decomposes W_y at most once per readout, lazily, so a readout that needs no root runs no solve. `Root` and `PsdRoot` read that one eigensystem, each under its own rule and each built once. `Read` returns the metric, and `Adequacy` reads it from there. `PsdRoot`'s outer products skip zero eigenvector components, which leaves every sum unchanged, so an identity or diagonal metric costs O(m²) there rather than O(m³). This replaces a separate fast path.
+- **C3.** `TermFactors` caches F_K per ordered structure within a readout, under the matrix check's budget (`GramCacheValues`), and forms W_x once.
+
+**Outputs:** bit-identical. A probe hashed the bits of five readouts before and after:
+- a direct exact readout with a full W_y;
+- the same with the identity metric;
+- a direct sampled readout;
+- a basis exact readout;
+- adequacy.
+
+Every line matched, adequacy included: its weights, normalized by a different route, rounded the same here. The probe's source and both outputs are in `artifacts/spectral-c/`.
+
+**Work:** [ReadoutDecompositionTests](../../tests/regression/ReadoutDecompositionTests.cs) counts decompositions with `DecompositionLog`:
+- W_y is decomposed once on the sampled route with a declared metric. Before: 3.
+- Three copies of one draw add two symmetric solves when patterns are asked. Before: 4.
+- Adequacy adds only the span's SVD to the direct readout's decompositions. Before: 12 symmetric solves against 10.
+
+Run against the pre-C sources, all three failed with exactly those counts.
+
+**Gate:** `scripts/test-select.ps1 -Scope Commit` over the A and C paths, 286 of 301 classes: 2,920 passed, none failed or skipped ([trx](../../artifacts/spectral-c/test-select/20261112_112227-commit/Commit.trx)).
+
+**Not done here:** C4 (each sampled draw's Gram formed twice) and C5 (the whitening inverse), as sequenced.
+
+**Pins moved:** none.
+
+**Doc changes owed:** [ActiveSubspaces.md](../../docs/Maths/Regression/ActiveSubspaces.md), `BasisAdequacy.Of`'s signature.
+
+### A2: Jacobi stopping, convergence report and DecompositionLog (2026-11-12)
+
+**Commit:** `3661e81`.
+
+**What changed:**
+- A sweep that rotates nothing ends the solve, in EigenFast and in the reference alike. The eigenpairs are the same bits as before, since the extra sweeps changed nothing.
+- `EigenResult.Convergence` (`DenseEigenConvergence`) reports, measured on the returned state after the last sweep:
+  - sweeps and rotations;
+  - off(A) and the largest off-diagonal entry;
+  - `Converged`, when every off-diagonal entry passes the pivot test.
+- `EigenFast.DecomposeSymmetricInPlace` returns the same report. `ScaledEigen` carries it back to the caller's scale.
+- `DecompositionLog` records decompositions at the three kernels.
+
+**Tests:** [EigenFastTests](../../tests/VizCore.Tests/EigenFastTests.cs) became property tests:
+- residuals, orthogonality and known spectra;
+- the no-rotation witness, with one sweep, no rotation, and the same eigenpairs under caps of 1 and 256;
+- a capped solve whose reported off(A) matches VᵀAV recomputed from the result;
+- one agreement check against the reference.
+
+[DecompositionLogTests](../../tests/VizCore.Tests/DecompositionLogTests.cs) covers scopes, nesting, and work on tasks the scope's flow starts.
+
+**Gate:** the `VizCore.Tests` selection for the A paths, 34 classes: 233 passed, 2 skipped (the Möbius drafts' standing skips). The regression reach through `ScaledEigen` and the kernels ran in C's gate.
+
+**Pins moved:** none. The parity-with-reference assertions were incidental behavior and are now property tests.
+
+**Doc changes owed:** [LinearAlgebra.md](../../docs/Maths/LinearAlgebra.md), the stopping rule, `DenseEigenConvergence` and `DecompositionLog`. `AlignmentEigenCentrality.Tolerance` is documented as a bound on the off-diagonal infinity norm. With the pivot test now ending the solve, that wording describes what EigenFast does. Before, its exit read the Frobenius norm.
+
+### A1: LOBPCG residual at the cap (2026-11-12)
+
+**Commit:** `c2163a8`.
+
+**What changed:** when the loop ends without converging, the operator is applied to the returned block and its residual measured, so `ResidualNorm` and `Converged` describe the pairs returned. That costs one extra operator application, at the cap only.
+
+**Tests:** `LobpcgDenseTests.Solve_ResidualDescribesReturnedPairs` checks the witness (0.3493 reported, not 0.7620), a converged run, and a block of four capped at three iterations, each against the operator applied independently. The fix sits after the loop, whatever the options. Constrained and preconditioned capped runs have no test of their own.
+
+**Gate:** as A2's.
+
+**Pins moved:** none.
+
+**Doc changes owed:** none.
