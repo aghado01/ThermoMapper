@@ -4,7 +4,6 @@ using System;
 using System.Buffers;
 using System.Runtime.CompilerServices;
 using System.Runtime.Intrinsics;
-using System.Runtime.Intrinsics.X86;
 
 namespace Maths.LinAlg
 {
@@ -39,7 +38,6 @@ namespace Maths.LinAlg
             DecompositionLog.Record(DecompositionKernel.FastJacobi, n, n);
             int matrixSize = n * n;
             double[] workingArray = ArrayPool<double>.Shared.Rent(matrixSize);
-            bool useFma = fastVariant == DenseEigenFastVariant.Fma && Fma.IsSupported;
             int sweeps = 0;
             long rotations = 0;
             double offDiagonalNorm, largestOffDiagonal;
@@ -105,35 +103,16 @@ namespace Maths.LinAlg
                                 {
                                     int simdLen = n & ~3;
 
-                                    if (useFma)
+                                    for (; i < simdLen; i += 4)
                                     {
-                                        for (; i < simdLen; i += 4)
-                                        {
-                                            var vvip = Vector256.Load(V + pBase + i);
-                                            var vviq = Vector256.Load(V + qBase + i);
+                                        var vvip = Vector256.Load(V + pBase + i);
+                                        var vviq = Vector256.Load(V + qBase + i);
 
-                                            var vcvip = Vector256.Multiply(vc, vvip);
-                                            var vcviq = Vector256.Multiply(vc, vviq);
-                                            var vNewVip = Fma.MultiplyAddNegated(vs, vviq, vcvip);
-                                            var vNewViq = Fma.MultiplyAdd(vs, vvip, vcviq);
+                                        var vNewVip = Vector256.Subtract(Vector256.Multiply(vc, vvip), Vector256.Multiply(vs, vviq));
+                                        var vNewViq = Vector256.Add(Vector256.Multiply(vs, vvip), Vector256.Multiply(vc, vviq));
 
-                                            Vector256.Store(vNewVip, V + pBase + i);
-                                            Vector256.Store(vNewViq, V + qBase + i);
-                                        }
-                                    }
-                                    else
-                                    {
-                                        for (; i < simdLen; i += 4)
-                                        {
-                                            var vvip = Vector256.Load(V + pBase + i);
-                                            var vviq = Vector256.Load(V + qBase + i);
-
-                                            var vNewVip = Vector256.Subtract(Vector256.Multiply(vc, vvip), Vector256.Multiply(vs, vviq));
-                                            var vNewViq = Vector256.Add(Vector256.Multiply(vs, vvip), Vector256.Multiply(vc, vviq));
-
-                                            Vector256.Store(vNewVip, V + pBase + i);
-                                            Vector256.Store(vNewViq, V + qBase + i);
-                                        }
+                                        Vector256.Store(vNewVip, V + pBase + i);
+                                        Vector256.Store(vNewViq, V + qBase + i);
                                     }
                                 }
                                 if (vectors)
@@ -150,35 +129,16 @@ namespace Maths.LinAlg
                                 {
                                     int simdLen = p & ~3;
 
-                                    if (useFma)
+                                    for (; zone1 < simdLen; zone1 += 4)
                                     {
-                                        for (; zone1 < simdLen; zone1 += 4)
-                                        {
-                                            var vaip = Vector256.Load(A + pBase + zone1);
-                                            var vaiq = Vector256.Load(A + qBase + zone1);
+                                        var vaip = Vector256.Load(A + pBase + zone1);
+                                        var vaiq = Vector256.Load(A + qBase + zone1);
 
-                                            var vcAip = Vector256.Multiply(vc, vaip);
-                                            var vcAiq = Vector256.Multiply(vc, vaiq);
-                                            var vNewAip = Fma.MultiplyAddNegated(vs, vaiq, vcAip);
-                                            var vNewAiq = Fma.MultiplyAdd(vs, vaip, vcAiq);
+                                        var vNewAip = Vector256.Subtract(Vector256.Multiply(vc, vaip), Vector256.Multiply(vs, vaiq));
+                                        var vNewAiq = Vector256.Add(Vector256.Multiply(vs, vaip), Vector256.Multiply(vc, vaiq));
 
-                                            Vector256.Store(vNewAip, A + pBase + zone1);
-                                            Vector256.Store(vNewAiq, A + qBase + zone1);
-                                        }
-                                    }
-                                    else
-                                    {
-                                        for (; zone1 < simdLen; zone1 += 4)
-                                        {
-                                            var vaip = Vector256.Load(A + pBase + zone1);
-                                            var vaiq = Vector256.Load(A + qBase + zone1);
-
-                                            var vNewAip = Vector256.Subtract(Vector256.Multiply(vc, vaip), Vector256.Multiply(vs, vaiq));
-                                            var vNewAiq = Vector256.Add(Vector256.Multiply(vs, vaip), Vector256.Multiply(vc, vaiq));
-
-                                            Vector256.Store(vNewAip, A + pBase + zone1);
-                                            Vector256.Store(vNewAiq, A + qBase + zone1);
-                                        }
+                                        Vector256.Store(vNewAip, A + pBase + zone1);
+                                        Vector256.Store(vNewAiq, A + qBase + zone1);
                                     }
                                 }
 

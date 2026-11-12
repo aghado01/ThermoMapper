@@ -3,10 +3,11 @@ using System.Buffers;
 
 namespace Maths.LinAlg;
 
+/// <summary>The production Jacobi's arithmetic. Its opt-in FMA variant was removed (spectral-solver brief, decision 2): fused
+/// arithmetic returns only as a kernel's own, unconditional and the same bits on every machine, if its timings favor it.</summary>
 public enum DenseEigenFastVariant
 {
     Default = 0,
-    Fma = 1,
 }
 
 public readonly record struct DenseEigenOptions(

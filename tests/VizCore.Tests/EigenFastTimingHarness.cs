@@ -45,14 +45,12 @@ public sealed class EigenFastTimingHarness
             });
 
         string directPath = run.WriteRunJson("direct-comparison", Array.Empty<DirectBenchmarkCase>());
-        string variantPath = run.WriteRunJson("fast-variant-comparison", Array.Empty<FastVariantBenchmarkCase>());
         string spectralPath = run.WriteRunJson("spectral-dispatch-comparison", Array.Empty<SpectralBenchmarkCase>());
         string solverPath = run.WriteRunJson("spectral-solver-comparison", Array.Empty<SpectralSolverComparisonCase>());
         string denseBottomKPath = run.WriteRunJson("dense-bottomk-comparison", Array.Empty<DenseBottomKComparisonCase>());
         string summaryPath = run.WriteRunText("summary", "pending");
 
         var directCases = new List<DirectBenchmarkCase>();
-        var variantCases = new List<FastVariantBenchmarkCase>();
         var spectralCases = new List<SpectralBenchmarkCase>();
         var solverCases = new List<SpectralSolverComparisonCase>();
         var denseBottomKCases = new List<DenseBottomKComparisonCase>();
@@ -68,14 +66,6 @@ public sealed class EigenFastTimingHarness
         DisconnectedControl.Fixture control = DisconnectedControl.Generate(pointsPerComponent: 64, separation: 100.0);
         CsrGraph graph = FixtureGoldenHelpers.BuildDraftGraph(control.Points, k: 4, ensureConnected: true);
         directCases.Add(MeasureCase("lap-128", BuildCombinatorialLaplacian(graph)));
-
-#if !EIGEN_REFERENCE
-        foreach (int size in new[] { 128, 256, 512 })
-        {
-            double[,] matrix = BuildRandomSymmetricMatrix(size, seed: 20_000 + size);
-            variantCases.Add(MeasureFastVariantCase($"rand-{size}", matrix));
-        }
-#endif
 
         double[][] crescent = CrescentAndEllipsoid.Generate(crescentPoints: 500, ellipsoidPoints: 0, seed: 42).Features;
         CsrGraph crescentGraph = FixtureGoldenHelpers.BuildDraftGraph(crescent, k: FixtureGoldenHelpers.ConnectedFixtureK, ensureConnected: true);
@@ -94,15 +84,6 @@ public sealed class EigenFastTimingHarness
             denseOptions: default,
             materialization: DenseLaplacianMaterialization.FlatColumnMajor));
 
-#if !EIGEN_REFERENCE
-        spectralCases.Add(MeasureSpectralCase(
-            "spectral-crescent-500",
-            crescentGraph,
-            seed: FixtureGoldenHelpers.SpectralSeed,
-            k: 8,
-            denseOptions: new DenseEigenOptions(DenseEigenFastVariant.Fma),
-            materialization: DenseLaplacianMaterialization.FlatColumnMajor));
-#endif
 
         double[][] mobius = MobiusAndEllipsoid.Generate(mobiusPoints: 500, ellipsoidPoints: 0, seed: 42).Features;
         CsrGraph mobiusGraph = FixtureGoldenHelpers.BuildDraftGraph(mobius, k: FixtureGoldenHelpers.ConnectedFixtureK, ensureConnected: true);
@@ -121,15 +102,6 @@ public sealed class EigenFastTimingHarness
             denseOptions: default,
             materialization: DenseLaplacianMaterialization.FlatColumnMajor));
 
-#if !EIGEN_REFERENCE
-        spectralCases.Add(MeasureSpectralCase(
-            "spectral-mobius-500",
-            mobiusGraph,
-            seed: FixtureGoldenHelpers.SpectralSeed,
-            k: 8,
-            denseOptions: new DenseEigenOptions(DenseEigenFastVariant.Fma),
-            materialization: DenseLaplacianMaterialization.FlatColumnMajor));
-#endif
 
         solverCases.Add(MeasureSpectralSolverComparison(
             "solver-crescent-500", crescentGraph, seed: FixtureGoldenHelpers.SpectralSeed, k: 8));
@@ -137,16 +109,14 @@ public sealed class EigenFastTimingHarness
             "solver-mobius-500", mobiusGraph, seed: FixtureGoldenHelpers.SpectralSeed, k: 8));
 
         directPath = run.WriteRunJson("direct-comparison", directCases);
-        variantPath = run.WriteRunJson("fast-variant-comparison", variantCases);
         spectralPath = run.WriteRunJson("spectral-dispatch-comparison", spectralCases);
         solverPath = run.WriteRunJson("spectral-solver-comparison", solverCases);
         denseBottomKPath = run.WriteRunJson("dense-bottomk-comparison", denseBottomKCases);
-        summaryPath = run.WriteRunText("summary", BuildSummary(directCases, variantCases, spectralCases, solverCases, denseBottomKCases));
+        summaryPath = run.WriteRunText("summary", BuildSummary(directCases, spectralCases, solverCases, denseBottomKCases));
 
         _output.WriteLine($"RunRoot\t{run.RunDirectory}");
         _output.WriteLine($"Manifest\t{run.ManifestPath}");
         _output.WriteLine($"DirectComparison\t{directPath}");
-        _output.WriteLine($"FastVariantComparison\t{variantPath}");
         _output.WriteLine($"SpectralDispatchComparison\t{spectralPath}");
         _output.WriteLine($"SpectralSolverComparison\t{solverPath}");
         _output.WriteLine($"DenseBottomKComparison\t{denseBottomKPath}");
@@ -156,7 +126,6 @@ public sealed class EigenFastTimingHarness
 
     private static string BuildSummary(
         IReadOnlyList<DirectBenchmarkCase> directCases,
-        IReadOnlyList<FastVariantBenchmarkCase> variantCases,
         IReadOnlyList<SpectralBenchmarkCase> spectralCases,
         IReadOnlyList<SpectralSolverComparisonCase> solverCases,
         IReadOnlyList<DenseBottomKComparisonCase> denseBottomKCases)
@@ -166,15 +135,6 @@ public sealed class EigenFastTimingHarness
         builder.AppendLine("Label\tEigenMs\tEigenFastMs\tSpeedup\tResidual");
         foreach (DirectBenchmarkCase item in directCases)
             builder.AppendLine($"{item.Label}\t{item.EigenMilliseconds:F3}\t{item.EigenFastMilliseconds:F3}\t{item.Speedup:F2}x\t{item.Residual:E3}");
-
-        if (variantCases.Count > 0)
-        {
-            builder.AppendLine();
-            builder.AppendLine("fast-variant-comparison");
-            builder.AppendLine("Label\tDefaultMs\tFmaMs\tSpeedup\tResidual");
-            foreach (FastVariantBenchmarkCase item in variantCases)
-                builder.AppendLine($"{item.Label}\t{item.DefaultMilliseconds:F3}\t{item.FmaMilliseconds:F3}\t{item.Speedup:F2}x\t{item.Residual:E3}");
-        }
 
         builder.AppendLine();
         builder.AppendLine("spectral-dispatch-comparison");
@@ -351,24 +311,6 @@ public sealed class EigenFastTimingHarness
         return new DirectBenchmarkCase(label, eigenMedian, fastMedian, speedup, residual);
     }
 
-    private FastVariantBenchmarkCase MeasureFastVariantCase(string label, double[,] matrix)
-    {
-        WarmUp(matrix);
-        _ = EigenFast.DecomposeSymmetric(matrix, fastVariant: DenseEigenFastVariant.Fma);
-
-        double defaultMedian = MeasureMedianMilliseconds(
-            () => EigenFast.DecomposeSymmetric(matrix),
-            iterations: 7);
-        double fmaMedian = MeasureMedianMilliseconds(
-            () => EigenFast.DecomposeSymmetric(matrix, fastVariant: DenseEigenFastVariant.Fma),
-            iterations: 7);
-        EigenResult fma = EigenFast.DecomposeSymmetric(matrix, fastVariant: DenseEigenFastVariant.Fma);
-        double residual = ComputeMaxResidualNorm(matrix, fma);
-        double speedup = defaultMedian / fmaMedian;
-
-        return new FastVariantBenchmarkCase(label, defaultMedian, fmaMedian, speedup, residual);
-    }
-
     private SpectralBenchmarkCase MeasureSpectralCase(
         string label,
         CsrGraph graph,
@@ -537,13 +479,6 @@ public sealed class EigenFastTimingHarness
         string Label,
         double EigenMilliseconds,
         double EigenFastMilliseconds,
-        double Speedup,
-        double Residual);
-
-    private readonly record struct FastVariantBenchmarkCase(
-        string Label,
-        double DefaultMilliseconds,
-        double FmaMilliseconds,
         double Speedup,
         double Residual);
 

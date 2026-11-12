@@ -60,55 +60,6 @@ public sealed class SpectralDenseDispatchTests
     }
 
     [Fact]
-    public void ComputeBottomK_FmaVariantMatchesDefaultFastVariant()
-    {
-#if EIGEN_REFERENCE
-        return;
-#else
-        CsrGraph graph = BuildConnectedFixtureGraph();
-
-        IReadOnlyList<EigenPair> baseline = Spectral.ComputeBottomK(
-            graph,
-            seed: FixtureGoldenHelpers.SpectralSeed,
-            k: 8,
-            lapType: LaplacianType.Combinatorial,
-            solverKind: SolverKind.Dense,
-            denseOptions: default,
-            denseMaterialization: DenseLaplacianMaterialization.FlatColumnMajor);
-
-        IReadOnlyList<EigenPair> fma = Spectral.ComputeBottomK(
-            graph,
-            seed: FixtureGoldenHelpers.SpectralSeed,
-            k: 8,
-            lapType: LaplacianType.Combinatorial,
-            solverKind: SolverKind.Dense,
-            denseOptions: new DenseEigenOptions(DenseEigenFastVariant.Fma),
-            denseMaterialization: DenseLaplacianMaterialization.FlatColumnMajor);
-
-        var run = HarnessArtifacts.Create(
-            runKind: "test-runs",
-            suiteName: nameof(SpectralDenseDispatchTests),
-            runName: nameof(ComputeBottomK_FmaVariantMatchesDefaultFastVariant),
-            metadata: new Dictionary<string, object?>
-            {
-                ["Comparison"] = "DefaultVsFma",
-                ["NodeCount"] = graph.NodeCount,
-            });
-
-        double[,] laplacian = BuildCombinatorialLaplacian(graph);
-        string comparisonPath = run.WriteRunJson(
-            "comparison",
-            BuildComparisonRecord(graph, baseline, fma, laplacian));
-
-        Console.WriteLine($"RunRoot\t{run.RunDirectory}");
-        Console.WriteLine($"Manifest\t{run.ManifestPath}");
-        Console.WriteLine($"Comparison\t{comparisonPath}");
-
-        AssertBottomPairsMatch(baseline, fma, graph, eigenvalueTolerance: 1e-8, residualTolerance: 1e-7);
-#endif
-    }
-
-    [Fact]
     public void ComputeBottomK_IterativeMatchesDense()
     {
         CsrGraph graph = BuildConnectedFixtureGraph();
