@@ -151,6 +151,7 @@ public static class LOBPCG
         double[] trialBasis = new double[n * (3 * k)];
         double[] appliedTrialBasis = new double[n * (3 * k)];
         double[] theta = new double[k];
+        var ritz = new RitzWorkspace(3 * k);
 
         // Constraint block Y: re-orthonormalized once, then re-applied every
         // iteration. This is the deflation that keeps the iterate off known modes.
@@ -180,7 +181,7 @@ public static class LOBPCG
             completedIterations = iter + 1;
 
             op.Apply(x, ax, k);
-            RotateToExtremalRitzBasis(x, ax, n, k, k, theta, xWork, axWork, wantLargest);
+            RotateToExtremalRitzBasis(x, ax, n, k, k, theta, xWork, axWork, wantLargest, ritz);
             Swap(ref x, ref xWork);
             Swap(ref ax, ref axWork);
 
@@ -217,7 +218,7 @@ public static class LOBPCG
                 trialBasis.AsSpan(0, n * trialCols));
 
             op.Apply(trialBasis.AsSpan(0, n * trialBasisCols), appliedTrialBasis.AsSpan(0, n * trialBasisCols), trialBasisCols);
-            RotateToExtremalRitzBasis(trialBasis, appliedTrialBasis, n, trialBasisCols, k, theta, xWork, axWork, wantLargest);
+            RotateToExtremalRitzBasis(trialBasis, appliedTrialBasis, n, trialBasisCols, k, theta, xWork, axWork, wantLargest, ritz);
 
             BuildDifferenceBlock(xWork, x, conjugate, n, k);
             ProjectBlockAgainst(conjugate, n, k, xWork, k);
@@ -303,6 +304,19 @@ public static class LOBPCG
         preconditioner.Apply(residual.AsSpan(0, n * k), preconditioned.AsSpan(0, n * k), k);
     }
 
+    // The Rayleigh–Ritz step's buffers, sized for the trial basis of up to 3k columns and reused every iteration (spectral-solver
+    // brief, B3): the projection, its eigenvalues and its eigenvectors as flat columns.
+    private sealed class RitzWorkspace(int capacity)
+    {
+        public double[] Projected { get; } = new double[capacity * capacity];
+
+        public double[] Values { get; } = new double[capacity];
+
+        public double[] Vectors { get; } = new double[capacity * capacity];
+    }
+
+    // The projection VᵀAV of order m, solved by the production dense kernel into the workspace (eigenvalues descending, eigenvectors
+    // as flat columns), and the extremal Ritz vectors and their images formed from it.
     private static void RotateToExtremalRitzBasis(
         double[] vectors,
         double[] appliedVectors,
@@ -312,69 +326,51 @@ public static class LOBPCG
         double[] eigenvalues,
         double[] outputVectors,
         double[] outputAppliedVectors,
-        bool wantLargest)
+        bool wantLargest,
+        RitzWorkspace ritz)
     {
-        var projected = BuildProjectedMatrix(vectors, appliedVectors, n, sourceCols);
-        var eig = Eigen.DecomposeSymmetric(projected); // eigenvalues sorted descending
-        var coeff = BuildExtremalEigenvectorMatrix(eig, takeCols, wantLargest);
-
-        MultiplyBlockByCoefficients(vectors, n, sourceCols, coeff, takeCols, outputVectors);
-        MultiplyBlockByCoefficients(appliedVectors, n, sourceCols, coeff, takeCols, outputAppliedVectors);
-
-        int lastIndex = eig.Eigenvalues.Length - 1;
-        for (int col = 0; col < takeCols; col++)
-            eigenvalues[col] = wantLargest ? eig.Eigenvalues[col] : eig.Eigenvalues[lastIndex - col];
-    }
-
-    private static double[,] BuildProjectedMatrix(double[] left, double[] right, int n, int cols)
-    {
-        var projected = new double[cols, cols];
-        for (int i = 0; i < cols; i++)
+        int m = sourceCols;
+        Span<double> projected = ritz.Projected.AsSpan(0, m * m);
+        Span<double> values = ritz.Values.AsSpan(0, m);
+        Span<double> ritzVectors = ritz.Vectors.AsSpan(0, m * m);
+        for (int i = 0; i < m; i++)
         {
-            ReadOnlySpan<double> leftCol = left.AsSpan(i * n, n);
-            for (int j = i; j < cols; j++)
+            ReadOnlySpan<double> leftCol = vectors.AsSpan(i * n, n);
+            for (int j = i; j < m; j++)
             {
-                double value = MatrixOps.Dot(leftCol, right.AsSpan(j * n, n));
-                projected[i, j] = value;
-                projected[j, i] = value;
+                double value = MatrixOps.Dot(leftCol, appliedVectors.AsSpan(j * n, n));
+                projected[j * m + i] = value;
+                projected[i * m + j] = value;
             }
         }
+        DenseEigen.DecomposeSymmetric(projected, m, values, ritzVectors);
 
-        return projected;
-    }
-
-    private static double[,] BuildExtremalEigenvectorMatrix(EigenResult eig, int takeCols, bool wantLargest)
-    {
-        int sourceCols = eig.Eigenvalues.Length;
-        var coeff = new double[sourceCols, takeCols];
-        int lastIndex = sourceCols - 1;
+        MultiplyBlockByCoefficients(vectors, n, m, ritzVectors, takeCols, wantLargest, outputVectors);
+        MultiplyBlockByCoefficients(appliedVectors, n, m, ritzVectors, takeCols, wantLargest, outputAppliedVectors);
 
         for (int col = 0; col < takeCols; col++)
-        {
-            // Descending order: index 0 is the largest eigenpair, lastIndex the smallest.
-            double[] eigenvector = wantLargest ? eig.Eigenvectors[col] : eig.Eigenvectors[lastIndex - col];
-            for (int row = 0; row < sourceCols; row++)
-                coeff[row, col] = eigenvector[row];
-        }
-
-        return coeff;
+            eigenvalues[col] = wantLargest ? values[col] : values[m - 1 - col];
     }
 
+    // Target column c is Σ_s source column s weighted by the extremal Ritz vector's component s: Ritz vector c for the largest, m − 1 − c
+    // for the smallest, as the eigenvalues descend.
     private static void MultiplyBlockByCoefficients(
         double[] source,
         int n,
         int sourceCols,
-        double[,] coeff,
+        ReadOnlySpan<double> ritzVectors,
         int targetCols,
+        bool wantLargest,
         double[] destination)
     {
         Array.Clear(destination, 0, n * targetCols);
         for (int targetCol = 0; targetCol < targetCols; targetCol++)
         {
             Span<double> dst = destination.AsSpan(targetCol * n, n);
+            ReadOnlySpan<double> weights = ritzVectors.Slice((wantLargest ? targetCol : sourceCols - 1 - targetCol) * sourceCols, sourceCols);
             for (int sourceCol = 0; sourceCol < sourceCols; sourceCol++)
             {
-                double weight = coeff[sourceCol, targetCol];
+                double weight = weights[sourceCol];
                 if (weight == 0.0) continue;
 
                 ReadOnlySpan<double> src = source.AsSpan(sourceCol * n, n);

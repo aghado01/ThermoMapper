@@ -287,7 +287,7 @@ public sealed partial class HierarchicalPSpline
         _gramDense = new double[_nu, _nu];
         for (int d = 0; d <= _gramBw; d++)
             for (int j = 0; j + d < _nu; j++) { _gramDense[j + d, j] = _gram[d, j]; _gramDense[j, j + d] = _gram[d, j]; }
-        EigenResult eigen = Eigen.DecomposeSymmetric(_gramDense);
+        EigenResult eigen = DenseEigen.DecomposeSymmetric(_gramDense);
         _gramValues = eigen.Eigenvalues;
         _gramVectors = eigen.Eigenvectors;
         _sumZtyInEigenbasis = new double[_nu];

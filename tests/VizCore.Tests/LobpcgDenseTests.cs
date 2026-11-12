@@ -83,6 +83,42 @@ public sealed class LobpcgDenseTests
         Assert.False(block.Converged);
     }
 
+    /// <summary>
+    /// The Rayleigh–Ritz step runs on the production dense kernel (spectral-solver brief, B3): a solve that converges at iteration I
+    /// decomposes 2I − 1 projections, two per iteration but the last, and none of them by the reference Jacobi; a capped solve two per
+    /// iteration. The build's dense dispatch decides the kernel, the reference one only under EIGEN_REFERENCE.
+    /// </summary>
+    [Fact]
+    public void Solve_RayleighRitzRunsOnTheDenseDispatch()
+    {
+#if EIGEN_REFERENCE
+        const DecompositionKernel dense = DecompositionKernel.ReferenceJacobi;
+#else
+        const DecompositionKernel dense = DecompositionKernel.FastJacobi;
+#endif
+        double[,] matrix = BuildRandomSymmetricMatrix(size: 64, seed: 7);
+        var op = new DenseSymmetricOperator(matrix);
+        LOBPCG.Result converged, capped;
+        IReadOnlyList<Decomposition> convergedWork, cappedWork;
+        using (DecompositionLog log = DecompositionLog.Begin())
+        {
+            converged = LOBPCG.Solve(op, 4, new LOBPCG.Options { MaxIterations = 2000, Tolerance = 1e-9 });
+            convergedWork = log.Entries;
+        }
+        using (DecompositionLog log = DecompositionLog.Begin())
+        {
+            capped = LOBPCG.Solve(op, 4, new LOBPCG.Options { MaxIterations = 3 });
+            cappedWork = log.Entries;
+        }
+
+        Assert.True(converged.Converged);
+        Assert.All(convergedWork.Concat(cappedWork), d => Assert.Equal(dense, d.Kernel));
+        Assert.Equal(2 * converged.Iterations - 1, convergedWork.Count);
+        Assert.False(capped.Converged);
+        Assert.Equal(6, cappedWork.Count);
+        Assert.InRange(Math.Abs(converged.ResidualNorm - MaxResidual(matrix, converged)), 0.0, 1e-12);
+    }
+
     private static double MaxResidual(double[,] matrix, LOBPCG.Result result) =>
         result.Eigenpairs.Max(pair => ResidualNorm(matrix, pair.Lambda, pair.Vector));
 
