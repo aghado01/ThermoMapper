@@ -279,28 +279,17 @@ public sealed record ActiveSubspaceAnalysis(
         init => _mapInverse = (Map, value);
     }
 
-    // L⁻¹ for a diagonal map, or a symmetric positive definite one by its eigenvalues.
+    // L⁻¹ for a diagonal map, or a symmetric positive definite one as V·Λ⁻¹·Vᵀ, symmetrized.
     private static double[,] InverseOf(double[,] l)
     {
         int p = l.GetLength(0);
-        var inverse = new double[p, p];
         bool diagonal = true;
         for (int i = 0; i < p && diagonal; i++)
             for (int j = 0; j < p; j++)
                 if (i != j && l[i, j] != 0.0) { diagonal = false; break; }
-        if (diagonal)
-        {
-            for (int i = 0; i < p; i++) inverse[i, i] = 1.0 / l[i, i];
-            return inverse;
-        }
-        EigenResult e = ScaledEigen.Of(l);
-        for (int q = 0; q < p; q++)
-        {
-            double s = 1.0 / e.Eigenvalues[q];
-            double[] v = e.Eigenvectors[q];
-            for (int i = 0; i < p; i++)
-                for (int j = 0; j < p; j++) inverse[i, j] += s * v[i] * v[j];
-        }
+        if (!diagonal) return MatrixFunctions.Symmetric(ScaledEigen.Of(l), x => 1.0 / x);
+        var inverse = new double[p, p];
+        for (int i = 0; i < p; i++) inverse[i, i] = 1.0 / l[i, i];
         return inverse;
     }
 }

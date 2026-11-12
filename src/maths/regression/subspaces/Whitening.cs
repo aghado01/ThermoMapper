@@ -86,26 +86,7 @@ public static class Whitening
         double top = e.Eigenvalues.Max(), bottom = e.Eigenvalues.Min();
         if (!(top > 0.0) || !(bottom > 1e-12 * top))
             throw new ArgumentException($"Whitening needs a positive definite covariance; its eigenvalues run from {bottom:G3} to {top:G3}.", nameof(covariance));
-        var root = new double[p, p];
-        var inverse = new double[p, p];
-        for (int q = 0; q < p; q++)
-        {
-            double s = Math.Sqrt(e.Eigenvalues[q]), si = 1.0 / s;
-            double[] v = e.Eigenvectors[q];
-            for (int i = 0; i < p; i++)
-                for (int j = 0; j < p; j++)
-                {
-                    root[i, j] += s * v[i] * v[j];
-                    inverse[i, j] += si * v[i] * v[j];
-                }
-        }
-        for (int i = 0; i < p; i++)
-            for (int j = i + 1; j < p; j++)
-            {
-                root[i, j] = root[j, i] = 0.5 * (root[i, j] + root[j, i]);
-                inverse[i, j] = inverse[j, i] = 0.5 * (inverse[i, j] + inverse[j, i]);
-            }
-        return (root, inverse);
+        return (MatrixFunctions.Symmetric(e, Math.Sqrt), MatrixFunctions.Symmetric(e, x => 1.0 / Math.Sqrt(x)));
     }
 
     // Weights normalized to sum to 1, uniform when null; refused unless nonnegative, finite, one per point and of positive sum.

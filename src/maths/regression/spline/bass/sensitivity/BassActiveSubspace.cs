@@ -348,13 +348,7 @@ internal static partial class BassActiveSubspaces
             EigenResult e = ScaledEigen.Of(gram);
             double top = Math.Max(e.Eigenvalues.Max(), 0.0);
             int[] kept = [.. Enumerable.Range(0, t).Where(q => e.Eigenvalues[q] > 1e-14 * top)];
-            var fk = new double[t, Math.Max(1, kept.Length)];
-            for (int c = 0; c < kept.Length; c++)
-            {
-                double root = Math.Sqrt(e.Eigenvalues[kept[c]]);
-                for (int a = 0; a < t; a++) fk[a, c] = root * e.Eigenvectors[kept[c]][a];
-            }
-            return fk;
+            return kept.Length == 0 ? new double[t, 1] : MatrixFunctions.FactorColumns(e, kept, Math.Sqrt);
         }
     }
 
@@ -497,35 +491,9 @@ internal static partial class BassActiveSubspaces
         return g;
     }
 
-    // W_y's symmetric root, positive semidefinite: S = Σ √λ_q v_qv_qᵀ, so the output side keeps the locations' coordinates. Each
-    // eigenvector's outer product runs over its nonzero components alone: a zero component adds a signed zero to a sum that starts at +0,
-    // which leaves it unchanged, so the root is the same bits, and an identity or diagonal metric costs O(m²) here rather than O(m³).
-    private static double[,] PsdRootOf(EigenResult e, int m)
-    {
-        var s = new double[m, m];
-        var nonzero = new int[m];
-        for (int q = 0; q < m; q++)
-        {
-            double root = Math.Sqrt(Math.Max(0.0, e.Eigenvalues[q]));
-            if (root == 0.0) continue;
-            double[] v = e.Eigenvectors[q];
-            int count = 0;
-            for (int i = 0; i < m; i++)
-                if (v[i] != 0.0) nonzero[count++] = i;
-            for (int a = 0; a < count; a++)
-            {
-                int i = nonzero[a];
-                for (int b = 0; b < count; b++)
-                {
-                    int j = nonzero[b];
-                    s[i, j] += root * v[i] * v[j];
-                }
-            }
-        }
-        for (int i = 0; i < m; i++)
-            for (int j = i + 1; j < m; j++) s[i, j] = s[j, i] = 0.5 * (s[i, j] + s[j, i]);
-        return s;
-    }
+    // W_y's symmetric root, positive semidefinite: S = Σ √λ_q v_qv_qᵀ over the positive eigenvalues, so the output side keeps the
+    // locations' coordinates (MatrixFunctions.Symmetric, which skips zero terms, so an identity or diagonal metric costs O(m²)).
+    private static double[,] PsdRootOf(EigenResult e) => MatrixFunctions.Symmetric(e, x => Math.Sqrt(Math.Max(0.0, x)));
 
     // Output patterns: 0 reads none; otherwise a functional fit's, from 1 to its locations.
     private static void Patterns(int patterns, bool functional, int m)
@@ -1147,7 +1115,7 @@ internal static partial class BassActiveSubspaces
 
         public double[,] Root => _root ??= RootOf(Eigen, W.GetLength(0));
 
-        public double[,] PsdRoot => _psdRoot ??= PsdRootOf(Eigen, W.GetLength(0));
+        public double[,] PsdRoot => _psdRoot ??= PsdRootOf(Eigen);
 
         // W_y's range for the matrix check (spectral-solver brief, D): null when W_y is positive definite.
         public double[,]? Range
@@ -1174,20 +1142,15 @@ internal static partial class BassActiveSubspaces
     private static double[,] RootOf(EigenResult e, int m)
     {
         double top = Math.Max(e.Eigenvalues.Max(x => Math.Abs(x)), double.Epsilon);
-        var rows = new List<double[]>();
+        var kept = new List<int>();
         for (int q = 0; q < m; q++)
         {
             double lambda = e.Eigenvalues[q];
             if (lambda < -1e-12 * top) throw new ArgumentException("The output metric is positive semidefinite.");
-            if (!(lambda > 1e-14 * top)) continue;   // rounding-level directions add nothing
-            double s = Math.Sqrt(lambda);
-            rows.Add([.. Enumerable.Range(0, m).Select(l => s * e.Eigenvectors[q][l])]);
+            if (lambda > 1e-14 * top) kept.Add(q);   // rounding-level directions add nothing
         }
-        if (rows.Count == 0) rows.Add(new double[m]);   // W_y = 0: one zero row, so C is 0
-        var root = new double[rows.Count, m];
-        for (int q = 0; q < rows.Count; q++)
-            for (int l = 0; l < m; l++) root[q, l] = rows[q][l];
-        return root;
+        return kept.Count == 0 ? new double[1, m]   // W_y = 0: one zero row, so C is 0
+                               : MatrixFunctions.FactorRows(e, kept, Math.Sqrt);
     }
 
     // A fit's output functional: required for a functional response, one weight per training output location; refused for a scalar one.
