@@ -184,6 +184,7 @@ Nothing is built until the user decides the items marked **Decision** below. The
 - **C for BGP** in closed form (Wycoff et al., not held). BGP's gradients are a later consumer.
 - **G4's joint mixture of products** and E25's readouts (ALE, Shapley).
 - **The response envelope and E34.** E34's co-active pairs across outputs use slice 3 once E34 exists.
+- **2311.18146's PBX 9501 application.** Its 14 materials' data are downloaded to `artifacts/datasets/PBX9501` (2026-11-12, pinned to the authors' commit, outside git; `PROVENANCE.md` there). The authors' script computes each concordance's numerator from saved draws 1 to 10 and its denominator from draws 100 to 1000; a replication pairs the same draws and reports corrected values. It waits for the user.
 - **`StiefelManifold`'s repair,** which waits for a frame consumer.
 
 ## Working rules
