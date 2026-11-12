@@ -1,0 +1,33 @@
+# Line endings: every text file is stored and checked out with LF, whatever the platform or core.autocrlf.
+* text=auto eol=lf
+
+# cmd.exe misreads labels and goto in LF batch files, so Windows command scripts keep CRLF.
+*.bat text eol=crlf
+*.cmd text eol=crlf
+
+# Binary formats, declared so text detection never has to guess.
+*.png binary
+*.jpg binary
+*.jpeg binary
+*.gif binary
+*.ico binary
+*.pdf binary
+*.gz binary
+*.zip binary
+*.7z binary
+*.xls binary
+*.xlsx binary
+*.docx binary
+*.pptx binary
+*.dta binary
+*.sas7bdat binary
+*.rds binary
+*.RData binary
+*.parquet binary
+*.exe binary
+*.dll binary
+*.pdb binary
+*.woff binary
+*.woff2 binary
+*.ttf binary
+*.otf binary
