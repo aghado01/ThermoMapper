@@ -299,7 +299,7 @@ Started at the main session's word after 12b's verification (decision 11), under
   - the inflated set's coverage on a fixture whose ν is known;
   - qualification: coverage with Metropolis chains stopped before mixing, beside the full step from the same stopped chains, plus BASS chains stopped early and the cost row.
 
-**State.** Being written. Nothing committed.
+**State.** The code and tests are committed in `e8cf30b`. The Commit selection passed 1,102 of 1,102. Qualification gave stopped Metropolis chains 0.908 against 0.909 for the full step, and stopped BASS chains 0.918 against 0.903. The whole assembly is running at `e8cf30b`; the report follows it.
 
 ### 2026-11-11 — Slice 12b, CB-4's latent-posterior reading as the full step's opt-in
 
