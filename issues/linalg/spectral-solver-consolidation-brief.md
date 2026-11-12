@@ -415,6 +415,32 @@ Settled in the 2026-11-12 reviews:
 
 Each slice is reported here, newest first, with its commit, fixtures, commands, receipts, pins moved and doc changes owed.
 
+### DenseEigenOptions and DenseEigenFastVariant removed (2026-11-12)
+
+**Commit:** `75f76c1`. Decided by the owner after decision 2 left the enum with one value and the record carrying nothing.
+
+**Consequences:**
+- **Public API.**
+  - Removed parameters:
+    - the options parameter of every `DenseEigen` entry point;
+    - the `fastVariant` parameter of `EigenFast`'s;
+    - the options parameter of both `SpectralMath.BottomK` overloads;
+    - `denseOptions` on `Spectral.ComputeBottomK` and `CoherentField.Build`.
+  - Also removed: the reference build's compatibility check.
+  - Already-compiled consumers must rebuild, even if their source omitted the optional argument, and callers that passed it explicitly must edit the call.
+- **Saved configs.** Removing `AlignmentEigenCentrality.EigenOptions` changes the class's serialized shape. No tracked JSON, YAML or TOML config contains the field, and no in-repo loader reads this class. An external config that sets `EigenOptions` migrates by deleting that property and keeping `MaxSweeps` and `Tolerance`.
+- **Benchmark output.** The timing harness drops `FastVariant` from its text summary and from newly generated JSON. `Materialization` stays, since it still distinguishes rectangular from flat column-major input. Historical receipts keep the variant that was actually measured.
+
+B1 can introduce an explicitly named stopping rule when callers need to choose one.
+
+**Gates:**
+- `ThermoMapper.sln` builds, Release, with no errors.
+- The focused dense and graph dispatch tests pass in both builds, 46 of 46 each. They are `EigenFastTests`, `EigenDecomposeSymmetricTests`, `DecompositionLogTests`, `LobpcgDenseTests`, `SpectralDenseDispatchTests`, `SpectralSolverPolicyTests`, `SpcDiagnosticsTests`, `IcaTests` and `PcaTests`. The two builds' `Maths.LinAlg.dll` differ in size, 110,080 against 109,568 bytes, so the reference define applied.
+
+**Pins moved:** none.
+
+**Doc changes owed:** [LinearAlgebra.md](../../docs/Maths/LinearAlgebra.md), the only page that names the removed types: `DenseEigenOptions`, the `FastVariant` row and the reference build's exception behavior.
+
 ### Decision 2: the FMA variant removed (2026-11-12)
 
 **Commit:** `9635dca`.
