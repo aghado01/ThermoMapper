@@ -56,7 +56,14 @@ public static class Whitening
     /// Σ^{1/2}, symmetric, from Σ's eigendecomposition. Refused unless <paramref name="covariance"/> is square, finite, symmetric to
     /// rounding and positive definite, its smallest eigenvalue above 10⁻¹² of its largest: a degenerate law has no whitened coordinates.
     /// </summary>
-    public static double[,] SymmetricRoot(double[,] covariance)
+    public static double[,] SymmetricRoot(double[,] covariance) => SymmetricRoots(covariance).Root;
+
+    /// <summary>
+    /// Σ^{1/2} and Σ^{-1/2}, both symmetric, from one eigendecomposition of Σ (spectral-solver brief, C5): the whitening map and the
+    /// inverse a projection reads, with the eigenvectors shared rather than recomputed from the root. Refused as
+    /// <see cref="SymmetricRoot"/> refuses.
+    /// </summary>
+    public static (double[,] Root, double[,] InverseRoot) SymmetricRoots(double[,] covariance)
     {
         ArgumentNullException.ThrowIfNull(covariance);
         int p = covariance.GetLength(0);
@@ -80,16 +87,25 @@ public static class Whitening
         if (!(top > 0.0) || !(bottom > 1e-12 * top))
             throw new ArgumentException($"Whitening needs a positive definite covariance; its eigenvalues run from {bottom:G3} to {top:G3}.", nameof(covariance));
         var root = new double[p, p];
+        var inverse = new double[p, p];
         for (int q = 0; q < p; q++)
         {
-            double s = Math.Sqrt(e.Eigenvalues[q]);
+            double s = Math.Sqrt(e.Eigenvalues[q]), si = 1.0 / s;
             double[] v = e.Eigenvectors[q];
             for (int i = 0; i < p; i++)
-                for (int j = 0; j < p; j++) root[i, j] += s * v[i] * v[j];
+                for (int j = 0; j < p; j++)
+                {
+                    root[i, j] += s * v[i] * v[j];
+                    inverse[i, j] += si * v[i] * v[j];
+                }
         }
         for (int i = 0; i < p; i++)
-            for (int j = i + 1; j < p; j++) root[i, j] = root[j, i] = 0.5 * (root[i, j] + root[j, i]);
-        return root;
+            for (int j = i + 1; j < p; j++)
+            {
+                root[i, j] = root[j, i] = 0.5 * (root[i, j] + root[j, i]);
+                inverse[i, j] = inverse[j, i] = 0.5 * (inverse[i, j] + inverse[j, i]);
+            }
+        return (root, inverse);
     }
 
     // Weights normalized to sum to 1, uniform when null; refused unless nonnegative, finite, one per point and of positive sum.

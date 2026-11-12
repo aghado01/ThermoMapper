@@ -33,21 +33,16 @@ public sealed record DrawSubspace(double[,] C, double[] Eigenvalues, double[,] B
     /// <summary>
     /// The draw's subspace from a factor F with C = FᵀF, N × p (a sampled route's square-root-weighted gradient matrix): the right
     /// singular vectors of F's thin SVD, whose squared singular values are C's eigenvalues, so the gaps are not squared as forming C
-    /// squares them (decision 5).
+    /// squares them (decision 5). <paramref name="c"/> is C as the caller accumulated it, kept as the draw's C rather than formed again
+    /// from F (spectral-solver brief, C4); with fewer factor rows than <paramref name="dimension"/>, the subspace is C's own eigenspace.
     /// </summary>
-    public static DrawSubspace FromFactor(double[,] factor, int dimension)
+    public static DrawSubspace FromFactor(double[,] factor, double[,] c, int dimension)
     {
         ArgumentNullException.ThrowIfNull(factor);
-        int n = factor.GetLength(0), p = factor.GetLength(1);
+        ArgumentNullException.ThrowIfNull(c);
+        int p = factor.GetLength(1);
         if (dimension < 1 || dimension > p) throw new ArgumentOutOfRangeException(nameof(dimension), "The dimension is from 1 to the inputs.");
-        var c = new double[p, p];
-        for (int r = 0; r < n; r++)
-            for (int i = 0; i < p; i++)
-            {
-                double fi = factor[r, i];
-                if (fi == 0.0) continue;
-                for (int j = 0; j < p; j++) c[i, j] += fi * factor[r, j];
-            }
+        if (c.GetLength(0) != p || c.GetLength(1) != p) throw new ArgumentException("C is p × p, one row and column per factor column.", nameof(c));
         ThinSvdResult svd = ThinSvd.Decompose(factor);
         var eigenvalues = new double[p];
         for (int i = 0; i < svd.SingularValues.Length; i++) eigenvalues[i] = svd.SingularValues[i] * svd.SingularValues[i];

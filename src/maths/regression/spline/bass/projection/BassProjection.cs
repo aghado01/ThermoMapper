@@ -136,7 +136,7 @@ public sealed class BassProjection
             for (int j = 0; j < dimension; j++) frame[i, j] = posterior.MeanCVectors[i, j];
         double top = eigenvalues[0];
         double[] gaps = [.. Enumerable.Range(0, dimension).Select(j => top > 0.0 ? (eigenvalues[j] - (j + 1 < p ? eigenvalues[j + 1] : 0.0)) / top : 0.0)];
-        double[,] a = Multiply(InverseTranspose(analysis.Map), frame);
+        double[,] a = Multiply(analysis.MapInverse, frame);
 
         var domains = new InputDomain[dimension];
         for (int j = 0; j < dimension; j++)
@@ -268,31 +268,6 @@ public sealed class BassProjection
     }
 
     private static double[] Column(double[,] m, int j) => [.. Enumerable.Range(0, m.GetLength(0)).Select(r => m[r, j])];
-
-    // L⁻ᵀ for the analysis's map: diagonal, or a symmetric positive definite root (whitening under a joint sample), by its eigenvalues.
-    private static double[,] InverseTranspose(double[,] l)
-    {
-        int p = l.GetLength(0);
-        var inverse = new double[p, p];
-        bool diagonal = true;
-        for (int i = 0; i < p && diagonal; i++)
-            for (int j = 0; j < p; j++)
-                if (i != j && l[i, j] != 0.0) { diagonal = false; break; }
-        if (diagonal)
-        {
-            for (int i = 0; i < p; i++) inverse[i, i] = 1.0 / l[i, i];
-            return inverse;
-        }
-        EigenResult e = ScaledEigen.Of(l);
-        for (int q = 0; q < p; q++)
-        {
-            double s = 1.0 / e.Eigenvalues[q];
-            double[] v = e.Eigenvectors[q];
-            for (int i = 0; i < p; i++)
-                for (int j = 0; j < p; j++) inverse[i, j] += s * v[i] * v[j];
-        }
-        return inverse;
-    }
 
     private static double[,] Multiply(double[,] a, double[,] b)
     {

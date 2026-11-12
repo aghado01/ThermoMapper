@@ -35,9 +35,10 @@ internal static partial class BassActiveSubspaces
 
     // What a readout shares: the inputs, the law (a product measure, or a joint sample's cases and weights), the continuous predictors,
     // the metric's map and the route.
+    // L⁻¹ rides with L: the diagonal's reciprocals, or under whitening the inverse root from the covariance's own eigensystem (C5).
     private sealed record Frame(BassInputs Inputs, ProductMeasure? Measure, BassInputTransform Transform, int[] Variables, string[] Names,
                                 string[] Excluded, double[] Widths, double[,] L, bool Diagonal, ActiveSubspaceRoute Route, int Degree,
-                                HingeNormalization Hinges, PredictionCases? SampleCases, double[]? SampleWeights)
+                                HingeNormalization Hinges, PredictionCases? SampleCases, double[]? SampleWeights, double[,] LInverse)
     {
         public int P => Variables.Length;
 
@@ -140,7 +141,10 @@ internal static partial class BassActiveSubspaces
         var analysis = new ActiveSubspaceAnalysis(Array.AsReadOnly(frame.Names), Array.AsReadOnly(frame.Excluded), frame.Route, spec.Metric, frame.Map,
                                                   frame.Measure, PointCount(frame, spec.Points), posterior, error, poincare, Array.AsReadOnly(selected),
                                                   spec.Rank is null ? null : RankPosterior.Of(draws, weights, spec.Rank),
-                                                  factors is null ? null : OutputPosterior.Of(factors, weights, patterns), matrix, status, Boxes(frame));
+                                                  factors is null ? null : OutputPosterior.Of(factors, weights, patterns), matrix, status, Boxes(frame))
+        {
+            MapInverse = frame.LInverse,
+        };
         return (analysis, factors, w);
     }
 
@@ -210,7 +214,10 @@ internal static partial class BassActiveSubspaces
         return new ActiveSubspaceAnalysis(Array.AsReadOnly(frame.Names), Array.AsReadOnly(frame.Excluded), frame.Route, spec.Metric, frame.Map,
                                           frame.Measure, PointCount(frame, spec.Points), posterior, error, poincare, Array.AsReadOnly(selected),
                                           spec.Rank is null ? null : RankPosterior.Of(draws, weights, spec.Rank),
-                                          factors is null ? null : OutputPosterior.Of(factors, weights, spec.OutputPatterns), matrix, status, Boxes(frame));
+                                          factors is null ? null : OutputPosterior.Of(factors, weights, spec.OutputPatterns), matrix, status, Boxes(frame))
+        {
+            MapInverse = frame.LInverse,
+        };
     }
 
     // Basis adequacy (slice 5): the direct fit's G against the basis's span, both under the spec's output metric.
@@ -294,7 +301,7 @@ internal static partial class BassActiveSubspaces
             }
         }
         (double[,] c, double[,] e) = sums.Result();
-        return (DrawSubspace.FromFactor(factor, dimension), c, e, g);
+        return (DrawSubspace.FromFactor(factor, c, dimension), c, e, g);
     }
 
     // G's factor on the exact route: G = E[J W_x Jᵀ] = S·H·K·Hᵀ·S with K_ab = Σ_ij (LLᵀ)_ij E[∂ᵢB_a ∂ⱼB_b], so F = S·H·F_K with K = F_KF_Kᵀ.
@@ -992,6 +999,7 @@ internal static partial class BassActiveSubspaces
             throw new ArgumentException("The exact route needs a product law; a joint sample runs on the sampled route.", nameof(route));
         (PredictionCases? cases, double[]? weights, double[][]? box) = sample is null ? (null, null, null) : SampleOf(sample, transform, inputs);
         double[,] l = new double[p, p];
+        double[,]? lInverse = null;
         bool diagonal = true;
         switch (metric)
         {
@@ -1015,14 +1023,19 @@ internal static partial class BassActiveSubspaces
                 break;
             }
             case InputMetric.Whitened:
-                l = Whitening.SymmetricRoot(Whitening.Moments(box!, weights).Covariance);
+                (l, lInverse) = Whitening.SymmetricRoots(Whitening.Moments(box!, weights).Covariance);
                 diagonal = false;
                 break;
             default:
                 throw new ArgumentOutOfRangeException(nameof(metric), $"No metric {metric}.");
         }
+        if (lInverse is null)
+        {
+            lInverse = new double[p, p];
+            for (int i = 0; i < p; i++) lInverse[i, i] = 1.0 / l[i, i];
+        }
         return new Frame(inputs, sample is null ? measure : null, transform, variables, names, excluded, widths, l, diagonal, resolved, degree,
-                         hinges, cases, weights);
+                         hinges, cases, weights, lInverse);
     }
 
     // A joint sample's cases, its normalized weights and its continuous columns in box units. Refused: points outside the boxes (the

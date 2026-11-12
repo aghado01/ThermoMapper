@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using Maths.LinAlg;
 using Maths.Regression.Subspaces;
 
 namespace Maths.Regression.Spline.Bass.Sensitivity;
@@ -266,4 +267,40 @@ public sealed record ActiveSubspaceAnalysis(
     /// <summary>The activity scores (slice 6), in the metric: C's diagonal always, and its truncation at k, and at each draw's k_s under a
     /// rank rule (<see cref="ActivityScores"/>). Read from <see cref="Posterior"/> and <see cref="Ranks"/> when asked.</summary>
     public ActivityScores Activity => ActivityScores.Of(Posterior, Ranks);
+
+    private readonly (double[,] Map, double[,] Inverse)? _mapInverse;
+
+    /// <summary>L⁻¹, which is L⁻ᵀ for the diagonal and symmetric maps a readout builds (spectral-solver brief, C5). The readout sets it
+    /// as it built L: the diagonal's reciprocals, or under whitening the inverse root from the covariance's own eigensystem. It is kept
+    /// with the map it inverts, so a copy with another <see cref="Map"/>, or an analysis built by hand, derives it from its own map.</summary>
+    internal double[,] MapInverse
+    {
+        get => _mapInverse is { } kept && ReferenceEquals(kept.Map, Map) ? kept.Inverse : InverseOf(Map);
+        init => _mapInverse = (Map, value);
+    }
+
+    // L⁻¹ for a diagonal map, or a symmetric positive definite one by its eigenvalues.
+    private static double[,] InverseOf(double[,] l)
+    {
+        int p = l.GetLength(0);
+        var inverse = new double[p, p];
+        bool diagonal = true;
+        for (int i = 0; i < p && diagonal; i++)
+            for (int j = 0; j < p; j++)
+                if (i != j && l[i, j] != 0.0) { diagonal = false; break; }
+        if (diagonal)
+        {
+            for (int i = 0; i < p; i++) inverse[i, i] = 1.0 / l[i, i];
+            return inverse;
+        }
+        EigenResult e = ScaledEigen.Of(l);
+        for (int q = 0; q < p; q++)
+        {
+            double s = 1.0 / e.Eigenvalues[q];
+            double[] v = e.Eigenvectors[q];
+            for (int i = 0; i < p; i++)
+                for (int j = 0; j < p; j++) inverse[i, j] += s * v[i] * v[j];
+        }
+        return inverse;
+    }
 }
