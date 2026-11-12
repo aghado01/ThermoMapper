@@ -355,10 +355,16 @@ public sealed class ObservationLatents
     public double Skew { get; }
 
     /// <summary>These latents at σ² = <paramref name="sigma2"/>, the values shared.</summary>
-    internal ObservationLatents WithSigma2(double sigma2) => new(_values, Skew, sigma2, Gamma);
+    internal ObservationLatents WithSigma2(double sigma2) => new(_values, Skew, sigma2, Gamma) { OutputSkew = OutputSkew };
 
     /// <summary>These latents at skew <paramref name="skew"/> and γ = <paramref name="gamma"/>, the values shared.</summary>
-    internal ObservationLatents WithShape(double skew, double? gamma) => new(_values, skew, Sigma2, gamma);
+    internal ObservationLatents WithShape(double skew, double? gamma) => new(_values, skew, Sigma2, gamma) { OutputSkew = OutputSkew };
+
+    /// <summary>Several outputs' skew γ ∈ ℝᴷ in the outputs' units (E34's decision 6), the drift per unit v shared by a case's outputs, with
+    /// γ | Σ ~ N(0, s²Σ) where drawn; null where the noise has none, and for one response, whose skew is <see cref="Skew"/>.</summary>
+    public double[]? OutputSkew { get; init; }
+
+    internal ObservationLatents WithOutputShape(double[]? skew, double? gamma) => new(_values, 0.0, Sigma2, gamma) { OutputSkew = skew };
 
     /// <summary>The values' own array, not to be written.</summary>
     internal double[] ValueArray => _values;
@@ -414,15 +420,29 @@ public sealed class VarianceMeanMixture : IBassObservationModel, IBassNoiseLaw
     /// skewed noise draws σ² against, or holds it at. <paramref name="recordsSigma2"/> keeps σ² on the record without a skew as well, which
     /// random effects need: their prior scales with σ² (E21's decision 7, amended).</summary>
     public VarianceMeanMixture(BassNoise noise, Sigma2Prior? sigma2 = null, bool recordsSigma2 = false)
+        : this(noise, sigma2, recordsSigma2, outputs: 0) { }
+
+    /// <summary>The model of <paramref name="noise"/> for <paramref name="outputs"/> outputs sharing one v per case (E34's decision 6): Σ stays
+    /// integrated in the structure step and is drawn with the coefficients each sweep, the skew γ ∈ ℝᴷ (<see cref="ObservationLatents.OutputSkew"/>)
+    /// with γ | Σ ~ N(0, s²Σ), so the reading's offset vᵢγ reads no Σ; 0 outputs is one response.</summary>
+    internal VarianceMeanMixture(BassNoise noise, Sigma2Prior? sigma2, bool recordsSigma2, int outputs)
     {
         ArgumentNullException.ThrowIfNull(noise);
         Noise = noise;
         Mixing = noise.Mixing;
         Skew = noise.Skew;
         Skewed = noise.Skewed;
-        RecordsSigma2 = noise.Skewed || recordsSigma2;
+        Outputs = outputs;
         _held = sigma2?.IsHeld == true ? sigma2.Value : null;
         _coefficients = [new BassCoefficientsBlock()];
+        if (outputs > 0)
+        {
+            RecordsSigma2 = false;
+            _latent = noise.RescalesSkew ? [new BassOutputLatentScaleBlock(this), new BassOutputSkewRescaleBlock(this)] : [new BassOutputLatentScaleBlock(this)];
+            _scale = noise.SkewDrawn || noise.GammaPrior is { IsHeld: false } ? [new BassOutputShapeBlock(this)] : [];
+            return;
+        }
+        RecordsSigma2 = noise.Skewed || recordsSigma2;
         _latent = noise.RescalesSkew ? [new BassLatentScaleBlock(this), new BassSkewRescaleBlock(this)] : [new BassLatentScaleBlock(this)];
         var scale = new List<IBlock<ReversibleJumpChain<BassState>>>();
         if (RecordsSigma2 && _held is null) scale.Add(new BassScaleBlock(this));
@@ -430,6 +450,9 @@ public sealed class VarianceMeanMixture : IBassObservationModel, IBassNoiseLaw
         if (noise.Interweave && _held is null) scale.Add(new BassInterweavingBlock(this));
         _scale = [.. scale];
     }
+
+    /// <summary>K, the outputs sharing one v per case (E34's decision 6); 0 for one response.</summary>
+    public int Outputs { get; }
 
     /// <summary>The noise it models.</summary>
     public BassNoise Noise { get; }
@@ -464,6 +487,14 @@ public sealed class VarianceMeanMixture : IBassObservationModel, IBassNoiseLaw
         int n = response.Observations;
         var ones = new double[n];
         Array.Fill(ones, 1.0);
+        if (response is MultiOutputResponse several)
+        {
+            // Several outputs (E34's decision 6): v = 1, γ at 0 where drawn, the Normal-Wald's tail at its start; no reference, the resolution
+            // reading the raw response's moments.
+            var start = new ObservationLatents(ones, 0.0, null, Noise.GammaStart) { OutputSkew = Noise.SkewDrawn ? new double[several.Outputs] : null };
+            (double[]? startOffset, double[] startWeights) = Reading(start, several.Outputs);
+            return new WorkingResponse(response, startOffset, startWeights, latents: start);
+        }
         double? sigma2 = null, gamma = Noise.GammaStart;
         if (RecordsSigma2)
         {
@@ -495,9 +526,39 @@ public sealed class VarianceMeanMixture : IBassObservationModel, IBassNoiseLaw
     /// at that γ, and under a skew σ² from <paramref name="sigma2Prior"/>, the prior at the state (a held σ² as the config holds it).
     /// Refused under a skew whose σ² prior is improper, which has no draw.
     /// </summary>
-    internal ObservationLatents PriorLatents(int observations, InverseGamma? sigma2Prior, Xoshiro256PlusPlus rng)
+    internal ObservationLatents PriorLatents(int observations, InverseGamma? sigma2Prior, Xoshiro256PlusPlus rng, InverseWishart? outputPrior = null)
     {
         ArgumentNullException.ThrowIfNull(rng);
+        if (Outputs > 0)
+        {
+            // Several outputs (E34's decision 6): γ | Σ ~ N(0, s²Σ) through a draw of Σ from its prior, the tail as one response's, each vᵢ
+            // from its law at that tail.
+            double[]? skewVector = null;
+            if (Noise.SkewPrior is { IsHeld: false } prior)
+            {
+                double[,] sigma = (outputPrior ?? throw new ArgumentException("Several outputs' skew draws Σ from its prior.", nameof(outputPrior))).Sample(rng);
+                double[,] root = GPrior.MatrixTPredictive.Root(sigma);
+                var z = new double[Outputs];
+                for (int l = 0; l < Outputs; l++) z[l] = Normal.SampleStandard(rng);
+                skewVector = new double[Outputs];
+                for (int l = 0; l < Outputs; l++)
+                {
+                    double e = 0.0;
+                    for (int q = 0; q <= l; q++) e += root[l, q] * z[q];
+                    skewVector[l] = prior.Sd * e;
+                }
+            }
+            double? tail = Noise.GammaPrior switch
+            {
+                { IsHeld: false } g => Normal.MeanSd(g.Mean, g.Sd).SampleOn(rng, 0.0, double.PositiveInfinity),
+                { } g => g.Mean,
+                null => null,
+            };
+            IMixingLaw drawn = Noise.MixingAt(tail);
+            var values = new double[observations];
+            for (int i = 0; i < observations; i++) values[i] = drawn.SamplePrior(rng);
+            return new ObservationLatents(values, 0.0, null, tail) { OutputSkew = skewVector };
+        }
         double skew = Noise.SkewPrior is { IsHeld: false } b ? b.Mean + b.Sd * Normal.SampleStandard(rng) : Skew;
         double? gamma = Noise.GammaPrior switch
         {
@@ -523,7 +584,7 @@ public sealed class VarianceMeanMixture : IBassObservationModel, IBassNoiseLaw
     /// </summary>
     internal WorkingResponse At(WorkingResponse from, ObservationLatents latents, bool weightsMoved = true)
     {
-        (double[]? offset, double[] weights) = Reading(latents);
+        (double[]? offset, double[] weights) = Reading(latents, from.Response is MultiOutputResponse several ? several.Outputs : 0);
         return from.Moved(WithEffects(offset, from.Effects, latents.Values.Length), weightsMoved ? weights : default, latents);
     }
 
@@ -555,13 +616,22 @@ public sealed class VarianceMeanMixture : IBassObservationModel, IBassNoiseLaw
         return total;
     }
 
-    // The offset σβ·v (none at β = 0) and the weights 1/(c·v) at `latents`.
-    private (double[]? Offset, double[] Weights) Reading(ObservationLatents latents)
+    // The offset σβ·v (none at β = 0) and the weights 1/(c·v) at `latents`; for `outputs` outputs (E34's decision 6) the offset vᵢγ_l case
+    // by case and output by output, none at γ = 0.
+    private (double[]? Offset, double[] Weights) Reading(ObservationLatents latents, int outputs = 0)
     {
         ReadOnlySpan<double> v = latents.Values;
         double c = VarianceScale;
         var weights = new double[v.Length];
         for (int i = 0; i < v.Length; i++) weights[i] = 1.0 / (c * v[i]);
+        if (outputs > 0)
+        {
+            if (latents.OutputSkew is not { } gamma || Array.TrueForAll(gamma, g => g == 0.0)) return (null, weights);
+            var shifted = new double[v.Length * outputs];
+            for (int i = 0; i < v.Length; i++)
+                for (int l = 0; l < outputs; l++) shifted[i * outputs + l] = v[i] * gamma[l];
+            return (shifted, weights);
+        }
         if (latents.Skew == 0.0) return (null, weights);
         double drift = Math.Sqrt(latents.Sigma2 ?? throw new InvalidOperationException("A skewed noise's latents hold σ².")) * latents.Skew;
         var offset = new double[v.Length];
@@ -663,7 +733,8 @@ public sealed class BassCoefficientsBlock : IBlock<ReversibleJumpChain<BassState
         ArgumentNullException.ThrowIfNull(state);
         ArgumentNullException.ThrowIfNull(rng);
         BassStructureMoves moves = BassStructureMoves.Of(state);
-        moves.DrawSweepFit(state.Current, rng, state.Target as BassTarget, Power(state));
+        if ((state.Target as BassTarget)?.Outputs is not null) moves.DrawOutputSweepFit(state.Current, rng, state.Target as BassTarget, Power(state));
+        else moves.DrawSweepFit(state.Current, rng, state.Target as BassTarget, Power(state));
         return true;
     }
 

@@ -323,7 +323,7 @@ public sealed class MultiOutputCoreTests(ITestOutputHelper output)
         (List<BassPredictor> predictors, double[,] y) = Data(40, 3, Seed + 4);
         var data = new BassData(predictors, new MultiOutputResponse(y, Names(3)));
         void Refused(BassConfig config) => Assert.Throws<ArgumentException>(() => BassModel.Create(config, data));
-        Refused(new BassConfig { Noise = BassNoise.StudentT(4.0) });
+        Refused(new BassConfig { Noise = BassNoise.AsymmetricLaplace(0.5) });   // the noise by row (slice 4) has no joint quantile
         Refused(new BassConfig { Sigma2 = Sigma2Prior.Jeffreys });
         Refused(new BassConfig { Sigma2 = Sigma2Prior.InverseGamma(1.0, 1.0) });
         Refused(new BassConfig { Sigma2 = Sigma2Prior.HalfCauchy() });
@@ -345,10 +345,13 @@ public sealed class MultiOutputCoreTests(ITestOutputHelper output)
         Assert.Throws<ArgumentException>(() => new MultiOutputResponse(y, ["a", "b", "a"]));
         Assert.Throws<ArgumentException>(() => new MultiOutputResponse(y, ["a", "", "c"]));
 
-        // Latents on the working response, and the scalar marginal. Weights and an offset are read since slice 4 (MultiOutputRandomEffectsTests);
-        // latents arrive with the noise by row.
+        // A frozen reference on the working response, and the scalar marginal. Weights, an offset and latents are read since slice 4
+        // (MultiOutputRandomEffectsTests, MultiOutputNoiseTests); the priors read the raw response's moments in place of a reference.
         BassModel model = BassModel.Create(new BassConfig(), data);
-        Assert.Throws<NotSupportedException>(() => new WorkingResponse(data.Response, latents: new ObservationLatents(Enumerable.Repeat(1.0, 40).ToArray(), 0.0, null, null)));
+        var latents = new ObservationLatents(Enumerable.Repeat(1.0, 40).ToArray(), 0.0, null, null);
+        Assert.NotNull(new WorkingResponse(data.Response, weights: Enumerable.Repeat(1.0, 40).ToArray(), latents: latents).Latents);
+        Assert.Throws<NotSupportedException>(() => new WorkingResponse(data.Response, weights: Enumerable.Repeat(1.0, 40).ToArray(),
+                                                                       reference: BassPriorReference.Moments(data.Response.Values), latents: latents));
         Assert.Throws<InvalidOperationException>(() => model.Working.ResponseMean);
         Assert.Throws<InvalidOperationException>(() => model.Target.Marginal(BassStructureFit.Of(model.NewDesign(), 0.0), 1.0));
     }

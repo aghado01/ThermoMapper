@@ -60,6 +60,8 @@ public static class BassMultiOutput
         var sigma = new double[selected.Length][,];
         var rng = new Xoshiro256PlusPlus(options.Seed);
         var column = new double[n]; var coefficients = new double[0]; var z = new double[k];
+        // A noise by row (E34's decision 6): a new case's outputs share one v from the law at the draw's tail, yᵢ = fᵢ + vγ + √(c·v)·L_Σz.
+        var mixture = model.Observation as VarianceMeanMixture;
         for (int d = 0; d < selected.Length; d++)
         {
             BassDraw draw = pooled[selected[d]];
@@ -80,10 +82,20 @@ public static class BassMultiOutput
             }
             if (predictive is null) continue;
             var root = MatrixTPredictive.Root(s);
+            ObservationLatents? rowNoise = mixture is null ? null
+                : draw.LatentsOn(model) ?? throw new ArgumentException("A draw under a noise carries its latents.", nameof(fit));
+            IMixingLaw? law = rowNoise is null ? null : mixture!.MixingAt(rowNoise);
+            double[]? skew = rowNoise?.OutputSkew;
             for (int i = 0; i < n; i++)
             {
+                double v = law?.SamplePrior(rng) ?? 1.0, spread = law is null ? 1.0 : Math.Sqrt(mixture!.VarianceScale * v);
                 for (int l = 0; l < k; l++) z[l] = Normal.SampleStandard(rng);
-                for (int l = 0; l < k; l++) { double noise = 0; for (int j = 0; j <= l; j++) noise += root[l, j] * z[j]; predictive[d, i, l] = latent[d, i, l] + noise; }
+                for (int l = 0; l < k; l++)
+                {
+                    double noise = skew is null ? 0 : v * skew[l];
+                    for (int j = 0; j <= l; j++) noise += spread * root[l, j] * z[j];
+                    predictive[d, i, l] = latent[d, i, l] + noise;
+                }
             }
             if (effects is null) continue;
             for (int g = 0; g < groups!.Length; g++)   // a population case's own effect, after every case's noise
@@ -120,7 +132,7 @@ public static class BassMultiOutput
                 var design = model.NewDesign();
                 if (design.Load(ids.Select(id => fit.Terms[id]).ToArray(), reading) is { } refusal) throw new ArgumentException($"The retained structure was refused ({refusal}).", nameof(fit));
                 var means = new double[ids.Length]; var training = new double[rows];
-                for (int j = 0; j < ids.Length; j++) { model.Basis.CaseColumn(fit.Terms[ids[j]], model.Inputs.Cases, training); means[j] = model.Working.ColumnMean(training, null); }
+                for (int j = 0; j < ids.Length; j++) { model.Basis.CaseColumn(fit.Terms[ids[j]], model.Inputs.Cases, training); means[j] = reading.ColumnMean(training, null); }
                 cached = (design, BassStructureFit.Of(design, 0), means); designs.Add(key, cached);
             }
             double precision = draw.Tau / model.Target.CoefficientConstant;
@@ -132,7 +144,7 @@ public static class BassMultiOutput
             var columns = new double[k][];
             for (int l = 0; l < k; l++)
             {
-                double mean = outputMeans[l], level = moved ? (model.Target.Intercept == GPriorCentre.Zero ? 0.0 : mean) : model.Resolved.Outputs.Levels[l];
+                double mean = outputMeans[l], level = moved && reading.Latents is null ? (model.Target.Intercept == GPriorCentre.Zero ? 0.0 : mean) : model.Resolved.Outputs.Levels[l];
                 coefficients[0] = flat ? mean : pencilMean is not null ? pencilMean[0, l] : level + (mean - level) / (1 + precision);
                 for (int j = 0; j < ids.Length; j++)
                 {
@@ -167,6 +179,9 @@ public static class BassMultiOutput
         if (model.RandomEffects is not null)
             throw new NotSupportedException("Under random intercepts a new case's row correlates with the training rows through u, which the matrix-t's row "
                                             + "scale does not carry; Predict reads each draw's effects (E34's slice 4).");
+        if (model.Observation is VarianceMeanMixture)
+            throw new NotSupportedException("Under a noise by row a new case's outputs are a variance-mean mixture, not a matrix-t's row; Predict draws "
+                                            + "them (E34's decision 6).");
         var pooled = fit.Draws.SelectMany(c => c).ToArray();
         var (selected, weights) = Draws3.Select(options.Draws, pooled.Length, fit.DrawWeights, nameof(options));
         var (inputs, outside) = cases.Prepare(model.Transform, model.Inputs, options.UnseenLevels);

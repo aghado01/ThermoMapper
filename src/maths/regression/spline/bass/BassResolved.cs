@@ -487,7 +487,6 @@ public sealed record BassResolved
     private static BassResolvedOutputs ResolveOutputs(BassConfig config, MultiOutputResponse response, WorkingResponse fitted, List<BassAutoPick> log)
     {
         int k = response.Outputs, n = response.Cases;
-        if (config.Noise is not null) throw new ArgumentException("Several outputs take Gaussian noise in E34's slice 1; the noise by row (decision 6) arrives in slice 4.", "config");
         if (config.HasRandomEffects && config.Coefficients.Form is not GForm)
             throw new ArgumentException("Several outputs with random intercepts take the g-form (E34's slice 4); the normalized ridge and KHAOS's priors "
                                         + "would rebuild their pencil on every step of s and are not built under a block.", "config");
@@ -500,7 +499,8 @@ public sealed record BassResolved
 
         // The moments the priors read, as scalar BASS's s² reads them: the reading's, a held s's whitening among them; under a drawn s, whose
         // reading moves with s, the response's own (scalar BASS's frozen reference, which several outputs take as the raw response).
-        bool drawnScale = config.HasRandomEffects && config.EffectSpecifications.Any(e => e.ScalePrior is not null);
+        // A noise's reading moves with v as a drawn s's moves with s (E34's slice 4): the raw response's moments there too.
+        bool drawnScale = config.HasRandomEffects && config.EffectSpecifications.Any(e => e.ScalePrior is not null) || fitted.Latents is not null;
         ReadOnlySpan<double> means = drawnScale ? RawMeans(response) : fitted.OutputMeans;
         var levels = new double[k];
         for (int l = 0; l < k; l++) levels[l] = config.Intercept == GPriorCentre.Zero ? 0.0 : means[l];

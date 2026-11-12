@@ -178,6 +178,7 @@ public sealed class BassDesign
     private RidgeSpectrum? _spectrum;   // the current structure's, under the ridge; null until read
     private DesignOutputs? _outputs;   // several outputs' statistics, in place of the scalar ones (E34); null for one response; re-read when the reading moves
     private OutputPencil? _outputPencil;
+    private readonly double[]? _outputLevels;   // several outputs' intercept levels frozen apart from a noise's reading (E34's slice 4)
 
     // Lever 1 of the efficiency pass: the cross products of a one-way hinge with the held columns, from prefix tables. A table is a pure
     // cache, per (column, variable, sign), built the first time a proposal needs it and dropped with its column; which proposals read tables
@@ -330,9 +331,11 @@ public sealed class BassDesign
             if (_functional) throw new NotSupportedException("Several outputs need a case design.");
             if (working.Weighted is not null)
                 throw new NotSupportedException("Several outputs under a noise's weights with random effects arrive with E34's slice 4, its last stage.");
-            if ((working.Whitening is not null || working.WeightArray is not null) && (_ridge || _priorColumns is not null || !_precision.Unit && !ReferenceEquals(_precision, BassPriorPrecision.Gram)))
-                throw new NotSupportedException("Several outputs take the g-form on the reading's own Gram under a random-effect block or weights; the "
-                                                + "normalized ridge, KHAOS's priors and a prior apart from the weights arrive with the noise by row (E34's slice 4).");
+            if (working.Whitening is not null && (_ridge || _priorColumns is not null || !_precision.Unit && !ReferenceEquals(_precision, BassPriorPrecision.Gram)))
+                throw new NotSupportedException("Several outputs take the g-form on the reading's own Gram under a random-effect block; the normalized "
+                                                + "ridge and KHAOS's priors would rebuild their pencil on every step of s.");
+            // Under a noise the intercept's level is frozen apart from v, the raw response's mean, as scalar BASS's reference holds it.
+            if (working.Latents is not null) _outputLevels = RawLevels((MultiOutputResponse)data.Response, intercept);
             if (_ridge)
             {
                 _priorColumns = [];
@@ -385,6 +388,22 @@ public sealed class BassDesign
         }
         double level = _priorColumns is null || _intercept == GPriorCentre.Zero ? 0.0 : working.Reference?.Level ?? PairwiseSum.Of(values) / _rows;
         return new BassDesignResponse(working, y, roots, level, _output.Dot(y, y));
+    }
+
+    // Each output's raw mean over the cases, 0 under the zero centre: the levels a noise's reading leaves frozen (E34's slice 4).
+    private static double[] RawLevels(MultiOutputResponse response, GPriorCentre intercept)
+    {
+        int k = response.Outputs, n = response.Cases;
+        ReadOnlySpan<double> values = response.Values;
+        var levels = new double[k];
+        if (intercept == GPriorCentre.Zero) return levels;
+        var column = new double[n];
+        for (int l = 0; l < k; l++)
+        {
+            for (int i = 0; i < n; i++) column[i] = values[i * k + l];
+            levels[l] = PairwiseSum.Of(column) / n;
+        }
+        return levels;
     }
 
     // Several outputs (E34): each output read as Read reads a scalar response, ỹ_k = W^½(y_k − ȳ_k) on the reading's values (the block's
@@ -454,7 +473,7 @@ public sealed class BassDesign
             if (_outputs is null) return null;
             var forms = _outputs.Forms;
             if (_priorColumns is null) return forms;
-            _outputPencil ??= OutputPencil.Of(Pencil!, _outputs.CandidateCross(-1, null), OutputMeans, _intercept, _rows);
+            _outputPencil ??= OutputPencil.Of(Pencil!, _outputs.CandidateCross(-1, null), OutputMeans, _intercept, Weighting.Mass, _outputLevels);
             return forms with { Prior = _outputPencil };
         }
     }
@@ -558,7 +577,7 @@ public sealed class BassDesign
             {
                 ownGram = PriorGramWithout(index);
                 ownPencil = PencilOf(Without(CurrentGram(), index), ownGram, Without(CurrentShifts(), index), new double[_terms.Count - 1], _response)!;
-                forms = forms with { Prior = OutputPencil.Of(ownPencil, crosses, OutputMeans, _intercept, _rows) };
+                forms = forms with { Prior = OutputPencil.Of(ownPencil, crosses, OutputMeans, _intercept, Weighting.Mass, _outputLevels) };
             }
             var several = new DesignProposal(null, _terms.Count - 1, double.NaN, double.NaN, p.MinLeaveOneOutPivot, double.NaN, null, forms);
             _pending = new Pending(Move.Death, index, null, null, null, 0.0, null, several, PriorGram: ownGram, Pencil: ownPencil);
@@ -692,7 +711,11 @@ public sealed class BassDesign
             outputs.Load(columns);
             outputs.Refit(factor, columns);
         }
-        var account = new DesignProposal(null, m, rss, q, minAngle, double.NaN, (RidgeColumns?)pencil ?? spectrum, outputs?.Forms);
+        // With the prior apart the outputs' forms carry their pencil at the new reading's crosses, means and mass, as a load's do.
+        OutputForms? outputForms = outputs?.Forms;
+        if (outputForms is not null && pencil is not null)
+            outputForms = outputForms with { Prior = OutputPencil.Of(pencil, outputs!.CandidateCross(-1, null), working.OutputMeans, _intercept, working.Weighting.Mass, _outputLevels) };
+        var account = new DesignProposal(null, m, rss, q, minAngle, double.NaN, (RidgeColumns?)pencil ?? spectrum, outputForms);
         var followed = new Followed(response, reweighted ? columns : null, reweighted ? priors : null, reweighted ? factor : null, b, beta, residual, rss, q, spectrum, pencil,
                                     outputs);
         _pending = new Pending(Move.Follow, -1, null, null, null, 0.0, null, account, Response: followed);
@@ -982,7 +1005,7 @@ public sealed class BassDesign
                 int columns = kind == Move.Birth ? _terms.Count + 1 : _terms.Count;
                 ownPencil = PencilOf(strict ?? Candidate(skip, border, diagonal), ownGram, shifts, new double[columns], _response);
                 if (ownPencil is null) return DesignProposal.Refused(BassRefusal.Numerical);
-                forms = forms with { Prior = OutputPencil.Of(ownPencil, _outputs.CandidateCross(skip, cross), OutputMeans, _intercept, _rows) };
+                forms = forms with { Prior = OutputPencil.Of(ownPencil, _outputs.CandidateCross(skip, cross), OutputMeans, _intercept, Weighting.Mass, _outputLevels) };
             }
             var several = new DesignProposal(null, kind == Move.Birth ? _terms.Count + 1 : _terms.Count, double.NaN, double.NaN, minAngle, newest, null, forms);
             _pending = new Pending(kind, index, term, column, output, 0.0, strict, several,

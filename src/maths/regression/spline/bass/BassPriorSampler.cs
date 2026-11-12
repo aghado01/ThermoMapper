@@ -219,7 +219,10 @@ public sealed class BassPriorSampler : IReferenceSampler<BassState>
             }
             double logTau = DrawLogTau(rng), logRate = target.Sigma2Rate?.SampleLogRate(rng) ?? double.NaN;
             InverseGamma? sigma2Prior = target.Sigma2Rate is { } rate ? rate.PriorAt(logRate) : target.Sigma2;
-            WorkingResponse working = mixture.At(_model.Working, mixture.PriorLatents(n, sigma2Prior, rng));
+            // Several outputs (E34's decision 6): Huang and Wand's rates first, Σ's prior at them drawn for the skew's γ | Σ.
+            double[]? logOutputRates = target.Outputs?.Rates?.Sample(rng);
+            InverseWishart? outputPrior = target.Outputs is { } outputs ? outputs.Rates is { } rates ? rates.PriorAt(logOutputRates!) : outputs.Prior : null;
+            WorkingResponse working = mixture.At(_model.Working, mixture.PriorLatents(n, sigma2Prior, rng, outputPrior));
             if (_model.RandomEffects is { } block)   // each drawn scale from its prior, then u from its prior given σ² (E21's slice 4)
             {
                 double[] scales = block.Scales.ToArray();
@@ -233,7 +236,7 @@ public sealed class BassPriorSampler : IReferenceSampler<BassState>
                 Refusals.Add(refusal);
                 continue;
             }
-            var state = new BassState([.. _design.Terms], BassStructureFit.Of(_design, logTermPrior), logTau, logRate);
+            var state = new BassState([.. _design.Terms], BassStructureFit.Of(_design, logTermPrior), logTau, logRate, logOutputRates);
             BassEvaluation evaluation = target.Evaluate(state);
             if (evaluation.Refusal is { } exact)
             {

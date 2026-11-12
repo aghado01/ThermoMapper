@@ -40,7 +40,9 @@ public sealed class BassModel
     public static BassModel Create(BassConfig config, BassData data, TemperedForm? form = null)
     {
         ArgumentNullException.ThrowIfNull(config);
-        return Create(config, data, config.Noise is { } noise ? new VarianceMeanMixture(noise, config.Sigma2, recordsSigma2: config.HasRandomEffects) : GaussianObservation.Instance, form);
+        return Create(config, data, config.Noise is { } noise
+            ? new VarianceMeanMixture(noise, config.Sigma2, recordsSigma2: config.HasRandomEffects, outputs: data?.Response is MultiOutputResponse several ? several.Outputs : 0)
+            : GaussianObservation.Instance, form);
     }
 
     /// <summary><see cref="Create(BassConfig, BassData, TemperedForm?)"/> with <paramref name="observation"/> as the noise
@@ -53,8 +55,12 @@ public sealed class BassModel
         ArgumentNullException.ThrowIfNull(observation);
         if (config.Noise is { } declared && !(observation is VarianceMeanMixture mixture && mixture.Noise == declared))
             throw new ArgumentException("The config declares its noise, so the observation model is the config's.", nameof(observation));
-        if (data.Response is MultiOutputResponse && observation is not GaussianObservation)
-            throw new ArgumentException("Several outputs take Gaussian noise; the noise by row (E34's decision 6) arrives with slice 4's later stages.", nameof(config));
+        if (observation is VarianceMeanMixture { Outputs: var built } && built != (data.Response is MultiOutputResponse outputsOf ? outputsOf.Outputs : 0))
+            throw new ArgumentException("The mixture is built for another number of outputs than the response holds.", nameof(observation));
+        if (data.Response is MultiOutputResponse && observation is VarianceMeanMixture { Noise: var rowNoise })
+            RefuseOutputNoise(config, rowNoise);
+        else if (data.Response is MultiOutputResponse && observation is not GaussianObservation)
+            throw new ArgumentException("Several outputs take Gaussian noise or a variance-mean mixture's (E34's decision 6).", nameof(observation));
         if (data.Response is MultiOutputResponse && config.RandomSlopes is { Count: > 0 })
             throw new ArgumentException("Several outputs take random intercepts with one s for every output (E34's decision 7); random slopes for several "
                                         + "outputs are not commissioned.", nameof(config));
@@ -101,6 +107,22 @@ public sealed class BassModel
         IBassProposalKernel kernel = proposal ?? (IBassProposalKernel)new LegendreTermProposal(prior, config.Structure.Legendre!);
         var target = new BassTarget(config, resolved, prior, form ?? config.Sampling.Tempering?.Form ?? config.Sampling.Smc?.Form ?? TemperedForm.Integrated, working);
         return new(config, data, resolved, transform, inputs, basis, admission, prior, proposal, kernel, target, observation, working, baseReading, block);
+    }
+
+    // Several outputs' noise by row (E34's decision 6): one v per case shared by its outputs, a skew γ | Σ ~ N(0, s²Σ) at zero mean, the priors
+    // reading the raw response's moments. What has no K-output reading is refused rather than ignored.
+    private static void RefuseOutputNoise(BassConfig config, BassNoise noise)
+    {
+        if (noise.Kind == BassNoiseKind.AsymmetricLaplace)
+            throw new ArgumentException("The asymmetric Laplace's quantile is one response's; several outputs have no joint quantile here.", nameof(config));
+        if (noise.Reference != BassNoiseReference.Moments)
+            throw new ArgumentException("Several outputs' priors read the raw response's moments under a noise; another reference has no K-output reading.", nameof(config));
+        if (noise.Interweave)
+            throw new ArgumentException("The interweaving block moves σ², which several outputs integrate as Σ.", nameof(config));
+        if (noise.SkewPrior is { Mean: not 0.0 })
+            throw new ArgumentException("Several outputs' skew is γ | Σ ~ N(0, s²Σ): its prior centres on 0, the only direction every output shares.", nameof(config));
+        if (config.HasRandomEffects)
+            throw new ArgumentException("Random intercepts for several outputs under a noise arrive with E34's slice 4, stage 4.", nameof(config));
     }
 
     /// <summary>The random-intercept block (E21) the config declares, integrated out of every marginal by whitening, which the working
@@ -178,7 +200,7 @@ public sealed class BassModel
         (Data.Response is MultiOutputResponse ? Config.OutputCovariance?.ReadsResponse ?? true : Config.Sigma2.ReadsResponse));
 
     // Several outputs under a drawn s and Gaussian noise, whose resolution reads the raw response (E34's slice 4).
-    private bool OutputsReadTheResponse => Data.Response is MultiOutputResponse && ScaleDrawn && Observation is GaussianObservation;
+    private bool OutputsReadTheResponse => Data.Response is MultiOutputResponse && (ScaleDrawn && Observation is GaussianObservation || Observation is VarianceMeanMixture);
 
     /// <summary>M_max, the basis cap.</summary>
     public int MaxBasis => Resolved.MaxBasis;

@@ -369,7 +369,10 @@ public sealed class BassStructureMoves
         BassGroupDraw[]? groups = _design.Working.Whitening is { } block
             ? block.DrawOutputGroups(_model, [.. order.Select(r => state.Terms[r])], coefficients, MatrixTPredictive.Root(sigma), rng)
             : null;
-        return new BassDraw(new BassStructure(sorted), tau, double.NaN, [], lambda, Groups: groups, Sigma: sigma, OutputCoefficients: coefficients, OutputRates: rates);
+        // Under a noise (E34's decision 6) the draw keeps the latents alone, its reading rebuilt from them as one response's is.
+        ObservationLatents? latents = _design.Working.Latents is { } held && _model.Observation.Rebuilds ? held : null;
+        return new BassDraw(new BassStructure(sorted), tau, double.NaN, [], lambda, Latents: latents, Groups: groups, Sigma: sigma, OutputCoefficients: coefficients,
+                            OutputRates: rates);
     }
 
     /// <summary>The coefficients' block's draw in this sweep (<see cref="BassCoefficientsBlock"/>), which the blocks after it read; null
@@ -378,6 +381,33 @@ public sealed class BassStructureMoves
 
     // A block that moves the state after the coefficients' draw hands its fit on at the new state (E21's u block and collapsed step).
     internal void Hand(BassSweepFit fit) => SweepFit = fit;
+
+    /// <summary>Several outputs' coefficients block's draw under a noise (E34's decision 6), kept as <see cref="OutputSweepFit"/>: Σ and A at the
+    /// rung's power on the reading, with the fit at every case and output, centred as the design centres it.</summary>
+    internal BassOutputSweepFit DrawOutputSweepFit(BassState state, Xoshiro256PlusPlus rng, BassTarget? current = null, double power = 1.0)
+    {
+        ArgumentNullException.ThrowIfNull(rng);
+        Sync(state);
+        BassTarget target = current ?? _model.Target;
+        double tau = target.SamplesTau ? state.Tau : target.HeldTau!.Value;
+        (double[,] sigma, double[,] centred) = BassOutputDraws.Sample(target, _design, state.Fit, tau, rng, target.Evaluate(state).OutputPrior, power);
+        WorkingResponse working = _design.Working;
+        int n = _design.Observations, k = sigma.GetLength(0);
+        var fitted = new double[n * k];
+        for (int i = 0; i < n; i++)
+            for (int l = 0; l < k; l++) fitted[i * k + l] = centred[0, l];
+        for (int j = 0; j < state.Count; j++)
+        {
+            (double[] a, _) = SweepColumns(state.Terms[j]);
+            double mean = working.ColumnMean(a, null);
+            for (int i = 0; i < n; i++)
+                for (int l = 0; l < k; l++) fitted[i * k + l] += centred[j + 1, l] * (a[i] - mean);
+        }
+        return OutputSweepFit = new BassOutputSweepFit(state, sigma, centred, fitted);
+    }
+
+    /// <summary>Several outputs' coefficients block's draw in this sweep (E34's decision 6); null before the first. Not state.</summary>
+    internal BassOutputSweepFit? OutputSweepFit { get; private set; }
 
     /// <summary>
     /// σ² and the coefficients at <paramref name="state"/> from their conditional given the structure, τ and the working response, as

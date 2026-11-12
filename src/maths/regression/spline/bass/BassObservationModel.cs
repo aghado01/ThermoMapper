@@ -257,20 +257,12 @@ public sealed class WorkingResponse
         if (logJacobian != 0.0) Weighting = Weighting with { SumLogWeights = Weighting.SumLogWeights + logJacobian };
         if (response is MultiOutputResponse outputs)
         {
-            // Several outputs (E34): an offset per value (a block's whitening, case by case and output by output), one weight per case that
-            // its outputs share, and a log-Jacobian per output; each output's mean is the scalar reading's, under W. Latents and a frozen
-            // reference arrive with the noise by row (E34's slice 4, its later stages).
-            if (latents is not null || reference is not null || priorGram == WeightedPriorGram.Frozen)
-                throw new NotSupportedException("Several outputs take latents and a frozen reference with the noise by row (E34's slice 4).");
-            _outputMeans = new double[outputs.Outputs];
-            ReadOnlySpan<double> values = Values;
-            int k = outputs.Outputs;
-            var column = new double[n];
-            for (int l = 0; l < k; l++)
-            {
-                for (int i = 0; i < n; i++) column[i] = values[i * k + l];
-                _outputMeans[l] = MeanOf(_weights, column, Weighting, n);
-            }
+            // Several outputs (E34): an offset per value (a block's whitening or a noise's vᵢγ, case by case and output by output), one
+            // weight per case that its outputs share, and a log-Jacobian per output; each output's mean is the scalar reading's, under W. A
+            // frozen reference is not read: under a noise the priors read the raw response's moments (E34's slice 4).
+            if (reference is not null || priorGram == WeightedPriorGram.Frozen)
+                throw new NotSupportedException("Several outputs read the raw response's moments in place of a frozen reference (E34's slice 4).");
+            _outputMeans = OutputMeansOf(outputs, Values, _weights, Weighting);
             _responseMean = double.NaN;
             return;
         }
@@ -293,9 +285,15 @@ public sealed class WorkingResponse
         Weighted = source.Weighted;
         Effects = source.Effects;
         _weights = source._weights;
-        if (Response is MultiOutputResponse)
-            throw new NotSupportedException("Several outputs read the response itself: offsets and latents arrive with E34's noise (slice 4).");
         (_offset, _shifted) = Shifted(Response, offset);
+        if (Response is MultiOutputResponse outputs)
+        {
+            // Several outputs at another offset (a noise's vᵢγ, E34's slice 4): each output's mean under the weights as they stand.
+            if (Weighted is not null) throw new NotSupportedException("Several outputs under a noise's weights with random effects arrive with E34's slice 4, its last stage.");
+            _outputMeans = OutputMeansOf(outputs, Values, _weights, Weighting);
+            _responseMean = double.NaN;
+            return;
+        }
         _responseMean = Weighted is { } weighted ? weighted.Mean(Values) : MeanOf(_weights, Values, Weighting, Response.Observations);
     }
 
@@ -338,6 +336,20 @@ public sealed class WorkingResponse
             shifted[i] = y[i] - copied[i];
         }
         return (copied, shifted);
+    }
+
+    // Several outputs' means (E34): each output's scalar mean under W, its values case by case and output by output.
+    private static double[] OutputMeansOf(MultiOutputResponse outputs, ReadOnlySpan<double> values, double[]? weights, GPriorWeights weighting)
+    {
+        int k = outputs.Outputs, n = outputs.Cases;
+        var means = new double[k];
+        var column = new double[n];
+        for (int l = 0; l < k; l++)
+        {
+            for (int i = 0; i < n; i++) column[i] = values[i * k + l];
+            means[l] = MeanOf(weights, column, weighting, n);
+        }
+        return means;
     }
 
     private static double MeanOf(double[]? weights, ReadOnlySpan<double> values, GPriorWeights weighting, int n)

@@ -102,6 +102,7 @@ public sealed class BassTarget : ISamplingTarget<BassState>
         CoefficientConstant = resolved.CoefficientConstant;
         Sigma2Rate = resolved.Sigma2Rate;
         Outputs = resolved.Outputs;
+        OutputSkewSd = resolved.Outputs is not null && config.Noise?.SkewPrior is { IsHeld: false } skew ? skew.Sd : null;
         _resolvedOn = working;
         _exactFitSquares = Sigma2 is null && GivenSigma2 is null && Outputs is null ? FloorSquared * Weighting.Mass * resolved.WeightedMeanSquare : double.NegativeInfinity;
     }
@@ -123,6 +124,7 @@ public sealed class BassTarget : ISamplingTarget<BassState>
         CoefficientConstant = source.CoefficientConstant;
         Sigma2Rate = source.Sigma2Rate;
         Outputs = source.Outputs;
+        OutputSkewSd = source.OutputSkewSd;
         _resolvedOn = source._resolvedOn;
         _exactFitSquares = double.NegativeInfinity;
     }
@@ -155,18 +157,39 @@ public sealed class BassTarget : ISamplingTarget<BassState>
         if (Outputs is not { } outputs) throw new InvalidOperationException("The target holds one response; its marginal is Marginal's.");
         if (Refusal(fit) is { } reason) throw new ArgumentException($"The structure lies outside F ({reason}).", nameof(fit));
         OutputForms forms = fit.Outputs ?? throw new ArgumentException("A structure of several outputs carries their forms.", nameof(fit));
-        if (forms.Prior is { } pencil) return pencil.At(forms.Residual, Observations, tau / CoefficientConstant, inverseTemperature);
         // The reading the forms are on (E34's slice 4): its weights' mass, Σ ln wᵢ and count, a random-effect block's −ln|V| among them, and
         // its outputs' means; at the response itself, the resolution's means and unit weights.
         WorkingResponse? reading = fit.Working;
+        if (forms.Prior is { } pencil)
+            return pencil.At(forms.Residual, Observations, tau / CoefficientConstant, inverseTemperature, reading is null || reading.IsResponseItself ? null : reading.Weighting);
         if (reading is null || reading.IsResponseItself)
             return OutputMarginal.CentredAt(fit.Terms, forms.Residual, forms.Fitted, Observations, outputs.Means, Intercept, tau / CoefficientConstant, inverseTemperature);
+        // Under a noise the level is frozen apart from v (the resolution's raw mean), so level centring reads the gap ȳ_w − ℓ.
         return OutputMarginal.CentredAt(fit.Terms, forms.Residual, forms.Fitted, Observations, reading.OutputMeans.ToArray(), Intercept, tau / CoefficientConstant,
-                                        inverseTemperature, weights: reading.Weighting);
+                                        inverseTemperature, Intercept == GPriorCentre.Mean && reading.Latents is not null ? outputs.Levels : null, reading.Weighting);
     }
 
     /// <summary>The prior on structures.</summary>
     public BassStructurePrior Prior { get; }
+
+    /// <summary>Several outputs' drawn skew's s, γ | Σ ~ N(0, s²Σ) (E34's decision 6); null where the skew is not drawn or the response is one.</summary>
+    internal double? OutputSkewSd { get; init; }
+
+    /// <summary>Σ's prior with γ's pseudo-row, IW(ν₀ + 1, Ψ₀ + γγᵀ/s²), and ln p(γ), γ's multivariate t under IW(ν₀, Ψ₀) scaled by s:
+    /// −(K/2)ln(πs²) + ln Γ_K((ν₀+1)/2) − ln Γ_K(ν₀/2) + (ν₀/2)ln|Ψ₀| − ((ν₀+1)/2)ln|Ψ₀ + γγᵀ/s²|.</summary>
+    internal static (InverseWishart Prior, double LogSkew) WithSkew(InverseWishart prior, double[] gamma, double sd)
+    {
+        int k = gamma.Length;
+        double[,] scale = prior.Scale;
+        double inverse = 1.0 / (sd * sd);
+        for (int a = 0; a < k; a++)
+            for (int d = 0; d < k; d++) scale[a, d] += gamma[a] * gamma[d] * inverse;
+        double nu = prior.DegreesOfFreedom;
+        var updated = InverseWishart.Of(nu + 1.0, scale);
+        double logSkew = -0.5 * k * Math.Log(Math.PI * sd * sd) + SpecialFunctions.LogMultivariateGamma(k, 0.5 * (nu + 1.0))
+                         - SpecialFunctions.LogMultivariateGamma(k, 0.5 * nu) + 0.5 * nu * prior.LogDeterminantScale - 0.5 * (nu + 1.0) * updated.LogDeterminantScale;
+        return (updated, logSkew);
+    }
 
     /// <summary>The tempered form on the likelihood path.</summary>
     public TemperedForm Form { get; }
@@ -418,6 +441,13 @@ public sealed class BassEvaluation : ITargetEvaluation
         _target = target;
         _logRate = logRate;
         _outputPrior = outputPrior ?? target.Outputs?.Prior;
+        // Several outputs' drawn skew (E34's decision 6): γ | Σ ~ N(0, s²Σ) enters Σ's posterior as one pseudo-row, and its multivariate t
+        // under Σ's prior joins the log prior, so the target is p(structure, τ, γ, Y | v).
+        if (target.OutputSkewSd is double sd && fit.Working?.Latents?.OutputSkew is { } gamma && _outputPrior is { } basis && !double.IsNegativeInfinity(logPrior))
+        {
+            (_outputPrior, double logSkew) = BassTarget.WithSkew(basis, gamma, sd);
+            logPrior += logSkew;
+        }
         Fit = fit;
         Tau = tau;
         LogPrior = target.WithGroupScalePrior(logPrior, fit);

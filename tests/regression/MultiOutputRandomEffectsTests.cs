@@ -291,7 +291,7 @@ public sealed class MultiOutputRandomEffectsTests(ITestOutputHelper output)
         BassConfig block = Config(0.8, false);
         Assert.Throws<ArgumentException>(() => BassModel.Create(block with { RandomIntercepts = null, RandomSlopes = [new BassRandomSlope("g", "x0", RandomSlopeScale.Unit, 0.5)] }, data));
         Assert.Throws<ArgumentException>(() => BassModel.Create(block with { Coefficients = new BassCoefficientPrior(new RidgeForm(), TauPrior.UnitInformationGamma()) }, data));
-        Assert.Throws<ArgumentException>(() => BassModel.Create(block with { Noise = BassNoise.StudentT(4.0), RandomIntercepts = null }, new BassData(p, data.Response)));
+        Assert.Throws<ArgumentException>(() => BassModel.Create(block with { Noise = BassNoise.StudentT(4.0) }, data));   // until stage 4
     }
 
     // ── Geweke from exact starts (qualification) ──────────────────────────────────────────────────────────────────────────────────
@@ -445,11 +445,11 @@ public sealed class MultiOutputRandomEffectsTests(ITestOutputHelper output)
         return new ReferenceSigmaPrior(iw.DegreesOfFreedom, iw.Scale);
     }
 
-    private static double[,] MatrixTPredictiveRoot(double[,] sigma) => ReferenceAlgebra.Cholesky(sigma)!;
+    internal static double[,] MatrixTPredictiveRoot(double[,] sigma) => ReferenceAlgebra.Cholesky(sigma)!;
 
     // A prior draw's surface at the training cases: A | Σ, τ ~ MN(0, (τG_c)⁻¹, Σ) and the intercept from N(0, Σ/(τ·mass)) under level centring's
     // prior about the levels at 0 for the zero-mean design; the fitted values f = 1αᵀ + Z_cA.
-    private static double[,] GewekeSurface(BassModel model, BassDesign d, double[,] root, double tau, int n, int k, Xoshiro256PlusPlus rng)
+    internal static double[,] GewekeSurface(BassModel model, BassDesign d, double[,] root, double tau, int n, int k, Xoshiro256PlusPlus rng)
     {
         int m = d.Count;
         var centred = new double[m + 1, k];
@@ -506,7 +506,7 @@ public sealed class MultiOutputRandomEffectsTests(ITestOutputHelper output)
     }
 
     // f = 1αᵀ + Z_cA at the design's structure, from centred coefficients (α first, then the terms in the design's order).
-    private static double[,] Fitted(BassModel model, BassDesign design, double[,] centred)
+    internal static double[,] Fitted(BassModel model, BassDesign design, double[,] centred)
     {
         int n = model.Data.Response.Cases, k = centred.GetLength(1);
         double[,] xc = MultiOutputCoreTests.Columns(model, design);

@@ -135,16 +135,20 @@ public sealed class OutputMarginal
     /// the flat intercept K·(M/2)·ln(τ/(τ + b)) − (K/2)·ln(Nb).</summary>
     public double LogDeterminantTerm { get; }
 
-    internal static OutputMarginal FromPencil(double[,] residual, PriorPencil[] pencils, int rows, double tau, double b)
+    // The pencil's form (slice 2), with the reading's weights taken as CentredAt takes them (E34's slice 4): the flat intercept's mass,
+    // (Kb/2)Σ ln wᵢ and the count ν reads.
+    internal static OutputMarginal FromPencil(double[,] residual, PriorPencil[] pencils, int rows, double tau, double b, GPriorWeights? weights = null)
     {
+        GPriorWeights w = weights ?? GPriorWeights.Unit(rows);
         int k = pencils.Length, p = pencils[0].Eigenvalues.Length;
         bool flat = !pencils[0].InterceptInside;
         if (!(tau > 0 && double.IsFinite(tau)) || !(b >= 0 && double.IsFinite(b)) || (flat && b == 0))
             throw new ArgumentOutOfRangeException(nameof(b), "The coefficient precision and temperature must define the block.");
         var s = new double[k, k];
         var slope = new double[k, k];
-        double determinant = flat ? -0.5 * k * Math.Log(rows * b) : 0;
-        double determinantSlope = flat ? -0.5 * k / b : 0;
+        double logWeights = k * 0.5 * w.SumLogWeights;
+        double determinant = (flat ? -0.5 * k * Math.Log(w.Mass * b) : 0) + b * logWeights;
+        double determinantSlope = (flat ? -0.5 * k / b : 0) + logWeights;
         for (int a = 0; a < k; a++)
             for (int d = 0; d < k; d++)
             {
@@ -167,7 +171,7 @@ public sealed class OutputMarginal
                     slope[d, a] = slope[a, d];
                 }
         }
-        return new OutputMarginal(s, slope, determinant, determinantSlope, rows, tau, b, flat ? 1 : 0);
+        return new OutputMarginal(s, slope, determinant, determinantSlope, rows, tau, b, flat ? 1 : 0, w.Count);
     }
 
     /// <summary>

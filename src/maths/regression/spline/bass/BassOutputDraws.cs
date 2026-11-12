@@ -20,18 +20,24 @@ internal static class BassOutputDraws
     /// <summary>Σ and the centred coefficients at <paramref name="design"/>'s structure and τ = <paramref name="tau"/>: row 0 the
     /// intercepts, then one row per term in the design's order, one column per output.</summary>
     internal static (double[,] Sigma, double[,] Centred) Sample(BassTarget target, BassDesign design, BassStructureFit fit, double tau, Xoshiro256PlusPlus rng,
-                                                              InverseWishart? prior = null)
+                                                              InverseWishart? prior = null, double power = 1.0)
     {
         BassResolvedOutputs outputs = target.Outputs ?? throw new InvalidOperationException("The target holds one response.");
         if (outputs.Rates is not null && prior is null)
             throw new ArgumentException("A draw under Huang and Wand's prior needs the conditional inverse Wishart at its state's rates.", nameof(prior));
         int k = outputs.Count, m = design.Count, n = design.Observations;
         double precision = tau / target.CoefficientConstant;
-        double[,] sigma = target.OutputsMarginal(fit, tau).SigmaPosterior(prior ?? outputs.Prior).Sample(rng);
+        double[,] sigma = target.OutputsMarginal(fit, tau, power).SigmaPosterior(prior ?? outputs.Prior).Sample(rng);
         double[,] root = Root(sigma);
+        // On a moved reading (E34's slice 4: weights, a block's whitening) the intercept reads its mass and means; the rung's power b tempers
+        // the likelihood, so the coefficients' precision is (τ + b)G and their mean b/(τ + b)·β̂.
+        WorkingResponse? reading = fit.Working;
+        bool moved = reading is not null && !reading.IsResponseItself;
+        double mass = moved ? reading!.Weighting.Mass : n;
+        ReadOnlySpan<double> means = moved ? reading!.OutputMeans : outputs.Means;
         if (fit.Outputs?.Prior is { } pencil)
-            return (sigma, SamplePencil(pencil, outputs, root, precision, n, m, rng));
-        double shrink = 1.0 / (precision + 1.0), scale = Math.Sqrt(shrink);
+            return (sigma, SamplePencil(pencil, means.ToArray(), root, precision, mass, m, power, rng));
+        double shrink = power / (precision + power), scale = Math.Sqrt(1.0 / (precision + power));
         double[,] beta = design.OutputCoefficients ?? throw new InvalidOperationException("The design holds one response.");
         ISpdFactor factor = design.Factor;
 
@@ -57,17 +63,14 @@ internal static class BassOutputDraws
             }
 
         bool flat = target.Intercept == GPriorCentre.Flat;
-        // On a moved reading (E34's slice 4: weights, a random-effect block's whitening) the intercept reads its mass and means, and level
-        // centring its own mean; at the response itself, the resolution's.
-        WorkingResponse? reading = fit.Working;
-        bool moved = reading is not null && !reading.IsResponseItself;
-        double interceptScale = Math.Sqrt((flat ? 1.0 : shrink) / (moved ? reading!.Weighting.Mass : n));
-        ReadOnlySpan<double> means = moved ? reading!.OutputMeans : outputs.Means;
+        // Level centring centres on the reading's own mean, or under a noise on the level frozen apart from v; the intercept's variance is
+        // Σ/(b·mass) under the flat intercept and Σ/((τ + b)·mass) inside the prior.
+        double interceptScale = Math.Sqrt((flat ? 1.0 / power : 1.0 / (precision + power)) / mass);
         var u = new double[k];
         for (int l = 0; l < k; l++) u[l] = Normal.SampleStandard(rng);
         for (int a = 0; a < k; a++)
         {
-            double mean = means[a], level = moved ? (target.Intercept == GPriorCentre.Zero ? 0.0 : mean) : outputs.Levels[a];
+            double mean = means[a], level = moved && reading!.Latents is null ? (target.Intercept == GPriorCentre.Zero ? 0.0 : mean) : outputs.Levels[a];
             double centre = flat ? mean : level + shrink * (mean - level);
             double mixed = 0.0;
             for (int l = 0; l <= a; l++) mixed += root[a, l] * u[l];
@@ -76,11 +79,12 @@ internal static class BassOutputDraws
         return (sigma, centred);
     }
 
-    private static double[,] SamplePencil(OutputPencil pencil, BassResolvedOutputs outputs, double[,] root, double tau,
-                                          int rows, int terms, Xoshiro256PlusPlus rng)
+    // `means` and `mass` are the reading's (E34's slice 4: the weighted means and Σwᵢ under a noise), `power` the rung's b.
+    private static double[,] SamplePencil(OutputPencil pencil, double[] means, double[,] root, double tau,
+                                          double mass, int terms, double power, Xoshiro256PlusPlus rng)
     {
-        var (factor, mean) = pencil.Conditional(tau, 1);
-        int p = factor.Dimension, k = outputs.Count, offset = p == terms ? 0 : 1;
+        var (factor, mean) = pencil.Conditional(tau, power);
+        int p = factor.Dimension, k = means.Length, offset = p == terms ? 0 : 1;
         var innovations = new double[k][];
         var z = new double[p];
         for (int l = 0; l < k; l++)
@@ -103,8 +107,8 @@ internal static class BassOutputDraws
             for (int l = 0; l < k; l++) intercept[l] = Normal.SampleStandard(rng);
             for (int a = 0; a < k; a++)
             {
-                double value = outputs.Means[a];
-                for (int l = 0; l <= a; l++) value += root[a, l] * intercept[l] / Math.Sqrt(rows);
+                double value = means[a];
+                for (int l = 0; l <= a; l++) value += root[a, l] * intercept[l] / Math.Sqrt(power * mass);
                 centred[0, a] = value;
             }
         }
