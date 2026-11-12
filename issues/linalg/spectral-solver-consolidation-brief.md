@@ -407,6 +407,70 @@ Settled in the 2026-11-12 reviews:
 
 Each slice is reported here, newest first, with its commit, fixtures, commands, receipts, pins moved and doc changes owed.
 
+### B2–B3: caller-owned dense solves and the production Rayleigh–Ritz step (2026-11-12)
+
+**Commits:** `84f001e` (B2), `1adf27d` (B3).
+
+**B2, what changed:**
+- `EigenFast.DecomposeSymmetricInPlace` takes an empty eigenvector buffer for eigenvalues alone and skips the eigenvector rotations. The eigenvalues and the convergence report stay the same bits.
+- The final sort runs the same exchanges on an index permutation and moves each column once along its cycles: O(n²) where it was up to O(n³). A repeated eigenvalue's vectors keep their order, so no output moved.
+- The convergence report is read without a closure. A solve into caller-owned buffers allocates nothing once the pools are warm.
+- `DenseEigen` gains `DecomposeSymmetric(flat, n, values, vectors)` and `DecomposeSymmetricInto(matrix or flat, values, columns)`. The second writes the eigenvectors once, as the columns of a `double[,]`.
+- `ScaledEigen.Into` writes the same bits as `ScaledEigen.Of`.
+- `SubspacePosterior` (twice), `RankPosterior` and `CoActivePosterior` (twice) read columns directly instead of transposing rows.
+- `PenalizedSpline` and the Poincaré pencil's last solve read eigenvalues alone.
+
+**B2, outputs:** the BASS readout probe after B2 is identical to the probe after C5, line for line. `EigenFastTests` checks:
+- the caller-owned entries against the allocating overload, bit for bit;
+- that eigenvalues alone match;
+- the exchange order on diag(1, 1, 2);
+- zero bytes allocated when warm.
+
+**B3, what changed:**
+- LOBPCG projects into a workspace sized for 3k and allocated once per solve, solves it through `DenseEigen`'s caller-owned entry, and reads the extremal Ritz vectors from the eigenvector columns. `BuildProjectedMatrix` and `BuildExtremalEigenvectorMatrix` are gone.
+- `HierarchicalPSpline` decomposes its Gram through `DenseEigen` at the tolerance the reference used, 10⁻¹². Its conditional tests pass in the commit gate.
+- The reference Jacobi's only production references are now `DenseEigen`'s `#if EIGEN_REFERENCE` branches.
+
+**B3, work:** `LobpcgDenseTests.Solve_RayleighRitzRunsOnTheDenseDispatch` checks the projection solves:
+- a solve that converges at iteration I runs 2I − 1;
+- a solve capped at three iterations runs six;
+- all run on the build's dense dispatch, none on the reference.
+
+**B3, measurements:** probe `artifacts/spectral-b/LobpcgTimingProbe.cs.txt`, receipts `artifacts/spectral-b/lobpcg-*.txt`. Setup: Release, 18 cores, AVX2 and FMA, default tiering and PGO, below-normal priority on a shared machine.
+
+| Fixture | Before, median / min | After, median / min | Allocation per solve | Iterations |
+|---|---|---|---|---|
+| Crescent graph, 500 nodes, k = 8 | 52 / 45 ms | 40 / 34 ms | 1,216 → 550 KB | 37 → 36 |
+| Möbius graph, 500 nodes, k = 8 | 52 / 47 ms | 43 / 39 ms | 1,287 → 550 KB | 42 → 42 |
+| Dense 256, k = 8 | 282 / 263 ms | 227 / 205 ms | 2,902 → 795 KB | 110 → 110 |
+
+- **Warm-up:** these rows are the third round, with 12 warm-up solves on each side. With three warm-up solves, the post-change crescent medians read 106–115 ms while their minima held at 38–44 ms. That was a warm-up effect, gone at 12.
+- **Load:** load moved timings by up to about 25% between rounds. So: no regression, the size of the gain unsettled.
+- **Agreement:** reported and independently recomputed residuals match, all below 10⁻⁹, and the eigenvalues agree with the earlier solver's to about 10⁻¹⁵.
+- **The kernels at the projected sizes**, reference against production:
+
+  | Order | Reference | Production |
+  |---|---|---|
+  | 16 | 73–81 µs | 30–49 µs |
+  | 24 | 265–331 µs | 97–112 µs |
+
+  The production kernel allocates nothing, against 2.7–16 KB. At order 8 the readings disagree across rounds, 9.5–12 µs against 16–20 µs in three of them, with two rounds reversed by load.
+- **Not measured:** the projection's share inside the whole solve, operator applications counted on their own (iteration counts stand in), and subspace agreement for clustered eigenvalues.
+
+**Gates:**
+- `VizCore.Tests`, 33 classes: 236 passed, 2 standing skips.
+- `Maths.Regression.Tests` at commit scope, 284 classes with the pinned tier: 2,899 passed.
+- `Maths.LinAlg.Tests` 22, `Maths.Geometry.Tests` 13, `TDA.Mapper.Tests` 14: all passed.
+- `Maths.Oracle.Tests`: 135 of 136. `DiagramMetricsTransportParityTests(p: 2)` hit its R oracle's 120 s timeout under load. It reaches no eigensolver, and it passed when rerun alone.
+
+**Pins moved:** none.
+
+**Doc changes owed:** [LinearAlgebra.md](../../docs/Maths/LinearAlgebra.md):
+- the caller-owned entries and eigenvalues alone;
+- the sort;
+- the diagram's LOBPCG Rayleigh–Ritz arrow, which now points to `DenseEigen`, not the reference;
+- `DenseEigenOptions`' scope, now including LOBPCG's projections.
+
 ### C4–C5: the sampled Gram and the whitening inverse (2026-11-12)
 
 **Commit:** `72c5838`.
