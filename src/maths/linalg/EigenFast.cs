@@ -15,6 +15,9 @@ namespace Maths.LinAlg
         /// Zero transcendentals, zero symmetry mirroring overhead, fully vectorized.
         /// A pivot rotates when |a_pq| is at least <paramref name="tol"/>; a sweep that rotates nothing ends the solve, so skipping a
         /// pivot and stopping depend on the same test. Returns how the solve ended, read from the diagonalization it leaves.
+        /// Eigenvalues are written descending; eigenvectors as the columns of the flat column-major <paramref name="outEigenvectors"/>,
+        /// or none when it is empty, which skips their rotations, about half the work, and leaves the eigenvalues the same bits. The
+        /// working copy and the sort's scratch are pooled, so a call into caller-owned buffers allocates nothing once the pool is warm.
         /// </summary>
         public static DenseEigenConvergence DecomposeSymmetricInPlace(
             ReadOnlySpan<double> flatMatrix,
@@ -30,7 +33,8 @@ namespace Maths.LinAlg
 
             if (flatMatrix.Length != n * n) throw new ArgumentException("Matrix dimensions must match N x N.");
             if (outEigenvalues.Length != n) throw new ArgumentException("Eigenvalues buffer size must equal N.");
-            if (outEigenvectors.Length != n * n) throw new ArgumentException("Eigenvectors buffer size must equal N * N.");
+            bool vectors = outEigenvectors.Length != 0;
+            if (vectors && outEigenvectors.Length != n * n) throw new ArgumentException("Eigenvectors buffer size must equal N * N, or 0 for eigenvalues alone.");
 
             DecompositionLog.Record(DecompositionKernel.FastJacobi, n, n);
             int matrixSize = n * n;
@@ -49,8 +53,11 @@ namespace Maths.LinAlg
                     Unsafe.CopyBlock(A, pSrc, (uint)(sizeof(double) * matrixSize));
 
                     // Initialize Eigenvectors matrix to Identity (flat column-major)
-                    outEigenvectors.Clear();
-                    for (int i = 0; i < n; i++) V[i * n + i] = 1.0;
+                    if (vectors)
+                    {
+                        outEigenvectors.Clear();
+                        for (int i = 0; i < n; i++) V[i * n + i] = 1.0;
+                    }
 
                     for (int sweep = 0; sweep < maxSweeps; sweep++)
                     {
@@ -94,7 +101,7 @@ namespace Maths.LinAlg
 
                                 // Update the tracking basis vector matrix V (Fully Vectorized Column Transformations)
                                 int i = 0;
-                                if (canVectorize && n >= 4)
+                                if (vectors && canVectorize && n >= 4)
                                 {
                                     int simdLen = n & ~3;
 
@@ -129,13 +136,14 @@ namespace Maths.LinAlg
                                         }
                                     }
                                 }
-                                for (; i < n; i++)
-                                {
-                                    double vip = V[pBase + i];
-                                    double viq = V[qBase + i];
-                                    V[pBase + i] = c * vip - s * viq;
-                                    V[qBase + i] = s * vip + c * viq;
-                                }
+                                if (vectors)
+                                    for (; i < n; i++)
+                                    {
+                                        double vip = V[pBase + i];
+                                        double viq = V[qBase + i];
+                                        V[pBase + i] = c * vip - s * viq;
+                                        V[qBase + i] = s * vip + c * viq;
+                                    }
 
                                 int zone1 = 0;
                                 if (canVectorize && p >= 4)
@@ -229,38 +237,67 @@ namespace Maths.LinAlg
 
                 // The returned diagonalization's off-diagonal, read after the last sweep: a sample taken during a sweep precedes
                 // that sweep's rotations.
-                double[] working = workingArray;
-                (offDiagonalNorm, largestOffDiagonal) = DenseEigenConvergence.OffDiagonal(n, (p, q) => working[q * n + p]);
+                (offDiagonalNorm, largestOffDiagonal) = DenseEigenConvergence.OffDiagonal(workingArray.AsSpan(0, matrixSize), n);
             }
             finally
             {
                 ArrayPool<double>.Shared.Return(workingArray);
             }
 
-            // In-place sorting matching structural memory constraints
-            for (int i = 0; i < n - 1; i++)
-            {
-                for (int j = i + 1; j < n; j++)
-                {
-                    if (outEigenvalues[j] > outEigenvalues[i])
-                    {
-                        double tmpLambda = outEigenvalues[i];
-                        outEigenvalues[i] = outEigenvalues[j];
-                        outEigenvalues[j] = tmpLambda;
+            SortDescending(outEigenvalues, outEigenvectors, n);
+            return new DenseEigenConvergence(sweeps, rotations, offDiagonalNorm, largestOffDiagonal, largestOffDiagonal < tol);
+        }
 
-                        Span<double> colVi = outEigenvectors.Slice(i * n, n);
-                        Span<double> colVj = outEigenvectors.Slice(j * n, n);
-                        for (int row = 0; row < n; row++)
+        // Eigenvalues descending with their eigenvector columns. The exchange order is the one this solver always used, so a repeated
+        // eigenvalue's vectors keep their order; the exchanges run on an index permutation and the columns move once, following its
+        // cycles, O(n²) where swapping whole columns at each exchange cost up to O(n³).
+        private static void SortDescending(Span<double> values, Span<double> vectors, int n)
+        {
+            int[] order = ArrayPool<int>.Shared.Rent(n);
+            try
+            {
+                for (int i = 0; i < n; i++) order[i] = i;
+                for (int i = 0; i < n - 1; i++)
+                    for (int j = i + 1; j < n; j++)
+                        if (values[j] > values[i])
                         {
-                            double tmpV = colVi[row];
-                            colVi[row] = colVj[row];
-                            colVj[row] = tmpV;
+                            (values[i], values[j]) = (values[j], values[i]);
+                            (order[i], order[j]) = (order[j], order[i]);
+                        }
+                if (vectors.Length == 0) return;
+
+                // Position i takes the column that started at order[i]; each cycle is walked once, its first column held aside.
+                double[] held = ArrayPool<double>.Shared.Rent(n);
+                try
+                {
+                    for (int start = 0; start < n; start++)
+                    {
+                        if (order[start] < 0 || order[start] == start) continue;
+                        vectors.Slice(start * n, n).CopyTo(held);
+                        int at = start;
+                        while (true)
+                        {
+                            int from = order[at];
+                            order[at] = -1;
+                            if (from == start)
+                            {
+                                held.AsSpan(0, n).CopyTo(vectors.Slice(at * n, n));
+                                break;
+                            }
+                            vectors.Slice(from * n, n).CopyTo(vectors.Slice(at * n, n));
+                            at = from;
                         }
                     }
                 }
+                finally
+                {
+                    ArrayPool<double>.Shared.Return(held);
+                }
             }
-
-            return new DenseEigenConvergence(sweeps, rotations, offDiagonalNorm, largestOffDiagonal, largestOffDiagonal < tol);
+            finally
+            {
+                ArrayPool<int>.Shared.Return(order);
+            }
         }
 
         /// <summary>

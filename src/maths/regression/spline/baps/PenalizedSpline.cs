@@ -182,7 +182,8 @@ public sealed class PenalizedSpline
                 c[a, b] = c[b, a] = 0.5 * (s + t);
             }
 
-        double[] mu = DenseEigen.DecomposeSymmetric(c).Eigenvalues;
+        var mu = new double[_nu];   // eigenvalues alone: their vectors are never read
+        DenseEigen.DecomposeSymmetricInto(c, mu, null);
         Array.Sort(mu);
         int r = _penalty.Nullity;
         bool identified = false;

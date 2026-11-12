@@ -44,7 +44,7 @@ namespace Maths.LinAlg
                 rotations += sweepRotations;
                 if (sweepRotations == 0) break;
             }
-            (double offDiagonalNorm, double largestOffDiagonal) = DenseEigenConvergence.OffDiagonal(n, (p, q) => A[p, q]);
+            (double offDiagonalNorm, double largestOffDiagonal) = DenseEigenConvergence.OffDiagonal(A);
             var convergence = new DenseEigenConvergence(sweeps, rotations, offDiagonalNorm, largestOffDiagonal, largestOffDiagonal <= tol);
 
             // Extract eigenvalues + sort descending

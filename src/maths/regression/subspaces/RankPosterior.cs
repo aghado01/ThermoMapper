@@ -208,11 +208,9 @@ public sealed class RankPosterior
                     projection[i, j] += w[s] * pij;
                 }
         }
-        EigenResult e = ScaledEigen.Of(projection);
+        var values = new double[p];
         var vectors = new double[p, p];
-        for (int j = 0; j < p; j++)
-            for (int i = 0; i < p; i++) vectors[i, j] = e.Eigenvectors[j][i];
-        double[] values = [.. e.Eigenvalues];
+        ScaledEigen.Into(projection, values, vectors);
         int summaryRank = values.Count(x => x > 0.5);
         double[,] summary = Leading(vectors, summaryRank);
         var rankTerms = new double[draws.Count];

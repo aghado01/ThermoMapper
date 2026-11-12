@@ -237,7 +237,9 @@ public static class MatrixPoincare
                 }
                 reduced[i, j] = reduced[j, i] = 0.5 * (s + u) / Math.Sqrt(e.Eigenvalues[kept[i]] * e.Eigenvalues[kept[j]]);
             }
-        return Math.Max(0.0, ScaledEigen.Of(reduced).Eigenvalues.Max());
+        var spectrum = new double[r];   // eigenvalues alone
+        ScaledEigen.Into(reduced, spectrum, null);
+        return Math.Max(0.0, spectrum.Max());
     }
 
     /// <summary>

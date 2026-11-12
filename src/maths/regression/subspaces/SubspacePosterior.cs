@@ -18,16 +18,13 @@ public sealed record DrawSubspace(double[,] C, double[] Eigenvalues, double[,] B
     {
         ArgumentNullException.ThrowIfNull(c);
         int p = Check(c, dimension);
-        EigenResult e = ScaledEigen.Of(c);
-        var basis = new double[p, dimension];
+        var values = new double[p];
         var vectors = new double[p, p];
-        for (int j = 0; j < p; j++)
-            for (int i = 0; i < p; i++)
-            {
-                vectors[i, j] = e.Eigenvectors[j][i];
-                if (j < dimension) basis[i, j] = vectors[i, j];
-            }
-        return new DrawSubspace(c, [.. e.Eigenvalues], basis) { Vectors = vectors };
+        ScaledEigen.Into(c, values, vectors);
+        var basis = new double[p, dimension];
+        for (int i = 0; i < p; i++)
+            for (int j = 0; j < dimension; j++) basis[i, j] = vectors[i, j];
+        return new DrawSubspace(c, values, basis) { Vectors = vectors };
     }
 
     /// <summary>
@@ -218,11 +215,10 @@ public sealed class SubspacePosterior
     private static (double[] Values, double[,] Vectors) Eigen(double[,] m)
     {
         int p = m.GetLength(0);
-        EigenResult e = ScaledEigen.Of(m);
+        var values = new double[p];
         var vectors = new double[p, p];
-        for (int j = 0; j < p; j++)
-            for (int i = 0; i < p; i++) vectors[i, j] = e.Eigenvectors[j][i];
-        return ([.. e.Eigenvalues], vectors);
+        ScaledEigen.Into(m, values, vectors);
+        return (values, vectors);
     }
 
     private static double[,] Leading(double[,] vectors, int k)

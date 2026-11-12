@@ -160,14 +160,9 @@ public sealed class CoActivePosterior
                     projection[i, j] += Weights[s] * pij;
                 }
         }
-        EigenResult e = ScaledEigen.Of(projection);
         var eigenvalues = new double[p];
         var vectors = new double[p, p];
-        for (int j = 0; j < p; j++)
-        {
-            eigenvalues[j] = e.Eigenvalues[j];
-            for (int i = 0; i < p; i++) vectors[i, j] = e.Eigenvectors[j][i];
-        }
+        ScaledEigen.Into(projection, eigenvalues, vectors);
         var mean = new double[p, q];
         for (int i = 0; i < p; i++)
             for (int j = 0; j < q; j++) mean[i, j] = vectors[i, j];
@@ -196,14 +191,16 @@ public sealed class CoActivePosterior
     private static (double[] Values, double[,] Directions) ByMagnitude(double[,] v)
     {
         int p = v.GetLength(0);
-        EigenResult e = ScaledEigen.Of(v);
-        int[] order = [.. Enumerable.Range(0, p).OrderByDescending(i => Math.Abs(e.Eigenvalues[i])).ThenBy(i => i)];
+        var signed = new double[p];
+        var columns = new double[p, p];
+        ScaledEigen.Into(v, signed, columns);
+        int[] order = [.. Enumerable.Range(0, p).OrderByDescending(i => Math.Abs(signed[i])).ThenBy(i => i)];
         var values = new double[p];
         var directions = new double[p, p];
         for (int j = 0; j < p; j++)
         {
-            values[j] = e.Eigenvalues[order[j]];
-            for (int i = 0; i < p; i++) directions[i, j] = e.Eigenvectors[order[j]][i];
+            values[j] = signed[order[j]];
+            for (int i = 0; i < p; i++) directions[i, j] = columns[i, order[j]];
         }
         return (values, directions);
     }

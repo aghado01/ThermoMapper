@@ -137,6 +137,79 @@ public sealed class EigenFastTests
         for (int i = 0; i < 50; i++) Assert.InRange(Math.Abs(reference.Eigenvalues[i] - fast.Eigenvalues[i]), 0.0, 1e-12);
     }
 
+    /// <summary>
+    /// The caller-owned entries (spectral-solver brief, B2) give the allocating overload's bits: eigenvectors as flat columns, or as
+    /// the columns of a double[,]; and eigenvalues alone, which skip the eigenvector rotations, are the same eigenvalues and the same
+    /// convergence report.
+    /// </summary>
+    [Fact]
+    public void CallerOwnedEntries_MatchTheAllocatingOverload()
+    {
+        const int n = 40;
+        double[,] matrix = RandomSymmetric(size: n, seed: 271);
+        double[] flat = new double[n * n];
+        for (int c = 0; c < n; c++)
+            for (int r = 0; r < n; r++) flat[c * n + r] = matrix[r, c];
+        EigenResult allocated = EigenFast.DecomposeSymmetric(matrix);
+
+        var values = new double[n];
+        var vectors = new double[n * n];
+        DenseEigenConvergence withVectors = EigenFast.DecomposeSymmetricInPlace(flat, n, values, vectors);
+        var alone = new double[n];
+        DenseEigenConvergence valuesOnly = EigenFast.DecomposeSymmetricInPlace(flat, n, alone, Span<double>.Empty);
+
+        Assert.Equal(allocated.Eigenvalues, values);
+        Assert.Equal(allocated.Eigenvalues, alone);
+        Assert.Equal(allocated.Convergence, withVectors);
+        Assert.Equal(withVectors, valuesOnly);
+        for (int j = 0; j < n; j++) Assert.Equal(allocated.Eigenvectors[j], vectors.AsSpan(j * n, n).ToArray());
+
+        EigenResult dispatched = DenseEigen.DecomposeSymmetric(matrix);
+        var columnValues = new double[n];
+        var columns = new double[n, n];
+        DenseEigen.DecomposeSymmetricInto(matrix, columnValues, columns);
+        Assert.Equal(dispatched.Eigenvalues, columnValues);
+        for (int j = 0; j < n; j++)
+            for (int i = 0; i < n; i++) Assert.Equal(dispatched.Eigenvectors[j][i], columns[i, j]);
+    }
+
+    /// <summary>A repeated eigenvalue's vectors keep the order the exchange sort always gave: diag(1, 1, 2) rotates nothing, and the
+    /// exchanges leave the columns as e₂, e₁, e₀.</summary>
+    [Fact]
+    public void RepeatedEigenvalues_KeepTheExchangeOrder()
+    {
+        EigenResult result = EigenFast.DecomposeSymmetric(new[,] { { 1.0, 0.0, 0.0 }, { 0.0, 1.0, 0.0 }, { 0.0, 0.0, 2.0 } });
+
+        Assert.Equal([2.0, 1.0, 1.0], result.Eigenvalues);
+        Assert.Equal([0.0, 0.0, 1.0], result.Eigenvectors[0]);
+        Assert.Equal([0.0, 1.0, 0.0], result.Eigenvectors[1]);
+        Assert.Equal([1.0, 0.0, 0.0], result.Eigenvectors[2]);
+    }
+
+    /// <summary>Into caller-owned buffers a solve allocates nothing once the pools are warm: the working copy and the sort's scratch
+    /// are pooled, and the convergence report is read without a closure.</summary>
+    [Fact]
+    public void CallerOwnedSolve_AllocatesNothingWhenWarm()
+    {
+        const int n = 24;
+        double[,] matrix = RandomSymmetric(size: n, seed: 314);
+        double[] flat = new double[n * n];
+        for (int c = 0; c < n; c++)
+            for (int r = 0; r < n; r++) flat[c * n + r] = matrix[r, c];
+        var values = new double[n];
+        var vectors = new double[n * n];
+        for (int warm = 0; warm < 3; warm++) EigenFast.DecomposeSymmetricInPlace(flat, n, values, vectors);
+
+        long least = long.MaxValue;
+        for (int trial = 0; trial < 5; trial++)
+        {
+            long before = GC.GetAllocatedBytesForCurrentThread();
+            EigenFast.DecomposeSymmetricInPlace(flat, n, values, vectors);
+            least = Math.Min(least, GC.GetAllocatedBytesForCurrentThread() - before);
+        }
+        Assert.Equal(0L, least);
+    }
+
     // Descending eigenvalues, residuals ‖Av − λv‖ at 10⁻¹⁰·max(1, ‖A‖_F) and orthogonality |VᵀV − I| at 10⁻¹².
     private static void AssertDecomposition(double[,] matrix, EigenResult result)
     {
