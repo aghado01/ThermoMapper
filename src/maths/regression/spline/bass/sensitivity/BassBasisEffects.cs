@@ -13,6 +13,16 @@ namespace Maths.Regression.Spline.Bass.Sensitivity;
 /// </summary>
 public static class BassBasisEffects
 {
+    // The hinge normalization every component shares (BassStructureSpec.ResolvedHingeNormalization): the cross-component moments read one.
+    internal static HingeNormalization OneNormalization(BassBasisFit fit)
+    {
+        HingeNormalization first = fit.Components[0].Config.Structure.ResolvedHingeNormalization;
+        for (int k = 1; k < fit.Components.Count; k++)
+            if (fit.Components[k].Config.Structure.ResolvedHingeNormalization != first)
+                throw new ArgumentException($"Component {k}'s hinges are normalized over {fit.Components[k].Config.Structure.ResolvedHingeNormalization} and component 0's over {first}: the cross moments need one normalization.", nameof(fit));
+        return first;
+    }
+
     /// <summary>
     /// The effects of <paramref name="fit"/>'s joint draws under <paramref name="spec"/>'s measure and each component's
     /// degree. With no subsets named, every input's main effect and the two-way effect of every pair a term of some joint
@@ -44,7 +54,7 @@ public static class BassBasisEffects
         if (effects.Subsets is { } given) named = [.. given];
         else
         {
-            BassMoments moments = BassMoments.On(inputs, first.Config.Structure.Degree, measure);
+            BassMoments moments = BassMoments.On(inputs, first.Config.Structure.Degree, measure, OneNormalization(fit));
             var pairs = new SortedSet<(int, int)>();
             for (int k = 0; k < r; k++)
             {

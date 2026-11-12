@@ -43,9 +43,10 @@ public static class BassBasisSensitivity
                 throw new ArgumentException($"Component {k} was fitted at hinge degree {fit.Components[k].Config.Structure.Degree} and component 0 at {degree}: " +
                                             "the cross-component moments need one degree.", nameof(fit));
         BassFit first = fit.Components[0];
+        HingeNormalization hinges = BassBasisEffects.OneNormalization(fit);
         BassInputs inputs = BassInputs.Prepare(fit.ComponentData(0), first.Transform);
         ProductMeasure measure = ProductMeasure.Resolve(first.Transform, inputs, spec.Measures);
-        BassMoments moments = BassMoments.On(inputs, degree, measure);
+        BassMoments moments = BassMoments.On(inputs, degree, measure, hinges);
 
         // Each component's draws pooled in chain order; joint draw j takes pooled[k][JointDraws.Draw(k, j)], over the joint
         // draws selected.

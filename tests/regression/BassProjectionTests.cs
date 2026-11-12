@@ -23,7 +23,9 @@ namespace Maths.Regression.Tests;
 /// levels at their probabilities; under a joint sample, exactly;</item>
 /// <item>projected data and cases agree bit for bit, and what is refused (d, the names, the pushforward's points);</item>
 /// <item>decision 4's gate: in high p a dense direction's bounding box is several times the data's spread, the default g-form and count
-/// support read that scaling not at all (draw for draw the same fit), and the column-mass support and the raw ridge read it.</item>
+/// support read that scaling not at all (draw for draw the same fit), and the column-mass support and the raw ridge read it;</item>
+/// <item>slice 7d's gate: with hinges normalized over the training range, the column-mass support and the raw ridge read it not at
+/// all either.</item>
 /// </list>
 /// </summary>
 public sealed class BassProjectionTests(ITestOutputHelper output)
@@ -313,12 +315,7 @@ public sealed class BassProjectionTests(ITestOutputHelper output)
         BassProjection? projection40 = null;
         foreach (int p in new[] { 2, 10, 40 })
         {
-            BassData data = Synthetic(p, 300, 1000 + p, declared: true);
-            var transform = BassInputTransform.Fit(data);
-            var w = new double[p, 1];
-            for (int i = 0; i < p; i++) w[i, 0] = 1.0 / Math.Sqrt(p);
-            double[,] c = ActiveSubspaceFollowUpTests.Spectral(Complete(w), [.. Enumerable.Range(0, p).Select(i => i == 0 ? 1.0 : 1e-3 / (i + 1))]);
-            BassProjection projection = BassProjection.Of(transform, Analysis(data, c, 1), 1);
+            (BassData data, BassProjection projection) = DenseDirection(p);
             spreads.Add((p, projection.Spreads(data)[0]));
             if (p == 40) (data40, projection40) = (data, projection);
         }
@@ -363,6 +360,68 @@ public sealed class BassProjectionTests(ITestOutputHelper output)
                 Assert.Equal(0, differ);
                 Assert.True(gap / scale <= 1e-9, $"{name}: {gap / scale:E2}");
             }
+        }
+    }
+
+    // Decision 4's fixture: p inputs declared on [0, 1] with 300 uniform cases, the frame a dense direction w = 1/√p, d = 1.
+    private static (BassData Data, BassProjection Projection) DenseDirection(int p)
+    {
+        BassData data = Synthetic(p, 300, 1000 + p, declared: true);
+        var transform = BassInputTransform.Fit(data);
+        var w = new double[p, 1];
+        for (int i = 0; i < p; i++) w[i, 0] = 1.0 / Math.Sqrt(p);
+        double[,] c = ActiveSubspaceFollowUpTests.Spectral(Complete(w), [.. Enumerable.Range(0, p).Select(i => i == 0 ? 1.0 : 1e-3 / (i + 1))]);
+        return (data, BassProjection.Of(transform, Analysis(data, c, 1), 1));
+    }
+
+    /// <summary>
+    /// Slice 7d's gate on decision 4's p = 40 data. With hinges normalized over the training range, the fit with the bounding box as
+    /// u's domain is the fit with the training range as its domain, under the column-mass support and the raw ridge as under the
+    /// g-form with count support: draw for draw the same structures, posterior means to 10⁻⁹ of their size. On the training-range
+    /// data the training range is the box, so the two rules there are the same bits.
+    /// </summary>
+    [Fact]
+    public void HighDimensionalDomain_TrainingRangeHinges_ReadTheDataScale()
+    {
+        (BassData data, BassProjection projection) = DenseDirection(40);
+        BassData box = projection.Project(data);
+        double[] u = ((ContinuousPredictor)box.Predictors[0]).Values.ToArray();
+        var rng = new Xoshiro256PlusPlus(41);
+        double[] y = [.. u.Select(t => Math.Sin(3.0 * t) + 0.05 * Normal.SampleStandard(rng))];
+        var withBox = new BassData([new ContinuousPredictor("u1", u, projection.Domains[0])], new ScalarResponse(y));
+        var withRange = new BassData([new ContinuousPredictor("u1", u)], new ScalarResponse(y));
+        var cases = new PredictionCases([new ContinuousColumn("u1", u)]);
+        BassConfig defaults = SensitivityFixture.Config(maxBasis: 8);
+        static BassConfig Trained(BassConfig c) => c with { Structure = c.Structure with { HingeNormalization = HingeNormalization.TrainingRange } };
+        foreach ((string name, BassConfig config) in new[]
+        {
+            ("g-form, count support", defaults),
+            ("column-mass support", defaults with { Structure = defaults.Structure with { Support = new SupportRule(SupportKind.ColumnMass) } }),
+            ("raw ridge", defaults with { Coefficients = BassCoefficientPrior.RawRidge(TauPrior.UnitInformationGamma()) }),
+        })
+        {
+            BassFit wide = Bass.Fit(Trained(config), withBox), reference = Bass.Fit(config, withRange), trained = Bass.Fit(Trained(config), withRange);
+            BassDraw[] dw = [.. wide.Draws.SelectMany(ch => ch)], dr = [.. reference.Draws.SelectMany(ch => ch)], dt = [.. trained.Draws.SelectMany(ch => ch)];
+            int differ = 0;
+            for (int s = 0; s < dw.Length; s++)
+            {
+                BassTerm[] tw = [.. dw[s].Structure.TermIds.Select(id => wide.Terms[id])], tr = [.. dr[s].Structure.TermIds.Select(id => reference.Terms[id])];
+                if (!tw.SequenceEqual(tr)) differ++;
+            }
+            double[,] mw = wide.Predict(withBox, cases).Mean(), mr = reference.Predict(withRange, cases).Mean(), mt = trained.Predict(withRange, cases).Mean();
+            double scale = 0.0, gap = 0.0;
+            for (int r = 0; r < u.Length; r++)
+            {
+                scale = Math.Max(scale, Math.Abs(mr[r, 0]));
+                gap = Math.Max(gap, Math.Abs(mw[r, 0] - mr[r, 0]));
+            }
+            output.WriteLine($"{name}, training-range hinges: {differ} of {dw.Length} draws with other structures than the training-range domain's; " +
+                             $"posterior means apart by {gap / scale:E2} of their size");
+            Assert.Equal(0, differ);
+            Assert.True(gap / scale <= 1e-9, $"{name}: {gap / scale:E2}");
+            Assert.Equal(dr.Length, dt.Length);
+            for (int s = 0; s < dr.Length; s++) Assert.Equal(dr[s].Structure.TermIds.Select(id => reference.Terms[id]), dt[s].Structure.TermIds.Select(id => trained.Terms[id]));
+            Assert.Equal(mr, mt);
         }
     }
 

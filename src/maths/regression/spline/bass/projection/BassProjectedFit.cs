@@ -42,6 +42,10 @@ public sealed class BassProjectedFit
     /// The refit of <paramref name="data"/>, the native fit's data or the same cases, projected by <paramref name="projection"/>
     /// (<see cref="BassProjection.Project(BassData)"/>), under <paramref name="config"/>, the native fit's by default being the
     /// caller's to pass.
+    /// <para>The active variables' domains are the zonotope's bounding box, so every image of the input box lies inside, and in high
+    /// dimension most of that box is far from the data. A hinge config that leaves <see cref="BassStructureSpec.HingeNormalization"/>
+    /// unset is resolved to the training range (E8's slice 7d): the column-mass support and the raw ridge then read the data's
+    /// scale, not the box's, and the refit's config records the choice. A stated normalization is kept as stated.</para>
     /// </summary>
     public static BassProjectedFit Of(BassProjection projection, BassData data, BassConfig config, BassRunOptions? run = null)
     {
@@ -49,6 +53,8 @@ public sealed class BassProjectedFit
         ArgumentNullException.ThrowIfNull(data);
         ArgumentNullException.ThrowIfNull(config);
         BassData projected = projection.Project(data);
+        if (config.Structure is { Legendre: null, HingeNormalization: null } structure)
+            config = config with { Structure = structure with { HingeNormalization = HingeNormalization.TrainingRange } };
         return new BassProjectedFit(projection, projected, Bass.Fit(config, projected, run));
     }
 

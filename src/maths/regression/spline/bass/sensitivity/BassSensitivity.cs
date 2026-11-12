@@ -458,7 +458,7 @@ public static class BassSensitivity
             int[] held = form == FunctionalForm.Condition ? Held(outputs, spec.ConditionOn) : [];
             string[] integrated = [.. Enumerable.Range(0, outputs.Count).Where(d => Array.IndexOf(held, d) < 0).Select(d => outputs[d].Name)];
             var measure = ProductMeasure.Resolve(fit.Transform, inputs, spec.Measures, spec.OutputMeasures, integrated);
-            var moments = BassMoments.On(inputs, fit.Config.Structure.Degree, measure);
+            var moments = BassMoments.On(inputs, fit.Config.Structure.Degree, measure, fit.Config.Structure.ResolvedHingeNormalization);
 
             int total = fit.Draws.Sum(c => c.Count);
             var pooled = new (BassDraw Draw, int Chain, int Index)[total];
@@ -500,7 +500,7 @@ public static class BassSensitivity
                 }
             }
             int degree = fit.Config.Structure.Degree;
-            var kernels = new DesignKernels(inputs, degree);
+            var kernels = new DesignKernels(inputs, degree, fit.Config.Structure.ResolvedHingeNormalization);
             var outputSide = new double[fit.Terms.Count][];
             foreach (int id in ids)
             {

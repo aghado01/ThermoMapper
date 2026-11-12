@@ -13,13 +13,13 @@ internal static partial class BassActiveSubspaces
         double[] a = BassMultiOutput.Functional(data.Response.Outputs, spec.Output ?? throw new ArgumentException("The first output functional is required.", nameof(spec)));
         double[] b = BassMultiOutput.Functional(data.Response.Outputs, spec.OtherOutput ?? throw new ArgumentException("The second output functional is required.", nameof(spec)));
         var inputs = BassInputs.Prepare(data, fit.Transform);
-        Frame frame = FrameOf(inputs, fit.Transform, fit.Config.Structure.Degree, spec.Measures, spec.Sample, spec.Metric, spec.Route, spec.Points, 1);
+        Frame frame = FrameOf(inputs, fit.Transform, fit.Config.Structure.Degree, fit.Config.Structure.ResolvedHingeNormalization, spec.Measures, spec.Sample, spec.Metric, spec.Route, spec.Points, 1);
         var pooled = fit.Draws.SelectMany(c => c).ToArray();
         var (selected, weights) = Draws3.Select(spec.Draws, pooled.Length, fit.DrawWeights, nameof(spec));
         var pairs = new CoActivePair[selected.Length]; CoActiveError[]? errors = null;
         if (frame.Route == ActiveSubspaceRoute.Exact)
         {
-            var moments = BassMoments.On(inputs, fit.Config.Structure.Degree, frame.Measure!);
+            var moments = BassMoments.On(inputs, frame.Degree, frame.Measure!, frame.Hinges);
             for (int s = 0; s < selected.Length; s++)
             {
                 var draw = pooled[selected[s]];
