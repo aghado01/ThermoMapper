@@ -228,6 +228,25 @@ The user asked for this on 2026-11-08 ("Yes, start it"), relayed by the BASS ext
 
 Newest first.
 
+### In progress — slice 14's follow-ups
+
+Updated 2026-11-13, in place.
+- *Follow-ups 2 and 3:* their checks pass on their own. They splice in turn, each with its own gates and full checks run.
+- *Follow-up 2's additions* (the user, 2026-11-13: "lets work on the likelihood ratio weights question and then the weighted version of k-fold cv"):
+  - JAWS's likelihood-ratio form and K-fold CV+'s one-fold bound under likelihood ratios are drafted, and their checks pass.
+  - The merged K-fold bound under position weights is checked, and its Lean is next.
+- *Builds:* the active-subspace Lean chip's full build is done, and `lean/` builds are this chip's again (its message, 2026-11-13).
+- The working files are in `artifacts/chip-conformal-lean/`, which is untracked.
+
+### 2026-11-13 — slice 14's follow-up 1: the weighted predictive distribution's PIT, proved
+
+The statements are in the ledger, under "Slice 14's follow-ups". The new declarations are PROOF-CLOSED, with the standard three axioms only. The checks ran first.
+
+- *Uniform* (`pit_weighted`, `sum_mul_wPitCdf`). Read at the test unit's value with the tied mass randomized, the weighted distribution's PIT is exactly uniform under covariate or response shift with the true ratio. This holds in the split and full forms (equivariant scores).
+- *Unrandomized,* it is `weightLe`, super-uniform at every level (`coverage_weighted`).
+- *With an estimated ratio* (`wPit_estimated`, ours), it is within TV(p, p̂) of uniform from either side, and the bound is tight in the checks.
+- *For the C#:* the predictive distribution can take shift weights.
+
 ### 2026-11-13 — slice 18 checked against its sources
 
 The three sources slice 18 lacked were read in full; the ledger's "Slice 18" says where. Every result stands, and the citations now name theorems rather than abstracts.

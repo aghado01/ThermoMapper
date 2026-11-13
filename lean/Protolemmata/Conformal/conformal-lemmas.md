@@ -2,7 +2,7 @@
 
 Pins the contract of the engine's conformal layer, one layer over retained draws and pointwise densities for every model with a pointwise density ([E16](../../../issues/regression/bass/extensions-brief.md#conformal-bayes-the-consumer)). The layer owns coverage and the score owns width. These are the finite statements of that split. They are the sibling of [GuardedEstimator](../BASS/guarded-estimator-lemmas.md): there, means valid whatever the emulator does; here, prediction sets valid whatever the model does. Written from the [chip brief](conformal-chip-brief.md).
 
-**Status (2026-11-10).** Proved in `lean/Enthymemata/ConformalValidity.lean`, namespace `Conformal`, with no apologies (PROOF-CLOSED, 395 declarations counting E35's M-1 and M-2 and slices 9, 10, 12, 13, 14, 15, 16 and 18 at the end of this page; `#print axioms` shows `propext`, `Classical.choice`, `Quot.sound` only):
+**Status (2026-11-13).** Proved in `lean/Enthymemata/ConformalValidity.lean`, namespace `Conformal`, with no apologies (PROOF-CLOSED, 409 declarations counting E35's M-1 and M-2 and slices 9, 10, 12, 13, 14, 15, 16 and 18, and slice 14's follow-up 1 at the end of this page; `#print axioms` shows `propext`, `Classical.choice`, `Quot.sound` only):
 - CB-1: `card_rankLe_le`, `coverage_orderings`, `coverage_orderings_eq`, `coverage_strict_le`, `coverage_orderings_le`, `rank_uniform`, `coverage_tieBreak`, `coverage_given`, `coverage_law`, `coverage_stratum`;
 - CB-2: `split_coverage`, `exchangeable_given_training`, `cqr_ordConnected`;
 - CB-4: `sum_jointU`, `post_addOneIn`, `integratedScore_equivariant`, `latentScore_equivariant`, `latentScore_eq`, `sum_jointU_addOneIn`, `integratedScore_le_latentScore`, `accepts_latent_of_mixed`, `mixed_counterexample`;
@@ -924,3 +924,30 @@ Snell and Griffiths (arXiv 2502.13228v2), read in TeX: §3–§4, Propositions 3
 - The HPD rule exactly, end to end, on 100 laws: it fails at most where the fixed threshold does, within 1 − β (worst failure 0.15).
 - The squared loss's gap exactly, and Gibbs in floats, on 300 law pairs.
 - The written directions in their proof failing at once.
+
+## Slice 14's follow-ups
+
+Commissioned on 2026-11-13 (the brief's top section), each to settle a C# decision named in slice 14's C# report.
+
+### Follow-up 1 — the weighted predictive distribution's PIT
+
+Sources: Tibshirani, Barber, Candès and Ramdas 2019 (arXiv 1904.06019v3) and Podkopaev and Ramdas 2021, as read for slice 14. Proved on 2026-11-13 in `ConformalValidity.lean`, section `WeightedPit` beside `Shift`, PROOF-CLOSED, with the standard three axioms only. The checks (section "Slice 14 follow-up 1") ran first.
+
+- *The distribution.* At the test unit's value, the weighted predictive distribution puts weight A strictly below it and B tied with it, its own included (`weightLt`, `weightEq`).
+  - With the tied mass randomized, the PIT is T = A + V B, with V uniform (`wPitCdf`).
+  - With ties counted for the candidate (V = 1), it is `weightLe`.
+- *Uniform given the data set* (`sum_mul_wPitCdf`). If the test unit is unit u with chance q_u and Σ q = 1, then P(T ≤ x) = x for x ∈ [0, 1]. The tie levels' intervals [A, A + B) tile [0, 1] (`levels_tile`).
+- *Over orderings, split and full* (`pit_weighted`). With the true ratio w and an equivariant score, the PIT is exactly uniform over the orderings, each weighted by w(z_{σt}).
+  - w is w(x) for covariate shift and w(y) for response shift.
+  - The split form is the score S z = s ∘ z.
+- *Unrandomized:* `weightLe`'s super-uniformity at every level is `coverage_weighted` (slice 14).
+- *An estimated ratio* (`wPit_estimated`, our statement).
+  - The test unit lands by the true normalized weights p, and the PIT is read with the estimates p̂.
+  - Then P(T ≤ x) is within TV(p, p̂) = Σ (p − p̂)⁺ of x, from either side.
+  - The checks find the bound attained: the largest share of TV used is 1.000.
+- *For the C#:* the distribution may take shift weights. Its PIT is uniform with the true ratio, and moves by at most the weights' TV with an estimated one.
+
+**Checks.**
+- The tiling on 3,000 random cases (scores with ties, weights with zeros), with `weightLe`'s super-uniformity.
+- The full form over every ordering, with an equivariant score, on 150 data sets.
+- The estimated ratio's bound on 3,000 cases.

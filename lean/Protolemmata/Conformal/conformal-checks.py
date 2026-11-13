@@ -2978,4 +2978,83 @@ print(f"Slice 18: the posterior L+ exactly, its machinery on {n_dd} knot sets (m
       f"laws (worst failure {float(worst):.4f}); the squared loss's gap and Gibbs on {n_prop} law pairs")
 
 print()
+print("=== Slice 14 follow-up 1: the weighted predictive distribution's PIT ===")
+# The weighted predictive distribution read at the test unit's value: T = A + V B, A the normalized weight
+# scoring strictly below it, B the weight tied with it (its own included), V uniform on (0, 1]. Given the
+# data set the test unit is unit u with chance q_u, the true ratio normalized, so
+# P(T <= x) = sum_u q_u P(A_u + V B_u <= x). The tie levels' intervals [A, A + B) tile [0, sum q], so this is
+# min(max(x, 0), sum q): uniform. Unrandomized (V = 1) it is weightLe, super-uniform at every level.
+
+
+def unit_clamp(a):
+    return max(Q(0), min(Q(1), a))
+
+
+def wpit_cdf(s, q, u, x):
+    A = sum(q[j] for j in range(len(s)) if s[j] < s[u])
+    Bq = sum(q[j] for j in range(len(s)) if s[j] == s[u])
+    if Bq == 0:
+        return Q(int(A <= x))
+    return unit_clamp((x - A) / Bq)
+
+
+n_tile = 0
+rr = random.Random(1900)
+for trial in range(3000):
+    m = rr.randint(1, 7)
+    s = [rr.randint(0, 4) for _ in range(m)]
+    q = [Q(rr.randint(0, 5), rr.randint(1, 5)) for _ in range(m)]
+    Qt = sum(q)
+    for x in [Q(rr.randint(-4, 24), 20) for _ in range(4)] + [Q(0), Qt]:
+        assert sum(q[u] * wpit_cdf(s, q, u, x) for u in range(m)) == min(max(x, Q(0)), Qt)
+        assert all(0 <= wpit_cdf(s, q, u, x) <= 1 for u in range(m))
+        le = [sum(q[j] for j in range(m) if s[j] <= s[u]) for u in range(m)]
+        assert sum(q[u] for u in range(m) if le[u] <= x) <= max(x, Q(0))     # weightLe, unrandomized
+    n_tile += 1
+
+# The full form over orderings: an equivariant score (|z_i - mean z|), weights w(z_u), every ordering.
+n_full = 0
+for N in range(1, 6):
+    rr = random.Random(1910 + N)
+    for trial in range(30):
+        z = [Q(rr.randint(0, 6)) for _ in range(N)]
+        wv = {v: Q(rr.randint(0, 4)) for v in set(z)}
+        W = sum(wv[v] for v in z)
+        t = rr.randrange(N)
+        for x in (Q(0), Q(1, 3), Q(1, 2), Q(7, 10), Q(1)):
+            num = den = Q(0)
+            for sig in itertools.permutations(range(N)):
+                zs = [z[sig[i]] for i in range(N)]
+                mu = sum(zs) / N
+                S = [abs(v - mu) for v in zs]
+                q = [wv[v] / W if W else Q(0) for v in zs]
+                num += wv[zs[t]] * wpit_cdf(S, q, t, x)
+                den += wv[zs[t]]
+            assert num == x * den
+        n_full += 1
+
+# An estimated ratio ph for the true p: |P(T_hat <= x) - x| <= TV(p, ph), from either side.
+n_est, worst_est = 0, Q(0)
+rr = random.Random(1920)
+for trial in range(3000):
+    m = rr.randint(1, 7)
+    s = [rr.randint(0, 4) for _ in range(m)]
+    pw = [rr.randint(0, 5) for _ in range(m)]
+    pw[0] = pw[0] or 1
+    hw = [rr.randint(0, 5) for _ in range(m)]
+    hw[-1] = hw[-1] or 1
+    p, ph = [Q(a, sum(pw)) for a in pw], [Q(a, sum(hw)) for a in hw]
+    tv = sum(max(Q(0), a - b) for a, b in zip(p, ph))
+    for x in [Q(rr.randint(0, 20), 20) for _ in range(4)]:
+        d = sum(p[u] * wpit_cdf(s, ph, u, x) for u in range(m)) - x
+        assert abs(d) <= tv
+        if tv:
+            worst_est = max(worst_est, abs(d) / tv)
+    n_est += 1
+print(f"Follow-up 1: the weighted PIT's levels tile [0, sum q] on {n_tile} random (scores with ties, weights "
+      f"with zeros), so it is uniform given the data set, and weightLe super-uniform; the full form over every "
+      f"ordering with an equivariant score on {n_full} data sets; an estimated ratio within TV(p, ph) on {n_est} "
+      f"(largest share of TV used {float(worst_est):.3f})")
+
+print()
 print("All assertions hold.")

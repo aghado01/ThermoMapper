@@ -5618,6 +5618,262 @@ theorem refused_le_swap_tv {Z : Type*} [Fintype Z] {S : (ι → Z) → ι → �
 
 end Shift
 
+/-! ### Slice 14's follow-up 1: the weighted predictive distribution's PIT
+
+The weighted predictive distribution read at the test unit's value, with the tied mass randomized,
+is uniform given the data set; read with ties counted for the candidate it is `weightLe`, whose
+super-uniformity at every level is `coverage_weighted`. -/
+
+section WeightedPit
+
+/-- Clamps add along a split of `[0, Q + b]` at `Q`. -/
+theorem clamp_add {Q b x : ℝ} (hQ : 0 ≤ Q) (hb : 0 ≤ b) :
+    max 0 (min Q x) + max 0 (min b (x - Q)) = max 0 (min (Q + b) x) := by
+  rcases le_total x 0 with h1 | h1
+  · rw [min_eq_right (h1.trans hQ), max_eq_left h1, min_eq_right (by linarith : x - Q ≤ b),
+      max_eq_left (by linarith : x - Q ≤ 0), min_eq_right (by linarith : x ≤ Q + b),
+      max_eq_left h1, add_zero]
+  rcases le_total x Q with h2 | h2
+  · rw [min_eq_right h2, max_eq_right h1, min_eq_right (by linarith : x - Q ≤ b),
+      max_eq_left (by linarith : x - Q ≤ 0), min_eq_right (by linarith : x ≤ Q + b),
+      max_eq_right h1, add_zero]
+  rcases le_total x (Q + b) with h3 | h3
+  · rw [min_eq_left h2, max_eq_right hQ, min_eq_right (by linarith : x - Q ≤ b),
+      max_eq_right (by linarith : 0 ≤ x - Q), min_eq_right h3, max_eq_right h1]
+    ring
+  · rw [min_eq_left h2, max_eq_right hQ, min_eq_left (by linarith : b ≤ x - Q), max_eq_right hb,
+      min_eq_left h3, max_eq_right (by linarith : 0 ≤ Q + b)]
+
+/-- **Levels tile** `[0, Σ b]`: level `v` covers `[a_v, a_v + b_v)`, `a_v` the mass of the levels
+below it, so the clamps of `x` into the levels sum to `x` clamped into `[0, Σ b]`. -/
+theorem levels_tile (T : Finset ℝ) (b : ℝ → ℝ) (hb : ∀ v ∈ T, 0 ≤ b v) (x : ℝ) :
+    ∑ v ∈ T, max 0 (min (b v) (x - ∑ w ∈ T.filter (· < v), b w)) =
+      max 0 (min (∑ v ∈ T, b v) x) := by
+  induction T using Finset.induction_on_max with
+  | empty => simp
+  | insert M T hM ih =>
+    have hMT : M ∉ T := fun h => lt_irrefl M (hM M h)
+    have hbT : ∀ v ∈ T, 0 ≤ b v := fun v hv => hb v (mem_insert_of_mem hv)
+    have hM' : (insert M T).filter (· < M) = T := by
+      rw [filter_insert, if_neg (lt_irrefl M), filter_true_of_mem hM]
+    have hrest : ∑ v ∈ T, max 0 (min (b v) (x - ∑ w ∈ (insert M T).filter (· < v), b w)) =
+        ∑ v ∈ T, max 0 (min (b v) (x - ∑ w ∈ T.filter (· < v), b w)) :=
+      sum_congr rfl fun v hv => by rw [filter_insert, if_neg (not_lt.2 (hM v hv).le)]
+    rw [sum_insert hMT, hM', hrest, ih hbT, sum_insert hMT, add_comm (b M),
+      add_comm (max 0 (min (b M) _)), clamp_add (sum_nonneg hbT) (hb M (mem_insert_self M T))]
+
+variable {ι : Type*} [Fintype ι] [DecidableEq ι]
+
+omit [Fintype ι] in
+/-- The weight of the units of `C` scoring strictly below `u`'s score. -/
+noncomputable def weightLt (C : Finset ι) (s q : ι → ℝ) (u : ι) : ℝ :=
+  ∑ j ∈ C.filter (fun j => s j < s u), q j
+
+omit [Fintype ι] in
+/-- The weight of the units of `C` tied with `u`, `u` included. -/
+noncomputable def weightEq (C : Finset ι) (s q : ι → ℝ) (u : ι) : ℝ :=
+  ∑ j ∈ C.filter (fun j => s j = s u), q j
+
+omit [Fintype ι] in
+/-- **The weighted predictive distribution's PIT, its CDF**: `P(T ≤ x)` for `T = A + V B`, with
+`A` the weight scoring strictly below `u` (`weightLt`), `B` the weight tied with it (`weightEq`),
+and `V` uniform on `(0, 1]`. At `V = 1` the PIT is `weightLe`. -/
+noncomputable def wPitCdf (C : Finset ι) (s q : ι → ℝ) (u : ι) (x : ℝ) : ℝ :=
+  if weightEq C s q u = 0 then (if weightLt C s q u ≤ x then 1 else 0)
+  else unitClamp ((x - weightLt C s q u) / weightEq C s q u)
+
+omit [Fintype ι] [DecidableEq ι] in
+theorem wPitCdf_nonneg (C : Finset ι) (s q : ι → ℝ) (u : ι) (x : ℝ) : 0 ≤ wPitCdf C s q u x := by
+  unfold wPitCdf unitClamp
+  split_ifs <;> norm_num
+
+omit [Fintype ι] [DecidableEq ι] in
+theorem wPitCdf_le_one (C : Finset ι) (s q : ι → ℝ) (u : ι) (x : ℝ) : wPitCdf C s q u x ≤ 1 := by
+  unfold wPitCdf unitClamp
+  split_ifs <;> norm_num
+
+theorem weightLt_comp {C : Finset ι} {σ : Equiv.Perm ι} (hσ : σ ∈ permsOn C) (s q : ι → ℝ)
+    (u : ι) : weightLt C (s ∘ σ) (q ∘ σ) u = weightLt C s q (σ u) := by
+  unfold weightLt
+  exact sum_equiv σ (fun j => by simp only [mem_filter, Function.comp_apply,
+    mem_iff_of_mem_permsOn hσ]) fun j _ => rfl
+
+theorem weightEq_comp {C : Finset ι} {σ : Equiv.Perm ι} (hσ : σ ∈ permsOn C) (s q : ι → ℝ)
+    (u : ι) : weightEq C (s ∘ σ) (q ∘ σ) u = weightEq C s q (σ u) := by
+  unfold weightEq
+  exact sum_equiv σ (fun j => by simp only [mem_filter, Function.comp_apply,
+    mem_iff_of_mem_permsOn hσ]) fun j _ => rfl
+
+theorem wPitCdf_comp {C : Finset ι} {σ : Equiv.Perm ι} (hσ : σ ∈ permsOn C) (s q : ι → ℝ)
+    (u : ι) (x : ℝ) : wPitCdf C (s ∘ σ) (q ∘ σ) u x = wPitCdf C s q (σ u) x := by
+  unfold wPitCdf
+  rw [weightLt_comp hσ, weightEq_comp hσ]
+
+/-- `B · P(V ≤ y/B) = y` clamped into `[0, B]`. -/
+theorem mul_unitClamp_div {B y : ℝ} (hB : 0 < B) : B * unitClamp (y / B) = max 0 (min B y) := by
+  unfold unitClamp
+  have h : B * (y / B) = y := by field_simp
+  rw [mul_max_of_nonneg _ _ hB.le, mul_min_of_nonneg _ _ hB.le, mul_zero, mul_one, h]
+
+omit [Fintype ι] [DecidableEq ι] in
+/-- **The weighted PIT is uniform given the data set**: with the test unit on unit `u` with chance
+`q u`, `P(T ≤ x) = Σ_u q_u P(A_u + V B_u ≤ x)` is `x` clamped into `[0, Σ q]`. The tie levels'
+intervals `[A, A + B)` tile `[0, Σ q]`. -/
+theorem sum_mul_wPitCdf (C : Finset ι) (s q : ι → ℝ) (hq : ∀ j ∈ C, 0 ≤ q j) (x : ℝ) :
+    ∑ u ∈ C, q u * wPitCdf C s q u x = max 0 (min (∑ u ∈ C, q u) x) := by
+  set Bv : ℝ → ℝ := fun v => ∑ j ∈ C.filter (fun j => s j = v), q j with hBv
+  set Av : ℝ → ℝ := fun v => ∑ j ∈ C.filter (fun j => s j < v), q j with hAv
+  set g : ℝ → ℝ := fun v => max 0 (min (Bv v) (x - Av v)) with hg
+  have hBnn : ∀ v, 0 ≤ Bv v := fun v => sum_nonneg fun j hj => hq j (mem_filter.1 hj).1
+  -- each unit: its chance times its weight is its share of its level's clamp
+  have hunit : ∀ u ∈ C, q u * wPitCdf C s q u x = q u / Bv (s u) * g (s u) := by
+    intro u hu
+    have hle : q u ≤ Bv (s u) :=
+      single_le_sum (fun j hj => hq j (mem_filter.1 hj).1) (mem_filter.2 ⟨hu, rfl⟩)
+    unfold wPitCdf
+    change q u * (if Bv (s u) = 0 then (if Av (s u) ≤ x then 1 else 0)
+      else unitClamp ((x - Av (s u)) / Bv (s u))) = q u / Bv (s u) * g (s u)
+    by_cases h0 : Bv (s u) = 0
+    · have : q u = 0 := le_antisymm (h0 ▸ hle) (hq u hu)
+      rw [this, zero_mul, zero_div, zero_mul]
+    · have hpos : 0 < Bv (s u) := lt_of_le_of_ne (hBnn _) (Ne.symm h0)
+      rw [if_neg h0]
+      change q u * unitClamp ((x - Av (s u)) / Bv (s u)) =
+        q u / Bv (s u) * max 0 (min (Bv (s u)) (x - Av (s u)))
+      rw [← mul_unitClamp_div hpos, ← mul_assoc, div_mul_cancel₀ _ h0]
+  rw [sum_congr rfl hunit]
+  -- units to levels
+  have hlev : ∑ u ∈ C, q u / Bv (s u) * g (s u) = ∑ v ∈ C.image s, g v := by
+    refine (sum_image' (fun u => q u / Bv (s u) * g (s u)) fun i hi => ?_).symm
+    have e : ∑ j ∈ C with s j = s i, q j / Bv (s j) * g (s j) =
+        (∑ j ∈ C with s j = s i, q j) / Bv (s i) * g (s i) := by
+      rw [sum_div, sum_mul]
+      exact sum_congr rfl fun j hj => by rw [(mem_filter.1 hj).2]
+    rw [e]
+    change g (s i) = Bv (s i) / Bv (s i) * g (s i)
+    rcases eq_or_ne (Bv (s i)) 0 with h0 | h0
+    · rw [h0, div_zero, zero_mul]
+      change max 0 (min (Bv (s i)) (x - Av (s i))) = 0
+      rw [h0]
+      exact max_eq_left (min_le_left _ _)
+    · rw [div_self h0, one_mul]
+  rw [hlev]
+  -- the mass below a level is the levels below it
+  have hA : ∀ v, Av v = ∑ w ∈ (C.image s).filter (· < v), Bv w := by
+    intro v
+    rw [show (C.image s).filter (· < v) = (C.filter fun j => s j < v).image s by
+      ext w
+      simp only [mem_filter, mem_image]
+      constructor
+      · rintro ⟨⟨j, hj, rfl⟩, hw⟩
+        exact ⟨j, ⟨hj, hw⟩, rfl⟩
+      · rintro ⟨j, ⟨hj, hw⟩, rfl⟩
+        exact ⟨⟨j, hj, rfl⟩, hw⟩]
+    refine (sum_image' q fun i hi => ?_).symm
+    have hiv : s i < v := (mem_filter.1 hi).2
+    rw [filter_filter]
+    exact sum_congr (filter_congr fun j _ => ⟨fun h => ⟨by rw [h]; exact hiv, h⟩,
+      fun h => h.2⟩) fun _ _ => rfl
+  have hsumB : ∑ v ∈ C.image s, Bv v = ∑ u ∈ C, q u :=
+    sum_image' q fun i _ => rfl
+  rw [← hsumB, ← levels_tile (C.image s) Bv (fun v _ => hBnn v) x]
+  refine sum_congr rfl fun v _ => ?_
+  change max 0 (min (Bv v) (x - Av v)) = _
+  rw [hA v]
+
+/-- **The weighted predictive distribution's PIT, over orderings** (Tibshirani, Barber, Candès and
+Ramdas 2019 for covariate shift, `w(x)`; Podkopaev and Ramdas 2021 for response shift, `w(y)`).
+Over the orderings of a data set the test unit lands on unit `u` with weight `w(z_u)`; read at its
+value with the tied mass randomized, the weighted distribution's PIT is exactly uniform. The score
+is equivariant, so this is the full form; the split form is `S z = s ∘ z`. -/
+theorem pit_weighted {Z : Type*} {C : Finset ι} {t : ι} (ht : t ∈ C)
+    {S : (ι → Z) → ι → ℝ} (hS : Equivariant C S) (z : ι → Z) (w : Z → ℝ) (hw : ∀ v, 0 ≤ w v)
+    {x : ℝ} (hx0 : 0 ≤ x) (hx1 : x ≤ 1) :
+    ∑ σ ∈ permsOn C, w (z (σ t)) *
+        wPitCdf C (S (z ∘ σ)) (fun j => w (z (σ j)) / ∑ i ∈ C, w (z i)) t x =
+      x * ∑ σ ∈ permsOn C, w (z (σ t)) := by
+  set q : ι → ℝ := fun j => w (z j) / ∑ i ∈ C, w (z i) with hq
+  have hpt : ∀ σ ∈ permsOn C, w (z (σ t)) *
+      wPitCdf C (S (z ∘ σ)) (fun j => w (z (σ j)) / ∑ i ∈ C, w (z i)) t x =
+      (fun u => w (z u) * wPitCdf C (S z) q u x) (σ t) := by
+    intro σ hσ
+    have hfun : S (z ∘ σ) = S z ∘ σ := funext fun i => hS σ hσ z i
+    rw [hfun, show (fun j => w (z (σ j)) / ∑ i ∈ C, w (z i)) = q ∘ σ from rfl, wPitCdf_comp hσ]
+  rw [sum_congr rfl hpt]
+  have hc : (0 : ℝ) < C.card := by exact_mod_cast card_pos.2 ⟨t, ht⟩
+  have hkey : ∑ u ∈ C, w (z u) * wPitCdf C (S z) q u x = x * ∑ i ∈ C, w (z i) := by
+    rcases (sum_nonneg fun i (_ : i ∈ C) => hw (z i)).eq_or_lt with h0 | hpos
+    · have hz : ∀ i ∈ C, w (z i) = 0 :=
+        (sum_eq_zero_iff_of_nonneg fun i _ => hw (z i)).1 h0.symm
+      rw [sum_eq_zero fun u hu => by rw [hz u hu, zero_mul], ← h0, mul_zero]
+    · have hW := hpos.ne'
+      have htile := sum_mul_wPitCdf C (S z) q (fun j _ => div_nonneg (hw _) hpos.le) x
+      have hq1 : ∑ u ∈ C, q u = 1 := by
+        change ∑ u ∈ C, w (z u) / ∑ i ∈ C, w (z i) = 1
+        rw [← sum_div, div_self hW]
+      rw [hq1, min_eq_right hx1, max_eq_right hx0] at htile
+      calc ∑ u ∈ C, w (z u) * wPitCdf C (S z) q u x =
+            (∑ i ∈ C, w (z i)) * ∑ u ∈ C, q u * wPitCdf C (S z) q u x := by
+            rw [mul_sum]
+            refine sum_congr rfl fun u _ => ?_
+            change w (z u) * wPitCdf C (S z) q u x =
+              (∑ i ∈ C, w (z i)) * ((w (z u) / ∑ i ∈ C, w (z i)) * wPitCdf C (S z) q u x)
+            rw [← mul_assoc, mul_comm (∑ i ∈ C, w (z i)), div_mul_cancel₀ _ hW]
+        _ = x * ∑ i ∈ C, w (z i) := by rw [htile, mul_comm]
+  refine mul_left_cancel₀ hc.ne' ?_
+  rw [card_mul_sum_permsOn ht (fun u => w (z u) * wPitCdf C (S z) q u x), hkey,
+    mul_left_comm (C.card : ℝ) x, card_mul_sum_permsOn ht (fun u => w (z u))]
+  ring
+
+omit [Fintype ι] [DecidableEq ι] in
+/-- **The PIT with an estimated ratio** (our statement): with the test unit landing by the true
+normalized weights `p` and the PIT read with estimates `ph`, `P(T ≤ x)` is within the total
+variation `Σ (p − ph)⁺` of `x`, from either side. -/
+theorem wPit_estimated (C : Finset ι) (s p ph : ι → ℝ) (hph : ∀ j ∈ C, 0 ≤ ph j)
+    (hp1 : ∑ j ∈ C, p j = 1) (hph1 : ∑ j ∈ C, ph j = 1) {x : ℝ} (hx0 : 0 ≤ x) (hx1 : x ≤ 1) :
+    |∑ u ∈ C, p u * wPitCdf C s ph u x - x| ≤ ∑ u ∈ C, max 0 (p u - ph u) := by
+  have htile := sum_mul_wPitCdf C s ph hph x
+  rw [hph1, min_eq_right hx1, max_eq_right hx0] at htile
+  have hd : ∑ u ∈ C, p u * wPitCdf C s ph u x - x =
+      ∑ u ∈ C, (p u - ph u) * wPitCdf C s ph u x := by
+    have e : ∑ u ∈ C, p u * wPitCdf C s ph u x - x =
+        ∑ u ∈ C, p u * wPitCdf C s ph u x - ∑ u ∈ C, ph u * wPitCdf C s ph u x := by
+      rw [htile]
+    rw [e, ← sum_sub_distrib]
+    exact sum_congr rfl fun u _ => by ring
+  have hterm : ∀ u, max 0 (p u - ph u) - max 0 (ph u - p u) = p u - ph u := fun u => by
+    rcases le_total 0 (p u - ph u) with h | h
+    · rw [max_eq_right h, max_eq_left (by linarith : ph u - p u ≤ 0)]
+      ring
+    · rw [max_eq_left h, max_eq_right (by linarith : 0 ≤ ph u - p u)]
+      ring
+  have hsym : ∑ u ∈ C, max 0 (ph u - p u) = ∑ u ∈ C, max 0 (p u - ph u) := by
+    have h : ∑ u ∈ C, (max 0 (p u - ph u) - max 0 (ph u - p u)) = ∑ u ∈ C, (p u - ph u) :=
+      sum_congr rfl fun u _ => hterm u
+    rw [sum_sub_distrib, sum_sub_distrib, hp1, hph1] at h
+    linarith
+  rw [hd, abs_le]
+  constructor
+  · rw [← hsym, ← sum_neg_distrib]
+    refine sum_le_sum fun u _ => ?_
+    have h0 := wPitCdf_nonneg C s ph u x
+    have h1 := wPitCdf_le_one C s ph u x
+    rcases le_total 0 (p u - ph u) with h | h
+    · rw [max_eq_left (by linarith : ph u - p u ≤ 0)]
+      nlinarith
+    · rw [max_eq_right (by linarith : 0 ≤ ph u - p u)]
+      nlinarith
+  · refine sum_le_sum fun u _ => ?_
+    have h0 := wPitCdf_nonneg C s ph u x
+    have h1 := wPitCdf_le_one C s ph u x
+    rcases le_total 0 (p u - ph u) with h | h
+    · rw [max_eq_right h]
+      nlinarith
+    · rw [max_eq_left h]
+      nlinarith
+
+end WeightedPit
+
 /-! ### Slice 15: posterior conformal prediction (Zhang and Candès, arXiv 2409.19712) -/
 
 section PosteriorConformal
