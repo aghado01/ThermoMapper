@@ -68,7 +68,7 @@ These are the statements that E8's readouts ([active-subspace-brief.md](../../..
 
 ## AS-2 — the matrix Poincaré check
 
-**Status (2026-11-13).** (a), (b), the matrix form and (c)'s algebra are proved in `ActiveSubspace/MatrixPoincare.lean`, no apologies, reusing `efron_stein` (`Enthymemata/BassSensitivity.lean`, SG-1(d)). The one-variable inequality is a hypothesis, as posed. Checks AS-2a to AS-2e pass.
+**Status (2026-11-13).** (a), (b), the matrix form and (c)'s algebra are proved in `ActiveSubspace/MatrixPoincare.lean`, no apologies, reusing `efron_stein` (`Enthymemata/BassSensitivity.lean`, SG-1(d)). The one-variable inequality is a hypothesis, as posed, in its integrated form (corrected after review, below). Checks AS-2a to AS-2e pass.
 
 **Claims.** ρ is a product law on the inputs, f has m outputs, and D = diag(c₁, …, c_p).
 - **(a) The reduction.** Cov_ρ(f) ≼ E_ρ[J D Jᵀ] holds exactly when Var(vᵀf) ≤ Σᵢ cᵢ E[(∂ᵢ vᵀf)²] for every v ∈ ℝᵐ. This holds because vᵀCov(f)v = Var(vᵀf) and vᵀE[JDJᵀ]v = Σᵢ cᵢ E[(Σ_j v_j J_ji)²], and ∂ᵢ(vᵀf) = Σ_j v_j J_ji.
@@ -106,7 +106,7 @@ It does not mark one for the laws E8 already reports as not applicable: mixtures
 **Lean** (`Enthymemata/ActiveSubspace/MatrixPoincare.lean`), on a finite product law, with `BASS.meanOf` and `BASS.coordMean`.
 - (a): `loewner_iff`, `covForm_eq_var`, `energyForm_eq`, through `quadForm_eq` and `meanOf_sq_lin`.
 - (b): `meanOf_mul_sub_coordMean` (Efron–Stein's summand is E[Varᵢ g]); `var_le_of_coord_poincare`, from `BASS.efron_stein` and the hypothesis `hcoord : ∀ i x, condVar μ i g x ≤ c i * e i x`; and `coordwise_le_scalar`.
-- *The matrix check:* `matrix_poincare`, with the one-variable inequality assumed for every linear combination vᵀf, whose partial along i is Σₐ vₐJₐᵢ.
+- *The matrix check:* `matrix_poincare`, with the one-variable inequality assumed in its integrated form for every linear combination vᵀf: Varᵢ(vᵀf) ≤ cᵢ Eᵢ[(Σₐ vₐJₐᵢ)²], both sides means over coordinate i (`coordMean`), so neither reads xᵢ. The first version bounded Varᵢ by the squared partial at x itself, pointwise in xᵢ. That form is true but stronger than the one-variable inequality, which cannot discharge it: on a symmetric box, g = xᵢ² has zero partial at 0 and nonzero variance. The coordinating session's review found it on 2026-11-13, and it is corrected.
 - (c): `energy_box`, for any r; at r = 1/π² it is G/π².
 - *Not formalized:* the constants themselves, the uniform's (b − a)²/π² and the truncated normal's bound. They rest on the checks.
 

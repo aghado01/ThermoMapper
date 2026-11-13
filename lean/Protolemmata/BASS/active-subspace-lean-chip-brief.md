@@ -85,6 +85,23 @@ Hand-over state between turns is an "In progress" entry here.
 
 ## Reports
 
+### 2026-11-13 — AS-2's hypothesis corrected after review
+
+The coordinating session reviewed the statements at `6a3268d` and returned two points, both taken.
+1. **`matrix_poincare`'s `hcoord` was too strong.**
+   - It bounded Varᵢ(vᵀf) at x by cᵢ(Σₐ vₐJₐᵢ(x))², pointwise in xᵢ. `condVar` does not read xᵢ, so the hypothesis demanded the bound at the least squared partial over xᵢ.
+   - The one-variable inequality Varᵢ g ≤ cᵢEᵢ[(∂ᵢg)²] cannot supply that: g = xᵢ² on a symmetric box has zero partial at 0 and nonzero variance. The theorem was true, but its hypothesis could not be discharged by the inequality it names.
+   - The right side is now cᵢ · `coordMean μ i (fun z => (Σₐ vₐ J z a i)²) x`. The proof passes it to `var_le_of_coord_poincare` and returns E[Eᵢ ·] to the energy form by `meanOf_coordMean`.
+   - The file header, both docstrings and the lemmas' AS-2 wording now say the integrated form.
+   - *Which form the checks exercised:* the integrated one throughout. AS-2c tests Var_U(h) ≤ c·E_U[h′²] over the coordinate's law, AS-2d tests the matrix form against E[J D Jᵀ] by quadrature over the whole law, and AS-2b tests Efron–Stein exactly. None tested the pointwise form, which is why the checks did not catch it.
+2. **`powerSpherical_antipode` now takes 0 < κ.** At κ < 0 the zero came from rpow's convention, not from the law.
+
+Declaration names are unchanged: only `matrix_poincare`'s hypothesis and `powerSpherical_antipode`'s hypothesis changed. Both print only `propext`, `Classical.choice` and `Quot.sound`.
+
+Gates:
+- `lean` on the module, then `lake build Enthymemata.ActiveSubspace`, clean.
+- The full `lake build` (Lemmas, Theorems, Enthymemata, 3,185 jobs) passed. It ran after the Conformal chip confirmed it was idle, and was taken on the tree just before this fix. The only warnings are the existing apologies in `BARS`, `Stability` and `CumulativeField.Local`.
+
 ### 2026-11-13 — all four targets proved
 
 **Landed.**
@@ -151,7 +168,7 @@ Hand-over state between turns is an "In progress" entry here.
   - (c)'s Lean holds at every k, wider than posed; the docstring says so.
   - `compress_eigenvalues_mem` took `DecidableEq` out of its type (linter).
   - The "½ indifferent" clause is covered by `summaryProj_trace_sub`'s range of S.
-- *AS-2:* `hcoord` is the posed hypothesis and nothing else carries weight. `matrix_poincare` quantifies it over every v, which is the one-variable inequality applied to vᵀf.
+- *AS-2:* this pass judged `hcoord` to be the posed hypothesis. It was not: its pointwise form was stronger than the one-variable inequality. The review entry above records the correction.
 - *AS-3:*
   - The pass found finding 7 and added `poisson_count_ratio` and `double_count_ratio`.
   - `change_ratio` assumed only a symmetric kernel, so `change_ratio_powerSpherical` ties it to the power spherical law on the sphere.
@@ -165,7 +182,7 @@ Hand-over state between turns is an "In progress" entry here.
 - `lean` on each module.
 - `lake build Enthymemata.ActiveSubspace` (the four modules and the barrel), clean with no warnings after the linter pass, at below-normal priority.
 - `scripts/meta-ci.ps1 -NoBuild`: PASS. The four modules are `PROOF-CLOSED`.
-- The full `lake build` was not run: `ConformalValidity.lean` holds the Conformal chip's uncommitted work, and nothing outside `ActiveSubspace` changed. The Conformal chip was told before the builds and the aggregate edit, and had not replied when they ran.
+- The full `lake build` was not run at first: `ConformalValidity.lean` held the Conformal chip's uncommitted work. It ran once that chip confirmed it was idle, and passed (see the entry above).
 - No Mathlib fetch was needed. D: had 34 GB free at the end.
 
 **Follow-ups,** none with a decision waiting, so recorded as open:
