@@ -4,7 +4,9 @@
 #   pwsh -NoProfile -File verify-csharp.ps1 -Name e8-s7d-<head> -ChangedFile changed.txt
 #
 # Receipts land in artifacts/verify-<Name>/ (commit.log, commit.trx, counters.txt). The snapshot and
-# build in artifacts/verify-main/ are removed afterwards unless -Keep. -NoRun builds the snapshot only.
+# build in artifacts/verify-main/ are removed afterwards unless -Keep. -NoRun stops after extracting
+# the snapshot; pair it with -Keep to look at the snapshot. A relative -ChangedFile is read from the
+# directory the script is called from.
 # Runs below normal priority on two processors: the machine is shared.
 param(
   [Parameter(Mandatory)][string]$Name,
@@ -14,6 +16,11 @@ param(
   [switch]$Keep
 )
 $ErrorActionPreference = 'Continue'
+# The arguments are checked before anything is written, so a bad call leaves no artifacts/verify-main.
+if (-not $NoRun) {
+  if (-not $ChangedFile) { throw '-ChangedFile is required unless -NoRun' }
+  $ChangedFile = (Resolve-Path -LiteralPath $ChangedFile -ErrorAction Stop).Path
+}
 [System.Diagnostics.Process]::GetCurrentProcess().PriorityClass = 'BelowNormal'
 $env:MSBUILDDISABLENODEREUSE = '1'
 $env:DOTNET_PROCESSOR_COUNT = '2'
@@ -34,8 +41,7 @@ Remove-Item -LiteralPath $tarball
   Tee-Object -FilePath (Join-Path $out 'snapshot.txt')
 
 if (-not $NoRun) {
-  if (-not $ChangedFile) { throw '-ChangedFile is required unless -NoRun' }
-  $changed = Get-Content -LiteralPath $ChangedFile | Where-Object { $_ -and -not $_.StartsWith('#') }
+  $changed =Get-Content -LiteralPath $ChangedFile | Where-Object { $_ -and -not $_.StartsWith('#') }
   & .\scripts\test-select.ps1 -SourceRoot $snap -Scope Commit -Changed $changed -ArtifactsRoot "$work\bin\" *> (Join-Path $out 'commit.log')
   "exit $LASTEXITCODE" | Out-File -Append (Join-Path $out 'commit.log')
   $trx = Get-ChildItem -LiteralPath $work -Recurse -Filter *.trx | Sort-Object LastWriteTime | Select-Object -Last 1
