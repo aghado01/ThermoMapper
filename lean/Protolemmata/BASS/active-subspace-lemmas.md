@@ -2,7 +2,7 @@
 
 These are the statements that E8's readouts ([active-subspace-brief.md](../../../issues/regression/bass/active-subspace-brief.md), slices 5 and 7) and E36's sampler ([bppr-brief.md](../../../issues/regression/bass/bppr-brief.md), decision 5) rest on. They were commissioned on 2026-11-13 by the [chip brief](active-subspace-lean-chip-brief.md); before that the four existed only as names (handoff of 2026-11-10, item 8). The numeric checks are [`active-subspace-checks.py`](active-subspace-checks.py).
 
-**Status (2026-11-13).** All four are posed, and the checks pass 44 of 44. Nothing is proved yet. The Lean is planned as `lean/Enthymemata/ActiveSubspace/` (one module per target, a barrel `Enthymemata/ActiveSubspace.lean`, namespace `ActiveSubspace`). Each target's own status line follows.
+**Status (2026-11-13).** All four are proved, with no apologies, in `lean/Enthymemata/ActiveSubspace/`: `ProjectionMean` (AS-1), `MatrixPoincare` (AS-2), `DirectionMoves` (AS-3) and `Refit` (AS-4). The barrel is `Enthymemata/ActiveSubspace.lean` and the namespace `ActiveSubspace`. Each main result prints only `propext`, `Classical.choice` and `Quot.sound`. The checks pass 44 of 44. Two hypotheses stay hypotheses, as posed: the one-variable Poincaré inequality (AS-2) and the continuous reversible-jump form (AS-3). Each target's own status line follows.
 
 **What posing changed** (findings before any Lean):
 1. **AS-1(c): the cross-rank distance is not Ye and Lim's.** ½‖P_s − P‖²_F = |k_s − k|/2 + Σ sin²θᵢ holds (checked to 5·10⁻¹⁵). But Ye and Lim's chordal metric on subspaces of all dimensions is |k − l| + Σ sin²θᵢ, with the rank term at weight 1. That is their Table 3, and their §7 shows it equals the symmetric directional distance. The two agree when the ranks are equal.
@@ -19,6 +19,7 @@ These are the statements that E8's readouts ([active-subspace-brief.md](../../..
    - What moves under a non-conformal L is the leading k of a C of rank above k.
    - "Orthogonal" also widens to conformal (L = cQ).
 6. **AS-4(a): the frame claim is stronger than posed.** A linear map R of u carries the tensor-product hinge class into itself only when each row of R has at most one nonzero entry. For orthogonal R that means R is a signed permutation, which BASS already ignores. So the refit depends on the frame at every frame, and not only where the active block's eigenvalues are near-equal.
+7. **AS-3(b), found in the proof: the count read twice changes the prior.** A birth ratio with a further 1/(M + 1) still balances, but against the count weight λ^M/(M!)², not Poisson's λ^M/M! (`double_count_ratio`). So the slip is silent: the chain still runs and passes reciprocity, while targeting a lighter count prior. It shows only against an independent reference, which is what AS-3c's balance gap measures (0.34, against the Poisson target).
 
 **Which reading of AS-4 the record supports.** The frame. The name entered the record on 2026-11-10 (`391f052`, the handoff's item 8). At that point the record held slice 7's plan, which says BASS's axis alignment makes the frame matter (decision 2, after the Grassmann discussion's synthesis point 3), and the user's decision 2, which asks for the eigengaps within the active block. The scale reading's material came later: decision 4's gate in 7a and the training-range rule in 7d, both on 2026-11-11. Both readings are posed below and both hold.
 
@@ -28,7 +29,7 @@ These are the statements that E8's readouts ([active-subspace-brief.md](../../..
 
 ## AS-1 — P̄ over mixed ranks
 
-**Status.** Posed; checks AS-1a to AS-1c pass. Lean planned in `ActiveSubspace/ProjectionMean.lean`.
+**Status (2026-11-13).** Proved in `ActiveSubspace/ProjectionMean.lean`, no apologies; checks AS-1a to AS-1c pass. The statement stands as posed. The Lean form of (c) holds at every k.
 
 **Claims.** Each P_s is an orthogonal projection with k_s = tr P_s (its rank), the weights are nonnegative and sum to 1, and P̄ = Σ w_s P_s.
 - **(a)** P̄ is symmetric, 0 ≼ P̄ ≼ I, and tr P̄ = Σ w_s k_s.
@@ -57,37 +58,17 @@ These are the statements that E8's readouts ([active-subspace-brief.md](../../..
 - (b): the identity exactly, at a projection of every rank. The summary was never beaten, by any eigen-subset or by 9,000 random projections (least margin −1.8·10⁻¹⁵). The ½ case reads ½ either way. On coordinate subspaces P̄ is the diagonal of inclusion probabilities, and the Frobenius loss is the Hamming loss.
 - (c): to 4.7·10⁻¹⁵ on 300 pairs of mixed ranks. Ye and Lim's metric² exceeds the half Frobenius by |k_s − k|/2, to the same precision.
 
-**Lean form (planned).**
-
-```lean
-variable {n : Type*} [Fintype n] [DecidableEq n] {ι : Type*} [Fintype ι]
-
-def IsOrthProj (P : Matrix n n ℝ) : Prop := P.IsHermitian ∧ P * P = P
-noncomputable def frobSq (A : Matrix n n ℝ) : ℝ := ∑ i, ∑ j, A i j ^ 2
-
-theorem projMean_posSemidef (P : ι → Matrix n n ℝ) (hP : ∀ s, IsOrthProj (P s)) (w : ι → ℝ)
-    (hw : ∀ s, 0 ≤ w s) : (∑ s, w s • P s).PosSemidef := sorry
-theorem one_sub_projMean_posSemidef … (hsum : ∑ s, w s = 1) : (1 - ∑ s, w s • P s).PosSemidef := sorry
-theorem trace_projMean … : (∑ s, w s • P s).trace = ∑ s, w s * (P s).trace := sorry
-theorem projLoss_eq … (hsum : ∑ s, w s = 1) (Q : Matrix n n ℝ) (hQ : IsOrthProj Q) :
-    ∑ s, w s * frobSq (Q - P s) = Q.trace + ∑ s, w s * (P s).trace - 2 * (Q * ∑ s, w s • P s).trace := sorry
--- with hA : A.IsHermitian, A = P̄:
-theorem projLoss_ge (Q) (hQ : IsOrthProj Q) :
-    ∑ i, min 0 (1 - 2 * hA.eigenvalues i) ≤ Q.trace - 2 * (Q * A).trace := sorry
-theorem projLoss_attained (S : Finset n) (hS₁ : ∀ i, 1/2 < hA.eigenvalues i → i ∈ S)
-    (hS₂ : ∀ i ∈ S, 1/2 ≤ hA.eigenvalues i) :
-    IsOrthProj (summaryProj hA S) ∧
-      (summaryProj hA S).trace - 2 * (summaryProj hA S * A).trace = ∑ i, min 0 (1 - 2 * hA.eigenvalues i) := sorry
-theorem half_frobSq_cross_rank (Ps : Matrix n n ℝ) (hPs : IsOrthProj Ps) {k : ℕ} (U : Matrix n (Fin k) ℝ)
-    (hU : Uᵀ * U = 1) (hM : (Uᵀ * Ps * U).IsHermitian) :
-    (1/2) * frobSq (Ps - U * Uᵀ) = (Ps.trace - k) / 2 + ∑ i, (1 - hM.eigenvalues i) := sorry
-```
+**Lean** (`Enthymemata/ActiveSubspace/ProjectionMean.lean`). A projection is `IsOrthProj` (Pᵀ = P, P² = P), and `frobSq` is the entry sum of squares.
+- (a): `IsOrthProj.posSemidef`, `projMean_posSemidef`, `one_sub_projMean_posSemidef`, `trace_projMean`. `IsOrthProj.diag_mem` gives the diagonal in [0, 1], which (b) uses.
+- (b): `projLoss_eq`, then `trace_sub_two_trace_mul_eq` (tr Q − 2 tr(QP̄) = Σᵢ (1 − 2μᵢ)(UᵀQU)ᵢᵢ) and `trace_sub_two_trace_mul_ge` (the bound, over projections of every rank). `summaryProj_isOrthProj` and `summaryProj_trace_sub` show it is attained for any S between {μ > ½} and {μ ≥ ½}. `summaryLoss_le` puts them together.
+- (c): `half_frobSq_cross_rank` holds at every k, with cos²θᵢ the eigenvalues of UᵀP_sU, and `compress_eigenvalues_mem` puts those in [0, 1]. Taking U as the basis of the smaller rank gives the |k_s − k|/2 form; the norm is symmetric.
+- *Not formalized:* that tr P_s is the rank, which for a projection is its count of unit eigenvalues.
 
 ---
 
 ## AS-2 — the matrix Poincaré check
 
-**Status.** Posed; checks AS-2a to AS-2e pass. Lean planned in `ActiveSubspace/MatrixPoincare.lean`, reusing `efron_stein` (`Enthymemata/BassSensitivity.lean`, SG-1(d)).
+**Status (2026-11-13).** (a), (b), the matrix form and (c)'s algebra are proved in `ActiveSubspace/MatrixPoincare.lean`, no apologies, reusing `efron_stein` (`Enthymemata/BassSensitivity.lean`, SG-1(d)). The one-variable inequality is a hypothesis, as posed. Checks AS-2a to AS-2e pass.
 
 **Claims.** ρ is a product law on the inputs, f has m outputs, and D = diag(c₁, …, c_p).
 - **(a) The reduction.** Cov_ρ(f) ≼ E_ρ[J D Jᵀ] holds exactly when Var(vᵀf) ≤ Σᵢ cᵢ E[(∂ᵢ vᵀf)²] for every v ∈ ℝᵐ. This holds because vᵀCov(f)v = Var(vᵀf) and vᵀE[JDJᵀ]v = Σᵢ cᵢ E[(Σ_j v_j J_ji)²], and ∂ᵢ(vᵀf) = Σ_j v_j J_ji.
@@ -122,32 +103,18 @@ It does not mark one for the laws E8 already reports as not applicable: mixtures
 - (e), truncated normals: the Galerkin constant over min(σ², (b − a)²/π²) is at most 1.000000 on 200 laws. Narrow normals inside their interval sit at equality, as Bakry–Émery's sharp case predicts.
   - A first version solved B⁻¹A directly and read 8.6 there. It came from ill-conditioning, and whitening B removes it. The script records why.
 
-**Lean form (planned).**
-
-```lean
--- (a): Loewner order as quadratic forms, and the two forms on a finite law
-theorem loewner_iff (A B : Matrix m m ℝ) (hA : A.IsHermitian) (hB : B.IsHermitian) :
-    (B - A).PosSemidef ↔ ∀ v, v ⬝ᵥ A *ᵥ v ≤ v ⬝ᵥ B *ᵥ v := sorry
-theorem covForm_eq_var (p : Ω → ℝ) (f : Ω → m → ℝ) (v : m → ℝ) :
-    v ⬝ᵥ covOf p f *ᵥ v = varOf p (fun ω => v ⬝ᵥ f ω) := sorry
-theorem energyForm_eq (p : Ω → ℝ) (J : Ω → Matrix m q ℝ) (c : q → ℝ) (v : m → ℝ) :
-    v ⬝ᵥ energyOf p J c *ᵥ v = ∑ i, c i * ∑ ω, p ω * (∑ j, v j * J ω j i) ^ 2 := sorry
--- (b): on a finite product, with the one-variable inequality as a hypothesis over any energy e
-theorem var_le_of_coord_poincare (μ : ∀ i, X i → ℝ) (h₀ : ∀ i y, 0 ≤ μ i y) (hμ : ∀ i, ∑ y, μ i y = 1)
-    (g : (∀ j, X j) → ℝ) (c : ι → ℝ) (e : ι → (∀ j, X j) → ℝ)
-    (hcoord : ∀ i x, condVar μ i g x ≤ c i * e i x) :
-    meanOf μ (fun x => g x ^ 2) - meanOf μ g ^ 2 ≤ ∑ i, c i * meanOf μ (e i) := sorry
--- (c): the box metric's algebra
-theorem energy_box (J : Matrix m q ℝ) (wd : q → ℝ) :
-    J * Matrix.diagonal (fun i => wd i ^ 2 / Real.pi ^ 2) * Jᵀ
-      = (1 / Real.pi ^ 2) • ((J * Matrix.diagonal wd) * (J * Matrix.diagonal wd)ᵀ) := sorry
-```
+**Lean** (`Enthymemata/ActiveSubspace/MatrixPoincare.lean`), on a finite product law, with `BASS.meanOf` and `BASS.coordMean`.
+- (a): `loewner_iff`, `covForm_eq_var`, `energyForm_eq`, through `quadForm_eq` and `meanOf_sq_lin`.
+- (b): `meanOf_mul_sub_coordMean` (Efron–Stein's summand is E[Varᵢ g]); `var_le_of_coord_poincare`, from `BASS.efron_stein` and the hypothesis `hcoord : ∀ i x, condVar μ i g x ≤ c i * e i x`; and `coordwise_le_scalar`.
+- *The matrix check:* `matrix_poincare`, with the one-variable inequality assumed for every linear combination vᵀf, whose partial along i is Σₐ vₐJₐᵢ.
+- (c): `energy_box`, for any r; at r = 1/π² it is G/π².
+- *Not formalized:* the constants themselves, the uniform's (b − a)²/π² and the truncated normal's bound. They rest on the checks.
 
 ---
 
 ## AS-3 — E36's direction moves
 
-**Status.** Posed; checks AS-3a to AS-3d pass. Lean planned in `ActiveSubspace/DirectionMoves.lean`, reusing `mhRatio` and `mh_detailed_balance` (`Enthymemata/BassStructureChain.lean`, SC-1).
+**Status (2026-11-13).** Proved in `ActiveSubspace/DirectionMoves.lean`, no apologies, reusing `mhRatio` and `mh_detailed_balance` (`Enthymemata/BassStructureChain.lean`, SC-1). Checks AS-3a to AS-3d pass. One statement changed: the count read twice changes the target, and still balances (finding 7).
 
 **Claims.**
 - **(a) The change move.** The power spherical density on S^{a−1} is q(x | μ) = N(κ, a)⁻¹(1 + μᵀx)^κ, with a normalizer that does not read μ. So on one sphere q(θ′ | θ) = q(θ | θ′).
@@ -159,7 +126,7 @@ theorem energy_box (J : Matrix m q ℝ) (wd : q → ℝ) :
 
   and the death's is its reciprocal, read from the state with M + 1 ridges.
   - *The count's factors.* The Poisson ratio π(M + 1)/π(M) = λ/(M + 1) remains. The insertion position's 1/(M + 1) cancels the death's uniform choice of ridge. On multisets, the multinomial coefficient does the same.
-  - *What to leave out.* A further 1/(M + 1) reads the count twice (KHAOS's slip, in the port hub's register).
+  - *What to leave out.* A further 1/(M + 1) reads the count twice (KHAOS's slip, in the port hub's register). The chain still balances, but against the count weight λ^M/(M!)² in place of Poisson's (finding 7).
   - *Dimension matching.* The new ridge's parameters are the proposal's draw itself, so the map (state, u) ↦ (state with u) has Jacobian 1. The densities of θ and t₀ enter as plain ratios, and cancel, provided prior and proposal are densities against one base measure: counting on (a, 𝒥), surface measure on S^{a−1}_𝒥, Lebesgue on t₀. A parameterization by angles would bring its Jacobian into both and cancel the same way, but only if both are written in it.
   - *A cap M_max* refuses births at the cap. P_D and P_B are the move-type probabilities at the two states, and both are ⅓ in the paper.
   - *The paper's display* agrees with this, except at a\* = 1 (finding 4). There π(a)π(𝒥 | a) = 1/(A·binom(p, a)), with A = min(3, p).
@@ -191,39 +158,25 @@ theorem energy_box (J : Matrix m q ℝ) (wd : q → ℝ) :
 - (c), birth and death exactly on multisets of 4 ridge types up to 3 ridges:
   - balance and stationarity both exact (0);
   - the same ratio on ordered tuples with uniform positions also exactly balanced;
-  - an extra 1/(M + 1) gives a gap of 0.34.
+  - an extra 1/(M + 1) gives a gap of 0.34 against the Poisson target.
 - (d), a continuous toy with M ∈ {0, 1}, θ on S¹ and t₀ on [0, 1]. Births come from the prior, and the change move uses the power spherical at κ = 20. Over 400,000 steps it reads P(M = 1) = 0.838 against the exact 0.837, and E[cos θ | M = 1] = 0.530 against 0.534.
 
-**Lean form (planned).**
+**Lean** (`Enthymemata/ActiveSubspace/DirectionMoves.lean`), reusing SC-1.
+- (a): `powerSpherical_symm`, `mhRatio_of_symm`, `change_ratio` (any symmetric kernel, a uniform direction prior, the knot from its prior given the proposed direction), `change_detailed_balance`, `change_ratio_powerSpherical` (the same on `Metric.sphere 0 1` with the power spherical kernel), and `powerSpherical_antipode`.
+- (b), on ordered tuples with insertion and deletion at uniform positions (`insertAt`, `tupleTarget` with any count weight w):
+  - `birth_green_ratio`: the ratio is L′/L · w(M+1)/w(M) · P_D/P_B · π_r/q_r;
+  - `poisson_count_ratio`: λ/(M + 1);
+  - `double_count_ratio` (finding 7);
+  - `prior_draw_cancel`;
+  - `birth_death_balance`, through `mh_detailed_balance` on a two-point space.
 
-```lean
-theorem mhRatio_of_symm (π : S → ℝ) (q : S → S → ℝ) (s t : S) (h : q s t = q t s) (hq : q s t ≠ 0) :
-    BASS.mhRatio π q s t = π t / π s := sorry
--- the change move on Θ × T: uniform prior on Θ, a symmetric kernel k, t₀ from its prior given the new θ
-theorem change_ratio (c : ℝ) (k : Θ → Θ → ℝ) (hk : ∀ a b, k a b = k b a) (πt L : Θ → T → ℝ) … :
-    BASS.mhRatio (fun s => c * πt s.1 s.2 * L s.1 s.2) (fun s s' => k s.1 s'.1 * πt s'.1 s'.2) s s'
-      = L s'.1 s'.2 / L s.1 s.2 := sorry
-theorem powerSpherical_symm (κ N : ℝ) (x y : EuclideanSpace ℝ (Fin a)) :
-    (1 + ⟪x, y⟫_ℝ) ^ κ / N = (1 + ⟪y, x⟫_ℝ) ^ κ / N := sorry
-theorem powerSpherical_antipode (κ : ℝ) (hκ : 0 < κ) (μ : EuclideanSpace ℝ (Fin a)) (hμ : ‖μ‖ = 1) :
-    (1 + ⟪μ, -μ⟫_ℝ) ^ κ = 0 := sorry
--- birth at position i of r into c : Fin M → R, against the death of position i
-theorem birth_ratio_eq (λ : ℝ) (pr q : R → ℝ) (L : (M : ℕ) → (Fin M → R) → ℝ) (PB PD : ℕ → ℝ) … :
-    tupleTarget (M + 1) (Fin.insertNth i r c) * (PD (M + 1) / (M + 1)) /
-        (tupleTarget M c * (PB M / (M + 1)) * q r)
-      = L (M + 1) (Fin.insertNth i r c) / L M c * (λ / (M + 1)) * (PD (M + 1) / PB M) * (pr r / q r) := sorry
-theorem birth_death_balance … : -- per (c, i, r), via mh_detailed_balance
-    tupleTarget M c * (PB M / (M + 1) * q r) * min 1 (birthRatio …)
-      = tupleTarget (M + 1) (Fin.insertNth i r c) * (PD (M + 1) / (M + 1)) * min 1 (birthRatio …)⁻¹ := sorry
-```
-
-The measure-theoretic form, on S^{a−1} × ℝ with densities, is not formalized: Mathlib's reversible-jump and sphere-measure support is not enough to state it short of a project. The finite statements carry the algebra of the ratio, and AS-3d checks the continuous form.
+*Not formalized:* the measure-theoretic form, on S^{a−1} × ℝ with densities. Mathlib's support for reversible jump and for sphere measure is not enough to state it short of a project. The finite statements carry the algebra of the ratio, and AS-3d checks the continuous form.
 
 ---
 
 ## AS-4 — rotate-and-refit's non-invariance
 
-**Status.** Posed, both readings; checks AS-4a to AS-4d pass. Lean planned in `ActiveSubspace/Refit.lean`.
+**Status (2026-11-13).** Both readings proved in `ActiveSubspace/Refit.lean`, no apologies; checks AS-4a to AS-4d pass. (viii) is proved on its example, with the leading eigenvectors stated (`IsLeading`); the general non-conformal case stays with the check.
 
 ### The frame (the record's reading)
 
@@ -270,27 +223,15 @@ The measure-theoretic form, on S^{a−1} × ℝ with densities, is not formalize
 - (ix): the hat exactly on 60 designs; the raw ridge's log marginal moves by 1.17 with a column scaled by 4.
 - (x): exactly on 300 products of 1 to 3 factors, degrees 1 to 3, inside and beyond the training range. κ's ratio is Π (W′/W)^q exactly.
 
-**Lean form (planned).**
-
-```lean
-theorem ridgeHinge_not_separable {a b : ℝ} (ha : a ≠ 0) (hb : b ≠ 0) (t : ℝ) (M : ℕ)
-    (φ ψ : Fin M → ℝ → ℝ) : ¬ ∀ x y, max 0 (a * x + b * y - t) = ∑ m, φ m x * ψ m y := sorry
-def SeparableAcross (j : Fin d) (f : (Fin d → ℝ) → ℝ) : Prop :=
-  ∃ (M : ℕ) (φ : Fin M → ℝ → ℝ) (ψ : Fin M → (Fin d → ℝ) → ℝ),
-    (∀ m u y, ψ m (Function.update u j y) = ψ m u) ∧ ∀ u, f u = ∑ m, φ m (u j) * ψ m u
-theorem hingeSum_separableAcross (j : Fin d) (f) (hf : IsHingeSum f) : SeparableAcross j f := sorry
-theorem hinge_comp_not_hingeSum (R : Matrix (Fin d) (Fin d) ℝ) {i j k : Fin d} (hjk : j ≠ k)
-    (hj : R i j ≠ 0) (hk : R i k ≠ 0) (t : ℝ) : ¬ IsHingeSum (fun u => max 0 ((R *ᵥ u) i - t)) := sorry
-theorem pullback_ker (C L : Matrix n n ℝ) (hL : IsUnit L.det) (v : n → ℝ) :
-    (Lᵀ * C * L) *ᵥ v = 0 ↔ C *ᵥ (L *ᵥ v) = 0 := sorry
-theorem pullback_eigen_of_orthogonal (C Q : Matrix n n ℝ) (hQ : Qᵀ * Q = 1) (hQ' : Q * Qᵀ = 1) (μ : ℝ) (v) :
-    C *ᵥ v = μ • v ↔ (Qᵀ * C * Q) *ᵥ (Qᵀ *ᵥ v) = μ • (Qᵀ *ᵥ v) := sorry
-theorem leading_moves : (!![1, 0; 0, 2] : Matrix (Fin 2) (Fin 2) ℝ)ᵀ * !![1, 0; 0, 1/2] * !![1, 0; 0, 2]
-    = !![1, 0; 0, 2] := sorry
-theorem hat_invariant (B : Matrix N k ℝ) (T : Matrix k k ℝ) (hB : IsUnit (Bᵀ * B).det) (hT : IsUnit T.det) :
-    (B * T) * ((B * T)ᵀ * (B * T))⁻¹ * (B * T)ᵀ = B * (Bᵀ * B)⁻¹ * Bᵀ := sorry
-theorem trainingRange_hinge (x t U W : ℝ) (q : ℕ) (hW : 0 < W) :
-    max 0 ((x - t) / W) ^ q / ((U - t) / W) ^ q = max 0 (x - t) ^ q / (U - t) ^ q := sorry
-theorem kappa_moves (t U W W' : ℝ) (q : ℕ) (hq : q ≠ 0) (hU : t < U) (hW : 0 < W) (hW' : 0 < W') (h : W ≠ W') :
-    ((U - t) / W) ^ q ≠ ((U - t) / W') ^ q := sorry
-```
+**Lean** (`Enthymemata/ActiveSubspace/Refit.lean`).
+- *The frame:*
+  - (i): `ridgeGrid_det`, `ridgeHinge_not_separable`;
+  - (ii)–(iii): `IsHingeFactor`, `IsHingeSum`, `hinge_isHingeSum`, `hinge_comp_not_hingeSum` and `hingeSum_not_closed`;
+  - the converse at the factor level: `hingeFactor_neg`, `hingeFactor_scale`. The class-level converse (monomial maps keep the class) is stated, not formalized.
+- *The scale:*
+  - (v): `outer_pullback`, `activeMatrix_pullback`;
+  - (vi): `pullback_eigen_of_orthogonal`, `conformal_pullback`;
+  - (vii): `pullback_ker`, `pullback_range`;
+  - (viii): `IsLeading` (an eigenvector whose eigenvalue bounds every Rayleigh quotient), `leading_moves`, `leading_C_coord` and `leading_pullback_coord`. C's leading eigenvectors are the multiples of e₁, LᵀCL's those of e₂, and Lᵀe₁ is not leading for LᵀCL. The general non-conformal L stays with the check;
+  - (ix): `hat_invariant` (it needs T invertible only), `rawRidge_moves`;
+  - (x): `trainingRange_factor`, `trainingRange_hinge`, `kappa_moves`, `kappa_ratio`.

@@ -85,8 +85,94 @@ Hand-over state between turns is an "In progress" entry here.
 
 ## Reports
 
-### In progress (2026-11-13)
+### 2026-11-13 — all four targets proved
 
-- **Posed and committed** (`21cfcd2`): [active-subspace-lemmas.md](active-subspace-lemmas.md), all four targets with statements, hypotheses, decisions and prior art, and [active-subspace-checks.py](active-subspace-checks.py), 44 of 44 passing. The lemmas' head lists what posing changed (six findings) and which reading of AS-4 the record supports (the frame).
-- **Next:** the Lean, one target at a time, in `lean/Enthymemata/ActiveSubspace/` (`ProjectionMean`, `MatrixPoincare`, `DirectionMoves`, `Refit`) behind a barrel `Enthymemata/ActiveSubspace.lean`. The Conformal Lean chip is told before `Enthymemata.lean` gains its line.
-- **Uncommitted:** nothing. **Running:** nothing. Disk at the start: 35 GB free on D:.
+**Landed.**
+- Posing: `21cfcd2`, [active-subspace-lemmas.md](active-subspace-lemmas.md) and [active-subspace-checks.py](active-subspace-checks.py), 44 of 44 checks passing.
+- The Lean: one commit per target, then the barrel and `Enthymemata.lean`'s line, then this report and the lemmas' status lines.
+- The coordinating session read the statements at `21cfcd2` and asked for the four in order without stopping.
+- AS-4 stands as posed, the frame reading first.
+
+**Modules and the declarations to print axioms for** (namespace `ActiveSubspace`; every one prints only `propext`, `Classical.choice`, `Quot.sound`):
+- `Enthymemata.ActiveSubspace.ProjectionMean` (AS-1): `projMean_posSemidef`, `one_sub_projMean_posSemidef`, `trace_projMean`, `projLoss_eq`, `trace_sub_two_trace_mul_ge`, `summaryProj_trace_sub`, `summaryLoss_le`, `half_frobSq_cross_rank`, `compress_eigenvalues_mem`.
+- `Enthymemata.ActiveSubspace.MatrixPoincare` (AS-2): `loewner_iff`, `covForm_eq_var`, `energyForm_eq`, `meanOf_mul_sub_coordMean`, `var_le_of_coord_poincare`, `coordwise_le_scalar`, `matrix_poincare`, `energy_box`.
+- `Enthymemata.ActiveSubspace.DirectionMoves` (AS-3): `mhRatio_of_symm`, `powerSpherical_symm`, `powerSpherical_antipode`, `change_ratio`, `change_detailed_balance`, `change_ratio_powerSpherical`, `birth_green_ratio`, `poisson_count_ratio`, `double_count_ratio`, `prior_draw_cancel`, `birth_death_balance`.
+- `Enthymemata.ActiveSubspace.Refit` (AS-4):
+  - the frame: `ridgeGrid_det`, `ridgeHinge_not_separable`, `hinge_isHingeSum`, `hinge_comp_not_hingeSum`, `hingeSum_not_closed`, `hingeFactor_neg`, `hingeFactor_scale`;
+  - the scale: `outer_pullback`, `activeMatrix_pullback`, `pullback_eigen_of_orthogonal`, `conformal_pullback`, `pullback_ker`, `pullback_range`, `leading_C_coord`, `leading_pullback_coord`, `leading_moves`, `hat_invariant`, `rawRidge_moves`, `trainingRange_factor`, `trainingRange_hinge`, `kappa_moves`, `kappa_ratio`.
+- The barrel is `Enthymemata.ActiveSubspace`, and `Enthymemata.lean` imports it.
+
+**What remains open, as posed.**
+- AS-2's one-variable Poincaré inequality is a hypothesis (`hcoord`). Mathlib carries no Poincaré or Wirtinger inequality, and the constants (b − a)²/π² and min(σ², (b − a)²/π²) rest on checks AS-2c and AS-2e.
+- AS-3's measure-theoretic form on S^{a−1} × ℝ is not stated; check AS-3d reads it.
+- AS-4(viii) is proved on its example; the general non-conformal L stays with the check.
+- AS-4(iii)'s converse (monomial maps keep the class) is proved at the factor level only.
+- That a projection's trace is its rank is used, not formalized.
+
+**Statements that changed or proved false.** None is false. The lemmas' head lists seven findings.
+- *From posing:*
+  - the cross-rank distance is ½‖P_s − P‖²_F, not Ye and Lim's chordal metric;
+  - Barbieri and Berger prove optimality for a different loss;
+  - the change move never flips a sign at a = 1;
+  - BPPR's eq. (mhb) slips at a\* = 1;
+  - the scale's non-invariance is a truncation's only;
+  - the hinge class is kept by monomial maps alone.
+- *From the proofs:* finding 7, that a birth ratio with a further 1/(M + 1) still balances, but against the count weight λ^M/(M!)², not Poisson's (`double_count_ratio`). The protolemma's "breaks balance" wording was corrected.
+- *Lean-side widenings:*
+  - `half_frobSq_cross_rank` holds at every k;
+  - `hat_invariant` needs no invertible BᵀB.
+
+**The line E8's brief can take** (slice 5's items, slice 7, and the handoff's item 2):
+> Lean (`lean/Enthymemata/ActiveSubspace/`, 2026-11-13):
+> - **P̄ over mixed ranks:** 0 ≼ P̄ ≼ I and tr P̄ = E[k_s] are proved. The rank summary (P̄'s eigenvalues above ½, a tie at ½ either way) is least over projections of every rank (`summaryLoss_le`).
+> - **The cross-rank distance** is ½‖P_s − P‖²_F = |k_s − k|/2 + Σ sin²θᵢ (`half_frobSq_cross_rank`). Ye and Lim's chordal metric weights the rank term 1. Barbieri and Berger's optimality is for predictive loss; here the ½ rule is optimal for Hamming loss outright.
+> - **The matrix check:** Cov ≼ E[J D Jᵀ] follows from Efron–Stein and each input's one-variable inequality (`matrix_poincare`, the inequality a hypothesis). A reading above 1 is a defect under the uniform and one truncated normal, the laws the check covers.
+> - **The frame:** the hinge class in u is kept only by signed permutations (`hinge_comp_not_hingeSum`), so the refit depends on the frame at every frame. The eigengap report warns where that choice is arbitrary; it does not say the frame suits the class.
+> - **The scale:**
+>   - The exact active subspace is carried by every invertible change of units (`pullback_range`). Only the leading k of a C of rank above k moves, as in `leading_moves`.
+>   - Under the training-range rule the evaluated hinges do not read the declared box (`trainingRange_hinge`); κ alone does (`kappa_moves`). The g-form reads no column scale under either rule (`hat_invariant`). So the training range as default rests on a proved invariance.
+
+**The line BPPR's brief can take** (decision 5, and slice 2's ratios):
+> Lean (`lean/Enthymemata/ActiveSubspace/DirectionMoves.lean`, 2026-11-13):
+> - **The change move** accepts on the collapsed likelihood ratio alone (`change_ratio_powerSpherical`), with t₀ drawn from its prior given the proposed direction. At a = 1 it keeps the direction's sign (`powerSpherical_antipode`), so the sampler treats a = 1 apart.
+> - **A birth** accepts on L′/L · λ/(M + 1) · P_D(M + 1)/P_B(M) · π(a)π(𝒥|a)/(q(a)q(𝒥|a)) (`birth_green_ratio`, `poisson_count_ratio`, `prior_draw_cancel`); **a death** on its reciprocal.
+> - **No further 1/(M + 1):** with it the chain targets λ^M/(M!)² (`double_count_ratio`).
+> - **The paper's slip:** its eq. (mhb) divides by W_{a\*} at a\* = 1, where its Algorithm 2 draws 𝒥 uniformly.
+
+**Prior art,** in each target's section of the lemmas:
+- *Ye and Lim 2016,* read in its LaTeX source (v3; Table 2, Theorem 12, Table 3, §7).
+- *Barbieri and Berger 2004,* from the abstract.
+- *De Cao and Aziz 2020, and Collins, Francom and Rumsey §2.4,* read in their TeX.
+- *From memory, unread:* Efron–Stein, Wirtinger, Bakry–Émery, Payne–Weinberger, Green 1995, Constantine 2015, and Draper et al. 2014. Efron–Stein is also proved here as SG-1(d).
+- *The rank argument and the matrix Poincaré form* had no source found.
+
+**Self-review, by target.**
+- *AS-1:*
+  - (c)'s Lean holds at every k, wider than posed; the docstring says so.
+  - `compress_eigenvalues_mem` took `DecidableEq` out of its type (linter).
+  - The "½ indifferent" clause is covered by `summaryProj_trace_sub`'s range of S.
+- *AS-2:* `hcoord` is the posed hypothesis and nothing else carries weight. `matrix_poincare` quantifies it over every v, which is the one-variable inequality applied to vᵀf.
+- *AS-3:*
+  - The pass found finding 7 and added `poisson_count_ratio` and `double_count_ratio`.
+  - `change_ratio` assumed only a symmetric kernel, so `change_ratio_powerSpherical` ties it to the power spherical law on the sphere.
+  - The two-point balance device became a constant kernel.
+- *AS-4:*
+  - At the coordinating session's request, `leading_moves` states leading eigenvectors (`IsLeading`) and not a product. `leading_C_coord` and `leading_pullback_coord` say which.
+  - `rawRidge_moves` dropped an unused `Fintype`.
+  - The flexible `simp`s became `simpa`s.
+
+**Build gates.**
+- `lean` on each module.
+- `lake build Enthymemata.ActiveSubspace` (the four modules and the barrel), clean with no warnings after the linter pass, at below-normal priority.
+- `scripts/meta-ci.ps1 -NoBuild`: PASS. The four modules are `PROOF-CLOSED`.
+- The full `lake build` was not run: `ConformalValidity.lean` holds the Conformal chip's uncommitted work, and nothing outside `ActiveSubspace` changed. The Conformal chip was told before the builds and the aggregate edit, and had not replied when they ran.
+- No Mathlib fetch was needed. D: had 34 GB free at the end.
+
+**Follow-ups,** none with a decision waiting, so recorded as open:
+- A one-variable Wirtinger inequality in Lean would turn AS-2's hypothesis into a proof. Nothing in the readout changes.
+- BPPR's supplement, which holds the paper's change ratio, is not on disk. Reading it would confirm the paper's own form; the derived ratio stands either way.
+- The four modules are candidates for the promotion review.
+
+**Doc changes owed.**
+- `docs/Maths/Regression/ActiveSubspaces.md`, slice 5's section: the cross-rank distance as ½‖·‖²_F with Ye and Lim's weighting beside it, the median model's reason, and the matrix check's covered laws.
+- The same page, slice 7's section: the frame's non-invariance (signed permutations only), the scale's (truncation only), and the training range's invariance.
