@@ -77,6 +77,10 @@ y = α + Σⱼ βⱼBⱼ(x) + Σₖ Z̃ₖuₖ + ε, ε ~ N(0, σ²W⁻¹) (W = 
      - *The default.* Plain form B at every rung.
      - *The collapse* becomes a sampling option, off by default. Its gain is expected where u and the basis compete for the same variation, so it is measured on a confounded dataset (a grouping aligned with an input, or a few large groups) before any default changes.
      - *Still with the user:* the u–s funnel's fix (ln s's integrated autocorrelation time is about 19,000 sweeps), by a step on s with u integrated, exact at b = 1 only, or by interweaving u's centred and non-centred forms, exact at every rung.
+   - **The u–s funnel's fix, decided by the user on 2026-11-13: interweaving.**
+     - *The step.* Beside s's centred step (s given u), a non-centred step holds ũ = u/(σs) and moves ln s against the likelihood at the offset Z̃u, as Yu and Meng's ancillarity-sufficiency interweaving does. It is exact at every rung.
+     - *Where the funnel bites.* The 19,000-sweep autocorrelation time is Geweke's successive chain on 12 cases in 3 levels, with y redrawn each step. On fixed data with about 25 cases a level (slice 4's mixing measurement, n = 300) ln s's autocorrelation time is about 5. The funnel is where the data pin each group's effect weakly: few cases a level, or noise large against s.
+     - *The default* (on, or an opt-in as σ's interweaving is) is read from a weak-data and the n = 300 mixing measurement, on against off.
 8. **The candidate seam: a case in a known group and in a new one,** its shape agreed with the conformal chip before slice 5 opens. The proposal:
    - *A known group:* log p(y | x_t, θ_s) = the training terms' density at f + Σₖ u_{k,g(t)}, conditioned on the draw's effects, as the hierarchical P-spline's new point on a seen curve is. The groups are offered as strata for Mondrian sets.
    - *A new group:* the draw's population predictive with its effects integrated: N(y | f, σ²(1 + Σₖ sₖ²·z̃ₖ²)) under Gaussian BASS. Under a noise, y | v ~ N(f + σβv, σ²(cv + Σ s²z̃²)) is a mixture over v again, read by quadrature on v or refused at first.
@@ -156,6 +160,21 @@ Maintain an **In progress** entry here with uncommitted work, running checks and
 ## Reports
 
 Newest first.
+
+### In progress: slice 6, the u–s funnel's fix by interweaving (GBASS chip, 2026-11-13)
+
+Hand-over state, updated in place until the slice's report replaces it.
+- *Commissioned* by the user on 2026-11-13 (decision 7: interweaving).
+- *Plan.*
+  - A non-centred step on each drawn s_k under a noise, after s's centred step in τ's slot. It holds ũ_k = u_k/(σs_k), proposes ln s′, scales u_k by s′/s, and follows the reading at the new offset. It accepts on the tempered target's change, plus ln p(s′) − ln p(s) and the Jacobian t, with a Hastings term for a scale read from the state.
+  - The step reads the a-marginal, before the coefficients' slot draws a, in the partially collapsed order the τ step keeps.
+  - It is behind a sampling option, refused where it reads nothing.
+- *Gates.*
+  - Geweke rows from exact starts with the step on: t at b = 1, a replica at b < 1, Normal-Wald, and the skewed horseshoe with its β·v move.
+  - Resume bit for bit with the step on.
+  - Every fit without the step bit for bit.
+  - The refusals.
+  - The mixing measurement on a weak-data fixture and on the n = 300 fixture, on against off, which sets the default.
 
 ### Slice 5: the candidate seam under random effects (Codex continuation, 2026-11-11)
 
