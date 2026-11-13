@@ -428,6 +428,10 @@ The [coordinating chat](codex://threads/01a1cc28-f4d3-7951-882a-65aeb6945f8c) re
 
 At the stage-two handoff the coordinator checked the saved test counters. B1 stage one passed 66 focused regression tests in each build and 2,901 in the rebuilt default commit gate after five pin updates. The GP worker's isolated snapshot passed 152 in the commit gate and 3,280 in the full regression assembly. Stage two begins at `cb94b17`, which contains both code changes. Graph callers and the absolute default remain assigned to the later migration.
 
+**Stage-two review.** MoMPCA landed in `f48613f` and the two regression callers in `672d1c2`. All six owned source and test files match the qualified hashes. The focused regression, geometry and LinAlg gates passed in both builds. The full default run passed 3,281 of 3,284 with the former held-group pins, and the rebuilt commit gate passed all 2,778 after the three pin updates. The hinge and tempered-hinge paths changed term sequences in 129 and 184 of 400 draws respectively. The report records the independent law checks and the limits of the trajectory comparison. [B1 stage-two qualification](spectral-b1-stage-two-report.md)
+
+**Tensor factorization review.** Retain the compact banded LDLᵀ factor. Across two warmed processes and nine tensor shapes, baseline time divided by candidate time for the complete REML fit ranged from 0.84 to 1.55. The candidate allocated 1.28 to 5.74 times as many bytes. At fixed smoothing of 10²⁰ on both axes, feasibility changed on three shapes. All 225 search-box grid points and 990 distinct optimizer trial points agreed on feasibility. The full regression gate of 3,282 passes covers the production baseline. The probe supplies the candidate comparison. [Tensor-spline qualification](spectral-tensor-factorization-report.md)
+
 ### DenseEigenOptions and DenseEigenFastVariant removed (2026-11-12)
 
 **Commit:** `75f76c1`. Decided by the owner after decision 2 left the enum with one value and the record carrying nothing.
