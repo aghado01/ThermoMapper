@@ -285,6 +285,32 @@ Each report gives the commits, gate results, coverage and width by fit, cost, de
 
 Newest first.
 
+### In progress — Slice 14, shift (started 2026-11-13)
+
+Started at the user's pick of 2026-11-13 ("ok 14 then 15", in this session), relayed to the main session. It runs under the Lean's slice 14 (section `Shift`), and 15 waits for 14's verification.
+
+**Plan.**
+- *`ShiftWeights`* holds the likelihood ratio at each training or calibration unit, and at each candidate: per grid column for the density forms, per test case for the closed-form intervals.
+- *The weighted rule* (`weightLe`): a candidate is refused when the weight of the units scoring at most its score, itself included, is at most α of the total. A set whose stratum's weights and candidate weights are all equal is CB-1's set, bit for bit (`weighted_eq_cb1`).
+- *Where weights enter:*
+  - the split form's density sets, CQR, asymmetric CQR and the standardized residual (`SplitConformal.*(…, weights)`), by a weighted calibration per stratum: sorted scores with their prefix weights, and the threshold per candidate weight;
+  - the full step (`ConformalOptions.Weights`), the scorer summing the weight of the units at or below each candidate.
+- *Refused under weights,* each counting units rather than weighing them: the full step's margin, inflated rule, fallback rule, Hoff's score and the margin's refinement. Split-half is not read.
+- *The guarantees, by declaration:*
+  - covariate shift with w(x), and response shift with w(y), at 1 − α (`coverage_weighted`);
+  - an estimated ratio losing at most E TV(p, p̂) (`sum_weight_refused_estimated_le`);
+  - weights fixed by position beyond exchangeability, at α + Σ q_K TV_K (`refused_le_swap_tv`);
+  - label-conditional sets as strata, no weights (`coverage_stratum`).
+- *Gates:*
+  - the weighted lemma on random scores, weights and ties;
+  - equal weights giving CB-1's sets bit for bit in every form;
+  - coverage under a known covariate shift and a response shift with the true ratio, beside the unweighted sets;
+  - the loss with an estimated ratio against its TV;
+  - the refusals;
+  - qualification: the full step under shift on exact draws, and a drifting stream under position weights.
+
+**State.** Being written. Nothing committed.
+
 ### 2026-11-11 — Slice 13, the tournament correction
 
 Built at the main session's word of 2026-11-11, after 12b's verification (decision 11), against the Lean's slice 13 (`f998131`, section `Tournament`).
