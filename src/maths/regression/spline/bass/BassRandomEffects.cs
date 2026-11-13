@@ -490,7 +490,7 @@ internal sealed class RandomEffectGrouping
         var matrix = new double[constraints.Length,levels];
         for (int k = 0; k < constraints.Length; k++)
             for (int g = 0; g < levels; g++) matrix[k,g] = constraints[k][g];
-        ThinSvdResult factor = ThinSvd.Decompose(matrix);
+        ThinSvdResult factor = ThinSvd.Decompose(matrix, leftVectors: false);
         // Reveal rank jointly: independently normalizing a nearly zero row would turn rounding noise into a constraint.
         List<double[]> rows = [.. factor.RightVectors.Take(factor.NumericalRank)];
         var basis = new List<double[]>();

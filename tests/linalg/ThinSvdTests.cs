@@ -149,6 +149,30 @@ public sealed class ThinSvdTests
         foreach (double s in svd.SingularValues) Assert.True(double.IsFinite(s));
     }
 
+    /// <summary>
+    /// Without left vectors (spectral-solver brief, E, input side) a tall matrix skips forming U and returns none, with the singular
+    /// values, right vectors, rank and tolerance the same bits as the full decomposition's; a wide matrix forms both, as its right
+    /// vectors are its transpose's left ones, and is the full decomposition.
+    /// </summary>
+    [Fact]
+    public void WithoutLeftVectors_KeepsTheSameValuesAndRightVectors()
+    {
+        var rng = new Xoshiro256PlusPlus(2611);
+        foreach ((int m, int n) in new[] { (40, 7), (7, 7), (7, 40) })
+        {
+            double[,] a = RandomMatrix(m, n, rng);
+            ThinSvdResult full = ThinSvd.Decompose(a);
+            ThinSvdResult right = ThinSvd.Decompose(a, leftVectors: false);
+
+            Assert.Equal(full.SingularValues, right.SingularValues);
+            Assert.Equal(full.RightVectors, right.RightVectors);
+            Assert.Equal(full.NumericalRank, right.NumericalRank);
+            Assert.Equal(full.RankTolerance, right.RankTolerance);
+            if (m >= n) Assert.Empty(right.LeftVectors);
+            else Assert.Equal(full.LeftVectors, right.LeftVectors);
+        }
+    }
+
     [Fact]
     public void NonFiniteEntry_IsRefused()
     {

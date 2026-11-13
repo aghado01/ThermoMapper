@@ -243,7 +243,7 @@ public static class MatrixPoincare
     internal static double[,]? RowSpace(double[,] map)
     {
         int t = map.GetLength(1);
-        ThinSvdResult svd = ThinSvd.Decompose(map);
+        ThinSvdResult svd = ThinSvd.Decompose(map, leftVectors: false);
         int r = svd.NumericalRank;
         if (r == t) return null;
         var q = new double[t, r];

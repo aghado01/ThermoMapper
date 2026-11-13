@@ -29,8 +29,13 @@ namespace Maths.LinAlg
         private const int MaxSweeps = 60;
         private const double MachineEpsilon = 2.220446049250313e-16;   // 2⁻⁵², R's .Machine$double.eps
 
-        /// <summary>Decomposes the m × n matrix <paramref name="a"/>.</summary>
-        public static ThinSvdResult Decompose(double[,] a)
+        /// <summary>
+        /// Decomposes the m × n matrix <paramref name="a"/>. With <paramref name="leftVectors"/> false and m ≥ n the left vectors are not
+        /// formed, which saves applying the QR reflectors to them, typically half the cost of a tall decomposition (spectral-solver brief,
+        /// E, input side), and <see cref="ThinSvdResult.LeftVectors"/> is empty. The singular values and right vectors are the same bits
+        /// either way. A wide matrix forms both, its right vectors being its transpose's left ones.
+        /// </summary>
+        public static ThinSvdResult Decompose(double[,] a, bool leftVectors = true)
         {
             ArgumentNullException.ThrowIfNull(a);
             int m = a.GetLength(0), n = a.GetLength(1);
@@ -45,7 +50,7 @@ namespace Maths.LinAlg
                     columns[j] = new double[m];
                     for (int i = 0; i < m; i++) columns[j][i] = a[i, j];
                 }
-                return Tall(columns, m, n, transposed: false);
+                return Tall(columns, m, n, transposed: false, formLeft: leftVectors);
             }
             else
             {
@@ -55,12 +60,12 @@ namespace Maths.LinAlg
                     columns[i] = new double[n];
                     for (int j = 0; j < n; j++) columns[i][j] = a[i, j];
                 }
-                return Tall(columns, n, m, transposed: true);
+                return Tall(columns, n, m, transposed: true, formLeft: true);
             }
         }
 
         // The SVD of the rows × cols matrix whose columns are given (rows ≥ cols); for Aᵀ, U and V swap at the end.
-        private static ThinSvdResult Tall(double[][] x, int rows, int cols, bool transposed)
+        private static ThinSvdResult Tall(double[][] x, int rows, int cols, bool transposed, bool formLeft)
         {
             // Householder QR: x's columns become R's columns, and the reflectors are kept.
             var reflectors = new double[cols][];
@@ -157,21 +162,25 @@ namespace Maths.LinAlg
                     completeFrom = k;
                 left[k] = u;
             }
-            for (int k = completeFrom; k < cols; k++) Complete(left, k, cols);
-
-            // U = Q·[U_R; 0], applying the reflectors in reverse.
-            for (int k = 0; k < cols; k++)
+            if (formLeft)
             {
-                var u = new double[rows];
-                left[k].CopyTo(u, 0);
-                for (int j = cols - 1; j >= 0; j--)
+                for (int k = completeFrom; k < cols; k++) Complete(left, k, cols);
+
+                // U = Q·[U_R; 0], applying the reflectors in reverse.
+                for (int k = 0; k < cols; k++)
                 {
-                    double[] v = reflectors[j];
-                    if (v is null) continue;
-                    Reflect(v, PairwiseSum.Dot(v, v), u.AsSpan(j));
+                    var u = new double[rows];
+                    left[k].CopyTo(u, 0);
+                    for (int j = cols - 1; j >= 0; j--)
+                    {
+                        double[] v = reflectors[j];
+                        if (v is null) continue;
+                        Reflect(v, PairwiseSum.Dot(v, v), u.AsSpan(j));
+                    }
+                    left[k] = u;
                 }
-                left[k] = u;
             }
+            else left = [];
 
             double tolerance = Math.Max(rows, cols) * MachineEpsilon * (cols > 0 ? singularValues[0] : 0.0);
             int rank = 0;

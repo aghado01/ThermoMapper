@@ -40,7 +40,7 @@ public sealed record DrawSubspace(double[,] C, double[] Eigenvalues, double[,] B
         int p = factor.GetLength(1);
         if (dimension < 1 || dimension > p) throw new ArgumentOutOfRangeException(nameof(dimension), "The dimension is from 1 to the inputs.");
         if (c.GetLength(0) != p || c.GetLength(1) != p) throw new ArgumentException("C is p × p, one row and column per factor column.", nameof(c));
-        ThinSvdResult svd = ThinSvd.Decompose(factor);
+        ThinSvdResult svd = ThinSvd.Decompose(factor, leftVectors: false);
         var eigenvalues = new double[p];
         for (int i = 0; i < svd.SingularValues.Length; i++) eigenvalues[i] = svd.SingularValues[i] * svd.SingularValues[i];
         if (svd.RightVectors.Length < dimension) return FromC(c, dimension);   // fewer points than the dimension: C's own eigenspace

@@ -62,8 +62,8 @@ namespace Maths.LinAlg
                     residual[r, j] = value;
                 }
 
-            double[] cosines = ThinSvd.Decompose(c).SingularValues;      // descending: the smallest angle first
-            double[] sines = ThinSvd.Decompose(residual).SingularValues; // descending: the largest angle first
+            double[] cosines = ThinSvd.Decompose(c, leftVectors: false).SingularValues;      // descending: the smallest angle first
+            double[] sines = ThinSvd.Decompose(residual, leftVectors: false).SingularValues; // descending: the largest angle first
             var angles = new double[k];
             for (int i = 0; i < k; i++)
                 angles[i] = Math.Atan2(Math.Min(sines[k - 1 - i], 1.0), Math.Min(cosines[i], 1.0));

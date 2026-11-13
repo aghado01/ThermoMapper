@@ -20,7 +20,7 @@ namespace Maths.LinAlg
             var x = new double[n, d];
             for (int i = 0; i < n; i++)
                 for (int j = 0; j < d; j++) x[i, j] = data[i][j] - mean[j];
-            ThinSvdResult svd = ThinSvd.Decompose(x);
+            ThinSvdResult svd = ThinSvd.Decompose(x, leftVectors: false);
 
             double totalVar = 0.0;
             foreach (double s in svd.SingularValues) totalVar += s * s / n;
