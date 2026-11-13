@@ -76,6 +76,10 @@ Older chips are listed in the 2026-11-09 handoff. Message a chip by its `local_�
   - the matrix Poincaré check reports one ratio per draw and stays opt-in.
 - **E21, the u–s funnel's fix: interweaving** (the user, 2026-11-13, in the GBASS thread; decision 7 in the [brief](bass/ridge-blocks-brief.md), `3d46d04`). It is exact at every rung. The 19,000-sweep autocorrelation time came from Geweke's toy chain (12 cases in 3 levels, y redrawn each step); on the n = 300 fit ln s's is about 5, so the funnel bites where the data pin each group's effect weakly.
 - **Conformal: slice 14, then 15** (the user, 2026-11-13, in the conformal chip's thread: "ok 14 then 15"). One chip builds both, and 14 is verified before 15 starts. A commission of 15 to a new chip (`0a1c648`) was withdrawn in `4094ec7`; that chip was stopped before it wrote anything.
+- **The Lean chip's two findings against slice 18's papers** (the user, 2026-11-13). Neither touches built code or docs.
+  - *Snell and Griffiths's Theorem 4.3 fails as stated,* and Corollary 4.4 with it. A point-mass prior consistent with the losses defeats the claim that L⁺ bounds the posterior under every prior. What holds is frequentist: b*_β is Gaffke's bound, calibrated over replicated calibration sets (Vlassis and Thomas's Theorem 1). Conformal C# slice 18's plan row now reads it out as that confidence bound, never as a posterior.
+  - *Gressmann et al.'s proof of Proposition 2.5(i) has two sign slips;* the statement stands and the Lean proves it independently. Recorded in the Lean ledger; nothing to do.
+  - Both belong in the corrections of a conformal page under `docs/Maths` when one is written.
 - **E38 recorded** (`419f547`): a replicate layer in BAPS, subsuming the hierarchical P-spline, parked after E3.
 - **The requested papers are on disk** (the user, 2026-11-11):
 
@@ -109,7 +113,7 @@ New on 2026-11-13:
 Carried:
 
 4. **The BPPR brief** ([bppr-brief.md](bass/bppr-brief.md)) has six open decisions. The coordinating session agrees with each of their recommendations, and also recommends that the moves' balance go Lean first. The power spherical paper is now on disk. Approval also gives the go-ahead to install `BayesPPR` 0.2.0 from CRAN.
-5. **Conformal Lean, slice 18's sources:** done on 2026-11-13 at the user's request (`f9bcbb1`; see the Conformal Lean row). Still open from this item: the chip's earlier findings, that Snell and Griffiths's Theorem 4.3 is false as stated and that Gressmann's proof of Proposition 2.5(i) has two sign slips while the statement stands. The source check's report does not address them.
+5. **Conformal Lean, slice 18's sources:** done on 2026-11-13 at the user's request (`f9bcbb1`; see the Conformal Lean row). The chip's two earlier findings are settled (under Decided).
 6. **The next conformal C# slice:** decided on 2026-11-13, 14 then 15 (under Decided). The number is kept so other notes' item numbers still hold.
 7. **Slice 12a's k̂ diagnostic:** opt-in (recommended; it costs about 200× the score) or on by default.
 8. **E34 slice 4's follow-ups**, listed in its report (`fc9c343`).
