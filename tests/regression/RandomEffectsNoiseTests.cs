@@ -294,9 +294,10 @@ public sealed class RandomEffectsNoiseTests(ITestOutputHelper output)
     }
 
     [Theory]
-    [InlineData(false)]
-    [InlineData(true)]
-    public void ATemperedFitUnderANoise_WithADrawnScale_ResumesBitForBit(bool collapse)
+    [InlineData(false, false)]
+    [InlineData(true, false)]
+    [InlineData(false, true)]
+    public void ATemperedFitUnderANoise_WithADrawnScale_ResumesBitForBit(bool collapse, bool interweave)
     {
         (BassModel model, BassConfig config) = NoiseModel();
         var spec = new TemperingSpec { Levels = 3, HotEnd = 0.2, ReferenceRung = true };
@@ -306,7 +307,7 @@ public sealed class RandomEffectsNoiseTests(ITestOutputHelper output)
             Sampling = new BassSampling
             {
                 Chains = 2, MasterSeed = 31, BurnIn = 100, Samples = 120, Thin = 2, Tempering = spec, ReportEvidence = true,
-                CollapseEffectsInMoves = collapse,
+                CollapseEffectsInMoves = collapse, InterweaveGroupScales = interweave,
             },
         };
         BassConfig half = whole with { Sampling = whole.Sampling with { Samples = 60 } };
@@ -322,6 +323,40 @@ public sealed class RandomEffectsNoiseTests(ITestOutputHelper output)
                     Assert.Equal(full.Draws[c][d].Groups![k].Effects, resumed.Draws[c][d].Groups![k].Effects);
                 }
         Assert.True(double.IsFinite(full.Evidence!.LogEvidence));
+    }
+
+    // s's interweaving (E21's slice 6; decision 7, the user's call of 2026-11-13): the non-centred step right after each drawn scale's centred
+    // step, a fit that takes it, and its refusals; without the option no sweep holds it.
+    [Fact]
+    public void TheInterwovenScaleStep_FollowsTheCentredOne_AndIsRefusedWhereItReadsNothing()
+    {
+        (BassModel model, BassConfig config) = NoiseModel();
+        Assert.DoesNotContain(BassSweepSlots.Blocks(model), b => b is BassGroupScaleInterweavingBlock);
+        BassConfig woven = config with { Sampling = config.Sampling with { InterweaveGroupScales = true } };
+        BassModel interweaving = BassModel.Create(woven, model.Data);
+        foreach (BassSweepSlot first in new[] { BassSweepSlot.Structure, BassSweepSlot.Tau })
+        {
+            string[] names = [.. BassSweepSlots.Blocks(interweaving, first).Select(b => b.Name)];
+            output.WriteLine($"{first}: {string.Join(", ", names)}");
+            Assert.Equal(Array.IndexOf(names, "group scale g1") + 1, Array.IndexOf(names, "group scale g1 interwoven"));
+            Assert.DoesNotContain("group scale g2 interwoven", names);   // g2's scale is held
+            Assert.Equal([.. BassSweepSlots.Blocks(model, first).Select(b => b.Name)], names.Where(n => n != "group scale g1 interwoven"));
+        }
+
+        BassFit fit = Bass.Fit(woven with { Sampling = new BassSampling { Chains = 2, MasterSeed = 7, BurnIn = 300, Samples = 300, InterweaveGroupScales = true } }, model.Data);
+        MoveStat step = fit.Diagnostics.Chains[0].Blocks!.Single(k => k.Key == "group scale g1 interwoven");
+        output.WriteLine($"interwoven steps accepted {step.Accepted} of {step.Attempts}");
+        Assert.True(step.Accepted > 0 && step.Accepted < step.Attempts);
+
+        Assert.DoesNotContain(nameof(BassSampling.InterweaveGroupScales), config.ToJson());
+        Assert.Contains($"\"{nameof(BassSampling.InterweaveGroupScales)}\":true", woven.ToJson());
+        Assert.Equal(woven, BassConfig.FromJson(woven.ToJson()));
+        // Refused where it reads nothing: under Gaussian noise s steps on the effects' integral; a held scale does not move.
+        Assert.Contains("InterweaveGroupScales", Assert.Throws<ArgumentException>(() => (woven with { Noise = null }).Validate()).Message);
+        Assert.Contains("InterweaveGroupScales", Assert.Throws<ArgumentException>(() => (woven with
+        {
+            RandomIntercepts = [new BassRandomIntercept("g1", 0.8), new BassRandomIntercept("g2", 0.5)],
+        }).Validate()).Message);
     }
 
     // The b = 1 collapse is an opt-in (decision 7, amended 2026-11-10). Chains, ladder replicas and SMC particles all take their sweep from

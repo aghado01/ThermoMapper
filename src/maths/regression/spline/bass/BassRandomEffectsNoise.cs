@@ -127,6 +127,88 @@ public sealed class BassLatentGroupScaleBlock : IBlock<ReversibleJumpChain<BassS
 }
 
 /// <summary>
+/// A drawn scale's non-centred step under a noise (E21's slice 6; decision 7, the user's call of 2026-11-13): the ancillary half of Yu and
+/// Meng's interweaving, beside the centred step (<see cref="BassLatentGroupScaleBlock"/>), when <see cref="BassSampling.InterweaveGroupScales"/>
+/// asks for it. The centred step moves s_k only through u_k, and where the data pin u_k weakly that is a funnel. This step holds
+/// ũ_k = u_k/(σs_k), so t = ln(s′/s) scales u_k by eᵗ and moves the offset Z̃u, and accepts with
+/// <para>ln A = ℓ_b(s′) − ℓ_b(s) + ln p(s′) − ln p(s) + t + ln q(−t | x′) − ln q(t | x).</para>
+/// <para>ℓ_b is the rung's tempered target at the reading, with a integrated, as τ's step reads it before the coefficients' slot draws a
+/// (the partially collapsed order). ũ's standard normal law is free of s and cancels. Under a noise the target holds no scale prior, which
+/// a whitening alone adds (<see cref="BassTarget"/>), so the step adds ln p(s′) − ln p(s) and the Jacobian. The proposal is t ~ N(0, h(x)²)
+/// with h = 2.4/√C, where C = b·Σᵢ wᵢ(z̃ᵢu_{k,g(i)})²/σ², the information the data carry about ln s with ũ held, plus the prior's
+/// curvature in ln s, at least 1. A scalar response's; several outputs' U is E34's.</para>
+/// </summary>
+public sealed class BassGroupScaleInterweavingBlock : IBlock<ReversibleJumpChain<BassState>>
+{
+    private const double Step = 2.4;
+    private readonly int _group;
+    private readonly string _name;
+    private readonly BassGroupScalePrior _prior;
+    private readonly VarianceMeanMixture _mixture;
+
+    internal BassGroupScaleInterweavingBlock(BassModel model, int group)
+    {
+        ArgumentNullException.ThrowIfNull(model);
+        RandomEffectsBlock block = model.RandomEffects ?? throw new ArgumentException("The model holds no random effects.", nameof(model));
+        if ((uint)group >= (uint)block.Count) throw new ArgumentOutOfRangeException(nameof(group));
+        if (model.Data.Response is MultiOutputResponse) throw new ArgumentException("Several outputs' U has steps of its own (E34).", nameof(model));
+        _group = group;
+        _prior = block.Specifications[group].ScalePrior ?? throw new ArgumentException("The scale is held.", nameof(group));
+        _mixture = model.Observation as VarianceMeanMixture ?? throw new ArgumentException("u is a latent under a noise.", nameof(model));
+        IBassRandomEffect spec = block.Specifications[group];
+        _name = (spec is BassRandomSlope slope ? $"group scale {spec.Grouping} on {slope.Input}" : $"group scale {spec.Grouping}") + " interwoven";
+    }
+
+    /// <inheritdoc/>
+    public string Name => _name;
+
+    /// <inheritdoc/>
+    public bool Update(ReversibleJumpChain<BassState> state, Xoshiro256PlusPlus rng)
+    {
+        ArgumentNullException.ThrowIfNull(state);
+        ArgumentNullException.ThrowIfNull(rng);
+        BassStructureMoves moves = BassStructureMoves.Of(state);
+        WorkingResponse working = moves.DesignAt(state.Current).Working;
+        RandomEffectsLatent latent = working.Effects ?? throw new InvalidOperationException("The reading carries no random effects.");
+        double sigma2 = working.Latents?.Sigma2 ?? throw new InvalidOperationException("Random effects under a noise keep σ² on the record.");
+        double power = BassCoefficientsBlock.Power(state);
+        double s = latent.Block.Scales.Span[_group], h = Scale(latent, working.Weights, sigma2, power);
+        double t = h * Normal.SampleStandard(rng), moved = s * Math.Exp(t);
+        if (!(moved > 0.0) || !double.IsFinite(moved)) return false;
+        var effects = (double[][])latent.Effects.Clone();
+        double ratio = moved / s;
+        effects[_group] = [.. latent.Effects[_group].Select(u => u * ratio)];
+        var scaled = new RandomEffectsLatent(latent.Block.At(_group, moved), effects);
+        double reverse = Scale(scaled, working.Weights, sigma2, power);
+        BassState candidate = moves.ProposeFollow(state.Current, _mixture.At(working, scaled));
+        var target = state.Target as BassTarget ?? throw new InvalidOperationException("The chain's target is BASS's.");
+        if (target.Refusal(candidate.Fit) is not null) return false;
+        ITargetEvaluation evaluation = state.Target.Evaluate(candidate);
+        double logA = state.Temperature.LogDensity(evaluation) - state.CurrentLogDensity
+                      + _prior.LogDensity(moved) - _prior.LogDensity(s) + t
+                      + Math.Log(h) - Math.Log(reverse) - t * t / (2.0 * reverse * reverse) + t * t / (2.0 * h * h);
+        if (!(Math.Log(1.0 - rng.NextDouble()) < logA)) return false;
+        state.SetState(candidate, evaluation);
+        return true;
+    }
+
+    // h = 2.4/√C: C = b·Σᵢ wᵢ(z̃ᵢu_{k,g(i)})²/σ² plus the prior's curvature in ln s at the latent's s, at least 1.
+    private double Scale(RandomEffectsLatent latent, ReadOnlySpan<double> weights, double sigma2, double power)
+    {
+        RandomEffectGrouping layout = latent.Block.Layout(_group);
+        double[] u = latent.Effects[_group];
+        double information = 0.0;
+        for (int i = 0; i < weights.Length; i++)
+        {
+            double shift = layout.Multiplier(i) * u[layout.GroupOf(i)];
+            information += weights[i] * shift * shift;
+        }
+        double c = power * information / sigma2 + _prior.CurvatureInLog(latent.Block.Scales.Span[_group]);
+        return Step / Math.Sqrt(double.IsFinite(c) ? Math.Max(c, 1.0) : 1.0);
+    }
+}
+
+/// <summary>
 /// The structure step at b = 1 under a noise with random effects, when <see cref="BassSampling.CollapseEffectsInMoves"/> asks for it
 /// (decision 7, an opt-in since 2026-11-10; off by default, form B's move step in its place): the chain follows the u-integrated reading at the
 /// current weights (<see cref="VarianceMeanMixture.Integrated"/>), takes one reversible-jump move on that marginal, draws a and then u from

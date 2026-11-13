@@ -22,10 +22,12 @@ namespace Maths.Regression.Tests;
 /// <item><b>Geweke's joint-distribution test of one sweep:</b> at b = 1 a chain's sweep with the opt-in collapsed step
 /// (<see cref="BassSampling.CollapseEffectsInMoves"/>), and without it (form B, the default); below 1 a replica's sweep, its own move then the blocks, against the tilted joint whose b-rung that kernel leaves
 /// invariant, as a ladder's rung and an SMC stage run it. Under t, the asymmetric Laplace, the skewed Normal-Wald, the skewed horseshoe with
-/// its move along β·v, and t interwoven; s drawn, u and s among the functions.</item>
+/// its move along β·v, and t interwoven; s drawn, u and s among the functions; and with s's interweaving (slice 6, the rows marked
+/// <c>+scales</c>, <see cref="BassSampling.InterweaveGroupScales"/>).</item>
 /// <item><b>A ladder and SMC end to end:</b> their evidence against each other and their posterior means of ln s and M against long
 /// chains'.</item>
-/// <item><b>Mixing:</b> a plain chain's effective sizes per second with the collapsed step against form B without it.</item>
+/// <item><b>Mixing:</b> a plain chain's effective sizes per sweep and per second with the collapsed step against form B without it, and
+/// with s's interweaving against the centred step alone, on data that pin u weakly and on the n = 300 fixture.</item>
 /// <item><b>Recovery under heavy-tailed noise,</b> effects generated outside the model.</item>
 /// </list>
 /// </summary>
@@ -73,7 +75,7 @@ public sealed class RandomEffectsNoiseQualificationTests(ITestOutputHelper outpu
         Sigma2 = Sigma2Prior.InverseGamma(alpha, Beta0),
         Noise = GewekeNoise(form),
         RandomIntercepts = [new BassRandomIntercept("g", 0.8, ScalePrior: new BassGroupScalePrior())],
-        Sampling = new BassSampling { Chains = 1, MasterSeed = 1, BurnIn = 0, Samples = 1 },
+        Sampling = new BassSampling { Chains = 1, MasterSeed = 1, BurnIn = 0, Samples = 1, InterweaveGroupScales = form.Contains("+scales") },
     };
 
     // A reading of `model` at latents (v, β, σ²) carrying u at its scales.
@@ -96,6 +98,10 @@ public sealed class RandomEffectsNoiseQualificationTests(ITestOutputHelper outpu
     [InlineData("horseshoe+rescale", 1.0, "collapse", 20261110)]
     [InlineData("horseshoe+rescale", 0.75, "replica", 20261110)]
     [InlineData("t+interweave", 1.0, "collapse", 20261110)]
+    [InlineData("t+scales", 1.0, "plain", 20261113)]
+    [InlineData("t+scales", 0.5, "replica", 20261113)]
+    [InlineData("nw+scales", 1.0, "collapse", 20261113)]
+    [InlineData("horseshoe+rescale+scales", 0.75, "replica", 20261113)]
     public void Geweke_TheSweepLeavesItsJointInvariant(string form, double b, string sweep, int seed)
     {
         if (!BassQualification.Enabled) return;   // heavy
@@ -313,6 +319,80 @@ public sealed class RandomEffectsNoiseQualificationTests(ITestOutputHelper outpu
         output.WriteLine($"seed {seed}: bulk ESS, collapsed over not, per sweep: " +
                          string.Join(", ", names.Select((n, g) => $"{n} {perSweep[0][g] / perSweep[1][g]:F2}")) + "; per second: " +
                          string.Join(", ", names.Select((n, g) => $"{n} {perSecond[0][g] / perSecond[1][g]:F2}")));
+    }
+
+    // Six levels of four cases under scaled t₃ noise against effects of sd 0.3: data that pin each group's effect weakly, the u–s funnel's case.
+    private static BassData WeakGroups(int seed)
+    {
+        const int levels = 6, each = 4, n = levels * each;
+        var rng = new Xoshiro256PlusPlus(seed);
+        double[] x0 = [.. Enumerable.Range(0, n).Select(_ => rng.NextDouble())], x1 = [.. Enumerable.Range(0, n).Select(_ => rng.NextDouble())];
+        int[] codes = [.. Enumerable.Range(0, n).Select(i => i % levels)];
+        double[] effects = [.. Enumerable.Range(0, levels).Select(_ => 0.3 * Normal.SampleStandard(rng))];
+        double centre = effects.Average();
+        var t3 = StudentT.Standard(3.0);
+        double[] y = [.. Enumerable.Range(0, n).Select(i => Math.Sin(2.0 * Math.PI * x0[i]) + x1[i] + effects[codes[i]] - centre + 0.5 * t3.Sample(rng))];
+        var grouping = new CategoricalPredictor("g", codes, [.. Enumerable.Range(0, levels).Select(l => $"l{l}")]);
+        return new BassData([new ContinuousPredictor("x0", x0), new ContinuousPredictor("x1", x1)], new ScalarResponse(y), [grouping]);
+    }
+
+    // s's interweaving (E21's slice 6) against the centred step alone, on data that pin u weakly and on the n = 300 fixture: both arms' means
+    // (one target) and their bulk ESS per sweep and per second, which set the option's default.
+    [Theory]
+    [InlineData("weak", 11)]
+    [InlineData("weak", 23)]
+    [InlineData("n300", 11)]
+    public void Mixing_InterwovenScales_AgainstTheCentredStep(string data, int seed)
+    {
+        if (!BassQualification.Enabled) return;   // heavy
+        BassData fixture = data == "weak" ? WeakGroups(41) : Grouped(300, 41).Data;
+        string[] names = ["ln sigma2", "ln s", "u0", "M"];
+        var perSecond = new double[2][];
+        var perSweep = new double[2][];
+        foreach (bool woven in new[] { true, false })
+        {
+            BassModel model = BassModel.Create(Config(new BassSampling { Chains = 1, MasterSeed = seed, BurnIn = 0, Samples = 1, InterweaveGroupScales = woven }), fixture);
+            const int chains = 4, burn = 2000, kept = 40_000;
+            var samples = new double[names.Length][][];
+            for (int g = 0; g < names.Length; g++) samples[g] = new double[chains][];
+            long t0 = BassCost.Tick();
+            for (int c = 0; c < chains; c++)
+            {
+                var moves = new BassStructureMoves(model, [], 0.0);
+                var chain = new ReversibleJumpChain<BassState>(moves.Moves, model.Target, moves.Start, new Xoshiro256PlusPlus(seed * 10 + c));
+                var rng = new Xoshiro256PlusPlus(seed * 100 + c);
+                List<IBlock<ReversibleJumpChain<BassState>>> blocks = BassSweepSlots.Blocks(model);
+                for (int g = 0; g < names.Length; g++) samples[g][c] = new double[kept];
+                for (int k = 0; k < burn + kept; k++)
+                {
+                    foreach (IBlock<ReversibleJumpChain<BassState>> block in blocks) block.Update(chain, rng);
+                    if (k < burn) continue;
+                    WorkingResponse reading = moves.DesignAt(chain.Current).Working;
+                    samples[0][c][k - burn] = Math.Log(reading.Latents!.Sigma2!.Value);
+                    samples[1][c][k - burn] = Math.Log(reading.Effects!.Block.Scales.Span[0]);
+                    samples[2][c][k - burn] = reading.Effects.Effects[0][0];
+                    samples[3][c][k - burn] = chain.Current.Count;
+                }
+            }
+            double seconds = (BassCost.Tick() - t0) / BassCost.TicksPerSecond;
+            int arm = woven ? 0 : 1;
+            perSecond[arm] = new double[names.Length];
+            perSweep[arm] = new double[names.Length];
+            var cells = new List<string>();
+            for (int g = 0; g < names.Length; g++)
+            {
+                ConvergenceDiagnostic d = ChainDiagnostics.Diagnose(samples[g]);
+                perSecond[arm][g] = d.BulkEss.Value / seconds;
+                perSweep[arm][g] = d.BulkEss.Value;
+                double[] means = [.. samples[g].Select(chain => chain.Average())];
+                double mean = means.Average(), se = Math.Sqrt(means.Sum(m => (m - mean) * (m - mean)) / (chains - 1) / chains);
+                cells.Add($"{names[g]} {mean:F4} ± {se:F4} R̂ {d.RHat.Value:F3} ESS {d.BulkEss.Value:F0} ({d.BulkEss.Value / seconds:F1}/s)");
+            }
+            output.WriteLine($"{data}, seed {seed}, {(woven ? "interwoven" : "centred alone")}: {seconds:F1} s; {string.Join("; ", cells)}");
+        }
+        output.WriteLine($"{data}, seed {seed}: bulk ESS, interwoven over centred, per sweep: "
+                         + string.Join(", ", names.Select((n, g) => $"{n} {perSweep[0][g] / perSweep[1][g]:F2}")) + "; per second: "
+                         + string.Join(", ", names.Select((n, g) => $"{n} {perSecond[0][g] / perSecond[1][g]:F2}")));
     }
 
     [Fact]

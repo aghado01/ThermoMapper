@@ -242,6 +242,8 @@ public sealed record BassConfig
         if (run.StoppingScope is not (BassStoppingScope.All or BassStoppingScope.Predictive)) throw Bad("Sampling.StoppingScope", "is not a known scope");
         if (run.CollapseEffectsInMoves && !(HasRandomEffects && Noise is not null))
             throw Bad("Sampling.CollapseEffectsInMoves", "reads random effects under a noise: under Gaussian noise u is always integrated, and without random effects there is nothing to integrate");
+        if (run.InterweaveGroupScales && !(Noise is not null && EffectSpecifications.Any(s => s.ScalePrior is not null)))
+            throw Bad("Sampling.InterweaveGroupScales", "reads a drawn scale (ScalePrior) of random effects under a noise: under Gaussian noise s steps on the effects' integral, and a held scale does not move");
         if (run.MonitoredPoints is { } points)
         {
             if (points.Count == 0) throw Bad("Sampling.MonitoredPoints", "must hold a point, or be null for the defaults");
@@ -705,6 +707,22 @@ public sealed record BassSampling
     /// </summary>
     [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingDefault)]
     public bool CollapseEffectsInMoves { get; init; }
+
+    /// <summary>
+    /// Under a noise with random effects and a drawn scale, whether each s_k also takes the non-centred step, which holds u_k/(σs_k) and moves
+    /// s_k through the likelihood (<see cref="BassGroupScaleInterweavingBlock"/>; E21's decision 7, the user's call of 2026-11-13: Yu and
+    /// Meng's interweaving). The centred step alone moves s_k only through u_k, a funnel where the data pin u_k weakly. Exact at every rung.
+    /// Its gain is regime-dependent, so it is an opt-in.
+    /// <list type="bullet">
+    /// <item>On six levels of four cases under t noise it raised ln s's ESS per sweep 3.6 times and u's twice. ln σ² and M then ran at
+    /// 0.33 to 1.13 of their ESS per sweep.</item>
+    /// <item>On 300 cases in twelve levels it gave ln s nothing and ran at 0.47 to 0.78 of the centred step's ESS per second.</item>
+    /// </list>
+    /// So it is for groups the data pin weakly: few cases a level, or noise large against s. One response only. Left out of the
+    /// serialized form when false.
+    /// </summary>
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingDefault)]
+    public bool InterweaveGroupScales { get; init; }
 
     /// <summary>Parallel tempering within each chain; null, the default, runs untempered (D05).</summary>
     public TemperingSpec? Tempering { get; init; }

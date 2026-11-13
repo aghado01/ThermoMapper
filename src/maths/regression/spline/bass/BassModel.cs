@@ -126,6 +126,8 @@ public sealed class BassModel
         if (config.HasRandomEffects && config.Sampling?.CollapseEffectsInMoves == true)
             throw new ArgumentException("Several outputs under a noise take their random intercepts as a latent on every rung (form B); the b = 1 "
                                         + "collapse would integrate U through a weighted whitening of K outputs, which is not built.", nameof(config));
+        if (config.Sampling?.InterweaveGroupScales == true)
+            throw new ArgumentException("The interwoven scale step holds one response's u/(σs); several outputs' U under Σ has no non-centred step here.", nameof(config));
     }
 
     /// <summary>The random-intercept block (E21) the config declares, integrated out of every marginal by whitening, which the working

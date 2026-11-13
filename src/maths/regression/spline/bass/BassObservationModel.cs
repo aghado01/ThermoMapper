@@ -587,9 +587,14 @@ public static class BassSweepSlots
                     if (model.RandomEffects is { } groups)
                         for (int group = 0; group < groups.Count; group++)
                             if (groups.Specifications[group].ScalePrior is not null)
+                            {
                                 blocks.Add(!model.EffectsAreLatent ? new BassGroupScaleBlock(model, group)
                                            : model.Data.Response is MultiOutputResponse ? new BassOutputGroupScaleBlock(model, group)
                                            : new BassLatentGroupScaleBlock(model, group));
+                                // The non-centred half of s's interweaving, after the centred step (E21's slice 6).
+                                if (model.EffectsAreLatent && model.Config.Sampling?.InterweaveGroupScales == true)
+                                    blocks.Add(new BassGroupScaleInterweavingBlock(model, group));
+                            }
                     break;
                 case BassSweepSlot.Coefficients:
                     blocks.AddRange(model.Observation.Blocks(slot));
