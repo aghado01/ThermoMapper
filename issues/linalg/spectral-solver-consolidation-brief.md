@@ -432,6 +432,68 @@ At the stage-two handoff the coordinator checked the saved test counters. B1 sta
 
 **Tensor factorization review.** Retain the compact banded LDLᵀ factor. Across two warmed processes and nine tensor shapes, baseline time divided by candidate time for the complete REML fit ranged from 0.84 to 1.55. The candidate allocated 1.28 to 5.74 times as many bytes. At fixed smoothing of 10²⁰ on both axes, feasibility changed on three shapes. All 225 search-box grid points and 990 distinct optimizer trial points agreed on feasibility. The full regression gate of 3,282 passes covers the production baseline. The probe supplies the candidate comparison. [Tensor-spline qualification](spectral-tensor-factorization-report.md)
 
+### LOBPCG closeout: clustered eigenspaces, the capped constrained run and the Rayleigh–Ritz share (2026-11-12)
+
+**Commit:** `e8d6b89` (tests only).
+
+**Tests,** in `LobpcgDenseTests`, 12 of 12 passing in the default and `EIGEN_REFERENCE` builds:
+- `Solve_ClusteredEigenvalues_AgreeOnTheClustersEigenspace` closes B3's clustered-eigenspace gap. It has six cases:
+  - A = QΛQᵀ with Q random orthogonal places four eigenvalues at 10 above a spectrum on [0, 8], or three at 0 below one on [2, 10].
+  - Each cluster is exact or spread by 10⁻¹².
+  - The blocks are as wide as the cluster or narrower.
+
+  The checks:
+  - the returned vectors lie in the cluster's eigenspace to the Davis–Kahan bound ‖R‖_F/δ plus 10⁻¹²;
+  - the values lie inside the cluster's interval widened by their residuals;
+  - the reported residual is the independent one.
+
+  Exact ties are where the production kernel's sort decides which Ritz vectors are kept.
+- `Solve_CappedConstrainedPreconditioned_DescribesReturnedPairs` closes A1's gap. It runs the constrained, preconditioned fixture capped at three iterations. Each check holds to 10⁻¹²:
+  - the reported residual is the operator applied to the returned pairs;
+  - each value is its vector's Rayleigh quotient;
+  - the vectors are orthogonal to the constraint.
+
+  The converged carried-image test now shares its fixture.
+
+**Measurements:**
+- Setup: a `git archive` snapshot of `898a531` instrumented by `artifacts/spectral-closeout/patch_lobpcg.py`.
+  - It times each Rayleigh–Ritz solve and switches its stopping rule.
+  - It re-decomposes each projection under both rules, timed adjacent.
+- Probe: `LobpcgRitzShareProbe.cs.txt`.
+- Receipts: `ritz-share-{1,2}.txt`.
+- Two rounds. Counts and iterations are identical across rounds, and the share ranges span both.
+
+| Fixture | Rayleigh–Ritz share, absolute → relative | Iterations | Operator applications |
+|---|---|---|---|
+| Crescent, 500 nodes, k = 8, Jacobi preconditioner | 6.6–6.7% → 7.5–7.6% | 35 → 38 | 663 → 692 |
+| Same, null space deflated | 6.6–7.5% → 7.3–7.4% | 33 → 32 | 641 → 632 |
+| Möbius, 500 nodes, k = 8, Jacobi preconditioner | 5.9–7.0% → 7.2–7.3% | 42 → 41 | 756 → 748 |
+| Same, null space deflated | 7.3% → 7.6–8.0% | 35 → 36 | 691 → 699 |
+| Dense 256, k = 8 | 3.7–4.0% → 5.0–5.5% | 111 → 95 | 2,125 → 2,071 |
+| Output operator G(Gᵀv), m = 2000, 200 factor columns, top 4 | 0.30–0.32% → 0.34–0.35% | 98 → 93 | 1,070 → 1,057 |
+| Same, top 8 | 0.60–0.62% → 0.73–0.78% | 96 → 89 | 1,819 → 1,907 |
+| Same, m = 8000, top 4 | 0.06% → 0.07% | 331 → 242 | 2,636 → 2,449 |
+
+**Findings:**
+- **The Rayleigh–Ritz solve is 4–8% of a solve.** That holds on the graphs and the dense control, at projected orders up to 24. On the output operators the operator dominates and the share is under 1%. That operator applies column by column, unblocked; a blocked apply would raise the share. So B1's change of default cannot move LOBPCG's cost much through this solve, and E's two arms can straddle it.
+- **On identical projections the relative rule never stalls or fails to converge.** It takes the same number of sweeps or fewer, and the kept Ritz values agree to 1.5·10⁻¹⁵ of the projection's scale. The undeflated graph fixtures carry the null vector's Ritz value, about 10⁻¹⁵, on the diagonal, and it caused no extra sweeps.
+- **Each relative solve still costs more.** It was slower in 31 of 32 adjacent pairs, typically by 10–25% and at most 36%. Its pivot test takes two square roots for every pivot it examines, and its tangent adds three divisions. At orders 12–24 the test is a large part of the work.
+
+  For B1's final kernel or G2: a diagonal entry changes only when a rotation touches it, so its root could be carried rather than recomputed per pivot.
+- **Rounding-level differences change LOBPCG's path.** Iteration counts move by −27% to +9% between rules whose Ritz values agree to 10⁻¹⁵. A single LOBPCG timing is one sample of a trajectory, so E times over several seeds.
+- **Iteration counts depend on the spectral gap.** The output fixtures' random factors have no planted gap, which is why they take 89–331 iterations. E's fixtures state their gaps, since iteration counts scale with them.
+
+**Not run:** B3's before/after count of operator applications. B3's receipts already record iterations (37 → 36, 42 → 42, 110 → 110), and B5 replaced the iteration they describe. The count would describe code that no longer runs and would change no decision. The table gives the current code's counts under each rule.
+
+**Gates:** `LobpcgDenseTests` 12 of 12 in each build. The probe ran on the snapshot only; production is unchanged.
+
+**Pins moved:** none.
+
+**Doc changes owed:** [LinearAlgebra.md](../../docs/Maths/LinearAlgebra.md), LOBPCG:
+- clustered spectra are compared by eigenspace;
+- the Rayleigh–Ritz share;
+- the relative rule's per-pivot cost at small orders.
+
 ### DenseEigenOptions and DenseEigenFastVariant removed (2026-11-12)
 
 **Commit:** `75f76c1`. Decided by the owner after decision 2 left the enum with one value and the record carrying nothing.
