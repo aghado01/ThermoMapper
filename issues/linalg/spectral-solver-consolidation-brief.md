@@ -459,6 +459,65 @@ At the stage-two handoff the coordinator checked the saved test counters. B1 sta
 
 **Tensor factorization review.** Retain the compact banded LDLᵀ factor. Across two warmed processes and nine tensor shapes, baseline time divided by candidate time for the complete REML fit ranged from 0.84 to 1.55. The candidate allocated 1.28 to 5.74 times as many bytes. At fixed smoothing of 10²⁰ on both axes, feasibility changed on three shapes. All 225 search-box grid points and 990 distinct optimizer trial points agreed on feasibility. The full regression gate of 3,282 passes covers the production baseline. The probe supplies the candidate comparison. [Tensor-spline qualification](spectral-tensor-factorization-report.md)
 
+### B1 change of default and cleanup: one rule (2026-11-12)
+
+**Commit:** `75523c4`.
+
+**What changed:**
+- `DenseEigen`, `EigenFast` and the reference `Eigen` have one rule: a pivot passes when |a_pq| ≤ tol·√|a_pp·a_qq|, with tol in [0, 1) and 10⁻¹² by default. `JacobiPivot` documents it.
+- Deleted:
+  - the absolute rule;
+  - `JacobiStoppingRule` and every `stoppingRule` parameter;
+  - the reference solver's trigonometric `Rotate`;
+  - `ScaledEigen`;
+  - `PriorPencil.DecomposeAtUnitScale`.
+- Fifteen files dropped their explicit rule argument; their results are the same bits, since the relative branch is now the only code path.
+
+**What the default means:** at 10⁻¹² the eigenvalues come out at least as accurate as under the absolute default, measured against a 10⁻¹⁴ reference. Eigenvector residuals reach about 10⁻¹² of the matrix's scale. Callers that need more pass a tighter tolerance, as E8 does at 10⁻¹⁴.
+
+**Qualification of the six callers that took the default:**
+- Method: a shadow probe re-decomposed every default-rule solve in their test suites under the relative rule at 10⁻¹² and at 10⁻¹⁴. Patch `artifacts/spectral-closeout/patch_default_rule_probe.py` with `extend_probe_tight.py`, on a snapshot of `55eedf2`; receipts in `default-rule-probe/`.
+- Coverage: about 5 million solves. Under both relative tolerances, none stalled and none failed to converge.
+- Error is measured on well-determined eigenvalues, relative to the 10⁻¹⁴ solve:
+
+| Caller | Solves, largest order | Absolute rule | Relative, 10⁻¹² | Sweeps, absolute → relative |
+|---|---|---|---|---|
+| LOBPCG Rayleigh–Ritz | 544, 15 | 1.8·10⁻¹² | 1.3·10⁻¹³ | 2,737 → 2,757 |
+| FastIca decorrelation | 400, 2 | 0 | 0 | same |
+| NewtonMetropolis | 4.9 million, 2 | 8.1·10⁻¹³ | 0 | same |
+| PenalizedSpline penalty spectrum | 8, 29 | 2.4·10⁻¹³ | 1.9·10⁻¹³ | 67 → 75 |
+| HierarchicalPSpline | 60, 81 | 1.7·10⁻¹⁴ | 4.4·10⁻¹⁶ | 427 → 433 |
+| TensorPenalty | 44, 13 | 2.0·10⁻¹⁴ | 0 | 281 → 317 |
+
+NewtonMetropolis's absolute-rule error came from small-scale Hessians, where the absolute bound skipped rotations the relative rule makes.
+
+**Tests rewritten:** they now assert the properties the deleted helpers supplied.
+- `RelativeEigenMigrationTests` checks scale equivariance from 10⁻²⁴⁰ to 10²⁴⁰. It also checks the pencil's determinant, shrinkage and evidence against A's own spectrum.
+- `RankAndOutputSideTests`' metric-range cases decompose directly.
+- `RelativeJacobiTests` lost its rule arguments.
+- `EigenFastTests.RandomSymmetric_ConvergesWithRotations` bounds the final off-diagonals by tol·max|λ|, which the relative test implies, instead of by tol.
+
+**Gates,** default and `EIGEN_REFERENCE` builds alike (receipts `artifacts/spectral-closeout/switch-gates/`):
+
+| Project | Passed |
+|---|---|
+| `Maths.LinAlg.Tests` | 167 |
+| `VizCore.Tests` | 696, 2 standing skips |
+| `TDA.Ph.Tests` | 477 |
+| `Maths.Samplers.Tests` | 296 |
+| `Maths.Geometry.Tests` | 91 |
+| `TDA.Mapper.Tests` | 28 |
+| `Graphs.Primitives.Tests` | 3 |
+| Focused regression set, with `BASS_QUALIFICATION` | 86 |
+
+`Maths.Regression.Tests` at commit scope with the pinned tier, default build: 2,906 passed.
+
+**Pins moved:** none. The samplers' and splines' pins hold, so the rounding-level differences above did not reach a pinned value.
+
+**Doc changes owed:**
+- [LinearAlgebra.md](../../docs/Maths/LinearAlgebra.md): the stopping rule, now the only one; the default tolerance's meaning; and the dense-route diagram without the absolute branch.
+- [ActiveSubspaces.md](../../docs/Maths/Regression/ActiveSubspaces.md): the unit-scale paragraph, now retired.
+
 ### B1 stage three: the graph callers (2026-11-12)
 
 **Commit:** `ad15299`.
