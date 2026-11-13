@@ -20,7 +20,7 @@ public sealed record DrawSubspace(double[,] C, double[] Eigenvalues, double[,] B
         int p = Check(c, dimension);
         var values = new double[p];
         var vectors = new double[p, p];
-        ScaledEigen.Into(c, values, vectors);
+        DenseEigen.DecomposeSymmetricInto(c, values, vectors, tol: 1e-14, stoppingRule: JacobiStoppingRule.ElementWiseRelative);
         var basis = new double[p, dimension];
         for (int i = 0; i < p; i++)
             for (int j = 0; j < dimension; j++) basis[i, j] = vectors[i, j];
@@ -217,7 +217,7 @@ public sealed class SubspacePosterior
         int p = m.GetLength(0);
         var values = new double[p];
         var vectors = new double[p, p];
-        ScaledEigen.Into(m, values, vectors);
+        DenseEigen.DecomposeSymmetricInto(m, values, vectors, tol: 1e-14, stoppingRule: JacobiStoppingRule.ElementWiseRelative);
         return (values, vectors);
     }
 

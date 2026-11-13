@@ -82,7 +82,7 @@ public static class Whitening
                     throw new ArgumentException("A covariance is symmetric.", nameof(covariance));
                 sym[i, j] = 0.5 * (covariance[i, j] + covariance[j, i]);
             }
-        EigenResult e = ScaledEigen.Of(sym);
+        EigenResult e = DenseEigen.DecomposeSymmetric(sym, tol: 1e-14, stoppingRule: JacobiStoppingRule.ElementWiseRelative);
         double top = e.Eigenvalues.Max(), bottom = e.Eigenvalues.Min();
         if (!(top > 0.0) || !(bottom > 1e-12 * top))
             throw new ArgumentException($"Whitening needs a positive definite covariance; its eigenvalues run from {bottom:G3} to {top:G3}.", nameof(covariance));

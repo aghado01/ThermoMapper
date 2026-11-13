@@ -380,10 +380,13 @@ public sealed class RandomEffectsNoiseTests(ITestOutputHelper output)
     }
 
     // Noise fits without a block keep their draws: pinned by hash on HEAD before the change.
+    // Re-pinned for B1's relative PriorPencil, 2026-11-12. Retained structures and tau match the baseline; continuous
+    // latent updates amplify the changed rounding. Ranges and old/new receipts: spectral-b1-stage-one-report.md.
     [Theory]
-    [InlineData("t", "5471c4bcad7d0b09")]
-    [InlineData("skewed horseshoe", "afd1aa3f399ea35f")]
-    [InlineData("tempered normal-wald", "98b9820e14563b71")]
+    [Trait("Tier", "Pinned")]
+    [InlineData("t", "0d6c539efe10a3bd")]
+    [InlineData("skewed horseshoe", "f5855f7382b9826b")]
+    [InlineData("tempered normal-wald", "8410c6ea70239f29")]
     public void ANoiseFitWithoutABlock_KeepsItsDraws(string fit, string expected)
     {
         BassData data = BassQuantileTests.Data();

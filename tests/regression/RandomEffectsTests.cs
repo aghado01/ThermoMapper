@@ -54,10 +54,12 @@ public sealed class RandomEffectsTests(ITestOutputHelper output)
     }
 
     // Slice 0's gate: moving the whitening onto the working response leaves a held-s block's fits as they were.
+    // Re-pinned 2026-11-12 for B1's relative PriorPencil: the Legendre fit retains all 400 structures, tau and sigma²;
+    // coefficients move by at most 2.85e-14 and group effects by 2.56e-14. See spectral-b1-stage-one-report.md.
     [Theory]
     [Trait("Tier", "Pinned")]
     [InlineData("hinge", "b9b95aee57ef459c")]
-    [InlineData("legendre", "a1f4528886afa5f7")]
+    [InlineData("legendre", "f07a33dd35774c18")]
     [InlineData("tempered hinge", "05122582e8f56f75")]
     public void AHeldScaleFit_KeepsItsDraws(string fit, string expected)
     {

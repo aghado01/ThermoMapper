@@ -129,7 +129,8 @@ public sealed class BassBitIdentityTests
     // and a KHAOS fit on slice 0's exact-law fixture under the modified g-prior.
     [Theory]
     [InlineData("hinge", "3440c6398ce3c0d5")]
-    [InlineData("khaos", "a51939ff36591784")]
+    // B1, 2026-11-12: relative PriorPencil changes rounding in the modified-g solve; see spectral-b1-stage-one-report.md.
+    [InlineData("khaos", "3505662fb879bb6a")]
     public void Smc_KeepsTheBaseline(string fixture, string expected)
     {
         var smc = new SmcSpec { Particles = 300, Replicates = 2, MutationSteps = 3 };

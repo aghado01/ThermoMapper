@@ -210,7 +210,7 @@ public sealed class RankPosterior
         }
         var values = new double[p];
         var vectors = new double[p, p];
-        ScaledEigen.Into(projection, values, vectors);
+        DenseEigen.DecomposeSymmetricInto(projection, values, vectors, tol: 1e-14, stoppingRule: JacobiStoppingRule.ElementWiseRelative);
         int summaryRank = values.Count(x => x > 0.5);
         double[,] summary = Leading(vectors, summaryRank);
         var rankTerms = new double[draws.Count];

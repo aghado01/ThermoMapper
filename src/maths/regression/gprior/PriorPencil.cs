@@ -58,7 +58,7 @@ public sealed class PriorPencil : RidgeColumns
         if (p == 0) return new PriorPencil(0, false, [], [], new double[0, 0], [], 0.0, likelihood, prior);
         if (InverseRoot(prior, out double logDeterminant) is not { } t) return null;
 
-        // L⁻¹AL⁻ᵀ, scaled to a unit largest diagonal for the eigensolver's absolute tolerance.
+        // L⁻¹AL⁻ᵀ, read directly with the element-wise relative pivot test.
         var scratch = new double[p, p];
         for (int i = 0; i < p; i++)
             for (int j = 0; j < p; j++)
@@ -78,8 +78,8 @@ public sealed class PriorPencil : RidgeColumns
                 if (i == j) top = Math.Max(top, sum);
             }
         if (!(top > 0.0) || double.IsPositiveInfinity(top)) return null;
-        for (int k = 0; k < unit.Length; k++) unit[k] /= top;
-        EigenResult eigen = DenseEigen.DecomposeSymmetric(unit, p, tol: JacobiTolerance);
+        EigenResult eigen = DenseEigen.DecomposeSymmetric(unit, p, tol: JacobiTolerance,
+            stoppingRule: JacobiStoppingRule.ElementWiseRelative);
         var lambda = new double[p];
         var whitened = new double[p];
         for (int i = 0; i < p; i++)
@@ -91,7 +91,7 @@ public sealed class PriorPencil : RidgeColumns
         var w = new double[p];
         for (int j = 0; j < p; j++)
         {
-            lambda[j] = top * eigen.Eigenvalues[j];
+            lambda[j] = eigen.Eigenvalues[j];
             if (!(lambda[j] > 0.0)) return null;
             double[] v = eigen.Eigenvectors[j];
             double sum = 0.0;
@@ -99,6 +99,16 @@ public sealed class PriorPencil : RidgeColumns
             w[j] = sum;
         }
         return new PriorPencil(centredColumns, interceptInside, lambda, eigen.Eigenvectors, t, w, logDeterminant, likelihood, prior);
+    }
+
+    // Stage one's old unit-scale solve, retained for qualification until the final B1 cleanup.
+    internal static EigenResult DecomposeAtUnitScale(double[] unit, int p, double top)
+    {
+        unit = (double[])unit.Clone();
+        for (int k = 0; k < unit.Length; k++) unit[k] /= top;
+        EigenResult eigen = DenseEigen.DecomposeSymmetric(unit, p, tol: JacobiTolerance);
+        for (int j = 0; j < p; j++) eigen.Eigenvalues[j] *= top;
+        return eigen;
     }
 
     /// <summary>This pencil with the cross products <paramref name="cross"/> in place of its own: the same A and D under another
