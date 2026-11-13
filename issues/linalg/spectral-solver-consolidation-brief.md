@@ -471,7 +471,7 @@ At the stage-two handoff the coordinator checked the saved test counters. B1 sta
   - the reference solver's trigonometric `Rotate`;
   - `ScaledEigen`;
   - `PriorPencil.DecomposeAtUnitScale`.
-- Fifteen files dropped their explicit rule argument; their results are the same bits, since the relative branch is now the only code path.
+- Fifteen files dropped their explicit rule argument. Their arithmetic is unchanged, since the relative branch was already their path. The pinned tier holding is consistent with that, but no bit-level probe was run.
 
 **What the default means:** at 10⁻¹² the eigenvalues come out at least as accurate as under the absolute default, measured against a 10⁻¹⁴ reference. Eigenvector residuals reach about 10⁻¹² of the matrix's scale. Callers that need more pass a tighter tolerance, as E8 does at 10⁻¹⁴.
 
