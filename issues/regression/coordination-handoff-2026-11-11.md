@@ -8,7 +8,7 @@ Updated 2026-11-13 with that day's round-up: E8's slice 7d verified, the LinAlg 
 
 1. Read [AGENTS.md](../../AGENTS.md) and [CONTRIBUTING.md](../../CONTRIBUTING.md), then this file. Read a workstream's brief before acting on it.
 2. **This session's chips:** the conformal chip is building slice 15, with slice 14 and its ratio estimator verified on 2026-11-13. The conformal Lean chip is proving slice 14's three follow-ups (decision 12, `d08139e`). E21's slice 6 landed (`5cde502`) and passed its Commit selection; its Geweke rows still run under qualification. This session (`local_b6732445`) verifies those two; the second coordinating session (`local_b84fa8ad`) verifies its own two chips. E8's slice 7d landed and was verified on 2026-11-13 (below).
-3. Two Opus chips were commissioned the same day by a second coordinating session, at the user's request: the defects chip and the active-subspace Lean chip ([Sessions](#sessions)).
+3. Two Opus chips were commissioned the same day by a second coordinating session, at the user's request: the defects chip and the active-subspace Lean chip ([Sessions](#sessions)). Both have landed their work. The Lean is verified; the defects chip's two slices await that session's clean-archive runs.
 4. Then take the [waiting list](#waiting-on-the-user) to the user.
 
 ## Standing rules
@@ -40,8 +40,8 @@ They are in [AGENTS.md](../../AGENTS.md#docops--conventions-for-issues) (the use
 | [GBASS slices](claude://claude.ai/epitaxy/local_add4be38-7ddb-4981-8b14-6f8ac64f7dab) `local_add4be38` | [ridge-blocks-brief.md](bass/ridge-blocks-brief.md) (E21) | Idle; E21 slice 6 landed (`5cde502`), its Geweke rows still to verify |
 | [KHAOS slices](claude://claude.ai/epitaxy/local_d665e4ce-cd64-427f-9c2a-8c94d96497dd), [weighted fits](claude://claude.ai/epitaxy/local_57bad71b-a245-4e83-8cb0-52c46cd48b60) | — | Idle; their work landed |
 | LinAlg consolidation: the user's Sol sessions, listed in its brief | [spectral-solver-consolidation-brief.md](../linalg/spectral-solver-consolidation-brief.md) | Complete |
-| [Shared-code defects](claude://claude.ai/epitaxy/local_0e31b37f-31de-42a6-a527-9c1daa3819bc) `local_0e31b37f` (Opus) | [shared-code-defects-brief.md](shared-code-defects-brief.md) | **Building:** slice 1, the weight reader; then slice 2, `CholeskyDecomposition` |
-| [Active-subspace Lean](claude://claude.ai/epitaxy/local_eaa7e8ed-844f-440c-ae5f-b72b72d6d68a) `local_eaa7e8ed` (Opus) | [active-subspace-lean-chip-brief.md](../../lean/Protolemmata/BASS/active-subspace-lean-chip-brief.md) | **Building:** the four targets posed with numeric checks, then their proofs |
+| [Shared-code defects](claude://claude.ai/epitaxy/local_0e31b37f-31de-42a6-a527-9c1daa3819bc) `local_0e31b37f` (Opus) | [shared-code-defects-brief.md](shared-code-defects-brief.md) | **Both slices landed:** the weight reader (`f50753f`) and the factor's refusal (`37eb63c`), each with its report. The second coordinator's clean-archive verification is running for slice 1 and follows for slice 2. Four decisions wait on the user ([item 13](#waiting-on-the-user)) |
+| [Active-subspace Lean](claude://claude.ai/epitaxy/local_eaa7e8ed-844f-440c-ae5f-b72b72d6d68a) `local_eaa7e8ed` (Opus) | [active-subspace-lean-chip-brief.md](../../lean/Protolemmata/BASS/active-subspace-lean-chip-brief.md) | **Done and verified:** all four proved (`cbfd0ec` to `85d9d53`), one hypothesis corrected after review (`1682d4a`); verified from a clean archive at `42c980d` ([item 10](#waiting-on-the-user)) |
 
 Older chips are listed in the 2026-11-09 handoff. Message a chip by its `local_…` id.
 
@@ -105,6 +105,7 @@ New on 2026-11-13:
 
    Approval commissions slice 0, which only reads and measures: `BarsEnsemble`'s body, and a bicubic design through `WeightedNormalModel` against dense algebra.
 2. **E8's follow-up: the training range as BASS's default** for any fit whose declared domain is wider than its data. Today only projected fits default to it. It would move existing results under column-mass support and the raw ridge; BASS's defaults (the g-form with count support) do not depend on the rule.
+    - *Lean (2026-11-13):* the invariance this rests on is proved. Under the rule the evaluated hinges do not read the declared box (`trainingRange_hinge`); κ alone does (`kappa_moves`); the g-form reads no column scale under either rule (`hat_invariant`).
 3. **PBX 9501, the application in 2311.18146.** Replicate it or not.
    - The 14 materials' data are in `artifacts/datasets/PBX9501` (2026-11-12, pinned to the authors' commit, outside git; `PROVENANCE.md` there).
    - The authors' script takes each concordance's numerator from saved draws 1 to 10 and its denominator from draws 100 to 1000. A replication pairs the same draws and reports corrected values.
@@ -118,11 +119,13 @@ Carried:
 7. **Slice 12a's k̂ diagnostic:** opt-in (recommended; it costs about 200× the score) or on by default.
 8. **E34 slice 4's follow-ups**, listed in its report (`fc9c343`).
 9. **The original side-session notes** in `%APPDATA%\Claude\side-session-notes\`: delete them or keep them. Copies are in each workstream's `issues/<workstream>/handover-notes/`, except three PyTeXML notes, which were left there.
-10. **Lean for the active-subspace geometry** (proposed 2026-11-10). Commissioned by the user on 2026-11-13; the Lean chip's [brief](../../lean/Protolemmata/BASS/active-subspace-lean-chip-brief.md) poses the four:
-    - E36's direction moves;
-    - the matrix Poincaré check's reduction and the product law's constant;
-    - P̄'s readings under mixed ranks;
-    - rotate-and-refit's non-invariance.
+10. **Lean for the active-subspace geometry** (proposed 2026-11-10; commissioned by the user on 2026-11-13). All four targets are proved in `lean/Enthymemata/ActiveSubspace/` and verified from a clean archive at `42c980d`. The chip's [brief](../../lean/Protolemmata/BASS/active-subspace-lean-chip-brief.md) holds the reports. What comes back:
+    - *for item 2:* the training-range rule's invariance is proved;
+    - *for E8's brief and BPPR's brief:* the report gives each a line to take (slice 5's readouts and slice 7; decision 5 and slice 2's ratios);
+    - *BPPR's ratios:* the paper's printed birth ratio slips at one active coordinate; the change move never flips a sign there, so the sampler treats that case apart; a further 1/(M + 1) in a birth targets λ^M/(M!)², not the Poisson prior;
+    - *two attributions in E8's brief change, the readouts standing:* the cross-rank distance is not Ye and Lim's metric, and Barbieri and Berger prove the ½ rule for another loss;
+    - *the frame:* the refit depends on the frame at every frame, since only signed permutations keep the hinge class. The eigengap report warns of ties only;
+    - *still open, as posed:* the one-variable Poincaré inequality is a hypothesis (Mathlib has none), and the direction moves are proved in finite algebraic form.
 11. **Carried from 2026-11-09:**
     - GBASS's open decisions;
     - `RungWorkers`' default and the GC pass;
@@ -135,12 +138,17 @@ Carried:
     - `MultiOutput.md` and `BASS.md`, from E34.
 
     The ~200 links into `docs/.archive/BayesianRegression.md` wait until the docs layout settles.
+13. **The defects chip's four decisions** (2026-11-13), with measurements in its [reports](shared-code-defects-brief.md#reports):
+    - *the floor's rule:* the absolute 10⁻¹² floor fires on scale alone, and once it fires `LogDet` and the solves are wrong while every entry stays finite. The chip recommends no floor, with callers regularizing; a floor relative to the largest diagonal is the alternative. GMM leans on the floor where its ridge is 0 or a warm start is singular;
+    - *a pivoted factor in `Maths.LinAlg`:* promote `BgpDrawnFunction`'s private factor, with a low-rank solve and sample;
+    - *retiring `CholeskyDecomposition` into `DenseCholesky`:* a removal, so its own question; it follows the floor's decision;
+    - *BASS's draw-weight readers* (`Draws3.Select`, `PosteriorSummary.Over`): the weight reader's full-range rule, or a stated limit and a refusal.
 
 Closed since the 2026-11-11 handoff: `DenseEigen`'s relative threshold (`75523c4`), the projected fit's prior rules (7d), and regression's use of the legacy `CholeskyDecomposition` (BGP moved, `5db2e40`).
 
 ## Open defects in shared code
 
-Both were commissioned by the user on 2026-11-13, to the defects chip ([brief](shared-code-defects-brief.md)): the weight reader first, then the factor's refusal of a non-finite result. The floor's rule, a shared pivoted factor and the legacy class's retirement come back to the user with measurements.
+Both were commissioned by the user on 2026-11-13, to the defects chip ([brief](shared-code-defects-brief.md)): the weight reader first, then the factor's refusal of a non-finite result. Both repairs have landed: the reader keeps every finite weight's normalized log (`f50753f`), and the factor refuses a result that is not finite, with its three callers reading the refusal (`37eb63c`). The second coordinator's clean-archive verification of the two is in progress. A floored factor that stays finite is still read, and still wrong once a pivot floors: that is the first decision of [item 13](#waiting-on-the-user).
 
 - **`CholeskyDecomposition` on a near-singular covariance.** Found by conformal slice 11 (`9248e33`).
   - The factor's entries go infinite while `LogDet` stays finite, and only `Status.Finite` reports it.

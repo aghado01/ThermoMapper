@@ -85,6 +85,16 @@ Hand-over state between turns is an "In progress" entry here.
 
 ## Reports
 
+### 2026-11-13 — verified from a clean archive (coordinating session)
+
+- **Commit:** `42c980d`, through `scripts/verify-lean.ps1` with `-Module Enthymemata.ActiveSubspace` and this folder's checks.
+- **Checks:** 44 of 44.
+- **Build:** 2,642 jobs, with no warnings and no errors.
+- **Axioms:** every theorem of the four modules, 73 in all, prints `propext`, `Classical.choice` and `Quot.sound` only. The axioms file was generated from the modules' own declarations, not from the report's list.
+- **meta-ci:** PASS; the four modules read as proof-closed.
+- **Statements:** read against the lemmas at `6a3268d`. The two points of the entry below were the outcome, and the archived commit holds both corrected hypotheses.
+- **Receipts:** `artifacts/verify-lean-42c980d/`, with the axioms file and the summary tracked in [receipts](../../../issues/regression/receipts/verify-lean-42c980d/). The run on `6a3268d`, before the correction, passed the same gates (`artifacts/verify-lean-6a3268d/`).
+
 ### 2026-11-13 — AS-2's hypothesis corrected after review
 
 The coordinating session reviewed the statements at `6a3268d` and returned two points, both taken.
