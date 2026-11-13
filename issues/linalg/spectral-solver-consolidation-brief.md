@@ -461,7 +461,33 @@ At the stage-two handoff the coordinator checked the saved test counters. B1 sta
 
 ### E: leading output patterns by LOBPCG, crossover measured (2026-11-12)
 
-**Commits:** none yet. The measurement favors building the readout, and its design waits on the owner.
+**Commits:**
+- `5ddea64`: the leading-patterns readout, built as a separate readout, which the owner chose.
+- `73b7d74`: this measurement.
+
+**What was built:**
+- **`OutputPosterior.Leading(factors, weights, patterns, tolerance = 1e-9)`:**
+  - Each draw's stage is read as `Of` reads it. E[G]'s leading eigenpairs come by LOBPCG on v ↦ Σ_j c_j(c_jᵀv) over the compressed factors, never forming E[G].
+  - `MeanTrace` is Σ w_s tr G_s.
+  - `MeanSolve` reports iterations, residual and convergence, so a clustered spectrum shows.
+  - Eigenvalues below max(m, R)·ε·λ₁ are dropped as numerically null.
+  - A problem too small to iterate, 3k ≥ min(m, R), is read by the stacked SVD cut to k, with `MeanSolve` null.
+- **`OutputPosterior.Of` is unchanged:** its per-draw and stacked stages moved into shared helpers with the same arithmetic. The pinned tier holds.
+- **`OutputPosterior.Spectrum`** says which readout ran.
+- **`ActiveSubspaceSpec.OutputSpectrum`** selects the readout: `Full` by default, or `Leading`. Both readout call sites dispatch on it, and basis adequacy reads whichever ran.
+
+**Tests:** `LeadingOutputPatternsTests`, 4 passing.
+- **Agreement with `Of` on smooth factors:**
+  - draw quantities identical bit for bit;
+  - eigenvalues to 10⁻¹⁰ and the trace to 10⁻¹²;
+  - patterns within the Davis–Kahan bound √k·r/(λ_k − λ_{k+1}), r the solve's reported residual.
+- **The brief's witness:** draws diag(4, 3, 0) and diag(0, 3, 4) give E[G] = diag(2, 3, 2). Its leading pattern is the second location's, with eigenvalue 3, through the LOBPCG path.
+- **The small-problem fallback:** it returns the three nonzero eigenvalues 3, 2 and 2 with no solve reported.
+- **The spec switch:** on the functional fixture it changes only the mean stage.
+
+**Gates:** `Maths.Regression.Tests` at commit scope, with the pinned tier, 2,502 passed. Pins moved: none.
+
+**Originally recorded before the owner's choice:**
 
 **Setup:**
 - Probe: `artifacts/spectral-closeout/OutputPatternsCrossoverProbe.cs.txt`.
