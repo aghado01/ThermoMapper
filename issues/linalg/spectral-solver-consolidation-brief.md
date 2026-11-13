@@ -459,6 +459,50 @@ At the stage-two handoff the coordinator checked the saved test counters. B1 sta
 
 **Tensor factorization review.** Retain the compact banded LDLᵀ factor. Across two warmed processes and nine tensor shapes, baseline time divided by candidate time for the complete REML fit ranged from 0.84 to 1.55. The candidate allocated 1.28 to 5.74 times as many bytes. At fixed smoothing of 10²⁰ on both axes, feasibility changed on three shapes. All 225 search-box grid points and 990 distinct optimizer trial points agreed on feasibility. The full regression gate of 3,282 passes covers the production baseline. The probe supplies the candidate comparison. [Tensor-spline qualification](spectral-tensor-factorization-report.md)
 
+### E: leading output patterns by LOBPCG, crossover measured (2026-11-12)
+
+**Commits:** none yet. The measurement favors building the readout, and its design waits on the owner.
+
+**Setup:**
+- Probe: `artifacts/spectral-closeout/OutputPatternsCrossoverProbe.cs.txt`.
+- Receipts: `output-crossover-{1,2}.txt`, under the timing protocol in the G1/G3 report, two rounds.
+- Three paths to E[G]'s mean patterns:
+  - the current readout, `OutputPosterior.Of`: per-draw SVDs, then the stacked SVD;
+  - one direct SVD of the stacked weighted raw factors;
+  - LOBPCG for the top k on v ↦ C(Cᵀv), a blocked operator over those factors, with the trace read exactly as Σ‖c‖². Tolerance is 10⁻⁹ of the trace.
+- Shapes:
+  - output locations m from 100 to 3,000;
+  - 40 or 200 equally weighted draws of width 5, so R = 200 or 1,000 stacked columns;
+  - k = 3 or 10.
+- Two kinds of factor:
+  - **smooth:** draws share twelve cosine modes over the locations, with variances falling as 1/j² and per-draw noise. This is the realistic case.
+  - **random:** uniform entries, a flat spectrum whose leading eigenvalues cluster, with gap ratios λ_{k+1}/λ_k of 0.96–0.999. This is the adversarial case.
+
+**Results:** time as a fraction of the readout's median; the two rounds agree.
+
+| Kind | k | Iterations | LOBPCG time as a fraction of the readout's |
+|---|---|---|---|
+| smooth | 3 | 7–9 | 0.003–0.12 |
+| smooth | 10 | 4–6 | 0.007–0.27 |
+| random | 3 | 31–135 | 0.03–1.07 (even only at m = 3,000, R = 200) |
+| random | 10 | 27–84 | 0.10–3.1 (slower at R = 200 and at m = 300, R = 1,000) |
+
+- **The readout's cost is the stacked SVD.** The direct SVD takes 0.80–1.02 of the readout's time, so the per-draw stage is small. The one-sided Jacobi SVD of the stacked factor costs 8.5–9.5 s at 1,000 × 1,000 and 11–12 s at 3,000 × 1,000.
+- **Accuracy against the readout:**
+  - top-k eigenvalues to 10⁻¹² on smooth factors and 2·10⁻¹¹ on random ones;
+  - trace to 3·10⁻¹³;
+  - pattern subspaces to sin Θ of 10⁻⁹–10⁻⁶ on smooth factors. On random factors, as low as 1.6·10⁻⁴, where the clustered eigenvalues leave the subspace ill-defined.
+- **The pre-measurement estimate was wrong.** This brief's discussion placed the crossover at several hundred to a thousand output locations. It underestimated the stacked SVD's cost and assumed the 89–331 iterations seen on random factors. Realistic spectra converge in a handful of iterations, so LOBPCG wins from m = 100.
+
+**Decision:** build a separately requested leading-patterns readout. It would provide:
+- E[G]'s top k patterns and eigenvalues by LOBPCG;
+- the exact trace Σ w_s‖F_s‖²;
+- the solver's residual and convergence, so a clustered spectrum is visible.
+
+The full-spectrum readout stays the default, because its `MeanEigenvalues` is the whole nonzero spectrum, which a top-k readout does not give. The API shape is the owner's call.
+
+**Doc changes owed:** [ActiveSubspaces.md](../../docs/Maths/Regression/ActiveSubspaces.md), output side: the readout's cost and the leading-patterns alternative, once built.
+
 ### G2 and G1 for EigenFast: layout retained, unfused retained (2026-11-12)
 
 **Commits:** none; both results retain the current kernel.
