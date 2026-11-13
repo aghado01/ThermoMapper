@@ -481,7 +481,7 @@ At the stage-two handoff the coordinator checked the saved test counters. B1 sta
 **Findings:** times as a fraction of the SVD's median; the two rounds agree.
 - **LOBPCG on Fᵀ(Fv): not adopted.**
   - With k = 2 on structured gradients it took 0.05–0.7 of the SVD's time.
-  - On flat gradients, or with k = 5, it ran up to 4.5 times slower: k = 5 lost at every p from 30 up except p = 200 with N = 512.
+  - On flat gradients, or with k = 5, it ran up to 4.5 times slower. With k = 5 it was slower at p = 30 and at p = 100, apart from a tie at N = 512. It won only at p = 200, with N = 512, or with N = 2,048 on structured gradients.
   - The input side also reads the whole spectrum, for the gap, the per-draw ranks and the eigenvalues kept with each subspace, so a leading-only readout would not serve it.
 - **Without the left vectors, the SVD took 0.33–0.87 of its time,** typically about half, on every shape. The singular values and right vectors are the same arithmetic, so the result is exact.
 - **C's eigendecomposition is faster still,** 0.01–0.83 of the SVD's time, because the caller has already accumulated C. Decision 5 keeps the SVD of F, so gaps are not squared. LOBPCG on C beat it only for k = 2 at p ≥ 100.
