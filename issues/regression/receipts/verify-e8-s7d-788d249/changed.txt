@@ -1,0 +1,15 @@
+src/maths/regression/spline/bass/BassBasis.cs
+src/maths/regression/spline/bass/BassConfig.cs
+src/maths/regression/spline/bass/BassDesign.cs
+src/maths/regression/spline/bass/BassModel.cs
+src/maths/regression/spline/bass/DesignKernel.cs
+src/maths/regression/spline/bass/DesignKernels.cs
+src/maths/regression/spline/bass/projection/BassProjectedFit.cs
+src/maths/regression/spline/bass/sensitivity/BassActiveSubspace.cs
+src/maths/regression/spline/bass/sensitivity/BassBasisEffects.cs
+src/maths/regression/spline/bass/sensitivity/BassBasisSensitivity.cs
+src/maths/regression/spline/bass/sensitivity/BassMoments.cs
+src/maths/regression/spline/bass/sensitivity/BassMultiOutputSubspaces.cs
+src/maths/regression/spline/bass/sensitivity/BassSensitivity.cs
+tests/regression/BassProjectionTests.cs
+tests/regression/HingeNormalizationTests.cs

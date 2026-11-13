@@ -5,7 +5,7 @@ Written by the coordinating session (`local_b6732445`) at close-out, for a fresh
 ## Start here
 
 1. Read [AGENTS.md](../../AGENTS.md) and [CONTRIBUTING.md](../../CONTRIBUTING.md), then this file. Read a workstream's brief before acting on it.
-2. **E8 is the only chip building.** When its report lands, verify it (see [Verification](#verification)) before anything else is commissioned on the BASS core.
+2. **No chip is building.** E8's slice 7d landed and was verified on 2026-11-13 (below).
 3. Then take the [waiting list](#waiting-on-the-user) to the user. No other chip has work commissioned.
 
 ## Standing rules
@@ -39,7 +39,7 @@ Older chips are listed in the 2026-11-09 handoff. Message a chip by its `local_�
 
 | Workstream | Done and verified | Next |
 |---|---|---|
-| **E8** | Through slice 7. Slice 7 verified: 7a `7b2ca7a` (2,349 of 2,349), 7b `70a2aa2` (48 of 48), 7c `015d977` (46 of 46); 7c's report is `5064e50` | The training-range rework (building); verify it on its report. Then the BPPR brief, if the user approves it |
+| **E8** | Through slice 7. Slice 7 verified: 7a `7b2ca7a` (2,349 of 2,349), 7b `70a2aa2` (48 of 48), 7c `015d977` (46 of 46); 7c's report is `5064e50`. Slice 7d, the training-range rule (`566c1f1` to `6aff134`, report `f72039b`), verified 2026-11-13: 2,502 of 2,502 from a clean archive of `788d249` ([inputs](receipts/verify-e8-s7d-788d249/)) | The BPPR brief, if the user approves it |
 | **Conformal (E16)** | 12a, 10a/10b, 11 (149 of 149 at `9248e33`), 12b (2,659 of 2,659 at `6ef6c98`), 13 (1,120 of 1,120 at `60694f0`) | The queue is empty. Slices 14 to 18 come by the user's need (waiting list) |
 | **Conformal Lean** | Slices 10, 12, 13–16, 18 and the grid reading, all verified | Slice 18's sources are now on disk (waiting list) |
 | **E21** | Slices 0–5. The b = 1 collapse is opt-in (`BassSampling.CollapseEffectsInMoves`), with form B on every rung by default | The u–s funnel fix (waiting list). New-group coverage stays open as the layer's follow-up; see the [two-layer addendum](bass/ridge-blocks-brief.md) (`8bc0d55`) |
