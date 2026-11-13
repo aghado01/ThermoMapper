@@ -285,31 +285,76 @@ Each report gives the commits, gate results, coverage and width by fit, cost, de
 
 Newest first.
 
-### In progress — Slice 14, shift (started 2026-11-13)
+### 2026-11-13 — Slice 14, the weighted rule under shift
 
-Started at the user's pick of 2026-11-13 ("ok 14 then 15", in this session), relayed to the main session. It runs under the Lean's slice 14 (section `Shift`), and 15 waits for 14's verification.
+Built at the user's pick of 2026-11-13 ("ok 14 then 15", in this session; slice 15 waits for this slice's verification), against the Lean's slice 14 (section `Shift`).
 
-**Plan.**
-- *`ShiftWeights`* holds the likelihood ratio at each training or calibration unit, and at each candidate: per grid column for the density forms, per test case for the closed-form intervals.
-- *The weighted rule* (`weightLe`): a candidate is refused when the weight of the units scoring at most its score, itself included, is at most α of the total. A set whose stratum's weights and candidate weights are all equal is CB-1's set, bit for bit (`weighted_eq_cb1`).
-- *Where weights enter:*
-  - the split form's density sets, CQR, asymmetric CQR and the standardized residual (`SplitConformal.*(…, weights)`), by a weighted calibration per stratum: sorted scores with their prefix weights, and the threshold per candidate weight;
-  - the full step (`ConformalOptions.Weights`), the scorer summing the weight of the units at or below each candidate.
-- *Refused under weights,* each counting units rather than weighing them: the full step's margin, inflated rule, fallback rule, Hoff's score and the margin's refinement. Split-half is not read.
-- *The guarantees, by declaration:*
-  - covariate shift with w(x), and response shift with w(y), at 1 − α (`coverage_weighted`);
-  - an estimated ratio losing at most E TV(p, p̂) (`sum_weight_refused_estimated_le`);
-  - weights fixed by position beyond exchangeability, at α + Σ q_K TV_K (`refused_le_swap_tv`);
-  - label-conditional sets as strata, no weights (`coverage_stratum`).
-- *Gates:*
-  - the weighted lemma on random scores, weights and ties;
-  - equal weights giving CB-1's sets bit for bit in every form;
-  - coverage under a known covariate shift and a response shift with the true ratio, beside the unweighted sets;
-  - the loss with an estimated ratio against its TV;
+**Landed** on `main`, nothing pushed:
+- `c19ce98`, with its tests.
+  - `ShiftWeights`, with `ShiftWeights.ByCase`.
+  - `WeightedCalibration`, internal.
+  - The weighted rule in `SplitConformal.Density`, `Quantiles`, `AsymmetricQuantiles` and `Residuals`, each with a `weights` argument.
+  - The full step's `ConformalOptions.Weights`.
+  - `WeightedAlpha` on `ConformalSet`, `ConformalInterval` and `AsymmetricConformalInterval`.
+  - `WeightedConformalTests`.
+- *Nothing moves without weights,* and a case whose weights are all equal takes CB-1's set, bit for bit.
+- *Not touched:* `PredictiveChecks.cs` and `Pointwise.cs`, which the shared-code defects chip owns (the coordination note, 4094ec7).
+
+**What it computes.**
+- *The rule* (`weightLe`). A candidate is refused when the weight of its stratum's units scoring at or below it, its own included, is at most α of the total. Its p-value is (Σ_{sᵢ ≤ s} wᵢ + w_c)/(W_h + w_c), with ties counted for the candidate.
+- *The closed forms* take, per case, the least accepted score: the first sorted calibration score whose running weight, with the case's own, passes α of the total. It is −∞ where the case's weight alone does, so the interval is the whole line.
+- *Equal weights.* Where a case's candidate weights and its stratum's unit weights are all one value, the layer returns CB-1's set, read by counts, so it is identical bit for bit (`weighted_eq_cb1`). Floating weights at an exact boundary cannot move it.
+- *The full step* sums the weight of the stratum's units scoring at or below each candidate, in the scorer's count. A stratum too small for a level keeps CB-1's whole space only where a case's weights are equal; elsewhere the weighted rule reads it.
+- *The guarantees,* each stated where the weights are given (`ShiftWeights`' docstring):
+  - covariate shift with w(x) (Tibshirani, Barber, Candès and Ramdas 2019) and response shift with w(y) (Podkopaev and Ramdas 2021), at 1 − α (`coverage_weighted`);
+  - an estimated ratio losing at most the expected total variation of the data set's normalized weights (`sum_weight_refused_estimated_le`, the layer's statement; the papers' is asymptotic);
+  - weights by position beyond exchangeability, at α + Σ_K q_K·TV(P, P∘swap) (Barber, Candès, Ramdas and Tibshirani 2023, `refused_le_swap_tv`);
+  - for a response with finitely many values, ranking within each value's stratum, with no weights (`coverage_stratum`).
+
+**Refused, each with its reason.**
+- *In the full step under weights:* the margin, the inflated rule, the fallback rule, Hoff's score and the margin's refinement. Each counts units rather than weighing them, and none is built for weights. A weighted set carries no margin, and its split-half reading is not taken.
+- *Every form:* weights that are negative, NaN or infinite, and counts unlike the units' and the candidates'.
+
+**Gates.**
+- *The weighted lemma* (`sum_weight_refused_le`): 3,000 random data sets with ties and some zero weights, each unit in turn the candidate. The refused units' normalized weight never exceeds α (largest excess 0.0000). A score is accepted exactly when it reaches the threshold at its weight.
+- *Equal weights:* CB-1's sets bit for bit in the density form, CQR, asymmetric CQR, the residual and the full step, its split-half reading included. In a call where one case is weighed otherwise, only that case takes the weighted rule.
+- *Covariate shift.* Training x is uniform; the test's x has density 2x, so w(x) = 2x. Noise grows with x, and the fit uses one scale. Over 4,000 replications (se 0.005), in each of the density, CQR and residual forms:
+  - unweighted: 0.845;
+  - the true ratio: 0.902;
+  - an estimated ratio, 0.5 + x: 0.878, against its bound of 0.9 less the mean TV 0.125.
+- *Response shift:* train y ~ N(0, 1), test y ~ N(1, 1), with x | y fixed. The unweighted sets cover 0.845 and the true ratio 0.919.
+- *The refusals* above. Under unequal weights the full step returns the weighted rule's set, with `Coverage` 1 − α and no margin.
+- *Per commit,* the selected classes and the pinned tier: 1,142 of 1,142. *At the slice's end,* the whole assembly: 3,295 of 3,295 at `c19ce98`.
+
+**The measurements** (behind `BASS_QUALIFICATION=1`):
+- *The full step under covariate shift on exact draws.* The model is y = βx + N(0, 1), under the conformal tests' heteroscedastic truth, with train x ~ N(0, 1) and test x ~ N(1, 1), so w(x) = e^(x − 1/2); n 49, 2,000 replications. Unweighted 0.829; the true ratio 0.939 (se 0.007).
+- *A drifting stream:* 199 calibration units in time order, the level drifting by 0.006 a step, and a fixed fit scored by the residual. Equal weights cover 0.497; weights ρ^(n − i) by position cover 0.686 at ρ 0.99 and 0.828 at ρ 0.97, over 4,000 replications. This is a reading: the bound's TV term is unknown, and the weights trade width for recency.
+
+**Defects found: none.** Two gaps were closed in building, before any commit:
+- the full step's small-stratum shortcut returned the whole space before weights were read;
+- three locals clashed in the density form's weighted branch.
+
+**Decided in building it.**
+- *One record for every form.* `ShiftWeights` carries the units' weights and the candidates': per grid column for the density forms, so response shift moves along a grid, and per case for the closed forms.
+- *Equal weights read as counts,* so CB-1's sets are unchanged bit for bit.
+- *The weighted set keeps CB-1's counts* in `Below` and `Tied` and CB-1's `Level` at the same m, as diagnostics. Its `PValues` are the weighted ones, and `WeightedAlpha` marks it.
+- *The full step's weighted sets carry no margin.* The inflated rule's ranks are counts, so the margin is null rather than misleading.
+
+**Follow-ups, each with the decision it would change.**
+- *The weighted predictive distribution,* split and full: the weighted CDF of the scores with the candidate's mass randomized. It decides whether the distribution takes shift weights.
+- *The cross-fitted forms under weights* (jackknife+, CV+ and the tournament, nonexchangeable per Barber et al. 2023). It decides whether those forms take weights.
+- *The inflated rule and the margin under weights.* CB-3's bounds would need weighted counts. It decides whether weighted full-step sets report their Monte Carlo error.
+- *A ratio estimator* (a probabilistic classifier's odds). It decides whether the layer estimates w or takes it given; today it is given.
+- *Slice 15* builds on this rule, its weights the cluster kernel's κ(L | z).
+
+**Doc changes owed** (for the offline docs pass; chips leave `docs/` alone).
+- *`docs/Maths/Regression/ConformalPrediction.md`, a section on the weighted rule:*
+  - the rule and its p-value;
+  - the four guarantees and where each weight comes from;
+  - equal weights as CB-1;
   - the refusals;
-  - qualification: the full step under shift on exact draws, and a drifting stream under position weights.
-
-**State.** The code and tests are committed in `c19ce98`. The Commit selection passed 1,142 of 1,142. Qualification read the full step under shift at 0.939 against 0.829 unweighted, and the drift readings. The whole assembly is running at `c19ce98`; the report follows it.
+  - the gates' tables and the drift reading.
+- *The API rows:* `ShiftWeights`, the `weights` arguments, `ConformalOptions.Weights`, `WeightedAlpha`.
 
 ### 2026-11-11 — Slice 13, the tournament correction
 
