@@ -459,6 +459,44 @@ At the stage-two handoff the coordinator checked the saved test counters. B1 sta
 
 **Tensor factorization review.** Retain the compact banded LDLᵀ factor. Across two warmed processes and nine tensor shapes, baseline time divided by candidate time for the complete REML fit ranged from 0.84 to 1.55. The candidate allocated 1.28 to 5.74 times as many bytes. At fixed smoothing of 10²⁰ on both axes, feasibility changed on three shapes. All 225 search-box grid points and 990 distinct optimizer trial points agreed on feasibility. The full regression gate of 3,282 passes covers the production baseline. The probe supplies the candidate comparison. [Tensor-spline qualification](spectral-tensor-factorization-report.md)
 
+### B1 stage three: the graph callers (2026-11-12)
+
+**Commit:** `ad15299`.
+
+**What changed:** three callers now use the element-wise relative rule at the default tolerance of 10⁻¹²:
+- `AlgebraicConnectivity`;
+- `AlignmentEigenCentrality`;
+- `SpectralMath.BottomK`, the dense path of `Spectral.ComputeBottomK`, which reaches `CoherentField`, `EffectiveResistance`, `SpectralBridge`, the Fiedler filter and the Rips filtration.
+
+`AlignmentEigenCentrality.Tolerance` changes units as decided. It is now relative, in [0, 1), and its documentation says so. With G's unit diagonal the two rules start out alike.
+
+Two stale comments are corrected:
+- `GraphFilters.FiedlerVector` now names `Spectral.ComputeBottomK` with `SolverKind.Auto`.
+- `SpectralDenseDispatchTests` no longer claims to cover FMA variants.
+
+**Tests:** `GraphSpectralScaleTests`, new.
+- The algebraic connectivity and the dense bottom five pairs, in both layouts, of a path with weights 1 to 4, at weight scales from 10⁻⁴⁰ to 10⁴⁰. Each eigenvalue divided by the scale matches unit scale to 10⁻¹² of the largest. The eigenvectors match up to sign to 10⁻¹².
+- `AlignmentEigenCentrality` on a star of five leaves returns the known Perron vector (√5, 1, 1, 1, 1, 1)/√10 to 10⁻¹². The class had no test before.
+
+**Witness against the absolute rule:** run before the migration, 6 of the 15 cases fail, at scales 10⁻⁸, 10⁻²⁰ and 10⁻⁴⁰ (receipt `artifacts/spectral-closeout/stage3-old-rule.txt`).
+- At 10⁻²⁰ and below no pivot rotates, so λ₂ divided by the scale comes back as a degree, off by 2.26.
+- At 10⁻⁸ the solve stops at a relative accuracy near 10⁻⁴ of the weights, which leaves the eigenvalue errors at 3–8·10⁻¹⁰.
+- The large scales passed under both rules.
+
+**Gates,** default and `EIGEN_REFERENCE` builds alike, whole projects (receipts `artifacts/spectral-closeout/stage3-gates/`):
+
+| Project | Passed |
+|---|---|
+| `VizCore.Tests` | 696, 2 standing skips |
+| `TDA.Ph.Tests` | 477 |
+| `TDA.Mapper.Tests` | 28 |
+| `Graphs.Primitives.Tests` | 3 |
+| `Maths.LinAlg.Tests` | 167 |
+
+**Pins moved:** none. The golden graph fixtures hold under the relative rule.
+
+**Doc changes owed:** [LinearAlgebra.md](../../docs/Maths/LinearAlgebra.md), on graph spectra stopping on the relative rule, and the units of `AlignmentEigenCentrality.Tolerance` wherever graph observables are documented.
+
 ### LOBPCG closeout: clustered eigenspaces, the capped constrained run and the Rayleigh–Ritz share (2026-11-12)
 
 **Commit:** `e8d6b89` (tests only).
