@@ -32,6 +32,8 @@ public sealed class DensityRatio
 
     /// <summary>Fits the ratio from <paramref name="source"/> (rows the source law's inputs' features) and <paramref name="target"/> (the
     /// target law's), each at least one row and the same width.</summary>
+    /// <param name="source">The source law's sample, one row of features per input.</param>
+    /// <param name="target">The target law's sample, its rows the same features.</param>
     /// <param name="ridge">The slopes' penalty per pooled point on the standardized features; positive.</param>
     /// <param name="maxIterations">Newton steps allowed before the fit is refused as not converged.</param>
     /// <param name="tolerance">The largest standardized gradient entry per pooled point at which the fit stops.</param>
