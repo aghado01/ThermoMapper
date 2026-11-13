@@ -292,6 +292,31 @@ Each report gives the commits, gate results, coverage and width by fit, cost, de
 
 Newest first.
 
+### In progress — Slice 15, posterior conformal prediction (started 2026-11-13)
+
+Started at the main session's word after slice 14's verification, under the Lean's slice 15 (section `PosteriorConformal`) and Zhang and Candès (arXiv 2409.19712v2, read in TeX: §2, §6 and its hyperparameter rules, Theorems 1, 3 and 4, Proposition 2).
+
+**Plan, in two parts.**
+- *15a, the rule given the memberships.* It is slice 14's weighted rule, with unit weights that move with the test case: `ShiftWeights` gains weights per case.
+  - *Randomized,* their Theorem 1. L ~ Multinomial(m, π(x_test)), drawn per case on a seeded stream, and w_i ∝ Π_k π_k(x_i)^{L_k}, the test's own included. Exact given L, so exactly marginal (`coverage_pcp`, `coverage_pcp_marginal`).
+  - *KL,* their Theorem 3. w_i ∝ exp(−m·KL(π(x_test) ‖ π(x_i))), fixed given the covariates, the test's the largest. The per-cluster gap is α + Σ_K q_K Σ_k |π_k(K) − π_k(test)|, half their constant (`pcp_cluster_gap`); it is read at the memberships given as a diagnostic, since it needs the true ones.
+  - The split forms and the full step take weights per case. Each case reports its draw and its weights' ESS.
+- *15b, the membership estimator* on a training split: their matching fit.
+  - Logistic fits τ_t(x) = P(score ≤ ξ_t | x) at the score's nine deciles.
+  - A simplex-constrained factorization τ ≈ Σ_k π_k γ_k, k-means++-initialized, alternating projected updates and least squares.
+  - Memberships at new inputs by the same projection.
+  - J by their R² rule, and m by their effective-sample-size and self-weight rule on the training split.
+  - Fitted on the training split, π̂ is a fixed function of x, so their symmetry condition holds without refitting per y.
+- *Gates:*
+  - the rule's exact given-L statement over enumerated test identities;
+  - on a two-cluster heteroscedastic fixture with known memberships: marginal coverage, per-cluster coverage near nominal, and width against Mondrian strata, beside the unweighted split;
+  - KL weights with their gap read;
+  - per-case weights matching per-case calls;
+  - the refusals;
+  - 15b: memberships recovered up to labels, and end-to-end coverage with the estimate.
+
+**State.** 15a is being written. Nothing committed.
+
 ### 2026-11-13 — Slice 14's follow-up: the ratio estimator
 
 Built at the user's decision 12 ("Lean first, 15 meanwhile"). It needs no Lean: the estimated-ratio bound covers it (`sum_weight_refused_estimated_le`).
