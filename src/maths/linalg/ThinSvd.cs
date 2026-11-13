@@ -101,14 +101,18 @@ namespace Maths.LinAlg
             double negligible = MachineEpsilon * frobenius;
             var scratchP = new double[cols];
             var scratchQ = new double[cols];
+            // Column norms are read at the start of each sweep and carried through its rotations (spectral-solver brief, G3),
+            // so a pair costs one dot product, not three. The sweep that rotates nothing, the last, reads every norm afresh.
+            var norms = new double[cols];
             bool converged = false;
             for (int sweep = 0; sweep < MaxSweeps && !converged; sweep++)
             {
                 converged = true;
+                for (int j = 0; j < cols; j++) norms[j] = Norm(w[j]);
                 for (int p = 0; p < cols - 1; p++)
                     for (int q = p + 1; q < cols; q++)
                     {
-                        double np = Norm(w[p]), nq = Norm(w[q]);
+                        double np = norms[p], nq = norms[q];
                         if (np <= negligible || nq <= negligible) continue;
                         double cos = Cosine(w[p], np, w[q], nq, scratchP, scratchQ);
                         if (Math.Abs(cos) <= orthogonal) continue;
@@ -125,6 +129,7 @@ namespace Maths.LinAlg
                         converged = false;
                         Rotate(w[p], w[q], c, s);
                         Rotate(vt[p], vt[q], c, s);
+                        CarryNorms(norms, w, p, q, np, nq, t, cos);
                     }
             }
             if (!converged) throw new InvalidOperationException($"One-sided Jacobi did not converge in {MaxSweeps} sweeps.");
@@ -201,6 +206,18 @@ namespace Maths.LinAlg
                 sy[i] = y[i] / ny;
             }
             return PairwiseSum.Dot(sx, sy);
+        }
+
+        // The rotation diagonalizes the pair's Gram, so the squared norms become ‖w_p‖² − t·d and ‖w_q‖² + t·d, d = w_pᵀw_q.
+        // A column left with less than a quarter of its square is recomputed, so cancellation cannot cost a small column its
+        // accuracy; so are norms outside the range where their squares are safe.
+        private static void CarryNorms(double[] norms, double[][] w, int p, int q, double np, double nq, double t, double cos)
+        {
+            double d = cos * np * nq;
+            bool safe = np > 1e-140 && np < 1e140 && nq > 1e-140 && nq < 1e140;
+            double sp = np * np - t * d, sq = nq * nq + t * d;
+            norms[p] = safe && sp >= 0.25 * np * np ? Math.Sqrt(sp) : Norm(w[p]);
+            norms[q] = safe && sq >= 0.25 * nq * nq ? Math.Sqrt(sq) : Norm(w[q]);
         }
 
         // y ← (I − 2vvᵀ/vᵀv)·y.

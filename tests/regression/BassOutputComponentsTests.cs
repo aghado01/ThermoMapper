@@ -131,7 +131,10 @@ public sealed class BassOutputComponentsTests
     {
         (double[,] y, BassPredictor[] predictors) = Problem();
         BassDecomposition d = BassDecomposition.FromPca(y, new BassPcaSpec { Rank = 3 });
-        BassConfig config = Config(chains: 3, samples: 2000) is var c
+        // Seed 5: two components stop early at different lengths (850 and 1,500 draws, the third at the cap of 2,000). The R̂ stop
+        // fires on few seeds of this fixture (4 of 13 scanned), and the former seed's single early stop was lost to a rounding-level
+        // change in ThinSvd (spectral-solver brief, G3); two early stops give the precondition margin.
+        BassConfig config = Config(chains: 3, samples: 2000, seed: 5) is var c
             ? c with { Sampling = c.Sampling with { RHatTarget = 1.1, BatchSize = 50, MinEssPerChain = 10, StoppingScope = BassStoppingScope.Predictive } }
             : null!;
         BassBasisFit fit = BassComponents.Fit(d, predictors, config);

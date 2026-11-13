@@ -60,7 +60,7 @@ public sealed class BassSensitivityBasisTests
                 for (int v = 0; v < direct.Inputs.Count; v++) Assert.True(Close(at.TotalVariance[d, v], scale * direct.TotalVariance[d, v]));
                 Assert.Equal(direct.Status[d], at.Status[d]);
                 if (!direct.IsDefined(d)) continue;
-                for (int u = 0; u < direct.Subsets.Count; u++) Assert.Equal(direct.MainIndex(d, u), at.MainIndex(d, u), 13);
+                for (int u = 0; u < direct.Subsets.Count; u++) Assert.InRange(Math.Abs(direct.MainIndex(d, u) - at.MainIndex(d, u)), 0.0, 1e-13);
             }
         }
     }
