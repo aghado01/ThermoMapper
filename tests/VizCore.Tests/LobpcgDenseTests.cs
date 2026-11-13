@@ -133,16 +133,8 @@ public sealed class LobpcgDenseTests
     [Fact]
     public void Solve_CarriedImages_ReportTheReturnedPairsResidual()
     {
-        const int n = 80;
-        double[,] matrix = BuildRandomSymmetricMatrix(size: n, seed: 23);
-        for (int i = 0; i < n; i++) matrix[i, i] += 4.0 + i * 0.05;   // a varied diagonal for the preconditioner to read
-        EigenResult full = DenseEigen.DecomposeSymmetric(matrix);
-        double[] constraint = full.Eigenvectors[n - 1];
-        var options = new LOBPCG.Options
-        {
-            MaxIterations = 2000, Tolerance = 1e-7, Constraints = constraint, ConstraintColumns = 1,
-            Preconditioner = new DiagonalPreconditioner(matrix),
-        };
+        (double[,] matrix, EigenResult full, double[] constraint, LOBPCG.Options options) = ConstrainedFixture();
+        int n = matrix.GetLength(0);
         LOBPCG.Result result = LOBPCG.Solve(new DenseSymmetricOperator(matrix), 5, options);
 
         Assert.True(result.Converged, $"iterations {result.Iterations}, residual {result.ResidualNorm:E3}, independent {MaxResidual(matrix, result):E3}");
@@ -151,8 +143,116 @@ public sealed class LobpcgDenseTests
         for (int j = 0; j < 5; j++)
         {
             Assert.InRange(Math.Abs(result.Eigenpairs[j].Lambda - full.Eigenvalues[n - 2 - j]), 0.0, 1e-9);
-            Assert.InRange(Math.Abs(result.Eigenpairs[j].Vector.Zip(constraint, (a, b) => a * b).Sum()), 0.0, 1e-8);
+            Assert.InRange(Math.Abs(Dot(result.Eigenpairs[j].Vector, constraint)), 0.0, 1e-8);
         }
+    }
+
+    /// <summary>
+    /// At the iteration cap with a constraint and a preconditioner (spectral-solver brief, A1 and B5), the solve still describes the
+    /// pairs it returns: the reported residual is the operator applied to them, each value is its vector's Rayleigh quotient, and the
+    /// vectors are orthogonal to the constraint. The fixture is the converged test's, capped at three iterations, so the cap's fresh
+    /// application follows carried images that have passed through the deflation and the preconditioner.
+    /// </summary>
+    [Fact]
+    public void Solve_CappedConstrainedPreconditioned_DescribesReturnedPairs()
+    {
+        (double[,] matrix, _, double[] constraint, LOBPCG.Options options) = ConstrainedFixture();
+        LOBPCG.Result result = LOBPCG.Solve(new DenseSymmetricOperator(matrix), 5, options with { MaxIterations = 3 });
+
+        Assert.False(result.Converged);
+        Assert.Equal(3, result.Iterations);
+        Assert.InRange(Math.Abs(result.ResidualNorm - MaxResidual(matrix, result)), 0.0, 1e-12);
+        foreach (EigenPair pair in result.Eigenpairs)
+        {
+            Assert.InRange(Math.Abs(pair.Lambda - Dot(pair.Vector, Multiply(matrix, pair.Vector))), 0.0, 1e-12);
+            Assert.InRange(Math.Abs(Dot(pair.Vector, constraint)), 0.0, 1e-12);
+        }
+    }
+
+    /// <summary>
+    /// Clustered eigenvalues (spectral-solver brief, B3). Inside a cluster the eigenvectors are not determined, so agreement is read on
+    /// the cluster's eigenspace. A = QΛQᵀ, Q random orthogonal, places four eigenvalues at 10 above a spectrum on [0, 8], or three at 0
+    /// below one on [2, 10], each cluster exact or spread by 10⁻¹². The returned vectors V lie in the cluster's eigenspace to the
+    /// Davis–Kahan bound, ‖(I − QcQcᵀ)V‖_F ≤ ‖R‖_F/δ, with R the returned pairs' residual block and δ the distance from their values to
+    /// the eigenvalues outside the cluster, plus 10⁻¹² for forming A in floating point. A block as wide as the cluster spans it; a
+    /// narrower one lies inside it. Ties in the projected matrix are where the dense kernel's sort decides which Ritz vectors are kept.
+    /// </summary>
+    [Theory]
+    [InlineData(true, 0.0, 4)]
+    [InlineData(true, 1e-12, 4)]
+    [InlineData(true, 0.0, 2)]
+    [InlineData(true, 1e-12, 2)]
+    [InlineData(false, 0.0, 3)]
+    [InlineData(false, 1e-12, 3)]
+    public void Solve_ClusteredEigenvalues_AgreeOnTheClustersEigenspace(bool wantLargest, double spread, int k)
+    {
+        const int n = 60;
+        int clusterSize = wantLargest ? 4 : 3;
+        double clusterAt = wantLargest ? 10.0 : 0.0, restFrom = wantLargest ? 0.0 : 2.0;
+        var spectrum = new double[n];
+        for (int j = 0; j < n; j++)
+            spectrum[j] = j < clusterSize ? clusterAt + j * spread : restFrom + 8.0 * (j - clusterSize) / (n - clusterSize - 1);
+        double[] q = MatrixOps.RandomOrthonormal(n, n, seed: 31);
+        var matrix = new double[n, n];
+        for (int r = 0; r < n; r++)
+            for (int c = r; c < n; c++)
+            {
+                double s = 0.0;
+                for (int j = 0; j < n; j++) s += q[j * n + r] * spectrum[j] * q[j * n + c];
+                matrix[r, c] = matrix[c, r] = s;
+            }
+
+        LOBPCG.Result result = LOBPCG.Solve(new DenseSymmetricOperator(matrix), k,
+            new LOBPCG.Options { WantLargest = wantLargest, MaxIterations = 2000, Tolerance = 1e-10 });
+
+        Assert.True(result.Converged, $"iterations {result.Iterations}, residual {result.ResidualNorm:E3}");
+        Assert.Equal(k, result.Eigenpairs.Count);
+        Assert.InRange(Math.Abs(result.ResidualNorm - MaxResidual(matrix, result)), 0.0, 1e-12);
+        double residualSquares = 0.0, outsideSquares = 0.0, delta = double.MaxValue;
+        foreach (EigenPair pair in result.Eigenpairs)
+        {
+            double residual = ResidualNorm(matrix, pair.Lambda, pair.Vector);
+            residualSquares += residual * residual;
+            Assert.InRange(pair.Lambda, clusterAt - residual - 1e-12, clusterAt + (clusterSize - 1) * spread + residual + 1e-12);
+            for (int j = clusterSize; j < n; j++) delta = Math.Min(delta, Math.Abs(pair.Lambda - spectrum[j]));
+            double[] outside = (double[])pair.Vector.Clone();
+            for (int j = 0; j < clusterSize; j++)
+            {
+                double along = 0.0;
+                for (int i = 0; i < n; i++) along += q[j * n + i] * pair.Vector[i];
+                for (int i = 0; i < n; i++) outside[i] -= along * q[j * n + i];
+            }
+            outsideSquares += Dot(outside, outside);
+        }
+        Assert.InRange(Math.Sqrt(outsideSquares), 0.0, Math.Sqrt(residualSquares) / delta + 1e-12);
+    }
+
+    // An 80 × 80 random symmetric matrix with a varied diagonal for the preconditioner to read, its lowest eigenvector as the
+    // constraint, five pairs asked for at a tolerance of 10⁻⁷ (the floor the constraint leaves is in the carried-image test's summary).
+    private static (double[,] Matrix, EigenResult Full, double[] Constraint, LOBPCG.Options Options) ConstrainedFixture()
+    {
+        const int n = 80;
+        double[,] matrix = BuildRandomSymmetricMatrix(size: n, seed: 23);
+        for (int i = 0; i < n; i++) matrix[i, i] += 4.0 + i * 0.05;
+        EigenResult full = DenseEigen.DecomposeSymmetric(matrix);
+        double[] constraint = full.Eigenvectors[n - 1];
+        var options = new LOBPCG.Options
+        {
+            MaxIterations = 2000, Tolerance = 1e-7, Constraints = constraint, ConstraintColumns = 1,
+            Preconditioner = new DiagonalPreconditioner(matrix),
+        };
+        return (matrix, full, constraint, options);
+    }
+
+    private static double Dot(double[] a, double[] b) => a.Zip(b, (x, y) => x * y).Sum();
+
+    private static double[] Multiply(double[,] matrix, double[] v)
+    {
+        int n = v.Length;
+        var result = new double[n];
+        for (int i = 0; i < n; i++)
+            for (int j = 0; j < n; j++) result[i] += matrix[i, j] * v[j];
+        return result;
     }
 
     // D⁻¹ for the matrix's diagonal D.
