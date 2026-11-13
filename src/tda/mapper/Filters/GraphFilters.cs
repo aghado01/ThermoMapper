@@ -53,8 +53,8 @@ public static class GraphFilters
     /// of the weighted graph Laplacian). Captures the dominant connectivity
     /// gradient — the "principal axis" of the graph. Requires a connected
     /// graph (use <c>ConnectivityRepair.EnsureConnected</c> for MST-bridged repair).
-    /// Uses dense eigendecomposition via <c>Maths.LinAlg.DenseEigen.DecomposeSymmetric</c>;
-    /// suitable for graphs up to ~few thousand nodes.</summary>
+    /// Uses <c>Graphs.Spectral.Spectral.ComputeBottomK</c> with <c>SolverKind.Auto</c>, which
+    /// chooses the dense decomposition or matrix-free LOBPCG by graph size.</summary>
     public static IGraphFilter FiedlerVector => new FiedlerVectorFilter();
 
     /// <summary>Lift a point-cloud <see cref="IFilter"/> to operate on graph

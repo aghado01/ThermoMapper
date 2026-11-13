@@ -11,7 +11,7 @@ using Xunit;
 
 namespace VizCore.Tests;
 
-[HarnessFixture("Verifies numerical consistency across dense Laplacian materialization strategies and FMA dispatch variants.")]
+[HarnessFixture("Verifies numerical consistency across dense Laplacian materialization strategies.")]
 public sealed class SpectralDenseDispatchTests
 {
     [Fact]

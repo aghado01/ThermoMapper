@@ -33,7 +33,7 @@ namespace Graphs.Observables;
 ///         signal.</item>
 ///     </list>
 ///   </item>
-///   <item>Call <see cref="DenseEigen.DecomposeSymmetric(double[,], int, double)"/>;
+///   <item>Call <see cref="DenseEigen.DecomposeSymmetric(double[,], int, double, JacobiStoppingRule)"/> under the element-wise relative rule;
 ///     the result's eigenvalues are sorted descending.</item>
 ///   <item>Take <c>Eigenvectors[0]</c> as the per-node scalar.</item>
 ///   <item>By Perron-Frobenius (G is non-negative symmetric) the top
@@ -65,8 +65,9 @@ public sealed class AlignmentEigenCentrality : IGraphSignal<Alignments>
     public int MaxSweeps { get; init; } = 256;
 
     /// <summary>
-    /// Convergence tolerance for the off-diagonal infinity norm.
-    /// Default matches <see cref="DenseEigen"/>'s default.
+    /// Relative convergence tolerance, in [0, 1): a Jacobi pivot is left unrotated when |G_pq| ≤ Tolerance·√|G_pp·G_qq|
+    /// (<see cref="JacobiStoppingRule.ElementWiseRelative"/>). It bounded |G_pq| absolutely until the spectral-solver
+    /// consolidation (B1 stage three); with G's unit diagonal the two agree at the start of the solve.
     /// </summary>
     public double Tolerance { get; init; } = 1e-12;
 
@@ -105,7 +106,7 @@ public sealed class AlignmentEigenCentrality : IGraphSignal<Alignments>
         }
 
         // ── Top eigenvector via dispatched symmetric eigendecomposition ──
-        EigenResult eig = DenseEigen.DecomposeSymmetric(g, MaxSweeps, Tolerance);
+        EigenResult eig = DenseEigen.DecomposeSymmetric(g, MaxSweeps, Tolerance, JacobiStoppingRule.ElementWiseRelative);
         double[] top = eig.Eigenvectors[0];
         if (top.Length != n)
             throw new InvalidOperationException(

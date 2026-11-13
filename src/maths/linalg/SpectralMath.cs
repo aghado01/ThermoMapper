@@ -13,8 +13,10 @@ public readonly record struct EigenPair(double Lambda, double[] Vector);
 
 /// <summary>
 /// Graph-free dense spectral primitives. Operates on materialised symmetric
-/// matrices, dispatches eigendecomposition via <see cref="DenseEigen"/>, and
-/// selects the bottom-K eigenpairs (smallest eigenvalues, sorted ascending).
+/// matrices, dispatches eigendecomposition via <see cref="DenseEigen"/> under the
+/// element-wise relative stopping rule, so a Laplacian's eigenpairs follow any
+/// rescaling of its weights, and selects the bottom-K eigenpairs (smallest
+/// eigenvalues, sorted ascending).
 ///
 /// Pair this with a graph-aware adapter — e.g.
 /// <c>Graphs.Spectral.Spectral.ComputeBottomK</c> — when consuming
@@ -32,7 +34,7 @@ public static class SpectralMath
         double[,] matrix, int k)
     {
         if (k <= 0) return Array.Empty<EigenPair>();
-        EigenResult eig = DenseEigen.DecomposeSymmetric(matrix);
+        EigenResult eig = DenseEigen.DecomposeSymmetric(matrix, stoppingRule: JacobiStoppingRule.ElementWiseRelative);
         return SelectBottomK(eig, k);
     }
 
@@ -45,7 +47,7 @@ public static class SpectralMath
         ReadOnlySpan<double> flatColumnMajorMatrix, int n, int k)
     {
         if (k <= 0) return Array.Empty<EigenPair>();
-        EigenResult eig = DenseEigen.DecomposeSymmetric(flatColumnMajorMatrix, n);
+        EigenResult eig = DenseEigen.DecomposeSymmetric(flatColumnMajorMatrix, n, stoppingRule: JacobiStoppingRule.ElementWiseRelative);
         return SelectBottomK(eig, k);
     }
 
