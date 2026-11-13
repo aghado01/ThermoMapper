@@ -190,6 +190,8 @@ Written on 2026-11-08 at the user's request, relayed by the main session: comple
 - *A noise law's density over many residuals at one draw* (slice 1's follow-up). It belongs to the noise laws' owner, and decides whether `IBassNoiseLaw` gains a batched density.
 - *A trigger for the fallback signal,* which waits on a fixture with a measured shortfall (2026-11-07's decision).
 - *Dobriban and Lin's joint coverage regions,* which need a conditional pivot a nonparametric fit lacks (E16's entry).
+- *Coverage for a new group under random effects* (agreed with the GBASS chip for E21's slice 5, 2026-11-10). A new group's cases are correlated, so case-level calibration does not cover them. The units must be whole groups held out, or one score per held-out group (Dunn, Wasserman and Ramdas's two-layer conformal). It decides whether the split form takes group-level units for BASS's random-effect fits; today a new group's candidates are read, but not calibrated as a group.
+- *The layer's own check that strata lie inside cells* (the same agreement). The densities would carry each unit's cell, and the layer would refuse a stratum spanning two. BASS's entry points refuse such strata already, except a training partition built without strata. It decides whether a training density built without the cells is caught at the layer.
 
 **Decisions for the user, before the slices they touch.**
 - *Slice 7's flag* removes an input the full step now takes.
