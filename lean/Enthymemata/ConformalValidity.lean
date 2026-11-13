@@ -6265,10 +6265,10 @@ noncomputable def crcRule {Z : Type*} {k : ℕ} (C : Finset ι) (t : ι) (ℓ : 
   firstFeasible fun l => ∑ i ∈ C.erase t, ℓ (z i) l + B ≤ α * C.card
 
 /-- **Conformal risk control, over orderings** (Snell and Griffiths's Proposition 3.2, through
-Angelopoulos et al.'s theorem): the posterior mean `E(L⁺)` is calibrated over replicated calibration
-sets. Losses nonincreasing in the threshold, at most `B`, and at most `α` at the last threshold.
-Averaged over the orderings of any data set, the test unit's loss at the rule's threshold is at
-most `α`. -/
+Angelopoulos et al.'s Theorem 1, arXiv 2208.02814): the posterior mean `E(L⁺)` is calibrated over
+replicated calibration sets. Losses nonincreasing in the threshold, at most `B`, and at most `α` at
+the last threshold; on a grid, their right-continuity is not needed. Averaged over the orderings of
+any data set, the test unit's loss at the rule's threshold is at most `α`. -/
 theorem crc_orderings {Z : Type*} {k : ℕ} {C : Finset ι} {t : ι} (ht : t ∈ C)
     (ℓ : Z → Fin (k + 1) → ℝ) (hanti : ∀ v, Antitone (ℓ v)) {B α : ℝ} (hB : ∀ v l, ℓ v l ≤ B)
     (hlast : ∀ v, ℓ v (Fin.last k) ≤ α) (z : ι → Z) :
@@ -6312,8 +6312,8 @@ omit [Fintype ι] [DecidableEq ι] in
 /-- **The `β`-bound's calibration at one calibration unit** (Gaffke's bound, which is Snell and
 Griffiths's `b*_β`). With one loss `ℓ` their posterior is `L⁺ = ℓ + U (B − ℓ)`, `U` uniform, so
 `b*_β = ℓ + β (B − ℓ)`. For a loss law on finitely many values at most `B`, the bound is at least
-the mean loss `J` with chance at least `β`. Gaffke proved two units, and Vlassis and Thomas (arXiv
-2607.08415) every number. -/
+the mean loss `J` with chance at least `β`. Every number of units is Vlassis and Thomas's Theorem 1
+(arXiv 2607.08415) with `X_i = (B − ℓ_i)/(B − J)`: `P(L⁺ ≤ J) = 1 − K(X)` for their `K`. -/
 theorem gaffke_one {κ : Type*} [Fintype κ] (p v : κ → ℝ) (hp : ∀ k, 0 ≤ p k)
     (hp1 : ∑ k, p k = 1) {B β : ℝ} (hv : ∀ k, v k ≤ B) (hβ : β ≤ 1) :
     β ≤ ∑ k, p k * if (∑ k', p k' * v k') ≤ v k + β * (B - v k) then 1 else 0 := by
@@ -6432,7 +6432,8 @@ theorem logLoss_strict (p q : κ → ℝ) (hp : ∀ y, 0 ≤ p y) (hp1 : ∑ y, 
   simp only [mul_neg, sum_neg_distrib]
   linarith
 
-/-- **The integrated squared loss's gap** (Gressmann et al.'s Lemma 2.4 (ii)): with
+/-- **The integrated squared loss's gap** (Gressmann et al.'s Lemma 2.4 (ii); the loss is minus
+Gneiting and Raftery's quadratic score, and the gap is its Bregman divergence): with
 `L(q, y) = −2 q(y) + ‖q‖²`, the multi-class Brier loss, the expected loss of `q` exceeds that of
 the law `p` by `Σ (p − q)²`. -/
 theorem gneitingLoss_gap (p q : κ → ℝ) (hp1 : ∑ y, p y = 1) :

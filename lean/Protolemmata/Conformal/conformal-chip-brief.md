@@ -206,14 +206,27 @@ The user asked for this on 2026-11-08 ("Yes, start it"), relayed by the BASS ext
 
 ## Reports
 
+Newest first.
+
+### 2026-11-13 — slice 18 checked against its sources
+
+The three sources slice 18 lacked were read in full; the ledger's "Slice 18" says where. Every result stands, and the citations now name theorems rather than abstracts.
+- *The β-bound's calibration is Vlassis and Thomas's Theorem 1.*
+  - With X_i = (B − ℓ_i)/(B − J), P(L⁺ ≤ J) = 1 − K(X) for their statistic. The checks confirm this exactly on 300 cases. So b*_β misses J only when K(X) < 1 − β.
+  - It holds for independent losses at most B, whatever their laws, discrete included. That is wider than Snell and Griffiths's continuity footnote.
+- *`crc_orderings` is Angelopoulos et al.'s Theorem 1 on a grid.* It has the same hypotheses and the same oracle-threshold proof, and their right-continuity is not needed. Their Theorem 2 (the lower bound) is not formalized.
+- *The scores match Gneiting and Raftery.*
+  - The integrated squared loss is minus their quadratic score, and its gap is the Brier score's Bregman divergence.
+  - The log-loss's positivity hypothesis is their dominated class, on finitely many outcomes.
+- *Changed:* three docstrings (no proof changed), one exact check, and the ledger. The main session's 2026-11-11 entry moved under "Newest first."
+- *Gates:* the module and barrel build, the axioms probe (standard three only), meta-ci, and the full checks run (1,111 s) pass.
+
 ### 2026-11-11 — slice 18's sources, on disk (main session)
 
 The user placed the sources slice 18 wanted. Reading them against slice 18's findings waits for the user's go-ahead.
 - Vlassis and Thomas, arXiv 2607.08415: `gauntlet/conformal-bayes/2607.08415v1/` (PDF, TeX).
 - Angelopoulos et al., Conformal Risk Control, arXiv 2208.02814: `gauntlet/conformal-bayes/2208.02814v4/`.
 - Gneiting and Raftery 2007 (JASA): `PDFs/Bayesian/Gneiting2007jasa.pdf`.
-
-Newest first.
 
 ### 2026-11-10 — slice 18: the guarantee read out, proved
 

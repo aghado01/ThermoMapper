@@ -2872,6 +2872,20 @@ for n in range(1, 6):
             slack_min = cov - beta if slack_min is None else min(slack_min, cov - beta)
         n_cal += 1
 
+# The calibration is Vlassis and Thomas's Theorem 1: with X_i = (B - l_i)/(B - J) >= 0 and their
+# K(x) = P{sum_i x_i D_i <= 1}, D ~ Dir(1, ..., 1) over n + 1 weights (a zero added to x), P(L+ <= J) is
+# 1 - K(X); so b*_beta misses J exactly when K(X) < 1 - beta, which has chance at most 1 - beta.
+n_vt = 0
+rr = random.Random(1830)
+for trial in range(300):
+    n = rr.randint(1, 6)
+    ls = [Q(rr.randint(0, 8), 8) for _ in range(n)]
+    J = Q(rr.randint(1, 15), 16)
+    X = [(1 - l) / (1 - J) for l in ls]
+    K = 1 - plus_pow_dd([Q(0)] + sorted(X), Q(1), n)
+    assert lplus_cdf(ls, Q(1), J) == 1 - K
+    n_vt += 1
+
 # Their Theorem 4.3 takes p(t | l) to be the Dirichlet law, which it is before l is seen. A point-mass
 # prior on the step quantile function, 0 on [0, 1/10] and B = 1 above (J = 9/10), is consistent with
 # all-zero losses; its posterior has J = 9/10 surely, so Pr(L <= b | l) = 0 for b < 9/10, while
@@ -2958,6 +2972,7 @@ assert math.log(0.5 * 0.9 + 0.5 * 0.1) > 0.5 * math.log(0.9) + 0.5 * math.log(0.
 print(f"Slice 18: the posterior L+ exactly, its machinery on {n_dd} knot sets (mean, ends, distinct-knot "
       f"formula); its beta-bound calibrated over replicated calibration sets on {n_cal} loss laws, n <= 5, "
       f"beta in {{1/2, 3/4, 9/10, 19/20}} (least slack {float(slack_min):.4f}), n = 1 as the Lean states it; "
+      f"P(L+ <= J) = 1 - K(X) for Vlassis and Thomas's K on {n_vt} cases; "
       f"their Theorem 4.3 failing under a point-mass prior; conformal risk control over orderings on {n_crc} "
       f"data sets; the HPD rule failing at most where the fixed threshold does, within 1 - beta, on {n_hpd} "
       f"laws (worst failure {float(worst):.4f}); the squared loss's gap and Gibbs on {n_prop} law pairs")

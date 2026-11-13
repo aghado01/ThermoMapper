@@ -858,15 +858,19 @@ Lee, Tchetgen Tchetgen and Dobriban (arXiv 2409.13990v5), read in TeX: §2, Cond
 
 ## Slice 18 — the guarantee read out
 
-Snell and Griffiths (arXiv 2502.13228v2), read in TeX: §3–§4, Propositions 3.1–3.2, Theorems 4.1 and 4.3, Lemma 4.2, Corollary 4.4, the appendix proofs, and §5.1. Gressmann et al. (arXiv 1801.00753v3), read in TeX: §2.5, Definitions 2.2–2.3, Lemma 2.4, Propositions 2.5–2.7. Proved on 2026-11-10 in `ConformalValidity.lean`, sections `LossPosterior` and `ProperScores`, PROOF-CLOSED, with the standard three axioms only. The checks (section "Slice 18") ran first.
+Snell and Griffiths (arXiv 2502.13228v2), read in TeX: §3–§4, Propositions 3.1–3.2, Theorems 4.1 and 4.3, Lemma 4.2, Corollary 4.4, the appendix proofs, and §5.1. Gressmann et al. (arXiv 1801.00753v3), read in TeX: §2.5, Definitions 2.2–2.3, Lemma 2.4, Propositions 2.5–2.7. Proved on 2026-11-10 in `ConformalValidity.lean`, sections `LossPosterior` and `ProperScores`, PROOF-CLOSED, with the standard three axioms only. The checks (section "Slice 18") ran first. Checked on 2026-11-13 against the sources the first reading lacked:
+- Vlassis and Thomas (arXiv 2607.08415v1), read in TeX: §1 and Theorem 1, with the two-point validity and its proof.
+- Angelopoulos et al., *Conformal risk control* (arXiv 2208.02814v4), read in TeX: §2, Theorems 1 and 2, and Theorem 1's proof.
+- Gneiting and Raftery (JASA 2007), read from the PDF: Examples 1 and 3, and the quadratic score (18).
 
 **The posterior over the loss.**
 - *Their construction.* Take n calibration losses ℓ_(1) ≤ … ≤ ℓ_(n), set ℓ_(n+1) = B, and let L⁺ = Σ U_i ℓ_(i) with U ~ Dir(1, …, 1).
 - *Its exact law, for small n.* The checks compute it exactly: P(L⁺ > x) is the divided difference of (t − x)_+^n on the knots, confluent where they tie.
-- *Its mean is conformal risk control* (`crc_orderings`; their Proposition 3.2, through Angelopoulos et al.).
+- *Its mean is conformal risk control* (`crc_orderings`; their Proposition 3.2, through Angelopoulos et al.'s Theorem 1).
   - E(L⁺) = (Σ ℓ_i + B)/(n + 1). The rule λ_crc takes the first threshold with E(L⁺) ≤ α.
   - Over the orderings of any data set, the test unit's loss at that threshold averages at most α. So the posterior mean is calibrated over replicated calibration sets.
   - *Hypotheses.* Losses are nonincreasing in λ on a grid, at most B, and at most α at the last threshold.
+  - *Against Angelopoulos et al.* Their Theorem 1 has these hypotheses, and its proof runs the same route: an oracle threshold over all n + 1 losses sits below λ̂, and the test loss is uniform over the multiset. On a grid, their right-continuity is not needed.
 
 **Finding: their Theorem 4.3 does not hold as stated.**
 - *The gap.* Its proof replaces p(t_{1:n} | ℓ_{1:n}) with the Dirichlet law of the spacings. That is their law before ℓ is seen, not after.
@@ -877,8 +881,14 @@ Snell and Griffiths (arXiv 2502.13228v2), read in TeX: §3–§4, Propositions 3
 - *What stands.* Their Theorem 4.1, the right-rectangle bound given the quantile levels.
 
 **The β-bound's calibration is frequentist, and known.**
-- *Identification.* b*_β is Gaffke's (2005) upper bound for the mean of a bounded variable, which Learned-Miller and Thomas rediscovered.
-- *Status.* Its calibration over replicated calibration sets, P(J ≤ b*_β) ≥ β, was Gaffke's conjecture. Gaffke proved two units; Vlassis and Thomas (arXiv 2607.08415, 2026) proved every number, for independent nonnegative variables (here B − ℓ). Neither paper is on disk; this comes from abstracts found by web search.
+- *Identification.* b*_β is Gaffke's (2005) bound.
+  - Vlassis and Thomas's statistic is K(x) = P{Σ x_i D_i ≤ 1}, with D ~ Dir(1, …, 1) over the n values and an added zero.
+  - With X_i = (B − ℓ_i)/(B − J), P(L⁺ ≤ J) = 1 − K(X). The checks confirm this identity exactly on 300 cases.
+  - Learned-Miller and Thomas rediscovered the bound as a confidence bound on [0, 1].
+- *Status: proved.* The calibration over replicated calibration sets, P(J ≤ b*_β) ≥ β, is Vlassis and Thomas's Theorem 1.
+  - b*_β misses J exactly when K(X) < 1 − β, which has chance at most 1 − β.
+  - Gaffke conjectured it, reduced it to mean-one two-point laws, proved n = 2, and checked it numerically to n = 15. Learned-Miller and Thomas proved Bernoulli and half-Bernoulli laws.
+- *Wider than their footnote.* The theorem needs the losses independent and at most B, and needs neither identical laws nor continuity. Snell and Griffiths's Lemma 4.2 needs continuity; the calibration does not, and the checks' laws are discrete.
 - *One unit* (`gaffke_one`, our proof).
   - With one loss, b*_β = ℓ + β (B − ℓ).
   - The miss set's mass P satisfies P (B − J) ≤ (1 − β)(B − J) by a Markov-type step, strictly when P > 0. So P ≤ 1 − β.
@@ -892,13 +902,15 @@ Snell and Griffiths (arXiv 2502.13228v2), read in TeX: §3–§4, Propositions 3
 **Proper scores** (Gressmann et al.).
 - *The log-loss* (`logLoss_proper`, `logLoss_strict`; their Proposition 2.5 (i)).
   - It is Gibbs' inequality on finitely many outcomes, strict at q ≠ p for q a law.
-  - q must be positive where p is: Lean's log 0 is 0, where their loss is +∞.
+  - q must be positive where p is: Lean's log 0 is 0, where their loss is +∞. Gneiting and Raftery's log score (their Example 3) is strictly proper relative to the measures dominated by the reference measure, which is this hypothesis on finitely many outcomes.
 - *The integrated squared loss* (`gneitingLoss_gap`, `gneitingLoss_strict`; their Lemma 2.4 (ii) and Proposition 2.5 (ii)). The gap is Σ (p − q)².
+  - Against Gneiting and Raftery, the loss is minus their quadratic score (18). Their Brier score (Example 1) is 2p_i − Σ p_j² − 1, and the gap is its Bregman divergence.
 - *Conditional predictions* (`proper_conditional`; their Proposition 2.7).
 - *Finding: two sign slips in their proof of Proposition 2.5 (i).* Jensen is written log E Z ≤ E log Z, and Gibbs as E[log p_Y(Y)] ≤ E[log p(Y)]. Both hold for the loss −log, which is the reverse of what is written. The statement itself stands.
 
 **Not formalized.**
-- The calibration for n ≥ 2 (Vlassis and Thomas's theorem).
+- The calibration for n ≥ 2: Vlassis and Thomas's Theorem 1, whose proof is a chain-measure induction.
+- Angelopoulos et al.'s Theorem 2, the lower bound α − 2B/(n + 1) for i.i.d. losses without jumps.
 - Their Theorem 4.1 on [0, 1], and Lemma 4.2 (Dirichlet spacings).
 - The density case of the proper scores, and their Proposition 2.6 (the log-loss is the only strictly local, strictly proper loss).
 
@@ -906,6 +918,7 @@ Snell and Griffiths (arXiv 2502.13228v2), read in TeX: §3–§4, Propositions 3
 - The exact law of L⁺ on 393 knot sets: its mean, its ends, and the distinct-knot formula.
 - At n = 1, b*_β = ℓ + β(B − ℓ).
 - The calibration over replicated calibration sets, as above. At n = 1 it is checked as the Lean states it.
+- P(L⁺ ≤ J) = 1 − K(X) for Vlassis and Thomas's K, exactly, on 300 cases.
 - Their Theorem 4.3 failing under the point-mass prior.
 - Conformal risk control over orderings on 300 data sets.
 - The HPD rule exactly, end to end, on 100 laws: it fails at most where the fixed threshold does, within 1 − β (worst failure 0.15).
