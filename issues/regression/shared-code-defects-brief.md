@@ -49,7 +49,7 @@ Commissioned by the user on 2026-11-13 through the coordinating session. Both de
 
 - **Order.** Slice 1, then slice 2. They touch different code, so slice 2's reading starts when slice 1 lands. The coordinating session verifies each landed slice from a clean archive ([scripts/verify-csharp.ps1](../../scripts/verify-csharp.ps1)).
 - **Files.** This chip owns `PredictiveChecks.cs`, the weight check in `Pointwise.cs`, `Cholesky.cs`, the three caller files, and their tests. Three other chips are at work:
-  - the conformal chip, on slice 15, owns `src/maths/regression/conformal/**` and reads `Rows`; a change inside that folder is agreed with it by message first;
+  - the conformal chip (`local_69bae1e5`), on the remaining slices 14 to 18, owns `src/maths/regression/conformal/**` and reads `Rows`; a change inside that folder is agreed with it by message first;
   - the GBASS chip owns BASS's sampler files for the u–s funnel fix;
   - two Lean chips work in `lean/`.
 - **Git.** On `main`, one commit per concern with its tests, committed by pathspec, nothing left staged, nothing pushed, no attribution lines.
