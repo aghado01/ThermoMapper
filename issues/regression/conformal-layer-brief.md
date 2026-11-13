@@ -99,6 +99,13 @@ It does not reach a curve's or a parameter's own intervals: those stay with E15'
     - *The reading:* the margin reads nothing on BASS fits with the degenerate turns left out. The Kept diagnostic is negative on the Gaussian and Student-t fits at every ESS floor, the carried one is near 0, and the own-turn proxy is not a guaranteed superset.
     - *The ordering:* the tournament correction gives the full-data guarantee that does not lean on mixing, and its Lean is verified (`f998131`). Slices 11 and 12b keep their place ahead of it (decision 10). Slices 14 to 18 follow by need, each with its Lean already verified or landed (14 to 16 verified, 18 landed in `4383916`).
 
+12. **Slice 14's follow-ups** (the user, 2026-11-13, in this session: "Lean first, 15 meanwhile").
+    - *Lean first,* relayed to the main session for the conformal Lean chip, because each carries a new guarantee:
+      - the weighted predictive distribution's PIT;
+      - the cross-fitted forms under weights (Barber et al. 2023's non-exchangeable jackknife+ and CV+);
+      - CB-3's margin and inflated rule under weights.
+    - *Meanwhile,* the ratio estimator, which carries no new guarantee (`sum_weight_refused_estimated_le` covers it), then slice 15 after 14's verification. The three follow when their Lean lands.
+
 **The Lean for slices 10 and 12 is done and verified** (`dfe5c99`, `a708eb2`, `f82ae97`, `f692e37`; verified on 3b61763). The rules the C# implements are in the [Lean chip's reports](../../lean/Protolemmata/Conformal/conformal-chip-brief.md#reports) and the ledger's [slice 10](../../lean/Protolemmata/Conformal/conformal-lemmas.md#slice-10--the-full-steps-error-completed) and slice 12 sections.
 - *Slice 10, the excluded set:* it is read per grid value y over all m units, the candidate included. The data units' flags come from conservative proxies.
 - *Slice 10, the reading:* only at kept y. The largest excluded share over the grid is charged, and 2ν in place of ν.
