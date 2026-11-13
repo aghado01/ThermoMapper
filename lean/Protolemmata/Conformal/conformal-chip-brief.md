@@ -1,6 +1,26 @@
 # Conformal validity in the Lean harness — chip brief
 
-CB-1 to CB-4 were proved on 2026-11-06, E35's M-1 and M-2 on 2026-11-08, and E16 slice 9's jackknife+ and asymmetric CQR on 2026-11-09. Their reports are below. E16 slices 10 and 12 were commissioned and proved on 2026-11-10, and the Lean for slices 13 to 16 and 18 was commissioned and proved the same day.
+CB-1 to CB-4 were proved on 2026-11-06, E35's M-1 and M-2 on 2026-11-08, and E16 slice 9's jackknife+ and asymmetric CQR on 2026-11-09. Their reports are below. E16 slices 10 and 12 were commissioned and proved on 2026-11-10, and the Lean for slices 13 to 16 and 18 was commissioned and proved the same day. Slice 14's three follow-ups were commissioned on 2026-11-13.
+
+## Slice 14's follow-ups: the weighted distribution, cross-fitted forms and CB-3 under weights (2026-11-13)
+
+Status: commissioned 2026-11-13 by the user ("Lean first, 15 meanwhile", in the conformal C# chip's thread), relayed by that chip and the main session.
+
+**Why now.** Slice 14's C# (`c19ce98`; its [report](../../../issues/regression/conformal-layer-brief.md#2026-11-13--slice-14-the-weighted-rule-under-shift)) lists follow-ups that each need a guarantee before their C# (decision 7 on the layer plan). The C# chip builds the ratio estimator and slice 15 meanwhile, then these three as their Lean lands.
+
+**How.**
+- As for the 2026-11-10 items below: checks first, exhaustive at small n, then the Lean in `ConformalValidity.lean`, in or beside section `Shift`.
+- A statement that proves false, or holds only with a further hypothesis, is a finding.
+- One report per item, under "Reports". Tell the conformal C# chip (`local_69bae1e5`) and the main session tersely when each lands.
+- No `docs/` edits.
+- The active-subspace Lean chip (`local_eaa7e8ed`) is also building in `lean/`. Agree shared files such as `lean/Enthymemata.lean` with it by message first.
+
+**Sources.** Check each item's sources are on disk first (`gauntlet/conformal-bayes` with its `inventory.jsonl`, and `PDFs/Bayesian`), and list any missing in one message to the main session. Barber, Candès, Ramdas and Tibshirani 2023 is arXiv 2202.13415, which slice 14 cites.
+
+**Order** (the C# chip's):
+1. **The weighted predictive distribution's PIT.** With ties randomized, its law under covariate or response shift with the true ratio, in the split and full forms, from `coverage_weighted` at every level.
+2. **The cross-fitted forms under weights.** Barber, Candès, Ramdas and Tibshirani's non-exchangeable jackknife+ and CV+ bounds; the tournament under weights, if it holds.
+3. **CB-3's margin and inflated rule under weights.** The weighted fragile count, and its dominance from any ordering's estimates.
 
 ## Slice 10's grid reading, and the Lean for E16 slices 13 to 16 and 18 (2026-11-10)
 
