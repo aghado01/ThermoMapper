@@ -365,14 +365,41 @@ The sweep recomputes both column norms for every pair ([ThinSvd.cs:110](../../sr
 
 ## Sequencing
 
-1. **In parallel from the start:**
-   - A1 and A2, with A2 adding convergence information and rewriting `EigenFastTests`;
-   - C1, C2 and C3, the pure reuse;
-   - D, whose expected values are settled.
-2. **After A2:** B1 and B2, which need the convergence information for qualification. A1, A2 and all of C and D have landed (see [Reports](#reports)).
-3. **After A1 and B2:** B3, then B5. B4 is not pursued ([Decisions](#decisions) item 1).
-4. **Measurement-gated:** E, F, G1–G3. G1's EigenFast timing waits for G2.
-5. **Final cleanup commit:** delete `ScaledEigen`, PriorPencil's division, the two-matrix `Ratio` and the decided removals.
+Landed (see [Reports](#reports)):
+- A, B2, B3, B5, B6, C and D;
+- B1 stages one and two;
+- both F comparisons;
+- the LOBPCG closeout.
+
+B4 is not pursued ([Decisions](#decisions) item 1). The removed options and the two-matrix `Ratio` are already gone.
+
+Remaining, revised 2026-11-12:
+1. **B1 stage three, the graph callers.**
+   - [AlignmentEigenCentrality](../../src/graphs/observables/AlignmentEigenCentrality.cs): its public `Tolerance` changes units ([Decisions](#decisions) item 3).
+   - [AlgebraicConnectivity](../../src/graphs/observables/AlgebraicConnectivity.cs).
+   - [SpectralMath.BottomK](../../src/maths/linalg/SpectralMath.cs): it lives in LinAlg, but only graph code calls it, through `Spectral.ComputeBottomK`.
+
+   Correct the comment at [GraphFilters.cs:56](../../src/tda/mapper/Filters/GraphFilters.cs). It says the Fiedler filter uses `DenseEigen`, but the filter goes through `Spectral.ComputeBottomK`, which can choose LOBPCG. Qualify in both builds.
+2. **B1's change of default and its cleanup, one commit.** The default becomes the element-wise relative rule, and the absolute rule is deleted, with `ScaledEigen`, `PriorPencil.DecomposeAtUnitScale` and the tests that call them.
+
+   Six callers name no rule and change only here, so their qualification belongs to this commit:
+   - LOBPCG's Rayleigh–Ritz solve ([Lobpcg.cs:360](../../src/maths/linalg/Lobpcg.cs)), measured in the LOBPCG closeout report;
+   - [ICA](../../src/maths/linalg/ICA.cs);
+   - [NewtonMetropolis](../../src/maths/samplers/blocks/NewtonMetropolis.cs), whose chains will change, so it needs checks on its distribution, as stage two's hinge paths did;
+   - `PenalizedSpline`, `HierarchicalPSpline` and `TensorPenalty`.
+
+   The commit also states what the default tolerance of 10⁻¹² means in relative units.
+3. **Alongside 1 and 2: G1's ThinSvd rotations, and G3.** Both change only `ThinSvd.cs` and need nothing from B1. Landing them before E gives E its final baseline.
+4. **After 2: G2, then G1's EigenFast timing.** Deleting the absolute rule changes EigenFast's inner loop. G2 also weighs the relative pivot test's cost, which the closeout report measured.
+5. **E, after 3.**
+   - Before running, name the regime it serves: output dimension, factor width, draw count and requested rank, as E8 sees them. Also name the result that would justify a new readout.
+   - Pin one commit for both arms.
+   - Time over several seeds, since LOBPCG's iteration counts move with rounding.
+   - State each fixture's spectral gap.
+
+Not scheduled:
+- the Poincaré timing, which matters only for reopening [Decisions](#decisions) item 5;
+- `docs/`, updated in a batch ([Doc changes owed](#doc-changes-owed)).
 
 ## Decisions
 
