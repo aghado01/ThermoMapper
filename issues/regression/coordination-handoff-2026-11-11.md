@@ -85,7 +85,7 @@ Older chips are listed in the 2026-11-09 handoff. Message a chip by its `local_â
 
 New on 2026-11-13:
 
-1. **BAMRS (E3), free-knot tensor-product surfaces.** The [preparation brief](bamrs/bamrs-brief.md) has seven decisions, each with a recommendation:
+1. **BAMRS (E3), free-knot tensor-product surfaces.** Its working directory is [abmrs-bamrs/](abmrs-bamrs/) (the user, 2026-11-13): `briefs-slices/`, `papers/`, `probes/`, `receipts/`, `verification/` and the authors' supplement. The [preparation brief](abmrs-bamrs/briefs-slices/bamrs-brief.md) has seven decisions, each with a recommendation:
    - one engine over the product carrier, with BARS as its one-axis case and BARS's pinned tier as the acceptance (the alternatives are a sibling ensemble or a BASS term type);
    - the g-prior with the thin-column gate by default; a ridge prior only if slice 2 measures the gate refusing configurations the posterior would hold;
    - the count law's default left open until the benchmark;

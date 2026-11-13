@@ -1,6 +1,6 @@
 # BAMRS: free-knot tensor-product spline surfaces (preparation brief)
 
-Date: 2026-11-12. Status: preparation; nothing is built. This is E3 of the [extensions checklist](../bass/extensions-checklist.md), queued by the user on 2026-11-08. It replaces the design notes under E3 in the [extensions brief](../bass/extensions-brief.md#free-knot-tensor-product-surfaces-abmrs) as the working document. Written by the main session at the user's request, after a re-read of the sources and a survey of the engine. Its decisions are proposals until the user takes them.
+Date: 2026-11-12. Status: preparation; nothing is built. This is E3 of the [extensions checklist](../../bass/extensions-checklist.md), queued by the user on 2026-11-08. It replaces the design notes under E3 in the [extensions brief](../../bass/extensions-brief.md#free-knot-tensor-product-surfaces-abmrs) as the working document. Written by the main session at the user's request, after a re-read of the sources and a survey of the engine. Its decisions are proposals until the user takes them.
 
 ## Why
 
@@ -12,7 +12,7 @@ What it adds to the family:
 - **Discontinuities along an axis,** from knots that cluster within the data's resolution.
 - **Scope.** Low dimension: d = 2 for cubics, and d = 3 at degree 1 or with many observations (the support gate, below). The engine is application-agnostic.
 
-**The name.** BAMRS is Bayesian Adaptive Multivariate Regression Splines, the source's ABMRS in the family's word order. [BAMRS.md](../../../docs/Maths/Regression/BAMRS.md) and [Regression.md](../../../docs/Maths/Regression/Regression.md) expand it as "Multiresolution", which is a correction owed. A multiresolution engine is a different model and a separate candidate ([its section](#multiresolution-a-separate-candidate)).
+**The name.** BAMRS is Bayesian Adaptive Multivariate Regression Splines, the source's ABMRS in the family's word order. [BAMRS.md](../../../../docs/Maths/Regression/BAMRS.md) and [Regression.md](../../../../docs/Maths/Regression/Regression.md) expand it as "Multiresolution", which is a correction owed. A multiresolution engine is a different model and a separate candidate ([its section](#multiresolution-a-separate-candidate)).
 
 ## Sources
 
@@ -21,8 +21,8 @@ What it adds to the family:
 - **The supplement:** [ABMRS_Revision_V2_Supplementary_Materials](../ABMRS_Revision_V2_Supplementary_Materials), with the web appendix as [text](../ABMRS_Revision_V2_Supplementary_Materials/web_appendix_extracted.txt). Web Appendix A proves Lemma 1 and Lemma 3 only, with the preprint's statements, which implies the article carries no theorem needing a proof beyond the preprint's lemmas.
 - **The author's repositories,** cloned at `D:\aghado01\packages\bayesian-related`: `ABMRS` (its `src` and `R` are identical to the supplement's copy) and `exampleABMRS`, the scripts behind the article's simulations and its real-data example.
 - **Chen and Chen (2008),** *Extended Bayesian information criteria for model selection with large model spaces*, Biometrika. Not held. Its consistency condition is quoted below from memory and wants checking against the paper before it enters `docs/`.
-- **Checked earlier:** the report half of [abmrs-verification-questions.md](../discussion/abmrs-verification-questions.md), which holds against the supplement.
-- **Unreliable, and not to be cited:** [HYK-2024-2026-differences.md](../discussion/HYK-2024-2026-differences.md) and [HYK-2024-2026-clarifications.md](../discussion/HYK-2024-2026-clarifications.md). They are external summaries with invented content (a knot-multiplicity kernel, a gradient and Hessian peak finder, a changed death formula, fMRI and cardiac applications). [argon-abmrs-verification-debrief.md](../discussion/argon-abmrs-verification-debrief.md) retracts part of it.
+- **Checked earlier:** the report half of [abmrs-verification-questions.md](../../discussion/abmrs-verification-questions.md), which holds against the supplement.
+- **Unreliable, and not to be cited:** [HYK-2024-2026-differences.md](../../discussion/HYK-2024-2026-differences.md) and [HYK-2024-2026-clarifications.md](../../discussion/HYK-2024-2026-clarifications.md). They are external summaries with invented content (a knot-multiplicity kernel, a gradient and Hessian peak finder, a changed death formula, fMRI and cardiac applications). [argon-abmrs-verification-debrief.md](../../discussion/argon-abmrs-verification-debrief.md) retracts part of it.
 
 ## The source's theory, re-derived
 
@@ -44,7 +44,7 @@ Rows 2–5 are in BAMRS.md today. The rest are new from this pass.
 
 | # | Source | What the check found | The engine's design |
 |---|---|---|---|
-| 1 | Lemma 1's prior is centred at zero (both versions) | a = RSS + ‖Zβ̂‖²/(m+1), so the marginal depends on the response's level, and a response far from zero swamps the residual. It is the defect BARS fixed on 2026-10-22 ([BARS.md](../../../docs/Maths/Regression/BARS.md), "Centring the Normal prior"). Their code does not show it only because it runs the BIC-type ratio | The centred block (`GPriorCentre.Median` by default). A tensor B-spline basis sums to one, so the centre is c·1 with no solve |
+| 1 | Lemma 1's prior is centred at zero (both versions) | a = RSS + ‖Zβ̂‖²/(m+1), so the marginal depends on the response's level, and a response far from zero swamps the residual. It is the defect BARS fixed on 2026-10-22 ([BARS.md](../../../../docs/Maths/Regression/BARS.md), "Centring the Normal prior"). Their code does not show it only because it runs the BIC-type ratio | The centred block (`GPriorCentre.Median` by default). A tensor B-spline basis sums to one, so the centre is c·1 with no solve |
 | 2 | The code scores m^((ν−ν′)/2)·(σ̂/σ̂′)^m (`mebars.cpp:185`) | An approximation where Lemma 1 is exact and cheap. Its ν counts the columns it has dropped | The exact marginal of the centred block |
 | 3 | Columns with at most `npart` = min(20, ⌊0.1m⌋) nonzero entries are dropped, and the Gram takes a 10⁻⁸ ridge (`utils.cpp:234`–`257`) | The model changes silently, and the basis stops summing to one | Refusal: the support gate and factor admission |
 | 4 | β is drawn at the plug-in σ̂, and σ is never drawn (`mebars.cpp:199`–`202`) | The draws and the prediction intervals omit σ's uncertainty | The exact joint draw |
@@ -106,7 +106,7 @@ Read from the source on 2026-11-12. "As is" means by reading, not by running.
 | Moments over piecewise polynomials | `Bass.Sensitivity.PiecewisePolynomial`, `BassMoments` | Sobol indices and effects for tensor B-splines, as the extensions brief notes |
 | Declared coefficient priors | `PriorPencil`, `CollapsedPencilPrior`, `TauPrior`, BAPS's `TensorPenalty` | Decision 2's ridge option |
 | Term contract (F-X3) | `Bass.IDesignKernel<TPoints>`, `DesignFactor` | The other route: a tensor B-spline part as a BASS term type. Not recommended as the first build (Decision 1) |
-| Lean | [BARS.lean](../../../lean/Enthymemata/BARS.lean): MP-1, MP-2, SP-1 to SP-3 stated, proofs open; protolemmata MP-3, MP-4, O1–O3; [Stability.lean](../../../lean/Enthymemata/Stability.lean) | [Lean](#lean) |
+| Lean | [BARS.lean](../../../../lean/Enthymemata/BARS.lean): MP-1, MP-2, SP-1 to SP-3 stated, proofs open; protolemmata MP-3, MP-4, O1–O3; [Stability.lean](../../../../lean/Enthymemata/Stability.lean) | [Lean](#lean) |
 
 ## Decisions
 
