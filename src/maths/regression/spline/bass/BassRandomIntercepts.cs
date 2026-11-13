@@ -187,7 +187,8 @@ public sealed class RandomInterceptBlock
                 for (int g = 0; g < levels; g++) sum += basis[a][g] * counts[g] * basis[b][g];
                 gram[a, b] = gram[b, a] = sum;
             }
-        EigenResult eigen = DenseEigen.DecomposeSymmetric(gram, tol: 1e-15);
+        EigenResult eigen = DenseEigen.DecomposeSymmetric(gram, tol: 1e-15,
+            stoppingRule: JacobiStoppingRule.ElementWiseRelative);
         // HE: each eigenvector carried back to the levels.
         var he = new double[levels, q];
         for (int k = 0; k < q; k++)

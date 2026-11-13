@@ -978,7 +978,7 @@ public abstract class RidgeColumns
 /// (τ, b) then costs O(M) (<see cref="RidgeColumns.At"/>), which τ's slice step and the tempered rungs read; a candidate
 /// structure one column away (<see cref="Birth"/>, <see cref="Death"/>, <see cref="Change"/>) is evaluated through the
 /// eigenvectors without a decomposition of its own. The normalized Gram is decomposed through its unit-diagonal scaling
-/// G̃/N by cyclic Jacobi (<see cref="DenseEigen"/>) at an absolute off-diagonal tolerance of 10⁻¹⁵, so λⱼ = N·μⱼ.
+/// G̃/N by cyclic Jacobi (<see cref="DenseEigen"/>) at an element-wise relative tolerance of 10⁻¹⁵, so λⱼ = N·μⱼ.
 /// Immutable: a design's current structure shares one with every state that holds it.
 /// </summary>
 public sealed class RidgeSpectrum : RidgeColumns
@@ -1030,7 +1030,8 @@ public sealed class RidgeSpectrum : RidgeColumns
         for (int i = 0; i < m; i++)
             for (int j = 0; j < m; j++)
                 unit[i * m + j] = i == j ? 1.0 : centredGram[i, j] / (Math.Sqrt(centredGram[i, i]) * Math.Sqrt(centredGram[j, j]));
-        EigenResult eigen = DenseEigen.DecomposeSymmetric(unit, m, tol: JacobiTolerance);
+        EigenResult eigen = DenseEigen.DecomposeSymmetric(unit, m, tol: JacobiTolerance,
+            stoppingRule: JacobiStoppingRule.ElementWiseRelative);
         var lambda = new double[m];
         var w = new double[m];
         for (int j = 0; j < m; j++)
