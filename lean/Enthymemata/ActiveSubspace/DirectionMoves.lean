@@ -54,12 +54,12 @@ theorem powerSpherical_symm {a : ℕ} (κ N : ℝ) (μ x : EuclideanSpace ℝ (F
     powerSpherical κ N μ x = powerSpherical κ N x μ := by
   simp only [powerSpherical, real_inner_comm]
 
-/-- **AS-3(a), at `a = 1`.** The law puts nothing on the antipode: on `S⁰ = {μ, −μ}` the change move
-keeps the direction's sign. -/
-theorem powerSpherical_antipode {a : ℕ} (κ N : ℝ) (hκ : κ ≠ 0) (μ : EuclideanSpace ℝ (Fin a))
+/-- **AS-3(a), at `a = 1`.** For `κ > 0` the law puts nothing on the antipode: on `S⁰ = {μ, −μ}`
+the change move keeps the direction's sign. -/
+theorem powerSpherical_antipode {a : ℕ} (κ N : ℝ) (hκ : 0 < κ) (μ : EuclideanSpace ℝ (Fin a))
     (hμ : ‖μ‖ = 1) : powerSpherical κ N μ (-μ) = 0 := by
   simp only [powerSpherical, inner_neg_right, real_inner_self_eq_norm_sq, hμ, one_pow,
-    add_neg_cancel, Real.zero_rpow hκ, zero_div]
+    add_neg_cancel, Real.zero_rpow hκ.ne', zero_div]
 
 /-- **AS-3(a), the change move's ratio.** States are a direction and a knot. The direction's prior
 is uniform (the constant `c`), the knot's prior `πt θ` may read the direction, and `L` is the

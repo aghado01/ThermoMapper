@@ -16,11 +16,11 @@ The statements of `Protolemmata/BASS/active-subspace-lemmas.md`, AS-2, on a fini
   `var_le_of_coord_poincare`: Efron–Stein (`BASS.efron_stein`) and each coordinate's own inequality
   `Varᵢ g ≤ cᵢ eᵢ` give `Var g ≤ Σᵢ cᵢ E[eᵢ]`, each coordinate keeping its own constant;
   `coordwise_le_scalar`: never looser than the largest constant taken for all.
-  `matrix_poincare`: so `Cov(f) ≼ E[J D Jᵀ]` when the one-variable inequality holds for every linear
-  combination `vᵀf`, whose partials are `vᵀJ`.
+  `matrix_poincare`: so `Cov(f) ≼ E[J D Jᵀ]` when each coordinate's one-variable inequality
+  `Varᵢ g ≤ cᵢ Eᵢ[(∂ᵢ g)²]` holds for every linear combination `g = vᵀf`, whose partial is `vᵀJ`.
+  Both sides of that inequality are means over coordinate `i`, so neither reads `xᵢ`.
 * **(c)** `energy_box`: `J diag(wᵢ² r) Jᵀ = r · (J diag w)(J diag w)ᵀ`, so at `r = 1/π²` the
-  uniform's
-  bound is `G/π²` in the box metric.
+  uniform's bound is `G/π²` in the box metric.
 
 The one-variable inequality is a hypothesis (`hcoord`): Mathlib carries no Poincaré or Wirtinger
 inequality, and a finite product has no derivative, so the partials enter as data `J`. The uniform's
@@ -196,7 +196,8 @@ theorem meanOf_mul_sub_coordMean (μ : ∀ i, X i → ℝ) (hμ : ∀ i, ∑ y, 
 
 /-- **AS-2(b), the product step.** If each coordinate satisfies its own one-variable inequality
 `Varᵢ g ≤ cᵢ · eᵢ` (with the other coordinates held), then `Var g ≤ Σᵢ cᵢ E[eᵢ]`: Efron–Stein puts
-each coordinate's constant on its own term. -/
+each coordinate's constant on its own term. The statement holds for any `e`; the one-variable
+inequality supplies `eᵢ = Eᵢ[(∂ᵢ g)²]`, which, like `Varᵢ g`, does not read `xᵢ`. -/
 theorem var_le_of_coord_poincare (μ : ∀ i, X i → ℝ) (h₀ : ∀ i y, 0 ≤ μ i y)
     (hμ : ∀ i, ∑ y, μ i y = 1) (g : (∀ j, X j) → ℝ) (c : ι → ℝ) (e : ι → (∀ j, X j) → ℝ)
     (hcoord : ∀ i x, condVar μ i g x ≤ c i * e i x) :
@@ -216,18 +217,21 @@ theorem coordwise_le_scalar (μ : ∀ i, X i → ℝ) (h₀ : ∀ i y, 0 ≤ μ 
   have h := meanOf_mono μ h₀ (f := fun _ => (0 : ℝ)) (g := e i) (he i)
   simpa [meanOf] using h
 
-/-- **AS-2, the matrix check.** If the one-variable inequality holds coordinate by coordinate for
-every linear combination `vᵀf`, whose partial along `i` is `Σₐ vₐ Jₐᵢ`, then
-`Cov(f) ≼ E[J D Jᵀ]`. -/
+/-- **AS-2, the matrix check.** If each coordinate's one-variable inequality
+`Varᵢ g ≤ cᵢ Eᵢ[(∂ᵢ g)²]` holds for every linear combination `g = vᵀf`, whose partial along `i` is
+`Σₐ vₐ Jₐᵢ`, then `Cov(f) ≼ E[J D Jᵀ]`. The hypothesis takes the inequality's integrated form: its
+right side is the mean over coordinate `i` (`coordMean`), as its left side is. -/
 theorem matrix_poincare (μ : ∀ i, X i → ℝ) (h₀ : ∀ i y, 0 ≤ μ i y) (hμ : ∀ i, ∑ y, μ i y = 1)
     (f : (∀ j, X j) → o → ℝ) (J : (∀ j, X j) → Matrix o ι ℝ) (c : ι → ℝ)
-    (hcoord : ∀ (v : o → ℝ) i x,
-      condVar μ i (fun z => v ⬝ᵥ f z) x ≤ c i * (∑ a, v a * J x a i) ^ 2) :
+    (hcoord : ∀ (v : o → ℝ) i x, condVar μ i (fun z => v ⬝ᵥ f z) x ≤
+      c i * coordMean μ i (fun z => (∑ a, v a * J z a i) ^ 2) x) :
     (energyOf μ J c - covOf μ f).PosSemidef := by
   rw [loewner_iff _ _ (covOf_isHermitian μ f) (energyOf_isHermitian μ J c)]
   intro v
   rw [covForm_eq_var, energyForm_eq]
-  exact var_le_of_coord_poincare μ h₀ hμ _ c (fun i x => (∑ a, v a * J x a i) ^ 2) (hcoord v)
+  have h := var_le_of_coord_poincare μ h₀ hμ _ c
+    (fun i => coordMean μ i (fun z => (∑ a, v a * J z a i) ^ 2)) (hcoord v)
+  simpa only [meanOf_coordMean μ hμ] using h
 
 end Finite
 
