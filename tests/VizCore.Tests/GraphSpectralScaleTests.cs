@@ -52,7 +52,7 @@ public sealed class GraphSpectralScaleTests
     }
 
     /// <summary>
-    /// A star of five leaves around node 0, every alignment a: G = I + a·A, whose top eigenvector is (2, 1, 1, 1, 1, 1)/√20 for
+    /// A star of five leaves around node 0, every alignment a: G = I + a·A, whose top eigenvector is (√5, 1, 1, 1, 1, 1)/√10 for
     /// eigenvalue 1 + a√5, the hub weighted by √(leaves).
     /// </summary>
     [Fact]
