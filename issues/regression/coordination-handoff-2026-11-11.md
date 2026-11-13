@@ -7,7 +7,7 @@ Updated 2026-11-13 with that day's round-up: E8's slice 7d verified, the LinAlg 
 ## Start here
 
 1. Read [AGENTS.md](../../AGENTS.md) and [CONTRIBUTING.md](../../CONTRIBUTING.md), then this file. Read a workstream's brief before acting on it.
-2. **No chip is building.** E8's slice 7d landed and was verified on 2026-11-13 (below).
+2. **One chip is building:** the GBASS chip, on E21's slice 6, the u–s funnel's fix by interweaving (the user, 2026-11-13; `3d46d04`). E8's slice 7d landed and was verified on 2026-11-13 (below).
 3. Then take the [waiting list](#waiting-on-the-user) to the user. No other chip has work commissioned.
 
 ## Standing rules
@@ -36,7 +36,7 @@ They are in [AGENTS.md](../../AGENTS.md#docops--conventions-for-issues) (the use
 | [Conformal slices](claude://claude.ai/epitaxy/local_69bae1e5-39ad-45c0-8df2-e8e705b21e42) `local_69bae1e5` | [conformal-layer-brief.md](conformal-layer-brief.md) | Idle; slices through 13 done |
 | [Conformal Lean](claude://claude.ai/epitaxy/local_21649695-833f-41ac-8d7c-326b4f691dda) `local_21649695` | [conformal-chip-brief.md](../../lean/Protolemmata/Conformal/conformal-chip-brief.md) | Idle; commission complete |
 | [E34: several outputs](claude://claude.ai/epitaxy/local_26b4e7ee-1be4-482b-a19d-995477d32291) `local_26b4e7ee` | [multi-output-brief.md](bass/multi-output-brief.md) | Idle; E34 complete |
-| [GBASS slices](claude://claude.ai/epitaxy/local_add4be38-7ddb-4981-8b14-6f8ac64f7dab) `local_add4be38` | [ridge-blocks-brief.md](bass/ridge-blocks-brief.md) (E21) | Idle; E21 slices 0–5 done |
+| [GBASS slices](claude://claude.ai/epitaxy/local_add4be38-7ddb-4981-8b14-6f8ac64f7dab) `local_add4be38` | [ridge-blocks-brief.md](bass/ridge-blocks-brief.md) (E21) | **Building:** E21 slice 6, the u–s funnel's fix by interweaving (`3d46d04`) |
 | [KHAOS slices](claude://claude.ai/epitaxy/local_d665e4ce-cd64-427f-9c2a-8c94d96497dd), [weighted fits](claude://claude.ai/epitaxy/local_57bad71b-a245-4e83-8cb0-52c46cd48b60) | — | Idle; their work landed |
 | LinAlg consolidation: the user's Sol sessions, listed in its brief | [spectral-solver-consolidation-brief.md](../linalg/spectral-solver-consolidation-brief.md) | Complete |
 
@@ -49,7 +49,7 @@ Older chips are listed in the 2026-11-09 handoff. Message a chip by its `local_�
 | **E8** | Through slice 7. Slice 7 verified: 7a `7b2ca7a` (2,349 of 2,349), 7b `70a2aa2` (48 of 48), 7c `015d977` (46 of 46); 7c's report is `5064e50`. Slice 7d, the training-range rule (`566c1f1` to `6aff134`, report `f72039b`), verified 2026-11-13: 2,502 of 2,502 from a clean archive of `788d249` ([inputs](receipts/verify-e8-s7d-788d249/)) | The training-range default and PBX 9501 (waiting list); the BPPR brief, if the user approves it |
 | **Conformal (E16)** | 12a, 10a/10b, 11 (149 of 149 at `9248e33`), 12b (2,659 of 2,659 at `6ef6c98`), 13 (1,120 of 1,120 at `60694f0`) | The queue is empty. Slices 14 to 18 come by the user's need (waiting list) |
 | **Conformal Lean** | Slices 10, 12, 13–16, 18 and the grid reading, all verified | Slice 18's sources are now on disk (waiting list) |
-| **E21** | Slices 0–5. The b = 1 collapse is opt-in (`BassSampling.CollapseEffectsInMoves`), with form B on every rung by default | The u–s funnel fix (waiting list). New-group coverage stays open as the layer's follow-up; see the [two-layer addendum](bass/ridge-blocks-brief.md) (`8bc0d55`) |
+| **E21** | Slices 0–5. The b = 1 collapse is opt-in (`BassSampling.CollapseEffectsInMoves`), with form B on every rung by default | Slice 6, in progress: a non-centred step on s behind an option, its default read from mixing measurements on a weak-data fit and on the n = 300 fit. New-group coverage stays open as the layer's follow-up; see the [two-layer addendum](bass/ridge-blocks-brief.md) (`8bc0d55`) |
 | **E34** | Complete: slices 0–5. Slice 5 at 2,396 of 2,396 (`e5f142f`); slice 4 at 2,651 of 2,651 (report `fc9c343`) | Its slice 4 report's follow-ups wait for the user. Doc changes owed: `MultiOutput.md`, `BASS.md` |
 | **E36, BPPR** | Draft brief `57e1ef6` | The user's approval (waiting list) |
 | **KHAOS** | SMC's step cap; the residual birth as the raw-ridge default (`0ffc0e0` … `a980d1f`) | Not rerun (the user: "Not now") |
@@ -71,6 +71,7 @@ Older chips are listed in the 2026-11-09 handoff. Message a chip by its `local_�
   - B1 migrated its callers in stages;
   - one element-wise relative rule serves positive definite and indefinite inputs alike;
   - the matrix Poincaré check reports one ratio per draw and stays opt-in.
+- **E21, the u–s funnel's fix: interweaving** (the user, 2026-11-13, in the GBASS thread; decision 7 in the [brief](bass/ridge-blocks-brief.md), `3d46d04`). It is exact at every rung. The 19,000-sweep autocorrelation time came from Geweke's toy chain (12 cases in 3 levels, y redrawn each step); on the n = 300 fit ln s's is about 5, so the funnel bites where the data pin each group's effect weakly.
 - **E38 recorded** (`419f547`): a replicate layer in BAPS, subsuming the hierarchical P-spline, parked after E3.
 - **The requested papers are on disk** (the user, 2026-11-11):
 
@@ -103,31 +104,28 @@ New on 2026-11-13:
 
 Carried:
 
-4. **E21's u–s funnel fix.** Commission it or not. ln s's integrated autocorrelation time is about 19,000 sweeps under every random-effects fit with a noise. There are two remedies:
-   - a step on s with u integrated out, exact at b = 1 only;
-   - interweaving u's centred and non-centred forms, exact at every rung. This is the coordinating session's recommendation.
-5. **The BPPR brief** ([bppr-brief.md](bass/bppr-brief.md)) has six open decisions. The coordinating session agrees with each of their recommendations, and also recommends that the moves' balance go Lean first. The power spherical paper is now on disk. Approval also gives the go-ahead to install `BayesPPR` 0.2.0 from CRAN.
-6. **Conformal Lean, slice 18's sources.** Should the Lean chip read them against its slice 18 report?
+4. **The BPPR brief** ([bppr-brief.md](bass/bppr-brief.md)) has six open decisions. The coordinating session agrees with each of their recommendations, and also recommends that the moves' balance go Lean first. The power spherical paper is now on disk. Approval also gives the go-ahead to install `BayesPPR` 0.2.0 from CRAN.
+5. **Conformal Lean, slice 18's sources.** Should the Lean chip read them against its slice 18 report?
    - *Gaffke.* It proved one unit of Gaffke's bound (`gaffke_one`); Vlassis and Thomas prove the whole conjecture.
    - *Conformal risk control.* Its `crc_orderings` reads Snell and Griffiths's Proposition 3.2 as conformal risk control.
    - *Proper scores.* Gneiting and Raftery underlie that part.
    - *Its findings to confirm.* Snell and Griffiths's Theorem 4.3 is false as stated. Gressmann's proof of Proposition 2.5(i) has two sign slips, while the statement stands.
-7. **The next conformal C# slice among 14–18.** Slice 15 (posterior conformal prediction, for conditional coverage) is recommended. Its Lean is verified, as is the Lean for 14, 16 and 18.
-8. **Slice 12a's k̂ diagnostic:** opt-in (recommended; it costs about 200× the score) or on by default.
-9. **E34 slice 4's follow-ups**, listed in its report (`fc9c343`).
-10. **The original side-session notes** in `%APPDATA%\Claude\side-session-notes\`: delete them or keep them. Copies are in each workstream's `issues/<workstream>/handover-notes/`, except three PyTeXML notes, which were left there.
-11. **Lean for the active-subspace geometry** (proposed 2026-11-10):
+6. **The next conformal C# slice among 14–18.** Slice 15 (posterior conformal prediction, for conditional coverage) is recommended. Its Lean is verified, as is the Lean for 14, 16 and 18.
+7. **Slice 12a's k̂ diagnostic:** opt-in (recommended; it costs about 200× the score) or on by default.
+8. **E34 slice 4's follow-ups**, listed in its report (`fc9c343`).
+9. **The original side-session notes** in `%APPDATA%\Claude\side-session-notes\`: delete them or keep them. Copies are in each workstream's `issues/<workstream>/handover-notes/`, except three PyTeXML notes, which were left there.
+10. **Lean for the active-subspace geometry** (proposed 2026-11-10):
     - E36's direction moves;
     - the matrix Poincaré check's reduction and the product law's constant;
     - P̄'s readings under mixed ranks;
     - rotate-and-refit's non-invariance.
-12. **Carried from 2026-11-09:**
+11. **Carried from 2026-11-09:**
     - GBASS's open decisions;
     - `RungWorkers`' default and the GC pass;
     - the Lean promotion review;
     - the next wave: E25 and E15 (E3 now has its brief, item 1);
     - test tooling's follow-ups.
-13. **The offline docs pass.** Each report's "Doc changes owed" lists its sections. The owed pages are piling up:
+12. **The offline docs pass.** Each report's "Doc changes owed" lists its sections. The owed pages are piling up:
     - `LinearAlgebra.md` and `ActiveSubspaces.md`, from the LinAlg consolidation;
     - `BASS.md` and `ActiveSubspaces.md`, from 7d;
     - `MultiOutput.md` and `BASS.md`, from E34.
