@@ -84,3 +84,9 @@ Append a report under "Reports", newest first, and keep the protolemma's status 
 Hand-over state between turns is an "In progress" entry here.
 
 ## Reports
+
+### In progress (2026-11-13)
+
+- **Posed and committed** (`21cfcd2`): [active-subspace-lemmas.md](active-subspace-lemmas.md), all four targets with statements, hypotheses, decisions and prior art, and [active-subspace-checks.py](active-subspace-checks.py), 44 of 44 passing. The lemmas' head lists what posing changed (six findings) and which reading of AS-4 the record supports (the frame).
+- **Next:** the Lean, one target at a time, in `lean/Enthymemata/ActiveSubspace/` (`ProjectionMean`, `MatrixPoincare`, `DirectionMoves`, `Refit`) behind a barrel `Enthymemata/ActiveSubspace.lean`. The Conformal Lean chip is told before `Enthymemata.lean` gains its line.
+- **Uncommitted:** nothing. **Running:** nothing. Disk at the start: 35 GB free on D:.
