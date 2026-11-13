@@ -144,6 +144,8 @@ Existing code that entries below would otherwise each change on their own, with 
 
 ## Free-knot tensor-product surfaces (ABMRS)
 
+**Working brief (2026-11-12):** [bamrs/bamrs-brief.md](../bamrs/bamrs-brief.md) carries the design from here: the re-derived theory, the corrections, the reuse map and the readout tiers. The notes below stay as the record of the entry.
+
 **Parked extension (2026-10-20): free-knot tensor-product surfaces.**
 - **What.** An expensive variant that carries BARS's continuous knot moves (birth, death and relocation per input dimension) to tensor-product spline surfaces, reserved for low-dimensional problems where its cost is tractable.
 - **Pieces it would reuse,** once the BASS upgrades are done: the shared g-prior block, the `IBasis` carrier seam, the reversible-jump engine and the ensemble shell.
