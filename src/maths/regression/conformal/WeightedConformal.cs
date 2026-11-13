@@ -4,8 +4,8 @@ using System.Collections.Generic;
 namespace Maths.Regression.Conformal;
 
 /// <summary>
-/// Weights for the weighted conformal rule (the conformal layer's slice 14): <paramref name="Units"/> at each training or calibration unit,
-/// in the units' order, and <paramref name="Candidates"/> at each candidate, per column of a candidate seam's grids for the density forms
+/// Weights for the weighted conformal rule (the conformal layer's slice 14): <see cref="Units"/> at each training or calibration unit,
+/// in the units' order, and <see cref="Candidates"/> at each candidate, per column of a candidate seam's grids for the density forms
 /// and per test case for the closed-form intervals. A candidate is refused when the weight of the units scoring at most its score, its own
 /// weight included, is at most α of the stratum's total with its own (<c>weightLe</c>). What the weights state decides the guarantee:
 /// <list type="bullet">
