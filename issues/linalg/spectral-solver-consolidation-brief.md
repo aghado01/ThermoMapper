@@ -422,6 +422,7 @@ Each slice is reported here, newest first, with its commit, fixtures, commands, 
 | B1 relative stopping rule and first caller migration | [B1 dense Jacobi and first caller migration](codex://threads/01a1d201-30f7-7941-aeb4-130bc14f7ae5) | [B1 stage one](spectral-b1-stage-one-report.md) |
 | B1 stage two, migrating RidgeSpectrum, BassRandomIntercepts and MoMPCA in both builds | [Same B1 worker](codex://threads/01a1d201-30f7-7941-aeb4-130bc14f7ae5) | [B1 stage two](spectral-b1-stage-two-report.md) |
 | F ordinary GP fit and leave-out factorization | [F GP factorization and leave-out costs](codex://threads/01a1d201-5ab1-74a2-81cd-0aa671ed7905) | [GP factorization](spectral-gp-factorization-report.md) |
+| F anisotropic tensor-spline factorization and end-to-end REML comparison | [Same GP and factorization worker](codex://threads/01a1d201-5ab1-74a2-81cd-0aa671ed7905) | [Tensor-spline comparison](spectral-tensor-factorization-report.md) |
 
 The [coordinating chat](codex://threads/01a1cc28-f4d3-7951-882a-65aeb6945f8c) reviews the reported commits and receipts. Each worker maintains its own report beside this brief.
 
