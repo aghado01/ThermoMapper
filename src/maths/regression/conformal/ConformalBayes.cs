@@ -89,6 +89,15 @@ public sealed record ConformalOptions
     /// refused, each reading the training terms as something they no longer are.
     /// </summary>
     public LatentReading ObservationLatents { get; init; } = LatentReading.Integrated;
+
+    /// <summary>
+    /// The weighted rule's weights (<see cref="ShiftWeights"/>, the conformal layer's slice 14), opt-in: one per training unit in the
+    /// partition's order and one per candidate column. Each case's set ranks its candidate by the weight of its stratum's units scoring at
+    /// or below it, its own included, accepting where that passes α of the total (<c>weightLe</c>, <c>coverage_weighted</c>). A case whose
+    /// stratum's weights and candidate weights all equal one value takes CB-1's set, bit for bit. Under weights the margin, the inflated
+    /// rule, the fallback rule, Hoff's score and the margin's refinement are refused, each counting units rather than weighing them.
+    /// </summary>
+    public ShiftWeights? Weights { get; init; }
 }
 
 /// <summary>How the full step's units read their observation latents (<see cref="ConformalOptions.ObservationLatents"/>, CB-4).</summary>
@@ -364,7 +373,8 @@ public sealed record ConformalSet(int Case, int Stratum, int Units, int Level, d
 
     /// <summary>The finite-sample lower bound under the form's assumptions: 1 − k/m for full and split, and
     /// max(0, 1 − (2k − 1)/m) for cross-fitted scores, with 1 at k = 0.</summary>
-    public double Coverage => Form == ConformalForm.CrossFitted ? CrossConformal.Coverage(Units, Level) : 1.0 - (double)Level / Units;
+    public double Coverage => WeightedAlpha is double a ? 1.0 - a
+        : Form == ConformalForm.CrossFitted ? CrossConformal.Coverage(Units, Level) : 1.0 - (double)Level / Units;
 
     /// <summary>
     /// The coverage the set keeps under its scores' Monte Carlo error, indicative since the bounds are not sure ones:
@@ -396,8 +406,17 @@ public sealed record ConformalSet(int Case, int Stratum, int Units, int Level, d
     /// rule's otherwise.</summary>
     public bool Accepts(int g) => Inflated ? AcceptsInflated(g) : AcceptsPlain(g);
 
-    /// <summary>Whether the plain rule accepts grid value <paramref name="g"/>, π(y_g) > k/m.</summary>
-    public bool AcceptsPlain(int g) => WholeSpace || Below![g] + Tied![g] + 1 > Level;
+    /// <summary>Whether the plain rule accepts grid value <paramref name="g"/>, π(y_g) > k/m; under the weighted rule
+    /// (<see cref="WeightedAlpha"/>) π(y_g) > α, π its weighted p-value.</summary>
+    public bool AcceptsPlain(int g) => WholeSpace || (WeightedAlpha is double a ? PValues![g] > a : Below![g] + Tied![g] + 1 > Level);
+
+    /// <summary>
+    /// The weighted rule's α where the set is the weighted rule's (<see cref="ShiftWeights"/>, slice 14): <see cref="PValues"/> are then the
+    /// weight of the stratum's units scoring at or below each candidate, its own included, over the total (<c>weightLe</c>), and
+    /// <see cref="Coverage"/> is 1 − α under the shift the weights state. <see cref="Below"/> and <see cref="Tied"/> stay the unweighted
+    /// counts, and <see cref="Level"/> CB-1's level at the same m. Null for CB-1's sets, equal weights' included.
+    /// </summary>
+    public double? WeightedAlpha { get; init; }
 
     /// <summary>Whether the inflated rule accepts grid value <paramref name="g"/>. It accepts every value the plain rule does,
     /// since raising the candidate's estimate and lowering the units' only adds units at or below it. With no margin, the split
@@ -463,7 +482,7 @@ public sealed record ConformalSet(int Case, int Stratum, int Units, int Level, d
             ConformalSet probe = at(y);
             if (probe.Grid.Length != 1 || probe.Grid[0] != y || probe.Stratum != Stratum || probe.Units != Units ||
                 probe.Level != Level || probe.Inflated != Inflated || probe.Margin?.Inflation != Margin?.Inflation ||
-                probe.ErrorLevel != ErrorLevel || probe.Form != Form || probe.WholeSpace)
+                probe.ErrorLevel != ErrorLevel || probe.Form != Form || probe.WholeSpace || probe.WeightedAlpha != WeightedAlpha)
                 throw new ArgumentException("Refinement needs the same set rule and stratum at the requested y.", nameof(at));
             return probe.Accepts(0);
         }
@@ -592,6 +611,17 @@ public static class ConformalBayes
         bool conditioned = options.ObservationLatents == LatentReading.Conditioned;
         CheckReading(options.ObservationLatents, options.MarginBounds is not null, leaveOneOut);
         Check(training, candidates, conditioned);
+        ShiftWeights? shift = options.Weights;
+        if (shift is not null)
+        {
+            if (options.MarginBounds is not null || options.Inflate || options.FallbackShare is not null || leaveOneOut || options.MarginRefinement is not null)
+                throw new ArgumentException("Under weights the full step reads the weighted rule alone: the margin, the inflated rule, the fallback rule, "
+                                            + "Hoff's score and the margin's refinement count units rather than weighing them, and are not built for weights.", nameof(options));
+            if (shift.Units.Count != training.Units.Units)
+                throw new ArgumentException($"One weight per training unit is required: {shift.Units.Count} weights for {training.Units.Units} units.", nameof(options));
+            if (shift.Candidates.Count != candidates.Values.GetLength(1))
+                throw new ArgumentException($"One weight per candidate is required: {shift.Candidates.Count} weights for {candidates.Values.GetLength(1)} candidates.", nameof(options));
+        }
         double[,]? ownTerms = conditioned ? candidates.ConditionedValues : null;
         (int[] rows, double[]? logWeights) = PredictiveChecks.Rows(training);
         Dictionary<int, List<int>> units = UnitsByStratum(training.Units);
@@ -610,9 +640,21 @@ public static class ConformalBayes
             int m = members.Length + 1, k = (int)Math.Floor(alpha * m);
             if (k == 0)
             {
+                // CB-1's whole space; under weights only where a case's weights are all equal, the weighted rule reading the rest.
+                double[] stratumWeights = shift is null ? [] : [.. members.Select(u => shift.Units[u])];
+                var weighed = new List<int>();
                 foreach (int t in cases)
+                {
+                    if (shift is not null && !EqualWeights(stratumWeights, shift.Candidates, candidates.Offset(t), candidates.Grids[t].Length))
+                    {
+                        weighed.Add(t);
+                        continue;
+                    }
                     sets[t] = new ConformalSet(t, h, m, k, candidates.Grids[t], null, null, null, null, null, null, options.Inflate, nu);
-                continue;
+                }
+                if (weighed.Count == 0) continue;
+                cases.Clear();
+                cases.AddRange(weighed);
             }
             if (leaveOneOut)
             {
@@ -631,8 +673,9 @@ public static class ConformalBayes
                 }
                 continue;
             }
+            double[]? unitWeights = shift is null ? null : [.. members.Select(u => shift.Units[u])];
             var scorer = new StratumScorer(training.Values, rows, logWeights, members, training.ChainLengths, k, Multiple(nu, m),
-                                           options.MarginBounds, options.InflationBounds, degenerateEss: options.DegenerateEss);
+                                           options.MarginBounds, options.InflationBounds, degenerateEss: options.DegenerateEss) { UnitWeights = unitWeights };
             (StratumScorer A, StratumScorer B)? halves = Halves(training.Values, rows, logWeights, members, training.ChainLengths, k);
             foreach (int t in cases)
             {
@@ -646,6 +689,20 @@ public static class ConformalBayes
                     if (halves is not { } h2) continue;
                     h2.A.Rank(candidates.Values, offset + b0, count, ra!.Value.Slice(b0), ownTerms);
                     h2.B.Rank(candidates.Values, offset + b0, count, rb!.Value.Slice(b0), ownTerms);
+                }
+                if (unitWeights is not null && !EqualWeights(unitWeights, shift!.Candidates, offset, g))
+                {
+                    // The weighted rule: the weight of the stratum's units at or below each candidate, its own included, over the total.
+                    double total = 0.0;
+                    foreach (double w in unitWeights) total += w;
+                    var weighted = new double[g];
+                    for (int j = 0; j < g; j++)
+                    {
+                        double wc = shift.Candidates[offset + j], all = total + wc;
+                        weighted[j] = all > 0.0 ? (r.WeightLe[j] + wc) / all : 1.0;
+                    }
+                    sets[t] = new ConformalSet(t, h, m, k, candidates.Grids[t], weighted, r.Below, r.Tied, r.Own, r.Ess, null, false, nu) { WeightedAlpha = alpha };
+                    continue;
                 }
                 (double splitMass, int disagreements) = SplitHalf(candidates.Grids[t], r, ra, rb, k);
                 var p = new double[g];
@@ -668,6 +725,15 @@ public static class ConformalBayes
             }
         }
         return new ConformalPrediction(sets, alpha);
+    }
+
+    // Whether a case's candidate weights and its stratum's unit weights are all one value, so its set is CB-1's.
+    private static bool EqualWeights(double[] units, IReadOnlyList<double> candidates, int offset, int count)
+    {
+        double common = units.Length > 0 ? units[0] : candidates[offset];
+        foreach (double w in units) if (w != common) return false;
+        for (int j = 0; j < count; j++) if (candidates[offset + j] != common) return false;
+        return true;
     }
 
     private static MarginRefined RefineMargin(PointwiseLogDensity training, CandidateLogDensity candidates, int t,
@@ -1041,17 +1107,17 @@ public static class ConformalBayes
         public Reading(int count)
             : this(new int[count], new int[count], new double[count], new double[count], new double[count], new double[count],
                    new double[count], new double[count], new int[count], new int[count], new double[count], new double[count],
-                   new double[count], new int[count], new bool[count], new int[count], 0) { }
+                   new double[count], new int[count], new bool[count], new int[count], new double[count], 0) { }
 
         private Reading(int[] below, int[] tied, double[] own, double[] ess, double[] candidateErrors, double[] uniformErrors,
                         double[] candidateCarried, double[] carriedUniform, int[] fragile, int[] inflatedRanks, double[] paretoK,
                         double[] efficiency, double[] logPredictive, int[] flagged, bool[] candidateFlagged, int[] degenerateAccepted,
-                        int start)
+                        double[] weightLe, int start)
         {
             Below = below; Tied = tied; Own = own; Ess = ess; CandidateErrors = candidateErrors; UniformErrors = uniformErrors;
             CandidateCarried = candidateCarried; CarriedUniform = carriedUniform; Fragile = fragile; InflatedRanks = inflatedRanks;
             ParetoK = paretoK; Efficiency = efficiency; LogPredictive = logPredictive; Flagged = flagged; CandidateFlagged = candidateFlagged;
-            DegenerateAccepted = degenerateAccepted; Start = start;
+            DegenerateAccepted = degenerateAccepted; WeightLe = weightLe; Start = start;
         }
 
         public int[] Below { get; }
@@ -1070,13 +1136,14 @@ public static class ConformalBayes
         public int[] Flagged { get; }   // under the kept turns' bounds: |D(y)|
         public bool[] CandidateFlagged { get; }   // under the kept turns' bounds: the candidate's own turn flagged
         public int[] DegenerateAccepted { get; }   // under the kept turns' bounds: flagged units the inflated rule accepts
+        public double[] WeightLe { get; }   // under weights: the weight of the units scoring at or below the candidate
 
         /// <summary>The first grid value of this slice.</summary>
         public int Start { get; }
 
         public Reading Slice(int start) => new(Below, Tied, Own, Ess, CandidateErrors, UniformErrors, CandidateCarried, CarriedUniform, Fragile,
                                                InflatedRanks, ParetoK, Efficiency, LogPredictive, Flagged, CandidateFlagged, DegenerateAccepted,
-                                               start);
+                                               WeightLe, start);
     }
 
     /// <summary>
@@ -1337,6 +1404,10 @@ public static class ConformalBayes
         /// <summary>z: each bound is this many Monte Carlo standard errors.</summary>
         public double Multiple { get; }
 
+        /// <summary>Under weights (slice 14), each member unit's weight, in the members' order: <see cref="Count"/> sums those scoring at or below
+        /// each candidate into <see cref="Reading.WeightLe"/>.</summary>
+        public double[]? UnitWeights { get; init; }
+
         /// <summary>The readings of <paramref name="count"/> candidates from column <paramref name="first"/> into
         /// <paramref name="into"/> from its start. Its steps are apart for the cost row: <see cref="Weigh"/>, <see cref="Multiply"/>,
         /// <see cref="Count"/>.</summary>
@@ -1414,6 +1485,8 @@ public static class ConformalBayes
             Span<double> carried = into.CandidateCarried.AsSpan(at, count), carriedUniform = into.CarriedUniform.AsSpan(at, count);
             below.Clear();
             tied.Clear();
+            Span<double> weightLe = into.WeightLe.AsSpan(at, count);
+            weightLe.Clear();
             for (int b = 0; b < count; b++)
             {
                 inflated[b] = 1;   // the candidate itself
@@ -1462,6 +1535,7 @@ public static class ConformalBayes
                     }
                     if (score < candidate) below[b]++;
                     else if (score == candidate) tied[b]++;
+                    if (UnitWeights is not null && score <= candidate) weightLe[b] += UnitWeights[i];
                     if (score - error <= candidate + ownError[b]) inflated[b]++;
                     if (error > uniform[b]) uniform[b] = error;
                     if (band) a1[b] = Math.Max(error, orderings);   // the unit's carried bound, in the spent sum's place

@@ -150,12 +150,17 @@ public sealed record ResidualReadings(IReadOnlyList<double> Center, IReadOnlyLis
 /// <param name="Upper">Its upper end; +∞ for the whole line.</param>
 public sealed record ConformalInterval(int Case, int Stratum, int Units, int Level, double Threshold, double Lower, double Upper)
 {
-    /// <summary>Whether the stratum is too small for the level, so the set is the whole line.</summary>
-    public bool WholeSpace => Level == 0;
+    /// <summary>Whether the set is the whole line: the stratum too small for the level, or under the weighted rule the case's weight alone
+    /// passing α of the total.</summary>
+    public bool WholeSpace => WeightedAlpha is null ? Level == 0 : double.IsNegativeInfinity(Threshold);
 
     /// <summary>The guaranteed coverage 1 − k/m: at least this for any fit (<c>split_coverage</c>), exactly this with distinct
-    /// scores.</summary>
-    public double Coverage => 1.0 - (double)Level / Units;
+    /// scores; 1 − α under the weighted rule, under the shift its weights state (<see cref="ShiftWeights"/>).</summary>
+    public double Coverage => WeightedAlpha is double a ? 1.0 - a : 1.0 - (double)Level / Units;
+
+    /// <summary>The weighted rule's α where the interval is the weighted rule's (slice 14), its <see cref="Threshold"/> the case's weighted
+    /// threshold and <see cref="Level"/> CB-1's at the same m; null for CB-1's intervals, equal weights' included.</summary>
+    public double? WeightedAlpha { get; init; }
 
     /// <summary>Whether the set holds nothing.</summary>
     public bool Empty => Lower > Upper;
@@ -214,7 +219,9 @@ internal readonly record struct SplitDraws(int Count, IReadOnlyList<int>? ChainL
 /// Σ_s W̄_s F(y | x, θ_s), the fit's predictive CDF, whose ranks give the conformal predictive distribution
 /// (<see cref="ConformalDistribution"/>), the layer's default.</item>
 /// </list>
-/// Ranks are taken within each test case's stratum, among the calibration units of that stratum (<c>coverage_stratum</c>).
+/// Ranks are taken within each test case's stratum, among the calibration units of that stratum (<c>coverage_stratum</c>). Given
+/// <see cref="ShiftWeights"/> (slice 14), the density, CQR, asymmetric CQR and residual forms rank by weight instead, the weighted rule
+/// under covariate or response shift or drift (<c>weightLe</c>), and take CB-1's sets where the weights are equal.
 /// Thread-safe: it reads its inputs and writes only its own buffers.
 /// </summary>
 public static class SplitConformal
@@ -231,7 +238,8 @@ public static class SplitConformal
     /// read by one function. Each case's set is π on its grid within its stratum, as the full step reports it
     /// (<see cref="ConformalSet"/>), with no add-one-in weights: no ESS, no margin, no diagnostics.
     /// </summary>
-    public static ConformalPrediction Density(CandidateLogDensity calibration, CandidateLogDensity candidates, double alpha = 0.1)
+    public static ConformalPrediction Density(CandidateLogDensity calibration, CandidateLogDensity candidates, double alpha = 0.1,
+                                              ShiftWeights? weights = null)
     {
         CheckAlpha(alpha);
         CheckPair(calibration, candidates);
@@ -240,11 +248,29 @@ public static class SplitConformal
         var scores = new double[calibration.Cases];
         LogPredictive(calibration.Values, rows, logWeights, 0, calibration.Cases, scores);
         var fit = new SplitCalibration(scores, calibration.StratumOf, alpha);
+        WeightedCalibration? weighted = weights is null ? null : Weighted(weights, scores, calibration.StratumOf, alpha, candidates.Values.GetLength(1));
         var sets = new ConformalSet[candidates.Cases];
         for (int t = 0; t < candidates.Cases; t++)
         {
             int h = candidates.StratumOf[t], m = fit.Units(h), k = fit.Level(h);
             double[] grid = candidates.Grids[t];
+            if (weighted is not null && !EqualCase(weighted, h, weights!.Candidates, candidates.Offset(t), grid.Length))
+            {
+                // The weighted rule (slice 14): each candidate's weight with the stratum's at or below it, over the total.
+                int count = grid.Length, offset = candidates.Offset(t);
+                var score = new double[count];
+                LogPredictive(candidates.Values, rows, logWeights, offset, count, score);
+                var under = new int[count];
+                var ties = new int[count];
+                var pv = new double[count];
+                for (int j = 0; j < count; j++)
+                {
+                    (under[j], ties[j]) = fit.Rank(h, score[j]);
+                    pv[j] = weighted.PValue(h, score[j], weights.Candidates[offset + j]);
+                }
+                sets[t] = new ConformalSet(t, h, m, k, grid, pv, under, ties, score, null, Form: ConformalForm.Split) { WeightedAlpha = alpha };
+                continue;
+            }
             if (k == 0)
             {
                 sets[t] = new ConformalSet(t, h, m, k, grid, null, null, null, null, null, Form: ConformalForm.Split);
@@ -304,7 +330,8 @@ public static class SplitConformal
     /// <paramref name="response"/>, and at the test cases. Each test case's set is the interval [q_lo − Q, q_hi + Q], Q the negated
     /// threshold of its stratum (<c>cqr_ordConnected</c>): the k-th largest of the calibration units' max(q_lo − y, y − q_hi).
     /// </summary>
-    public static ConformalIntervals Quantiles(QuantileReadings calibration, IReadOnlyList<double> response, QuantileReadings test, double alpha = 0.1)
+    public static ConformalIntervals Quantiles(QuantileReadings calibration, IReadOnlyList<double> response, QuantileReadings test, double alpha = 0.1,
+                                               ShiftWeights? weights = null)
     {
         CheckAlpha(alpha);
         int n = Check(calibration, response, nameof(calibration));
@@ -312,10 +339,17 @@ public static class SplitConformal
         var scores = new double[n];
         for (int i = 0; i < n; i++) scores[i] = CqrScore(calibration.Lower[i], calibration.Upper[i], response[i]);
         var fit = new SplitCalibration(scores, calibration.StratumOf, alpha);
+        WeightedCalibration? weighted = weights is null ? null : Weighted(weights, scores, calibration.StratumOf, alpha, cases);
         var intervals = new ConformalInterval[cases];
         for (int t = 0; t < cases; t++)
         {
             int h = test.StratumOf?[t] ?? 0;
+            if (weighted is not null && !weighted.Equal(h, weights!.Candidates[t]))
+            {
+                double w = weighted.Threshold(h, weights.Candidates[t]);
+                intervals[t] = WeightedInterval(t, h, fit, w, test.Lower[t] + w, test.Upper[t] - w, alpha);
+                continue;
+            }
             double c = fit.Threshold(h);
             intervals[t] = fit.Level(h) == 0
                 ? WholeLine(t, h, fit)
@@ -328,7 +362,7 @@ public static class SplitConformal
     /// Each tail's zero level gives an infinite end. The fit uses the training split, and calibration and test units must be
     /// exchangeable given that split.</summary>
     public static AsymmetricConformalIntervals AsymmetricQuantiles(QuantileReadings calibration, IReadOnlyList<double> response,
-                                                                   QuantileReadings test, double alpha = 0.1)
+                                                                   QuantileReadings test, double alpha = 0.1, ShiftWeights? weights = null)
     {
         CheckAlpha(alpha);
         int n = Check(calibration, response, nameof(calibration));
@@ -346,10 +380,18 @@ public static class SplitConformal
         double tailAlpha = Math.Max(double.Epsilon, alpha / 2);
         var lo = new SplitCalibration(lower, calibration.StratumOf, tailAlpha);
         var hi = new SplitCalibration(upper, calibration.StratumOf, tailAlpha);
+        WeightedCalibration? wlo = weights is null ? null : Weighted(weights, lower, calibration.StratumOf, tailAlpha, cases);
+        WeightedCalibration? whi = weights is null ? null : Weighted(weights, upper, calibration.StratumOf, tailAlpha, cases);
         var intervals = new AsymmetricConformalInterval[cases];
         for (int t = 0; t < cases; t++)
         {
             int h = test.StratumOf?[t] ?? 0;
+            if (wlo is not null && !wlo.Equal(h, weights!.Candidates[t]))
+            {
+                double wl = wlo.Threshold(h, weights.Candidates[t]), wh = whi!.Threshold(h, weights.Candidates[t]);
+                intervals[t] = new(t, h, lo.Units(h), lo.Level(h), hi.Level(h), wl, wh, test.Lower[t] + wl, test.Upper[t] - wh) { WeightedAlpha = alpha };
+                continue;
+            }
             double cLo = lo.Threshold(h), cHi = hi.Threshold(h);
             intervals[t] = new(t, h, lo.Units(h), lo.Level(h), hi.Level(h), cLo, cHi,
                                test.Lower[t] + cLo, test.Upper[t] - cHi);
@@ -362,7 +404,8 @@ public static class SplitConformal
     /// observed <paramref name="response"/>, and at the test cases. Each test case's set is the interval μ ± Qρ, Q the negated
     /// threshold of its stratum: the k-th largest of the calibration units' |y − μ|/ρ.
     /// </summary>
-    public static ConformalIntervals Residuals(ResidualReadings calibration, IReadOnlyList<double> response, ResidualReadings test, double alpha = 0.1)
+    public static ConformalIntervals Residuals(ResidualReadings calibration, IReadOnlyList<double> response, ResidualReadings test, double alpha = 0.1,
+                                               ShiftWeights? weights = null)
     {
         CheckAlpha(alpha);
         int n = Check(calibration, response, nameof(calibration));
@@ -370,10 +413,17 @@ public static class SplitConformal
         var scores = new double[n];
         for (int i = 0; i < n; i++) scores[i] = ResidualScore(calibration.Center[i], calibration.Scale?[i] ?? 1.0, response[i]);
         var fit = new SplitCalibration(scores, calibration.StratumOf, alpha);
+        WeightedCalibration? weighted = weights is null ? null : Weighted(weights, scores, calibration.StratumOf, alpha, cases);
         var intervals = new ConformalInterval[cases];
         for (int t = 0; t < cases; t++)
         {
             int h = test.StratumOf?[t] ?? 0;
+            if (weighted is not null && !weighted.Equal(h, weights!.Candidates[t]))
+            {
+                double w = weighted.Threshold(h, weights.Candidates[t]), wide = -w * (test.Scale?[t] ?? 1.0);
+                intervals[t] = WeightedInterval(t, h, fit, w, test.Center[t] - wide, test.Center[t] + wide, alpha);
+                continue;
+            }
             double c = fit.Threshold(h), half = -c * (test.Scale?[t] ?? 1.0);
             intervals[t] = fit.Level(h) == 0
                 ? WholeLine(t, h, fit)
@@ -426,6 +476,28 @@ public static class SplitConformal
 
     private static ConformalInterval WholeLine(int t, int h, SplitCalibration fit)
         => new(t, h, fit.Units(h), 0, double.NegativeInfinity, double.NegativeInfinity, double.PositiveInfinity);
+
+    // A weighted interval at threshold c, the whole line where c is −∞ (the case's weight alone passing α).
+    private static ConformalInterval WeightedInterval(int t, int h, SplitCalibration fit, double c, double lower, double upper, double alpha)
+        => double.IsNegativeInfinity(c)
+            ? new(t, h, fit.Units(h), fit.Level(h), c, double.NegativeInfinity, double.PositiveInfinity) { WeightedAlpha = alpha }
+            : new(t, h, fit.Units(h), fit.Level(h), c, lower, upper) { WeightedAlpha = alpha };
+
+    // The weighted calibration, its weights laid out as the units and the candidates.
+    private static WeightedCalibration Weighted(ShiftWeights weights, IReadOnlyList<double> scores, int[]? stratumOf, double alpha, int candidates)
+    {
+        if (weights.Candidates.Count != candidates)
+            throw new ArgumentException($"One weight per candidate is required: {weights.Candidates.Count} weights for {candidates} candidates.", nameof(weights));
+        return new WeightedCalibration(scores, weights.Units, stratumOf, alpha);
+    }
+
+    // Whether a case's candidate weights all equal its stratum's one weight, so its set is CB-1's.
+    private static bool EqualCase(WeightedCalibration weighted, int stratum, IReadOnlyList<double> candidates, int offset, int count)
+    {
+        for (int j = 0; j < count; j++)
+            if (!weighted.Equal(stratum, candidates[offset + j]) || candidates[offset + j] != candidates[offset]) return false;
+        return true;
+    }
 
     private static int Check(QuantileReadings readings, IReadOnlyList<double>? response, string name)
     {
