@@ -62,6 +62,14 @@ internal static partial class BassActiveSubspaces
         return Read(fit, data, spec, spec.OutputPatterns).Analysis;
     }
 
+    // The output posterior as the spec asks E[G] to be read (spectral-solver brief, E).
+    private static OutputPosterior Outputs(double[][,] factors, double[] weights, int patterns, OutputSpectrum spectrum) => spectrum switch
+    {
+        OutputSpectrum.Full => OutputPosterior.Of(factors, weights, patterns),
+        OutputSpectrum.Leading => OutputPosterior.Leading(factors, weights, patterns),
+        _ => throw new ArgumentOutOfRangeException(nameof(spectrum), spectrum, "Unknown output spectrum."),
+    };
+
     // The readout, with G's per-draw factors when patterns are asked (slice 5's output side and basis adequacy), and the output metric
     // with its roots, which adequacy reads again.
     private static (ActiveSubspaceAnalysis Analysis, double[][,]? Factors, MetricRoots Metric) Read(BassFit fit, BassData data, ActiveSubspaceSpec spec,
@@ -141,7 +149,7 @@ internal static partial class BassActiveSubspaces
         var analysis = new ActiveSubspaceAnalysis(Array.AsReadOnly(frame.Names), Array.AsReadOnly(frame.Excluded), frame.Route, spec.Metric, frame.Map,
                                                   frame.Measure, PointCount(frame, spec.Points), posterior, error, poincare, Array.AsReadOnly(selected),
                                                   spec.Rank is null ? null : RankPosterior.Of(draws, weights, spec.Rank),
-                                                  factors is null ? null : OutputPosterior.Of(factors, weights, patterns), matrix, status, Boxes(frame))
+                                                  factors is null ? null : Outputs(factors, weights, patterns, spec.OutputSpectrum), matrix, status, Boxes(frame))
         {
             MapInverse = frame.LInverse,
         };
@@ -214,7 +222,7 @@ internal static partial class BassActiveSubspaces
         return new ActiveSubspaceAnalysis(Array.AsReadOnly(frame.Names), Array.AsReadOnly(frame.Excluded), frame.Route, spec.Metric, frame.Map,
                                           frame.Measure, PointCount(frame, spec.Points), posterior, error, poincare, Array.AsReadOnly(selected),
                                           spec.Rank is null ? null : RankPosterior.Of(draws, weights, spec.Rank),
-                                          factors is null ? null : OutputPosterior.Of(factors, weights, spec.OutputPatterns), matrix, status, Boxes(frame))
+                                          factors is null ? null : Outputs(factors, weights, spec.OutputPatterns, spec.OutputSpectrum), matrix, status, Boxes(frame))
         {
             MapInverse = frame.LInverse,
         };

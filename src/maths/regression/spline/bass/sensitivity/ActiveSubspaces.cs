@@ -97,6 +97,12 @@ public sealed record ActiveSubspaceSpec
     /// in the input metric W_x = LLᵀ and the output metric's symmetric root. 0, the default, reads none; refused for a scalar fit.</summary>
     public int OutputPatterns { get; init; }
 
+    /// <summary>How E[G] is read when output patterns are asked (spectral-solver brief, E):
+    /// <see cref="Subspaces.OutputSpectrum.Full"/>, the default, its whole nonzero spectrum by the stacked SVD;
+    /// <see cref="Subspaces.OutputSpectrum.Leading"/>, its leading <see cref="OutputPatterns"/> eigenpairs by LOBPCG, with its trace from
+    /// the draws'. Basis adequacy reads whichever was read.</summary>
+    public OutputSpectrum OutputSpectrum { get; init; }
+
     /// <summary>Whether to read the matrix Poincaré check (slice 5) where it applies. Off by default: it about doubles the exact
     /// readout's cost per draw on scalar, functional and basis fits alike (the slice-5 cost row), so it is read when asked.</summary>
     public bool MatrixPoincare { get; init; }

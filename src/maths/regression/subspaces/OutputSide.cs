@@ -10,12 +10,15 @@ namespace Maths.Regression.Subspaces;
 /// G_s = E[J W_x Jᵀ], the m × m matrix of the output patterns that move with the inputs, given as a factor F_s with G_s = F_sF_sᵀ
 /// (m × c, the stacked metric-weighted Jacobians or their moment-route factor), so G is never formed. Each draw's spectrum and leading
 /// patterns come from F_s's thin SVD; E[G] = Σ w_s G_s's from the thin SVD of the draws' compressed factors side by side,
-/// [√w_s U_sΣ_s]. tr G_s is C_s's trace under the same metrics. A pattern's sign is set so that its largest entry is positive.
+/// [√w_s U_sΣ_s] (<see cref="Of"/>), or its leading patterns alone by LOBPCG on those factors (<see cref="Leading"/>). tr G_s is C_s's
+/// trace under the same metrics. A pattern's sign is set so that its largest entry is positive.
 /// </summary>
 public sealed class OutputPosterior
 {
+    private const double MachineEpsilon = 2.220446049250313e-16;
+
     private OutputPosterior(double[] weights, double[] traces, double[][] drawValues, double[][,] drawPatterns, double[] meanValues,
-                            double[,] meanPatterns)
+                            double[,] meanPatterns, double meanTrace, OutputSpectrum spectrum, LeadingPatternSolve? meanSolve)
     {
         Weights = weights;
         Traces = traces;
@@ -23,6 +26,9 @@ public sealed class OutputPosterior
         DrawPatterns = drawPatterns;
         MeanEigenvalues = meanValues;
         MeanPatterns = meanPatterns;
+        MeanTrace = meanTrace;
+        Spectrum = spectrum;
+        MeanSolve = meanSolve;
     }
 
     /// <summary>The draws' weights, normalized.</summary>
@@ -37,18 +43,68 @@ public sealed class OutputPosterior
     /// <summary>Each draw's leading patterns, m × the eigenvalues' count, as columns.</summary>
     public IReadOnlyList<double[,]> DrawPatterns { get; }
 
-    /// <summary>E[G]'s nonzero eigenvalues, descending.</summary>
+    /// <summary>E[G]'s eigenvalues, descending: its whole nonzero spectrum when read <see cref="OutputSpectrum.Full"/>, its leading
+    /// ones, as many as patterns were asked (fewer when E[G]'s rank is lower), when read <see cref="OutputSpectrum.Leading"/>.</summary>
     public double[] MeanEigenvalues { get; }
 
     /// <summary>E[G]'s leading patterns as columns, m × min(patterns asked, rank).</summary>
     public double[,] MeanPatterns { get; }
 
-    /// <summary>tr E[G].</summary>
-    public double MeanTrace => MeanEigenvalues.Sum();
+    /// <summary>tr E[G]: the full spectrum's sum, or Σ w_s tr G_s when only the leading patterns were read.</summary>
+    public double MeanTrace { get; }
+
+    /// <summary>How E[G] was read.</summary>
+    public OutputSpectrum Spectrum { get; }
+
+    /// <summary>The leading readout's iterative solve; null when the stacked SVD read E[G], under <see cref="Of"/> or for a leading
+    /// readout too small to iterate.</summary>
+    public LeadingPatternSolve? MeanSolve { get; }
 
     /// <summary>The posterior of the factors <paramref name="factors"/> (each m × c_s, G_s = F_sF_sᵀ) under <paramref name="weights"/>,
-    /// with <paramref name="patterns"/> leading patterns per draw and for E[G].</summary>
+    /// with <paramref name="patterns"/> leading patterns per draw and for E[G], whose whole nonzero spectrum is read.</summary>
     public static OutputPosterior Of(IReadOnlyList<double[,]> factors, IReadOnlyList<double> weights, int patterns)
+    {
+        DrawStage d = Draws(factors, weights, patterns);
+        (double[] meanValues, double[,] meanPatterns) = Stacked(d.Compressed, d.M, patterns);
+        return new OutputPosterior(d.Weights, d.Traces, d.Values, d.Patterns, meanValues, meanPatterns, meanValues.Sum(), OutputSpectrum.Full, null);
+    }
+
+    /// <summary>
+    /// The posterior with E[G]'s leading <paramref name="patterns"/> eigenpairs read by LOBPCG on v ↦ Σ_s w_s F_s(F_sᵀv) over the draws'
+    /// compressed factors, in place of the stacked SVD (spectral-solver brief, E), and tr E[G] = Σ w_s tr G_s. Each draw's spectrum and
+    /// patterns are read as <see cref="Of"/> reads them. The solve stops when every returned pair's residual ‖E[G]v − λv‖ is below
+    /// <paramref name="tolerance"/>·tr E[G]; <see cref="MeanSolve"/> reports it, so a clustered spectrum, whose patterns are not
+    /// determined, shows as a long or unconverged solve. Eigenvalues below max(m, R)·ε·λ₁ (R compressed columns) are numerically null and
+    /// dropped. A problem too small to iterate (3k ≥ min(m, R)) is read by the stacked SVD, cut to the leading patterns.
+    /// </summary>
+    public static OutputPosterior Leading(IReadOnlyList<double[,]> factors, IReadOnlyList<double> weights, int patterns, double tolerance = 1e-9)
+    {
+        if (!(tolerance > 0.0) || !double.IsFinite(tolerance))
+            throw new ArgumentOutOfRangeException(nameof(tolerance), "The tolerance is positive and finite.");
+        DrawStage d = Draws(factors, weights, patterns);
+        double trace = 0.0;
+        for (int s = 0; s < d.Traces.Length; s++) trace += d.Weights[s] * d.Traces[s];
+        int m = d.M, r = d.Compressed.Count;
+        int k = Math.Min(patterns, Math.Min(m - 1, r));
+        if (k < 1 || 3 * k >= Math.Min(m, r))
+        {
+            (double[] values, double[,] stacked) = Stacked(d.Compressed, m, patterns);
+            return new OutputPosterior(d.Weights, d.Traces, d.Values, d.Patterns, values[..stacked.GetLength(1)], stacked, trace,
+                                       OutputSpectrum.Leading, null);
+        }
+        LOBPCG.Result solve = LOBPCG.Solve(new StackedFactors(d.Compressed, m), k,
+            new LOBPCG.Options { WantLargest = true, MaxIterations = 1000, Tolerance = tolerance * trace });
+        double floor = Math.Max(m, r) * MachineEpsilon * solve.Eigenpairs[0].Lambda;
+        EigenPair[] kept = [.. solve.Eigenpairs.Where(p => p.Lambda > floor)];
+        double[][] vectors = [.. kept.Select(p => Signed(p.Vector))];
+        return new OutputPosterior(d.Weights, d.Traces, d.Values, d.Patterns, [.. kept.Select(p => p.Lambda)], Columns(vectors, kept.Length, m),
+                                   trace, OutputSpectrum.Leading, new LeadingPatternSolve(solve.Iterations, solve.ResidualNorm, solve.Converged));
+    }
+
+    // Each draw's spectrum, patterns and trace, and the compressed factors [√w_s U_sΣ_s] the mean stage reads.
+    private readonly record struct DrawStage(double[] Weights, double[] Traces, double[][] Values, double[][,] Patterns, List<double[]> Compressed, int M);
+
+    private static DrawStage Draws(IReadOnlyList<double[,]> factors, IReadOnlyList<double> weights, int patterns)
     {
         ArgumentNullException.ThrowIfNull(factors);
         if (factors.Count == 0) throw new ArgumentException("A posterior needs a draw.", nameof(factors));
@@ -74,23 +130,50 @@ public sealed class OutputPosterior
                 compressed.Add([.. left[j].Select(x => x * scale)]);
             }
         }
-        double[] meanValues;
-        double[,] meanPatterns;
-        if (compressed.Count == 0)
+        return new DrawStage(w, traces, values, drawPatterns, compressed, m);
+    }
+
+    // E[G]'s nonzero spectrum and leading patterns from the thin SVD of the compressed factors side by side.
+    private static (double[] Values, double[,] Patterns) Stacked(List<double[]> compressed, int m, int patterns)
+    {
+        if (compressed.Count == 0) return ([], new double[m, 0]);
+        var all = new double[m, compressed.Count];
+        for (int j = 0; j < compressed.Count; j++)
+            for (int l = 0; l < m; l++) all[l, j] = compressed[j][l];
+        (double[] sigma, double[][] left) = Left(all);
+        return ([.. sigma.Select(x => x * x)], Columns(left, Math.Min(patterns, sigma.Length), m));
+    }
+
+    // A copy of u with the sign that makes its largest entry positive, as Left sets it.
+    private static double[] Signed(double[] u)
+    {
+        double[] v = [.. u];
+        int big = 0;
+        for (int l = 1; l < v.Length; l++)
+            if (Math.Abs(v[l]) > Math.Abs(v[big])) big = l;
+        if (v[big] < 0.0)
+            for (int l = 0; l < v.Length; l++) v[l] = -v[l];
+        return v;
+    }
+
+    // v ↦ Σ_j c_j(c_jᵀv) over the compressed columns: E[G] applied to a block in two passes, one for the inner products and one to
+    // accumulate, so E[G] is never formed.
+    private sealed class StackedFactors(List<double[]> columns, int m) : ILinearOperator
+    {
+        private double[] _inner = [];
+
+        public int Dimension => m;
+
+        public void Apply(ReadOnlySpan<double> block, Span<double> result, int count)
         {
-            meanValues = [];
-            meanPatterns = new double[m, 0];
+            int r = columns.Count;
+            if (_inner.Length < r * count) _inner = new double[r * count];
+            for (int j = 0; j < r; j++)
+                for (int q = 0; q < count; q++) _inner[j * count + q] = MatrixOps.Dot(columns[j], block.Slice(q * m, m));
+            result.Slice(0, m * count).Clear();
+            for (int j = 0; j < r; j++)
+                for (int q = 0; q < count; q++) MatrixOps.ScaledSubtract(result.Slice(q * m, m), columns[j], -_inner[j * count + q], m);
         }
-        else
-        {
-            var all = new double[m, compressed.Count];
-            for (int j = 0; j < compressed.Count; j++)
-                for (int l = 0; l < m; l++) all[l, j] = compressed[j][l];
-            (double[] sigma, double[][] left) = Left(all);
-            meanValues = [.. sigma.Select(x => x * x)];
-            meanPatterns = Columns(left, Math.Min(patterns, sigma.Length), m);
-        }
-        return new OutputPosterior(w, traces, values, drawPatterns, meanValues, meanPatterns);
     }
 
     // The nonzero singular values of an m × c factor and their left vectors, signs set.
@@ -303,6 +386,23 @@ public static class MatrixPoincare
         return s;
     }
 }
+
+/// <summary>How an output posterior reads E[G] (spectral-solver brief, E).</summary>
+public enum OutputSpectrum
+{
+    /// <summary>The whole nonzero spectrum and the leading patterns, from the thin SVD of the draws' compressed factors side by side.</summary>
+    Full,
+
+    /// <summary>The leading patterns and their eigenvalues alone, by LOBPCG, with tr E[G] read from the draws' traces: the cheaper
+    /// readout when few patterns are asked of many output locations or draws.</summary>
+    Leading,
+}
+
+/// <summary>The leading readout's iterative solve of E[G] (spectral-solver brief, E).</summary>
+/// <param name="Iterations">LOBPCG's iterations.</param>
+/// <param name="ResidualNorm">The largest residual ‖E[G]v − λv‖ over the returned pairs.</param>
+/// <param name="Converged">Whether every residual is below the tolerance times tr E[G].</param>
+public sealed record LeadingPatternSolve(int Iterations, double ResidualNorm, bool Converged);
 
 /// <summary>
 /// Basis adequacy (E8, slice 5): for a basis fit beside a direct-mode fit of the same cases, the share of the direct fit's G outside the
