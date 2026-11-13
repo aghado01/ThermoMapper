@@ -1,0 +1,2 @@
+Passed 00:00:07.6337449 Maths.Regression.Tests.WeightedConformalTests.Measurement_TheFullStepUnderCovariateShift_OnExactDraws
+    the full step under covariate shift: unweighted 0.8290, the true ratio 0.9385 (se 0.0067; nominal 0.9000)

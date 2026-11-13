@@ -1,0 +1,3 @@
+src/maths/regression/conformal/DensityRatio.cs
+src/maths/regression/conformal/WeightedConformal.cs
+tests/regression/DensityRatioTests.cs

@@ -1,0 +1,6 @@
+src/maths/regression/spline/bass/BassConfig.cs
+src/maths/regression/spline/bass/BassModel.cs
+src/maths/regression/spline/bass/BassObservationModel.cs
+src/maths/regression/spline/bass/BassRandomEffectsNoise.cs
+tests/regression/RandomEffectsNoiseQualificationTests.cs
+tests/regression/RandomEffectsNoiseTests.cs

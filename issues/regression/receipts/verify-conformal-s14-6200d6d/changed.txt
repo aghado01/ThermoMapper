@@ -1,0 +1,5 @@
+src/maths/regression/conformal/AsymmetricConformalInterval.cs
+src/maths/regression/conformal/ConformalBayes.cs
+src/maths/regression/conformal/SplitConformal.cs
+src/maths/regression/conformal/WeightedConformal.cs
+tests/regression/WeightedConformalTests.cs

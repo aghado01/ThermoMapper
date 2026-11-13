@@ -1,0 +1,1 @@
+filter: FullyQualifiedName~WeightedConformalTests.Measurement_TheFullStepUnderCovariateShift_OnExactDraws, BASS_QUALIFICATION=1
