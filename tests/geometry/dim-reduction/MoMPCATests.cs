@@ -8,6 +8,30 @@ namespace Maths.Geometry.Tests;
 
 public sealed class MoMPCATests
 {
+    [Fact]
+    public void ComputeMoM_GradedCovariance_KeepsWeakVariancesAcrossUnits()
+    {
+        foreach (double scale in new[] { 1e-60, 1.0, 1e60 })
+        {
+            double strong = Math.Sqrt(3) * scale;
+            double a = Math.Sqrt(3 * 1.5e-20 / 2) * scale;
+            double b = Math.Sqrt(3 * 0.5e-20 / 2) * scale;
+            double[][] block = [[strong, 0, 0], [-strong, 0, 0], [0, a, a], [0, -a, -a], [0, b, -b], [0, -b, b]];
+            double[][] data = [.. Enumerable.Range(0, 5).SelectMany(_ => block.Select(row => (double[])row.Clone()))];
+            MoMPcaResult result = MoMPCA.ComputeMoM(data, kBlocks: 5, numComponents: 3);
+            double[] expected = [scale * scale, 1.5e-20 * scale * scale, 0.5e-20 * scale * scale];
+            for (int j = 0; j < 3; j++)
+            {
+                Assert.InRange(Math.Abs(result.Variances[j] / expected[j] - 1), 0, 2e-11);
+                for (int k = 0; k < 3; k++)
+                {
+                    double dot = result.Basis[j].Zip(result.Basis[k], (x, y) => x * y).Sum();
+                    Assert.InRange(Math.Abs(dot - (j == k ? 1 : 0)), 0, 2e-12);
+                }
+            }
+        }
+    }
+
     /// <summary>
     /// Three clean blocks share a mean ≈ (5, 0) and a high-variance axis ≈ (1, 0); two corrupted
     /// "nodes" sit at mean (5, 20) along the (1, 1) axis. The scale-calibrated product median on

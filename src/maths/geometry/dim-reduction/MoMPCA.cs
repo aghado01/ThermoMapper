@@ -121,16 +121,13 @@ namespace Maths.Geometry.DimReduction
             double[] covarianceMedian = ArithmeticMean(projected, r * r);
             GeometricMedian.Compute(new EuclideanVectorManifold(r * r), projected, weights, covarianceMedian);
             var median = new double[r, r];
-            double largest = 0.0;
             for (int a = 0; a < r; a++)
                 for (int b = 0; b < r; b++)
                 {
                     median[a, b] = 0.5 * (covarianceMedian[a * r + b] + covarianceMedian[b * r + a]);
-                    largest = Math.Max(largest, Math.Abs(median[a, b]));
                 }
-            // The Jacobi tolerance relative to the matrix, which scales with the data's units squared: an absolute
-            // 1e-12 would skip every rotation once the variances fall to about 1e-12.
-            EigenResult eig = DenseEigen.DecomposeSymmetric(median, tol: largest > 0 ? 1e-12 * largest : 1e-12);
+            EigenResult eig = DenseEigen.DecomposeSymmetric(median, tol: 1e-12,
+                stoppingRule: JacobiStoppingRule.ElementWiseRelative);
 
             var order = new int[r];
             for (int i = 0; i < r; i++) order[i] = i;
