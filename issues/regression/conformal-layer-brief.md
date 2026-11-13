@@ -309,7 +309,7 @@ Started at the user's pick of 2026-11-13 ("ok 14 then 15", in this session), rel
   - the refusals;
   - qualification: the full step under shift on exact draws, and a drifting stream under position weights.
 
-**State.** Being written. Nothing committed.
+**State.** The code and tests are committed in `c19ce98`. The Commit selection passed 1,142 of 1,142. Qualification read the full step under shift at 0.939 against 0.829 unweighted, and the drift readings. The whole assembly is running at `c19ce98`; the report follows it.
 
 ### 2026-11-11 — Slice 13, the tournament correction
 
