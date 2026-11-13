@@ -238,6 +238,21 @@ Commissioned by the user on 2026-11-10 ("lets build Hoff's score as an opt-in"),
 
 **Report** under "Reports": what landed by commit, the gates' numbers, the measurement with no default proposed, the refusals and their reasons, and the "Doc changes owed". Message the main session tersely when it lands.
 
+## Slice 15, commissioned (2026-11-13)
+
+The user commissioned the next conformal slice on 2026-11-13. Slice 15 goes first, as the [handoff](coordination-handoff-2026-11-11.md#waiting-on-the-user) recommended, and a new chip builds it. The reports below are the earlier chip's record.
+
+- **Sources.** Its row in [the plan](#e16s-completion-the-plan-slices-7-onward). Zhang and Candès, *Posterior Conformal Prediction*: `D:\aghado01\codex-scientiae\supellex-private\gauntlet\conformal-bayes\2409.19712v2\`. The Lean is verified: `coverage_pcp`, `coverage_pcp_marginal` and `pcp_cluster_gap`, in the Lean chip's [slice 15 report](../../lean/Protolemmata/Conformal/conformal-chip-brief.md#2026-11-10--slice-15-posterior-conformal-prediction-proved).
+- **Reading first.** Report the reading before building, as the plan's rule has it.
+- **The weighted rule, shared with slice 14.** The Lean report reads the method as slice 14's weighted rule with the posterior weights κ(L | z_u). So the weighted rank rule lands first, as its own commit, in the shape slice 14 will take: a weight per unit. Slice 15's mixture and posterior weights go on top. Likelihood ratios, label shift and the bound beyond exchangeability stay slice 14's. If the reading divides the work differently, say so in its report before building.
+- **After it.** The next slice among 14, 16, 17 and 18 starts on the coordinating session's word, once slice 15 is verified from a clean archive.
+- **Files, while three other chips are at work.**
+  - The [defects chip](shared-code-defects-brief.md) owns `PredictiveChecks.cs` and the weight check in `Pointwise.cs`. It is repairing how `PredictiveChecks.Rows` normalizes extreme weights, with ordinary weights kept bit for bit. A change this slice needs there is agreed with it by message first.
+  - The GBASS chip owns BASS's sampler files for the u–s funnel fix.
+  - Two Lean chips work in `lean/`.
+- **Left as built:** slice 12a's k̂ diagnostic and its default, which wait for the user.
+- **Events.** End a turn with one line and the report's link when the reading is in, when the slice lands, or when it needs a decision. Sub-agents need the user's permission.
+
 ## Gates common to every slice
 
 - **Nothing upstream moves.** The layer reads; every pinned hash and fingerprint holds: the pinned tier at each commit, the whole assembly at the slice's end ([targeted runs](../../CONTRIBUTING.md#testing-standards)).
