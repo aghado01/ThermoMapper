@@ -62,3 +62,44 @@ Commissioned by the user on 2026-11-13 through the coordinating session. Both de
 ## Reports
 
 Newest first. Each gives the commits, the gates' results, defects found, decisions for the user and "Doc changes owed".
+
+### In progress (2026-11-13)
+
+- *Slice 2, not started:* its reading (the reproduction, then the ladder of condition numbers and scales) starts after the coordinating session's check of slice 1.
+
+### 2026-11-13 — Slice 1: the weight reader at extreme weights
+
+**Commit.** `f50753f` fix(regression): the weight reader keeps every finite weight's normalized log.
+
+**What changed.**
+- *`PredictiveChecks.Rows`* reads every finite weight to full precision.
+  - Where the sum is finite and W_d/ΣW a normal double, it takes ln(W_d/ΣW), the expression it took before. Ordinary weights keep their bits by construction.
+  - Where the sum passes `double.MaxValue`, it takes the same ratio of the weights scaled by the power of two that brings the largest into [1, 2). The scaling is exact.
+  - Where the ratio is still below 2⁻¹⁰²², it takes ln W_d − e ln 2 − ln(the scaled sum), a difference of logs. These are the ratios the old form read as −∞ or as an imprecise subnormal.
+- *`PointwiseLogDensity.CheckWeights`* tests for one positive weight instead of forming a sum that can overflow. It admits and refuses exactly what it did.
+- *One shared routine.* WAIC, PSIS-LOO and the conformal layer's nine sites all read `Rows`. No other reader of the pointwise or candidate densities' weights normalizes them, so the conformal folder is unchanged.
+
+**The gates.**
+- *Slice 10's criterion*, in `WeightReaderTests`:
+  - `[1e300, 1e-300]` reads rows [0, 1] with log weights [0, −1381.551055796427]; `[1e308, 1e308]` reads two weights of exactly ½. No NaN, no lost row.
+  - The log weights against an exact reference: the weights summed as integers in units of 2⁻¹⁰⁷⁴, and the ratio taken to at least 62 bits by integer division. The tolerance is (n + 4)·2⁻⁵²·max(1, |reference|).
+  - Nine chosen cases, and a seeded sweep of 4,000 vectors: 2 to 41 weights, binary exponents over random bands of [−1074, 1024), with zeros, the smallest subnormals and values within 10⁻³ of `double.MaxValue`. The worst error is 0.15 of the tolerance. 2,694 of the vectors hold a ratio the old form lost.
+  - The readings, against log-sum-exp references on the exact log weights: the weighted predictive (`SplitConformal.LogPredictive`, WAIC's per-unit elpd), the CDF scores (`CdfScores.Fixed`), and slice 10's carried CDF error.
+  - A finite tilt of about −1381 nats on the dominant draw makes the first input's tiny row material. It moves WAIC's lppd by 0.35 and 0.61 nats, and the carried bound's weights to .62 and .38.
+  - Positive rescaling: 4,000 vectors scaled by a power of two. The 1,353 whose weights and ratios all stay normal agree bit for bit, and the rest within the tolerance. Scales that are not powers of two agree within three tolerances, and the carried error holds under 2^±20.
+  - Zero weights drop out and leave the others' log weights bit for bit (2,000 vectors).
+- *The reproduction.* On HEAD's code 12 of the 18 new tests fail, each extreme input reading −∞. After the repair, 18 of 18 pass.
+- *The ordinary range.* The new pinned test compares 4,000 ordinary vectors with the old form, kept verbatim, bit for bit. The `[1, double.Epsilon]` receipts also keep their bits: that ratio is exact, and the difference of logs gives the same ln ε.
+- *The whole regression assembly*, pinned tier included, from a `git archive HEAD` snapshot plus the three files: 3,306 passed, 0 failed (29 min). The selection by change was the whole assembly less its slow tier, since `Pointwise.cs` is a hub, so the slice's run covered it.
+- Receipts are in `artifacts/shared-code-defects/receipts/` (`slice1-*`).
+
+**Defects found.**
+- None in the slice's code.
+- *Finding, the same class outside the brief's files.* BASS's draw-weight readers normalize linear weights by a sum formed in linear space: `Draws3.Select` (`spline/bass/posterior/BassPrediction.cs`) and `PosteriorSummary.Over` (`spline/bass/presentation/`). Under `[1e308, 1e308]` the sum is +∞, and `Draws3.Select` returns weights of 0. They read `BassFit.DrawWeights`, not the pointwise densities. The samplers never produce such weights (SMC's and the flat histogram's are self-normalized), but `fit with { DrawWeights = … }` can.
+
+**Decisions for the user.**
+- *Whether BASS's draw weights get the same full-range reading.* If yes, a linear-space twin of `Rows`' rule serves `Draws3.Select` and `PosteriorSummary`, and prediction, sensitivity and the summaries read any finite weights. If no, `BassFit.DrawWeights` states that its sum must stay below `double.MaxValue`, and those readers refuse one that does not.
+
+**Doc changes owed.**
+- *`docs/Maths/Regression/Regression.md`*, the weighted draws (line 214): `PointwiseLogDensity.Weights` takes any finite, non-negative weights with one positive, over the whole finite range. The shared reader's rule: the ratio's log where it is normal, so ordinary weights read as before; the power-of-two-scaled ratio past `double.MaxValue`; a difference of logs below the normal range.
+- *`docs/Maths/Regression/ConformalPrediction.md`*, "Weighted draws work as they are" (line 76): the shared rows read extreme weights to full precision. This closes slice 10's parked weighted-row follow-up.
