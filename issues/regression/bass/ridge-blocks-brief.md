@@ -161,20 +161,54 @@ Maintain an **In progress** entry here with uncommitted work, running checks and
 
 Newest first.
 
-### In progress: slice 6, the u–s funnel's fix by interweaving (GBASS chip, 2026-11-13)
+### Slice 6: the u–s funnel's fix by interweaving (GBASS chip, 2026-11-13)
 
-Hand-over state, updated in place until the slice's report replaces it.
-- *Commissioned* by the user on 2026-11-13 (decision 7: interweaving).
-- *Plan.*
-  - A non-centred step on each drawn s_k under a noise, after s's centred step in τ's slot. It holds ũ_k = u_k/(σs_k), proposes ln s′, scales u_k by s′/s, and follows the reading at the new offset. It accepts on the tempered target's change, plus ln p(s′) − ln p(s) and the Jacobian t, with a Hastings term for a scale read from the state.
-  - The step reads the a-marginal, before the coefficients' slot draws a, in the partially collapsed order the τ step keeps.
-  - It is behind a sampling option, refused where it reads nothing.
-- *Gates.*
-  - Geweke rows from exact starts with the step on: t at b = 1, a replica at b < 1, Normal-Wald, and the skewed horseshoe with its β·v move.
-  - Resume bit for bit with the step on.
-  - Every fit without the step bit for bit.
-  - The refusals.
-  - The mixing measurement on a weak-data fixture and on the n = 300 fixture, on against off, which sets the default.
+**Landed** in `5cde502` and the commit that carries this report. Decision 7, the user's call of 2026-11-13: interweaving.
+
+**The step** (`BassGroupScaleInterweavingBlock`, behind `BassSampling.InterweaveGroupScales`).
+- Beside s's centred step (`BassLatentGroupScaleBlock`), which moves s_k only through u_k, the non-centred step holds ũ_k = u_k/(σs_k). A move t = ln(s′/s) scales u_k by eᵗ and moves the offset Z̃u.
+- It accepts on the rung's tempered target at the new reading, plus ln p(s′) − ln p(s) + t. Under a noise the target holds no scale prior, which only a whitening adds, so the step adds it.
+- Its Hastings term reads a proposal scale h = 2.4/√C, where C = b·Σᵢ wᵢ(z̃ᵢu_{k,g(i)})²/σ² plus the prior's curvature: the information the data carry about ln s with ũ held.
+- It runs in τ's slot after the centred step, on the a-marginal, before the coefficients' slot draws a: the partially collapsed order τ's step keeps.
+- It is exact at every rung, so ladders, SMC and the reference rung keep form B's exactness.
+- It is one response's: refused for several outputs (E34's U is integrated against Σ), under Gaussian noise (s steps on the effects' integral there) and for a held scale.
+
+**Found.** The 19,000-sweep autocorrelation time behind the decision is Geweke's successive chain on 12 cases in 3 levels, with y redrawn each step. On fixed data with about 25 cases a level, ln s's is about 5. The funnel is a weak-data regime, which the measurement confirms.
+
+**Gates.**
+- *The sweep:* the step sits right after each drawn scale's centred step, in a chain's sweep and a replica's. Without the option no sweep holds it. A fit accepted 140 of 300 proposals. The refusals and the serialized form (left out when off) hold.
+- *Resume bit for bit* with the step on, beside the collapse on and neither.
+- *Geweke from exact starts* (10 sweeps from each of 40,000 draws of the tilted joint), four new rows with the step:
+
+  | row | worst \|z\| | ln s z |
+  |---|---|---|
+  | t, b = 1, plain | 2.19 | 0.22 |
+  | t, b = 0.5, replica | 1.30 | −0.96 |
+  | Normal-Wald, b = 1, with the collapse | 0.99 | −0.59 |
+  | skewed horseshoe + β·v move, b = 0.75, replica | 1.83 | −1.52 |
+
+  The nine slice 4 rows were rerun alongside them, worst |z| 3.17.
+- *Mixing, the step on against off:* four chains of 2,000 + 40,000 sweeps per arm. Both arms reach the same posterior in every run. Bulk ESS, on over off:
+
+  | data | ln s per sweep | u0 per sweep | ln σ² per sweep | M per sweep | ESS per second |
+  |---|---|---|---|---|---|
+  | six levels of four cases, t₃ noise, seed 11 | 3.62 | 2.13 | 0.52 | 0.33 | ln s 4.84, u0 2.84, ln σ² 0.70, M 0.44 |
+  | the same, seed 23 | 3.67 | 2.09 | 1.13 | 0.80 | ln s 3.67, u0 2.09, ln σ² 1.13, M 0.80 |
+  | n = 300 in twelve levels, seed 11 | 1.03 | 0.81 | 0.77 | 0.62 | ln s 0.78, u0 0.61, ln σ² 0.59, M 0.47 |
+
+- *Per commit:* 2511 of 2511. *Slice end:* 3297 of 3297. Both ran on a snapshot of `127d64d` plus the slice's files. Conformal-layer commits that touch none of these files landed between that snapshot and `5cde502`, so the combined head was not run here.
+
+**The default: an opt-in, off.** The step fixes the funnel where it bites, ln s's ESS per sweep 3.6 times, but it is regime-dependent. On well-pinned data it gives ln s nothing and costs the other quantities. Even on the weak fixture, ln σ² and M ran at 0.33 to 1.13 of their ESS per sweep. The option's documentation says where to switch it on: few cases a level, or noise large against s.
+
+**Decisions taken beyond this brief.** The proposal scale reads the data's information about ln s with ũ held, so the step's width follows the regime. Several outputs are refused.
+
+**Doc changes owed** (chips leave `docs/` alone):
+- `docs/Maths/RandomEffects.md`, "Under GBASS's noises": the non-centred step and its ratio, why it is exact at every rung, the funnel's regime, the mixing table, and where to switch it on.
+- The configuration reference: `BassSampling.InterweaveGroupScales`.
+
+**Follow-ups, with the decision each would change.**
+- *ln σ²'s and M's per-sweep losses with the step on* are unexplained. One candidate is s's wider excursions on weak data widening u, which σ²'s conditional reads. A measurement that holds σ² would decide whether the step should skip a sweep's σ² block or move σ with s.
+- *An automatic default by cases per level* would change whether the step switches itself on for weakly pinned groups. It needs the mixing measurement over a grid of cases per level, with the weak fixture's ln σ² and M costs read beside ln s's gain.
 
 ### Slice 5: the candidate seam under random effects (Codex continuation, 2026-11-11)
 
