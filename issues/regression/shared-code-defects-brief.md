@@ -63,6 +63,15 @@ Commissioned by the user on 2026-11-13 through the coordinating session. Both de
 
 Newest first. Each gives the commits, the gates' results, defects found, decisions for the user and "Doc changes owed".
 
+### 2026-11-13 — Slice 1 verified from a clean archive (coordinating session)
+
+- **Run:** `scripts/verify-csharp.ps1` on a clean archive of HEAD `e39924c`, the Commit selection over slice 1's three files (`f50753f`).
+- **Selection:** 288 of 308 classes of the regression assembly, with the pinned tier and without the slow tier's 71 methods.
+- **Result:** 2,922 executed, 2,922 passed, 0 failed, 0 not executed (26 min). `WeightReaderTests` is among them.
+- **The source change was read:** ordinary weights take the earlier expression, so their bits hold; nothing was found.
+- **Slice 2 is not yet verified.** The archive holds its source (`37eb63c`), so the regression assembly passed with the refusal in place. The linear algebra, Mapper and VizCore selections are still to run.
+- **Receipts:** `artifacts/verify-defects-s1-e39924c/`, with the changed-file list, counters and snapshot line tracked in [receipts](receipts/verify-defects-s1-e39924c/).
+
 ### 2026-11-13 — Slice 2: `CholeskyDecomposition` on a near-singular covariance
 
 **Commit.** `37eb63c` fix(linalg): CholeskyDecomposition refuses a factor that is not finite, and its callers read it.

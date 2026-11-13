@@ -1,0 +1,3 @@
+src/maths/regression/Pointwise.cs
+src/maths/regression/PredictiveChecks.cs
+tests/regression/WeightReaderTests.cs

@@ -8,7 +8,7 @@ Updated 2026-11-13 with that day's round-up: E8's slice 7d verified, the LinAlg 
 
 1. Read [AGENTS.md](../../AGENTS.md) and [CONTRIBUTING.md](../../CONTRIBUTING.md), then this file. Read a workstream's brief before acting on it.
 2. **This session's chips:** the conformal chip is building slice 15, with slice 14 and its ratio estimator verified on 2026-11-13. The conformal Lean chip is proving slice 14's three follow-ups (decision 12, `d08139e`). E21's slice 6 landed (`5cde502`) and passed its Commit selection; its Geweke rows still run under qualification. This session (`local_b6732445`) verifies those two; the second coordinating session (`local_b84fa8ad`) verifies its own two chips. E8's slice 7d landed and was verified on 2026-11-13 (below).
-3. Two Opus chips were commissioned the same day by a second coordinating session, at the user's request: the defects chip and the active-subspace Lean chip ([Sessions](#sessions)). Both have landed their work. The Lean is verified; the defects chip's two slices await that session's clean-archive runs.
+3. Two Opus chips were commissioned the same day by a second coordinating session, at the user's request: the defects chip and the active-subspace Lean chip ([Sessions](#sessions)). Both have landed their work. The Lean and the weight reader are verified; the Cholesky refusal awaits that session's clean-archive run.
 4. Then take the [waiting list](#waiting-on-the-user) to the user.
 
 ## Standing rules
@@ -40,7 +40,7 @@ They are in [AGENTS.md](../../AGENTS.md#docops--conventions-for-issues) (the use
 | [GBASS slices](claude://claude.ai/epitaxy/local_add4be38-7ddb-4981-8b14-6f8ac64f7dab) `local_add4be38` | [ridge-blocks-brief.md](bass/ridge-blocks-brief.md) (E21) | Idle; E21 slice 6 landed (`5cde502`), its Geweke rows still to verify |
 | [KHAOS slices](claude://claude.ai/epitaxy/local_d665e4ce-cd64-427f-9c2a-8c94d96497dd), [weighted fits](claude://claude.ai/epitaxy/local_57bad71b-a245-4e83-8cb0-52c46cd48b60) | — | Idle; their work landed |
 | LinAlg consolidation: the user's Sol sessions, listed in its brief | [spectral-solver-consolidation-brief.md](../linalg/spectral-solver-consolidation-brief.md) | Complete |
-| [Shared-code defects](claude://claude.ai/epitaxy/local_0e31b37f-31de-42a6-a527-9c1daa3819bc) `local_0e31b37f` (Opus) | [shared-code-defects-brief.md](shared-code-defects-brief.md) | **Both slices landed:** the weight reader (`f50753f`) and the factor's refusal (`37eb63c`), each with its report. The second coordinator's clean-archive verification is running for slice 1 and follows for slice 2. Four decisions wait on the user ([item 13](#waiting-on-the-user)) |
+| [Shared-code defects](claude://claude.ai/epitaxy/local_0e31b37f-31de-42a6-a527-9c1daa3819bc) `local_0e31b37f` (Opus) | [shared-code-defects-brief.md](shared-code-defects-brief.md) | **Both slices landed:** the weight reader (`f50753f`) and the factor's refusal (`37eb63c`), each with its report. Slice 1 is verified from a clean archive (2,922 of 2,922 at `e39924c`); slice 2's run follows E21 slice 6's Geweke rows in the shared workspace. Four decisions wait on the user ([item 13](#waiting-on-the-user)) |
 | [Active-subspace Lean](claude://claude.ai/epitaxy/local_eaa7e8ed-844f-440c-ae5f-b72b72d6d68a) `local_eaa7e8ed` (Opus) | [active-subspace-lean-chip-brief.md](../../lean/Protolemmata/BASS/active-subspace-lean-chip-brief.md) | **Done and verified:** all four proved (`cbfd0ec` to `85d9d53`), one hypothesis corrected after review (`1682d4a`); verified from a clean archive at `42c980d` ([item 10](#waiting-on-the-user)) |
 
 Older chips are listed in the 2026-11-09 handoff. Message a chip by its `local_…` id.
@@ -148,7 +148,7 @@ Closed since the 2026-11-11 handoff: `DenseEigen`'s relative threshold (`75523c4
 
 ## Open defects in shared code
 
-Both were commissioned by the user on 2026-11-13, to the defects chip ([brief](shared-code-defects-brief.md)): the weight reader first, then the factor's refusal of a non-finite result. Both repairs have landed: the reader keeps every finite weight's normalized log (`f50753f`), and the factor refuses a result that is not finite, with its three callers reading the refusal (`37eb63c`). The second coordinator's clean-archive verification of the two is in progress. A floored factor that stays finite is still read, and still wrong once a pivot floors: that is the first decision of [item 13](#waiting-on-the-user).
+Both were commissioned by the user on 2026-11-13, to the defects chip ([brief](shared-code-defects-brief.md)): the weight reader first, then the factor's refusal of a non-finite result. Both repairs have landed: the reader keeps every finite weight's normalized log (`f50753f`), and the factor refuses a result that is not finite, with its three callers reading the refusal (`37eb63c`). The reader's repair is verified from a clean archive; the factor's refusal still waits for its run. A floored factor that stays finite is still read, and still wrong once a pivot floors: that is the first decision of [item 13](#waiting-on-the-user).
 
 - **`CholeskyDecomposition` on a near-singular covariance.** Found by conformal slice 11 (`9248e33`).
   - The factor's entries go infinite while `LogDet` stays finite, and only `Status.Finite` reports it.
