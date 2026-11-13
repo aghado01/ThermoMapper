@@ -1,3 +1,4 @@
+import Enthymemata.ActiveSubspace
 import Enthymemata.Ascent
 import Enthymemata.BARS
 import Enthymemata.BassContractionCover
