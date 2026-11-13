@@ -1,6 +1,14 @@
 # LinAlg eigensolvers — residuals, Jacobi stopping and the LOBPCG projected solve
 
-> The working brief is now [spectral-solver-consolidation-brief.md](spectral-solver-consolidation-brief.md) (2026-11-12). It carries this brief's witnesses and items. This file stays as the record.
+> **Closed 2026-11-13.** Every item below has landed through [spectral-solver-consolidation-brief.md](spectral-solver-consolidation-brief.md), whose Reports section records each slice:
+> - §1's two fixes became A1 and A2;
+> - §2's production Rayleigh–Ritz solve, and the hierarchical P-spline's reference call, became B3;
+> - §3's image reuse became B5;
+> - the relative tolerance became B1;
+> - the GP and tensor-spline items became F;
+> - E8's leading output patterns became E, together with its input-side analogue.
+>
+> One decision stays with its owner: the graph solver's dense-to-LOBPCG threshold (`SpectralSolverPolicy.IterativeMinNodes`, set from the June 2 benchmark). This file stays as the record.
 
 Queued 2026-11-09 for the next available LinAlg owner. The first two fixes can start independently of E21, E34 and conformal slice 8. Schedule comparative timings when the regression qualification runs leave the machine quiet. The [regression handoff](../regression/coordination-handoff-2026-11-09.md) tracks the separate E8 decision on a relative tolerance for small-scale matrices.
 
