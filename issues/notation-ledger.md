@@ -11,6 +11,15 @@ Splits in the module's language (symbols, identifiers, terms), logged as session
 
 ## Entries
 
+### The tilde in E21: Z̃, z̃ and ũ (2026-11-13)
+
+- **Kind:** one name for several concepts.
+- **Readings:**
+  - Z̃, the random effects' design: the cases' level indicators, times the standardized input for a slope (`issues/regression/bass/ridge-blocks-brief.md`, "The model").
+  - z̃, a case's multiplier in that design, 1 for an intercept and the scaled input for a slope (`RandomEffectGrouping.Multiplier`, `src/maths/regression/spline/bass/BassRandomEffects.cs`).
+  - ũ = u/(σs), the effects standardized, which s's non-centred step holds (`BassGroupScaleInterweavingBlock`, `src/maths/regression/spline/bass/BassRandomEffectsNoise.cs`). Beside them the core's z̃ for a moving response's column (the 2026-11-02 entry on z).
+- **Found:** 2026-11-13, E21's slice 6.
+
 ### E34's skew γ ∈ ℝᴷ beside the Normal–Wald's γ, scalar BASS's β and the skew prior's s (2026-11-11)
 
 - **Kind:** one name for several concepts, and one concept under two names.
