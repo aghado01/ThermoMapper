@@ -63,9 +63,104 @@ Commissioned by the user on 2026-11-13 through the coordinating session. Both de
 
 Newest first. Each gives the commits, the gates' results, defects found, decisions for the user and "Doc changes owed".
 
-### In progress (2026-11-13)
+### 2026-11-13 — Slice 2: `CholeskyDecomposition` on a near-singular covariance
 
-- *Slice 2, not started:* its reading (the reproduction, then the ladder of condition numbers and scales) starts after the coordinating session's check of slice 1.
+**Commit.** `37eb63c` fix(linalg): CholeskyDecomposition refuses a factor that is not finite, and its callers read it.
+
+**The reading.** The probe is `artifacts/shared-code-defects/probe/cholesky-floor.cs`, with its tables in `results-before.md` and `results-edges.md` beside it.
+- *The reproduction: squared-exponential covariances*, variance 1, on 50 to 401 points of [0, 1], lengths 0.05 to 1, no jitter.
+  - 19 of the 20 configurations floor pivots, and 15 of those overflow: 351 to 73,536 entries of the factor are not finite, the first at rows 17 to 57.
+  - `LogDet` still reads a finite −1,156 to −11,019 on every one.
+  - `DenseCholesky` stops on all 19, at rows 5 to 16.
+  - The other 4 floor 40 to 398 pivots and stay finite.
+- *Where the floored factor goes wrong while finite.* A = s·Q·diag(κ^(−i/39))·Qᵀ with n = 40, s from 10⁻¹⁶ to 10⁶ and κ from 1 to 10²⁰. The reference is a double-double factor of the stored A.
+  - *The floor fires on scale alone.* The pivots lie in [s/κ, s], so the floor fires when s/κ reaches 10⁻¹². At κ = 1, 10⁻¹³·I floors all 40 pivots.
+  - *Once a pivot is floored, the outputs leave any tolerance while every entry stays finite.*
+    - With 4 to 8 pivots floored, `LogDet` is off by 3.6 to 13 nats and the solves and inverse by 73 to 93 % (s = 1 at κ = 10¹⁴, 10⁻⁶ at 10⁸, 10⁻⁸ at 10⁶).
+    - Across every cell where flooring changed a pivot, `LogDet` is off by 3.6 to 1,200 nats and the solves by 46 % up to 2·10¹¹ relative. At s = 10⁻¹², κ = 1, the floor replaces 10⁻¹² by itself, and the error there is 0.
+    - The law `Sample` draws from, LLᵀ, is up to 5.9·10⁴ from A in relative terms, among the cells that have a reference.
+  - *`DenseCholesky` on the same matrices is accurate to its κ·ε*: 2.4·10⁻¹⁰ nats and 1.4·10⁻¹⁰ at s = 10⁻⁶, κ = 10⁸.
+    - It refuses only where the stored A has no factor in double: κ = 10²⁰ at every scale, and κ = 10¹⁸ at most.
+    - There the floored factor returns finite numbers for a matrix that is not positive definite. At s = 10⁶, κ = 10²⁰, its LLᵀ is 5.9·10⁴⁴ from A.
+  - *Where no pivot is floored, the two factors agree bit for bit.*
+- *Two edges.*
+  - A finite matrix can overflow a pivot while L stays finite: rank one at 10²⁰⁰ with one entry 2ε off reads `LogDet` 405.3, and its Σ⁻¹ has four non-finite entries.
+  - L⁻¹ can overflow while L and every pivot are finite. The tests construct one.
+  - `Status.Finite` catches the first edge and not the second.
+- *How `DenseCholesky` treats the same inputs.* It stops at the first pivot that is not finite and positive and names it in `FailedAt`. `LogDet` is NaN, and every read, `RelativePivot` included, throws.
+- *What the callers did with `Status`: none read it.*
+  - `GaussianComponent` wrote its inverse and log-normalizer from any factor.
+  - `BhattacharyyaCoefficient` read `LogDet` and the inverse.
+  - The scene export wrote `WriteLTo`'s factor as it came: the edge above exported a finite factor whose LLᵀ is not the covariance.
+
+**The build.**
+- *The refusal.* `Decompose` fails when a pivot before flooring, an entry of L or an entry of L⁻¹ is not finite.
+  - `FailedAt` (new) names the first such row, and `LogDet` is NaN.
+  - `Solve`, `WriteInverseTo`, `WriteLTo` and `Sample` throw, and they also throw before any `Decompose`.
+  - A floored factor that stays finite is read as before.
+- *The callers.*
+  - `GaussianComponent.UpdateCache` throws and leaves `CovarianceInverse` and `LogNormalizationFactor` NaN, so its density reads NaN and `Sample` is refused.
+  - `BhattacharyyaCoefficient` refuses by name (`cov1`, `cov2`, `a`, `b`, or the averaged covariance).
+  - The scene export refuses the component, naming its layer and index.
+- *The two factors now fail one way on a factor that is not finite.* They still differ on a floored factor that stays finite (decision 1).
+
+**The gates.**
+- *The reproduction.*
+  - On HEAD's code, 8 of the 11 new linear-algebra tests fail, every one that asserts a refusal. All 3 caller tests fail too: the component's cache, the distance (which read a finite −1,156 for `LogDet`), and the export of a meaningless factor.
+  - The 3 that pass on HEAD hold what the build leaves alone: floored factors that stay finite are read, and the pinned comparison.
+  - On the build, all of them pass.
+- *Bit for bit.* The class's existing tests hold, `DenseCholeskyTests`' exact agreement included. The new pinned test compares 63 matrices with the earlier class kept verbatim: the factor, `LogDet`, the inverse, a solve and a sample, bit for bit.
+  - 60 are random SPD matrices at scales 2⁻⁸⁰ to 2³⁹; the test requires at least 10 of them to floor.
+  - The other 3 are two floored kernels and 10⁻¹³·I.
+- *Whole projects*, from a snapshot of HEAD plus the six files:
+  - `Maths.LinAlg.Tests`: 179 of 179.
+  - `TDA.Mapper.Tests`: 28 of 28 (`MapperGMM` reaches the component).
+  - `VizCore.Tests`: 699 passed, 2 skipped. The skips are the Möbius golden drafts, skipped before this slice.
+  - `Maths.Regression.Tests`: 3,313 of 3,313 (27 min).
+  - The clustering projects (SPC, cumulative field) do not reach the class: their selection is empty and they have no pinned tier. Both build.
+- Receipts are in `artifacts/shared-code-defects/receipts/` (`slice2-*`).
+
+**Defects found.**
+- None in the slice's code.
+- *The defect left by design* (decision 1): a floored factor that stays finite is read, and its `LogDet` and solves are wrong by O(1). `Status.FlooredPivots` is its only signal, and no caller reads it.
+- *Where GMM leans on the floor.*
+  - `CovarianceRegularization` may be 0.
+  - `InitializeWithParameters` takes covariances as given.
+  - By the arithmetic, not measured: the 10⁻⁶ ridge falls below the pivots' rounding at large covariance scales.
+  - In each, a singular covariance is floored, stays finite, and is wrong.
+
+**Decisions for the user.** All three are unbuilt.
+1. *The floor's rule.*
+   - *Measured.* The absolute 10⁻¹² fires on scale alone. Once it fires, every output is wrong by O(1), because the floored pivot replaces the true one by orders of magnitude.
+     - A floor relative to the largest diagonal would make the class scale-invariant: each κ column of the ladder would read the same at every s. Once it fires, it is just as wrong.
+     - Pivots negative beyond rounding (the stored matrices at κ ≥ 10¹⁸) are floored silently today.
+   - *Recommendation: no floor.* Report a pivot that is not positive, as `DenseCholesky` does, and let callers regularize: GMM already adds its ridge and the export its ε. If a floor stays, make it relative to the largest diagonal, and refuse pivots below −n·ε·max A_jj.
+   - *What changes.* GMM's numbers move only where the floor fires today, in the cases above. There `UpdateCache` would throw instead of returning a floored fit.
+2. *A pivoted factor in the linear algebra.*
+   - *Measured.* Diagonal pivoting, stopped at 10⁻¹² of the largest diagonal, factors every kernel of the reproduction at rank 8 to 57. Its ‖A − LLᵀ‖_F/‖A‖_F is at most 1.3·10⁻¹³, on the same kernels where the floored factor overflowed or floored up to 398 pivots.
+   - *Recommendation.* Promote `BgpDrawnFunction`'s factor (Harbrecht, Peters and Schneider 2012) into `Maths.LinAlg` as the semidefinite factor, with a low-rank solve and sample. BGP's drawn function would be its first reader. It is the tool for smooth kernels' covariances; GMM does not need it.
+3. *Retiring `CholeskyDecomposition` into `DenseCholesky`.* This is a removal, so it is its own question.
+   - *What is lost:*
+     - the soft floor (decision 1);
+     - `WriteInverseTo`'s Σ⁻¹ through L⁻¹, which GMM's `CovarianceInverse`, its Mahalanobis distances and its mode ascent read;
+     - `Sample`'s μ + Lz (`DenseCholesky` offers L⁻ᵀz);
+     - `WriteLTo` (`DenseCholesky` offers `Factor(i, j)`).
+   - *What moves:*
+     - the callers: `GaussianComponent`, `BhattacharyyaCoefficient` (both overloads) and the scene export;
+     - the tests: `DenseCholeskyTests` (2 comparisons), `FactorReferenceTests` (3 sites), `BandCholeskyTests` (3) and `CholeskyDivergenceTests`;
+     - the cost profiles `CostProfileKernels`, `CostProfileLevers` and `CostProfileEngines`, which time the class as BGP's earlier path.
+   - *Bits.* `DenseCholesky`'s factor, `LogDet` and `Status` equal this class's bit for bit where no pivot is floored. An inverse rebuilt from solves would move GMM's Σ⁻¹ in its last bits.
+   - *Recommendation.* Retire it once decision 1 removes the floor, and give `DenseCholesky` an inverse writer and an Lz sample so GMM loses nothing. Keep it if the floor stays: the floor is then the whole difference between the two.
+
+**Doc changes owed.**
+- *`docs/Maths/LinearAlgebra.md`:*
+  - the API list (line 95): `CholeskyDecomposition` gains `FailedAt`;
+  - "Dense Cholesky (`CholeskyDecomposition`)" (line 193): the refusal, its three triggers, and the reads that throw, before a first `Decompose` too. Also the floored factor that stays finite: it is read, and wrong by O(1) once a pivot floors, with the ladder's numbers; and the floor fires on scale alone.
+- *`docs/Clustering/GaussianMixtures.md`:*
+  - line 45: `UpdateCache` throws on a covariance with no finite factor, leaving Σ⁻¹ and the log-normalizer NaN;
+  - the warm start (line 89): a singular warm-start covariance is floored and read, or refused when its factor is not finite;
+  - "Bhattacharyya distance" (line 162): it refuses a covariance with no finite factor, by name.
+- *The scene export's `cholesky_l`:* no doc in `docs/` describes it.
 
 ### 2026-11-13 — Slice 1: the weight reader at extreme weights
 
