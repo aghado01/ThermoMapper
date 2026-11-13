@@ -1030,8 +1030,7 @@ public sealed class RidgeSpectrum : RidgeColumns
         for (int i = 0; i < m; i++)
             for (int j = 0; j < m; j++)
                 unit[i * m + j] = i == j ? 1.0 : centredGram[i, j] / (Math.Sqrt(centredGram[i, i]) * Math.Sqrt(centredGram[j, j]));
-        EigenResult eigen = DenseEigen.DecomposeSymmetric(unit, m, tol: JacobiTolerance,
-            stoppingRule: JacobiStoppingRule.ElementWiseRelative);
+        EigenResult eigen = DenseEigen.DecomposeSymmetric(unit, m, tol: JacobiTolerance);
         var lambda = new double[m];
         var w = new double[m];
         for (int j = 0; j < m; j++)

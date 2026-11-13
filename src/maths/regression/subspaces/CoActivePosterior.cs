@@ -162,7 +162,7 @@ public sealed class CoActivePosterior
         }
         var eigenvalues = new double[p];
         var vectors = new double[p, p];
-        DenseEigen.DecomposeSymmetricInto(projection, eigenvalues, vectors, tol: 1e-14, stoppingRule: JacobiStoppingRule.ElementWiseRelative);
+        DenseEigen.DecomposeSymmetricInto(projection, eigenvalues, vectors, tol: 1e-14);
         var mean = new double[p, q];
         for (int i = 0; i < p; i++)
             for (int j = 0; j < q; j++) mean[i, j] = vectors[i, j];
@@ -193,7 +193,7 @@ public sealed class CoActivePosterior
         int p = v.GetLength(0);
         var signed = new double[p];
         var columns = new double[p, p];
-        DenseEigen.DecomposeSymmetricInto(v, signed, columns, tol: 1e-14, stoppingRule: JacobiStoppingRule.ElementWiseRelative);
+        DenseEigen.DecomposeSymmetricInto(v, signed, columns, tol: 1e-14);
         int[] order = [.. Enumerable.Range(0, p).OrderByDescending(i => Math.Abs(signed[i])).ThenBy(i => i)];
         var values = new double[p];
         var directions = new double[p, p];

@@ -75,8 +75,10 @@ public sealed class EigenFastTests
         Assert.True(c.Converged);
         Assert.True(c.Rotations > 0);
         Assert.InRange(c.Sweeps, 2, 30);
-        Assert.InRange(c.LargestOffDiagonal, 0.0, PivotTolerance);
-        Assert.InRange(c.OffDiagonalNorm, 0.0, Math.Sqrt(50.0 * 49.0) * PivotTolerance);
+        // Each final off-diagonal passes |b_pq| ≤ tol·√|b_pp·b_qq|, and √|b_pp·b_qq| is at most the largest eigenvalue's magnitude.
+        double top = result.Eigenvalues.Max(Math.Abs);
+        Assert.InRange(c.LargestOffDiagonal, 0.0, PivotTolerance * top);
+        Assert.InRange(c.OffDiagonalNorm, 0.0, Math.Sqrt(50.0 * 49.0) * PivotTolerance * top);
         AssertReportedOffDiagonal(matrix, result);
     }
 

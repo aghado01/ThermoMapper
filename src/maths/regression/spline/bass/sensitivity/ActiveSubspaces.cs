@@ -287,7 +287,7 @@ public sealed record ActiveSubspaceAnalysis(
         for (int i = 0; i < p && diagonal; i++)
             for (int j = 0; j < p; j++)
                 if (i != j && l[i, j] != 0.0) { diagonal = false; break; }
-        if (!diagonal) return MatrixFunctions.Symmetric(DenseEigen.DecomposeSymmetric(l, tol: 1e-14, stoppingRule: JacobiStoppingRule.ElementWiseRelative), x => 1.0 / x);
+        if (!diagonal) return MatrixFunctions.Symmetric(DenseEigen.DecomposeSymmetric(l, tol: 1e-14), x => 1.0 / x);
         var inverse = new double[p, p];
         for (int i = 0; i < p; i++) inverse[i, i] = 1.0 / l[i, i];
         return inverse;

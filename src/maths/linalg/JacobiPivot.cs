@@ -2,23 +2,17 @@ using System;
 
 namespace Maths.LinAlg;
 
-/// <summary>The pivot accuracy test used by a dense symmetric Jacobi solve.</summary>
-public enum JacobiStoppingRule
-{
-    /// <summary>Absolute off-diagonal tolerance; retained while callers migrate.</summary>
-    Absolute,
-    /// <summary>|a_pq| ≤ tol √|a_pp a_qq|, including zero pivots when a diagonal is zero.</summary>
-    ElementWiseRelative,
-}
-
+/// <summary>
+/// The dense Jacobi solvers' pivot test, the element-wise relative rule (Demmel and Veselić, 1992): a pivot (p, q) is left unrotated
+/// when |a_pq| ≤ tol·√|a_pp·a_qq|, so a zero diagonal entry leaves only an exact zero unrotated. Small eigenvalues of graded positive
+/// definite matrices keep their relative accuracy, and every eigenvalue's error is of order tol·‖A‖ (spectral-solver brief, B1).
+/// </summary>
 internal static class JacobiPivot
 {
-    internal static void Validate(JacobiStoppingRule rule, double tol)
+    internal static void Validate(double tol)
     {
-        if (rule != JacobiStoppingRule.Absolute && rule != JacobiStoppingRule.ElementWiseRelative)
-            throw new ArgumentOutOfRangeException(nameof(rule));
-        if (rule == JacobiStoppingRule.ElementWiseRelative && (!double.IsFinite(tol) || tol < 0 || tol >= 1))
-            throw new ArgumentOutOfRangeException(nameof(tol), "Relative tolerance must be finite and in [0, 1).");
+        if (!double.IsFinite(tol) || tol < 0 || tol >= 1)
+            throw new ArgumentOutOfRangeException(nameof(tol), "The relative tolerance must be finite and in [0, 1).");
     }
 
     internal static bool Passes(double app, double aqq, double apq, double tol)

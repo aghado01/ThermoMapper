@@ -210,7 +210,7 @@ public static class MatrixPoincare
         frobenius = Math.Sqrt(frobenius);
         if (!(frobenius > 0.0)) return 0.0;
         double resolution = 8.0 * n * MachineEpsilon;
-        EigenResult e = DenseEigen.DecomposeSymmetric(b, tol: 1e-14, stoppingRule: JacobiStoppingRule.ElementWiseRelative);
+        EigenResult e = DenseEigen.DecomposeSymmetric(b, tol: 1e-14);
         double top = Math.Max(e.Eigenvalues.Max(), 0.0);
         var kept = new List<int>();
         double outside = 0.0;   // A's mass off B's range
@@ -238,7 +238,7 @@ public static class MatrixPoincare
                 reduced[i, j] = reduced[j, i] = 0.5 * (s + u) / Math.Sqrt(e.Eigenvalues[kept[i]] * e.Eigenvalues[kept[j]]);
             }
         var spectrum = new double[r];   // eigenvalues alone
-        DenseEigen.DecomposeSymmetricInto(reduced, spectrum, null, tol: 1e-14, stoppingRule: JacobiStoppingRule.ElementWiseRelative);
+        DenseEigen.DecomposeSymmetricInto(reduced, spectrum, null, tol: 1e-14);
         return Math.Max(0.0, spectrum.Max());
     }
 

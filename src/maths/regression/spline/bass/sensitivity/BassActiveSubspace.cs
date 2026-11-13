@@ -345,7 +345,7 @@ internal static partial class BassActiveSubspaces
         {
             int t = terms.Length;
             double[,] gram = _moments.GradientGram(terms, _wx);
-            EigenResult e = DenseEigen.DecomposeSymmetric(gram, tol: 1e-14, stoppingRule: JacobiStoppingRule.ElementWiseRelative);
+            EigenResult e = DenseEigen.DecomposeSymmetric(gram, tol: 1e-14);
             double top = Math.Max(e.Eigenvalues.Max(), 0.0);
             int[] kept = [.. Enumerable.Range(0, t).Where(q => e.Eigenvalues[q] > 1e-14 * top)];
             return kept.Length == 0 ? new double[t, 1] : MatrixFunctions.FactorColumns(e, kept, Math.Sqrt);
@@ -1131,11 +1131,11 @@ internal static partial class BassActiveSubspaces
             }
         }
 
-        private EigenResult Eigen => _eigen ??= DenseEigen.DecomposeSymmetric(W, tol: 1e-14, stoppingRule: JacobiStoppingRule.ElementWiseRelative);
+        private EigenResult Eigen => _eigen ??= DenseEigen.DecomposeSymmetric(W, tol: 1e-14);
     }
 
     // R with W = RᵀR for a symmetric W, read from a fresh eigendecomposition.
-    private static double[,] Root(double[,] w) => RootOf(DenseEigen.DecomposeSymmetric(w, tol: 1e-14, stoppingRule: JacobiStoppingRule.ElementWiseRelative), w.GetLength(0));
+    private static double[,] Root(double[,] w) => RootOf(DenseEigen.DecomposeSymmetric(w, tol: 1e-14), w.GetLength(0));
 
     // R with W_y = RᵀR, from W_y's eigendecomposition, one row per positive eigenvalue; refused where W_y has a negative eigenvalue
     // beyond rounding.

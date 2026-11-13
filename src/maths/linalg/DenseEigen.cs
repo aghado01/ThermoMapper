@@ -12,8 +12,8 @@ namespace Maths.LinAlg;
 /// <param name="Rotations">Rotations applied over all sweeps.</param>
 /// <param name="OffDiagonalNorm">off(A) = (Σ_{i≠j} a_ij²)^½ of the returned diagonalization VᵀAV, as the solver holds it.</param>
 /// <param name="LargestOffDiagonal">max_{i≠j} |a_ij| of the returned diagonalization.</param>
-/// <param name="Converged">Whether every off-diagonal entry passes the selected pivot test on the final working state. A required
-/// but unrepresentable relative rotation leaves this false. Absolute uses &lt; tol in EigenFast and ≤ tol in Eigen.</param>
+/// <param name="Converged">Whether every off-diagonal entry passes the pivot test on the final working state. A required but
+/// unrepresentable rotation leaves this false.</param>
 public readonly record struct DenseEigenConvergence(int Sweeps, long Rotations, double OffDiagonalNorm, double LargestOffDiagonal, bool Converged)
 {
     /// <summary>A sweep made no rotations although a final pivot still failed the accuracy test.</summary>
@@ -58,20 +58,21 @@ public readonly record struct DenseEigenConvergence(int Sweeps, long Rotations, 
 
 /// <summary>
 /// Compile-time dispatch point for dense symmetric eigendecomposition.
-/// All entries accept an absolute tolerance (the staged-migration default) or the element-wise relative test
-/// |a_pq| ≤ tol √|a_pp a_qq|. EIGEN_REFERENCE selects the scalar reference kernel with the same requested test.
+/// Every entry stops on the element-wise relative rule, |a_pq| ≤ tol √|a_pp a_qq| (<see cref="JacobiPivot"/>), with tol in
+/// [0, 1) and 10⁻¹² by default: eigenvalue errors of order tol·‖A‖, and relative accuracy for the small eigenvalues of graded
+/// positive definite matrices. EIGEN_REFERENCE selects the scalar reference kernel with the same rule.
 /// </summary>
 public static class DenseEigen
 {
     public static EigenResult DecomposeSymmetric(
         double[,] matrix,
         int maxSweeps = 256,
-        double tol = 1e-12, JacobiStoppingRule stoppingRule = JacobiStoppingRule.Absolute)
+        double tol = 1e-12)
     {
 #if EIGEN_REFERENCE
-        return Eigen.DecomposeSymmetric(matrix, maxSweeps, tol, stoppingRule);
+        return Eigen.DecomposeSymmetric(matrix, maxSweeps, tol);
 #else
-        return EigenFast.DecomposeSymmetric(matrix, maxSweeps, tol, stoppingRule);
+        return EigenFast.DecomposeSymmetric(matrix, maxSweeps, tol);
 #endif
     }
 
@@ -79,7 +80,7 @@ public static class DenseEigen
         ReadOnlySpan<double> flatColumnMajorMatrix,
         int n,
         int maxSweeps = 256,
-        double tol = 1e-12, JacobiStoppingRule stoppingRule = JacobiStoppingRule.Absolute)
+        double tol = 1e-12)
     {
         if (flatColumnMajorMatrix.Length != n * n)
             throw new ArgumentException("Matrix dimensions must match N x N.", nameof(flatColumnMajorMatrix));
@@ -93,9 +94,9 @@ public static class DenseEigen
                 matrix[r, c] = flatColumnMajorMatrix[c * n + r];
         }
 
-        return Eigen.DecomposeSymmetric(matrix, maxSweeps, tol, stoppingRule);
+        return Eigen.DecomposeSymmetric(matrix, maxSweeps, tol);
 #else
-        return EigenFast.DecomposeSymmetric(flatColumnMajorMatrix, n, maxSweeps, tol, stoppingRule);
+        return EigenFast.DecomposeSymmetric(flatColumnMajorMatrix, n, maxSweeps, tol);
 #endif
     }
 
@@ -111,7 +112,7 @@ public static class DenseEigen
         Span<double> eigenvalues,
         Span<double> eigenvectors,
         int maxSweeps = 256,
-        double tol = 1e-12, JacobiStoppingRule stoppingRule = JacobiStoppingRule.Absolute)
+        double tol = 1e-12)
     {
         if (flatColumnMajorMatrix.Length != n * n)
             throw new ArgumentException("Matrix dimensions must match N x N.", nameof(flatColumnMajorMatrix));
@@ -122,13 +123,13 @@ public static class DenseEigen
         var matrix = new double[n, n];
         for (int c = 0; c < n; c++)
             for (int r = 0; r < n; r++) matrix[r, c] = flatColumnMajorMatrix[c * n + r];
-        EigenResult result = Eigen.DecomposeSymmetric(matrix, maxSweeps, tol, stoppingRule);
+        EigenResult result = Eigen.DecomposeSymmetric(matrix, maxSweeps, tol);
         result.Eigenvalues.CopyTo(eigenvalues);
         if (eigenvectors.Length != 0)
             for (int j = 0; j < n; j++) result.Eigenvectors[j].CopyTo(eigenvectors.Slice(j * n, n));
         return result.Convergence;
 #else
-        return EigenFast.DecomposeSymmetricInPlace(flatColumnMajorMatrix, n, eigenvalues, eigenvectors, maxSweeps, tol, stoppingRule);
+        return EigenFast.DecomposeSymmetricInPlace(flatColumnMajorMatrix, n, eigenvalues, eigenvectors, maxSweeps, tol);
 #endif
     }
 
@@ -143,7 +144,7 @@ public static class DenseEigen
         Span<double> eigenvalues,
         double[,]? eigenvectorColumns,
         int maxSweeps = 256,
-        double tol = 1e-12, JacobiStoppingRule stoppingRule = JacobiStoppingRule.Absolute)
+        double tol = 1e-12)
     {
         ArgumentNullException.ThrowIfNull(matrix);
         int n = matrix.GetLength(0);
@@ -153,7 +154,7 @@ public static class DenseEigen
         {
             for (int c = 0; c < n; c++)
                 for (int r = 0; r < n; r++) flat[c * n + r] = matrix[r, c];
-            return DecomposeSymmetricInto(flat.AsSpan(0, n * n), n, eigenvalues, eigenvectorColumns, maxSweeps, tol, stoppingRule);
+            return DecomposeSymmetricInto(flat.AsSpan(0, n * n), n, eigenvalues, eigenvectorColumns, maxSweeps, tol);
         }
         finally
         {
@@ -172,15 +173,15 @@ public static class DenseEigen
         Span<double> eigenvalues,
         double[,]? eigenvectorColumns,
         int maxSweeps = 256,
-        double tol = 1e-12, JacobiStoppingRule stoppingRule = JacobiStoppingRule.Absolute)
+        double tol = 1e-12)
     {
-        if (eigenvectorColumns is null) return DecomposeSymmetric(flatColumnMajorMatrix, n, eigenvalues, Span<double>.Empty, maxSweeps, tol, stoppingRule);
+        if (eigenvectorColumns is null) return DecomposeSymmetric(flatColumnMajorMatrix, n, eigenvalues, Span<double>.Empty, maxSweeps, tol);
         if (eigenvectorColumns.GetLength(0) != n || eigenvectorColumns.GetLength(1) != n)
             throw new ArgumentException("The eigenvector columns are n × n.", nameof(eigenvectorColumns));
         double[] vectors = ArrayPool<double>.Shared.Rent(n * n);
         try
         {
-            DenseEigenConvergence convergence = DecomposeSymmetric(flatColumnMajorMatrix, n, eigenvalues, vectors.AsSpan(0, n * n), maxSweeps, tol, stoppingRule);
+            DenseEigenConvergence convergence = DecomposeSymmetric(flatColumnMajorMatrix, n, eigenvalues, vectors.AsSpan(0, n * n), maxSweeps, tol);
             for (int j = 0; j < n; j++)
                 for (int i = 0; i < n; i++) eigenvectorColumns[i, j] = vectors[j * n + i];
             return convergence;

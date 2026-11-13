@@ -78,8 +78,7 @@ public sealed class PriorPencil : RidgeColumns
                 if (i == j) top = Math.Max(top, sum);
             }
         if (!(top > 0.0) || double.IsPositiveInfinity(top)) return null;
-        EigenResult eigen = DenseEigen.DecomposeSymmetric(unit, p, tol: JacobiTolerance,
-            stoppingRule: JacobiStoppingRule.ElementWiseRelative);
+        EigenResult eigen = DenseEigen.DecomposeSymmetric(unit, p, tol: JacobiTolerance);
         var lambda = new double[p];
         var whitened = new double[p];
         for (int i = 0; i < p; i++)
@@ -99,16 +98,6 @@ public sealed class PriorPencil : RidgeColumns
             w[j] = sum;
         }
         return new PriorPencil(centredColumns, interceptInside, lambda, eigen.Eigenvectors, t, w, logDeterminant, likelihood, prior);
-    }
-
-    // Stage one's old unit-scale solve, retained for qualification until the final B1 cleanup.
-    internal static EigenResult DecomposeAtUnitScale(double[] unit, int p, double top)
-    {
-        unit = (double[])unit.Clone();
-        for (int k = 0; k < unit.Length; k++) unit[k] /= top;
-        EigenResult eigen = DenseEigen.DecomposeSymmetric(unit, p, tol: JacobiTolerance);
-        for (int j = 0; j < p; j++) eigen.Eigenvalues[j] *= top;
-        return eigen;
     }
 
     /// <summary>This pencil with the cross products <paramref name="cross"/> in place of its own: the same A and D under another

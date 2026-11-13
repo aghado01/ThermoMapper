@@ -126,8 +126,7 @@ namespace Maths.Geometry.DimReduction
                 {
                     median[a, b] = 0.5 * (covarianceMedian[a * r + b] + covarianceMedian[b * r + a]);
                 }
-            EigenResult eig = DenseEigen.DecomposeSymmetric(median, tol: 1e-12,
-                stoppingRule: JacobiStoppingRule.ElementWiseRelative);
+            EigenResult eig = DenseEigen.DecomposeSymmetric(median, tol: 1e-12);
 
             var order = new int[r];
             for (int i = 0; i < r; i++) order[i] = i;

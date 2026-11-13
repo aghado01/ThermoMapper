@@ -10,13 +10,12 @@ namespace Maths.LinAlg
     public static class Eigen
     {
         /// <summary>
-        /// Absolute pivots rotate at |a_pq| > tol; element-wise relative pivots use |a_pq| > tol √|a_pp a_qq| and stable algebraic
-        /// rotations. A sweep that rotates nothing ends the solve; the report tests the final state, including stalled pivots.
+        /// A pivot rotates when |a_pq| > tol √|a_pp a_qq|, the element-wise relative rule (<see cref="JacobiPivot"/>), by a stable
+        /// algebraic rotation. A sweep that rotates nothing ends the solve; the report tests the final state, including stalled pivots.
         /// </summary>
-        public static EigenResult DecomposeSymmetric(double[,] matrix, int maxSweeps = 256, double tol = 1e-12,
-            JacobiStoppingRule stoppingRule = JacobiStoppingRule.Absolute)
+        public static EigenResult DecomposeSymmetric(double[,] matrix, int maxSweeps = 256, double tol = 1e-12)
         {
-            JacobiPivot.Validate(stoppingRule, tol);
+            JacobiPivot.Validate(tol);
             int n = matrix.GetLength(0);
             if (matrix.GetLength(1) != n) throw new ArgumentException("Matrix must be square.");
             DecompositionLog.Record(DecompositionKernel.ReferenceJacobi, n, n);
@@ -37,17 +36,9 @@ namespace Maths.LinAlg
                 {
                     for (int q = p + 1; q < n; q++)
                     {
-                        if (stoppingRule == JacobiStoppingRule.ElementWiseRelative)
-                        {
-                            if (JacobiPivot.Passes(A[p, p], A[q, q], A[p, q], tol)) continue;
-                            if (!JacobiPivot.TryTangent(A[p, p], A[q, q], A[p, q], out double t)) continue;
-                            RotateRelative(A, V, p, q, n, t);
-                        }
-                        else
-                        {
-                            if (Math.Abs(A[p, q]) <= tol) continue;
-                            Rotate(A, V, p, q, n);
-                        }
+                        if (JacobiPivot.Passes(A[p, p], A[q, q], A[p, q], tol)) continue;
+                        if (!JacobiPivot.TryTangent(A[p, p], A[q, q], A[p, q], out double t)) continue;
+                        RotateRelative(A, V, p, q, n, t);
                         sweepRotations++;
                     }
                 }
@@ -60,13 +51,9 @@ namespace Maths.LinAlg
                 }
             }
             (double offDiagonalNorm, double largestOffDiagonal) = DenseEigenConvergence.OffDiagonal(A);
-            bool converged = largestOffDiagonal <= tol;
-            if (stoppingRule == JacobiStoppingRule.ElementWiseRelative)
-            {
-                converged = true;
-                for (int q = 1; q < n; q++)
-                    for (int p = 0; p < q; p++) converged &= JacobiPivot.Passes(A[p, p], A[q, q], A[p, q], tol);
-            }
+            bool converged = true;
+            for (int q = 1; q < n; q++)
+                for (int p = 0; p < q; p++) converged &= JacobiPivot.Passes(A[p, p], A[q, q], A[p, q], tol);
             var convergence = new DenseEigenConvergence(sweeps, rotations, offDiagonalNorm, largestOffDiagonal, converged)
             { Stalled = stoppedWithoutRotations && !converged };
 
@@ -104,35 +91,6 @@ namespace Maths.LinAlg
                 A[i, p] = A[p, i] = c * aip - s * aiq;
                 A[i, q] = A[q, i] = s * aip + c * aiq;
             }
-            for (int i = 0; i < n; i++)
-            {
-                double vip = V[i, p], viq = V[i, q];
-                V[i, p] = c * vip - s * viq;
-                V[i, q] = s * vip + c * viq;
-            }
-        }
-
-        private static void Rotate(double[,] A, double[,] V, int p, int q, int n)
-        {
-            double theta = 0.5 * Math.Atan2(2 * A[p, q], A[q, q] - A[p, p]);
-            double c = Math.Cos(theta);
-            double s = Math.Sin(theta);
-
-            // Update A (symmetric)
-            double app = A[p, p], aqq = A[q, q], apq = A[p, q];
-            A[p, p] = c * c * app - 2 * s * c * apq + s * s * aqq;
-            A[q, q] = s * s * app + 2 * s * c * apq + c * c * aqq;
-            A[p, q] = A[q, p] = 0;
-
-            for (int i = 0; i < n; i++)
-            {
-                if (i == p || i == q) continue;
-                double aip = A[i, p], aiq = A[i, q];
-                A[i, p] = A[p, i] = c * aip - s * aiq;
-                A[i, q] = A[q, i] = s * aip + c * aiq;
-            }
-
-            // Update eigenvectors
             for (int i = 0; i < n; i++)
             {
                 double vip = V[i, p], viq = V[i, q];

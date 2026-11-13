@@ -34,7 +34,7 @@ public static class SpectralMath
         double[,] matrix, int k)
     {
         if (k <= 0) return Array.Empty<EigenPair>();
-        EigenResult eig = DenseEigen.DecomposeSymmetric(matrix, stoppingRule: JacobiStoppingRule.ElementWiseRelative);
+        EigenResult eig = DenseEigen.DecomposeSymmetric(matrix);
         return SelectBottomK(eig, k);
     }
 
@@ -47,7 +47,7 @@ public static class SpectralMath
         ReadOnlySpan<double> flatColumnMajorMatrix, int n, int k)
     {
         if (k <= 0) return Array.Empty<EigenPair>();
-        EigenResult eig = DenseEigen.DecomposeSymmetric(flatColumnMajorMatrix, n, stoppingRule: JacobiStoppingRule.ElementWiseRelative);
+        EigenResult eig = DenseEigen.DecomposeSymmetric(flatColumnMajorMatrix, n);
         return SelectBottomK(eig, k);
     }
 

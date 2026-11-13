@@ -8,19 +8,24 @@ namespace Maths.Regression.Tests;
 
 public sealed class RelativeEigenMigrationTests
 {
+    /// <summary>
+    /// The relative rule follows any rescaling (spectral-solver brief, B1): c·A's eigenvalues divided by c match A's from 10⁻²⁴⁰ to
+    /// 10²⁴⁰, which the retired unit-scale division used to supply. A prior pencil whose independently whitened likelihood is A reads
+    /// its determinant, shrinkage and evidence from A's spectrum.
+    /// </summary>
     [Fact]
-    public void FirstCallers_AgreeWithUnitScaleOnWellConditionedFixtures()
+    public void RelativeSolve_FollowsScale_AndThePencilReadsTheWhitenedSpectrum()
     {
         double[,] a = { { 2, 0.2, 0.3 }, { 0.2, 3, -0.4 }, { 0.3, -0.4, 4 } };
+        EigenResult spectrum = DenseEigen.DecomposeSymmetric(a, tol: 1e-14);
         foreach (int exponent in new[] { -240, -120, 0, 120, 240 })
         {
             double scale = Math.Pow(10, exponent);
             var scaled = new double[3,3];
             for (int i = 0; i < 3; i++)
                 for (int j = 0; j < 3; j++) scaled[i,j] = scale * a[i,j];
-            EigenResult old = ScaledEigen.Of(scaled);
-            EigenResult now = DenseEigen.DecomposeSymmetric(scaled, tol: 1e-14, stoppingRule: JacobiStoppingRule.ElementWiseRelative);
-            for (int j = 0; j < 3; j++) Assert.InRange(Math.Abs(old.Eigenvalues[j] / now.Eigenvalues[j] - 1), 0, 2e-13);
+            EigenResult now = DenseEigen.DecomposeSymmetric(scaled, tol: 1e-14);
+            for (int j = 0; j < 3; j++) Assert.InRange(Math.Abs(now.Eigenvalues[j] / (scale * spectrum.Eigenvalues[j]) - 1), 0, 2e-13);
         }
 
         // A nontrivial diagonal prior, whose independently whitened likelihood is a.
@@ -28,7 +33,6 @@ public sealed class RelativeEigenMigrationTests
         var prior = new double[3,3];
         var likelihood = new double[3,3];
         var rawCross = new double[3];
-        var flat = new double[9];
         for (int i = 0; i < 3; i++)
         {
             prior[i,i] = d[i];
@@ -36,11 +40,9 @@ public sealed class RelativeEigenMigrationTests
             for (int j = 0; j < 3; j++)
             {
                 likelihood[i,j] = Math.Sqrt(d[i]) * a[i,j] * Math.Sqrt(d[j]);
-                flat[j*3+i] = a[i,j];
             }
         }
         PriorPencil pencil = Assert.IsType<PriorPencil>(PriorPencil.Of(likelihood, prior, rawCross, 2, true));
-        EigenResult legacy = PriorPencil.DecomposeAtUnitScale(flat, 3, 4);
         foreach (double tau in new[] { 1e-8, 0.1, 1, 100, 1e8 })
             foreach (double b in new[] { 0.0, 0.4, 1.0 })
             {
@@ -48,8 +50,8 @@ public sealed class RelativeEigenMigrationTests
                 for (int j = 0; j < 3; j++)
                 {
                     double w = 0;
-                    for (int i = 0; i < 3; i++) w += legacy.Eigenvectors[j][i] * cross[i];
-                    double lambda = legacy.Eigenvalues[j];
+                    for (int i = 0; i < 3; i++) w += spectrum.Eigenvectors[j][i] * cross[i];
+                    double lambda = spectrum.Eigenvalues[j];
                     logDet -= 0.5 * double.LogP1(b * lambda / tau);
                     shrink += w*w/lambda * (tau/(tau+b*lambda));
                 }
@@ -57,7 +59,7 @@ public sealed class RelativeEigenMigrationTests
                 Assert.InRange(Math.Abs(terms.LogDeterminant-logDet),0,2e-13);
                 Assert.InRange(Math.Abs(terms.Shrinkage-shrink),0,2e-13);
                 GPriorMarginal marginal = CollapsedGPrior.CentredPencilMarginalAt(pencil, 5, 10, GPriorWeights.Unit(10), GPriorCentre.Zero, tau, b);
-                // Same conditional log evidence from the former pencil's determinant and shrinkage, sigma² = 2.
+                // The conditional log evidence from the spectrum's determinant and shrinkage, sigma² = 2.
                 double oldEvidence = -0.5*b*10*Math.Log(4*Math.PI) + logDet - 0.25*b*(5+shrink);
                 Assert.InRange(Math.Abs(marginal.LogMarginalGiven(2)-oldEvidence),0,2e-13);
             }

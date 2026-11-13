@@ -408,12 +408,12 @@ public sealed class RankAndOutputSideTests(ITestOutputHelper output)
         Assert.Equal(new[,] { { 1.0, 0.0 } }, dropped);
 
         var dense = new[,] { { 1.0, 1.0 }, { 1.0, 1.0 } };   // rank one, along (1, 1)/√2
-        double[,]? line = MatrixPoincare.MetricRange(dense, () => ScaledEigen.Of(dense));
+        double[,]? line = MatrixPoincare.MetricRange(dense, () => DenseEigen.DecomposeSymmetric(dense, tol: 1e-14));
         Assert.NotNull(line);
         Assert.Equal(1, line.GetLength(0));
         Assert.Equal(1.0 / Math.Sqrt(2.0), Math.Abs(line[0, 0]), 15);
         Assert.Equal(line[0, 0], line[0, 1], 15);
-        Assert.Null(MatrixPoincare.MetricRange(FunctionalActiveSubspaceTests.RandomMetric(5, 13), () => ScaledEigen.Of(FunctionalActiveSubspaceTests.RandomMetric(5, 13))));
+        Assert.Null(MatrixPoincare.MetricRange(FunctionalActiveSubspaceTests.RandomMetric(5, 13), () => DenseEigen.DecomposeSymmetric(FunctionalActiveSubspaceTests.RandomMetric(5, 13), tol: 1e-14)));
     }
 
     /// <summary>A structure's ratio over the whole term space is kept with its forms and read once (spectral-solver brief, D): a draw read

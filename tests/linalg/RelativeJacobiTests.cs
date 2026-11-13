@@ -6,16 +6,15 @@ namespace Maths.LinAlg.Tests;
 
 public sealed class RelativeJacobiTests
 {
-    private const JacobiStoppingRule Relative = JacobiStoppingRule.ElementWiseRelative;
 
     [Fact]
     public void Dispatch_UsesRequestedBuildKernelAndRelativeRule()
     {
         using var log = DecompositionLog.Begin();
         var a = new[,] { { 1.0, 5e-21 }, { 5e-21, 1e-40 } };
-        var e = DenseEigen.DecomposeSymmetric(a, stoppingRule: Relative);
+        var e = DenseEigen.DecomposeSymmetric(a);
         var values = new double[2];
-        DenseEigen.DecomposeSymmetricInto(a, values, null, stoppingRule: Relative);
+        DenseEigen.DecomposeSymmetricInto(a, values, null);
         Assert.Equal(e.Eigenvalues, values);
         Assert.InRange(Math.Abs(values[1]/7.5e-41-1),0,1e-14);
 #if EIGEN_REFERENCE
@@ -72,12 +71,12 @@ public sealed class RelativeJacobiTests
             for (int j = 0; j < 8; j++)
                 for (int k = 0; k < 8; k++) a[i,j] += h[i,k]*spectrum[k]*h[j,k]/8;
         Check(a,spectrum);
-        EigenResult capped = DenseEigen.DecomposeSymmetric(a, maxSweeps: 1, tol: 1e-14, stoppingRule: Relative);
+        EigenResult capped = DenseEigen.DecomposeSymmetric(a, maxSweeps: 1, tol: 1e-14);
         var flat = new double[64];
         for (int j = 0; j < 8; j++)
             for (int i = 0; i < 8; i++) flat[j*8+i] = a[i,j];
         var values = new double[8];
-        Assert.Equal(capped.Convergence, DenseEigen.DecomposeSymmetric(flat,8,values,[],maxSweeps: 1,tol: 1e-14,stoppingRule: Relative));
+        Assert.Equal(capped.Convergence, DenseEigen.DecomposeSymmetric(flat,8,values,[],maxSweeps: 1,tol: 1e-14));
         double squares = 0, largest = 0;
         for (int p = 0; p < 8; p++)
             for (int q = p+1; q < 8; q++)
@@ -110,7 +109,7 @@ public sealed class RelativeJacobiTests
         foreach (bool vectors in new[] { false, true })
         {
             var values = new double[2];
-            DenseEigenConvergence c = DenseEigen.DecomposeSymmetric(flat, 2, values, vectors ? new double[4] : [], stoppingRule: Relative);
+            DenseEigenConvergence c = DenseEigen.DecomposeSymmetric(flat, 2, values, vectors ? new double[4] : []);
             Assert.False(c.Converged);
             Assert.True(c.Stalled);
             Assert.Equal(1e-300, c.LargestOffDiagonal);
@@ -137,9 +136,9 @@ public sealed class RelativeJacobiTests
 
     private static Func<double[,], int, double, EigenResult>[] Solvers() =>
     [
-        (a, cap, tol) => EigenFast.DecomposeSymmetric(a, cap, tol, Relative),
-        (a, cap, tol) => Eigen.DecomposeSymmetric(a, cap, tol, Relative),
-        (a, cap, tol) => DenseEigen.DecomposeSymmetric(a, cap, tol, Relative),
+        (a, cap, tol) => EigenFast.DecomposeSymmetric(a, cap, tol),
+        (a, cap, tol) => Eigen.DecomposeSymmetric(a, cap, tol),
+        (a, cap, tol) => DenseEigen.DecomposeSymmetric(a, cap, tol),
     ];
 
     private static EigenResult[] SolveAll(double[,] a)
@@ -155,17 +154,17 @@ public sealed class RelativeJacobiTests
         var flat = new double[n*n];
         for (int j = 0; j < n; j++)
             for (int i = 0; i < n; i++) flat[j*n+i] = a[i,j];
-        EigenResult allocated = DenseEigen.DecomposeSymmetric(flat, n, tol: 1e-14, stoppingRule: Relative);
+        EigenResult allocated = DenseEigen.DecomposeSymmetric(flat, n, tol: 1e-14);
         Verify(a, expected, allocated);
         var values = new double[n];
         var columns = new double[n,n];
-        DenseEigenConvergence c = DenseEigen.DecomposeSymmetricInto(a, values, columns, tol: 1e-14, stoppingRule: Relative);
+        DenseEigenConvergence c = DenseEigen.DecomposeSymmetricInto(a, values, columns, tol: 1e-14);
         Assert.Equal(allocated.Eigenvalues, values);
         Assert.Equal(allocated.Convergence, c);
         for (int j = 0; j < n; j++)
             for (int i = 0; i < n; i++) Assert.Equal(allocated.Eigenvectors[j][i], columns[i,j]);
         var alone = new double[n];
-        Assert.Equal(c, DenseEigen.DecomposeSymmetric(flat, n, alone, [], tol: 1e-14, stoppingRule: Relative));
+        Assert.Equal(c, DenseEigen.DecomposeSymmetric(flat, n, alone, [], tol: 1e-14));
         Assert.Equal(values, alone);
     }
 

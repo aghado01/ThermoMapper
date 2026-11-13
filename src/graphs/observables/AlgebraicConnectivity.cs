@@ -42,7 +42,7 @@ namespace Graphs.Observables
                 laplacian[i, i] = weightedDegree;
             }
 
-            EigenResult eigen = DenseEigen.DecomposeSymmetric(laplacian, stoppingRule: JacobiStoppingRule.ElementWiseRelative);
+            EigenResult eigen = DenseEigen.DecomposeSymmetric(laplacian);
             double lambda2 = eigen.Eigenvalues[n - 2];
 
             return new AlgebraicConnectivityReport(
