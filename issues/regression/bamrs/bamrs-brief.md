@@ -139,14 +139,16 @@ Each is the main session's recommendation, with its alternatives. The user may t
 
 **Tier 1: restrictions reuse the curve engine as it stands.** Fix every axis but one. f(·, θ) is a spline in T on axis 1's knots, with coefficients cⱼ(θ) = Σₗ βⱼₗ Bₗ(θ). `SplineExtrema` applies to it unchanged, so each draw gives the ridge T*(θ), its height, its significant peaks and their spans along T, exactly, at any θ. Pooled over a θ grid these are λ(T | θ) and π(T | θ), and a posterior band for the ridge.
 - *One upgrade that serves both engines.* `SplineExtrema` takes (`KnotConfig`, coefficients, `SplineBasis`), though inside it needs only breakpoints, an evaluator and a degree. Opening it to a piecewise-polynomial input lets it read restrictions, derivative splines (below) and oblique lines. Along an oblique line a bicubic restricts to a piecewise polynomial of degree 6, which the general-degree path already handles.
+- *The ridge is a peak set at each θ.* T*(θ) jumps where two ridges exchange dominance. So the pooled readout is the peak set along T at each θ, λ(T | θ), and the argmax is one view of it.
+- *Ridge births and ends belong to this tier.* They are roots of one polynomial in θ (see the fold on a surface, below).
 
-**Tier 2: degree-1 surfaces have a closed form.** On each cell a degree-1 tensor spline is affine in each coordinate. A function affine in each coordinate attains its maximum over a box at a vertex, so every extremum of the surface sits on the knot lattice, the boundary lattice included. A bilinear cell's one interior critical point is a saddle. So at degree 1 peak inference is knot inference, which is the source's simulation, here with coefficient draws and the boundary.
+**Tier 2: degree-1 surfaces have a closed form.** On each cell a degree-1 tensor spline is affine in each coordinate. A function affine in each coordinate attains its maximum over a box at a vertex, so every strict local extremum of the surface sits on the knot lattice, the boundary lattice included. A weak extremum can fill a line, as a ridge of constant height along a cell edge does. A bilinear cell's one interior critical point is a saddle. So at degree 1 peak inference is knot inference, which is the source's simulation, here with coefficient draws and the boundary.
 
-**Tier 3: joint extrema of a cubic surface are new mathematics.** Fermat's candidate set stratifies over the cells: lattice vertices; critical points of the cubic restricted to each cell edge, which the existing closed form finds; and interior solutions of ∂₁f = ∂₂f = 0. The interior system has bidegrees (2, 3) and (3, 2), so at most 2·2 + 3·3 = 13 isolated solutions per cell.
+**Tier 3: joint extrema of a cubic surface are new mathematics.** Fermat's candidate set stratifies over the cells: lattice vertices; critical points of the cubic restricted to each cell edge, which the existing closed form finds; and interior solutions of ∂₁f = ∂₂f = 0. The interior system has bidegrees (2, 3) and (3, 2), so at most 2·2 + 3·3 = 13 isolated solutions per cell. A cell can also hold a curve of critical points, as −(u − v)² does. That is the surface's counterpart of a flat span, and it needs its own result.
 - *Recommended solver.* Convert each cell's patch to Bernstein form and subdivide. The control net bounds the patch, so cells are excluded with a certificate, and the global argmax needs only branch and bound on that bound.
 - *Alternatives.* A resultant reduces the system to one polynomial of degree 13, which is ill-conditioned in the monomial basis. Newton from seeds gives no completeness.
-- *What changes in the contract.* "Exact, in closed form" becomes "enclosed to a stated tolerance". The `argmax_in_closed_form_set` specification weakens accordingly for cubic surfaces, and holds as stated at degree 1.
-- The same solver finds saddles and the fold points of ridges (below), so it is one tool for three readouts.
+- *What changes in the contract.* "Exact, in closed form" becomes "enclosed to a stated tolerance". The guarantee is one-sided: no critical point lies outside the returned boxes, and that a box holds exactly one is a separate test. The `argmax_in_closed_form_set` specification weakens accordingly for cubic surfaces, and holds as stated at degree 1.
+- The same solver finds saddles, so it is one tool for two readouts. The fold points of ridges need only one-variable roots (below).
 
 **Significance in two variables.** Prominence generalizes as the persistence of a maximum in the superlevel-set merge tree, and a span as the superlevel component at the drop level: a region, with an area and axis extents. Both need saddles. Obligation O3 already assigns the merge and col definitions to the planned carrier-generic π₀ and merge-tree foundation; the surface readout should consume that foundation too, and wait for it.
 
@@ -177,20 +179,66 @@ This answers the user's wish to characterize more kinds of feature. It is a prop
 - for Δ > 0 a maximum and a minimum straddle the inflection, separated by √Δ/|A|, with height difference Δ^(3/2)/(6A²);
 - for Δ < 0 there is no critical pair, and |Δ/(4A)| measures how far the span is from having one.
 
-So one closed-form scalar per span orders a strong peak-and-valley pair, a marginal pair, a shoulder and a plain monotone stretch. Its zero set is the fold in MP-3's catastrophe set ("a critical pair annihilates: the per-span quadratic discriminant crosses 0"). A shoulder and a low-prominence peak are the two sides of that fold, and the posterior mass on each side is the probability that the feature is a peak. In general, where a pair straddles a knot, the definition goes through the derivative spline and not the per-span discriminant.
+So one closed-form scalar per span orders a strong peak-and-valley pair, a marginal pair, a shoulder and a plain monotone stretch. Its zero set is the fold in MP-3's catastrophe set ("a critical pair annihilates: the per-span quadratic discriminant crosses 0"). A shoulder and a marginal peak are the two sides of that fold. The newborn pair's prominence is the height difference above, which starts at zero, so a positive prominence gate is passed beyond the fold, where Δ^(3/2)/(6A²) reaches the gate. One feature then has two posterior probabilities: that the pair exists (Δ > 0), and that its peak is significant (the gate is passed). The fold moves the raw count and leaves the gated count alone. In general, where a pair straddles a knot, the definition goes through the derivative spline and not the per-span discriminant.
 
-**On a surface the fold becomes a point.** In a family f(T, θ), a ridge is born or ends where ∂_T f = 0 and ∂²_T f = 0 together: the parameter value at which a shoulder becomes a peak. These are isolated points, and they solve a two-equation polynomial system of the same kind as Tier 3's.
+**On a surface the fold becomes a point.** In a family f(T, θ), a ridge is born or ends where ∂_T f = 0 and ∂²_T f = 0 together: the parameter value at which a shoulder becomes a peak. On a bicubic cell ∂_T f is a quadratic in the span coordinate whose coefficients A(θ), B(θ) and C(θ) are cubics in θ. So the ridge branches are the quadratic formula in θ, and the fold points are the roots of Δ(θ) = B(θ)² − 4A(θ)C(θ), one polynomial of degree at most 6, kept where the inflection lies inside the span. The root finder behind `SplineExtrema`'s general-degree path covers that degree, so ridge births and ends are a Tier 1 readout.
 
 ## Lean
 
-- **What exists.** `BARS.lean` states MP-1 (`local_max_is_critical`, `finite_local_max`), MP-2, SP-1, SP-2 and SP-3; every proof there is open. MP-2′, MP-3 and MP-4 are protolemmata. The single-peak pair, `argmax_in_closed_form_set` and `argmax_expectation_noncommute`, is named in its docstrings, and I found no `.lean` statement of either.
-- **What transfers as stated.** MP-2 and SP-3, which do not mention the dimension.
-- **New targets, shortest first:**
-  1. A function affine in each coordinate attains its maximum over a box at a vertex (Tier 2).
-  2. The restriction of a tensor spline to an axis-parallel line is a spline with contracted coefficients. This reduces the ridge readout's exactness to MP-1 and SP-2.
-  3. The inflection set of a non-affine cubic span is finite, and in closed form: the order-2 analogue of MP-1.
-  4. On a cubic span the sign of Δ decides whether the critical pair exists. This gives MP-3's `Regular` predicate a concrete form.
-  5. The stratified candidate set for a box partition (Tier 3).
+Everything here is at the protolemma stage: candidate statements, none compiled. Their home, once worked, is a note under `lean/Protolemmata/` beside the BARS ones.
+
+**Where the estate stands.**
+- `lean/Enthymemata/BARS.lean` holds the first statements of MP-1, MP-2 and SP-1 to SP-3, with six open proofs.
+- `lean/Protolemmata/BARS/BARS.v2.lean.md` repairs them:
+  - MP-1 loses its interval, which blocked `finite_local_max` at the endpoints.
+  - SP-2 gains its antitone dual, and a peak's width becomes the difference of the two bracket roots. `levelWidth` is read as occupancy above a level.
+  - SP-3 splits into `levelWidth_not_affine`, which two constants witness, and a version whose level is tied to each curve.
+  - MP-2′ joins MP-2 as the overcount witness, so the count has no signed bound under averaging.
+  - Its header names what keeps it from compiling: a renamed root-finiteness lemma, now `Polynomial.finite_setOf_isRoot`, and two measure rewrites.
+- `lean/Protolemmata/BARS/spc-bars-readout-obligations.md` owns the gap to `SplineExtrema` as O1 to O3. Its discharge sequence is: the revised scaffolding and O1; a piecewise-polynomial carrier and O2; the branch and merge-level carrier; the readout specification; the witnesses restricted to the carrier; the posterior measure carrier.
+- `lean/Protolemmata/BARS/Fable5-BARS-revisions.md` adds a general pair: the raw count is unstable under a small perturbation, and the thresholded count is stable. It places the stable half downstream of `Stability.lean`, and moves MP-3 into merge-tree definitions on a connected-components foundation. The active stages hold no such module yet, and `Stability.lean` still takes curves on ℝ with no tameness hypothesis.
+- O1 restates `argmax_in_closed_form_set`, and records that the old `argmax_expectation_noncommute` sketch does not state its inequality. A witness that does: f = −a(x − p)² and g = −b(x − q)² have a mean whose argmax is (ap + bq)/(a + b), which differs from (p + q)/2 whenever a ≠ b and p ≠ q.
+- On the sampler side, `lean/Enthymemata/BassStructureChain.lean` has SC-1 with no open proof: `mhRatio_mul_swap`, `not_isMhPair_of_mul_ne_one` and `mh_detailed_balance`.
+- `lean/Enthymemata/BassIntegrals.lean` has a d-variable `tensorExpansion` with `tensorPartial` and `hasDerivAt_tensorExpansion`, fixed to Legendre factors.
+
+**Order.** Landing the revised draft comes first, and new statements are written against it. They join the ledger's sequence and add no step ahead of it. BAMRS changes what the second step's carrier has to be.
+
+**The carrier.** Polynomial pieces on a finite break set, with continuity as a hypothesis.
+- It is closed under each operation the readouts use: differentiation, the restriction of a tensor product to a line, and the difference of two draws on their merged breaks.
+- It matches the upgrade proposed for `SplineExtrema`, which needs breakpoints, an evaluator and a degree.
+- The B-spline coefficient form is a later bridge onto it. Partition of unity and the numerical contract belong to that bridge.
+- A surface is one polynomial per cell of a box partition. `tensorExpansion` shows the pattern over `Fin d → ℝ`. Opening its factor family past Legendre would give BASS and BAMRS one tensor carrier; that is a candidate, not a decision.
+
+**Four statements that shape a contract.** These are worth stating before the code exists, and proving after.
+1. *Maxima are strict.* A function affine in each coordinate attains its maximum over a box at a vertex, by induction on the coordinates. So the strict local maxima of a degree-1 surface are lattice vertices. Weak maxima can fill a line, which is why the predicate is strict, as O3 already asks for curves.
+2. *The ridge readout is a peak set at each θ.* The argmax ridge jumps where two ridges exchange dominance, so the pooled object is MP-4's peak set, read at each θ.
+3. *Tier 3's enclosure is one-sided.* No critical point lies outside the returned boxes. That a box holds exactly one is a separate claim.
+4. *Gate and fold are two readouts.* The fold statements below give each its coordinate.
+
+**Curve features.**
+- *The derivative ladder is by instantiation.* MP-1 and SP-1 hold for any polynomial, so steepest slopes and inflections are those statements at `derivative p`. What is owed is that the carrier is closed under differentiation. O2 already takes every knot as a candidate, which covers the lower smoothness of f′ and f″. An inflection is a sign change of f″, and a span with f″ ≡ 0 is the degenerate case, as the flat span is for peaks.
+- *The fold on a cubic span.* For f′(u) = Au² + Bu + C with A ≠ 0: a critical pair exists exactly when Δ > 0; its two values differ by Δ^(3/2)/(6A²); and for Δ < 0 the least |f′| is |Δ|/(4|A|). Mathlib's `discrim` and `quadratic_eq_zero_iff` carry the first part.
+- *The fold leaves the gated count alone.* The newborn pair's prominence is that difference of values, which starts at zero. So the pair fails any positive gate until Δ^(3/2)/(6A²) reaches it. MP-3's event (a) is then a jump of the raw count, and the gated count jumps only on the threshold set. In general this is the thresholded-count stability that the revisions note places downstream of `Stability.lean`; here it has a closed form. Read against `SignificantPeaks` and `ValleyFloor`, it holds for a pair born on a monotone stretch. Peaks of equal height are a tie convention there.
+
+**Surfaces.**
+- *Restriction.* Σⱼ Σₗ βⱼₗ Bⱼ(x) Cₗ(θ) = Σⱼ (Σₗ βⱼₗ Cₗ(θ)) Bⱼ(x) for any two families of functions. It is an exchange of sums and needs no spline theory. It reduces Tier 1's exactness to O1 and O2.
+- *The ridge in closed form.* On a bicubic cell ∂_T f = A(θ)u² + B(θ)u + C(θ) with cubic coefficients. The ridge branches are the quadratic formula in θ, and the folds are the roots of Δ(θ), of degree at most 6. Where Δ > 0 the ridge's slope is −∂_θ∂_T f / ∂²_T f. The regularity that slope needs is Δ ≠ 0, the fold's own predicate.
+- *The bilinear saddle.* The interior critical point of a + bx + cy + dxy with d ≠ 0 is a saddle.
+- *The convex-hull bound.* Nonnegative weights that sum to one keep a combination between its least and its greatest coefficient. It has two uses:
+  - With Mathlib's `bernstein_nonneg` and `bernstein.probability` it is the exclusion certificate for statement 3.
+  - With the B-splines' partition of unity it bounds a curve's sup-norm by its largest coefficient. That bridges coefficient perturbations to the sup-norm `Stability.lean` consumes.
+- *The stratified candidate set.* Lattice vertices, edge critical points and interior critical points exhaust the local maxima of a continuous piecewise-polynomial surface: O2's statement in two variables. Finiteness needs a regularity hypothesis, since a cell can hold a curve of critical points, and that degeneracy gets its own result.
+- *Stability for surfaces.* Give `Dgm` a domain type and thread the tameness hypothesis; both are cheap while the types are opaque. A surface band's ε needs only an upper bound on the sup of a difference of two draws. The convex-hull bound gives one on merged cells, and it errs on the safe side.
+
+**Sampler and model.** These sit beside SC-1, since they serve every reversible-jump engine.
+- *The source's k = 0 pair.* By `mebars.cpp:132` and `:188` the printed ratio from k = 0 is b₀·L, and the one back from k = 1 is 1/L, with L the likelihood ratio. Their product is b₀ ≠ 1, so `not_isMhPair_of_mul_ne_one` applies as it stands: an instance, with no new proof.
+- *The schedule cancels the count prior* (Lemma 3): r·min(1, 1/r) = min(1, r) for r > 0, at r = ((C − k)/(k + 1))^(1−γ).
+- *A mixture of balanced move pairs is balanced,* with weights that depend on the state and a null proposal as a stay step. This is the bookkeeping `ReversibleJumpChain` owns.
+- *Repeating until acceptance changes the target* (Algorithm 1). If a kernel is reversible for π with holding probability h < 1, its accept-only chain is reversible for π(x)(1 − h(x)).
+- *The corner mass.* ∫₀ʰ (1 − x/h)ᵖ dx = h/(p + 1), and the product over axes by Mathlib's `integral_fintype_prod_eq_prod`, as `integral_cube_prod` uses it for polynomial factors. It checks item 2's divisor, which is arithmetic so far.
+- *The readout rule.* Its affine half is linearity of expectation. Its other half is the witness family: MP-2, MP-2′, SP-3 and the argmax witness above.
+
+**Left as citation or arithmetic:** the dimension cost of an axis knot, Chen and Chen's condition, the bound of 13 (the solver does not use it), and Lemma 1's Gaussian integral. The Kronecker shortcut's identity waits for its slice, since the harness works back from built code.
 
 ## Multiresolution: a separate candidate
 
@@ -210,7 +258,7 @@ Proposed order; engine first, with no consumer wired in.
 1. **Carrier, design, target, moves.** The product carrier, the d-axis design builder, the tensor target and the axis adaptor. Qualify on the generic chain: each axis's count law under a constant likelihood, kₐ = 0 included, and the reference sampler.
 2. **The gate's measurement** (Decision 2) and **the count-mixing measurement** (item 1), with their decisions.
 3. **The ensemble** (Decision 1), with BARS's pinned tier as the acceptance.
-4. **Tier 1 readouts,** with `SplineExtrema` opened to piecewise polynomials, and the order-2 curve features.
+4. **Tier 1 readouts,** with `SplineExtrema` opened to piecewise polynomials, the order-2 curve features, and ridge births and ends.
 5. **Fixed counts and Tier 2.**
 6. **Accumulation and factor upgrades,** when a measured size asks for them.
 7. **The full-grid shortcut.**
@@ -237,6 +285,7 @@ Ground truth comes from outside the estimator, and the source's code is a sanity
 - The bodies of `BarsEnsemble` and `CollapsedGPrior`, and the contracts of `SmcRun` and the flat-histogram family.
 - Chen and Chen's condition, quoted from memory.
 - The references under Multiresolution, and the contour-tree literature for bilinear cells.
+- Nothing in the Lean section was compiled. Its Mathlib names were checked for existence in the local checkout, and the fold's effect on the gated count was read against `SignificantPeaks` and `ValleyFloor`, not tested.
 - Nothing here was run. The numbers under "What the product structure changes" are arithmetic.
 
 ## Doc changes owed
