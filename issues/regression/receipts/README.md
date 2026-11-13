@@ -13,7 +13,7 @@ implementation patch (git history holds the source) and bulky raw outputs such a
 `e34-slice3/results/coverage.csv`. The documents quote the counts from those logs;
 rerunning a tier with the tracked run settings on the pinned commit reproduces them.
 
-`verification/` is the one folder without an `artifacts/` counterpart. It holds the coordinating
-session's two verification scripts, `verify-csharp.ps1` (the Commit selection from a clean archive of
+The `verify-*` folders hold what a coordinating session's verification ran on. The scripts that
+produce them are in `scripts/`: `verify-csharp.ps1` (the Commit selection from a clean archive of
 HEAD) and `verify-lean.ps1` (the checks, module build, axioms and meta-ci from a clean archive of a
 commit's `lean/`). Their headers give the usage; both write their receipts under `artifacts/`.

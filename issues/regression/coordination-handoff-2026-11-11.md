@@ -147,13 +147,13 @@ Closed since the 2026-11-11 handoff: `DenseEigen`'s relative threshold (`75523c4
 
 ## Verification
 
-Each slice is verified from a clean archive before the next one starts on the same code. The two scripts used all week are tracked in [receipts/verification/](receipts/verification/). Both were dry-run tested at close-out (`-NoRun`): the snapshot matched the tracked files, and the junction came and went with the real packages intact. The C# script's first real run was 7d's (2,502 tests; the selection took 890 s). Since `959ceae` it checks its arguments before writing anything, and reads a relative `-ChangedFile` from the caller's directory.
+Each slice is verified from a clean archive before the next one starts on the same code. The two scripts used all week are in [scripts/](../../scripts/) (moved there by the user on 2026-11-13). Both were dry-run tested at close-out (`-NoRun`): the snapshot matched the tracked files, and the junction came and went with the real packages intact. The C# script's first real run was 7d's (2,502 tests; the selection took 890 s). Since `959ceae` it checks its arguments before writing anything, and reads a relative `-ChangedFile` from the caller's directory.
 
-- **C#:** [verify-csharp.ps1](receipts/verification/verify-csharp.ps1).
+- **C#:** [verify-csharp.ps1](../../scripts/verify-csharp.ps1).
   - It archives HEAD into `artifacts/verify-main/snap`, leaving out `r/`, then runs `scripts/test-select.ps1 -Scope Commit` over the changed files listed in `-ChangedFile`. That list is `git diff --name-only <last verified>..HEAD -- src tests projects`.
   - It copies the TRX, its counters and the log to `artifacts/verify-<Name>/`, then removes `verify-main`.
   - It runs below normal priority on two processors.
-- **Lean:** [verify-lean.ps1](receipts/verification/verify-lean.ps1).
+- **Lean:** [verify-lean.ps1](../../scripts/verify-lean.ps1).
   - It archives `<Commit>`'s `lean/` into `artifacts/verify-lean-<Commit>/` and links `.lake/packages` to the real packages with a junction.
   - It then runs the checks script, `lake build <Module>`, `#print axioms` through `-AxiomsFile` (`import <Module>`, then one `#print axioms` line per new result) and `meta-ci -NoBuild`.
   - **It removes the junction with `cmd /c rmdir` before deleting anything**, and checks that the real packages (9 entries) survived.

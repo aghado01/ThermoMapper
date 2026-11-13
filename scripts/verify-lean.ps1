@@ -1,7 +1,7 @@
 # Verify a Lean slice from a clean archive of <Commit>'s lean/: the checks script, the module build,
 # #print axioms, and meta-ci -NoBuild.
 #
-#   pwsh -NoProfile -File verify-lean.ps1 -Commit 4383916 -AxiomsFile axioms.lean
+#   pwsh -NoProfile -File scripts/verify-lean.ps1 -Commit 4383916 -AxiomsFile axioms.lean
 #
 # The axioms file is `import <Module>` followed by one `#print axioms <name>` per new result.
 # The snapshot's lean/.lake/packages is a junction to the real packages, so Mathlib is not rebuilt.
@@ -9,24 +9,27 @@
 # that the real packages survived: deleting through the junction would take them with it.
 # Receipts land in artifacts/verify-lean-<Commit>/receipts/ next to a copy of the axioms file.
 # -NoRun prepares and cleans up only; -Keep leaves the snapshot (the junction is removed regardless).
+# A relative -AxiomsFile is read from the directory the script is called from.
 param(
   [Parameter(Mandatory)][string]$Commit,
   [string]$Module = 'Enthymemata.ConformalValidity',
   [string]$Checks = 'Protolemmata\Conformal\conformal-checks.py',
   [string]$AxiomsFile,
-  [string]$Repo = 'D:\aghado01\ThermoMapper',
+  [string]$RepoRoot = (Split-Path $PSScriptRoot),
   [string]$Python = 'C:/Users/azrie/PDenv/PyenvPython/pyenv-win/versions/3.12.6/python.exe',
   [switch]$NoRun,
   [switch]$Keep
 )
 $ErrorActionPreference = 'Continue'
+# Resolved before anything is written, so a bad path leaves no snapshot behind.
+if ($AxiomsFile) { $AxiomsFile = (Resolve-Path -LiteralPath $AxiomsFile -ErrorAction Stop).Path }
 [System.Diagnostics.Process]::GetCurrentProcess().PriorityClass = 'BelowNormal'
-Set-Location -LiteralPath $Repo
+Set-Location -LiteralPath $RepoRoot
 
-$snap = Join-Path $Repo "artifacts\verify-lean-$Commit"
+$snap = Join-Path $RepoRoot "artifacts\verify-lean-$Commit"
 $lean = Join-Path $snap 'lean'
 $out = Join-Path $snap 'receipts'
-$realPackages = Join-Path $Repo 'lean\.lake\packages'
+$realPackages = Join-Path $RepoRoot 'lean\.lake\packages'
 $junction = Join-Path $lean '.lake\packages'
 $packagesBefore = (Get-ChildItem -LiteralPath $realPackages -Force).Count
 if (Test-Path -LiteralPath $lean) { throw "$lean exists: remove its junction with cmd /c rmdir first, then the folder" }
