@@ -8,7 +8,8 @@ Updated 2026-11-13 with that day's round-up: E8's slice 7d verified, the LinAlg 
 
 1. Read [AGENTS.md](../../AGENTS.md) and [CONTRIBUTING.md](../../CONTRIBUTING.md), then this file. Read a workstream's brief before acting on it.
 2. **One chip is building:** the GBASS chip, on E21's slice 6, the u–s funnel's fix by interweaving (the user, 2026-11-13; `3d46d04`). E8's slice 7d landed and was verified on 2026-11-13 (below).
-3. Then take the [waiting list](#waiting-on-the-user) to the user. No other chip has work commissioned.
+3. Two Opus chips were commissioned the same day by a second coordinating session, at the user's request: the defects chip and the active-subspace Lean chip ([Sessions](#sessions)).
+4. Then take the [waiting list](#waiting-on-the-user) to the user.
 
 ## Standing rules
 
@@ -39,6 +40,8 @@ They are in [AGENTS.md](../../AGENTS.md#docops--conventions-for-issues) (the use
 | [GBASS slices](claude://claude.ai/epitaxy/local_add4be38-7ddb-4981-8b14-6f8ac64f7dab) `local_add4be38` | [ridge-blocks-brief.md](bass/ridge-blocks-brief.md) (E21) | **Building:** E21 slice 6, the u–s funnel's fix by interweaving (`3d46d04`) |
 | [KHAOS slices](claude://claude.ai/epitaxy/local_d665e4ce-cd64-427f-9c2a-8c94d96497dd), [weighted fits](claude://claude.ai/epitaxy/local_57bad71b-a245-4e83-8cb0-52c46cd48b60) | — | Idle; their work landed |
 | LinAlg consolidation: the user's Sol sessions, listed in its brief | [spectral-solver-consolidation-brief.md](../linalg/spectral-solver-consolidation-brief.md) | Complete |
+| [Shared-code defects](claude://claude.ai/epitaxy/local_0e31b37f-31de-42a6-a527-9c1daa3819bc) `local_0e31b37f` (Opus) | [shared-code-defects-brief.md](shared-code-defects-brief.md) | **Building:** slice 1, the weight reader; then slice 2, `CholeskyDecomposition` |
+| [Active-subspace Lean](claude://claude.ai/epitaxy/local_eaa7e8ed-844f-440c-ae5f-b72b72d6d68a) `local_eaa7e8ed` (Opus) | [active-subspace-lean-chip-brief.md](../../lean/Protolemmata/BASS/active-subspace-lean-chip-brief.md) | **Building:** the four targets posed with numeric checks, then their proofs |
 
 Older chips are listed in the 2026-11-09 handoff. Message a chip by its `local_…` id.
 
@@ -114,7 +117,7 @@ Carried:
 7. **Slice 12a's k̂ diagnostic:** opt-in (recommended; it costs about 200× the score) or on by default.
 8. **E34 slice 4's follow-ups**, listed in its report (`fc9c343`).
 9. **The original side-session notes** in `%APPDATA%\Claude\side-session-notes\`: delete them or keep them. Copies are in each workstream's `issues/<workstream>/handover-notes/`, except three PyTeXML notes, which were left there.
-10. **Lean for the active-subspace geometry** (proposed 2026-11-10):
+10. **Lean for the active-subspace geometry** (proposed 2026-11-10). Commissioned by the user on 2026-11-13; the Lean chip's [brief](../../lean/Protolemmata/BASS/active-subspace-lean-chip-brief.md) poses the four:
     - E36's direction moves;
     - the matrix Poincaré check's reduction and the product law's constant;
     - P̄'s readings under mixed ranks;
@@ -135,6 +138,8 @@ Carried:
 Closed since the 2026-11-11 handoff: `DenseEigen`'s relative threshold (`75523c4`), the projected fit's prior rules (7d), and regression's use of the legacy `CholeskyDecomposition` (BGP moved, `5db2e40`).
 
 ## Open defects in shared code
+
+Both were commissioned by the user on 2026-11-13, to the defects chip ([brief](shared-code-defects-brief.md)): the weight reader first, then the factor's refusal of a non-finite result. The floor's rule, a shared pivoted factor and the legacy class's retirement come back to the user with measurements.
 
 - **`CholeskyDecomposition` on a near-singular covariance.** Found by conformal slice 11 (`9248e33`).
   - The factor's entries go infinite while `LogDet` stays finite, and only `Status.Finite` reports it.
