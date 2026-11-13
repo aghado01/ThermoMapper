@@ -7,7 +7,7 @@ Updated 2026-11-13 with that day's round-up: E8's slice 7d verified, the LinAlg 
 ## Start here
 
 1. Read [AGENTS.md](../../AGENTS.md) and [CONTRIBUTING.md](../../CONTRIBUTING.md), then this file. Read a workstream's brief before acting on it.
-2. **One chip is building:** the GBASS chip, on E21's slice 6, the u–s funnel's fix by interweaving (the user, 2026-11-13; `3d46d04`). E8's slice 7d landed and was verified on 2026-11-13 (below).
+2. **Two of this session's chips are building:** the GBASS chip, on E21's slice 6, the u–s funnel's fix by interweaving (the user, 2026-11-13; `3d46d04`); and the conformal chip, on slice 14, then slice 15 once 14 is verified (the user, 2026-11-13: "ok 14 then 15"). This session (`local_b6732445`) verifies those two; the second coordinating session (`local_b84fa8ad`) verifies its own two chips. E8's slice 7d landed and was verified on 2026-11-13 (below).
 3. Two Opus chips were commissioned the same day by a second coordinating session, at the user's request: the defects chip and the active-subspace Lean chip ([Sessions](#sessions)).
 4. Then take the [waiting list](#waiting-on-the-user) to the user.
 
@@ -34,7 +34,7 @@ They are in [AGENTS.md](../../AGENTS.md#docops--conventions-for-issues) (the use
 | Chip | Brief | State at handoff |
 |---|---|---|
 | [E8: active subspaces](claude://claude.ai/epitaxy/local_66d45fa0-e3f5-4429-b588-1786ae46c0ef) `local_66d45fa0` | [active-subspace-brief.md](bass/active-subspace-brief.md) | Idle; slice 7d landed and verified |
-| [Conformal slices](claude://claude.ai/epitaxy/local_69bae1e5-39ad-45c0-8df2-e8e705b21e42) `local_69bae1e5` | [conformal-layer-brief.md](conformal-layer-brief.md) | Idle; slices through 13 done |
+| [Conformal slices](claude://claude.ai/epitaxy/local_69bae1e5-39ad-45c0-8df2-e8e705b21e42) `local_69bae1e5` | [conformal-layer-brief.md](conformal-layer-brief.md) | **Building:** slice 14, then 15 after 14's verification |
 | [Conformal Lean](claude://claude.ai/epitaxy/local_21649695-833f-41ac-8d7c-326b4f691dda) `local_21649695` | [conformal-chip-brief.md](../../lean/Protolemmata/Conformal/conformal-chip-brief.md) | Idle; commission complete |
 | [E34: several outputs](claude://claude.ai/epitaxy/local_26b4e7ee-1be4-482b-a19d-995477d32291) `local_26b4e7ee` | [multi-output-brief.md](bass/multi-output-brief.md) | Idle; E34 complete |
 | [GBASS slices](claude://claude.ai/epitaxy/local_add4be38-7ddb-4981-8b14-6f8ac64f7dab) `local_add4be38` | [ridge-blocks-brief.md](bass/ridge-blocks-brief.md) (E21) | **Building:** E21 slice 6, the u–s funnel's fix by interweaving (`3d46d04`) |
@@ -50,7 +50,7 @@ Older chips are listed in the 2026-11-09 handoff. Message a chip by its `local_�
 | Workstream | Done and verified | Next |
 |---|---|---|
 | **E8** | Through slice 7. Slice 7 verified: 7a `7b2ca7a` (2,349 of 2,349), 7b `70a2aa2` (48 of 48), 7c `015d977` (46 of 46); 7c's report is `5064e50`. Slice 7d, the training-range rule (`566c1f1` to `6aff134`, report `f72039b`), verified 2026-11-13: 2,502 of 2,502 from a clean archive of `788d249` ([inputs](receipts/verify-e8-s7d-788d249/)) | The training-range default and PBX 9501 (waiting list); the BPPR brief, if the user approves it |
-| **Conformal (E16)** | 12a, 10a/10b, 11 (149 of 149 at `9248e33`), 12b (2,659 of 2,659 at `6ef6c98`), 13 (1,120 of 1,120 at `60694f0`) | The queue is empty. Slices 14 to 18 come by the user's need (waiting list) |
+| **Conformal (E16)** | 12a, 10a/10b, 11 (149 of 149 at `9248e33`), 12b (2,659 of 2,659 at `6ef6c98`), 13 (1,120 of 1,120 at `60694f0`) | Slice 14 (shift: likelihood-ratio weights, label shift, the bound beyond exchangeability), in progress; then 15 (posterior conformal prediction), whose commission (`0a1c648`) builds on 14's weighted rank rule. Slices 16 to 18 come by the user's need. Two follow-ups agreed with the GBASS chip for E21's slice 5 are recorded (`127d64d`): new-group coverage by group-level units, and the layer's check that strata lie inside cells |
 | **Conformal Lean** | Slices 10, 12, 13–16, 18 and the grid reading, all verified | Slice 18's sources are now on disk (waiting list) |
 | **E21** | Slices 0–5. The b = 1 collapse is opt-in (`BassSampling.CollapseEffectsInMoves`), with form B on every rung by default | Slice 6, in progress: a non-centred step on s behind an option, its default read from mixing measurements on a weak-data fit and on the n = 300 fit. New-group coverage stays open as the layer's follow-up; see the [two-layer addendum](bass/ridge-blocks-brief.md) (`8bc0d55`) |
 | **E34** | Complete: slices 0–5. Slice 5 at 2,396 of 2,396 (`e5f142f`); slice 4 at 2,651 of 2,651 (report `fc9c343`) | Its slice 4 report's follow-ups wait for the user. Doc changes owed: `MultiOutput.md`, `BASS.md` |
@@ -75,6 +75,7 @@ Older chips are listed in the 2026-11-09 handoff. Message a chip by its `local_�
   - one element-wise relative rule serves positive definite and indefinite inputs alike;
   - the matrix Poincaré check reports one ratio per draw and stays opt-in.
 - **E21, the u–s funnel's fix: interweaving** (the user, 2026-11-13, in the GBASS thread; decision 7 in the [brief](bass/ridge-blocks-brief.md), `3d46d04`). It is exact at every rung. The 19,000-sweep autocorrelation time came from Geweke's toy chain (12 cases in 3 levels, y redrawn each step); on the n = 300 fit ln s's is about 5, so the funnel bites where the data pin each group's effect weakly.
+- **Conformal: slice 14, then 15** (the user, 2026-11-13, in the conformal chip's thread: "ok 14 then 15"). One chip builds both, and 14 is verified before 15 starts. Slice 15's commission is `0a1c648`.
 - **E38 recorded** (`419f547`): a replicate layer in BAPS, subsuming the hierarchical P-spline, parked after E3.
 - **The requested papers are on disk** (the user, 2026-11-11):
 
@@ -113,7 +114,7 @@ Carried:
    - *Conformal risk control.* Its `crc_orderings` reads Snell and Griffiths's Proposition 3.2 as conformal risk control.
    - *Proper scores.* Gneiting and Raftery underlie that part.
    - *Its findings to confirm.* Snell and Griffiths's Theorem 4.3 is false as stated. Gressmann's proof of Proposition 2.5(i) has two sign slips, while the statement stands.
-6. **The next conformal C# slice among 14–18.** Slice 15 (posterior conformal prediction, for conditional coverage) is recommended. Its Lean is verified, as is the Lean for 14, 16 and 18.
+6. **The next conformal C# slice:** decided on 2026-11-13, 14 then 15 (under Decided). The number is kept so other notes' item numbers still hold.
 7. **Slice 12a's k̂ diagnostic:** opt-in (recommended; it costs about 200× the score) or on by default.
 8. **E34 slice 4's follow-ups**, listed in its report (`fc9c343`).
 9. **The original side-session notes** in `%APPDATA%\Claude\side-session-notes\`: delete them or keep them. Copies are in each workstream's `issues/<workstream>/handover-notes/`, except three PyTeXML notes, which were left there.
