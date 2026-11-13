@@ -165,8 +165,8 @@ public sealed record PointwiseLogDensity(double[,] Values, UnitPartition Units, 
 
     /// <summary>
     /// The draws' weights in row order, as an SMC population carries them; null, the default, weighs every draw equally.
-    /// One per draw, finite and non-negative, with a positive sum; their scale does not matter, and a draw of weight 0
-    /// drops out. <see cref="PredictiveChecks"/> read them inside their means and log ratios. Weighted draws are a
+    /// One per draw, finite and non-negative, with a positive sum; their scale does not matter over the whole finite range,
+    /// a sum past <see cref="double.MaxValue"/> included, and a draw of weight 0 drops out. <see cref="PredictiveChecks"/> read them inside their means and log ratios. Weighted draws are a
     /// population, not chains, so they come without <see cref="ChainLengths"/>.
     /// </summary>
     public IReadOnlyList<double>? Weights
@@ -212,13 +212,13 @@ public sealed record PointwiseLogDensity(double[,] Values, UnitPartition Units, 
         if (weights is null) return null;
         if (chains is not null) throw new ArgumentException("Weighted draws are a population, not chains: give no chain lengths with them.", nameof(Weights));
         if (weights.Count != values.GetLength(0)) throw new ArgumentException("One weight per draw is required.", nameof(Weights));
-        double total = 0.0;
+        bool positive = false;   // the sum is positive when one weight is, read without a sum that can pass double.MaxValue
         foreach (double w in weights)
         {
             if (!(w >= 0.0) || double.IsPositiveInfinity(w)) throw new ArgumentException("A draw's weight must be finite and non-negative.", nameof(Weights));
-            total += w;
+            positive |= w > 0.0;
         }
-        if (!(total > 0.0)) throw new ArgumentException("The weights must have a positive sum.", nameof(Weights));
+        if (!positive) throw new ArgumentException("The weights must have a positive sum.", nameof(Weights));
         return weights;
     }
 

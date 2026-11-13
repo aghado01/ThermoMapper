@@ -115,9 +115,12 @@ public static class PredictiveChecks
         return Summarize(elpd, pTotal, null);
     }
 
-    // The draws a check reads, as rows of the density, and their normalized log weights: every row and null for equal
-    // weights; the rows of positive weight for weighted draws. The conformal layer reads them too, the split form's from the
-    // candidate density's weights.
+    // The draws a check reads, as rows of the density, and their normalized log weights ln(W_d / ΣW): every row and null for
+    // equal weights; the rows of positive weight for weighted draws. The conformal layer reads them too, the split form's from the
+    // candidate density's weights. Every finite weight reads to full precision: where the sum is finite and W_d / ΣW a normal
+    // double, as for weights in an ordinary range, the log of that ratio; where the sum passes double.MaxValue or the ratio falls
+    // below the normal range, the same ratio of the weights scaled by the power of two that brings the largest into [1, 2), which
+    // is exact; and a ratio still below the normal range as a difference of logs.
     internal static (int[] Rows, double[]? LogWeights) Rows(PointwiseLogDensity density) => Rows(density.Weights, density.Draws);
 
     internal static (int[] Rows, double[]? LogWeights) Rows(IReadOnlyList<double>? drawWeights, int s)
@@ -128,23 +131,45 @@ public static class PredictiveChecks
             for (int d = 0; d < s; d++) all[d] = d;
             return (all, null);
         }
-        double total = 0.0;
+        double total = 0.0, largest = 0.0;
         int positive = 0;
         foreach (double w in weights)
         {
             total += w;
             if (w > 0.0) positive++;
+            largest = Math.Max(largest, w);
         }
         var rows = new int[positive];
         var log = new double[positive];
+        int scale = 0;
+        double scaledTotal = double.NaN;   // ΣW·2^−scale, summed when a first ratio leaves the normal range
         for (int d = 0, k = 0; d < s; d++)
         {
-            if (!(weights[d] > 0.0)) continue;
+            double w = weights[d];
+            if (!(w > 0.0)) continue;
             rows[k] = d;
-            log[k++] = Math.Log(weights[d] / total);
+            double ratio = w / total;
+            if (!(ratio >= SmallestNormal))
+            {
+                if (double.IsNaN(scaledTotal))
+                {
+                    scale = Math.ILogB(largest);
+                    scaledTotal = 0.0;
+                    foreach (double v in weights) scaledTotal += Math.ScaleB(v, -scale);
+                }
+                ratio = Math.ScaleB(w, -scale) / scaledTotal;
+                if (!(ratio >= SmallestNormal))
+                {
+                    log[k++] = Math.Log(w) - scale * Math.Log(2.0) - Math.Log(scaledTotal);
+                    continue;
+                }
+            }
+            log[k++] = Math.Log(ratio);
         }
         return (rows, log);
     }
+
+    private const double SmallestNormal = 2.2250738585072014e-308;   // 2^−1022
 
     /// <summary>
     /// PSIS-LOO: per unit, the importance log-ratios −log p(y_u | θ_s), or log W_s − log p(y_u | θ_s) under weights, are
