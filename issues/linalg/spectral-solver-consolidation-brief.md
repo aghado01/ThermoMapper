@@ -476,8 +476,8 @@ At the stage-two handoff the coordinator checked the saved test counters. B1 sta
 
 **Findings:**
 - **The Rayleigh–Ritz solve is 4–8% of a solve.** That holds on the graphs and the dense control, at projected orders up to 24. On the output operators the operator dominates and the share is under 1%. That operator applies column by column, unblocked; a blocked apply would raise the share. So B1's change of default cannot move LOBPCG's cost much through this solve, and E's two arms can straddle it.
-- **On identical projections the relative rule never stalls or fails to converge.** It takes the same number of sweeps or fewer, and the kept Ritz values agree to 1.5·10⁻¹⁵ of the projection's scale. The undeflated graph fixtures carry the null vector's Ritz value, about 10⁻¹⁵, on the diagonal, and it caused no extra sweeps.
-- **Each relative solve still costs more.** It was slower in 31 of 32 adjacent pairs, typically by 10–25% and at most 36%. Its pivot test takes two square roots for every pivot it examines, and its tangent adds three divisions. At orders 12–24 the test is a large part of the work.
+- **On identical projections the relative rule never stalls or fails to converge.** The kept Ritz values agree to 1.5·10⁻¹⁵ of the projection's scale. In total it takes fewer sweeps. It took more on 2 of the 1,447 projections compared per round, one each in the two undeflated graph fixtures. Those carry the null vector's Ritz value, about 10⁻¹⁵, on the diagonal.
+- **Each relative solve still costs more.** It was slower in 31 of 32 adjacent pairs, by a median of 18% and from 3% to 36%. Its pivot test takes two square roots for every pivot it examines, and its tangent adds three divisions. At orders 12–24 the test is a large part of the work.
 
   For B1's final kernel or G2: a diagonal entry changes only when a rotation touches it, so its root could be carried rather than recomputed per pivot.
 - **Rounding-level differences change LOBPCG's path.** Iteration counts move by −27% to +9% between rules whose Ritz values agree to 10⁻¹⁵. A single LOBPCG timing is one sample of a trajectory, so E times over several seeds.
