@@ -18,10 +18,18 @@ namespace Maths.LinAlg
     /// throwing. Callers that require strict positive-definiteness should add a
     /// regularisation term to the diagonal before calling <see cref="Decompose"/>.
     /// </para>
+    /// <para>
+    /// <strong>A factor that is not finite is refused.</strong> Under a floored pivot the later rows divide their
+    /// rounding by 1e-6, so on a covariance whose spectrum falls below rounding the factor can overflow. A pivot, an
+    /// entry of L or an entry of L⁻¹ that is not finite fails the factorization, as <see cref="DenseCholesky"/> fails
+    /// one: <see cref="FailedAt"/> says where, <see cref="LogDet"/> is NaN, and no solve, inverse, factor or sample is
+    /// read from it. A floored factor that stays finite is read; <see cref="Status"/> counts its floored pivots.
+    /// </para>
     /// </remarks>
     public sealed class CholeskyDecomposition
     {
         private readonly int _dim;
+        private bool _valid;
 
         // Lower-triangular factor L  (Σ = L·Lᵀ).
         // Upper triangle is always zero; only [i, j] for j ≤ i is written.
@@ -32,15 +40,21 @@ namespace Maths.LinAlg
         private readonly double[,] _lInv;
 
         /// <summary>
-        /// ln|Σ| = 2 · Σ_i ln(L_{ii}). Valid after <see cref="Decompose"/> has been called.
+        /// ln|Σ| = 2 · Σ_i ln(L_{ii}); NaN unless the last <see cref="Decompose"/> gave a finite factor.
         /// </summary>
-        public double LogDet { get; private set; }
+        public double LogDet { get; private set; } = double.NaN;
 
         /// <summary>
         /// What the last <see cref="Decompose"/> found: finiteness, floored pivots and the pivot range before flooring.
-        /// The factor, <see cref="LogDet"/> and the solves keep their floored behavior; this reports it.
+        /// A finite factor, its <see cref="LogDet"/> and its solves keep their floored behavior; this reports it.
         /// </summary>
         public FactorStatus Status { get; private set; }
+
+        /// <summary>
+        /// The first row at which the last <see cref="Decompose"/> went non-finite, in a pivot before flooring, in L or
+        /// in L⁻¹; −1 when the factor is finite. A failed factor is refused.
+        /// </summary>
+        public int FailedAt { get; private set; } = -1;
 
         /// <param name="dim">Dimensionality of the square covariance matrix.</param>
         public CholeskyDecomposition(int dim)
@@ -55,7 +69,7 @@ namespace Maths.LinAlg
         /// <summary>
         /// Decomposes <paramref name="sigma"/> into L·Lᵀ, updating <see cref="LogDet"/>
         /// and preparing the internal L⁻¹ required by <see cref="WriteInverseTo"/>
-        /// and <see cref="Sample"/>.
+        /// and <see cref="Sample"/>. A pivot or entry that is not finite fails it (<see cref="FailedAt"/>).
         /// </summary>
         /// <param name="sigma">
         /// Square, symmetric, positive-semi-definite covariance matrix of size dim × dim.
@@ -65,6 +79,7 @@ namespace Maths.LinAlg
         {
             double logDetL = 0.0;
             var tally = PivotTally.Start();
+            int failedAt = -1;   // a non-finite entry of L in row i makes row i's pivot non-finite, so the pivots find it
 
             // ── Step 1: L via Cholesky-Banachiewicz ──────────────────────────────
             for (int i = 0; i < _dim; i++)
@@ -77,6 +92,7 @@ namespace Maths.LinAlg
 
                     if (i == j)
                     {
+                        if (failedAt < 0 && !double.IsFinite(sum)) failedAt = i;
                         bool floored = sum <= 1e-12;
                         tally.Observe(sum, sigma[i, i], floored);
                         if (floored) sum = 1e-12; // diagonal floor
@@ -91,13 +107,13 @@ namespace Maths.LinAlg
                 }
             }
 
-            LogDet = 2.0 * logDetL; // ln|Σ| = 2·ln|L|
             Status = tally.ToStatus();
 
             // ── Step 2: L⁻¹ via forward substitution ────────────────────────────
-            for (int i = 0; i < _dim; i++)
+            for (int i = 0; i < _dim && failedAt < 0; i++)
             {
                 _lInv[i, i] = 1.0 / _l[i, i];
+                bool finite = double.IsFinite(_lInv[i, i]);
                 for (int j = 0; j < i; j++)
                 {
                     double sum = 0.0;
@@ -105,8 +121,22 @@ namespace Maths.LinAlg
                         sum -= _l[i, k] * _lInv[k, j];
                     _lInv[i, j] = sum / _l[i, i];
                     _lInv[j, i] = 0.0;
+                    finite &= double.IsFinite(_lInv[i, j]);
                 }
+                if (!finite) failedAt = i;
             }
+
+            FailedAt = failedAt;
+            _valid = failedAt < 0;
+            LogDet = _valid ? 2.0 * logDetL : double.NaN; // ln|Σ| = 2·ln|L|
+        }
+
+        private void RequireValid()
+        {
+            if (_valid) return;
+            throw new InvalidOperationException(FailedAt >= 0
+                ? $"The factor is not finite: it diverged at row {FailedAt}, after {Status.FlooredPivots} pivots floored at 1e-12."
+                : "No matrix has been factored.");
         }
 
         // ── Σ⁻¹ ─────────────────────────────────────────────────────────────────
@@ -118,6 +148,7 @@ namespace Maths.LinAlg
         /// <param name="target">Pre-allocated dim × dim matrix to receive Σ⁻¹.</param>
         public void WriteInverseTo(double[,] target)
         {
+            RequireValid();
             // L⁻¹ is lower-triangular: _lInv[k, i] = 0 for k < i.
             // Sum therefore starts at k = j (the larger of i and j).
             for (int i = 0; i < _dim; i++)
@@ -147,6 +178,7 @@ namespace Maths.LinAlg
         {
             ArgumentNullException.ThrowIfNull(b);
             if (b.Length != _dim) throw new ArgumentException("Right-hand side length must equal the matrix dimension.", nameof(b));
+            RequireValid();
             var x = new double[_dim];
 
             // Forward substitution: L·y = b (y accumulated in x; L is lower-triangular).
@@ -175,6 +207,7 @@ namespace Maths.LinAlg
         /// </summary>
         public void WriteLTo(Span<double> dst)
         {
+            RequireValid();
             for (int i = 0; i < _dim; i++)
                 for (int j = 0; j < _dim; j++)
                     dst[i * _dim + j] = _l[i, j];
@@ -191,6 +224,7 @@ namespace Maths.LinAlg
         /// <param name="mean">Mean vector of length dim.</param>
         public double[] Sample(Random rng, double[] mean)
         {
+            RequireValid();
             // Generate z ~ N(0, I) via Box-Muller pairs.
             double[] z = new double[_dim];
             for (int i = 0; i < _dim - 1; i += 2)

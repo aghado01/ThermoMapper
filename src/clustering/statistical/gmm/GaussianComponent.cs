@@ -107,11 +107,23 @@ namespace Clustering.Statistical.GMM
         /// <summary>
         /// Refreshes Σ⁻¹, ln|Σ|, ln π_k, and the Cholesky factor from the current
         /// <see cref="Weight"/> and <see cref="Covariance"/>. Call after any direct
-        /// assignment to those fields.
+        /// assignment to those fields. A covariance with no finite factor
+        /// (<see cref="CholeskyDecomposition.FailedAt"/>) throws, and leaves Σ⁻¹ and
+        /// <see cref="LogNormalizationFactor"/> NaN, so no density or sample is read from it.
         /// </summary>
         public void UpdateCache()
         {
             _chol.Decompose(Covariance);
+            if (_chol.FailedAt >= 0)
+            {
+                LogNormalizationFactor = double.NaN;
+                for (int i = 0; i < _dim; i++)
+                    for (int j = 0; j < _dim; j++)
+                        CovarianceInverse[i, j] = double.NaN;
+                throw new InvalidOperationException(
+                    $"The component's covariance has no finite Cholesky factor: it diverged at row {_chol.FailedAt}, " +
+                    $"after {_chol.Status.FlooredPivots} pivots floored at 1e-12. Regularize it before use.");
+            }
             _chol.WriteInverseTo(CovarianceInverse);
             LogNormalizationFactor = -0.5 * (_dim * Math.Log(2.0 * Math.PI) + _chol.LogDet);
             LogWeight = Math.Log(Math.Max(Weight, 1e-300));

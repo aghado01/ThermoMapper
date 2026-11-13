@@ -31,8 +31,11 @@ namespace Clustering.Statistical.GMM
                 for (int j = 0; j < d; j++)
                     sigmaBar[i, j] = 0.5 * (a.Covariance[i, j] + b.Covariance[i, j]);
 
+            if (!double.IsFinite(a.LogNormalizationFactor)) throw new ArgumentException(NoFactor("Component a's covariance"), nameof(a));
+            if (!double.IsFinite(b.LogNormalizationFactor)) throw new ArgumentException(NoFactor("Component b's covariance"), nameof(b));
+
             var chol = new CholeskyDecomposition(d);
-            chol.Decompose(sigmaBar);
+            Factor(chol, sigmaBar, "The averaged covariance (Σ₁ + Σ₂)/2", null);
             chol.WriteInverseTo(sigmaBarInv);
             double logDetSigmaBar = chol.LogDet;
 
@@ -76,14 +79,14 @@ namespace Clustering.Statistical.GMM
 
             var chol = new CholeskyDecomposition(d);
 
-            chol.Decompose(sigmaBar);
+            Factor(chol, sigmaBar, "The averaged covariance (Σ₁ + Σ₂)/2", null);
             chol.WriteInverseTo(sigmaBarInv);
             double logDetSigmaBar = chol.LogDet;
 
-            chol.Decompose(cov1);
+            Factor(chol, cov1, "The first covariance", nameof(cov1));
             double logDetCov1 = chol.LogDet;
 
-            chol.Decompose(cov2);
+            Factor(chol, cov2, "The second covariance", nameof(cov2));
             double logDetCov2 = chol.LogDet;
 
             double mahalTerm = 0.0;
@@ -100,5 +103,16 @@ namespace Clustering.Statistical.GMM
 
             return mahalTerm + logDetTerm;
         }
+
+        // Factors Σ, refusing one with no finite factor (CholeskyDecomposition.FailedAt): the distance has no value there.
+        private static void Factor(CholeskyDecomposition chol, double[,] sigma, string what, string? parameter)
+        {
+            chol.Decompose(sigma);
+            if (chol.FailedAt >= 0)
+                throw new ArgumentException(
+                    $"{NoFactor(what)} It diverged at row {chol.FailedAt}, after {chol.Status.FlooredPivots} pivots floored at 1e-12.", parameter);
+        }
+
+        private static string NoFactor(string what) => $"{what} has no finite Cholesky factor, so the distance has no value.";
     }
 }

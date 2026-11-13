@@ -276,6 +276,10 @@ namespace Viz.Renderers
                             : (r == c ? SerializerCovEps : 0.0);
 
                 chol.Decompose(tmp);
+                if (chol.FailedAt >= 0)
+                    throw new InvalidOperationException(
+                        $"Gaussian layer '{layer.Name}', component {k}: the covariance's leading {copyDim}×{copyDim} block has no " +
+                        $"finite Cholesky factor (it diverged at row {chol.FailedAt}), so its ellipsoid has no shape to draw.");
                 chol.WriteLTo(result.AsSpan(k * outStride, outStride));
             }
             return result;
