@@ -39,7 +39,7 @@ public sealed record GpFit(double Bandwidth, double LogMarginal, double[] Alpha,
 
 /// <summary>A <see cref="GpFit"/> with what its conditional variance needs: the factor of R = Σ_t + ηI, R⁻¹1 and
 /// 1ᵀR⁻¹1. It costs n² numbers, so a sampler holds one per chain while it is current and never retains it.</summary>
-internal sealed record GpFactoredFit(GpFit Fit, CholeskyDecomposition Factor, double[] KInvOne, double OneKOne);
+internal sealed record GpFactoredFit(GpFit Fit, DenseCholesky Factor, double[] KInvOne, double OneKOne);
 
 /// <summary>
 /// Bayesian GP regression with an ambient radial kernel (Tang, Wu, Cheng &amp; Dunson 2025): the conjugate core
@@ -222,9 +222,10 @@ public sealed class GpRegression
             }
         }
 
-        var chol = new CholeskyDecomposition(_n);
+        var chol = new DenseCholesky(_n);
         chol.Decompose(a);
-        if (chol.Status is not { PositiveDefinite: true, FlooredPivots: 0 })   // the nugget makes it positive definite; clamping means bad input
+        // GP admission retains the legacy floor boundary, including positive pivots the strict factor accepts.
+        if (chol.Status is not { PositiveDefinite: true, MinPivot: > 1e-12 })
             throw new InvalidOperationException($"Σ_t + {nugget:G4}·I is not numerically positive definite at t = {t} ({chol.Status}).");
 
         // K⁻¹Y and K⁻¹1 by triangular solves (O(n²) each); the GLS mean and the residual quadratic follow.
@@ -257,7 +258,8 @@ public sealed class GpRegression
     /// outside the unit. The flat mean leaves the projected precision P = R⁻¹ − R⁻¹11ᵀR⁻¹/1ᵀR⁻¹1, whose PY is the fit's α
     /// and YᵀPY its Q. A known σ² gives a Gaussian. An unknown scale under 1/s² gives a Student t over n − 1 effective
     /// observations. Either way each term is the evidence difference log p(Y | t, η) − log p(Y_rest | t, η). One refit and
-    /// one inverse, O(n³), serve every unit. A unit must leave one observation outside it, two for an unknown scale.
+    /// set of inverse-factor columns computed per unit, O(n³), serve every unit without forming the full precision.
+    /// A unit must leave one observation outside it, two for an unknown scale.
     /// </summary>
     public double[] LeaveOutLogDensities(GpFit fit, UnitPartition units)
     {
@@ -268,15 +270,14 @@ public sealed class GpRegression
         GpFactoredFit factored = Refit(fit);
         double[] alpha = factored.Fit.Alpha, kInvOne = factored.KInvOne;
         double oneKOne = factored.OneKOne;
-        var rInv = new double[_n, _n];
-        factored.Factor.WriteInverseTo(rInv);
+        var precision = new GpPrecision(factored.Factor);
         var terms = new double[units.Units];
         for (int u = 0; u < units.Units; u++)
         {
             int[] members = units.Members[u];
             int m = members.Length;
             if (m >= _n) throw new ArgumentException("A unit must leave some observations outside it.", nameof(units));
-            var block = new double[m, m];   // P_UU
+            double[,] block = precision.Block(members);   // R⁻¹_UU, then P_UU
             var pr = new double[m];         // (PY)_U = α_U
             for (int a = 0; a < m; a++)
             {
@@ -285,7 +286,7 @@ public sealed class GpRegression
                 for (int b = 0; b < m; b++)
                 {
                     int j = members[b];
-                    block[a, b] = rInv[i, j] - kInvOne[i] * kInvOne[j] / oneKOne;
+                    block[a, b] -= kInvOne[i] * kInvOne[j] / oneKOne;
                 }
             }
             terms[u] = NoiseModel == GpNoiseModel.Known
