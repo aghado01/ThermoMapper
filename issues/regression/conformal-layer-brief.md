@@ -292,6 +292,47 @@ Each report gives the commits, gate results, coverage and width by fit, cost, de
 
 Newest first.
 
+### 2026-11-13 — Slice 14's follow-up: the ratio estimator
+
+Built at the user's decision 12 ("Lean first, 15 meanwhile"). It needs no Lean: the estimated-ratio bound covers it (`sum_weight_refused_estimated_le`).
+
+**Landed** on `main`, nothing pushed:
+- `4aeebfc`: `DensityRatio.Logistic(source, target, ridge, maxIterations, tolerance)`, with `LogRatio`, `Ratio`, `Ratios`, `Iterations` and `Weights(units, cases, grids)`, which gives `ShiftWeights` for the density forms (with grids) or the closed forms (without). Also `DensityRatioTests`.
+- *Nothing existing changes.*
+
+**What it computes.**
+- *The fit:* a logistic regression telling the target law's sample from the source's.
+  - Its odds, corrected for the samples' sizes, are the ratio: w(x) = odds(x)·n_source/n_target (Tibshirani, Barber, Candès and Ramdas 2019, §3).
+  - The features are centred and scaled on the pooled samples, so the ridge on the slopes, ridge·N/2·‖β‖² with ridge 10⁻⁴ by default, reads alike in any units of the features. It keeps separated samples finite.
+- *The method:* Newton's method with step halving.
+  - A step below 10⁻¹² on the standardized scale is the optimum. A step within 10⁻¹² of the objective's magnitude is taken, so rounding at the optimum cannot stall it.
+  - A fit that does not converge in its step budget is refused.
+- *Its model:* the logistic model is right exactly when ln w is linear in the features: x for a Gaussian mean shift, ln x for a power.
+- *What it costs:* the weighted rule run with the estimate loses at most the expected total variation between the data set's normalized true and estimated weights. That is the estimate's price, which nothing here certifies.
+
+**Gates.**
+- *A Gaussian mean shift* (N(0, 1) against N(1, 1), 4,000 points each): ln w(x) = x − ½ is recovered within 0.07 at x = −1, 0, 1 and 2. An idle second feature moves it by less than 0.1.
+- *A power shift* (uniform against density 2x, on ln x): ln 2x is recovered within 0.03 at x = 0.1, 0.5 and 0.9.
+- *A seeded sweep,* 60 trials: shifts δ in [−3, 3], unequal samples of 50 to 3,000 points, the feature's units scaled by 10⁻³ to 10³.
+  - Every fit converges.
+  - The ratio reads alike in any units to 8 places.
+  - It recovers δx − δ²/2 within 1.27 of its standard errors at worst.
+- *Coverage with the estimate:* slice 14's covariate shift, the ratio fitted afresh in each of 2,000 replications from 400 unlabeled inputs of each law, on ln x.
+  - The estimated ratio covers 0.905 against 0.848 unweighted (se 0.007).
+  - Its mean total variation is 0.018, so the bound is 0.882.
+- *The refusals:* a constant feature, an empty sample, unequal widths, a ridge that is not positive, and features of another width.
+- *Per commit,* the selected classes and the pinned tier: 46 of 46.
+
+**Defects found: none.** One stall was closed in building, before any commit: near the optimum a Newton step's gain fell below the objective's rounding, and the halving read it as a loss.
+
+**Follow-ups, each with the decision it would change.**
+- *Richer classifiers* (a spline basis on the inputs, or an engine's own fit) where ln w is not linear in a handful of features. It decides whether the layer offers a nonparametric ratio. Today the caller supplies the features.
+
+**Doc changes owed** (for the offline docs pass): `docs/Maths/Regression/ConformalPrediction.md`, the weighted rule's section:
+- the ratio estimator, its odds correction, its standardized ridge, and when the logistic model is right;
+- the coverage it costs, with the gates' numbers;
+- the API row for `DensityRatio`.
+
 ### 2026-11-13 — Slice 14, the weighted rule under shift
 
 Built at the user's pick of 2026-11-13 ("ok 14 then 15", in this session; slice 15 waits for this slice's verification), against the Lean's slice 14 (section `Shift`).
