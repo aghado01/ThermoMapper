@@ -40,6 +40,7 @@ Extensions beyond the port's completion contract, collected from the [full port 
 | Additive models with a GP component (E32) | [The notes](../perplexity-bart-etc.md) | BGP: `y` per fit, σ² from outside with s² free, a declared mean. Fitting: the marginal given σ² | Candidate |
 | Regression-family integration (E33) | [The notes](../perplexity-bart-etc.md) | Every family: an inventory, declared capabilities, four verdicts | Candidate |
 | Several outputs on one basis, with Σ integrated (E34) | Brown, Vannucci and Fearn 1998; Huang and Wand 2013; [the lineage review](lineage-review.md) | Fitting: the collapsed core with a K × K quadratic form, the latent record by row. Samplers: nothing new | Building ([brief](multi-output-brief.md), 2026-11-08) |
+| A replicate layer in BAPS, subsuming the hierarchical P-spline (E38) | Behseta, Kass and Wallstrom 2005; Lang and Brezger 2004, from memory; Rodríguez-Álvarez, Durbán, Lee and Eilers 2019, arXiv 1801.07278 | BAPS: the locally adaptive scheme's per-row multipliers. `HierarchicalPSpline`: its deviation block and its mixing schemes. Nothing from the port | Parked, after E3 |
 | Direct-functional BASS for families of SPC sweeps | Derivations review §7, item 9 | The completed port | Application |
 
 ## Upgrades to existing code
@@ -681,6 +682,41 @@ y = g(x) + f(x) + ε, with g a GP and f a forest or BASS, and treed GPs. The sou
 - **Declared capabilities.** Partly there: `CanTemperLikelihood` and `CanTemperToPrior` on BARS's model, and `BassConfig.Validate`'s refusals. `ITargetEvaluation` refuses a b or a slope by exception at first evaluation, so after a run starts. The inventory decides what else earns a declaration. Evidence's is [above](#cross-engine-evidence).
 - **Four verdicts.** Target correctness, computational adequacy, predictive adequacy and evidence qualification, each certified apart. F-R1 is the example: the oracle and enumeration checks pass while no arm clears the R̂ gate. `ConvergenceVerdict` reads computational adequacy alone. A new family's qualification report reads by these four.
 - **No composition layer.** `BlockScan` and `IBlock` already compose blocks, for collapsed BASS and explicitly blocked BAPS alike. What the notes' own sequence asks for is contracts on block invariance, tempering semantics, normalization and restart.
+
+## A replicate layer in BAPS, subsuming the hierarchical P-spline (E38)
+
+**Parked extension (2026-11-12): one prior family for `Baps` and `HierarchicalPSpline`, with local multipliers on either layer.** From a discussion on the user's question. The row-rank argument was checked by hand; nothing was run.
+- **What.** Stack θ = (β₀, β₁, …, β_R) and write the prior precision as K = Mᵀ diag(w) M with wᵢ = ηᵢ/τ²_g(i). M has two kinds of rows:
+  - D on β₀, ν − r rows, in the group τ₀²;
+  - β_r − β₀ for each replicate, Rν rows, in the group τ_u².
+- **Its members.**
+  - `Baps` under `Gibbs`: the D rows alone, η fixed at 1.
+  - `Baps` under `LocallyAdaptiveGibbs`: the D rows alone, η free.
+  - `HierarchicalPSpline`: both kinds of rows, η fixed at 1. It is the non-adaptive member with one replicate layer.
+  - The extension: both kinds of rows, η free on either layer.
+- **Why every variance update stays conjugate.** M has full row rank, so pdet K = det(MMᵀ)·Πᵢwᵢ and the prior's normalizer factors as Πᵢwᵢ^½. That is the condition [BAPS.md](../../../docs/Maths/Regression/BAPS.md) gives for the locally adaptive scheme.
+  - τ²_g | · ~ IG(a + q_g/2, b + ½Σ_{i∈g} ηᵢ(Mθ)ᵢ²), with q_g the group's row count.
+  - A multiplier tied over a set S of one group's rows: η | · ~ Gamma(φ + |S|/2, rate φ + Σ_{i∈S}(Mθ)ᵢ²/(2τ²_g)).
+- **Where a multiplier is identified.**
+  - On a population difference it reads one squared difference, whatever R is. Replicates sharpen β₀ and add nothing more.
+  - Tied across replicates at coefficient k it reads R deviations: a variance function among curves, Behseta, Kass and Wallstrom's subject.
+  - Tied across coefficients within replicate r it reads ν deviations, and downweights an outlying replicate.
+- **What it does not cover.**
+  - *One replicate.* `Baps` is the member with no replicate layer, not the R = 1 case. With one replicate y = Z(β₀ + u₁), and only the two priors' shapes separate τ_u² from τ₀². So the layer's presence is structure, not a parameter.
+  - *The collapsed scheme.* It uses a different prior. A hierarchical counterpart needs edf partitioned by component (Cui, Hodges, Kong and Carlin 2010, from memory) and meets the cost BAPS.md names for the anisotropic case.
+  - *Anisotropic smoothing.* `HierarchicalPSpline` already has it for the population curve, through the shared eigenbasis, not through row rank.
+  - *Local multipliers on a tensor penalty.* Its stacked differences fail row rank, with or without the layer.
+- **Mixing schemes to recheck.** `CollapsedPopulation`'s once-only eigendecomposition of ZᵀZ rests on the deviation covariance τ_u²I. Per-replicate multipliers ω_r keep it, with λ/(σ² + τ_u²λ/ω_r) for each replicate. Per-coefficient multipliers lose it and need a solve each sweep. The interweaved and parameter-expanded sweeps are unexamined.
+- **Prior work (searched 2026-11-12, abstracts and summaries only).**
+  - *REML.* SOP (Rodríguez-Álvarez, Durbán, Lee and Eilers 2019, arXiv 1801.07278) treats a precision that is linear in the inverse variances. Its two worked models are locally adaptive P-splines and hierarchical curve data. `IAnisotropicPenalty`'s K = Σⱼ Pⱼ/τⱼ² has that form, and the row-rank family is its conjugate sub-family.
+  - *Wavelets.* Zhu, Brown and Morris (2011, *JASA* 106) put scale mixtures on the fixed-effect, random-effect and residual functions of a functional mixed model.
+  - *Basis selection.* Bigelow and Dunson (2007, *Biometrics* 63) is a hierarchical generalization of Bayesian MARS by reversible jump: BASS's lineage.
+  - *Bayesian P-splines.* Lang and Brezger's (2004) local multipliers sit inside structured additive regression, which also carries random effects (from memory, unread here).
+  - *Not found:* a Bayesian model with the coefficient-level hierarchy and local multipliers on both layers. Four searches, not a survey.
+- **Sequencing: after E3 (ABMRS, the project's BAMRS).**
+  - The BAPS part needs nothing from it and could be built first.
+  - ABMRS adds a second engine under the layer, since the deviation rows do not read how β₀ is regularized. The layer is then designed against two engines.
+  - In a free-knot engine a knot move changes every replicate's coefficient space at once. So a move either integrates the layer out in its marginal likelihood or proposes every replicate's new coefficients.
 
 ## Direct-functional BASS for families of SPC sweeps
 
