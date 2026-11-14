@@ -10,6 +10,7 @@ Opened 2026-11-14 at the user's word ("that brief was getting way too long, adde
 - Follow-up 2 is completed by `3f68330`, the merged K-fold CV+ bound under likelihood ratios, on the Lean at `47acb3c`.
 - Slice 16, batch predictive inference (`60ba2cb`), slice 17, scores beyond the model's own (`0b91db9`), and slice 18, the guarantee read out (`5b55a6f`), are built and verified. Their reports are below. Every slice in the plan is built.
 - Slice 18's first follow-up, the smoothed cell law for the log score (`b4b7e22`), is built and verified: `CellLaw.Smoothed`, opt-in, for the split form's unweighted cases.
+- GBASS's two follow-ups (`5ce91b9`) are built and verified: `GroupConformal`, group-level units for new groups; and the cell rule, `Cells` on both seams with the layer's refusal.
 - The defects chip owns `PredictiveChecks.cs` and `Pointwise.cs`'s weight check; a change there is agreed with it first (the archived brief's coordination note).
 
 ## Open, each with the decision it would change
@@ -19,7 +20,7 @@ Opened 2026-11-14 at the user's word ("that brief was getting way too long, adde
 - **Slice 15's precision rule** reads the training split's ESS: with 1,000 training and 399 calibration points it chose m of 294 to 500, and 7% of the sets were the whole space. It decides whether the fit takes the calibration split's size and scales the target itself.
 - **Slice 15's alternation speed** along the factorization's flat directions. It decides the cost at large n.
 - **τ through richer features,** the ratio estimator's open follow-up. It decides whether the layer offers a nonparametric τ.
-- **Two follow-ups agreed with the GBASS chip** for E21's slice 5 (`127d64d`): new-group coverage by group-level units, and the layer's own check that strata lie inside cells.
+- **BASS's seam for `GroupConformal`** (the GBASS follow-ups' report): `BassCandidates` refuses held-out groups in one stratum, so BASS cannot yet feed group-level units. Either (a) `BassCandidates` exempts new-group cases from its strata rule, loosening what the case-level split forms accept from BASS, or (b) BASS gains an opt-in group-units call. It decides how BASS feeds group-level units; the user's (the handoff's item 16).
 - **Slice 12a's k̂ diagnostic,** opt-in or on by default (the handoff's waiting list).
 
 ## Working rules
@@ -40,6 +41,9 @@ Built at the user's pick (2026-11-14, "GBASS's two follow-ups"). The cell rule w
   - `Cells` (optional, default null, length checked) on `PointwiseLogDensity` (one per observation) and `CandidateLogDensity` (one per case);
   - `BassPointwise.LogDensity` and `BassCandidates` set them from `BassGroupCells`, read only; `BassFit.cs` and `BassGroupCells` are untouched;
   - the refusal, `ConformalBayes.CheckCells`, read by `ConformalBayes.Check` and `SplitDraws.Check`, with `ConformalCellRuleTests`.
+- *Verified by the main session on 2026-11-14,* from a clean archive of `f96be6c` with zero skips ([receipts](receipts/verify-gbass-fu-5ce91b9/)):
+  - Maths.Regression.Tests' Commit selection, 3,033 of 3,033;
+  - Maths.Oracle.Tests', 145 of 147. The two misses are `DiagramMetricsTransportParityTests` (p 1 and 2): its R transport oracle timed out at 120 s under load. It reads none of these files, and it missed the same way in the defects chip's slice 6 verification.
 
 **A — group-level units for new groups.**
 - *What it computes.* The split density form with held-out groups as its units. There are m = G + 1 units, k = ⌊αm⌋, and CB-1's rule (B + T + 1)/m > k/m on one score per group:

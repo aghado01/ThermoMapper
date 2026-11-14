@@ -1,0 +1,9 @@
+src/maths/regression/CandidateLogDensity.cs
+src/maths/regression/Pointwise.cs
+src/maths/regression/conformal/ConformalBayes.cs
+src/maths/regression/conformal/GroupConformal.cs
+src/maths/regression/conformal/SplitConformal.cs
+src/maths/regression/spline/bass/BassCandidates.cs
+src/maths/regression/spline/bass/BassPointwise.cs
+tests/regression/ConformalCellRuleTests.cs
+tests/regression/GroupConformalTests.cs
