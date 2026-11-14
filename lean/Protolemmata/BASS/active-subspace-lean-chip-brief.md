@@ -40,6 +40,45 @@ For each: the statement, its hypotheses, the decision it changes and its prior a
    - *The scale.* C_z = LᵀC_xL, so the subspace is equivariant under orthogonal changes of the inputs and moves under any other. For the projected fit: the g-form's marginal is invariant to a column's scale; the column-mass support and the raw ridge are not; and under the training-range rule the evaluated hinge is invariant to the declared box while κ is not (slice 7a's decision 4 gate and slice 7d).
    - *Decision:* for the frame, whether the eigengap report within the active block is the right warning. For the scale, whether the training range as BASS's default (the handoff's item 2) rests on a proved invariance.
 
+## Added targets: a penalized system's admission (2026-11-14)
+
+Commissioned by the user on 2026-11-14 through the coordinating session. They sit outside active subspaces and come to this chip for its harness. The environment, working rules and reporting below hold unchanged.
+
+**Context.** BAPS factors A(c) = Σₖ cₖSₖ at every sampler step: ZᵀZ + λP, ZᵀZ + Σⱼ λⱼPⱼ, and ZᵀZ + Σᵢ λᵢdᵢdᵢᵀ for the locally adaptive penalty. Every Sₖ is positive semidefinite and fixed by the design, and every cₖ > 0. A gate admits a factor that is positive definite with an estimated κ₁ of the unit-diagonal scaling E(c) at most 10¹⁴ (`BapsAdmission`).
+- [Slice 6 of the defects brief](../../../issues/regression/shared-code-defects-brief.md#slice-6-the-samplers-condition-check-as-a-setting) builds a screen on a bound relative to one reference point c_ref. The defects chip (`local_0e31b37f`) is building it now and derives the screen's safety factor S.
+- The [BAPS follow-up's admission input](../../../issues/regression/bass/extensions-brief.md#input-for-the-follow-up-admission-and-singular-systems-2026-11-14) states the two failures behind the gate.
+- Every statement below was derived by the coordinating session on 2026-11-14 and checked against no run. Target 7's proof sketch is its own, not read from van der Sluis's paper.
+
+**Hypotheses an instance must meet.** Each result carries a concrete instance in the checks and in the report: a family with at least one positive definite combination, strictly positive coefficients, and a nonempty index set for the max and the min. S₁ = diag(1, 0), S₂ = diag(0, 1) is the smallest.
+
+5. **Identification does not read the coefficients.** For c > 0 entrywise:
+   - xᵀA(c)x = 0 exactly when Sₖx = 0 for every k, so ker A(c) = ⋂ₖ ker Sₖ at every such c;
+   - A(c) is positive definite at one c > 0 exactly when it is at every c > 0, and exactly when the Sₖ share no null vector but 0;
+   - BAPS's instance: ZᵀZ + Σⱼ λⱼPⱼ is singular exactly when some x ≠ 0 has Zx = 0 and Pⱼx = 0 for every j.
+   - *Decision:* whether one check of the design at construction stands on a proved footing (the follow-up's direction 1). It also says what a per-step positive-definiteness check can still catch: a loss in the computed factor only.
+6. **The bound.** With ρₖ = cₖ / c′ₖ, m = minₖ ρₖ and M = maxₖ ρₖ:
+   - m · xᵀA(c′)x ≤ xᵀA(c)x ≤ M · xᵀA(c′)x for every x;
+   - λ_min(A(c)) ≥ m · λ_min(A(c′)) and λ_max(A(c)) ≤ M · λ_max(A(c′));
+   - where A(c′) is positive definite, κ₂(A(c)) ≤ (M / m) · κ₂(A(c′));
+   - M / m is attained (the diagonal instance above, with c′ = (1, 1)), so no smaller constant serves every family;
+   - a coefficient held at 1 in both, as ZᵀZ's is, enters with ratio 1.
+   - *Form:* the quadratic-form line is the core. Say whether the eigenvalue lines are proved through Mathlib's ordered eigenvalues or through Rayleigh bounds.
+   - *Decision:* slice 6's screen rests on it. Sharpness says the window of c the solve carries widens only with another form of the solve (the follow-up's direction 2), never with a better inequality.
+7. **From the bound to what the gate reads.**
+   - *Jacobi scaling.* For B positive definite with unit diagonal and at most q nonzeros in any row, and F any positive diagonal: κ₂(B) ≤ q · κ₂(FBF). The sketch:
+     - |B_ij| ≤ 1, so every row's absolute sum is at most q and λ_max(B) ≤ q;
+     - λ_max(FBF) ≥ max f_i²;
+     - λ_min(B) ≥ λ_min(FBF) / max f_i².
+   - *Norms.* For a symmetric matrix ‖A‖₂ ≤ ‖A‖₁. With at most q nonzeros in a column ‖A‖₁ ≤ √q · ‖A‖₂, and for any n × n matrix ‖A‖₁ ≤ √n · ‖A‖₂.
+   - *Composed.* With q bounding the nonzeros in a row of every A(c): κ₁(E(c)) ≤ q · √(qn) · (M / m) · κ₁(E(c_ref)). A congruence by a positive diagonal keeps each Sₖ positive semidefinite, which is how target 6 enters.
+   - *Prior art:* van der Sluis (1969, Numer. Math. 14:14–23) for the scaling; the theorem numbers 4.1 (factor n) and 4.3 (factor q) are from a secondary citation, arXiv 1110.2805. Higham (2002), Corollary 7.6, for the factor n. Say what each states, read or from abstracts.
+   - *Outside Lean:* the gate reads an estimate of κ₁ that errs low, with no proved bound on its shortfall. That factor stays with the defects chip's sweep.
+   - *Decision:* the part of S that is proved, q · √(qn) if the chain holds, against the part that is measured. Give the defects brief a line it can take, and tell the defects chip by message when the chain's constant is settled either way.
+
+**Order.** 5, then 6, then 7. Numeric checks before any Lean, as for the first four: exact rational arithmetic for the quadratic-form lines, seeded random families with rank-deficient Sₖ with and without a common null vector, and small banded cases built from a B-spline Gram and difference penalties.
+
+**Files.** `lean/Protolemmata/BAPS/penalized-admission-lemmas.md` and `penalized-admission-checks.py`; the module under `lean/Enthymemata/`, named and placed by the README's taxonomy. Outside it: `src/`, `tests/`, `docs/`, the defects brief and the extensions brief, each of which gets a line it can take in the report.
+
 ## Scope
 
 New files:
