@@ -178,6 +178,13 @@ At the user's request, ahead of the chip's write-up.
   - κ₁(E(c)) / ((M/m)·κ₁(E(c′))) grows as well: 0.97, 3.8, 10 and 107. So no constant serves the whole κ₁ bound over every family either.
 - **What it does not say.** The spike family is dense: every column of vvᵀ is full. A banded family with q fixed is the open case, and the chip's search is on it.
 - **Receipts:** `artifacts/verify-lean-fc793df/`, with the axioms file, the summary and the rebuild's script and output tracked in [receipts](../../../issues/regression/receipts/verify-lean-fc793df/).
+- **Verified again at `95c3500`,** the write-up's head: the Lean modules are unchanged since `fc793df`; 27 of 27 checks; 89 theorems on the three standard axioms; meta-ci PASS.
+- **The banded finding, rebuilt apart** in 50-digit arithmetic, by tridiagonal solves with no dense inverse in doubles. At M/m = 10¹² the system's condition is near 10¹⁵ at n = 1024, so the check's double-precision inverse needed this.
+  - T reads 0.989, 1.704, 3.122 and 5.953 at n = 16, 64, 256 and 1024, and 0.901, 2.069 and 3.093 at n = 256 for M/m = 10², 10⁴ and 10⁶. The check's readings agree to the digits it prints.
+  - The hub's column is the largest at n up to 256, where every column was read.
+  - The rank-one part alone gives the same digits: E(c)'s near-null vector is √deg, spiked at the hub, with eigenvalue 2/(M/m + 1).
+  - *Its standing:* a numeric construction, not Lean. It shows the growth for a tridiagonal pattern. It is not a BAPS system, whose near-null vectors at large λ are polynomials, with no spike; whether a spline Gram with a penalty can realize it is not shown.
+  - Receipts with the script and its output: [verify-lean-95c3500](../../../issues/regression/receipts/verify-lean-95c3500/).
 
 ### 2026-11-14 — the two follow-ups verified from a clean archive (coordinating session)
 
