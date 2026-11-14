@@ -1,0 +1,11 @@
+src/maths/linalg/BandCholesky.cs
+src/maths/regression/spline/baps/AnisotropicTensorSpline.cs
+src/maths/regression/spline/baps/Baps.cs
+src/maths/regression/spline/baps/BapsAdmission.cs
+src/maths/regression/spline/baps/HierarchicalPSpline.cs
+src/maths/regression/spline/baps/PenalizedSpline.cs
+tests/linalg/BandCholeskyStrictTests.cs
+tests/linalg/ConditionEstimateTests.cs
+tests/linalg/FactorReferenceTests.cs
+tests/regression/BapsAdmissionTests.cs
+tests/regression/CostProfileKernels.cs

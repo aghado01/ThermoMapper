@@ -63,6 +63,18 @@ Commissioned by the user on 2026-11-13 through the coordinating session. Both de
 
 Newest first. Each gives the commits, the gates' results, defects found, decisions for the user and "Doc changes owed".
 
+### 2026-11-14 — Slice 5 verified from a clean archive (coordinating session)
+
+- **Run:** `scripts/verify-csharp.ps1` on one clean archive of HEAD `f1356cb`, the Commit selection over the eleven files of `f128e04` in each test project where they select a class.
+  - `Maths.Regression.Tests`: 129 of 317 classes, 1,461 of 1,461.
+  - `Maths.LinAlg.Tests`: 10 of 21 classes, 113 of 113.
+  - `Maths.Samplers.Tests`: 1 of 31 classes, 8 of 8.
+  - `Maths.Oracle.Tests`: 2 of 39 classes, 1 of 3.
+- **The two Oracle failures** are `DiagramMetricsTransportParityTests` at p = 1 and p = 2: `transport_oracle.R` timed out after 120 s inside the R call. It is slice 4's finding for the TDA owner; the test reaches neither `BandCholesky` nor BAPS.
+- **The source was read:** nothing found in the default's change, `BapsAdmission` or the eleven sites. `BapsAdmissionTests` ran in the regression selection.
+- **What this does not cover:** the report's decision 1. The gate throws inside the samplers' steps, and neither its cost per step nor the condition numbers the samplers' drawn systems reach has been measured. The probe behind the 10¹⁴ bound covers the tensor layouts only.
+- **Receipts:** `artifacts/verify-defects-s5-f1356cb/`, with the changed-file list, counters and snapshot line tracked in [receipts](receipts/verify-defects-s5-f1356cb/).
+
 ### 2026-11-13 — Slice 5: `BandCholesky` strict by default
 
 The user chose on 2026-11-13: strict by default, with the rollout qualified in three directions. Those are a valid small-scale fit that BAPS refuses today, singular-design refusal, and the public λx = λy = 1e20 tensor points. `PivotedCholesky`'s solve is still undecided and untouched.

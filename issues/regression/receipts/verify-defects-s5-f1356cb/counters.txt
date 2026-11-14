@@ -1,0 +1,4 @@
+regression    total 1461 executed 1461 passed 1461 failed 0 notExecuted 0
+linalg        total 113 executed 113 passed 113 failed 0 notExecuted 0
+samplers      total 8 executed 8 passed 8 failed 0 notExecuted 0
+oracle        total 3 executed 3 passed 1 failed 2 notExecuted 0
