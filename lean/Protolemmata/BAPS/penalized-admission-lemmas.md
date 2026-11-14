@@ -2,7 +2,7 @@
 
 BAPS factors A(c) = Σₖ cₖSₖ at every sampler step, and a gate (`BapsAdmission`) admits a factor that is positive definite with an estimated κ₁ of its unit-diagonal scaling E(c) at most 10¹⁴. Slice 6 of the [defects brief](../../../issues/regression/shared-code-defects-brief.md#slice-6-the-samplers-condition-check-as-a-setting) builds a screen on a bound relative to one reference point, and the [BAPS follow-up's admission input](../../../issues/regression/bass/extensions-brief.md#input-for-the-follow-up-admission-and-singular-systems-2026-11-14) states the two failures behind the gate. These are the statements both rest on. They were commissioned on 2026-11-14, as targets 5 to 7 of the [chip brief](../BASS/active-subspace-lean-chip-brief.md#added-targets-a-penalized-systems-admission-2026-11-14). The coordinating session derived them that day and checked them against no run. The numeric checks are [`penalized-admission-checks.py`](penalized-admission-checks.py).
 
-**Status (2026-11-14).** All three are proved, with no apologies, in `lean/Enthymemata/PenalizedAdmission.lean`, namespace `PenalizedAdmission`. Each main result prints only `propext`, `Classical.choice` and `Quot.sound`. Target 7 is the restated chain (`90fa6ce`). No statement proved false. Two follow-ups landed the same day (`7f535b3`): the Rayleigh extremes are the extreme eigenvalues (PA-6), and the column step's constant is (1 + √n)/2, sharp, which makes the composed factor q·(1 + √n)/2 (PA-7(c2′), (d′)). The checks pass 23 of 23. Each target's own status line follows.
+**Status (2026-11-14).** All three are proved, with no apologies, in `lean/Enthymemata/PenalizedAdmission.lean`, namespace `PenalizedAdmission`. Each main result prints only `propext`, `Classical.choice` and `Quot.sound`. Target 7 is the restated chain (`90fa6ce`). No statement proved false. Two follow-ups landed the same day (`7f535b3`): the Rayleigh extremes are the extreme eigenvalues (PA-6), and the column step's constant is (1 + √n)/2, sharp, which makes the composed factor q·(1 + √n)/2 (PA-7(c2′), (d′)). The user then asked for the conjecture they left open to be tried, and it proved false (finding 6, `fc793df`). The checks pass 27 of 27. Each target's own status line follows.
 
 **What posing changed** (findings before any Lean):
 1. **PA-7: the first statement's chain held, and the same pieces gave a constant √q smaller.**
@@ -22,7 +22,22 @@ BAPS factors A(c) = Σₖ cₖSₖ at every sampler step, and a gate (`BapsAdmis
    - *The inverse part's reading stays near 1.* T = ‖E(c)⁻¹‖₁ / ((M/m)·‖E(c′)⁻¹‖₁) read 1.00, 1.18, 1.20, 1.23, 1.00 and 1.05 at n = 3, 4, 6, 8, 12 and 16, while its proved bound (1 + √n)/2 grows from 1.37 to 2.50. R/q read at most 1.20.
    - *The search covers every family.* Every family gives m·A(c′) ≼ A(c) ≼ M·A(c′), and every pair satisfying it is a two-term family: S₁ = (A − mA′)/(M − m), S₂ = (MA′ − A)/(M − m). So the search runs over pairs.
    - *Each reading is a lower bound* from a local search; the higher dimensions search worst.
-   - *Conjecture:* the inverse part is bounded by a constant, which would give κ₁(E(c)) ≤ C·q·(M/m)·‖E(c′)⁻¹‖₁ for every family. Open. Each step of the chain alone is sharp, so a proof must use how E(c) and E(c′) are coupled.
+   - *The conjecture they suggested,* that the inverse part is bounded by a constant, is false (finding 6). The searches missed a family of measure near zero.
+6. **Follow-up: the inverse part is unbounded, so no factor of smaller order holds for every family.**
+   - *The family.* S₁ = I − vvᵀ and S₂ = vvᵀ for a unit v, with c′ = (1, 1) and c = (M, m). Then A(c′) = I, so ‖E(c′)⁻¹‖₁ = 1, and A(c) = M·I − (M − m)·vvᵀ.
+   - *Closed form,* for v ≥ 0, with ε = m/M and Δᵢ = 1 − (1 − ε)vᵢ²: column j of E(c)⁻¹ gives T = ε·Δⱼ + (1 − ε)·vⱼ√Δⱼ·Σᵢ vᵢ√Δᵢ. At v = (a, t, …, t) with a = 1/√3, as ε → 0, T → 2/9 + (2/(3√3))·√(n − 5/3), about 0.385·√n. The checks match the closed form to 10⁻⁸ from n = 16 to 1024.
+   - *So the inverse part's supremum lies between about 0.385·√n and (1 + √n)/2.* The proved order is the true order.
+   - *Lean.* `inverse_part_unbounded`: for every C there is a family meeting every hypothesis of (d′), with m = 1 and M = 2, whose inverse part exceeds C.
+     - It goes through a dual bound, |yⱼ| ≤ ‖E⁻¹‖₁·maxₖ|(Ey)ₖ| (`abs_le_norm1_inv_mul`), which lower-bounds ‖E⁻¹‖₁ without computing the inverse.
+     - The instance is rational: v = (3/5, 4/(5r), …, 4/(5r)) on r² + 1 coordinates and c = (2, 1). It has ‖E(c)⁻¹‖₁ ≥ 6r/25 (`norm1_inv_spike`).
+   - *The whole chain.* A fixed dense q-block beside the family gives R/q growing like 0.035·√n: 0.25, 0.42 and 0.80 at n = 32, 128 and 512, with q = n/2. So no C·q bound holds for every family either, though R stays far below q·(1 + √n)/2.
+   - *Why the searches missed it.* The family sits where A(c′) is diagonal and the change is rank one along a spiked v.
+   - *Banded patterns too.* A local search over banded two-term families read T between 1.01 and 1.54 for q = 3 and 5 up to n = 64. A construction shows the same growth at q = 3:
+     - S₁ = L, a path-graph Laplacian with heavy edges at one node, and S₂ = 2·diag(L) − L, its signless Laplacian. Both are tridiagonal and positive semidefinite.
+     - Then A(c′) = 2·diag(L) and E(c′) = I, while E(c) = (1 − δ)·Ľ + δ·I. Here Ľ is the normalized Laplacian, whose null vector is spiked over the node and its two neighbours.
+     - With M/m = 10¹², T reads 0.99, 1.70, 3.12 and 5.95 at n = 16, 64, 256 and 1024, about 0.19·√n.
+     - At n = 256 it reads 0.90, 2.07 and 3.09 at M/m = 10², 10⁴ and 10⁶. The growth needs M/m large against the path's spectral gap, about n².
+     - So √n cannot leave S on a pattern argument alone, even at q = 3. In practice M/m against the pattern's spectral gap limits it.
 
 
 **Symbols.** n the order. Sₖ are n × n real symmetric positive semidefinite, for k in a nonempty finite index set. c and c′ are coefficient vectors with every entry positive, c′ the reference point (c_ref in the defects brief), and A(c) = Σₖ cₖSₖ. ρₖ = cₖ / c′ₖ, m = minₖ ρₖ and M = maxₖ ρₖ. λ_min and λ_max are the extreme eigenvalues of a symmetric matrix, and κ₂ = λ_max / λ_min where it is positive definite. ‖A‖₁ is the largest column absolute sum, and κ₁(A) = ‖A‖₁‖A⁻¹‖₁. E(c) = D^{-1/2}A(c)D^{-1/2} with D = diag A(c), the unit-diagonal scaling. q bounds the nonzeros in any row (equally, any column) of every A(c).
@@ -171,7 +186,8 @@ Restated on 2026-11-14 (`90fa6ce`) from the defects chip's chain; finding 1 says
 - *Proof of (d′).* As (d), with (c2′) for P = E(c)⁻¹ and μ = 1/λ_min(E(c)) (`form_inv_le`) in place of (c2).
 - *Checks:* 400 random PSD matrices, none above the constant. The rank-one witnesses at n = 4, 9, 16 and 25 are exact. The unit-diagonal Gram construction reads (1 + √n)/2 to five places at n = 4, 9, 16, 25 and 49. On 120 banded families, κ₁(E(c)) reached at most 0.240 of (d′)'s bound.
 - *Lean:* `norm1_le_half_one_add_sqrt`, `form_inv_le`, `norm1_columnWitness` and `cond1_unitScale_le_sharp`. `cond1_unitScale_le` is now its corollary, with its statement unchanged.
-- *Decision:* the proved part of S becomes q·(1 + √n) with the defects chip's factor 2 for rounding, in place of 2·q·√n. Finding 5 says what a further gain would need.
+- *Decision:* the proved part of S becomes q·(1 + √n) with the defects chip's factor 2 for rounding, in place of 2·q·√n.
+- *The disproof* (finding 6): no constant bounds the inverse part over every family, so the order of (d′) cannot be improved without a further hypothesis. `abs_le_norm1_inv_mul`, `unitScale_mulVec`, `spikeVec`, `spikeFamily`, `spikeVec_dot`, `spikeFamily_posSemidef`, `comb_spike_one`, `comb_spike_two`, `norm1_inv_spike` and `inverse_part_unbounded` are in the module. A pattern of at most q nonzeros per column is the hypothesis left to try.
 
 **Off the path: Jacobi scaling.** The first statement's route. Recorded here and not queued: no decision rests on it now.
 - *The statement:* for B positive definite with unit diagonal and at most q nonzeros in any row, and F any positive diagonal, κ₂(B) ≤ q·κ₂(FBF).

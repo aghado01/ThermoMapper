@@ -613,6 +613,31 @@ for n in [32, 128, 512]:
 report("PA-7 no C·q bound either (a reading): a fixed dense q-block beside the spike family, R/q grows like √n",
        "; ".join(reads), ok)
 
+# banded too: a tridiagonal family (q = 3) whose T grows like sqrt n once M/m is large against the path's spectral gap
+def tri_T(n, W, Mm):
+    j = n // 2
+    wts = np.ones(n - 1)
+    wts[j - 1] = wts[j] = W
+    L = np.zeros((n, n))
+    for k, w in enumerate(wts):
+        L[k, k] += w; L[k + 1, k + 1] += w; L[k, k + 1] -= w; L[k + 1, k] -= w
+    S1, S2 = L, 2 * np.diag(np.diag(L)) - L  # Laplacian and signless Laplacian: A(c') = 2 diag(L), E(c') = I
+    E, Ep = unit_scale(Mm * S1 + S2), unit_scale(S1 + S2)
+    return norm1(np.linalg.inv(E)) / (Mm * norm1(np.linalg.inv(Ep))), int(((np.abs(S1) + np.abs(S2)) > 0).sum(axis=0).max())  # the union of the patterns
+
+
+reads = []
+ok = True
+prev = 0
+for n in [16, 64, 256, 1024]:
+    T, q = max(tri_T(n, math.exp(lw), 1e12) for lw in np.linspace(0, math.log(4 * n), 40))
+    ok &= q == 3 and T > prev
+    prev = T
+    reads.append(f"n={n}: T {T:.3f}, T/√n {T / math.sqrt(n):.3f}")
+mm = [max(tri_T(256, math.exp(lw), Mm)[0] for lw in np.linspace(0, math.log(1024), 40)) for Mm in (1e2, 1e4, 1e6)]
+report("PA-7 banded too: path Laplacian L with heavy edges at one node, S₂ = 2·diag(L) − L, q = 3, M/m = 10¹²",
+       "; ".join(reads) + f"; at n = 256, M/m = 10², 10⁴, 10⁶: {mm[0]:.2f}, {mm[1]:.2f}, {mm[2]:.2f}", ok)
+
 bad = 0
 for t in range(200):
     n = int(rng.integers(1, 12))

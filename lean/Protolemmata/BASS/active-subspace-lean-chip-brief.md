@@ -123,6 +123,47 @@ Hand-over state between turns is an "In progress" entry here.
 
 ## Reports
 
+### 2026-11-14 — the penalized admission's conjecture tried: false
+
+At the user's request ("Try the conjecture"), after the follow-ups were verified (`6fc199f`). The conjecture was the protolemma's finding 5: the chain's inverse part, T = ‖E(c)⁻¹‖₁ / ((M/m)·‖E(c′)⁻¹‖₁), is bounded by a constant, so κ₁(E(c)) ≤ C·q·(M/m)·‖E(c′)⁻¹‖₁ for every family.
+
+**Landed:** `fc793df` (Lean), and the checks and searches with the write-up. The checks gained four items and pass 27 of 27, and the searches file gained a banded section (`banded`, seed 5).
+
+**What is proved: the conjecture is false.** `inverse_part_unbounded`: for every C, some family meets every hypothesis of `cond1_unitScale_le_sharp`, with m = 1 and M = 2, and has T > C.
+- *The family:* S₁ = I − vvᵀ and S₂ = vvᵀ, with c′ = (1, 1) and c = (2, 1). A(c′) = I, and v = (3/5, 4/(5r), …, 4/(5r)) on r² + 1 coordinates. Then ‖E(c)⁻¹‖₁ ≥ 6r/25 (`norm1_inv_spike`).
+- *The method:* a dual bound, |yⱼ| ≤ ‖E⁻¹‖₁·maxₖ|(Ey)ₖ| (`abs_le_norm1_inv_mul`). Its certificate is y = D^{1/2}w, with Aw supported off the spike, so the proof never computes an inverse.
+- *In closed form* (protolemma finding 6) the family's T tends to 2/9 + (2/(3√3))·√(n − 5/3), about 0.385·√n. So the inverse part's supremum lies between about 0.385·√n and the proved (1 + √n)/2, and the proved order is the true order.
+- *The whole chain:* a fixed dense q-block beside the family gives R/q growing like 0.035·√n (a reading, in the checks). So no C·q bound holds either.
+
+**What changed.** Finding 5's conjecture is withdrawn. The searches had read T ≤ 1.23 because the family sits on a set of measure near zero: A(c′) diagonal and a rank-one change along a spiked v.
+
+**Banded patterns too (checks, a construction).** The dense family has q = n, while BAPS's patterns have q = 7. So the same question was asked of banded patterns, and a tridiagonal family (q = 3) answers it.
+- S₁ = L, a path Laplacian with heavy edges at one node, and S₂ = 2·diag(L) − L, its signless Laplacian. Then A(c′) is diagonal and E(c′) = I.
+- T reads 0.99, 1.70, 3.12 and 5.95 at n = 16, 64, 256 and 1024, about 0.19·√n.
+- The growth needs M/m large against the path's spectral gap, about n². At n = 256, T reads 0.90, 2.07 and 3.09 at M/m = 10², 10⁴ and 10⁶.
+- A local search over banded families had read at most 1.54. That is the dense case's blindness again.
+- So √n stays in S for BAPS's patterns. What a bound free of n would need is a hypothesis on M/m against the pattern's spectral gap.
+
+**Self-review.**
+- *Pass 1, the statement.* `inverse_part_unbounded` asserts the conjecture's negation exactly: positive semidefinite terms, the bracket with m = 1 and M = 2, A(c′) positive definite, and T > C. The instance also meets c > 0.
+- *Pass 2, the proof's repairs.* A `rw` with the identity y = E⁻¹(Ey) rewrote both sides; it now goes through `← hy`. Two orientations of the dot product needed rewriting before `nlinarith`. `PosDef.one` was misnamed. Linters asked for `change` in place of `show` in three places, and one line was over 100 characters.
+
+**Declarations to print axioms for** (8 theorems, 2 definitions): `abs_le_norm1_inv_mul`, `unitScale_mulVec`, `spikeVec_dot`, `spikeFamily_posSemidef`, `comb_spike_one`, `comb_spike_two`, `norm1_inv_spike`, `inverse_part_unbounded`, with the definitions `spikeVec` and `spikeFamily`. Each prints only `propext`, `Classical.choice` and `Quot.sound`.
+
+**The line the defects brief can take** (slice 6):
+> The screen's q·(1 + √n) is the right order: no constant times q bounds κ₁(E(c)) / ((M/m)·‖E(c_ref)⁻¹‖₁) over every family (`inverse_part_unbounded`). A tridiagonal family shows the same √n growth once M/m is large against the pattern's spectral gap, so a banded pattern alone does not remove it. The sweep's slack measures how far BAPS's real families sit from it.
+
+**Gates:**
+- The checks pass 27 of 27.
+- `lake build Enthymemata.PenalizedAdmission`: 2,634 jobs, with no warnings.
+- `scripts/meta-ci.ps1 -NoBuild`: PASS, with `PenalizedAdmission.lean` `PROOF-CLOSED` at 102 declarations.
+- No cache fetch.
+
+**Follow-ups:**
+- *A bound in M/m and the pattern's spectral gap.* The tridiagonal family shows √n only once M/m ≫ n². A bound of the form min(√n, f(M/m, gap)) could shrink S where M/m is moderate. Open, and no decision waits on it until the sweep says the slack matters.
+- *The supremum's constant,* between 0.385 and 0.5 times √n. No decision waits on it. Open.
+- *The promotion review* of `PenalizedAdmission`.
+
 ### 2026-11-14 — the disproof verified from a clean archive, and rebuilt apart (coordinating session)
 
 At the user's request, ahead of the chip's write-up.
