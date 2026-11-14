@@ -3,14 +3,6 @@ using System;
 namespace Maths.LinAlg
 {
     /// <summary>
-    /// Condition estimates through a factor's solves. The equilibrated condition number of a symmetric
-    /// positive-definite A is κ₁(E) = ‖E‖₁·‖E⁻¹‖₁, with E = D^(−½)·A·D^(−½) and D = diag(A): the number that governs
-    /// Cholesky's accuracy (van der Sluis 1969; Demmel 1989). ‖E‖₁ is read from A when it is factored; ‖E⁻¹‖₁ is
-    /// estimated by Higham's (1988) refinement of Hager's (1984) method, as LAPACK's xLACN2 does for xPOCON, in at most
-    /// eleven solves. The estimate is ‖E⁻¹v‖₁/‖v‖₁ for vectors it found, so it is a lower bound on the exact norm; in
-    /// practice it is rarely below a third of it, but nothing guarantees that.
-    /// </summary>
-    /// <summary>
     /// A factor's condition-estimate scratch, kept across its factorizations: the three work vectors and E⁻¹'s apply,
     /// v ← D^(½)·A⁻¹·D^(½)·v, over the factor's solve and its √A_jj array, which each factorization refills in place.
     /// </summary>
@@ -42,6 +34,14 @@ namespace Maths.LinAlg
         public Action<double[]> ApplyInverse { get; }
     }
 
+    /// <summary>
+    /// Condition estimates through a factor's solves. The equilibrated condition number of a symmetric
+    /// positive-definite A is κ₁(E) = ‖E‖₁·‖E⁻¹‖₁, with E = D^(−½)·A·D^(−½) and D = diag(A): the number that governs
+    /// Cholesky's accuracy (van der Sluis 1969; Demmel 1989). ‖E‖₁ is read from A when it is factored; ‖E⁻¹‖₁ is
+    /// estimated by Higham's (1988) refinement of Hager's (1984) method, as LAPACK's xLACN2 does for xPOCON, in at most
+    /// eleven solves. The estimate is ‖E⁻¹v‖₁/‖v‖₁ for vectors it found, so it is a lower bound on the exact norm; in
+    /// practice it is rarely below a third of it, but nothing guarantees that.
+    /// </summary>
     internal static class ConditionEstimate
     {
         private const int MaxIterations = 5;
