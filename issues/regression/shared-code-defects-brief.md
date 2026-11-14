@@ -151,6 +151,10 @@ Newest first. Each gives the commits, the gates' results, defects found, decisio
 - **Read:** the source diff. The default flips on both constructors, the screen's factor is m·(1 + √ν)/2 as `cond1_unitScale_le_sharp` states it, and the fingerprint rule's code is untouched.
 - **Slice 6's sweep, closed.** That sweep covered the 22 projects under folders named `*.Tests`. The five it missed are smoke and analysis programs with no test class, so nothing was skipped.
 - **Not run here:** the whole regression assembly, 3,458 of 3,458 on the chip's own run.
+- **Slice 6's open question, settled since.** Slice 6's report left open whether a smaller factor holds for every family. It does not.
+  - The Lean chip proved that no constant bounds the inverse part over every family (`inverse_part_unbounded`, `fc793df`, verified at `95c3500`), on a dense family.
+  - A tridiagonal family grows like √n as well, once max ρ / min ρ passes the pattern's spectral gap: 0.90, 2.07 and 3.09 at n = 256 for ratios of 10², 10⁴ and 10⁶. That one is numeric, rebuilt by the coordinating session in 50-digit arithmetic.
+  - So the screen's m·(1 + √ν) is the right order, and the gap between the proved factor and the sweep's slack is how far BAPS's own systems sit from the worst case.
 - **Receipts:** `artifacts/verify-defects-s7-1441600/`, with the counters, snapshot, changed files and the sweep tracked in [receipts](receipts/verify-defects-s7-1441600/).
 
 ### 2026-11-14 — Slice 7: "screened" as the samplers' default
