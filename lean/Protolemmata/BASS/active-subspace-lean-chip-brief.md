@@ -85,6 +85,37 @@ Hand-over state between turns is an "In progress" entry here.
 
 ## Reports
 
+### 2026-11-13 — the product step: any product of one-variable laws, and E8's mixed laws
+
+**Landed:** `e79624a`.
+- `ContinuousPoincare`:
+  - new: `HasPoincareOn`, `hasPoincareOn_uniformIcc`, `ae_mem_uniformIcc`, `poincare_prod`, `matrix_poincare_prod`, `ae_mem_box_pi` and `matrix_poincare_prod_box`;
+  - `poincare_pi`, `matrix_poincare_pi`, `ae_mem_box` and `matrix_poincare_box` keep their statements. Each is now a one-call proof of the uniform case.
+- `WeightedPoincare` now imports `ContinuousPoincare`, plus Mathlib's Gaussian and conditional probability. It adds `hasPoincareOn_of_density`, `truncNormal`, `truncNormal_isProbabilityMeasure`, `ae_mem_truncNormal`, `integral_truncNormal`, `hasPoincareOn_truncNormal` and `matrix_poincare_box_mixed`.
+
+**What changed or proved false.** Nothing proved false.
+- *The one-variable inequality is now a predicate on a coordinate's law,* `HasPoincareOn ν a b c`. The product theorems take one per coordinate, each with its own constant. The proof is AS-2(d)(iii)'s, with the predicate where Wirtinger was.
+- *The predicate asks h′ bounded on all of ℝ.* For a law on [a, b] that loses nothing. The box theorems reach it through `clampBox`.
+- *The truncated normal is Mathlib's `gaussianReal μ v` conditioned on [a, b],* so its variance is Mathlib's v : ℝ≥0, which is σ².
+- The lemmas file poses this as AS-2(f).
+
+**Declarations to print axioms for:** all 16 named above, minus the definitions `HasPoincareOn` and `truncNormal`, plus the four that were proved again. Each prints only `propext`, `Classical.choice` and `Quot.sound`.
+
+**The line E8's brief can take,** replacing what the earlier lines say of truncated normals:
+> The matrix check is proved on E8's laws (`matrix_poincare_box_mixed`, `lean/Enthymemata/ActiveSubspace/WeightedPoincare.lean`). Each input is uniform on its range or a normal N(μᵢ, σᵢ²) truncated to it, with Dᵢ = ((bᵢ − aᵢ)/π)² for a uniform input and σᵢ² for a truncated normal. Every hypothesis is asked only on the box. A reading above 1 beyond rounding against that D is a defect by theorem. Against Dᵢ = min(σᵢ², (bᵢ − aᵢ)²/π²) it rests on Payne–Weinberger, which the checks support and the Lean does not prove.
+
+**Gates:**
+- `lean` on `ContinuousPoincare`: clean in 46 s.
+- `lake build Enthymemata.ActiveSubspace`: 3,120 jobs, with no warnings. Mathlib's Gaussian modules were already in the cache.
+- `scripts/meta-ci.ps1 -NoBuild`: PASS, with all seven modules `PROOF-CLOSED`.
+- No cache fetch. D: had 33.5 GB free at the end.
+
+**Follow-ups:**
+- *Payne–Weinberger.* It decides whether E8 keeps min(σ², (b − a)²/π²) by theorem, or σ² alone. Open.
+- *The promotion review* of the seven modules.
+
+**Doc changes owed:** `docs/Maths/Regression/ActiveSubspaces.md` should say the matrix check holds on mixed uniform and truncated-normal inputs.
+
 ### 2026-11-13 — AS-2(e) verified from a clean archive (coordinating session)
 
 - **Commit:** `6d6b446`, through `scripts/verify-lean.ps1` with `-Module Enthymemata.ActiveSubspace` and this folder's checks.

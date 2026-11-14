@@ -2,7 +2,7 @@
 
 These are the statements that E8's readouts ([active-subspace-brief.md](../../../issues/regression/bass/active-subspace-brief.md), slices 5 and 7) and E36's sampler ([bppr-brief.md](../../../issues/regression/bass/bppr-brief.md), decision 5) rest on. They were commissioned on 2026-11-13 by the [chip brief](active-subspace-lean-chip-brief.md); before that the four existed only as names (handoff of 2026-11-10, item 8). The numeric checks are [`active-subspace-checks.py`](active-subspace-checks.py).
 
-**Status (2026-11-13).** All four are proved, with no apologies, in `lean/Enthymemata/ActiveSubspace/`: `ProjectionMean` (AS-1), `MatrixPoincare` (AS-2), `DirectionMoves` (AS-3) and `Refit` (AS-4). The barrel is `Enthymemata/ActiveSubspace.lean` and the namespace `ActiveSubspace`. Each main result prints only `propext`, `Classical.choice` and `Quot.sound`. The checks pass 44 of 44. The extension (below) closed the two hypotheses the first round left: the uniform's one-variable inequality, now proved on the continuous product law (AS-2(d)), and the reversible-jump moves in measure form (AS-3(c)). The truncated normal's constant still rests on the checks. Each target's own status line follows.
+**Status (2026-11-13).** All four are proved, with no apologies, in `lean/Enthymemata/ActiveSubspace/`: `ProjectionMean` (AS-1), `MatrixPoincare` (AS-2), `DirectionMoves` (AS-3) and `Refit` (AS-4). The barrel is `Enthymemata/ActiveSubspace.lean` and the namespace `ActiveSubspace`. Each main result prints only `propext`, `Classical.choice` and `Quot.sound`. The checks pass 44 of 44. The extension (below) closed the two hypotheses the first round left: the uniform's one-variable inequality, now proved on the continuous product law (AS-2(d)), and the reversible-jump moves in measure form (AS-3(c)). The truncated normal's σ² is proved (AS-2(e)), and the matrix check holds on E8's mixed laws (AS-2(f)). The (b − a)²/π² half of the truncated normal's min still rests on the checks. Each target's own status line follows.
 
 **What posing changed** (findings before any Lean):
 1. **AS-1(c): the cross-rank distance is not Ye and Lim's.** ½‖P_s − P‖²_F = |k_s − k|/2 + Σ sin²θᵢ holds (checked to 5·10⁻¹⁵). But Ye and Lim's chordal metric on subspaces of all dimensions is |k − l| + Σ sin²θᵢ, with the rank term at weight 1. That is their Table 3, and their §7 shows it equals the symmetric directional distance. The two agree when the ranks are equal.
@@ -68,7 +68,7 @@ These are the statements that E8's readouts ([active-subspace-brief.md](../../..
 
 ## AS-2 — the matrix Poincaré check
 
-**Status (2026-11-13).** (a), (b), the matrix form and (c)'s algebra are proved in `ActiveSubspace/MatrixPoincare.lean`, no apologies, reusing `efron_stein` (`Enthymemata/BassSensitivity.lean`, SG-1(d)). The one-variable inequality is a hypothesis here, as posed, in its integrated form (corrected after review, below). AS-2(d) in the extension proves it for the uniform and proves the matrix check on the continuous product of uniforms (`matrix_poincare_pi`). AS-2(e) proves the truncated normal's σ² (Bakry–Émery on an interval). Checks AS-2a to AS-2e pass.
+**Status (2026-11-13).** (a), (b), the matrix form and (c)'s algebra are proved in `ActiveSubspace/MatrixPoincare.lean`, no apologies, reusing `efron_stein` (`Enthymemata/BassSensitivity.lean`, SG-1(d)). The one-variable inequality is a hypothesis here, as posed, in its integrated form (corrected after review, below). AS-2(d) in the extension proves it for the uniform and proves the matrix check on the continuous product of uniforms (`matrix_poincare_pi`). AS-2(e) proves the truncated normal's σ² (Bakry–Émery on an interval). AS-2(f) proves the matrix check on any product of such laws, E8's mixed laws included. Checks AS-2a to AS-2e pass.
 
 **Claims.** ρ is a product law on the inputs, f has m outputs, and D = diag(c₁, …, c_p).
 - **(a) The reduction.** Cov_ρ(f) ≼ E_ρ[J D Jᵀ] holds exactly when Var(vᵀf) ≤ Σᵢ cᵢ E[(∂ᵢ vᵀf)²] for every v ∈ ℝᵐ. This holds because vᵀCov(f)v = Var(vᵀf) and vᵀE[JDJᵀ]v = Σᵢ cᵢ E[(Σ_j v_j J_ji)²], and ∂ᵢ(vᵀf) = Σ_j v_j J_ji.
@@ -315,3 +315,28 @@ Together, ∫ g²e^{−V} ≤ ∫ h′²e^{−V}/V″ ≤ κ⁻¹ ∫ h′²e^{�
 **Lean (proved,** `WeightedPoincare`**).** `poincare_weighted` is (i) and `poincare_truncNormal` is (ii). Both derivative identities go through `integral_eq_of_hasDerivAt_off_countable_of_le`, as AS-2(d)(i)'s step by parts did.
 
 **Prior art.** Bakry and Émery (1985), from memory. The route through W and Ψ was derived here, with no source read.
+
+### AS-2(f) — the matrix check on any product of one-variable laws
+
+**Claims.**
+- **(i) The predicate.** `HasPoincareOn ν a b c`: every h continuous on [a, b], with a bounded measurable derivative off a countable set, has Var_ν h ≤ c E_ν[h′²].
+  - The uniform law on [a, b] has c = ((b − a)/π)², by AS-2(d)(i).
+  - The normal N(μ, v) truncated to [a, b] has c = v, by AS-2(e).
+- **(ii) The product step.** Under ∏ᵢ νᵢ, with each νᵢ meeting the predicate with its own cᵢ on [aᵢ, bᵢ]: Var F ≤ Σᵢ cᵢ E[Dᵢ²], and Cov(f) ≼ E[J diag(c) Jᵀ]. On the box, every hypothesis is asked only there, when each νᵢ lives on [aᵢ, bᵢ]. The proof is AS-2(d)(iii)'s, with the predicate where Wirtinger was. Nothing else in that proof named the uniform law.
+- **(iii) E8's laws.** Each input is uniform on its range, or a normal truncated to it. Then Dᵢ = ((bᵢ − aᵢ)/π)² for a uniform input and Dᵢ = σᵢ² for a truncated normal.
+
+**Hypotheses, and what each does.**
+- *The predicate asks h′ bounded on all of ℝ.* For a law on [a, b] that loses nothing, since h′ may be redefined off [a, b]. The box theorems reach it through `clampBox`.
+- *The truncated normal is Mathlib's `gaussianReal μ v` conditioned on [a, b],* so its variance parameter is Mathlib's v : ℝ≥0, which is σ².
+
+**Lean (proved).**
+- `ContinuousPoincare`:
+  - `HasPoincareOn`, `hasPoincareOn_uniformIcc` and `ae_mem_uniformIcc`;
+  - `poincare_prod`, `matrix_poincare_prod`, `ae_mem_box_pi` and `matrix_poincare_prod_box`.
+  - `poincare_pi`, `matrix_poincare_pi`, `ae_mem_box` and `matrix_poincare_box` keep their statements. They are now the uniform case.
+- `WeightedPoincare`:
+  - `hasPoincareOn_of_density`, for ν with ∫ φ dν = C ∫ₐᵇ φ e^{−V};
+  - `truncNormal`, with `truncNormal_isProbabilityMeasure`, `ae_mem_truncNormal`, `integral_truncNormal` and `hasPoincareOn_truncNormal`;
+  - `matrix_poincare_box_mixed`, which is (iii).
+
+**What stays open.** E8 takes Dᵢ = min(σᵢ², (bᵢ − aᵢ)²/π²) for a truncated normal. The σᵢ² half is proved here. The (bᵢ − aᵢ)²/π² half is Payne–Weinberger for a log-concave law on an interval, which the checks support (AS-2e) and the Lean does not prove.
