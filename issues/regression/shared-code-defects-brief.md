@@ -72,13 +72,14 @@ The user chose on 2026-11-13: the review's recommendations (`discussion/astra-sh
 - `43bd61f` feat(linalg): PivotedCholesky, the semidefinite factor BGP's drawn function reads.
 - `ff5d635` refactor(gmm, viz): a Gaussian's covariance factor is DenseCholesky.
 - `e6dc220` chore(linalg): retire CholeskyDecomposition and BGP's own pivoted routine.
+- `78603a2` fix(viz): a singular block's ε is relative below unit scale too (after the coordinating session's review).
 
 **1. The floor dropped (`f448931`).**
 - *The class is strict.* The first pivot that is not finite and positive stops it, at the row `DenseCholesky` stops at, and an L⁻¹ past `double.MaxValue` fails it. On every input of a ladder the two agree on the failure row, `Status`, factor and `LogDet`. The ladder: 60 SPD matrices at scales 2⁻⁸⁰ to 2³⁹, 16 squared-exponential kernels, 10⁻¹³·I, and indefinite and non-finite inputs. 10⁻¹³·I now factors exactly, where the floor read every variance ten times too large.
 - *The earlier class, kept verbatim and pinned*, reads bit for bit on 60 inputs the floor never reached.
 - *The callers.*
   - GMM's `UpdateCache` and the Bhattacharyya distance refuse a covariance that is not positive definite. A warm start with a singular covariance is refused, an acceptance case.
-  - The scene export draws a singular block as a thin ellipsoid. It adds the ε the missing display dimensions take, relative to its largest variance, and refuses only a block that is still indefinite. The viewer loads all nine entries as a general 3×3 map (`viewer.html`, `buildGaussianGroup`), so a rank-deficient factor would make its normal matrix singular, and the ε keeps it invertible.
+  - The scene export draws a singular block as a thin ellipsoid. It adds ε = 10⁻⁸ of its largest variance, and refuses only a block that is still indefinite. The viewer loads all nine entries as a general 3×3 map (`viewer.html`, `buildGaussianGroup`), so a rank-deficient factor would make its normal matrix singular, and the ε keeps it invertible.
   - Rank one at 10²⁰⁰, which overflowed the floored factor, now exports a finite needle. `[[1, 2, 0], [2, 1, 0], [0, 0, 1]]` is refused, naming its layer and component.
 
 **2. The pivoted factor promoted (`43bd61f`).**
@@ -89,6 +90,7 @@ The user chose on 2026-11-13: the review's recommendations (`discussion/astra-sh
   - The rank still stops at 10⁻¹².
   - Indefiniteness is judged at its own tolerance, √ε (1.5·10⁻⁸) by default, far below the refused cases.
   - A remainder `[[0, δ], [δ, 0]]` at δ = 5·10⁻¹¹ is kept at the default and refused at 10⁻¹².
+- *The cost.* The factor costs O(p·k²) at rank k, and the remainder's check O((p − k)²·k), which is above the factor when p is far above k. For BGP both cost less than forming the covariance. The class's doc says so (`78603a2`).
 - *The solve waits*, as the review asked. On a singular matrix it must refuse or project a right-hand side outside L's range, and BGP's sampling needs neither.
 
 **3. The callers moved to `DenseCholesky` (`ff5d635`).**
@@ -116,7 +118,10 @@ The user chose on 2026-11-13: the review's recommendations (`discussion/astra-sh
 - Receipts are in `artifacts/shared-code-defects/receipts/` (`slice4-*`).
 
 **Defects found.**
-- None in the slice's code.
+- *One in the slice's code, found in the coordinating session's review and fixed in `78603a2`.* The export's ε started its largest variance at 1, so below unit scale it was absolute: a singular block with variances near 10⁻⁸ drew as thick as it was long.
+  - It is now 10⁻⁸ of the block's largest variance at every scale, which is what the display needs: a flat ellipsoid stays flat.
+  - An all-zero block keeps the missing dimensions' absolute 10⁻⁸, a sphere of radius 10⁻⁴.
+  - Gates: VizCore 7 of 7 and linear algebra 14 of 14 by selection with the pinned tier.
 - My own first remainder bound refused BGP's covariances, as above. One test used an assertion precision the analyzer refuses, and another rested on noise that could move the rank; both were rewritten before any run counted.
 - *Finding: the transport oracle no longer fits its timeout.* `DiagramMetricsTransportParityTests` (both p) times out in `transport_oracle.R` at 120 s, even run alone. It has nothing to do with this slice, and is for the TDA owner: either the timeout or the fixture's size (s = 100 slices).
 - *Finding: `BandCholesky`'s default floor is the same rule.* It "mirrored" the retired one: an absolute 10⁻¹², on by default, with strict mode a choice. By the same arithmetic it can introduce order-one error at small scale; this slice did not measure it.
@@ -129,7 +134,7 @@ The user chose on 2026-11-13: the review's recommendations (`discussion/astra-sh
 - *`docs/Maths/LinearAlgebra.md`:*
   - "Dense Cholesky (`CholeskyDecomposition`)" (line 193) and its rows in the API list (line 95), the module table (line 12), the diagram (line 33), the allocation note (line 73) and the storage table (line 81): retired.
   - `DenseCholesky` gains `TryWriteInverseTo` and `AddSample`, and serves the Gaussians.
-  - A section for `PivotedCholesky`: its contract, the two tolerances, the remainder rule, and the measurements above.
+  - A section for `PivotedCholesky`: its contract, the two tolerances, the remainder rule, its cost (the check's O((p − k)²·k) above the factor's O(p·k²) when p is far above k), and the measurements above.
   - `BandCholesky`'s floor no longer mirrors anything.
 - *`docs/Clustering/GaussianMixtures.md`:*
   - line 11: `DenseCholesky`;
