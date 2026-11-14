@@ -222,6 +222,124 @@ public sealed class ScoreMixtureTests(ITestOutputHelper output)
     }
 
     [Fact]
+    public void UnequalSplits_TheRuleReadsTheCalibrationSize()
+    {
+        // Slice 15's finding: fitted on 1,000 and calibrated on 399, the training's own reading chose m near its ceiling and gave a share of the
+        // sets the whole space where the clusters meet. The rule at the calibration's size takes a smaller m. Both m's on the same 2,000
+        // replications of 399 calibration units and a test case.
+        const int n = 399, replications = 2000;
+        const double alpha = 0.1;
+        var rng = new Xoshiro256PlusPlus(2026_1137);
+        (double[] tx, _, double[] ts) = Draw(1000, rng);
+        ScoreMixture fit = ScoreMixture.Fit(Features(tx), ts, new ScoreMixtureOptions { Seed = 5 });
+        PrecisionChoice atCalibration = fit.PrecisionAt(n);
+        int[] precisions = [fit.Precision, atCalibration.Precision];
+        var covered = new int[2, 2];
+        var whole = new int[2];
+        var widths = new double[2];
+        var tests = new int[2];
+        for (int r = 0; r < replications; r++)
+        {
+            (double[] x, double[] y, _) = Draw(n, rng);
+            double xt = rng.NextDouble(), yt = Curve(xt) + (rng.NextDouble() < Membership(xt) ? 0.2 : 1.0) * Gaussian(rng);
+            int region = Membership(xt) >= 0.5 ? 0 : 1;
+            tests[region]++;
+            var centre = new ResidualReadings([.. x.Select(Curve)]);
+            var at = new ResidualReadings([Curve(xt)]);
+            double[,] units = fit.Memberships(Features(x)), cases = fit.Memberships(Features([xt]));
+            for (int f = 0; f < 2; f++)
+            {
+                ShiftWeights weights = PosteriorConformal.Weights(units, cases, precisions[f], seed: r).Weights;
+                ConformalInterval read = SplitConformal.Residuals(centre, y, at, alpha, weights).Intervals[0];
+                if (read.Contains(yt)) covered[f, region]++;
+                if (read.WholeSpace) whole[f]++; else widths[f] += read.Width;
+            }
+        }
+        double nominal = 1 - alpha, se = Math.Sqrt(alpha * nominal / replications);
+        string[] rules = ["the training's own reading", "the calibration's size"];
+        for (int f = 0; f < 2; f++)
+            output.WriteLine($"{rules[f]}: m {precisions[f]}; marginal {(covered[f, 0] + covered[f, 1]) / (double)replications:F4}, cluster 1 "
+                             + $"{covered[f, 0] / (double)tests[0]:F4}, cluster 2 {covered[f, 1] / (double)tests[1]:F4}; whole space {whole[f] / (double)replications:P1}; "
+                             + $"mean finite width {widths[f] / (replications - whole[f]):F3}");
+        output.WriteLine($"at {n} units: mean ESS {atCalibration.MeanEffectiveSampleSize:F1}, mean self-weight {atCalibration.MeanSelfWeight:F4}, rule met {atCalibration.RuleMet}; "
+                         + $"the training's: {fit.MeanEffectiveSampleSize:F1} and {fit.MeanSelfWeight:F4}; se {se:F4}");
+        Assert.True(atCalibration.Precision < fit.Precision);
+        Assert.True(atCalibration.RuleMet);
+        Assert.True(whole[1] < whole[0], "the calibration's size should leave fewer whole-space sets");
+        Assert.True(whole[1] <= 0.01 * replications, $"whole space {whole[1]} of {replications}");
+        double marginal = (covered[1, 0] + covered[1, 1]) / (double)replications;
+        Assert.True(marginal >= nominal - 3.5 * se, $"marginal {marginal:F4}");
+        foreach (int region in new[] { 0, 1 })
+            Assert.True(covered[1, region] / (double)tests[region] >= nominal - 3.5 * Math.Sqrt(alpha * nominal / tests[region]), $"cluster {region + 1}");
+    }
+
+    [Fact]
+    public void TheRescaledReading_MatchesPoolsOfTheCalibrationsSize_AndEqualSplitsReadAsBefore()
+    {
+        var rng = new Xoshiro256PlusPlus(2026_1138);
+        (double[] tx, _, double[] ts) = Draw(1000, rng);
+        ScoreMixture fit = ScoreMixture.Fit(Features(tx), ts, new ScoreMixtureOptions { Seed = 5 });
+        double[,] pi = fit.Memberships(Features(tx));
+        double[][] rows = [.. Enumerable.Range(0, tx.Length).Select(i => Enumerable.Range(0, fit.Clusters).Select(k => pi[i, k]).ToArray())];
+
+        // The rescaled sums against pools of 399 others drawn at random, each point weighed as the reading weighs it. The rescaling reads the
+        // expected sums, and a point's self-weight is convex in its others' sum, so it reads the self-weight a little low where the weights
+        // concentrate: closely at the m the rule takes, within 5% at the ceiling.
+        foreach ((int m, double tolerance) in new[] { (fit.PrecisionAt(399).Precision, 0.01), (fit.Precision, 0.05) })
+        {
+            (double ess, double self) = ScoreMixture.Reading(rows, m, 5, 399.0 / 999.0);
+            var pick = new Xoshiro256PlusPlus(11);
+            double poolEss = 0.0, poolSelf = 0.0;
+            for (int i = 0; i < rows.Length; i++)
+            {
+                int[] draw = PosteriorConformal.Draw(rows[i], m, PosteriorConformal.Stream(5, i));
+                int[] others = [.. Enumerable.Range(0, rows.Length).Where(j => j != i)];
+                for (int a = 0; a < 399; a++)
+                {
+                    int b = a + pick.NextInt(others.Length - a);
+                    (others[a], others[b]) = (others[b], others[a]);
+                }
+                double LogWeight(int j) => Enumerable.Range(0, fit.Clusters).Where(c => draw[c] > 0).Sum(c => draw[c] * Math.Log(rows[j][c]));
+                double[] logs = [LogWeight(i), .. others.Take(399).Select(LogWeight)];
+                double top = logs.Max();
+                double[] w = [.. logs.Select(l => Math.Exp(l - top))];
+                poolEss += w.Sum() * w.Sum() / w.Sum(v => v * v);
+                poolSelf += w[0] / w.Sum();
+            }
+            poolEss /= rows.Length;
+            poolSelf /= rows.Length;
+            output.WriteLine($"m {m}: rescaled ESS {ess:F2} and self-weight {self:F5}; pools of 399 drawn: {poolEss:F2} and {poolSelf:F5}");
+            Assert.True(Math.Abs(ess / poolEss - 1.0) < tolerance, $"ESS {ess:F2} against {poolEss:F2}");
+            Assert.True(Math.Abs(self / poolSelf - 1.0) < tolerance, $"self-weight {self:F5} against {poolSelf:F5}");
+            Assert.True(self <= poolSelf, "the rescaled self-weight should read low, by convexity");
+        }
+
+        // Equal splits, n − 1 calibration units, read as before, bit for bit; a smaller split takes a smaller m.
+        PrecisionChoice own = fit.PrecisionAt(999);
+        Assert.Equal((fit.Precision, fit.MeanEffectiveSampleSize, fit.MeanSelfWeight, fit.PrecisionRuleMet), (own.Precision, own.MeanEffectiveSampleSize, own.MeanSelfWeight, own.RuleMet));
+        (double[] cx, _, _) = Draw(999, rng);
+        PosteriorWeights viaFit = fit.Weights(Features(cx), Features([0.3, 0.7]), seed: 2);
+        PosteriorWeights direct = PosteriorConformal.Weights(fit.Memberships(Features(cx)), fit.Memberships(Features([0.3, 0.7])), fit.Precision, seed: 2);
+        Assert.Equal(direct.SelfWeights, viaFit.SelfWeights);
+        Assert.Equal(direct.EffectiveSampleSizes, viaFit.EffectiveSampleSizes);
+        PosteriorWeights smaller = fit.Weights(Features(cx[..199]), Features([0.3, 0.7]), seed: 2);
+        PosteriorWeights smallerDirect = PosteriorConformal.Weights(fit.Memberships(Features(cx[..199])), fit.Memberships(Features([0.3, 0.7])),
+                                                                    fit.PrecisionAt(199).Precision, seed: 2);
+        Assert.Equal(smallerDirect.SelfWeights, smaller.SelfWeights);
+        Assert.True(fit.PrecisionAt(199).Precision <= fit.PrecisionAt(399).Precision);
+        Assert.True(fit.PrecisionAt(399).Precision <= fit.Precision);
+        Assert.Same(fit.PrecisionAt(399), fit.PrecisionAt(399));
+        Assert.Throws<ArgumentOutOfRangeException>(() => fit.PrecisionAt(0));
+
+        // A fixed m stands at every size, its readings and the rule's verdict read there.
+        ScoreMixture fixedFit = ScoreMixture.Fit(Features(tx), ts, new ScoreMixtureOptions { Seed = 5, Clusters = 2, Precision = 400 });
+        PrecisionChoice fixedSmall = fixedFit.PrecisionAt(99);
+        Assert.Equal(400, fixedSmall.Precision);
+        Assert.False(fixedSmall.RuleMet);
+        Assert.True(fixedSmall.MeanSelfWeight > fixedFit.MeanSelfWeight);
+    }
+
+    [Fact]
     public void WhatTheMixtureDoesNotServe_IsRefused()
     {
         var rng = new Xoshiro256PlusPlus(17);

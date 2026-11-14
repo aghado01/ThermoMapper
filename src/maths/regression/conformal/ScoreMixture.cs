@@ -22,8 +22,9 @@ public sealed record ScoreMixtureOptions
     public int MaxClusters { get; init; } = 10;
 
     /// <summary>m fixed; null chooses it by their rule: the largest m in [<see cref="MinPrecision"/>, <see cref="MaxPrecision"/>], found by
-    /// bisection, at which the training split's randomized weights have mean effective sample size above
-    /// <see cref="TargetEffectiveSampleSize"/> and mean self-weight at most <see cref="MaxSelfWeight"/>.</summary>
+    /// bisection, at which the randomized weights have mean effective sample size above <see cref="TargetEffectiveSampleSize"/> and mean
+    /// self-weight at most <see cref="MaxSelfWeight"/>, read on the training split at the calibration split's size
+    /// (<see cref="ScoreMixture.PrecisionAt"/>).</summary>
     public int? Precision { get; init; }
 
     /// <summary>The least m the rule considers.</summary>
@@ -32,12 +33,12 @@ public sealed record ScoreMixtureOptions
     /// <summary>The largest m the rule considers.</summary>
     public int MaxPrecision { get; init; } = 500;
 
-    /// <summary>The mean effective sample size the rule's m must exceed, read on the training split: where the calibration split is smaller,
-    /// the calibration's effective sample size is smaller in proportion, so scale the target by the training split's size over the
-    /// calibration's (their training and calibration splits are the same size).</summary>
+    /// <summary>The mean effective sample size the rule's m must exceed at the calibration split's size: the training split's reading,
+    /// its sums rescaled to the calibration's count (<see cref="ScoreMixture.PrecisionAt"/>; their splits are the same size).</summary>
     public double TargetEffectiveSampleSize { get; init; } = 100.0;
 
-    /// <summary>The mean self-weight the rule's m must not exceed.</summary>
+    /// <summary>The mean self-weight the rule's m must not exceed at the calibration split's size. A test case whose own weight passes α
+    /// gets the whole space, and the self-weight grows as the calibration split shrinks.</summary>
     public double MaxSelfWeight { get; init; } = 1.0 / 30.0;
 
     /// <summary>The logistic fits' ridge per pooled point on the standardized features (<see cref="DensityRatio.Logistic(double[,], double[,], double, int, double)"/>).</summary>
@@ -49,6 +50,16 @@ public sealed record ScoreMixtureOptions
     /// <summary>The seed of the k-means++ starts and of the precision rule's draws.</summary>
     public int Seed { get; init; }
 }
+
+/// <summary>The precision m for a calibration split's size (<see cref="ScoreMixture.PrecisionAt"/>), with the training split's readings at that
+/// size.</summary>
+/// <param name="Precision">m.</param>
+/// <param name="CalibrationUnits">The calibration split's size it was read at.</param>
+/// <param name="MeanEffectiveSampleSize">The mean effective sample size at m.</param>
+/// <param name="MeanSelfWeight">The mean self-weight at m.</param>
+/// <param name="RuleMet">Whether m meets the rule's two conditions; false where even the least m does not, which then is m, or where a
+/// fixed m does not.</param>
+public sealed record PrecisionChoice(int Precision, int CalibrationUnits, double MeanEffectiveSampleSize, double MeanSelfWeight, bool RuleMet);
 
 /// <summary>What a fit cost (<see cref="ScoreMixture.Cost"/>): seconds by phase, the factorization's alternating passes, and the simplex
 /// step's solves, active-set iterations and solves stopped at the iteration cap.</summary>
@@ -76,7 +87,14 @@ internal sealed class ScoreMixtureCost
 /// k-means++ centres, then alternating least squares for γ given π with the exact simplex-constrained least squares for each πᵢ given γ
 /// (an active-set solve, where they take mirror-descent steps). γ_k estimates cluster k's distribution function at the levels.</item>
 /// <item><b>Hyperparameters</b> (their §6.1). J grows until R² gains less than 0.05; m is the largest in [5, 500] whose randomized weights over
-/// the training split, each point weighed against all of them, have mean effective sample size above 100 and mean self-weight at most 1/30.</item>
+/// the training split, each point weighed against all of them, have mean effective sample size above 100 and mean self-weight at most 1/30.
+/// Their splits are the same size; here the rule reads at the calibration split's size (<see cref="PrecisionAt"/>), each training point's
+/// sums over the others rescaled to the calibration's count, so a smaller calibration split takes a smaller m. Fitted at 1,000 and
+/// calibrated at 399, the training's own reading chose m of 294 to 500 and gave 7% of the sets the whole space (slice 15's finding); on
+/// the fixture's 2,000 replications it took m 500 and 13.4%, the calibration's size m 45 and none, each cluster near nominal. The
+/// rescaling reads expected sums, so it reads a point's self-weight slightly low where the weights concentrate (2.9% at m 500, 0.5% at
+/// the m it took, against pools of 399 drawn). The choice reads the count and the training split alone, so the weights stay a fixed
+/// function of the inputs.</item>
 /// </list>
 /// The memberships at new inputs (<see cref="Memberships"/>) are the same projection: τ at the inputs, then the simplex-constrained least
 /// squares against the fitted γ. Fitted on a training split apart from the calibration units and the test cases, π̂ is a fixed function of
@@ -91,6 +109,9 @@ public sealed class ScoreMixture
     private readonly double[,] _profiles;  // γ, J × s
     private readonly double[,] _gram;      // γγᵀ with its ridge, J × J
     private readonly int _width;
+    private double[][] _memberships = [];  // π̂ at the training split, which the precision rule reads
+    private ScoreMixtureOptions _rule = new();
+    private readonly Dictionary<int, PrecisionChoice> _choices = new();
 
     private ScoreMixture(DensityRatio[] fits, double[] prior, double[] levels, double[,] profiles, int width, double[] rSquared)
     {
@@ -115,7 +136,8 @@ public sealed class ScoreMixture
     /// <summary>The factorization's R² on the training split at J = 1, 2, … as far as the rule went (only the fixed J's where J is fixed).</summary>
     public IReadOnlyList<double> RSquared { get; }
 
-    /// <summary>m, fixed or chosen by the rule.</summary>
+    /// <summary>m, fixed or chosen by the rule at the training split's own size, a calibration split of n − 1 units; <see cref="Weights"/>
+    /// takes the choice at its units' count (<see cref="PrecisionAt"/>).</summary>
     public int Precision { get; private set; }
 
     /// <summary>The training split's mean effective sample size at <see cref="Precision"/>.</summary>
@@ -126,6 +148,26 @@ public sealed class ScoreMixture
 
     /// <summary>Whether <see cref="Precision"/> meets the rule's two conditions; false where even the least m does not, which then is m.</summary>
     public bool PrecisionRuleMet { get; private set; }
+
+    /// <summary>
+    /// m for a calibration split of <paramref name="calibrationUnits"/> units: the fixed m, or the rule's choice with the training split's
+    /// readings at that size. Each training point stands as the test case against the n − 1 others, as a test case stands against the
+    /// calibration's units, and its weights' sums over the others are rescaled by <paramref name="calibrationUnits"/>/(n − 1), their
+    /// expected sums over that many units alike. At n − 1 units it is <see cref="Precision"/> and its readings, bit for bit.
+    /// </summary>
+    public PrecisionChoice PrecisionAt(int calibrationUnits)
+    {
+        ArgumentOutOfRangeException.ThrowIfLessThan(calibrationUnits, 1);
+        int others = _memberships.Length - 1;
+        if (calibrationUnits == others)
+            return new PrecisionChoice(Precision, calibrationUnits, MeanEffectiveSampleSize, MeanSelfWeight, PrecisionRuleMet);
+        lock (_choices)
+        {
+            if (!_choices.TryGetValue(calibrationUnits, out PrecisionChoice? choice))
+                _choices.Add(calibrationUnits, choice = Choose(_memberships, _rule, calibrationUnits, calibrationUnits / (double)others));
+            return choice;
+        }
+    }
 
     /// <summary>What the fit cost.</summary>
     internal ScoreMixtureCost Cost { get; private set; } = new();
@@ -221,35 +263,41 @@ public sealed class ScoreMixture
         clock.Restart();
         var mixture = new ScoreMixture(fits, prior, [.. levels], chosen, p, [.. rSquared]) { Cost = cost };
         double[][] memberships = mixture.Rows(features);
-        if (o.Precision is int m)
-        {
-            mixture.Precision = m;
-            (mixture.MeanEffectiveSampleSize, mixture.MeanSelfWeight) = Reading(memberships, m, o.Seed);
-            mixture.PrecisionRuleMet = mixture.MeanEffectiveSampleSize > o.TargetEffectiveSampleSize && mixture.MeanSelfWeight <= o.MaxSelfWeight;
-        }
-        else
-        {
-            var readings = new Dictionary<int, (double Ess, double Self)>();
-            bool Meets(int precision)
-            {
-                if (!readings.TryGetValue(precision, out var r)) readings[precision] = r = Reading(memberships, precision, o.Seed);
-                return r.Ess > o.TargetEffectiveSampleSize && r.Self <= o.MaxSelfWeight;
-            }
-            int lo = o.MinPrecision, hi = o.MaxPrecision;
-            bool met = Meets(lo);
-            if (met && Meets(hi)) lo = hi;
-            else if (met)
-                while (hi - lo > 1)
-                {
-                    int mid = lo + (hi - lo) / 2;
-                    if (Meets(mid)) lo = mid; else hi = mid;
-                }
-            mixture.Precision = lo;
-            mixture.PrecisionRuleMet = met;
-            (mixture.MeanEffectiveSampleSize, mixture.MeanSelfWeight) = readings[lo];
-        }
+        PrecisionChoice own = Choose(memberships, o, n - 1, 1.0);
+        mixture.Precision = own.Precision;
+        mixture.MeanEffectiveSampleSize = own.MeanEffectiveSampleSize;
+        mixture.MeanSelfWeight = own.MeanSelfWeight;
+        mixture.PrecisionRuleMet = own.RuleMet;
+        mixture._memberships = memberships;
+        mixture._rule = o;
         cost.PrecisionSeconds = clock.Elapsed.TotalSeconds;
         return mixture;
+    }
+
+    // The rule at a calibration split of `units` units, the training readings' sums over the others rescaled by `scale`.
+    private static PrecisionChoice Choose(double[][] memberships, ScoreMixtureOptions o, int units, double scale)
+    {
+        if (o.Precision is int m)
+        {
+            (double ess, double self) = Reading(memberships, m, o.Seed, scale);
+            return new PrecisionChoice(m, units, ess, self, ess > o.TargetEffectiveSampleSize && self <= o.MaxSelfWeight);
+        }
+        var readings = new Dictionary<int, (double Ess, double Self)>();
+        bool Meets(int precision)
+        {
+            if (!readings.TryGetValue(precision, out var r)) readings[precision] = r = Reading(memberships, precision, o.Seed, scale);
+            return r.Ess > o.TargetEffectiveSampleSize && r.Self <= o.MaxSelfWeight;
+        }
+        int lo = o.MinPrecision, hi = o.MaxPrecision;
+        bool met = Meets(lo);
+        if (met && Meets(hi)) lo = hi;
+        else if (met)
+            while (hi - lo > 1)
+            {
+                int mid = lo + (hi - lo) / 2;
+                if (Meets(mid)) lo = mid; else hi = mid;
+            }
+        return new PrecisionChoice(lo, units, readings[lo].Ess, readings[lo].Self, met);
     }
 
     /// <summary>π at each row of <paramref name="features"/>: τ at the row, projected onto the simplex against γ. A row per input, a column
@@ -263,8 +311,9 @@ public sealed class ScoreMixture
         return result;
     }
 
-    /// <summary>Posterior conformal prediction's weights (<see cref="PosteriorConformal.Weights"/>) at precision <see cref="Precision"/>, from
-    /// the memberships at the calibration units' features <paramref name="units"/> and the test cases' <paramref name="cases"/>.</summary>
+    /// <summary>Posterior conformal prediction's weights (<see cref="PosteriorConformal.Weights"/>) at the precision for as many units as
+    /// <paramref name="units"/> holds (<see cref="PrecisionAt"/>), from the memberships at the calibration units' features
+    /// <paramref name="units"/> and the test cases' <paramref name="cases"/>.</summary>
     /// <param name="units">The calibration (or training) units' features, a row each.</param>
     /// <param name="cases">The test cases' features, a row each.</param>
     /// <param name="seed">The draws' seed under the randomized weights.</param>
@@ -272,7 +321,8 @@ public sealed class ScoreMixture
     /// <param name="weighting">The randomized weights, the default, or the KL weights.</param>
     public PosteriorWeights Weights(double[,] units, double[,] cases, int seed = 0, IReadOnlyList<double[]>? grids = null,
                                     PosteriorWeighting weighting = PosteriorWeighting.Randomized)
-        => PosteriorConformal.Weights(Memberships(units), Memberships(cases), Precision, seed, grids, weighting);
+        => PosteriorConformal.Weights(Memberships(units), Memberships(cases), units.GetLength(0) >= 1 ? PrecisionAt(units.GetLength(0)).Precision : Precision,
+                                      seed, grids, weighting);
 
     private double[][] Rows(double[,] features)
     {
@@ -621,8 +671,9 @@ public sealed class ScoreMixture
 
     // The training split's mean effective sample size and mean self-weight at m: each point draws L ~ Multinomial(m, π(xᵢ)) on its own
     // stream and weighs every training point, itself included, by Π_k π_k(xⱼ)^{L_k}.
-    internal static (double Ess, double Self) Reading(double[][] memberships, int precision, int seed)
+    internal static (double Ess, double Self) Reading(double[][] memberships, int precision, int seed, double scale = 1.0)
     {
+        if (scale != 1.0) return Rescaled(memberships, precision, seed, scale);
         int n = memberships.Length, k = memberships.Length > 0 ? memberships[0].Length : 0;
         double ess = 0.0, self = 0.0;
         var log = new double[n];
@@ -649,6 +700,41 @@ public sealed class ScoreMixture
             }
             ess += total * total / squares;
             self += Math.Exp(log[i] - top) / total;
+        }
+        return (ess / n, self / n);
+    }
+
+    // The reading with each point's sums over the others scaled by `scale`, as over a calibration split of scale·(n − 1) units: the others'
+    // sums summed apart, so a self-weight near 1 loses no digits to a difference.
+    private static (double Ess, double Self) Rescaled(double[][] memberships, int precision, int seed, double scale)
+    {
+        int n = memberships.Length, k = memberships.Length > 0 ? memberships[0].Length : 0;
+        double ess = 0.0, self = 0.0;
+        var log = new double[n];
+        var logs = new double[n][];
+        for (int j = 0; j < n; j++) logs[j] = [.. Array.ConvertAll(memberships[j], v => Math.Log(v))];
+        for (int i = 0; i < n; i++)
+        {
+            int[] draw = PosteriorConformal.Draw(memberships[i], precision, PosteriorConformal.Stream(seed, i));
+            double top = double.NegativeInfinity;
+            for (int j = 0; j < n; j++)
+            {
+                double l = 0.0;
+                for (int c = 0; c < k; c++) if (draw[c] > 0) l += draw[c] * logs[j][c];
+                log[j] = l;
+                top = Math.Max(top, l);
+            }
+            double others = 0.0, othersSquared = 0.0;
+            for (int j = 0; j < n; j++)
+            {
+                if (j == i) continue;
+                double w = Math.Exp(log[j] - top);
+                others += w;
+                othersSquared += w * w;
+            }
+            double own = Math.Exp(log[i] - top), total = own + scale * others;
+            ess += total * total / (own * own + scale * othersSquared);
+            self += own / total;
         }
         return (ess / n, self / n);
     }
