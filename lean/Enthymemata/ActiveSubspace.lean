@@ -1,6 +1,7 @@
 import Enthymemata.ActiveSubspace.ContinuousPoincare
 import Enthymemata.ActiveSubspace.DirectionMoves
 import Enthymemata.ActiveSubspace.MatrixPoincare
+import Enthymemata.ActiveSubspace.ProductVariance
 import Enthymemata.ActiveSubspace.ProjectionMean
 import Enthymemata.ActiveSubspace.Refit
 

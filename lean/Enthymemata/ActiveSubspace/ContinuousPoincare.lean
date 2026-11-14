@@ -1,3 +1,5 @@
+import Enthymemata.ActiveSubspace.MatrixPoincare
+import Enthymemata.ActiveSubspace.ProductVariance
 import Mathlib.Analysis.Fourier.AddCircle
 import Mathlib.MeasureTheory.Integral.DivergenceTheorem
 
@@ -11,9 +13,15 @@ The statements of `Protolemmata/BASS/active-subspace-lemmas.md`, AS-2(d).
   `wirtinger_periodic`: so, by Parseval on `f − c₀`, `T⁻¹∫|f − c₀|² ≤ (T/2π)² T⁻¹∫|f′|²`.
   `wirtinger_interval`: on `[a, b]` with no end condition, through the even extension
   (`integral_reflect`), `Var_U(h) ≤ ((b − a)/π)² E_U[h′²]` under the uniform law, kinks allowed.
+* **(iii) The glue, scalar form.** `uniformIcc` with `integral_uniformIcc` and `varM_uniformIcc`;
+  `integral_integral_update`; `poincare_pi`: under a product of uniforms,
+  `Var F ≤ Σᵢ ((bᵢ − aᵢ)/π)² E[Dᵢ²]`.
+* **(iii) The glue, matrix form.** `covM`, `energyM`, `covM_form`, `energyM_form`;
+  `matrix_poincare_pi`: `Cov(f) ≼ E[J D Jᵀ]`, `D = diag(((bᵢ − aᵢ)/π)²)`, on the product of
+  uniforms itself.
 -/
 
-open MeasureTheory Set Complex intervalIntegral
+open MeasureTheory Set Complex
 open scoped Real
 
 namespace ActiveSubspace
@@ -267,5 +275,281 @@ theorem wirtinger_interval (hab : a < b) {h h' : ℝ → ℝ} {s : Set ℝ} (hs 
   exact hW
 
 end Wirtinger
+
+section Uniform
+
+/-- `|∫ f| ≤ C` under a probability measure when `|f| ≤ C`. -/
+theorem abs_integral_le_of_abs_le {X : Type*} [MeasurableSpace X] (μ : Measure X)
+    [IsProbabilityMeasure μ] {f : X → ℝ} {C : ℝ} (hC : ∀ x, |f x| ≤ C) : |∫ x, f x ∂μ| ≤ C := by
+  refine (abs_integral_le_integral_abs).trans ?_
+  calc ∫ x, |f x| ∂μ ≤ ∫ _x, C ∂μ :=
+        integral_mono_of_nonneg (ae_of_all _ fun _ => abs_nonneg _) (integrable_const C)
+          (ae_of_all _ hC)
+    _ = C := by simp
+
+/-- The uniform probability measure on `[a, b]`. -/
+noncomputable def uniformIcc (a b : ℝ) : Measure ℝ :=
+  (ENNReal.ofReal (b - a))⁻¹ • volume.restrict (Icc a b)
+
+theorem uniformIcc_isProbabilityMeasure {a b : ℝ} (hab : a < b) :
+    IsProbabilityMeasure (uniformIcc a b) := by
+  constructor
+  rw [uniformIcc, Measure.smul_apply, Measure.restrict_apply MeasurableSet.univ, univ_inter,
+    Real.volume_Icc, smul_eq_mul, ENNReal.inv_mul_cancel
+      (ENNReal.ofReal_pos.2 (sub_pos.2 hab)).ne' ENNReal.ofReal_ne_top]
+
+/-- Under the uniform law, an integral is the interval's mean. -/
+theorem integral_uniformIcc {a b : ℝ} (hab : a < b) (φ : ℝ → ℝ) :
+    ∫ y, φ y ∂(uniformIcc a b) = (b - a)⁻¹ * ∫ y in a..b, φ y := by
+  rw [uniformIcc, integral_smul_measure, ENNReal.toReal_inv,
+    ENNReal.toReal_ofReal (by linarith), integral_Icc_eq_integral_Ioc,
+    ← intervalIntegral.integral_of_le hab.le, smul_eq_mul]
+
+theorem varM_uniformIcc {a b : ℝ} (hab : a < b) (h : ℝ → ℝ) :
+    varM (uniformIcc a b) h =
+      (b - a)⁻¹ * ∫ t in a..b, (h t - (b - a)⁻¹ * ∫ y in a..b, h y) ^ 2 := by
+  simp only [varM, integral_uniformIcc hab]
+
+end Uniform
+
+section Glue
+
+variable {α : Type*} [MeasurableSpace α]
+
+/-- Integrating out coordinate `i` keeps a product law's integral. -/
+theorem integral_integral_update {n : ℕ} (μ : Fin n → Measure α)
+    [∀ i, IsProbabilityMeasure (μ i)] (i : Fin n) {G : (Fin n → α) → ℝ} (hG : Measurable G)
+    {C : ℝ} (hGC : ∀ x, |G x| ≤ C) :
+    ∫ x, ∫ t, G (Function.update x i t) ∂(μ i) ∂(Measure.pi μ) = ∫ x, G x ∂(Measure.pi μ) := by
+  obtain ⟨m, rfl⟩ := Nat.exists_eq_succ_of_ne_zero (Fin.pos i).ne'
+  set e := MeasurableEquiv.piFinSuccAbove (fun _ : Fin (m + 1) => α) i
+  have hmp : MeasurePreserving e (Measure.pi μ)
+      ((μ i).prod (Measure.pi fun j => μ (i.succAbove j))) :=
+    measurePreserving_piFinSuccAbove μ i
+  have hsymm : ∀ s z, e.symm (s, z) = Fin.insertNth (α := fun _ => α) i s z := fun _ _ => rfl
+  have hΦ : Measurable fun x => ∫ t, G (Function.update x i t) ∂(μ i) :=
+    (hG.comp measurable_update').stronglyMeasurable.integral_prod_right'.measurable
+  have hΦC : ∀ x, |∫ t, G (Function.update x i t) ∂(μ i)| ≤ C := fun x =>
+    abs_integral_le_of_abs_le _ fun t => hGC _
+  rw [← (hmp.symm e).integral_comp' G, integral_prod_symm (fun p => G (e.symm p))
+      (integrable_of_bdd (f := fun p => G (e.symm p)) _ (hG.comp e.symm.measurable)
+        (fun p => hGC _)),
+    ← (hmp.symm e).integral_comp' (fun x => ∫ t, G (Function.update x i t) ∂(μ i)),
+    integral_prod (fun p => ∫ t, G (Function.update (e.symm p) i t) ∂(μ i))
+      (integrable_of_bdd (f := fun p => ∫ t, G (Function.update (e.symm p) i t) ∂(μ i)) _
+        (hΦ.comp e.symm.measurable) (fun p => hΦC _))]
+  simp only [hsymm, Fin.update_insertNth]
+  simp
+
+/-- **AS-2(d)(iii), the scalar form.** Under a product of uniform laws on `[aᵢ, bᵢ]`, a bounded
+measurable `F` whose sections along each coordinate are continuous, with a bounded measurable
+derivative `Dᵢ` off a countable set, satisfies
+`Var F ≤ Σᵢ ((bᵢ − aᵢ)/π)² E[Dᵢ²]`: Efron–Stein (`efron_stein_pi`), Wirtinger on each section
+(`wirtinger_interval`), and the coordinate integrated back out. -/
+theorem poincare_pi {n : ℕ} (a b : Fin n → ℝ) (hab : ∀ i, a i < b i)
+    {F : (Fin n → ℝ) → ℝ} (hF : Measurable F) {C : ℝ} (hC : ∀ x, |F x| ≤ C)
+    (D : Fin n → (Fin n → ℝ) → ℝ) (hD : ∀ i, Measurable (D i)) {K : ℝ}
+    (hK : ∀ i x, |D i x| ≤ K) (s : Fin n → Set ℝ) (hs : ∀ i, (s i).Countable)
+    (hcont : ∀ i x, ContinuousOn (fun t => F (Function.update x i t)) (Icc (a i) (b i)))
+    (hder : ∀ i x, ∀ t ∈ Ioo (a i) (b i) \ s i,
+      HasDerivAt (fun t => F (Function.update x i t)) (D i (Function.update x i t)) t) :
+    varM (Measure.pi fun i => uniformIcc (a i) (b i)) F ≤
+      ∑ i, ((b i - a i) / π) ^ 2 *
+        ∫ x, D i x ^ 2 ∂(Measure.pi fun i => uniformIcc (a i) (b i)) := by
+  haveI : ∀ i, IsProbabilityMeasure (uniformIcc (a i) (b i)) := fun i =>
+    uniformIcc_isProbabilityMeasure (hab i)
+  refine (efron_stein_pi n (fun i => uniformIcc (a i) (b i)) F hF C hC).trans
+    (Finset.sum_le_sum fun i _ => ?_)
+  have hpt : ∀ x, varM (uniformIcc (a i) (b i)) (fun t => F (Function.update x i t)) ≤
+      ((b i - a i) / π) ^ 2 * ∫ t, D i (Function.update x i t) ^ 2 ∂(uniformIcc (a i) (b i)) := by
+    intro x
+    rw [varM_uniformIcc (hab i), integral_uniformIcc (hab i)]
+    exact wirtinger_interval (hab i) (hs i) (hcont i x) (hder i x)
+      ((hD i).comp (measurable_update x)) (fun t => hK i _)
+  have hD2 : Measurable fun x => D i x ^ 2 := (hD i).pow_const 2
+  have hD2C : ∀ x, |D i x ^ 2| ≤ K ^ 2 := fun x => by
+    rw [abs_pow]
+    exact pow_le_pow_left₀ (abs_nonneg _) (hK i x) 2
+  have hint1 : Integrable (fun x => varM (uniformIcc (a i) (b i))
+      (fun t => F (Function.update x i t))) (Measure.pi fun i => uniformIcc (a i) (b i)) :=
+    integrable_of_bdd _ (measurable_coordVar (fun i => uniformIcc (a i) (b i)) i hF)
+      (fun x => abs_varM_le _ fun t => hC _)
+  have hΨ : Measurable fun x => ∫ t, D i (Function.update x i t) ^ 2 ∂(uniformIcc (a i) (b i)) :=
+    (hD2.comp measurable_update').stronglyMeasurable.integral_prod_right'.measurable
+  have hint2 : Integrable (fun x => ((b i - a i) / π) ^ 2 *
+      ∫ t, D i (Function.update x i t) ^ 2 ∂(uniformIcc (a i) (b i)))
+      (Measure.pi fun i => uniformIcc (a i) (b i)) :=
+    (integrable_of_bdd _ hΨ (fun x => abs_integral_le_of_abs_le _ fun t => hD2C _)).const_mul _
+  calc coordVarPi (fun i => uniformIcc (a i) (b i)) i F
+      ≤ ∫ x, ((b i - a i) / π) ^ 2 *
+          ∫ t, D i (Function.update x i t) ^ 2 ∂(uniformIcc (a i) (b i))
+            ∂(Measure.pi fun i => uniformIcc (a i) (b i)) :=
+        integral_mono hint1 hint2 hpt
+    _ = ((b i - a i) / π) ^ 2 * ∫ x, D i x ^ 2 ∂(Measure.pi fun i => uniformIcc (a i) (b i)) := by
+        rw [MeasureTheory.integral_const_mul,
+          integral_integral_update (fun i => uniformIcc (a i) (b i)) i hD2 hD2C]
+
+end Glue
+
+section MatrixForm
+
+open Matrix
+
+variable {o : Type*} [Fintype o]
+
+/-- `Var g = E[g²] − (E g)²` under a probability measure. -/
+theorem varM_eq_sub {X : Type*} [MeasurableSpace X] (P : Measure X) [IsProbabilityMeasure P]
+    {g : X → ℝ} (hg : Integrable g P) (hg2 : Integrable (fun x => g x ^ 2) P) :
+    varM P g = ∫ x, g x ^ 2 ∂P - (∫ x, g x ∂P) ^ 2 := by
+  set c := ∫ x, g x ∂P with hc
+  have hexp : (fun x => (g x - c) ^ 2) = fun x => g x ^ 2 - 2 * c * g x + c ^ 2 := by
+    funext x
+    ring
+  have i1 : Integrable (fun x => g x ^ 2 - 2 * c * g x) P := hg2.sub (hg.const_mul (2 * c))
+  simp only [varM]
+  rw [← hc, hexp, integral_add i1 (integrable_const _), integral_sub hg2 (hg.const_mul (2 * c)),
+    MeasureTheory.integral_const_mul, MeasureTheory.integral_const, ← hc]
+  simp only [probReal_univ, one_smul]
+  ring
+
+/-- The output covariance matrix under a law. -/
+noncomputable def covM {X : Type*} [MeasurableSpace X] (P : Measure X) (f : X → o → ℝ) :
+    Matrix o o ℝ :=
+  fun p q => ∫ x, f x p * f x q ∂P - (∫ x, f x p ∂P) * ∫ x, f x q ∂P
+
+/-- `E[J D Jᵀ]` with `D = diag c`. -/
+noncomputable def energyM {X : Type*} [MeasurableSpace X] {n : ℕ} (P : Measure X)
+    (J : X → Matrix o (Fin n) ℝ) (c : Fin n → ℝ) : Matrix o o ℝ :=
+  fun p q => ∑ i, c i * ∫ x, J x p i * J x q i ∂P
+
+omit [Fintype o] in
+theorem covM_isHermitian {X : Type*} [MeasurableSpace X] (P : Measure X) (f : X → o → ℝ) :
+    (covM P f).IsHermitian := by
+  ext p q
+  simp only [conjTranspose_apply, star_trivial, covM, mul_comm]
+
+omit [Fintype o] in
+theorem energyM_isHermitian {X : Type*} [MeasurableSpace X] {n : ℕ} (P : Measure X)
+    (J : X → Matrix o (Fin n) ℝ) (c : Fin n → ℝ) : (energyM P J c).IsHermitian := by
+  ext p q
+  simp only [conjTranspose_apply, star_trivial, energyM, mul_comm (J _ q _)]
+
+/-- `E[(Σₚ vₚ hₚ)²] = Σₚ Σ_q vₚ v_q E[hₚ h_q]` for bounded measurable `hₚ`. -/
+theorem integral_sq_lin {X : Type*} [MeasurableSpace X] (P : Measure X) [IsProbabilityMeasure P]
+    {h : o → X → ℝ} (hh : ∀ p, Measurable (h p)) {C : ℝ} (hC : ∀ p x, |h p x| ≤ C)
+    (v : o → ℝ) :
+    ∫ x, (∑ p, v p * h p x) ^ 2 ∂P = ∑ p, ∑ q, v p * v q * ∫ x, h p x * h q x ∂P := by
+  have hii : ∀ p q, Integrable (fun x => h p x * h q x) P := fun p q =>
+    integrable_of_bdd _ ((hh p).mul (hh q)) (C := C * C) fun x => by
+      rw [abs_mul]
+      exact mul_le_mul (hC p x) (hC q x) (abs_nonneg _) ((abs_nonneg _).trans (hC p x))
+  have hsq : (fun x => (∑ p, v p * h p x) ^ 2) =
+      fun x => ∑ p, ∑ q, v p * v q * (h p x * h q x) := by
+    funext x
+    rw [sq, Finset.sum_mul_sum]
+    exact Finset.sum_congr rfl fun p _ => Finset.sum_congr rfl fun q _ => by ring
+  rw [hsq, integral_finsetSum _ fun p _ => integrable_finsetSum _ fun q _ => (hii p q).const_mul _]
+  refine Finset.sum_congr rfl fun p _ => ?_
+  rw [integral_finsetSum _ fun q _ => (hii p q).const_mul _]
+  exact Finset.sum_congr rfl fun q _ => integral_const_mul _ _
+
+/-- `vᵀ Cov(f) v = Var(vᵀf)` for bounded measurable outputs. -/
+theorem covM_form {X : Type*} [MeasurableSpace X] (P : Measure X) [IsProbabilityMeasure P]
+    {f : X → o → ℝ} (hf : ∀ p, Measurable fun x => f x p) {C : ℝ} (hC : ∀ x p, |f x p| ≤ C)
+    (v : o → ℝ) : v ⬝ᵥ (covM P f *ᵥ v) = varM P (fun x => v ⬝ᵥ f x) := by
+  have hi : ∀ p, Integrable (fun x => f x p) P := fun p =>
+    integrable_of_bdd _ (hf p) (fun x => hC x p)
+  have hg : Integrable (fun x => v ⬝ᵥ f x) P := by
+    simp only [dotProduct]
+    exact integrable_finsetSum _ fun p _ => (hi p).const_mul (v p)
+  have hgm : ∫ x, v ⬝ᵥ f x ∂P = ∑ p, v p * ∫ x, f x p ∂P := by
+    simp only [dotProduct]
+    rw [integral_finsetSum _ fun p _ => (hi p).const_mul _]
+    exact Finset.sum_congr rfl fun p _ => integral_const_mul _ _
+  have hg2 : ∫ x, (v ⬝ᵥ f x) ^ 2 ∂P = ∑ p, ∑ q, v p * v q * ∫ x, f x p * f x q ∂P :=
+    integral_sq_lin P (h := fun p x => f x p) hf (fun p x => hC x p) v
+  have hg2i : Integrable (fun x => (v ⬝ᵥ f x) ^ 2) P := by
+    have hsq : (fun x => (v ⬝ᵥ f x) ^ 2) =
+        fun x => ∑ p, ∑ q, v p * v q * (f x p * f x q) := by
+      funext x
+      simp only [dotProduct, sq, Finset.sum_mul_sum]
+      exact Finset.sum_congr rfl fun p _ => Finset.sum_congr rfl fun q _ => by ring
+    rw [hsq]
+    exact integrable_finsetSum _ fun p _ => integrable_finsetSum _ fun q _ =>
+      (integrable_of_bdd _ ((hf p).mul (hf q)) (C := C * C) fun x => by
+        change |f x p * f x q| ≤ C * C
+        rw [abs_mul]
+        exact mul_le_mul (hC x p) (hC x q) (abs_nonneg _) ((abs_nonneg _).trans (hC x p))
+        ).const_mul _
+  rw [quadForm_eq, varM_eq_sub P hg hg2i, hg2, hgm, sq, Finset.sum_mul_sum,
+    ← Finset.sum_sub_distrib]
+  refine Finset.sum_congr rfl fun p _ => ?_
+  rw [← Finset.sum_sub_distrib]
+  refine Finset.sum_congr rfl fun q _ => ?_
+  simp only [covM]
+  ring
+
+/-- `vᵀ E[J D Jᵀ] v = Σᵢ cᵢ E[(Σₚ vₚ Jₚᵢ)²]`. -/
+theorem energyM_form {X : Type*} [MeasurableSpace X] {n : ℕ} (P : Measure X)
+    [IsProbabilityMeasure P] {J : X → Matrix o (Fin n) ℝ} (hJ : ∀ p i, Measurable fun x => J x p i)
+    {K : ℝ} (hK : ∀ x p i, |J x p i| ≤ K) (c : Fin n → ℝ) (v : o → ℝ) :
+    v ⬝ᵥ (energyM P J c *ᵥ v) = ∑ i, c i * ∫ x, (∑ p, v p * J x p i) ^ 2 ∂P := by
+  have hR : ∑ i, c i * ∫ x, (∑ p, v p * J x p i) ^ 2 ∂P =
+      ∑ i, ∑ p, ∑ q, v p * v q * (c i * ∫ x, J x p i * J x q i ∂P) := by
+    refine Finset.sum_congr rfl fun i _ => ?_
+    rw [integral_sq_lin P (h := fun p x => J x p i) (fun p => hJ p i) (fun p x => hK x p i) v,
+      Finset.mul_sum]
+    refine Finset.sum_congr rfl fun p _ => ?_
+    rw [Finset.mul_sum]
+    exact Finset.sum_congr rfl fun q _ => by ring
+  have hL : v ⬝ᵥ (energyM P J c *ᵥ v) =
+      ∑ p, ∑ q, ∑ i, v p * v q * (c i * ∫ x, J x p i * J x q i ∂P) := by
+    rw [quadForm_eq]
+    refine Finset.sum_congr rfl fun p _ => Finset.sum_congr rfl fun q _ => ?_
+    simp only [energyM, Finset.mul_sum]
+  have hswap : ∀ p, ∑ q, ∑ i, v p * v q * (c i * ∫ x, J x p i * J x q i ∂P) =
+      ∑ i, ∑ q, v p * v q * (c i * ∫ x, J x p i * J x q i ∂P) := fun p => Finset.sum_comm
+  rw [hL, hR]
+  simp only [hswap]
+  exact Finset.sum_comm
+
+omit [Fintype o] in
+/-- **AS-2(d)(iii), the matrix check on continuous laws.** Under a product of uniform laws on
+`[aᵢ, bᵢ]`, bounded measurable outputs `f` whose sections along each coordinate are continuous with
+derivative `J` (bounded, measurable) off a countable set satisfy
+`Cov(f) ≼ E[J D Jᵀ]`, `D = diag(((bᵢ − aᵢ)/π)²)`: the matrix check of E8's slice 5, proved on the
+law it reads, with no hypothesis left but the regularity of the fit. -/
+theorem matrix_poincare_pi [Finite o] {n : ℕ} (a b : Fin n → ℝ) (hab : ∀ i, a i < b i)
+    {f : (Fin n → ℝ) → o → ℝ} (hf : ∀ p, Measurable fun x => f x p) {C : ℝ}
+    (hC : ∀ x p, |f x p| ≤ C) (J : (Fin n → ℝ) → Matrix o (Fin n) ℝ)
+    (hJ : ∀ p i, Measurable fun x => J x p i) {K : ℝ} (hK : ∀ x p i, |J x p i| ≤ K)
+    (s : Fin n → Set ℝ) (hs : ∀ i, (s i).Countable)
+    (hcont : ∀ p i x, ContinuousOn (fun t => f (Function.update x i t) p) (Icc (a i) (b i)))
+    (hder : ∀ p i x, ∀ t ∈ Ioo (a i) (b i) \ s i,
+      HasDerivAt (fun t => f (Function.update x i t) p) (J (Function.update x i t) p i) t) :
+    (energyM (Measure.pi fun i => uniformIcc (a i) (b i)) J (fun i => ((b i - a i) / π) ^ 2) -
+      covM (Measure.pi fun i => uniformIcc (a i) (b i)) f).PosSemidef := by
+  haveI : Fintype o := Fintype.ofFinite o
+  haveI : ∀ i, IsProbabilityMeasure (uniformIcc (a i) (b i)) := fun i =>
+    uniformIcc_isProbabilityMeasure (hab i)
+  rw [loewner_iff _ _ (covM_isHermitian _ f) (energyM_isHermitian _ J _)]
+  intro v
+  rw [covM_form _ hf hC, energyM_form _ hJ hK]
+  have hbd : ∀ x, |v ⬝ᵥ f x| ≤ ∑ p, |v p| * C := fun x => by
+    refine (Finset.abs_sum_le_sum_abs _ _).trans (Finset.sum_le_sum fun p _ => ?_)
+    rw [abs_mul]
+    exact mul_le_mul_of_nonneg_left (hC x p) (abs_nonneg _)
+  have hDbd : ∀ i x, |∑ p, v p * J x p i| ≤ ∑ p, |v p| * K := fun i x => by
+    refine (Finset.abs_sum_le_sum_abs _ _).trans (Finset.sum_le_sum fun p _ => ?_)
+    rw [abs_mul]
+    exact mul_le_mul_of_nonneg_left (hK x p i) (abs_nonneg _)
+  exact poincare_pi a b hab (F := fun x => v ⬝ᵥ f x)
+    (Finset.measurable_sum _ fun p _ => (hf p).const_mul (v p)) hbd
+    (fun i x => ∑ p, v p * J x p i)
+    (fun i => Finset.measurable_sum _ fun p _ => (hJ p i).const_mul (v p)) hDbd s hs
+    (fun i x => continuousOn_finsetSum _ fun p _ => continuousOn_const.mul (hcont p i x))
+    (fun i x t ht => HasDerivAt.fun_sum fun p _ => (hder p i x t ht).const_mul (v p))
+
+end MatrixForm
 
 end ActiveSubspace
