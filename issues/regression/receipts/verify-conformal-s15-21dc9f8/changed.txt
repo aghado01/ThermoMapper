@@ -1,0 +1,7 @@
+src/maths/regression/conformal/ConformalBayes.cs
+src/maths/regression/conformal/PosteriorConformal.cs
+src/maths/regression/conformal/ScoreMixture.cs
+src/maths/regression/conformal/SplitConformal.cs
+src/maths/regression/conformal/WeightedConformal.cs
+tests/regression/PosteriorConformalTests.cs
+tests/regression/ScoreMixtureTests.cs
