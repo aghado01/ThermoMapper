@@ -123,6 +123,19 @@ Hand-over state between turns is an "In progress" entry here.
 
 ## Reports
 
+### 2026-11-14 — the two follow-ups verified from a clean archive (coordinating session)
+
+- **Commit:** `dd57650` (the Lean is `7f535b3`), through `scripts/verify-lean.ps1` with `-Module Enthymemata.PenalizedAdmission` and the BAPS checks.
+- **Result:** 23 of 23 checks; 2,634 jobs with no warnings and no errors; meta-ci PASS.
+- **Axioms:** every theorem of the module, 78 in all, prints `propext`, `Classical.choice` and `Quot.sound` only. The nine new names and the reproved `cond1_unitScale_le` are among them.
+- **Statements, read for an instance that meets them:**
+  - *The bridge,* `lamMin_eq_iInf_eigenvalues` and `lamMax_eq_iSup_eigenvalues`, asks only that A be symmetric.
+  - *The column step,* `norm1_le_half_one_add_sqrt`: a symmetric positive semidefinite P with form at most μ‖z‖² has ‖P‖₁ ≤ μ(1 + √n)/2. Checked by hand on rank-one projectors, whose largest column sum is exactly (1 + √n)/2.
+  - *Its witness,* `norm1_columnWitness`: vvᵀ/12 with v = (3, 1, 1, 1) meets every hypothesis and attains the constant at n = 4.
+  - *The composed chain,* `cond1_unitScale_le_sharp`, keeps the earlier hypotheses. `cond1_unitScale_le` keeps its statement and is its corollary.
+- **For slice 6:** the screen may take (1 + √ν)/2 in place of √ν. The defects chip holds that change until the user answers the default question.
+- **Receipts:** `artifacts/verify-lean-dd57650/`, with the axioms file and the summary tracked in [receipts](../../../issues/regression/receipts/verify-lean-dd57650/).
+
 ### 2026-11-14 — the penalized admission's two follow-ups: the eigenvalue bridge and the sharp column step
 
 At the user's request ("do them anyway"), after the targets were verified (`af5cd65`).
