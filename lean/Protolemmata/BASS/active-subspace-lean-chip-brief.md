@@ -85,6 +85,49 @@ Hand-over state between turns is an "In progress" entry here.
 
 ## Reports
 
+### 2026-11-14 — Payne–Weinberger: the truncated normal's min, proved whole
+
+**Landed:** `1ea5d6b`.
+- `ContinuousPoincare`: new `wirtinger_dirichlet`, Wirtinger with zero ends, through the odd extension.
+- `WeightedPoincare`:
+  - new: `exists_dual`, `poincare_of_dual`, `integral_bochner` and `poincare_logConcave`;
+  - `poincare_weighted` keeps its statement. Its proof now goes through the first three.
+  - Stronger statements: `poincare_truncNormal`, `hasPoincareOn_truncNormal` and `matrix_poincare_box_mixed` carry min(σ², ((b − a)/π)²), E8's own D. `hasPoincareOn_of_density` takes any weighted inequality's constant as a hypothesis, in place of Bakry–Émery's.
+
+**What changed or proved false.** Nothing proved false.
+- *Payne–Weinberger needs no eigenfunction in one dimension.*
+  - W = ∫ₐˣ g e^{−V} is zero at both ends. A zero-end inequality for W under the weight e^{V} gives the one with no end condition for h, with the same constant.
+  - For V convex, z = e^{V/2}W has ∫ z′² ≤ ∫ g²e^{−V}. Wirtinger with zero ends then bounds ∫ W²e^{V} = ∫ z² by ((b − a)/π)² ∫ z′².
+- *Bakry–Émery shares the duality.* κ ∫ W²e^{V} ≤ ∫ V″W²e^{V} ≤ ∫ g²e^{−V} replaces its pointwise step.
+- *Four statements changed,* each to a stronger or more general one:
+  - The earlier `hasPoincareOn_of_density` is the new one applied to `poincare_weighted`.
+  - The earlier `poincare_truncNormal` and `hasPoincareOn_truncNormal` follow since min ≤ σ².
+  - The earlier `matrix_poincare_box_mixed`, with Dᵢ = σᵢ², follows because E[J diag(D) Jᵀ] is monotone in D. That monotonicity is not stated in the Lean, and the earlier forms are not kept as declarations.
+- The lemmas file poses this as AS-2(g) and updates AS-2(e) and (f).
+
+**Declarations to print axioms for:**
+- the new: `wirtinger_dirichlet`, `exists_dual`, `poincare_of_dual`, `integral_bochner` and `poincare_logConcave`;
+- the changed: `poincare_weighted`, `poincare_truncNormal`, `hasPoincareOn_of_density`, `hasPoincareOn_truncNormal` and `matrix_poincare_box_mixed`.
+
+Each prints only `propext`, `Classical.choice` and `Quot.sound`.
+
+**The line E8's brief can take,** replacing the product step's line:
+> The matrix check is proved on E8's laws with E8's own D (`matrix_poincare_box_mixed`, `lean/Enthymemata/ActiveSubspace/WeightedPoincare.lean`). Each input is uniform on its range or a normal N(μᵢ, σᵢ²) truncated to it. Dᵢ = ((bᵢ − aᵢ)/π)² for a uniform input and Dᵢ = min(σᵢ², ((bᵢ − aᵢ)/π)²) for a truncated normal. Every hypothesis is asked only on the box. A reading above 1 beyond rounding is a defect by theorem. The (bᵢ − aᵢ)²/π² half is Payne–Weinberger (`poincare_logConcave`).
+
+**Prior art.** Payne and Weinberger (1960), for convex domains under the flat weight, from memory. The one-dimensional route was derived here, with no source read.
+
+**Gates:**
+- `lean` on the drafts: clean.
+- `lake build Enthymemata.ActiveSubspace`: 3,120 jobs, with no warnings.
+- `scripts/meta-ci.ps1 -NoBuild`: PASS, with all seven modules `PROOF-CLOSED`.
+- No cache fetch. D: had 33.4 GB free at the end.
+
+**Follow-ups:** *the promotion review* of the seven modules. Nothing else in this chip's targets stays open.
+
+**Doc changes owed:** `docs/Maths/Regression/ActiveSubspaces.md` should say:
+- the truncated normal's min(σ², (b − a)²/π²) is proved whole;
+- the matrix check holds on E8's mixed laws with E8's own D.
+
 ### 2026-11-13 — the product step verified from a clean archive (coordinating session)
 
 - **Commit:** `dd06a48`, through `scripts/verify-lean.ps1` with `-Module Enthymemata.ActiveSubspace` and this folder's checks.
