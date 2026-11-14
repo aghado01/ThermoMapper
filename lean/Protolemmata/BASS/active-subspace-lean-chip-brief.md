@@ -123,6 +123,83 @@ Hand-over state between turns is an "In progress" entry here.
 
 ## Reports
 
+### 2026-11-14 — targets 5 to 7 proved: a penalized system's admission
+
+**Landed:** `212752f`.
+- The module is `lean/Enthymemata/PenalizedAdmission.lean`, namespace `PenalizedAdmission`, with its line in `Enthymemata.lean`.
+- The statements, checks and prior art are in [penalized-admission-lemmas.md](../BAPS/penalized-admission-lemmas.md), with [its checks](../BAPS/penalized-admission-checks.py) (17 of 17). They were posed at `a78d3d0`, and target 7 was restated at `6ec7a8c`.
+
+**What is proved.**
+- *Target 5:*
+  - `form_comb_eq_zero_iff` and `comb_mulVec_eq_zero_iff`: for c > 0, ker A(c) = ⋂ₖ ker Sₖ;
+  - `comb_posDef_iff` and `comb_posDef_iff_of_pos`: positive definite at one c > 0 exactly when at every one, exactly when the Sₖ share no null vector but 0;
+  - `penalized_det_eq_zero_iff`: ZᵀZ + Σⱼ λⱼPⱼ is singular exactly when some x ≠ 0 has Zx = 0 and every Pⱼx = 0.
+- *Target 6:*
+  - `form_comb_bound`, the quadratic-form line;
+  - `lamMin_comb_ge` and `lamMax_comb_le`, the eigenvalue lines;
+  - `cond2_comb_le`, κ₂(A(c)) ≤ (M/m)·κ₂(A(c′));
+  - `cond2_diagPair`: on S₁ = diag(1, 0), S₂ = diag(0, 1) with c′ = (1, 1), κ₂(A(c′)) = 1 and κ₂(A(c)) = max c / min c, so M/m is attained;
+  - `bracket_one`, the coefficient held at 1.
+- *Target 7, as restated:*
+  - `diag_comb_bound`, the diagonal;
+  - `lamMin_unitScale_ge`, λ_min(E(c)) ≥ (m/M)·λ_min(E(c′));
+  - the norm lines `norm1_le_card` (‖E(c)‖₁ ≤ q), `norm1_le_sqrt_card` (‖A‖₁ ≤ √n·‖A‖₂) and `mulVec_sq_le_norm1` (‖A‖₂ ≤ ‖A‖₁ for a symmetric A);
+  - `cond1_unitScale_le`, κ₁(E(c)) ≤ q·√n·(M/m)·‖E(c′)⁻¹‖₁.
+- *Nothing remains open* among the three targets.
+
+**What changed or proved false.** Nothing proved false.
+- *Target 7's first statement held, and the same pieces gave a constant √q smaller.*
+  - Posing found that ‖E(c)‖₁ ≤ q directly, and that the diagonal's ratio bound replaces the Jacobi step. It is the protolemma's finding 1.
+  - The defects chip had the same chain, and the brief restated target 7 to it (`90fa6ce`).
+  - The first statement's q·√(qn)·κ₁(E(c′)) follows from the restated one.
+- *The eigenvalue lines are proved through Rayleigh bounds,* not Mathlib's ordered eigenvalues.
+  - `lamMin` and `lamMax` are the infimum and supremum of xᵀAx / xᵀx, and `cond2` is their ratio.
+  - For a symmetric A these are the extreme eigenvalues and κ₂. The Lean does not prove that identification.
+  - ‖·‖₂ enters only as a bound ‖Ax‖ ≤ β‖x‖, in squares, and no operator norm is defined.
+- *The ratios enter as a bracket,* m·c′ₖ ≤ cₖ ≤ M·c′ₖ for every k. With c′ > 0 that is m ≤ ρₖ ≤ M, and min ρ and max ρ are the tightest choice.
+- *q counts the nonzeros in every column of A(c).* E(c) has no more.
+
+**Self-review.**
+- *Pass 1, the draft against the protolemma.* The composed proof's first draft left a placeholder for ‖E(c′)⁻¹‖₁ > 0. `inv_norm1_le_lamMin` already proved that positivity on the way, so it now returns it, and no placeholder reached the repo.
+- *Pass 2, can the hypotheses be met.* `comb_diagPair_posDef` shows the positive-definite hypothesis met by a family whose every term is singular. The bracket is met by m = min c and M = max c at c′ = 1, and the column count by q = 1 on that diagonal family.
+- *Pass 3, the build's linters.* Six statements carried a `DecidableEq` or `Fintype` hypothesis their types do not use. Each now takes it inside the proof (`classical`, `Fintype.ofFinite`). Also one line over 100 characters.
+- No hypothesis does the work. The two differences from the protolemma's wording, the Rayleigh extremes and the bracket, are stated above and in its Lean lines.
+
+**Declarations to print axioms for** (23). Each prints only `propext`, `Classical.choice` and `Quot.sound`:
+- `form_sq_le`, `mulVec_eq_zero_of_form`, `lamMin_pos`, `posDef_of_lamMin_pos`;
+- `form_comb_eq_zero_iff`, `comb_mulVec_eq_zero_iff`, `comb_posDef_iff`, `comb_posDef_iff_of_pos`, `penalized_det_eq_zero_iff`;
+- `form_comb_bound`, `lamMin_comb_ge`, `lamMax_comb_le`, `cond2_comb_le`, `bracket_one`, `cond2_diagPair`, `comb_diagPair_posDef`;
+- `diag_comb_bound`, `lamMin_unitScale_ge`, `norm1_le_card`, `norm1_le_sqrt_card`, `mulVec_sq_le_norm1`, `inv_norm1_le_lamMin`, `cond1_unitScale_le`.
+
+**The line the defects brief can take** (slice 6):
+> The screen's bound is proved (`cond1_unitScale_le`, `lean/Enthymemata/PenalizedAdmission.lean`). With A(c_ref) positive definite, m·c_ref,ₖ ≤ cₖ ≤ M·c_ref,ₖ for every k, and at most q nonzeros in any column of A(c): κ₁(E(c)) ≤ q·√n·(M/m)·‖E(c_ref)⁻¹‖₁ in exact arithmetic. The screen leaves rounding alone to the sweep, the factor 2. A coefficient at 0 has m = 0, outside the hypotheses, and the screen hands that step to the estimate.
+
+**The lines the extensions brief can take** (the admission input):
+> - *Direction 1.* Identification does not read the coefficients (`comb_posDef_iff_of_pos`, `penalized_det_eq_zero_iff`). A(c) is positive definite at one c > 0 exactly when it is at every one. ZᵀZ + Σⱼ λⱼPⱼ is singular exactly when some x ≠ 0 has Zx = 0 and Pⱼx = 0 for every j. So one check of the design at construction stands on a proof, and a per-step positive-definiteness check can catch only a loss in the computed factor.
+> - *Direction 2.* The bound's M/m is attained (`cond2_diagPair`). So the window of c a solve carries widens only with another form of the solve, never with a better inequality.
+
+**Prior art,** read or from secondary sources, in the protolemma:
+- Targets 5 and 6 are textbook linear algebra. Target 7's chain is the defects chip's (`76851ee`).
+- *van der Sluis (1969), Numer. Math. 14:14–23: read.* The PDF is on the shelf as `PDFs/other/VanderSluis1963.pdf`. Theorems 4.1 (factor n) and 4.3 (factor q, for at most q nonzeros per row) are the Jacobi-scaling bound that is now off the path.
+- *Bradley and Murray, arXiv 1110.2805: read* in its LaTeX source. It cites both theorems with those numbers.
+- *Higham (2002), Corollary 7.6: read at second hand,* through NAG's F07FFF (DPOEQU) document (`PDFs/other/LapackF07.pdf`). It gives the factor n for the unit-diagonal scaling of a symmetric positive definite matrix. The book is not on the shelf.
+
+**Gates:**
+- The checks pass 17 of 17.
+- `lean` on the draft: clean.
+- `lake build Enthymemata.PenalizedAdmission`: 2,055 jobs, with no warnings.
+- `scripts/meta-ci.ps1 -NoBuild`: PASS, with `PenalizedAdmission.lean` `PROOF-CLOSED` at 73 declarations.
+- The barrel's full `lake build` did not run, since other chips' modules share the workspace. meta-CI's reachability check covers the new import.
+- No cache fetch. D: had 33.3 GB free at the end.
+- The Conformal Lean chip was told before the barrel edit.
+
+**Follow-ups:**
+- *A bridge from `lamMin` and `lamMax` to Mathlib's `Matrix.IsHermitian.eigenvalues`.* No decision waits on it, since the screen reads κ₁. Open.
+- *Whether a factor below q·√n holds for every family.* The banded families used at most 1.007 of (M/m)·κ₁(E(c′)) (the protolemma's finding 2). A smaller proved factor would change S's proved part. The sweep measures the slack. Open.
+- *The promotion review* of `PenalizedAdmission`.
+
+**Doc changes owed:** none from this chip. The defects and extensions briefs take the lines above.
+
 ### 2026-11-14 — Payne–Weinberger verified from a clean archive (coordinating session)
 
 - **Commit:** `e683f48`, through `scripts/verify-lean.ps1` with `-Module Enthymemata.ActiveSubspace` and this folder's checks.
