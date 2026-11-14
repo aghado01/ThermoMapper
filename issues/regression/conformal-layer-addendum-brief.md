@@ -38,6 +38,7 @@ Built at the user's pick (2026-11-14, "Slice 16, batches"), under the Lean's sec
   - `Function` and `Select`, the latter giving a `BatchSelection`;
   - and `BatchConformalTests`.
 - *Nothing existing changes.*
+- *Verified by the main session on 2026-11-14,* from a clean archive of `eb0b064` with zero skips: the Commit selection, 49 of 49 ([receipts](receipts/verify-conformal-s16-60ba2cb/)).
 
 **What it computes.** Batch sets for functions of m test units' scores from n calibration scores, exchangeable together. The scores' floor and ceiling, S_(0) and S_(n+1), are ±∞ unless given.
 - *The basis.* The test units' sorted ranks are uniform on H = {1 ≤ r_1 ≤ … ≤ r_m ≤ n + 1}, |H| = C(n + m, m), and every sorted test score lies between S_(r_j − 1) and S_(r_j) at once (`card_testRank_mem`, `batch_sandwich`). Each set reads that sandwich on rank sequences holding at least 1 − α of H.
