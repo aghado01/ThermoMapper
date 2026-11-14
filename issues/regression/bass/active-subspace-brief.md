@@ -1,6 +1,6 @@
 # Active subspaces on the BASS core: E8's build (chip brief)
 
-Date: 2026-11-08. Status: slices 0–6 complete; slice 7's plan approved by the user (2026-11-10); slice 7a (`7b2ca7a`) verified 2026-11-11; slice 7b (`70a2aa2`) verified 2026-11-11; slice 7c (`015d977`) verified 2026-11-11; slice 7d, the training-range hinge rule the user chose for projected fits (2026-11-11), landed (`566c1f1` to `6aff134`) and was verified 2026-11-13 (2,502 of 2,502 from a clean archive of `788d249`); slice 7e, the frame's column signs, commissioned by the user on 2026-11-13 (below). Commissioned by the user on 2026-11-08 ("kick off e8"), after KHAOS's last slice; slice 5, the Grassmann discussion's items the user settled, commissioned 2026-11-08 ("ill take as recommended"). Every slice landed and was verified by the coordinating session on 2026-11-08: slice 0 (`15fb495`, `9e3028d`, `aa62879`), slice 1 (`95294f8`, `9dfcc6d`, `1385b86`), slice 2 (`8c7db77`, `3cdc2e8`), slice 3 (`84fe230`, `1049055`), slice 4 (`20aeb06`, `bc72014`) and slice 5 (`def59f3`, `9d2ff23`, `95d2900`, `a54a537`). The follow-ups, commissioned 2026-11-10: slice 6 (`276af70`, `e9d8827`, `30df59e`, `9a669b6`, report `3c26660`) verified by the coordinating session on 2026-11-10; slice 7's plan (below, "Slice 7's plan") waits for the user's decisions; E36's brief follows its verification. Written by the main session from [E8's entry](extensions-brief.md#active-subspace-analysis), [gap G3](lineage-gaps-register.md#g3-sobol-indices-and-active-subspaces-have-different-standing), [the lineage review's separability question](lineage-review.md#separability-is-what-the-closed-forms-rest-on), the [Astra notes](../discussion/astra-grassman-stiefel-pca-extensions.md), and the [Grassmann discussion](../discussion/grassmann-stiefel-subspaces-brief.md)'s report so far. Reports go under "Reports" below, newest first.
+Date: 2026-11-08. Status: slices 0–6 complete; slice 7's plan approved by the user (2026-11-10); slice 7a (`7b2ca7a`) verified 2026-11-11; slice 7b (`70a2aa2`) verified 2026-11-11; slice 7c (`015d977`) verified 2026-11-11; slice 7d, the training-range hinge rule the user chose for projected fits (2026-11-11), landed (`566c1f1` to `6aff134`) and was verified 2026-11-13 (2,502 of 2,502 from a clean archive of `788d249`); slice 7e, the frame's column signs, commissioned by the user on 2026-11-13 (below), landed (`9b9e4e1` to `199abd7`) and waits for its verification. Commissioned by the user on 2026-11-08 ("kick off e8"), after KHAOS's last slice; slice 5, the Grassmann discussion's items the user settled, commissioned 2026-11-08 ("ill take as recommended"). Every slice landed and was verified by the coordinating session on 2026-11-08: slice 0 (`15fb495`, `9e3028d`, `aa62879`), slice 1 (`95294f8`, `9dfcc6d`, `1385b86`), slice 2 (`8c7db77`, `3cdc2e8`), slice 3 (`84fe230`, `1049055`), slice 4 (`20aeb06`, `bc72014`) and slice 5 (`def59f3`, `9d2ff23`, `95d2900`, `a54a537`). The follow-ups, commissioned 2026-11-10: slice 6 (`276af70`, `e9d8827`, `30df59e`, `9a669b6`, report `3c26660`) verified by the coordinating session on 2026-11-10; slice 7's plan (below, "Slice 7's plan") waits for the user's decisions; E36's brief follows its verification. Written by the main session from [E8's entry](extensions-brief.md#active-subspace-analysis), [gap G3](lineage-gaps-register.md#g3-sobol-indices-and-active-subspaces-have-different-standing), [the lineage review's separability question](lineage-review.md#separability-is-what-the-closed-forms-rest-on), the [Astra notes](../discussion/astra-grassman-stiefel-pca-extensions.md), and the [Grassmann discussion](../discussion/grassmann-stiefel-subspaces-brief.md)'s report so far. Reports go under "Reports" below, newest first.
 
 ## Why
 
@@ -225,6 +225,74 @@ Commissioned by the user on 2026-11-13 ("Yes, commission it"), from the active-s
 Under "Reports" below, newest first, per slice: what landed by commit; the gates' numbers; decisions taken beyond this brief; what was left unbuilt and why; follow-ups with the decision each would change.
 
 ## Reports
+
+### Slice 7e: the frame's column signs (2026-11-13)
+
+**Asked for:** the commission above. The rule is `Pca.Orient`'s: each column's largest-magnitude entry is positive, the first on ties. It applies where `SubspacePosterior` forms its eigenvectors, so the frame and `BassProjectionComparison`'s exact check read one sign. The rule also covers every other direction the readouts return. `BassDecomposition`'s written-out copy calls it if its bits hold. Projected fits' pins move once, each one listed.
+
+**Landed:** `9b9e4e1` (LinAlg: the paired and column forms), `4703b1d` (the written-out copies call the rule), `199abd7` (the readouts oriented, `BassProjection.FromVectors`, `FrameSignTests`).
+
+**What was built:**
+- *LinAlg (`Pca`):* beside `Orient(axis)`, whose bits are unchanged, two new forms:
+  - `Orient(axis, partner)` is a singular pair. The axis is signed by the rule and the partner negated with it, so their outer product is unchanged.
+  - `OrientColumns(vectors)` signs each column of an eigensolver's matrix.
+  - The three forms share one selection.
+- *Oriented where the vectors are formed:*
+  - `SubspacePosterior`: E[C]'s and P̄'s eigenvectors (`MeanCVectors`, `ProjectionVectors`), and each draw's vectors and basis, from C (`DrawSubspace.FromC`) and from a factor (`FromFactor`, the sampled route's right singular vectors).
+  - `CoActivePosterior`: the co-active directions, each pair's top-q basis, and the projection mean's vectors.
+  - `RankPosterior`: P̄'s vectors, and so the rank summary.
+  - Through them, the frame and the comparison's exact check read one sign. `BassProjection` still copies `MeanCVectors` as before.
+- *The written-out copies call the rule:*
+  - `BassDecomposition`'s components use the paired form, so each component's coefficients are negated with K's column.
+  - `OutputPosterior.Left` and `OutputPosterior.Signed` cover the draw and mean output patterns, the LOBPCG route's included.
+  - Their bits are unchanged, which the gates test. The one difference is a NaN largest entry: the old component loop negated it and the rule leaves it. Finite responses cannot reach it.
+- *`BassProjection.FromVectors`* (internal) reads the frame from eigenvectors as given. `Of` passes it the analysis's own, and the gate passes it a negated solve.
+
+**Left as the solver returns them:** each is read only through a form a column's sign does not reach.
+- `Whitening`'s inverse root and `ActiveSubspaces`' metric inverse: symmetric functions V f(Λ) Vᵀ.
+- `BassActiveSubspace`'s output-metric roots and range (`MetricRoots`, `Root`): read as RᵀR, as a symmetric root, or as a projection.
+- `TermFactors`, the term-gradient Gram's factor: read through FFᵀ. The sampled factor's right singular vectors are oriented by `FromFactor`.
+- `OutputPosterior.RowSpace` and `PencilRatio`: a basis read through QᵀAQ, and eigenvalues alone. Both return a ratio.
+- `BassDecomposition`'s leave-one-out deflation directions: read as x − (dᵀx)d.
+- Fitting's own factorizations (random effects, random intercepts, the calibration covariance): not directions any readout returns.
+
+**Gates:**
+
+| Gate | Reading |
+| --- | --- |
+| The rule on 300 seeded symmetric matrices, p from 2 to 10, entries scaled over 10⁻⁶ to 10⁶ | 1,829 columns, 501 of them turned by the rule; with each column negated in turn, the oriented vectors are the same bits; every oriented column's largest entry is positive |
+| Ties, zero columns, the three forms | the first entry decides a tie; a zero column keeps its bits, −0 included; the axis, column and paired forms agree |
+| The written-out copies against the rule, on 2,000 vector pairs drawn from a few values so ties and zeros are common | `BassDecomposition`'s paired loop and `OutputPosterior`'s loop give the same bits |
+| The posteriors from a negated solve (p = 5, four draws) | E[C]'s and P̄'s vectors, and each draw's from C and from a factor, are the same bits. The rule holds on every vector the posteriors return: the co-active directions, the co-active projection mean's vectors and bases, and the rank posterior's |
+| Slice 7b's ridge: the frame from E[C]'s solve with each column negated in turn | the frame is the same bits; a projection read from it refits to the same draws, all 80; the comparison accepts its analysis |
+| The same ridge, the frame negated as a copy blind to the sign would read it | 80 of 80 draws' coefficients differ; the comparison refuses the analysis |
+| Projected fits' pins | none moves; detail below |
+| Fitting untouched | the whole assembly on the final tree: 3,362 of 3,362 in 37 min 51 s; the edit selection before it, 2,587 of 2,587 |
+
+**What the readings mean:**
+- *No projected fit moved.* No test holds a stored expectation of a projected fit, and no pinned-tier test reads one.
+  - Every reading of the 21 projection tests is the same to its last printed digit with and without the rule. They span `BassProjectedFitTests`, `BassProjectionComparisonTests`, `BassProjectionTests`, the projected fit's default and `ReadoutDecompositionTests`.
+  - The comparison ran on today's tree, built apart with the orientation calls removed.
+  - In every fixture, the solver's sign already kept the rule. On the ridge, the solver's first column already has its largest entry positive.
+  - The sweep turns about a quarter of the columns (501 of 1,829). So until now the solver's sign held these fixtures' draws; from now on the rule holds them, and a later change to the solver cannot move them.
+- *Ties and degenerate spaces.* Where a column's two largest entries of opposite sign nearly tie in magnitude, rounding can still choose the sign. The brief's caveat stands: the rule moves the arbitrary choice from the solver to that tie. Within a degenerate eigenspace (a small gap inside the active block), the vectors are fixed by nothing, not even up to sign. `Gaps` reports it.
+
+**Decisions beyond the brief:**
+1. *`OrientColumns` and the paired `Orient` live in `Pca`* beside `Orient`, all three on one selection.
+2. *Each draw's vectors are oriented too,* not only the posterior's means, because they are returned (`DrawSubspace.Vectors`, `Basis`) and a per-draw rank reads them. Everything the draws feed (P̄, the angles, the ranks) is blind to the sign, so no other reading moves.
+3. *`BassProjection.FromVectors`* is internal, so the gate can read a frame from a negated solve. `Of` calls it with the analysis's own vectors.
+4. *Shared files:*
+   - `SubspacePosterior.cs` and `CoActivePosterior.cs` carry another session's uncommitted `WeightScale` hunks. The conformal chip says they are not its own.
+   - These commits carry only slice 7e's hunks, applied to the index by patch. The `WeightScale` hunks stay in the tree, uncommitted.
+   - The whole assembly ran on the tree with both sets of hunks in it.
+5. *One whole-assembly run, on the final tree,* stands for the pinned tier at each commit. The first two commits change no bits (the gates above), and the last completes the slice.
+
+**Left unbuilt:** none of the commission.
+
+**Doc changes owed:**
+- `docs/Maths/Regression/ActiveSubspaces.md`, slice 7's section:
+  - the frame's sign convention: each column's largest-magnitude entry is positive, the first on ties;
+  - that the convention holds for every vector the readouts return: E[C]'s and P̄'s, each draw's, the co-active directions and bases, the rank summary, and the output patterns.
 
 ### Slice 7d: hinges normalized over the training range (2026-11-11)
 
