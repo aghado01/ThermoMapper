@@ -209,6 +209,8 @@ M's ratio is read only where the step-off arm's ESS of M is at least 100. At sma
 - keep it so, with ρ̂ = m·ŝ² below about 10 as the documented guide for switching it on;
 - commission a pilot-based switch on ρ̂ < 10, accepting a seed-dependent cost to M (median 0.73 to 0.91 per second).
 
+**The user's call, 2026-11-13: keep it opt-in.** The option stays off by default, with ρ̂ = m·ŝ² below about 10 as the documented guide for switching it on (Doc changes owed, below). No pilot-based switch is commissioned.
+
 **Per commit:** 72 of 72 (the test file alone; the rows return early without `BASS_QUALIFICATION`).
 
 **Doc changes owed:** `docs/Maths/RandomEffects.md`, the interweaving step's section: the grid's table by ρ, the guide (switch the step on where ρ̂ = m·ŝ² is below about 10), and its seed-dependent cost to M and ln σ².
