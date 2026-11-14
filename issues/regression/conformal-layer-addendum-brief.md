@@ -45,6 +45,56 @@ As in the archived brief: each slice is reported here, then waits for the main s
 
 Newest first.
 
+### 2026-11-14 — BASS's opt-in group-units call for `GroupConformal` (item 16, (b))
+
+Built as commissioned (the user's choice of (b), 2026-11-14; the Open list's specification, c94f244).
+
+**Landed** on `main`, nothing pushed:
+- `b79840f`:
+  - `BassFit.GroupConformal`, a new method beside `CandidateLogDensity`. No existing member of `BassFit.cs` changes, and its types are qualified (`Conformal.…`), so the file gains no `using`.
+  - `BassCandidates.GroupUnits` behind it. `BassCandidates.LogDensity`'s existing signature now forwards to a private overload, whose one flag skips the case-level strata rule for this call alone.
+  - `BassGroupConformalTests`.
+- `BassGroupCells` is unchanged.
+
+**What it computes.**
+- *The seams.* The held-out groups' cases are read at their responses and the test cases on their grids, each by BASS's new-group density (the seam the case-level call builds). The labels go to `GroupConformal.Density`.
+- *The groups,* from exactly one source:
+  - `groupOf`, each held-out case's label;
+  - `grouping`, the name of a grouping whose levels are the groups. Every held-out and test case's level of it must be new;
+  - otherwise the cells. They are read only where every effect reads one grouping (intercept and slope of one grouping included) and a column gives it.
+- *Where the cells don't serve.* A cell is one level of every grouping jointly, so the call refuses the cells reading in two designs, naming the remedy:
+  - crossed or nested groupings, where one held-out subject seen at two sites spans two cells;
+  - a grouping's column left out, where each case is a cell of its own.
+- *Refused.*
+  - Both readings at once.
+  - A grouping no effect reads.
+  - Under `grouping`, a case whose level of it the fit knows.
+  - A held-out or test case whose groups are all known. This is checked here because a seam with no new case carries no `NewGroup` flags for `GroupConformal` to read.
+  - The case-level call's own refusal stays as it was.
+- *Unseen levels.* `unseenLevels` defaults to `Refuse`, as `CandidateLogDensity`'s does, so a named new level asks for `OutsideEverySubset`. The same switch governs categorical predictors' unseen levels, so this call does not change the default on its own.
+- *What it covers.*
+  - `WorstCase` holds every case of one new group at once.
+  - `OneCase` holds one case drawn uniformly from it.
+  - Both need the held-out and new groups drawn alike, including how their sizes arise.
+  - The earlier report's 0.893 for one pooled case was its random-intercept fixture's alone, not a guarantee for pooled cases.
+
+**Gates.**
+- *End to end* (the crossed school × reader fixture):
+  - two held-out readers, each with repeated cases at schools L0 and L1, span four cells;
+  - named by `grouping: "reader"` they are two groups (m = 3), and under both scores they reproduce the p-values given explicit labels;
+  - the cells reading refuses the crossed fit;
+  - BASS's case-level `CandidateLogDensity` still refuses the same pooled stratum, both left to its default (the `GroupCells` message) and given as one stratum ("spans cells");
+  - each refusal above is exercised.
+- *One grouping* (the fixture restricted to the reader's intercept, its data to the reader's grouping, since BASS refuses a grouping no effect reads): the cells reading gives the named reading's p-values, and with the reader's column left out it is refused.
+- *Neighbours:* `RandomEffectsCandidateTests`, `ConformalCellRuleTests` and `GroupConformalTests` pass unchanged.
+- *Per commit,* the selected classes and the pinned tier: Maths.Regression.Tests 235 of 326 classes, 2,626 of 2,626; Maths.Oracle.Tests 13 of 39 classes, 57 of 57; Maths.Samplers.Tests compiles none of these files.
+
+**Defects found: none.**
+
+**Doc changes owed:**
+- the BASS conformal section's API rows: `BassFit.GroupConformal`, its three group readings and its refusals;
+- the new-groups section: BASS's group-units call beside `GroupConformal`, with the size condition and the note that the 0.893 for pooled cases is the fixture's alone.
+
 ### 2026-11-14 — GBASS's two follow-ups: group-level units for new groups, and the layer's cell rule
 
 Built at the user's pick (2026-11-14, "GBASS's two follow-ups"). The cell rule was built as the coordinator approved it, as one change: the field, BASS's wiring and the refusal. The defects chip was told before `Pointwise.cs` was touched and confirmed it had nothing pending there.
