@@ -553,6 +553,66 @@ for n in [3, 5, 9, 17]:
     reads.append(f"n={n}: {R:.4f}")
 report("PA-7(d′) reading: the factor q is reached, c₁J + c₂I gives κ₁(E(c)) / ((M/m)·‖E(c′)⁻¹‖₁) → n = q", "; ".join(reads), ok)
 
+# the conjecture that the inverse part is bounded: false. S1 = I - vv^T, S2 = vv^T, c' = (1, 1), c = (M, m)
+def spike_T(n, a, Mm):
+    t = math.sqrt((1 - a * a) / (n - 1))
+    v = np.r_[a, np.full(n - 1, t)]
+    P = np.outer(v, v)
+    E = unit_scale(Mm * (np.eye(n) - P) + P)
+    return norm1(np.linalg.inv(E)) / Mm  # E(c') = I, so ||E(c')^-1||_1 = 1
+
+
+def spike_closed(n, a, eps):
+    t = math.sqrt((1 - a * a) / (n - 1))
+    w = lambda x: x * math.sqrt(1 - (1 - eps) * x * x)
+    return eps * (1 - (1 - eps) * a * a) + (1 - eps) * w(a) * (w(a) + (n - 1) * w(t))
+
+
+reads = []
+ok = True
+for n in [16, 64, 256, 1024]:
+    T = spike_T(n, 1 / math.sqrt(3), 1e3)
+    ok &= abs(T - spike_closed(n, 1 / math.sqrt(3), 1e-3)) < 1e-8 * T
+    reads.append(f"n={n}: T {T:.4f}, T/√n {T / math.sqrt(n):.4f}")
+report("PA-7 conjecture false: the spike family's T grows like √n, matching its closed form (M/m = 10³, a = 1/√3)",
+       "; ".join(reads) + f"; limit 2/9 + (2/(3√3))·√(n − 5/3)", ok)
+
+r_reads = []
+ok = True
+for r in [1, 2, 4, 8]:
+    n = r * r + 1
+    v = np.r_[3 / 5, np.full(n - 1, 4 / (5 * r))]
+    E = unit_scale(2 * np.eye(n) - np.outer(v, v))
+    val = norm1(np.linalg.inv(E))
+    ok &= val >= 6 * r / 25
+    r_reads.append(f"r={r}: ‖E(c)⁻¹‖₁ {val:.4f} ≥ 6r/25 = {6 * r / 25:.4f}")
+report("PA-7 conjecture false, the Lean instance (`norm1_inv_spike`): v = (3/5, 4/(5r), …), c = (2, 1), c′ = (1, 1)",
+       "; ".join(r_reads), ok)
+
+
+def block_R(q, n2, s_, a, Mm):
+    E1 = s_ * np.ones((q, q)) + (1 - s_) * np.eye(q)
+    t = math.sqrt((1 - a * a) / (n2 - 1))
+    v = np.r_[a, np.full(n2 - 1, t)]
+    P = np.outer(v, v)
+    Z = np.zeros((q, n2))
+    A = np.block([[E1, Z], [Z.T, Mm * (np.eye(n2) - P) + P]])
+    Ap = np.block([[E1, Z], [Z.T, np.eye(n2)]])
+    return kappa1(unit_scale(A)) / (Mm * norm1(np.linalg.inv(unit_scale(Ap))))
+
+
+reads = []
+ok = True
+prev = 0
+for n in [32, 128, 512]:
+    q = n // 2
+    R = block_R(q, n - q, 0.5, 1 / math.sqrt(3), 1e6)
+    ok &= R / q > prev
+    prev = R / q
+    reads.append(f"n={n}, q={q}: R/q {R / q:.3f}, R/(q√n) {R / (q * math.sqrt(n)):.4f}")
+report("PA-7 no C·q bound either (a reading): a fixed dense q-block beside the spike family, R/q grows like √n",
+       "; ".join(reads), ok)
+
 bad = 0
 for t in range(200):
     n = int(rng.integers(1, 12))

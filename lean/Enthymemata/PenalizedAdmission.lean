@@ -1010,6 +1010,227 @@ theorem norm1_columnWitness :
     norm_num
   linarith
 
+/-! ### The inverse part is unbounded over every family -/
+
+section Dual
+
+/-- **A dual lower bound on `‖E⁻¹‖₁`.** For a symmetric invertible `E` and any `y` with every
+`|(Ey)ₖ| ≤ β`: `|yⱼ| ≤ ‖E⁻¹‖₁ · β`. -/
+theorem abs_le_norm1_inv_mul [DecidableEq n] {E : Matrix n n ℝ} (hs : Eᵀ = E)
+    (hu : IsUnit E.det) {y : n → ℝ} {β : ℝ} (hβ : ∀ k, |(E *ᵥ y) k| ≤ β) (j : n) :
+    |y j| ≤ norm1 E⁻¹ * β := by
+  have hy : y = E⁻¹ *ᵥ (E *ᵥ y) := by rw [mulVec_mulVec, nonsing_inv_mul _ hu, one_mulVec]
+  have hsi : (E⁻¹)ᵀ = E⁻¹ := inv_transpose_eq hs
+  have hβ0 : 0 ≤ β := (abs_nonneg _).trans (hβ j)
+  calc |y j| = |(E⁻¹ *ᵥ (E *ᵥ y)) j| := by rw [← hy]
+    _ = |∑ k, E⁻¹ j k * (E *ᵥ y) k| := rfl
+    _ ≤ ∑ k, |E⁻¹ j k| * β := (abs_sum_le_sum_abs _ _).trans
+        (sum_le_sum fun k _ => by
+          rw [abs_mul]; exact mul_le_mul_of_nonneg_left (hβ k) (abs_nonneg _))
+    _ = (∑ k, |E⁻¹ k j|) * β := by
+        rw [sum_mul]; exact sum_congr rfl fun k _ => by rw [entry_symm hsi j k]
+    _ ≤ norm1 E⁻¹ * β := mul_le_mul_of_nonneg_right (colSum_le_norm1 _ j) hβ0
+
+/-- `E (D^{1/2} w) = D^{-1/2} (A w)` for the unit-diagonal scaling of an `A` with positive
+diagonal. -/
+theorem unitScale_mulVec {A : Matrix n n ℝ} (hd : ∀ i, 0 < A i i) (w : n → ℝ) :
+    unitScale A *ᵥ (fun i => √(A i i) * w i) = fun i => (√(A i i))⁻¹ * (A *ᵥ w) i := by
+  funext i
+  simp only [unitScale, mulVec, dotProduct, of_apply, mul_sum]
+  refine sum_congr rfl fun j _ => ?_
+  have := (Real.sqrt_pos.2 (hd j)).ne'
+  field_simp
+
+/-! ### The inverse part is unbounded
+
+On `r² + 1` coordinates, `v = (3/5, 4/(5r), …, 4/(5r))` is a unit vector. The family
+`S₁ = I − vvᵀ`, `S₂ = vvᵀ` has `A(c′) = I` at `c′ = (1, 1)` and `A(c) = 2I − vvᵀ` at `c = (2, 1)`,
+so `M/m = 2` and `‖E(c′)⁻¹‖₁ = 1`, while `‖E(c)⁻¹‖₁ ≥ 6r/25`. -/
+
+section Unbounded
+
+variable (r : ℕ)
+
+/-- The unit vector `(3/5, 4/(5r), …, 4/(5r))` on `r² + 1` coordinates. -/
+noncomputable def spikeVec : Fin (r ^ 2 + 1) → ℝ := fun i => if i = 0 then 3 / 5 else 4 / (5 * r)
+
+/-- The two-term family `S₁ = I − vvᵀ`, `S₂ = vvᵀ`. -/
+noncomputable def spikeFamily : Fin 2 → Matrix (Fin (r ^ 2 + 1)) (Fin (r ^ 2 + 1)) ℝ :=
+  ![1 - vecMulVec (spikeVec r) (spikeVec r), vecMulVec (spikeVec r) (spikeVec r)]
+
+variable {r}
+
+theorem spikeVec_dot (hr : 1 ≤ r) : spikeVec r ⬝ᵥ spikeVec r = 1 := by
+  have hr0 : (r : ℝ) ≠ 0 := by positivity
+  simp only [dotProduct, Fin.sum_univ_succ, spikeVec, Fin.succ_ne_zero, if_true, if_false,
+    sum_const, card_univ, Fintype.card_fin, nsmul_eq_mul]
+  push_cast
+  field_simp
+  ring
+
+theorem vecMulVec_mulVec' (v w : Fin (r ^ 2 + 1) → ℝ) :
+    vecMulVec v v *ᵥ w = (v ⬝ᵥ w) • v := by
+  funext i
+  simp [vecMulVec, mulVec, dotProduct, mul_sum, mul_comm, mul_left_comm]
+
+theorem spikeFamily_posSemidef (hr : 1 ≤ r) : ∀ k, (spikeFamily r k).PosSemidef := by
+  have hv := spikeVec_dot hr
+  rw [Fin.forall_fin_two]
+  constructor
+  · change (1 - vecMulVec (spikeVec r) (spikeVec r)).PosSemidef
+    refine posSemidef_iff_dotProduct_mulVec.2 ⟨?_, fun x => ?_⟩
+    · rw [IsHermitian, conjTranspose_eq_transpose_of_trivial, transpose_sub, transpose_one,
+        transpose_vecMulVec]
+    · rw [star_trivial, sub_mulVec, one_mulVec, vecMulVec_mulVec', dotProduct_sub,
+        dotProduct_smul, smul_eq_mul]
+      have := dot_sq_le (spikeVec r) x
+      rw [hv, one_mul] at this
+      rw [dotProduct_comm x (spikeVec r)]
+      nlinarith [this]
+  · change (vecMulVec (spikeVec r) (spikeVec r)).PosSemidef
+    simpa using posSemidef_vecMulVec_self_star (spikeVec r)
+
+theorem comb_spike_one : comb (spikeFamily r) ![1, 1] = 1 := by
+  simp only [comb, Fin.sum_univ_two, spikeFamily, Matrix.cons_val_zero, Matrix.cons_val_one,
+    Matrix.cons_val_fin_one, one_smul]
+  abel
+
+theorem comb_spike_two :
+    comb (spikeFamily r) ![2, 1] =
+      (2 : ℝ) • (1 : Matrix _ _ ℝ) - vecMulVec (spikeVec r) (spikeVec r) := by
+  simp only [comb, Fin.sum_univ_two, spikeFamily, Matrix.cons_val_zero, Matrix.cons_val_one,
+    Matrix.cons_val_fin_one, one_smul, smul_sub]
+  rw [two_smul, two_smul]
+  abel
+
+theorem unitScale_one : unitScale (1 : Matrix (Fin (r ^ 2 + 1)) (Fin (r ^ 2 + 1)) ℝ) = 1 := by
+  ext i j
+  by_cases h : i = j
+  · subst h; simp [unitScale]
+  · simp [unitScale, one_apply_ne h]
+
+theorem norm1_one : norm1 (1 : Matrix (Fin (r ^ 2 + 1)) (Fin (r ^ 2 + 1)) ℝ) = 1 := by
+  have h : ∀ j : Fin (r ^ 2 + 1),
+      ∑ i, |(1 : Matrix (Fin (r ^ 2 + 1)) (Fin (r ^ 2 + 1)) ℝ) i j| = 1 :=
+    fun j => by
+      rw [Finset.sum_eq_single j (fun b _ hb => by simp [one_apply_ne hb]) (by simp)]
+      simp
+  simp only [norm1, h, ciSup_const]
+
+/-- **The spike family's inverse part.** `‖E(c)⁻¹‖₁ ≥ 6r/25` at `c = (2, 1)`. The certificate is
+`y = D^{1/2} w` with `Aw = (0, 5θ/(4r), …, 5θ/(4r))`, so `|(Ey)ₖ| ≤ 1` and `y₀ ≥ 6r/25`. -/
+theorem norm1_inv_spike (hr : 1 ≤ r) :
+    6 * (r : ℝ) / 25 ≤ norm1 (unitScale (comb (spikeFamily r) ![2, 1]))⁻¹ := by
+  classical
+  have hv := spikeVec_dot hr
+  have hr0 : (0 : ℝ) < r := by exact_mod_cast hr
+  have hr1 : (1 : ℝ) ≤ r := by exact_mod_cast hr
+  set v := spikeVec r with hvdef
+  set A := comb (spikeFamily r) ![2, 1] with hAdef
+  have hA : A = (2 : ℝ) • (1 : Matrix _ _ ℝ) - vecMulVec v v := comb_spike_two
+  have hAii : ∀ i, A i i = 2 - v i ^ 2 := fun i => by rw [hA]; simp [vecMulVec, sq]
+  have hv2 : ∀ i, v i ^ 2 ≤ 1 := fun i => by
+    by_cases h : i = 0
+    · simp only [hvdef, spikeVec, h, if_true]; norm_num
+    · simp only [hvdef, spikeVec, h, if_false]
+      rw [div_pow, div_le_one (by positivity)]
+      nlinarith
+  have hd : ∀ i, 1 ≤ A i i := fun i => by rw [hAii]; linarith [hv2 i]
+  have hd0 : ∀ i, 0 < A i i := fun i => by linarith [hd i]
+  have hsA : Aᵀ = A := by
+    rw [hA, transpose_sub, transpose_smul, transpose_one, transpose_vecMulVec]
+  have hAmul : ∀ w, A *ᵥ w = (2 : ℝ) • w - (v ⬝ᵥ w) • v := fun w => by
+    rw [hA, sub_mulVec, smul_mulVec, one_mulVec, vecMulVec_mulVec']
+  have hApd : A.PosDef := by
+    refine posDef_iff_dotProduct_mulVec.2 ⟨?_, fun x hx => ?_⟩
+    · rw [IsHermitian, conjTranspose_eq_transpose_of_trivial, hsA]
+    · rw [star_trivial, hAmul, dotProduct_sub, dotProduct_smul, dotProduct_smul, smul_eq_mul,
+        smul_eq_mul]
+      have h1 := dot_sq_le v x
+      rw [hv, one_mul] at h1
+      rw [dotProduct_comm x v]
+      have h2 := dot_self_pos hx
+      nlinarith
+  set E := unitScale A
+  have hsE : Eᵀ = E := unitScale_transpose hsA
+  have hpdE : E.PosDef := posDef_iff_dotProduct_mulVec.2
+    ⟨by rw [IsHermitian, conjTranspose_eq_transpose_of_trivial, hsE],
+     fun x hx => by simpa using unitScale_form_pos hApd hx⟩
+  have huE : IsUnit E.det := (isUnit_iff_isUnit_det E).1 hpdE.isUnit
+  -- the certificate
+  set Δ : ℝ := 2 - (4 / (5 * r)) ^ 2 with hΔdef
+  have hΔ : 1 ≤ Δ := by
+    rw [hΔdef, div_pow]
+    have : (4 : ℝ) ^ 2 / (5 * r) ^ 2 ≤ 1 := by rw [div_le_one (by positivity)]; nlinarith
+    linarith
+  have hsΔ : 1 ≤ √Δ := by
+    rw [show (1 : ℝ) = √1 from Real.sqrt_one.symm]; exact Real.sqrt_le_sqrt hΔ
+  set θ : ℝ := 4 * r * √Δ / 5 with hθ
+  set w : Fin (r ^ 2 + 1) → ℝ :=
+    fun i => if i = 0 then 3 * θ / 10 else 41 * θ / (40 * r) with hw
+  have hvw : v ⬝ᵥ w = θ := by
+    simp only [dotProduct, Fin.sum_univ_succ, hvdef, spikeVec, hw, Fin.succ_ne_zero, if_true,
+      if_false, sum_const, card_univ, Fintype.card_fin, nsmul_eq_mul]
+    push_cast
+    field_simp
+    ring
+  have hAw : ∀ i, (A *ᵥ w) i = if i = 0 then 0 else 5 * θ / (4 * r) := fun i => by
+    rw [hAmul, hvw]
+    by_cases h : i = 0
+    · simp only [h, if_true, Pi.sub_apply, Pi.smul_apply, smul_eq_mul, hw, hvdef, spikeVec]; ring
+    · simp only [h, if_false, Pi.sub_apply, Pi.smul_apply, smul_eq_mul, hw, hvdef, spikeVec]
+      field_simp
+      ring
+  have hEy : ∀ k, |(E *ᵥ fun i => √(A i i) * w i) k| ≤ 1 := fun k => by
+    rw [unitScale_mulVec hd0]
+    change |(√(A k k))⁻¹ * (A *ᵥ w) k| ≤ 1
+    rw [hAw k]
+    by_cases h : k = 0
+    · simp [h]
+    · rw [if_neg h, hAii k]
+      have hvk : v k = 4 / (5 * r) := by simp [hvdef, spikeVec, h]
+      rw [hvk, ← hΔdef]
+      have hpos : 0 < √Δ := by linarith
+      have : 5 * θ / (4 * r) = √Δ := by rw [hθ]; field_simp
+      rw [this, inv_mul_cancel₀ hpos.ne', abs_one]
+  have hy0 := abs_le_norm1_inv_mul hsE huE hEy 0
+  have hy0v : √(A 0 0) * w 0 = √(A 0 0) * (3 * θ / 10) := by simp [hw]
+  have hs0 : 1 ≤ √(A 0 0) := by
+    rw [show (1 : ℝ) = √1 from Real.sqrt_one.symm]; exact Real.sqrt_le_sqrt (hd 0)
+  have hθ0 : 0 ≤ 3 * θ / 10 := by rw [hθ]; positivity
+  have hθlow : 6 * (r : ℝ) / 25 ≤ 3 * θ / 10 := by
+    rw [hθ]; nlinarith
+  calc 6 * (r : ℝ) / 25 ≤ 3 * θ / 10 := hθlow
+    _ ≤ √(A 0 0) * (3 * θ / 10) := le_mul_of_one_le_left hθ0 hs0
+    _ ≤ |√(A 0 0) * w 0| := by rw [hy0v]; exact le_abs_self _
+    _ ≤ norm1 E⁻¹ * 1 := hy0
+    _ = norm1 E⁻¹ := mul_one _
+
+/-- **The conjecture is false.** No constant bounds `‖E(c)⁻¹‖₁ / ((M/m)·‖E(c′)⁻¹‖₁)` over every
+family: for every `C`, the spike family on `r² + 1` coordinates, `r > 25C/3`, has `m = 1`, `M = 2`,
+`A(c′) = I` positive definite and `‖E(c)⁻¹‖₁ > C·(M/m)·‖E(c′)⁻¹‖₁`. -/
+theorem inverse_part_unbounded (C : ℝ) :
+    ∃ (k : ℕ) (S : Fin 2 → Matrix (Fin (k + 1)) (Fin (k + 1)) ℝ) (c c' : Fin 2 → ℝ),
+      (∀ i, (S i).PosSemidef) ∧ (∀ i, 1 * c' i ≤ c i) ∧ (∀ i, c i ≤ 2 * c' i) ∧
+      (comb S c').PosDef ∧
+      C * (2 / 1) * norm1 (unitScale (comb S c'))⁻¹ < norm1 (unitScale (comb S c))⁻¹ := by
+  set r := ⌈25 * C / 3⌉₊ + 1 with hrdef
+  have hr : 1 ≤ r := Nat.le_add_left 1 _
+  refine ⟨r ^ 2, spikeFamily r, ![2, 1], ![1, 1], spikeFamily_posSemidef hr, ?_, ?_, ?_, ?_⟩
+  · rw [Fin.forall_fin_two]; norm_num
+  · rw [Fin.forall_fin_two]; norm_num
+  · rw [comb_spike_one]; exact PosDef.one
+  · rw [comb_spike_one, unitScale_one, inv_one, norm1_one, mul_one]
+    have h1 := norm1_inv_spike hr
+    have h2 : 25 * C / 3 < r := by
+      rw [hrdef]; push_cast
+      exact lt_of_le_of_lt (Nat.le_ceil _) (lt_add_one _)
+    linarith
+
+end Unbounded
+
+end Dual
+
 /-! ### The smallest instance
 
 `S₁ = diag(1, 0)` and `S₂ = diag(0, 1)`, each singular, with `c′ = (1, 1)`, `c = (2, 3)`, `m = 2`,
