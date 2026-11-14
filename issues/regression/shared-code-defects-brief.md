@@ -63,6 +63,18 @@ Commissioned by the user on 2026-11-13 through the coordinating session. Both de
 
 Newest first. Each gives the commits, the gates' results, defects found, decisions for the user and "Doc changes owed".
 
+### 2026-11-14 — The named-output readouts verified from a clean archive (coordinating session)
+
+- **Run:** `scripts/verify-csharp.ps1` on one clean archive of HEAD `79e858f`, the Commit selection over the seven files of `c543297` in each test project where they select a class.
+  - `Maths.Regression.Tests`: 229 of 318 classes, 2,603 of 2,603. `MultiOutputActiveSubspaceTests` is among them.
+  - `Maths.Oracle.Tests`: 13 of 39 classes, 57 of 57.
+- **The source was read:** nothing found.
+  - Scalar and functional fits take the arithmetic they took, and one named output under the identity takes the scalar's.
+  - The sampled route reads `BassMultiOutput.Gradient` in bounded draw batches.
+  - Pairs within one fit go through `BassMultiOutput.CoActive` alone.
+- **What it removes:** `RefuseSeveralOutputs` and its test, which `d9152e6` added, and nothing else of E34's. The three entries now read such a fit, so the first coordinating session's verification of `d9152e6` is superseded by design. Locations, output patterns and a metric that is not K × K are still refused.
+- **Receipts:** `artifacts/verify-defects-e8-named-79e858f/`, with the changed-file list, counters and snapshot line tracked in [receipts](receipts/verify-defects-e8-named-79e858f/).
+
 ### 2026-11-14 — Slice 5's decision 1, measured: the condition estimate's cost per sampler step
 
 The coordinating session relayed the user's yes on 2026-11-14. This is a measurement only: nothing is built and no default changes. The decision it serves is whether `BapsAdmission`'s estimate stays on every sampler step.

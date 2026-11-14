@@ -1,0 +1,7 @@
+src/maths/regression/spline/bass/BassFit.cs
+src/maths/regression/spline/bass/posterior/BassMultiOutput.cs
+src/maths/regression/spline/bass/sensitivity/ActiveSubspaces.cs
+src/maths/regression/spline/bass/sensitivity/BassActiveSubspace.cs
+src/maths/regression/spline/bass/sensitivity/BassMultiOutputSubspaces.cs
+tests/regression/MultiOutputActiveSubspaceTests.cs
+tests/regression/MultiOutputReadoutTests.cs
