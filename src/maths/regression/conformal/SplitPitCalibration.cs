@@ -10,6 +10,8 @@ public sealed class SplitPitCalibration
     private readonly int[] _rows;
     private readonly double[] _weights;
     private readonly Dictionary<int, CdfScore[]> _sorted = [];
+    private readonly Dictionary<int, int[]> _order = [];   // each stratum's calibration units, in their scores' sorted order
+    private readonly int _units;
 
     internal SplitPitCalibration(CandidateLogDensity calibration)
     {
@@ -18,19 +20,22 @@ public sealed class SplitPitCalibration
         (_rows, double[]? logWeights) = PredictiveChecks.Rows(calibration.Weights, calibration.Draws);
         _weights = CdfScores.Weights(_rows, logWeights);
         var scores = new CdfScore[calibration.Cases];
+        _units = scores.Length;
         Score(RequireCdf(calibration), 0, scores);
-        var groups = new Dictionary<int, List<CdfScore>>();
+        var groups = new Dictionary<int, List<int>>();
         for (int i = 0; i < scores.Length; i++)
         {
             int h = calibration.StratumOf[i];
             if (!groups.TryGetValue(h, out var group)) groups.Add(h, group = []);
-            group.Add(scores[i]);
+            group.Add(i);
         }
-        foreach ((int h, List<CdfScore> group) in groups)
+        foreach ((int h, List<int> group) in groups)
         {
-            CdfScore[] sorted = [.. group];
-            Array.Sort(sorted);
+            int[] order = [.. group];
+            CdfScore[] sorted = Array.ConvertAll(order, i => scores[i]);
+            Array.Sort(sorted, order);
             _sorted.Add(h, sorted);
+            _order.Add(h, order);
         }
     }
 
@@ -48,10 +53,24 @@ public sealed class SplitPitCalibration
 
     private CdfScore[] Sorted(int stratum) => _sorted.TryGetValue(stratum, out var scores) ? scores : [];
 
-    /// <summary>Read the split distribution on the supplied grids using the same calibration as the grid-free readouts.</summary>
-    public ConformalDistributions OnGrid(CandidateLogDensity candidates)
+    /// <summary>
+    /// Read the split distribution on the supplied grids using the same calibration as the grid-free readouts. With
+    /// <paramref name="weights"/> (<see cref="ShiftWeights"/>: one per calibration unit in the calibration's order, or per case, and one per
+    /// candidate column) each case whose weights are not all one value reads its <see cref="ConformalDistribution.Weighted"/> ranks
+    /// (slice 14's follow-up 1, <c>pit_weighted</c>).
+    /// </summary>
+    public ConformalDistributions OnGrid(CandidateLogDensity candidates, ShiftWeights? weights = null)
     {
         double[,] cdf = CheckCandidates(candidates);
+        if (weights is not null)
+        {
+            if (weights.UnitCount != _units)
+                throw new ArgumentException($"One weight per calibration unit is required: {weights.UnitCount} weights for {_units} units.", nameof(weights));
+            if (weights.UnitsByCase is { } byCase && byCase.Count != candidates.Cases)
+                throw new ArgumentException($"One set of unit weights per case is required: {byCase.Count} sets for {candidates.Cases} cases.", nameof(weights));
+            if (weights.Candidates.Count != candidates.Values.GetLength(1))
+                throw new ArgumentException($"One weight per candidate is required: {weights.Candidates.Count} weights for {candidates.Values.GetLength(1)} candidates.", nameof(weights));
+        }
         var distributions = new ConformalDistribution[candidates.Cases];
         for (int t = 0; t < candidates.Cases; t++)
         {
@@ -64,9 +83,39 @@ public sealed class SplitPitCalibration
             var tied = new int[grid.Length];
             for (int g = 0; g < grid.Length; g++) (below[g], tied[g]) = CdfScores.Rank(units, own[g]);
             distributions[t] = new ConformalDistribution(t, h, units.Length + 1, grid, below, tied, ConformalForm.Split,
-                                                         CdfScores.Fall(below, tied), CdfScores.ScoreFall(own));
+                                                         CdfScores.Fall(below, tied), CdfScores.ScoreFall(own))
+            {
+                Weighted = weights is null ? null : Weigh(weights, t, h, candidates.Offset(t), below, tied),
+            };
         }
         return new ConformalDistributions(distributions, ConformalForm.Split);
+    }
+
+    // Case t's weighted ranks: the stratum's unit weights summed along its sorted order, so the units below are the first B and those at or
+    // below the first B + T; null where its weights are all one value, CB-1's distribution.
+    private WeightedRanks? Weigh(ShiftWeights weights, int t, int h, int offset, int[] below, int[] tied)
+    {
+        IReadOnlyList<double> units = weights.UnitsFor(t);
+        int[] order = _order.TryGetValue(h, out int[]? found) ? found : [];
+        var running = new double[order.Length + 1];
+        double common = order.Length > 0 ? units[order[0]] : weights.Candidates[offset];
+        bool equal = true;
+        for (int j = 0; j < order.Length; j++)
+        {
+            double w = units[order[j]];
+            running[j + 1] = running[j] + w;
+            if (w != common) equal = false;
+        }
+        for (int g = 0; g < below.Length; g++) if (weights.Candidates[offset + g] != common) equal = false;
+        if (equal) return null;
+        var weightBelow = new double[below.Length];
+        var weightAtOrBelow = new double[below.Length];
+        for (int g = 0; g < below.Length; g++)
+        {
+            weightBelow[g] = running[below[g]];
+            weightAtOrBelow[g] = running[below[g] + tied[g]];
+        }
+        return CdfScores.Ranks(weightBelow, weightAtOrBelow, running[^1], weights.Candidates, offset);
     }
 
     /// <summary>

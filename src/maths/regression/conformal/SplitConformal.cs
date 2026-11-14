@@ -301,10 +301,12 @@ public static class SplitConformal
     /// with the candidate and the candidate's rises with y, so both of Vovk's conditions hold by construction and every case has a
     /// distribution (its <see cref="ConformalDistribution.Fall"/> is 0, and reads the CDFs' rounding if not). It is the fit's predictive
     /// recalibrated by the calibration PITs, valid for any fit (CB-2), PIT included. Both seams must hold their log CDF, the same
-    /// draws, chain lengths, weights and latent report.
+    /// draws, chain lengths, weights and latent report. With <paramref name="weights"/> each case whose shift weights are not all one value
+    /// reads its weighted ranks (<see cref="ConformalDistribution.Weighted"/>, slice 14's follow-up 1): its PIT exactly uniform under
+    /// covariate or response shift with the true ratio (<c>pit_weighted</c>).
     /// </summary>
-    public static ConformalDistributions Distribution(CandidateLogDensity calibration, CandidateLogDensity candidates)
-        => CalibrateDistribution(calibration).OnGrid(candidates);
+    public static ConformalDistributions Distribution(CandidateLogDensity calibration, CandidateLogDensity candidates, ShiftWeights? weights = null)
+        => CalibrateDistribution(calibration).OnGrid(candidates, weights);
 
     /// <summary>Sort the held-out PITs once per stratum for grid-free quantiles and equi-tailed sets at new cases.</summary>
     public static SplitPitCalibration CalibrateDistribution(CandidateLogDensity calibration) => new(calibration);

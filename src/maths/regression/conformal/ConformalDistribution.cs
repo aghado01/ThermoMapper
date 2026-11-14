@@ -5,6 +5,21 @@ using Maths.LinAlg;
 namespace Maths.Regression.Conformal;
 
 /// <summary>
+/// A case's weighted ranks along its grid (slice 14's follow-up 1; <see cref="ShiftWeights"/>): at each grid value the share of its
+/// stratum's weight, the candidate's own included, that lies below the candidate, Q⁻ = A/(W + w_c), and at or below it with its own,
+/// Q⁺ = (A + B)/(W + w_c), B the tied weight with the candidate's. The PIT T = Q⁻ + V·(Q⁺ − Q⁻), V uniform, is exactly uniform at the test
+/// unit's value under covariate shift w(x) or response shift w(y) with the true ratio, in the split form and the full step
+/// (<c>pit_weighted</c>, <c>sum_mul_wPitCdf</c>); with an estimated ratio it lies within the data set's total variation between the true and
+/// the estimated normalized weights of uniform, from either side (<c>wPit_estimated</c>). With ties counted for the candidate (V = 1) it is
+/// <c>weightLe</c>, super-uniform at every level (<c>coverage_weighted</c>). Where W + w_c is 0, Q⁻ is 0 and Q⁺ is 1.
+/// </summary>
+/// <param name="Lower">Q⁻ at each grid value.</param>
+/// <param name="Upper">Q⁺ at each grid value.</param>
+/// <param name="Fall">The largest fall of Q⁻ or Q⁺ between neighbouring grid values: 0 where both rise, the weighted distribution's
+/// condition. Under response shift the candidate's weight moves along the grid, and the shares can fall where the counts rise.</param>
+public sealed record WeightedRanks(double[] Lower, double[] Upper, double Fall);
+
+/// <summary>
 /// One test case's conformal predictive distribution on its grid (E16, slice 4; Vovk, Shen, Manokhin and Xie 2019). The candidate y is
 /// ranked by a CDF score among its stratum's m units: Q(y, τ) = (B + τ·(T + 1))/m, with B the units scoring below the candidate and T
 /// those tied with it. At the true y, with τ uniform, Q is uniform whatever the score (<c>coverage_tieBreak</c>, <c>rank_uniform</c>):
@@ -18,6 +33,7 @@ namespace Maths.Regression.Conformal;
 /// </list>
 /// The lower and upper p-values at y are Q⁺ = π(y) = (B + T + 1)/m and 1 − Q⁻ = (m − B)/m, ties counted for the candidate in each
 /// tail, so the equi-tailed set takes k = ⌊α·m/2⌋ per tail and covers at least 1 − 2k/m, exactly with distinct scores (CB-1 per tail).
+/// A case weighed by unequal shift weights reads its <see cref="Weighted"/> ranks instead, in every query.
 /// </summary>
 /// <param name="Case">The test case's index in the candidates.</param>
 /// <param name="Stratum">Its stratum.</param>
@@ -39,40 +55,50 @@ public sealed record ConformalDistribution(int Case, int Stratum, int Units, dou
     /// <summary>Whether set queries use the inflated tails; distribution, PIT and monotonicity queries retain the original ranks.</summary>
     public bool Inflated { get; init; }
 
+    /// <summary>
+    /// The weighted ranks where the case was weighed by unequal shift weights (<see cref="ShiftWeights"/>); null where unweighted, or where
+    /// its stratum's weights and its candidate weights are all one value, CB-1's distribution bit for bit. Where set every query reads them:
+    /// Q⁻, Q⁺, the PIT, the quantiles, the CRPS and monotonicity, and the equi-tailed set, which holds y_g where Q⁺ &gt; α/2 and
+    /// 1 − Q⁻ &gt; α/2, each tail refusing at most α/2 of the weight, so it covers at least 1 − α.
+    /// </summary>
+    public WeightedRanks? Weighted { get; init; }
+
     /// <summary>The conditional fixed/refined-grid coverage diagnostic at alpha; NaN for an uncomputed plain margin.</summary>
     public double CoverageUnderError(double alpha) => WholeSpace(alpha) ? 1.0 : Margin?.CoverageUnderError(Level(alpha), Units, Inflated) ?? double.NaN;
 
-    /// <summary>Whether Q rises along the grid, so the case has a distribution there.</summary>
-    public bool Monotone => Fall == 0;
+    /// <summary>Whether Q rises along the grid, so the case has a distribution there: the counts' <see cref="Fall"/>, or the weighted
+    /// ranks' where the case was weighed.</summary>
+    public bool Monotone => Weighted is { } w ? w.Fall == 0.0 : Fall == 0;
 
-    /// <summary>Q⁻ = Q(y_g, 0) = B/m, the lower distribution.</summary>
-    public double Lower(int g) => (double)Below[g] / Units;
+    /// <summary>Q⁻ = Q(y_g, 0) = B/m, the lower distribution; A/(W + w_c) where weighed.</summary>
+    public double Lower(int g) => Weighted is { } w ? w.Lower[g] : (double)Below[g] / Units;
 
-    /// <summary>Q⁺ = Q(y_g, 1) = (B + T + 1)/m, the upper distribution, and π(y_g) under the CDF score.</summary>
-    public double Upper(int g) => (double)(Below[g] + Tied[g] + 1) / Units;
+    /// <summary>Q⁺ = Q(y_g, 1) = (B + T + 1)/m, the upper distribution, and π(y_g) under the CDF score; (A + B)/(W + w_c) where weighed.</summary>
+    public double Upper(int g) => Weighted is { } w ? w.Upper[g] : (double)(Below[g] + Tied[g] + 1) / Units;
 
-    /// <summary>Q(y_g, τ) = (B + τ·(T + 1))/m; at the true y with τ uniform, the PIT.</summary>
+    /// <summary>Q(y_g, τ) = (B + τ·(T + 1))/m, or Q⁻ + τ·(Q⁺ − Q⁻) where weighed; at the true y with τ uniform, the PIT.</summary>
     public double At(int g, double tau)
     {
         if (!(tau >= 0.0 && tau <= 1.0)) throw new ArgumentOutOfRangeException(nameof(tau), "τ must lie in [0, 1].");
-        return (Below[g] + tau * (Tied[g] + 1)) / Units;
+        return Weighted is { } w ? w.Lower[g] + tau * (w.Upper[g] - w.Lower[g]) : (Below[g] + tau * (Tied[g] + 1)) / Units;
     }
 
-    /// <summary>Q's mean over τ, (B + (T + 1)/2)/m, the distribution the quantiles read.</summary>
-    public double Mid(int g) => (Below[g] + 0.5 * (Tied[g] + 1)) / Units;
+    /// <summary>Q's mean over τ, (B + (T + 1)/2)/m, or (Q⁻ + Q⁺)/2 where weighed: the distribution the quantiles read.</summary>
+    public double Mid(int g) => Weighted is { } w ? 0.5 * (w.Lower[g] + w.Upper[g]) : (Below[g] + 0.5 * (Tied[g] + 1)) / Units;
 
-    /// <summary>k = ⌊α·m/2⌋, each tail's level at miscoverage α.</summary>
+    /// <summary>k = ⌊α·m/2⌋, each tail's level at miscoverage α: the counts', which a weighed case's set does not read.</summary>
     public int Level(double alpha)
     {
         CheckAlpha(alpha);
         return (int)Math.Floor(0.5 * alpha * Units);
     }
 
-    /// <summary>1 − 2k/m, the equi-tailed set's coverage.</summary>
-    public double Coverage(double alpha) => 1.0 - 2.0 * Level(alpha) / Units;
+    /// <summary>1 − 2k/m, the equi-tailed set's coverage; 1 − α where weighed.</summary>
+    public double Coverage(double alpha) => Weighted is null ? 1.0 - 2.0 * Level(alpha) / Units : 1.0 - Checked(alpha);
 
-    /// <summary>Whether the set at α is the whole line: m below ⌈2/α⌉ leaves each tail no level.</summary>
-    public bool WholeSpace(double alpha) => Level(alpha) == 0;
+    /// <summary>Whether the set at α is the whole line: m below ⌈2/α⌉ leaves each tail no level. A weighed case judges each grid value
+    /// by its shares, so it is never the whole line by its count.</summary>
+    public bool WholeSpace(double alpha) => Level(alpha) == 0 && Weighted is null;
 
     /// <summary>Whether the equi-tailed set at α holds y_g: both p-values above k/m, (B + T + 1) &gt; k and m − B &gt; k.</summary>
     public bool Accepts(int g, double alpha)
@@ -81,6 +107,7 @@ public sealed record ConformalDistribution(int Case, int Stratum, int Units, dou
     /// <summary>The original equi-tailed set, irrespective of the inflation choice.</summary>
     public bool AcceptsPlain(int g, double alpha)
     {
+        if (Weighted is { } w) return w.Upper[g] > 0.5 * Checked(alpha) && 1.0 - w.Lower[g] > 0.5 * alpha;
         int k = Level(alpha);
         return k == 0 || (Below[g] + Tied[g] + 1 > k && Units - Below[g] > k);
     }
@@ -165,8 +192,8 @@ public sealed record ConformalDistribution(int Case, int Stratum, int Units, dou
         return total;
     }
 
-    // Q⁺ − Q⁻ = (T + 1)/m.
-    private double Spread(int g) => (Tied[g] + 1.0) / Units;
+    // Q⁺ − Q⁻ = (T + 1)/m, or the weighted ranks' difference.
+    private double Spread(int g) => Weighted is { } w ? w.Upper[g] - w.Lower[g] : (Tied[g] + 1.0) / Units;
 
     // ∫ u² + d²/12 over [a, b], u and d linear between their end values: (b − a)(u_a² + u_a·u_b + u_b²)/3, and d's alike.
     private static double Piece(double a, double b, double ua, double ub, double da, double db)
@@ -175,6 +202,12 @@ public sealed record ConformalDistribution(int Case, int Stratum, int Units, dou
     private static void CheckAlpha(double alpha)
     {
         if (!(alpha > 0.0 && alpha < 1.0)) throw new ArgumentOutOfRangeException(nameof(alpha), "α must lie in (0, 1).");
+    }
+
+    private static double Checked(double alpha)
+    {
+        CheckAlpha(alpha);
+        return alpha;
     }
 }
 
@@ -237,6 +270,28 @@ internal static class CdfScores
         for (int g = 1; g < below.Length; g++)
             fall = Math.Max(fall, Math.Max(below[g - 1] - below[g], below[g - 1] + tied[g - 1] - below[g] - tied[g]));
         return fall;
+    }
+
+    /// <summary>
+    /// The weighted ranks (<see cref="WeightedRanks"/>) from each grid value's unit weight below the candidate, <paramref name="below"/>,
+    /// and at or below it, <paramref name="atOrBelow"/>, the stratum's unit total <paramref name="units"/>, and the candidate weights from
+    /// column <paramref name="offset"/>: Q⁻ = A/(W + w_c) and Q⁺ = (A + B)/(W + w_c), each read from its own sum, so sums that grow along
+    /// the grid under a constant w_c give shares that do not fall.
+    /// </summary>
+    public static WeightedRanks Ranks(double[] below, double[] atOrBelow, double units, IReadOnlyList<double> candidates, int offset)
+    {
+        int count = below.Length;
+        var lower = new double[count];
+        var upper = new double[count];
+        double fall = 0.0;
+        for (int g = 0; g < count; g++)
+        {
+            double own = candidates[offset + g], total = units + own;
+            lower[g] = total > 0.0 ? below[g] / total : 0.0;
+            upper[g] = total > 0.0 ? (atOrBelow[g] + own) / total : 1.0;
+            if (g > 0) fall = Math.Max(fall, Math.Max(lower[g - 1] - lower[g], upper[g - 1] - upper[g]));
+        }
+        return new WeightedRanks(lower, upper, fall);
     }
 
     /// <summary>The largest fall of the candidate's own score between neighbouring grid values.</summary>
@@ -342,8 +397,11 @@ internal sealed class CdfScorer
     }
 
     /// <summary>Each of <paramref name="count"/> candidates from column <paramref name="first"/>: the units below and tied with it, into
-    /// <paramref name="below"/> and <paramref name="tied"/> from <paramref name="at"/>, and its own score into <paramref name="own"/>.</summary>
-    public void Score(double[,] logDensity, double[,] logCdf, int first, int count, int[] below, int[] tied, CdfScore[] own, int at)
+    /// <paramref name="below"/> and <paramref name="tied"/> from <paramref name="at"/>, and its own score into <paramref name="own"/>. With
+    /// <paramref name="unitWeights"/> (the members' shift weights, in their order) the weight of the units below and at or below it too, into
+    /// <paramref name="weightBelow"/> and <paramref name="weightAtOrBelow"/>, each summed in the members' order.</summary>
+    public void Score(double[,] logDensity, double[,] logCdf, int first, int count, int[] below, int[] tied, CdfScore[] own, int at,
+                      double[]? unitWeights = null, double[]? weightBelow = null, double[]? weightAtOrBelow = null)
     {
         int s = _s, size = s * count;
         if (_weights.Length < size) _weights = new double[size];
@@ -392,6 +450,11 @@ internal sealed class CdfScorer
         for (int b = 0; b < count; b++) own[at + b] = new CdfScore(lower[b], upper[b]);
         Array.Clear(below, at, count);
         Array.Clear(tied, at, count);
+        if (unitWeights is not null)
+        {
+            Array.Clear(weightBelow!, at, count);
+            Array.Clear(weightAtOrBelow!, at, count);
+        }
         if (_n == 0) return;
         if (_right is null || _right.Columns != count || _right.Inner != s) _right = new PackedColumns(s, count);
         _right.Fill(w);
@@ -408,6 +471,11 @@ internal sealed class CdfScorer
                 int order = new CdfScore(_a[i * count + b], _b[i * count + b]).CompareTo(own[at + b]);
                 if (order < 0) below[at + b]++;
                 else if (order == 0) tied[at + b]++;
+                if (unitWeights is not null && order <= 0)
+                {
+                    if (order < 0) weightBelow![at + b] += unitWeights[i];
+                    weightAtOrBelow![at + b] += unitWeights[i];
+                }
             }
     }
 }
