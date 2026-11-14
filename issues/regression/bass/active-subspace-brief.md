@@ -1,6 +1,6 @@
 # Active subspaces on the BASS core: E8's build (chip brief)
 
-Date: 2026-11-08. Status: slices 0–7e complete and verified; no slice is commissioned, and what stays open is under [Open items](#open-items-2026-11-13); slice 7's plan approved by the user (2026-11-10); slice 7a (`7b2ca7a`) verified 2026-11-11; slice 7b (`70a2aa2`) verified 2026-11-11; slice 7c (`015d977`) verified 2026-11-11; slice 7d, the training-range hinge rule the user chose for projected fits (2026-11-11), landed (`566c1f1` to `6aff134`) and was verified 2026-11-13 (2,502 of 2,502 from a clean archive of `788d249`); slice 7e, the frame's column signs, commissioned by the user on 2026-11-13 (below), landed (`9b9e4e1` to `199abd7`) and was verified the same day in seven test projects (below). Commissioned by the user on 2026-11-08 ("kick off e8"), after KHAOS's last slice; slice 5, the Grassmann discussion's items the user settled, commissioned 2026-11-08 ("ill take as recommended"). Every slice landed and was verified by the coordinating session on 2026-11-08: slice 0 (`15fb495`, `9e3028d`, `aa62879`), slice 1 (`95294f8`, `9dfcc6d`, `1385b86`), slice 2 (`8c7db77`, `3cdc2e8`), slice 3 (`84fe230`, `1049055`), slice 4 (`20aeb06`, `bc72014`) and slice 5 (`def59f3`, `9d2ff23`, `95d2900`, `a54a537`). The follow-ups, commissioned 2026-11-10: slice 6 (`276af70`, `e9d8827`, `30df59e`, `9a669b6`, report `3c26660`) verified by the coordinating session on 2026-11-10; slice 7's plan, approved 2026-11-10, was built as 7a to 7c; E36's brief ([`bppr-brief.md`](bppr-brief.md)) is drafted and waits for the user's approval. Written by the main session from [E8's entry](extensions-brief.md#active-subspace-analysis), [gap G3](lineage-gaps-register.md#g3-sobol-indices-and-active-subspaces-have-different-standing), [the lineage review's separability question](lineage-review.md#separability-is-what-the-closed-forms-rest-on), the [Astra notes](../archive/bass-gbass-khaos-activespaces/discussion/astra-grassman-stiefel-pca-extensions.md), and the [Grassmann discussion](../archive/bass-gbass-khaos-activespaces/briefs/grassmann-stiefel-subspaces-brief.md)'s report so far. Reports go under "Reports" below, newest first.
+Date: 2026-11-08. Status: slices 0–7e complete and verified; no slice is commissioned; slice 8's plan, the five unbuilt items, is drafted for the user's call (2026-11-13), and what stays open is under [Open items](#open-items-2026-11-13); slice 7's plan approved by the user (2026-11-10); slice 7a (`7b2ca7a`) verified 2026-11-11; slice 7b (`70a2aa2`) verified 2026-11-11; slice 7c (`015d977`) verified 2026-11-11; slice 7d, the training-range hinge rule the user chose for projected fits (2026-11-11), landed (`566c1f1` to `6aff134`) and was verified 2026-11-13 (2,502 of 2,502 from a clean archive of `788d249`); slice 7e, the frame's column signs, commissioned by the user on 2026-11-13 (below), landed (`9b9e4e1` to `199abd7`) and was verified the same day in seven test projects (below). Commissioned by the user on 2026-11-08 ("kick off e8"), after KHAOS's last slice; slice 5, the Grassmann discussion's items the user settled, commissioned 2026-11-08 ("ill take as recommended"). Every slice landed and was verified by the coordinating session on 2026-11-08: slice 0 (`15fb495`, `9e3028d`, `aa62879`), slice 1 (`95294f8`, `9dfcc6d`, `1385b86`), slice 2 (`8c7db77`, `3cdc2e8`), slice 3 (`84fe230`, `1049055`), slice 4 (`20aeb06`, `bc72014`) and slice 5 (`def59f3`, `9d2ff23`, `95d2900`, `a54a537`). The follow-ups, commissioned 2026-11-10: slice 6 (`276af70`, `e9d8827`, `30df59e`, `9a669b6`, report `3c26660`) verified by the coordinating session on 2026-11-10; slice 7's plan, approved 2026-11-10, was built as 7a to 7c; E36's brief ([`bppr-brief.md`](bppr-brief.md)) is drafted and waits for the user's approval. Written by the main session from [E8's entry](extensions-brief.md#active-subspace-analysis), [gap G3](lineage-gaps-register.md#g3-sobol-indices-and-active-subspaces-have-different-standing), [the lineage review's separability question](lineage-review.md#separability-is-what-the-closed-forms-rest-on), the [Astra notes](../archive/bass-gbass-khaos-activespaces/discussion/astra-grassman-stiefel-pca-extensions.md), and the [Grassmann discussion](../archive/bass-gbass-khaos-activespaces/briefs/grassmann-stiefel-subspaces-brief.md)'s report so far. Reports go under "Reports" below, newest first.
 
 ## Why
 
@@ -204,6 +204,73 @@ Commissioned by the user on 2026-11-13 ("Yes, commission it"), from the active-s
 
 **Report** under Reports, with the doc changes owed (`ActiveSubspaces.md`, slice 7's section: the frame's sign convention).
 
+### Slice 8's plan: the unbuilt readout and comparison items (2026-11-13), for the user's call
+
+Drafted at the user's request on 2026-11-13 ("Draft slice 8"), from the five items slices 6 and 7c left unbuilt. Nothing is built until the user commissions it and decides the items marked **Decision**; each decision has a recommendation. The items fall into three slices: two readout items, two comparison items, and one model change.
+
+**A. Co-active output functionals at new locations** (slice 6 left them at the training locations).
+- *What exists.* `CoActiveSpec.Output` and `OtherOutput` weight the training output locations. Slice 6 gave `OutputMetric` its `Locations` for a direct fit, whose output-side factors are hinges defined across the output variables' box.
+- *What to build.* Each side's functional over declared locations, for direct functional fits, read as `OutputMetric.Locations` reads them: matched by name, in the variables' units, inside their boxes. A basis fit refuses them, as `OutputMetric` does: its basis exists only at its training locations.
+- **Decision A1, the form.**
+  - *(a) Two properties, `OutputLocations` and `OtherOutputLocations`, beside the weights (recommended).* It mirrors `OutputMetric`, and null keeps today's training locations.
+  - *(b) A record pairing each functional's weights with its locations.* It would replace `Output` and `OtherOutput`, so it is a removal, its own question.
+
+**B. Poincaré constants for the remaining laws** (slice 6 covered the uniform and a single truncated normal).
+- *What exists.* The constant per input is (b − a)²/π² under a uniform law, and min(σ², (b − a)²/π²) under one truncated normal. Both bounds hold for log-concave laws (Brascamp–Lieb and Payne–Weinberger, cited from memory). Decision 6's per-input check and the matrix check's D read the same constants.
+- *Mixtures and Student t components* are not log-concave in general, so neither bound holds. A bimodal mixture's constant can exceed (b − a)²/π². Every such law here is truncated to a bounded interval, where its density is bounded away from zero. A constant therefore exists: 1/λ₁ of −(ρu′)′ = λρu with Neumann ends.
+- *The empirical law has none.* Its atoms let a function vary between training values with zero derivative on the support. It stays unchecked, and the readout says why. That part of the item closes as a finding.
+- **Decision B1, the constant for mixtures and Student t laws.**
+  - *(a) Numerical (recommended):* λ₁ by piecewise-linear finite elements on a fine grid, a symmetric tridiagonal generalized eigenproblem. Rayleigh–Ritz gives λ₁ʰ ≥ λ₁ (cited from memory), so the constant read is under the true one by O(h²). At a few thousand elements that is far below Monte Carlo error, and the readout states the grid.
+  - *(b) Holley–Stroock's bound,* (b − a)²/π² · sup ρ/inf ρ (cited from memory). It is valid but loose, so the check would seldom fire.
+  - *(c) Leave them unchecked,* as now.
+- **Decision B2, the single truncated normal.**
+  - *(a) Keep slice 6's closed bound (recommended).* No reading moves.
+  - *(b) Take the numerical constant there too.* It is tighter where σ is near the interval's width, and it moves slice 6's readings, so it is its own question.
+
+**C. A held-out log predictive density in the comparison** (7c's decision 1 left it as a follow-up).
+- *What to build.* Σᵢ log Σ_s w̃_s p(yᵢ | θ_s) over the held-out cases, for both fits, beside the RMSE, and per fold under cross-fitting.
+- *How.* Through the candidate seam (`BassFit.CandidateLogDensity`), each held-out response as its case's one candidate. The seam already reads every noise law, the case weights, and random effects, a new group's effect integrated from its prior. It is the conformal chip's, read here and not edited.
+- **Decision C1, functional responses.** The seam serves one observation of a scalar response.
+  - *(a) Scalar responses now (recommended):* a functional fit's held-out density is refused, with that reason.
+  - *(b) Also build a joint density per case for direct functional fits under Gaussian noise,* Πₗ N(y_il | f_il, σ²) within a draw. Noise laws would follow later.
+
+**D. Cross-fitting with groupings and case weights** (7c refuses them).
+- *What to build.* The fold's data carry the groupings' columns and the weights' rows, and the held-out cases carry their group columns into prediction.
+- **Decision D1, the fold unit.**
+  - *(a) Cases, as now (recommended default):* a grouping's levels spread across the folds.
+  - *(b) Opt-in: a named grouping's levels assigned whole to folds.* Each fold then scores new groups, the leave-groups-out question. A held-out case in a level no training fold took is predicted at the effect's prior mean, zero, and its density integrates the effect (the seam's rule).
+- **Decision D2, the score under case weights.**
+  - *(a) By the weights' meaning (recommended).* Replication weights count each held-out case wᵢ times in the RMSE, the sd and the density, as duplicated rows would. Precision weights enter the density as σ²/wᵢ alone, and each case counts once in the RMSE.
+  - *(b) Weighted RMSE under both meanings.*
+
+**E. Basis fits through a projection** (7c left it unbuilt). It changes the model, as slice 7 did.
+- *What exists.* A basis fit's analysis records its boxes, and `BassProjection.Of` takes a basis fit's component's transform, so a frame can be read from a basis fit today. The refit is what is missing.
+- **Decision E1, one frame or one per component.**
+  - *(a) One frame (recommended),* from the basis fit's own E[C] over its reconstruction under W_y, shared by every component. The components keep one input space, so the reconstruction's readouts and Sobol indices stay whole.
+  - *(b) A frame per component,* from each component's analysis. Each component gets its own active variables, and the reconstruction's readouts then need every component's map.
+- **Decision E2, the decomposition.**
+  - *(a) Reused (recommended).* For the refit on the full data, K depends on the outputs alone, and the refit changes only the inputs. Under cross-fitting, each fold's native fit decomposes the other folds' outputs, so the fold's basis is estimated as its frame is.
+  - *(b) Decomposed again for the refit.*
+- **Decision E3, the type.**
+  - *(a) `BassProjectedBasisFit`, beside `BassProjectedFit` (recommended).* It predicts the reconstruction, differentiates by the chain rule, and reads E8 in x.
+  - *(b) `BassProjectedFit` widened to hold either.*
+- *Carried over:* the native fit's component mode, independent or joint (E34's); training-range hinges on each component (7d); the frame's signs (7e).
+
+**Proposed slices, after the user's call:**
+
+| Slice | Delivers | Gates |
+| --- | --- | --- |
+| 8a. Readouts | A, and B with the empirical finding | A: declared training locations give the same bits as null; at new locations, C_fg against the gradient readout at those locations, on both routes; the reduction to C at f = g; the refusals (a basis fit, locations outside the box, a weight count off). B: the numerical constant against (b − a)²/π² for the uniform law and against σ² for a normal truncated far out, to the grid's stated error, with the h² rate; at or under both closed bounds on log-concave laws; above (b − a)²/π² on a bimodal mixture; no ratio above 1 beyond Monte Carlo error on fits under mixture and Student t laws; a constant scaled down on purpose fires; a seeded sweep over the laws' parameters |
+| 8b. The comparison | C and D | C: against a direct computation from per-draw predictions and σ² under Gaussian noise; under a noise law against the seam's own values; weighted draws against replicated ones; the folds' densities summing to the report's. D: integer replication weights against duplicated rows, each row's copies in one fold; group folds disjoint by level and covering every case; a held-out new level read through the integrated density; each fold's frame from the other folds alone, as in 7c |
+| 8c. Basis fits through a projection | E | the reused decomposition bit for bit; the reconstruction's gradient against central differences; the refit's C_x in span(W₁); a functional ridge g(wᵀx)·φ(t), from outside the model, recovered at d = 1 with fewer basis functions and a lower held-out error than the native basis fit; the comparison's criteria for a basis fit against their direct computation; the refusals |
+
+**The cost row:** the numerical constant per law (computed once per readout); the held-out density per case and draw; the projected basis fit's time against the native's.
+
+**Order and other writers:**
+- 8a, then 8b, then 8c. Each is reported and verified before the next.
+- E's decisions can be settled with the rest now, so 8c waits on nothing but 8b's verification.
+- The candidate seam (`BassCandidates.cs`, the conformal chip's) is read, not edited. The basis fit's entry points (`BassComponents.cs`) are shared with E34's chip, which hears first, and each such edit is committed by itself.
+
 ## Gates common to every slice
 
 - **Fitting untouched.** E8 reads fits, so no draw moves: the pinned tier at each commit, the whole assembly at the slice's end ([targeted runs](../../../CONTRIBUTING.md#testing-standards)).
@@ -224,7 +291,7 @@ No slice is commissioned. Each item below is drawn from the reports, which hold 
   - A public `outputLocations` on `BassFit.Gradient`, one optional parameter the internal path already takes.
 - *The PBX 9501 replication* (below). The user has deferred it (2026-11-13) to a broader pass over the applications in the papers behind the regression engine.
 
-**Unbuilt** (slices 6 and 7c). The user intends to commission these (2026-11-13), after other loose ends and before BPPR:
+**Unbuilt** (slices 6 and 7c). The user intends to commission these (2026-11-13), after other loose ends and before BPPR. [Slice 8's plan](#slice-8s-plan-the-unbuilt-readout-and-comparison-items-2026-11-13-for-the-users-call) drafts them, with the decisions they need:
 - Co-active output functionals at locations beyond the training ones.
 - Poincaré constants for Student t, empirical and mixture laws. Uniform and truncated normal laws have them.
 - Cross-fitting with groupings or case weights.
