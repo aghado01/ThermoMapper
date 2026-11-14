@@ -315,7 +315,18 @@ Started at the main session's word after slice 14's verification, under the Lean
   - the refusals;
   - 15b: memberships recovered up to labels, and end-to-end coverage with the estimate.
 
-**State.** 15a is being written. Nothing committed.
+**State (2026-11-13, paused at the usage limit).** Nothing committed; all in the working tree.
+- *15a, built and green:* `PosteriorConformal.cs` (randomized and KL weights, draws, ESS, self-weights, KL gaps; `GivenDraws` internal), per-case `ShiftWeights` in `WeightedConformal.cs`, `SplitConformal.cs` and `ConformalBayes.cs`. `PosteriorConformalTests` 5/5 and `WeightedConformalTests` 7/7 pass.
+  - Given-L exactness: the largest excess over α, across 4,000 enumerated draws, is −0.0001.
+  - Two clusters, known memberships, m = 20: randomized 0.904 marginal, 0.900 and 0.909 per cluster; KL 0.915 (gap 0.063); Mondrian 0.898; unweighted 0.889, with 0.975 and 0.808 per cluster.
+- *15b, written, one gate open:* `ScoreMixture.cs` (logistic τ via `DensityRatio`, k-means++ and alternating factorization, active-set simplex step, J and m rules) and `ScoreMixtureTests`.
+  - The simplex sweep, the end-to-end test and the refusals pass. End to end, with estimated memberships: 0.922 marginal, 0.921 and 0.922 per cluster, against 0.826 in the wide cluster unweighted.
+  - The recovery gate fails: mean error 0.043 and profiles within 0.046, but the error near the right edge, x of 0.86 to 0.96, reaches 0.155 to 0.19, the spline's last segment.
+- *Open:*
+  - The fit is slow: 35 s for n = 1,000 even after an anti-cycling stop in the active set. Profile the alternation and the solver's iteration counts (`SimplexSolver.Iterations`).
+  - Settle the recovery gate's basis or size.
+  - Run the end-to-end test with training size equal to calibration size. At 1,000 against 399 the m rule chose 294 to 500, and 8.5% of sets were the whole space. Document that the ESS target is read on the training split.
+  - Then qualification, the commit, the report and E16's line.
 
 ### 2026-11-13 — Slice 14's follow-up: the ratio estimator
 
