@@ -177,6 +177,41 @@ Maintain an **In progress** entry here with uncommitted work, running checks and
 
 Newest first.
 
+### Slice 7, item 1: why ln σ² and M mix worse with the interwoven step (GBASS chip, 2026-11-13)
+
+**Landed** in `d594d30` (the measurement) and the commit that carries this report. The step is unchanged: no fix was found to build.
+
+**The measurement** (`Mixing_InterwovenScales_AgainstTheCentredStep`): the weak fixture (six levels of four cases under t₃) with σ² held at about its posterior mean (`Sigma2Prior.Held(0.17)`), beside σ² drawn, four seeds each. Four chains of 2,000 + 40,000 sweeps per arm. Bulk ESS per sweep, the step on over off:
+
+| seed | M, σ² drawn | M, σ² held | ln σ², drawn | ln s, drawn / held | u0, drawn / held |
+|---|---|---|---|---|---|
+| 11 | 0.33 | 0.92 | 0.52 | 3.62 / 3.93 | 2.13 / 2.22 |
+| 23 | 0.80 | 1.15 | 1.13 | 3.67 / 3.90 | 2.09 / 2.09 |
+| 37 | 0.64 | 0.99 | 1.22 | 3.89 / 3.50 | 2.35 / 2.17 |
+| 51 | 0.67 | 0.93 | 0.80 | 3.51 / 4.25 | 2.17 / 2.27 |
+
+- ln s's pooled correlation with M is −0.02 to 0.04 in every arm, with σ² held or drawn. There is no coupling of s with M.
+- ln s's correlation with ln σ² is −0.26 to −0.28 in both arms.
+
+**Found.**
+- *The loss runs through σ²'s block.* With σ² held, M mixes as well with the step on as off (0.92 to 1.15). Drawn, it runs at 0.33 to 0.80. The gains on ln s (×3.5 to ×4.25) and u (×2.1 to ×2.35) stand either way.
+- *The candidate in the commission is half right.* σ² is the path, but not through a coupling of s with M.
+
+**Tried, not built: a ridge move along (s, σ).** ln s and ln σ² correlate at −0.26. A probe (outside the repository) added, after the interwoven step, a Metropolis move s′ = s·eᵗ, σ′ = σ·e^(−t) with u, v and β held, so σs, u's prior scale, is unchanged. It accepts on the target's change, which already holds σ²'s prior given σ², plus ln p(s′) − ln p(s) and the two log Jacobians, t − 2t; it accepted about 30%. Over twelve seeds (11, 23, 37, 51, 61, 73, 89, 97, 101, 113, 127, 131), its ESS per sweep over the interwoven step alone:
+- M: geometric mean 1.02, median 0.94, range 0.47 to 2.76;
+- ln σ²: about 1.05, or 1.13 counting seed 11's 2.58;
+- ln s: unchanged.
+
+It does not recover M, so the step is left as built.
+
+**The decision it served.** Neither skip a sweep's σ² block nor move σ with s. Skipping it only slows σ², and moving σ against s along the posterior's ridge does not reach M. The step stays as built, an opt-in, and item 2 reads it as it is.
+
+**Per commit:** 67 of 67 (the test file alone; the rows return early without `BASS_QUALIFICATION`).
+
+**Doc changes owed:** `docs/Maths/RandomEffects.md`, the interweaving step's section: the cost to M and ln σ² runs through σ²'s block (the held-σ² table), s is uncorrelated with M, and the ridge move was tried and recovers nothing.
+
+**Follow-up, with the decision it would change.** How σ²'s draw slows M is not pinned down. One untested candidate is σ's own interweaving against u: a σ step holding u/σ, so u scales with σ, as the s step holds u/(σs). It would change whether the opt-in step can come with σ's counterpart at no cost to M. A Geweke row and the held-against-drawn mixing table would gate it.
+
 ### Slice 6: the u–s funnel's fix by interweaving (GBASS chip, 2026-11-13)
 
 **Landed** in `5cde502` and the commit that carries this report. Decision 7, the user's call of 2026-11-13: interweaving.
