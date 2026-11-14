@@ -29,24 +29,77 @@ As in the archived brief: each slice is reported here, then waits for the main s
 
 Newest first.
 
-### In progress — Slice 17, scores beyond the model's own (started 2026-11-14)
+### 2026-11-14 — Slice 17, scores beyond the model's own
 
-At the user's pick (2026-11-14, "Slice 17, scores beyond the model"), the archived plan's row 17. Sources on disk, read in TeX:
-- Bhagwat, Kong and Jiang, CBMA (arXiv 2511.16924v1): §3, Algorithm 1, the lemma and both theorems;
-- Ashouritaklimi, Cortinovis and Caron, RoBAS (arXiv 2607.04236v2): §2.2–§3.4, the EB score and the interval theorem;
-- Wu, Lohmanova, Kaski and Caprio (arXiv 2602.03331v2): §4 and Algorithm 1, the L⁺ threshold rule.
+Built at the user's pick (2026-11-14, "Slice 17, scores beyond the model"), the archived plan's row 17, the last in the plan. Sources read in TeX:
+- Bhagwat, Kong and Jiang, CBMA (arXiv 2511.16924v1), §3, Algorithm 1, the lemma and both theorems;
+- Ashouritaklimi, Cortinovis and Caron, RoBAS (arXiv 2607.04236v2), §2.2–§3.4;
+- Wu, Lohmanova, Kaski and Caprio (arXiv 2602.03331v2), §4 and Algorithm 1.
 
-**Plan.** Each is a symmetric score or a rule already proved, so coverage stands on CB-1 (and slice 18 for Wu et al.); no new Lean is needed.
-- *CBMA* (`ModelAveraging`). Several models' full-step seams over the same units, with each model's log posterior probability given the n units. The score is σᵢ = Σ_k q_k(y)·σᵢ^{M_k}, q_k(y) ∝ p(M_k | Z₁:ₙ)·p_{M_k}(y | x, Z₁:ₙ). It is the hierarchical model's posterior predictive, so symmetric (their lemma). The weights are reported per candidate.
-- *RoBAS-EB and its two references* (`ResidualShrinkage`). Full conformal on a fixed predictor's residuals with the score |r − â·r̄| over the other n residuals, â = υ̂²/(υ̂² + σ̂²/n) by their EB estimates. Beside it, distance to origin and distance to average (DTA, the flat-prior Bayes score).
-- *Wu et al.'s high-density sets* (`RiskControlledSets`). The split form's density score with the threshold by slice 18's high-probability rule on miscoverage losses (`fail_le_fixed`): coverage 1 − α with confidence β over calibration sets.
-- *Gates* (the plan's):
-  - coverage for each;
-  - width against one law's score under a wrong noise and a wrong prior;
-  - CBMA's weights against each law's exact evidence;
-  - Wu et al.'s training-conditional coverage.
+Each is a symmetric score or a rule already proved, so coverage stands on CB-1, and for Wu et al. on slice 18's `fail_le_fixed`. No new Lean was needed. The plan's Lean column asked for Wu et al.'s risk bound "if it differs from coverage": it is slice 18's high-probability rule, already proved and verified.
 
-**State.** Being written. Nothing committed.
+**Landed** on `main`, nothing pushed:
+- `0b91db9`:
+  - `ModelAveraging.FullStep`, giving an `AveragedPrediction`;
+  - `ResidualShrinkage.Prediction` with `ResidualScore` (`DistanceToOrigin`, `DistanceToAverage`, `Shrinkage`);
+  - `RiskControlledSets.Density`, giving `HighDensitySets`;
+  - `ScoresBeyondTheModelTests`.
+- *Nothing existing changes.*
+
+**What it computes.**
+- *CBMA* (`ModelAveraging`).
+  - From K models' full-step seams over the same units, strata and grids, and each model's log posterior probability given the n units (its log evidence plus log prior), the score is σᵢ = Σ_k q_k(y)·σᵢ^{M_k}, q_k(y) ∝ p(M_k | Z₁:ₙ)·p_{M_k}(y | x, Z₁:ₙ).
+  - That is p(M_k | Z₁:ₙ₊₁), so σᵢ is the hierarchical model's posterior predictive, symmetric in the n + 1 units (their lemma). CB-1's rule on it covers at least 1 − α.
+  - The per-model scores are `ConformalBayes.Scores`'s, mixed by log-sum-exp. The weights are reported at every candidate.
+- *The residual scores* (`ResidualShrinkage`). Full conformal on a fixed predictor's residuals, each of the n + 1 scored against the other n:
+  - distance to origin, |r|;
+  - distance to average, |r − r̄|, the Bayes score of a flat prior on the mean (their proposition);
+  - RoBAS-EB, |r − â·r̄| with â = υ̂²/(υ̂² + σ̂²/n) from their EB estimates. It shrinks to the origin when the residuals sit near zero and to their average under a mean shift.
+
+  The others' mean and spread are read from residuals centred at their overall mean, so they keep their digits under a large shift.
+- *Wu et al.'s high-density sets* (`RiskControlledSets`). The split form's density score −ln p̂(y | x) and the set {s ≤ λ*}, λ* the least threshold whose Gaffke bound on the calibration miscoverage is at most α (slice 18's `HighProbability`). The set's miscoverage exceeds α with chance at most 1 − β over calibration sets, a training-conditional guarantee. Their Bayesian quadrature only estimates the set's size, so it is not built.
+
+**Gates.**
+- *CBMA with one model* is the full step's set bit for bit, its weight 1.
+- *CBMA's weights against the exact evidence.* Two noise laws, σ 1 and 1.5, on 8 units; the exact posterior model probabilities run from 0.015 to 0.669 over the grid. With 4,000 exact draws the weights match them to 0.0021.
+- *CBMA across models wrong in their mean* (y = 0.7x + N(0, 1), models βx and βx², n 30, 500 replications, α 0.1):
+
+  | score | coverage | mean width |
+  |---|---|---|
+  | CBMA | 0.912 | 3.52 |
+  | βx alone | 0.912 | 3.44 |
+  | βx² alone | 0.910 | 4.14 |
+
+  The mean weight on βx at the truth is 0.958.
+- *A model wrong only in its noise scale* (σ 3 against σ 1) barely moves the conformal set: 3.52 against 3.47 at 800 replications. A symmetric unimodal density ranks units by |residual| whatever its scale. So the plan's "wrong noise" bites only where the law's shape or centre differs, and the gate above uses a wrong mean.
+- *The residual scores' definitions:* 300 random vectors, some shifted by up to 10⁴, against two-pass definitions.
+- *The residual scores under a right and a shifted predictor* (n 15, α 0.1, 2,000 replications, se 0.0067):
+
+  | shift | distance to origin | distance to average | RoBAS-EB |
+  |---|---|---|---|
+  | 0: coverage, width | 0.930, 4.11 | 0.926, 4.27 | 0.927, 4.17 |
+  | 3: coverage, width | 0.946, 9.50 | 0.947, 4.31 | 0.948, 4.32 |
+
+  RoBAS-EB sits between the references when the predictor is right and matches distance to average under the shift.
+- *Wu et al.'s sets* (a fit to 50 training units, 60 calibration units, the miscoverage read on 1,000 fresh units, 300 calibration sets, α 0.1, β 0.9): the miscoverage is at most α in 0.957 of the calibration sets (se 0.017), with mean miscoverage 0.046.
+- *The refusals:*
+  - no models, weights of another count, models over other units, no model with positive weight;
+  - a NaN residual, centres and grids of different counts, a grid out of order, an undefined score;
+  - a confidence of 1.
+- *Per commit,* the selected classes and the pinned tier: 48 of 48 (one class, the new one).
+
+**Defects found: none.**
+
+**Follow-ups, each with the decision it would change.**
+- *RoBAS-Full,* the horseshoe score with ₁F₁, beside the EB score. Decides whether the layer offers the fully Bayesian robust score.
+- *CBMA's evidence from the engines' own fits.* Here it is exact and given; BASS and BARS would supply estimates such as bridge sampling. Decides whether model averaging reads an engine's evidence directly.
+- *A grid-free interval for the residual scores* (their bracketed root search), RoBAS-EB's sets being intervals. Decides whether `ResidualShrinkage` reports exact ends.
+
+**Doc changes owed** (for the offline docs pass): `docs/Maths/Regression/ConformalPrediction.md`:
+- a section on scores beyond the model's own: CBMA's score and weights, the three residual scores, and Wu et al.'s risk-controlled sets with their training-conditional guarantee;
+- the finding that a wrong noise scale barely moves conformal sets;
+- the gates' numbers;
+- API rows for `ModelAveraging`, `AveragedPrediction`, `ResidualShrinkage`, `ResidualScore`, `RiskControlledSets` and `HighDensitySets`.
 
 ### 2026-11-14 — Slice 18, the guarantee read out
 
