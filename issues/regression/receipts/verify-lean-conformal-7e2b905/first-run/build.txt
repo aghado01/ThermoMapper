@@ -1,0 +1,40 @@
+✔ [3158/3187] Built Enthymemata.Ascent (6.3s)
+✔ [3161/3187] Built Enthymemata.PottsPK (8.9s)
+✖ [3162/3187] Building Lemmas.RandomCluster (22s)
+trace: .> LEAN_PATH=D:\aghado01\ThermoMapper\lean\.lake\packages\Cli\.lake\build\lib\lean;D:\aghado01\ThermoMapper\lean\.lake\packages\batteries\.lake\build\lib\lean;D:\aghado01\ThermoMapper\lean\.lake\packages\Qq\.lake\build\lib\lean;D:\aghado01\ThermoMapper\lean\.lake\packages\aesop\.lake\build\lib\lean;D:\aghado01\ThermoMapper\lean\.lake\packages\proofwidgets\.lake\build\lib\lean;D:\aghado01\ThermoMapper\lean\.lake\packages\importGraph\.lake\build\lib\lean;D:\aghado01\ThermoMapper\lean\.lake\packages\LeanSearchClient\.lake\build\lib\lean;D:\aghado01\ThermoMapper\lean\.lake\packages\plausible\.lake\build\lib\lean;D:\aghado01\ThermoMapper\lean\.lake\packages\mathlib\.lake\build\lib\lean;D:\aghado01\ThermoMapper\artifacts\verify-lean-7e2b905\lean\.lake\build\lib\lean c:\Users\azrie\PDenv\elan\toolchains\leanprover--lean4---v4.32.2\bin\lean.exe D:\aghado01\ThermoMapper\artifacts\verify-lean-7e2b905\lean\Lemmas\RandomCluster.lean -o D:\aghado01\ThermoMapper\artifacts\verify-lean-7e2b905\lean\.lake\build\lib\lean\Lemmas\RandomCluster.olean -i D:\aghado01\ThermoMapper\artifacts\verify-lean-7e2b905\lean\.lake\build\lib\lean\Lemmas\RandomCluster.ilean -c D:\aghado01\ThermoMapper\artifacts\verify-lean-7e2b905\lean\.lake\build\ir\Lemmas\RandomCluster.c --setup D:\aghado01\ThermoMapper\artifacts\verify-lean-7e2b905\lean\.lake\build\ir\Lemmas\RandomCluster.setup.json --json
+error: Lemmas/RandomCluster.lean:1:0: failed to read file 'D:\aghado01\ThermoMapper\lean\.lake\packages\mathlib\.lake\build\lib\lean\Mathlib\Analysis\RCLike\Basic.olean.private'
+error: Lean exited with code 1
+⚠ [3165/3187] Built Enthymemata.CumulativeField.Local (37s)
+warning: Enthymemata/CumulativeField/Local.lean:52:8: declaration uses `sorry`
+✔ [3166/3187] Built Enthymemata.BassStructureChain (68s)
+✔ [3167/3187] Built Enthymemata.BassSensitivity (88s)
+✖ [3168/3187] Building Enthymemata.ActiveSubspace.ProjectionMean (96s)
+trace: .> LEAN_PATH=D:\aghado01\ThermoMapper\lean\.lake\packages\Cli\.lake\build\lib\lean;D:\aghado01\ThermoMapper\lean\.lake\packages\batteries\.lake\build\lib\lean;D:\aghado01\ThermoMapper\lean\.lake\packages\Qq\.lake\build\lib\lean;D:\aghado01\ThermoMapper\lean\.lake\packages\aesop\.lake\build\lib\lean;D:\aghado01\ThermoMapper\lean\.lake\packages\proofwidgets\.lake\build\lib\lean;D:\aghado01\ThermoMapper\lean\.lake\packages\importGraph\.lake\build\lib\lean;D:\aghado01\ThermoMapper\lean\.lake\packages\LeanSearchClient\.lake\build\lib\lean;D:\aghado01\ThermoMapper\lean\.lake\packages\plausible\.lake\build\lib\lean;D:\aghado01\ThermoMapper\lean\.lake\packages\mathlib\.lake\build\lib\lean;D:\aghado01\ThermoMapper\artifacts\verify-lean-7e2b905\lean\.lake\build\lib\lean c:\Users\azrie\PDenv\elan\toolchains\leanprover--lean4---v4.32.2\bin\lean.exe D:\aghado01\ThermoMapper\artifacts\verify-lean-7e2b905\lean\Enthymemata\ActiveSubspace\ProjectionMean.lean -o D:\aghado01\ThermoMapper\artifacts\verify-lean-7e2b905\lean\.lake\build\lib\lean\Enthymemata\ActiveSubspace\ProjectionMean.olean -i D:\aghado01\ThermoMapper\artifacts\verify-lean-7e2b905\lean\.lake\build\lib\lean\Enthymemata\ActiveSubspace\ProjectionMean.ilean -c D:\aghado01\ThermoMapper\artifacts\verify-lean-7e2b905\lean\.lake\build\ir\Enthymemata\ActiveSubspace\ProjectionMean.c --setup D:\aghado01\ThermoMapper\artifacts\verify-lean-7e2b905\lean\.lake\build\ir\Enthymemata\ActiveSubspace\ProjectionMean.setup.json --json
+error: Enthymemata/ActiveSubspace/ProjectionMean.lean:1:0: failed to read file 'D:\aghado01\ThermoMapper\lean\.lake\packages\mathlib\.lake\build\lib\lean\Mathlib\Tactic\Module.olean.private'
+error: Lean exited with code 1
+✔ [3170/3187] Built Enthymemata.GuardedEstimator (98s)
+⚠ [3171/3187] Built Enthymemata.Stability (116s)
+warning: Enthymemata/Stability.lean:85:8: declaration uses `sorry`
+✔ [3172/3187] Built Enthymemata.BgpUnknownVariance (122s)
+✔ [3173/3187] Built Enthymemata.ActiveSubspace.ContinuousPoincare (139s)
+⚠ [3174/3187] Built Enthymemata.BARS (141s)
+warning: Enthymemata/BARS.lean:33:8: declaration uses `sorry`
+warning: Enthymemata/BARS.lean:40:8: declaration uses `sorry`
+warning: Enthymemata/BARS.lean:51:8: declaration uses `sorry`
+warning: Enthymemata/BARS.lean:61:8: declaration uses `sorry`
+warning: Enthymemata/BARS.lean:69:8: declaration uses `sorry`
+warning: Enthymemata/BARS.lean:82:8: declaration uses `sorry`
+✔ [3175/3187] Built Enthymemata.ActiveSubspace.DirectionMoves (73s)
+✔ [3176/3187] Built Enthymemata.BgpCovering (146s)
+✔ [3177/3187] Built Enthymemata.BassContractionCover (110s)
+✔ [3178/3187] Built Enthymemata.BgpGaussianKL (160s)
+✔ [3179/3187] Built Enthymemata.ConformalValidity (281s)
+✔ [3180/3187] Built Enthymemata.CumulativeField (248s)
+✔ [3181/3187] Built Enthymemata.BgpGaussianTails (350s)
+✔ [3182/3187] Built Enthymemata.ActiveSubspace.MatrixPoincare (461s)
+✔ [3184/3187] Built Enthymemata.BassIntegrals (554s)
+✔ [3185/3187] Built Enthymemata.BgpUnknownVarianceTheorem (907s)
+Some required targets logged failures:
+- Lemmas.RandomCluster
+- Enthymemata.ActiveSubspace.ProjectionMean
+error: build failed

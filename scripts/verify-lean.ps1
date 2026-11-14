@@ -9,7 +9,8 @@
 # that the real packages survived: deleting through the junction would take them with it.
 # Receipts land in artifacts/verify-lean-<Commit>/receipts/ next to a copy of the axioms file.
 # -NoRun prepares and cleans up only; -Keep leaves the snapshot (the junction is removed regardless).
-# A relative -AxiomsFile is read from the directory the script is called from.
+# A relative -AxiomsFile is read from the directory the script is called from. -NoChecks skips the checks
+# script, to rerun a build that failed for a reason outside the commit.
 param(
   [Parameter(Mandatory)][string]$Commit,
   [string]$Module = 'Enthymemata.ConformalValidity',
@@ -18,6 +19,7 @@ param(
   [string]$RepoRoot = (Split-Path $PSScriptRoot),
   [string]$Python = 'C:/Users/azrie/PDenv/PyenvPython/pyenv-win/versions/3.12.6/python.exe',
   [switch]$NoRun,
+  [switch]$NoChecks,
   [switch]$Keep
 )
 $ErrorActionPreference = 'Continue'
@@ -47,8 +49,11 @@ $summary = Join-Path $out 'summary.txt'
 try {
   if (-not $NoRun) {
     $sw = [Diagnostics.Stopwatch]::StartNew()
-    & $Python -I -X utf8 (Join-Path $lean $Checks) *> (Join-Path $out 'checks.txt')
-    "checks exit $LASTEXITCODE in $([int]$sw.Elapsed.TotalSeconds) s" | Out-File -Append $summary
+    if ($NoChecks) { 'checks skipped (-NoChecks)' | Out-File -Append $summary }
+    else {
+      & $Python -I -X utf8 (Join-Path $lean $Checks) *> (Join-Path $out 'checks.txt')
+      "checks exit $LASTEXITCODE in $([int]$sw.Elapsed.TotalSeconds) s" | Out-File -Append $summary
+    }
     Push-Location -LiteralPath $lean
     try {
       $sw.Restart()

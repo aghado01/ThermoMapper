@@ -1,0 +1,3 @@
+Follow-up 2d: refused weight at most 2 alpha W + W_max on 5000 random fold-structured comparisons (largest share 0.560); over every fold and slot permutation, weighted by the test unit's w, at most 2 alpha + W_max / W on 59 data sets (largest share 0.278)
+
+All assertions hold.
