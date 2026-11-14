@@ -29,6 +29,25 @@ As in the archived brief: each slice is reported here, then waits for the main s
 
 Newest first.
 
+### In progress — Slice 17, scores beyond the model's own (started 2026-11-14)
+
+At the user's pick (2026-11-14, "Slice 17, scores beyond the model"), the archived plan's row 17. Sources on disk, read in TeX:
+- Bhagwat, Kong and Jiang, CBMA (arXiv 2511.16924v1): §3, Algorithm 1, the lemma and both theorems;
+- Ashouritaklimi, Cortinovis and Caron, RoBAS (arXiv 2607.04236v2): §2.2–§3.4, the EB score and the interval theorem;
+- Wu, Lohmanova, Kaski and Caprio (arXiv 2602.03331v2): §4 and Algorithm 1, the L⁺ threshold rule.
+
+**Plan.** Each is a symmetric score or a rule already proved, so coverage stands on CB-1 (and slice 18 for Wu et al.); no new Lean is needed.
+- *CBMA* (`ModelAveraging`). Several models' full-step seams over the same units, with each model's log posterior probability given the n units. The score is σᵢ = Σ_k q_k(y)·σᵢ^{M_k}, q_k(y) ∝ p(M_k | Z₁:ₙ)·p_{M_k}(y | x, Z₁:ₙ). It is the hierarchical model's posterior predictive, so symmetric (their lemma). The weights are reported per candidate.
+- *RoBAS-EB and its two references* (`ResidualShrinkage`). Full conformal on a fixed predictor's residuals with the score |r − â·r̄| over the other n residuals, â = υ̂²/(υ̂² + σ̂²/n) by their EB estimates. Beside it, distance to origin and distance to average (DTA, the flat-prior Bayes score).
+- *Wu et al.'s high-density sets* (`RiskControlledSets`). The split form's density score with the threshold by slice 18's high-probability rule on miscoverage losses (`fail_le_fixed`): coverage 1 − α with confidence β over calibration sets.
+- *Gates* (the plan's):
+  - coverage for each;
+  - width against one law's score under a wrong noise and a wrong prior;
+  - CBMA's weights against each law's exact evidence;
+  - Wu et al.'s training-conditional coverage.
+
+**State.** Being written. Nothing committed.
+
 ### 2026-11-14 — Slice 18, the guarantee read out
 
 Built at the user's pick (2026-11-14, "Slice 18, the guarantee read out"), under the Lean's sections `LossPosterior` and `ProperScores` (proved 2026-11-10, checked against their sources 2026-11-13). It follows the archived plan's row 18 and its 2026-11-13 correction: b*_β is Gaffke's confidence bound, calibrated over replicated calibration sets, and never named a posterior.
