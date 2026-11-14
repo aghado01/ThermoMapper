@@ -27,6 +27,24 @@ As in the archived brief: each slice is reported here, then waits for the main s
 
 Newest first.
 
+### In progress — Slice 18, the guarantee read out (started 2026-11-14)
+
+At the user's pick (2026-11-14, "Slice 18, the guarantee read out"), under the Lean's sections `LossPosterior` and `ProperScores` (proved 2026-11-10, checked against their sources 2026-11-13) and the archived plan's row 18, with its 2026-11-13 correction: b*_β is read out as Gaffke's confidence bound, calibrated over replicated calibration sets (Vlassis and Thomas's Theorem 1), and never named a posterior. Snell and Griffiths's Theorem 4.3 fails as stated (the Lean's finding).
+
+**Plan.**
+- *Gaffke's bound* (`LossBound`). The law of L⁺ = Σ Uᵢ ℓ₍ᵢ₎ over n losses in [0, B] and ℓ₍ₙ₊₁₎ = B, with U ~ Dir(1, …, 1). P(L⁺ > x) is the divided difference of (t − x)₊ⁿ on the knots, confluent where they tie, read in exact rational arithmetic. b*_β is its β-quantile, by bisection. At 0/1 losses the law is Beta(k + 1, n − k); at one loss b*_β = ℓ + β(B − ℓ) (`gaffke_one`).
+- *Two threshold rules on a loss matrix* (`RiskControl`), with the losses nonincreasing in the threshold and at most B:
+  - conformal risk control, the first threshold with (Σℓ + B)/(n + 1) ≤ α: expected test loss at most α (`crc_orderings`);
+  - the high-probability rule, the first with b*_β ≤ α: risk above α with chance at most 1 − β (`fail_le_fixed`, through Vlassis and Thomas's calibration).
+- *Proper scores* (Gressmann et al.; Gneiting and Raftery) for the predictive distributions beside the CRPS: the log score and the quadratic score on the grid's cells (`logLoss_proper`, `gneitingLoss_gap`).
+- *Gates* (the plan's):
+  - the bound's calibration over replicated small calibration sets, P(J ≤ b*_β) ≥ β, discrete losses included;
+  - the exact law against the Beta law and against Dirichlet draws;
+  - both rules' guarantees by simulation;
+  - the scores' propriety.
+
+**State.** Being written. Nothing committed.
+
 ### 2026-11-14 — Slice 16, batch predictive inference
 
 Built at the user's pick (2026-11-14, "Slice 16, batches"), under the Lean's section `Batch` (proved 2026-11-10) and Lee, Tchetgen Tchetgen and Dobriban (arXiv 2409.13990v5, read in TeX: §2, Condition 1, Algorithm 1, Theorem 1, the quantile and selection corollaries, the joint-bounds theorem and corollary).
