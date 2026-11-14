@@ -99,7 +99,7 @@ Hand-over state between turns is an "In progress" entry here.
 - *The truncated normal is Mathlib's `gaussianReal μ v` conditioned on [a, b],* so its variance is Mathlib's v : ℝ≥0, which is σ².
 - The lemmas file poses this as AS-2(f).
 
-**Declarations to print axioms for:** all 16 named above, minus the definitions `HasPoincareOn` and `truncNormal`, plus the four that were proved again. Each prints only `propext`, `Classical.choice` and `Quot.sound`.
+**Declarations to print axioms for:** the 16 theorems named above, twelve new and four proved again. `HasPoincareOn` and `truncNormal` are definitions. Each theorem prints only `propext`, `Classical.choice` and `Quot.sound`.
 
 **The line E8's brief can take,** replacing what the earlier lines say of truncated normals:
 > The matrix check is proved on E8's laws (`matrix_poincare_box_mixed`, `lean/Enthymemata/ActiveSubspace/WeightedPoincare.lean`). Each input is uniform on its range or a normal N(μᵢ, σᵢ²) truncated to it, with Dᵢ = ((bᵢ − aᵢ)/π)² for a uniform input and σᵢ² for a truncated normal. Every hypothesis is asked only on the box. A reading above 1 beyond rounding against that D is a defect by theorem. Against Dᵢ = min(σᵢ², (bᵢ − aᵢ)²/π²) it rests on Payne–Weinberger, which the checks support and the Lean does not prove.
