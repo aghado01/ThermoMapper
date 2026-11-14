@@ -415,17 +415,10 @@ public sealed class BassDecomposition
         for (int k = 0; k < r; k++) reached += d[k] * d[k];
         bool capped = spec.Rank is { } asked ? asked > rho : spec.VarianceShare < 1.0 && r == rho && reached / total < spec.VarianceShare;
 
-        // The sign convention, for comparisons only: each component's largest entry of K is positive.
+        // The sign convention, for comparisons only: each component's largest entry of K is positive, the first on ties (Pca.Orient's
+        // rule), its coefficients negated with it.
         double[][] left = svd.LeftVectors, right = svd.RightVectors;
-        for (int k = 0; k < rho; k++)
-        {
-            int largest = 0;
-            for (int l = 1; l < m; l++)
-                if (Math.Abs(left[k][l]) > Math.Abs(left[k][largest])) largest = l;
-            if (left[k][largest] >= 0.0) continue;
-            for (int l = 0; l < m; l++) left[k][l] = -left[k][l];
-            for (int i = 0; i < n; i++) right[k][i] = -right[k][i];
-        }
+        for (int k = 0; k < rho; k++) global::Maths.LinAlg.Pca.Orient(left[k], right[k]);
         var basis = new double[m, r];
         var coefficients = new double[r, n];
         for (int k = 0; k < r; k++)

@@ -144,15 +144,11 @@ public sealed class OutputPosterior
         return ([.. sigma.Select(x => x * x)], Columns(left, Math.Min(patterns, sigma.Length), m));
     }
 
-    // A copy of u with the sign that makes its largest entry positive, as Left sets it.
+    // A copy of u signed by Pca.Orient's rule, its largest entry positive, as Left sets it.
     private static double[] Signed(double[] u)
     {
         double[] v = [.. u];
-        int big = 0;
-        for (int l = 1; l < v.Length; l++)
-            if (Math.Abs(v[l]) > Math.Abs(v[big])) big = l;
-        if (v[big] < 0.0)
-            for (int l = 0; l < v.Length; l++) v[l] = -v[l];
+        Pca.Orient(v);
         return v;
     }
 
@@ -176,7 +172,7 @@ public sealed class OutputPosterior
         }
     }
 
-    // The nonzero singular values of an m × c factor and their left vectors, signs set.
+    // The nonzero singular values of an m × c factor and their left vectors, each signed by Pca.Orient's rule.
     internal static (double[] Sigma, double[][] Left) Left(double[,] f)
     {
         ThinSvdResult svd = ThinSvd.Decompose(f);
@@ -187,11 +183,7 @@ public sealed class OutputPosterior
         {
             sigma[j] = svd.SingularValues[j];
             double[] u = [.. svd.LeftVectors[j]];
-            int big = 0;
-            for (int l = 1; l < u.Length; l++)
-                if (Math.Abs(u[l]) > Math.Abs(u[big])) big = l;
-            if (u[big] < 0.0)
-                for (int l = 0; l < u.Length; l++) u[l] = -u[l];
+            Pca.Orient(u);
             left[j] = u;
         }
         return (sigma, left);
