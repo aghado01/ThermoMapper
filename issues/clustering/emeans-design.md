@@ -39,11 +39,40 @@ project `Clustering.Geometric.EMeans`, tests `tests/clustering/geometric/emeans`
 Readings of ambiguous text: the step schedule follows the equation (`t` from 0, `π·t/M`), so the last update sits
 just above the floor; "nearest power of two" is taken in log space; donors are drawn among live clusters only.
 
+## Measured below the fitting grid (2026-11-14)
+
+Probe `artifacts/probes/emeans-small-scale` (code, `results.md`, `results-eighth.md`, `runs.csv`; local, not
+tracked). Sixteen cells, all below the grid: iris (k=3), landsat (k=6, 24), isolet (k=26), and balanced mixtures,
+Zipf-sized mixtures and uniform cubes at `(n, d, k)` = (2000, 2, 8), (2000, 16, 8), (10000, 8, 32),
+(20000, 32, 64). Five seeds per cell, one data draw per synthetic cell. Baseline: Lloyd from k-means++ seeds until
+no label changes (cap 100 updates; median 4 to 100 updates to converge). e-means: `Auto` batch and step, default
+revival, last-epoch mean. Metric: training distortion; a pass is one epoch or one Lloyd update.
+
+- **From the same k-means++ seeds, `Auto` does not lose to Lloyd.** After 3 passes e-means is below Lloyd on 79 of
+  80 seed-cells. After 10 epochs its median is within 0.2% of Lloyd at convergence, or below it, in all 16 cells.
+  After 25 it is at or below Lloyd at convergence in all 16 (strictly below on 64 of 80 seed-cells; most of the
+  rest are ties at the same optimum). At 3 epochs it is level with Lloyd at 25 updates: better in 7 cells, worse in
+  7, tied in 2, all by under 1% except three cells in its favour.
+- **What the laws resolve to here.** The step law sits at its cap (`α₀ = 1`) in 14 of 16 cells at `T = 10`, and the
+  batch law gives `B ≈ n/8`, about 32 points per cluster per batch. Against a 60-point grid of explicit `(B, α₀)`
+  at `T = 10` from random points (median of 2 to 3 seeds, so the grid's best is optimistic), `Auto` is within 0.3%
+  of the best in 10 cells, 0.6 to 2.8% behind in 4, and 10.8% and 18.4% behind in two mixture cells where smaller,
+  noisier batches reach better optima across a whole block of the grid. Those settings are 5 to 45% worse on the
+  uniform cubes, and no single `(B, α₀)` ends at or below `Auto` in more than 11 of 16 cells. Full batch is the
+  worst row in every cell but one.
+- **The paper's divided-by-8 batch law, run directly, shows no consistent gain** over the undivided law here: it
+  wins on 0 to 5 of 5 seeds depending on the cell, in both directions.
+- **Random-point initialization is the weak part at small `k`.** From random points e-means stays 7.8% above Lloyd
+  on the well-separated mixture at every budget (ARI 0.83 against 0.99) and ends below Lloyd at convergence on
+  only 43 of 80 seed-cells at 25 epochs. It also wins one cell by 4.8% (landsat k=6, ARI 0.53 against 0.38): at
+  these sizes the optimum the seeding lands in decides more than the optimizer does. Revival does not help; it
+  fired in 3 of 16 cells.
+
+Reading: `Auto` stays as the batch and step default. The default `Init` is the open choice (see the handoff in the
+session that ran this); it is still the paper's `RandomPoints`.
+
 ## Not done
 
-- No measurement of the laws below their fitting grid (`n < 10⁵`, `k < 256`), which is where ThermoMapper's
-  datasets sit. The paper says the laws are not optimal on small, low-dimensional data. Whether `Auto` deserves to
-  be the default there is open until measured against Lloyd from k-means++.
 - Assignment is exact, single-threaded and scalar. No approximate assignment (the paper's IVF), no balanced variant
   (present in the paper's source only as commented-out text).
 - No Mapper adapter and no REPL surface.
