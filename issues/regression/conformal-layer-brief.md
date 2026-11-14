@@ -292,18 +292,59 @@ Each report gives the commits, gate results, coverage and width by fit, cost, de
 
 Newest first.
 
-### In progress — Slice 14's follow-up 3: CB-3's margin and inflated rule under weights (started 2026-11-13)
+### 2026-11-13 — Slice 14's follow-up 3: CB-3's margin and inflated rule under weights
 
-Its Lean (`2928b06`) was verified by the main session on a clean archive of `7e2b905`.
+Built at the user's decision 12 once its Lean (`2928b06`; `coverage_close_weighted`, `coverage_inflated_weighted`, `sum_wfragile_le_estimated`) was verified by the main session on a clean archive of `7e2b905`.
 
-**Plan.**
-- *3a, the full step's density sets.* The weighted band's share M̂ (`WFragileEstimated`, through `ConformalBayes.WeightedBand`), and the weighted inflated rule's p-values (`WAcceptsInflated`), read beside the counts in the scorer. They land in `ConformalMargin.WeightedFragile`, `WeightedInflated` and `WeightedCount`. `ConformalSet` reads them: 1 − α − M̂ − ν for the plain set, 1 − α − ν for the inflated one. Uniform and carried margins and the inflated rule are allowed under weights; the kept bounds, the fallback rule, Hoff's score and the refinement stay refused.
-- *3b, the full step's predictive distribution:* the two-tailed CDF margin under weights (`CdfMarginScorer`).
+**Landed** on `main`, nothing pushed:
+- `c092171`, *the full step's density sets*:
+  - `ConformalMargin.WeightedFragile`, `WeightedInflated` and `WeightedCount`;
+  - `ConformalBayes.WeightedBand`;
+  - the scorer weighs beside its counts;
+  - `WeightedMarginTests`.
+- `d154e99`, *the full step's predictive distribution*:
+  - `ConformalCdfMargin.Weighted`, `WeightedInflatedLower`, `WeightedInflatedUpper` and `WeightedBand(α)`;
+  - `CdfMarginReading.WeightedLower` and `WeightedUpper`;
+  - `ConformalDistribution` reads them;
+  - `WeightedCdfMarginTests`.
+- *Changes to existing behaviour*, both slice 14's and follow-up 1's, from earlier today:
+  - Under weights the uniform and carried margins and the inflated rule are now served, where they were refused. The kept turns' bounds, the fallback rule, Hoff's score and the refinement stay refused.
+  - Weighted sets and distributions now carry their margin record, as the counts' do. Without the band asked for, their coverage under error is NaN (not read), where the weighted sets returned 1 − α.
 
-**State.** Nothing committed.
-- 3a is applied in the working tree: `ConformalBayes.cs`, the slice 14 refusal test updated in `WeightedConformalTests.cs`, and the new `WeightedMarginTests.cs`. It is not yet built or run.
-- *A change to report:* weighted sets now carry a margin record, as unweighted ones do. Without the band asked for, their `CoverageUnderError` is NaN (not read) where it was 1 − α.
-- *Next:* build, test, the commit selection, the commit, the report; then 3b.
+**What it computes.**
+- *The weighted inflated rule* (`WAcceptsInflated`). The candidate is accepted where more than α of the weight has an estimate, lowered by its bound, at most the candidate's raised by its own, its own included. It keeps every value the exact score accepts, so it refuses at most α. For the distribution, each tail's share is read at α/2.
+- *The weighted band* (`WFragileEstimated`). The units, the candidate among them, that the weighted inflated rule accepts with at most α of the weight at j = u or s_j + 2ε_j + 2ε_u ≤ s_u.
+  - Its share M̂ dominates the exact score's weighted-fragile share, with the weights travelling with the units, so the plain weighted set refuses at most α + M̂.
+  - The density sets read it at α, the largest over the grid.
+  - The distribution reads it at any α, both tails at α/2 with a unit fragile in either counted once, from each grid value's kept scores.
+- *Coverage under error:* 1 − α − M̂ − ν for the plain set, 1 − α − ν for the inflated one.
+- *Not read under weights:* the distribution's counts by level and its PIT counts. They are counts, and no Lean states the PIT diagnostic under weights.
+- *Equal weights* give the counts' margin and readouts bit for bit.
+
+**Gates.**
+- *The band is the Lean's definition:* 3,000 seeded cases of 2 to 9 units, scores tied on a lattice, bounds and weights with zeros, α in (0.05, 0.5). The share matches the definition's to 10⁻¹²; 1,718 cases have a band. At equal weights and α between k/m and (k + 1)/m it is the count's band.
+- *The distribution's band and inflated shares at equal weights* are the counts' at every level: 2,000 orderings, CDF scores tied on a lattice.
+- *The full step's density sets* (29 units, 40 draws, covariate weights):
+  - coverage under error reads 0.9 − M̂ − ν, and the inflated set 0.9 − ν;
+  - the inflated p-values are never below the plain ones, and the inflated set holds the plain one.
+  - M̂ there is 0.143 and 0.278 under carried bounds, 0.502 and 0.783 under uniform ones. Uniform bounds charge every unit the largest bound, as the counts' do.
+- *The full step's distribution:* M̂ at α 0.1 is 0.067 and 0.036 under carried bounds, 0.403 and 0.387 under uniform ones, coverage under error reading 0.9 − M̂ − ν; the inflated distribution reads 0.9 − ν and holds the plain one at every grid value; no PIT counts are read.
+- *Coverage from few draws under covariate shift* (qualification switch; 49 units, 40 exact draws, 2,000 replications, the carried margin): the plain weighted set covers 0.938, against its bound 1 − α − E[M̂] − ν = 0.836 (mean M̂ 0.054, ν 0.010); the inflated one 0.945, against 0.890 (se 0.0067).
+- *The refusals* under weights: the kept turns' bounds, the fallback rule, Hoff's score and the refinement, in both forms.
+- *Existing classes,* the margin, kept-margin, per-unit-bounds, CDF-margin and predictive-distribution tests, pass unchanged.
+- *Per commit,* the selected classes and the pinned tier: 1,211 of 1,211 (`c092171`), 1,213 of 1,213 (`d154e99`).
+
+**Defects found: none.**
+
+**Follow-ups, each with the decision it would change.**
+- *The PIT diagnostic under weights* (the PIT counts by level). It needs a Lean statement: the weighted PIT's departure from uniform under the scores' Monte Carlo error, by level. Decides whether weighted distributions report PIT bounds.
+- *The kept turns' bounds and the refinement under weights.* Both read flagged turns and probes by count. Decides whether the proxy's degenerate turns can be weighed.
+
+**Doc changes owed** (for the offline docs pass): `docs/Maths/Regression/ConformalPrediction.md`, the margin section:
+- the weighted band and inflated rule with the Lean names, and the coverage each reports;
+- what is not read under weights, and the changed default readout;
+- the gates' numbers;
+- API rows for `ConformalMargin`'s and `ConformalCdfMargin`'s weighted members.
 
 ### 2026-11-13 — Slice 14's follow-up 2: the cross-fitted forms under weights
 
