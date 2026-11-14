@@ -51,7 +51,7 @@ namespace Clustering.Statistical.GMM
 
         // ── Cholesky work arrays ─────────────────────────────────────────────────
 
-        private readonly CholeskyDecomposition _chol;
+        private readonly DenseCholesky _chol;
 
         public GaussianComponent(int dim)
         {
@@ -61,7 +61,7 @@ namespace Clustering.Statistical.GMM
             CovarianceInverse = new double[dim, dim];
             ScratchMean = new double[dim];
             ScratchCov = new double[dim, dim];
-            _chol = new CholeskyDecomposition(dim);
+            _chol = new DenseCholesky(dim);
         }
 
         // ── M-Step helpers ───────────────────────────────────────────────────────
@@ -107,24 +107,24 @@ namespace Clustering.Statistical.GMM
         /// <summary>
         /// Refreshes Σ⁻¹, ln|Σ|, ln π_k, and the Cholesky factor from the current
         /// <see cref="Weight"/> and <see cref="Covariance"/>. Call after any direct
-        /// assignment to those fields. A covariance with no factor, not positive definite to working precision
-        /// (<see cref="CholeskyDecomposition.FailedAt"/>), throws, and leaves Σ⁻¹ and
-        /// <see cref="LogNormalizationFactor"/> NaN, so no density or sample is read from it.
+        /// assignment to those fields. A covariance that is not positive definite to working precision
+        /// (<see cref="DenseCholesky.FailedAt"/>), or whose inverse passes <see cref="double.MaxValue"/>, throws, and
+        /// leaves Σ⁻¹ and <see cref="LogNormalizationFactor"/> NaN, so no density or sample is read from it.
         /// </summary>
         public void UpdateCache()
         {
             _chol.Decompose(Covariance);
-            if (_chol.FailedAt >= 0)
+            bool factored = _chol.FailedAt < 0;
+            if (!factored || !_chol.TryWriteInverseTo(CovarianceInverse))
             {
                 LogNormalizationFactor = double.NaN;
                 for (int i = 0; i < _dim; i++)
                     for (int j = 0; j < _dim; j++)
                         CovarianceInverse[i, j] = double.NaN;
-                throw new InvalidOperationException(
-                    $"The component's covariance has no Cholesky factor: it is not positive definite to working precision at row " +
-                    $"{_chol.FailedAt}. Regularize it before use.");
+                throw new InvalidOperationException(factored
+                    ? "The component's covariance has no representable inverse: an entry passes double.MaxValue. Regularize it before use."
+                    : $"The component's covariance has no Cholesky factor: it is not positive definite to working precision at row {_chol.FailedAt}. Regularize it before use.");
             }
-            _chol.WriteInverseTo(CovarianceInverse);
             LogNormalizationFactor = -0.5 * (_dim * Math.Log(2.0 * Math.PI) + _chol.LogDet);
             LogWeight = Math.Log(Math.Max(Weight, 1e-300));
         }
@@ -143,8 +143,31 @@ namespace Clustering.Statistical.GMM
         public double MahalanobisSquared(double[] x)
             => Mahalanobis.DistanceSquared(x, Mean, CovarianceInverse);
 
-        /// <summary>Draws one sample using the cached Cholesky factor.</summary>
-        public double[] Sample(Random rng) => _chol.Sample(rng, Mean);
+        /// <summary>
+        /// Draws one sample μ + L·z with the cached Cholesky factor, z standard normals by the Box–Muller transform over
+        /// <paramref name="rng"/>, a pair per two coordinates.
+        /// </summary>
+        public double[] Sample(Random rng)
+        {
+            double[] z = new double[_dim];
+            for (int i = 0; i < _dim - 1; i += 2)
+            {
+                double u1 = 1.0 - rng.NextDouble();   // (0, 1] avoids log(0)
+                double u2 = 1.0 - rng.NextDouble();
+                double mag = Math.Sqrt(-2.0 * Math.Log(u1));
+                z[i] = mag * Math.Cos(2.0 * Math.PI * u2);
+                z[i + 1] = mag * Math.Sin(2.0 * Math.PI * u2);
+            }
+            if (_dim % 2 == 1)
+            {
+                double u1 = 1.0 - rng.NextDouble();
+                double u2 = 1.0 - rng.NextDouble();
+                z[_dim - 1] = Math.Sqrt(-2.0 * Math.Log(u1)) * Math.Cos(2.0 * Math.PI * u2);
+            }
+            double[] x = (double[])Mean.Clone();
+            _chol.AddSample(z, x);
+            return x;
+        }
 
         private double ComputeMahalanobisSquared(double[] x)
             => Mahalanobis.DistanceSquared(x, Mean, CovarianceInverse);

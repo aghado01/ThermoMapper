@@ -9,7 +9,7 @@ using Xunit;
 namespace VizCore.Tests;
 
 /// <summary>
-/// The callers of <see cref="Maths.LinAlg.CholeskyDecomposition"/> on a covariance with no finite factor: GMM's component
+/// The callers of a Gaussian's covariance factor (<see cref="Maths.LinAlg.DenseCholesky"/>) on a covariance with none: GMM's component
 /// cache and the Bhattacharyya distance refuse it, where they read wrong finite numbers before; the scene export draws a
 /// singular block thin, as it draws the dimensions a layer lacks, and refuses an indefinite one (shared-code defects brief, slice 2).
 /// </summary>
@@ -143,5 +143,136 @@ public sealed class GaussianFactorRefusalTests
         Assert.Throws<InvalidOperationException>(() => gmm.InitializeWithParameters([[0.0, 0.0]], [new double[,] { { 1, 1 }, { 1, 1 } }], [1.0]));
         gmm.InitializeWithParameters([[0.0, 0.0]], [new double[,] { { 1, 0.5 }, { 0.5, 1 } }], [1.0]);
         Assert.True(double.IsFinite(gmm.Components[0].LogNormalizationFactor));
+    }
+
+    // ── The components on DenseCholesky ──────────────────────────────────────────────────────────────────────────────
+
+    // A positive definite covariance with off-diagonal entries: B·Bᵀ + I/2 for a seeded B.
+    private static double[,] Spd(int n, int seed)
+    {
+        var rng = new Random(seed);
+        var b = new double[n, n];
+        for (int i = 0; i < n; i++) for (int j = 0; j < n; j++) b[i, j] = rng.NextDouble() - 0.5;
+        var a = new double[n, n];
+        for (int i = 0; i < n; i++)
+            for (int j = 0; j < n; j++)
+            {
+                for (int k = 0; k < n; k++) a[i, j] += b[i, k] * b[j, k];
+                if (i == j) a[i, j] += 0.5;
+            }
+        return a;
+    }
+
+    // The retired CholeskyDecomposition's factor, inverse and sample, verbatim.
+    private static (double[,] L, double[,] Inverse, double LogDet) EarlierFactor(double[,] sigma)
+    {
+        int n = sigma.GetLength(0);
+        var l = new double[n, n];
+        var lInv = new double[n, n];
+        double logDetL = 0.0;
+        for (int i = 0; i < n; i++)
+            for (int j = 0; j <= i; j++)
+            {
+                double sum = sigma[i, j];
+                for (int k = 0; k < j; k++) sum -= l[i, k] * l[j, k];
+                if (i == j) { l[i, i] = Math.Sqrt(sum); logDetL += Math.Log(l[i, i]); }
+                else l[i, j] = sum / l[j, j];
+            }
+        for (int i = 0; i < n; i++)
+        {
+            lInv[i, i] = 1.0 / l[i, i];
+            for (int j = 0; j < i; j++)
+            {
+                double sum = 0.0;
+                for (int k = j; k < i; k++) sum -= l[i, k] * lInv[k, j];
+                lInv[i, j] = sum / l[i, i];
+            }
+        }
+        var inverse = new double[n, n];
+        for (int i = 0; i < n; i++)
+            for (int j = i; j < n; j++)
+            {
+                double sum = 0.0;
+                for (int k = j; k < n; k++) sum += lInv[k, i] * lInv[k, j];
+                inverse[i, j] = inverse[j, i] = sum;
+            }
+        return (l, inverse, 2.0 * logDetL);
+    }
+
+    private static double[] EarlierSample(double[,] l, Random rng, double[] mean)
+    {
+        int dim = mean.Length;
+        double[] z = new double[dim];
+        for (int i = 0; i < dim - 1; i += 2)
+        {
+            double u1 = 1.0 - rng.NextDouble(), u2 = 1.0 - rng.NextDouble();
+            double mag = Math.Sqrt(-2.0 * Math.Log(u1));
+            z[i] = mag * Math.Cos(2.0 * Math.PI * u2);
+            z[i + 1] = mag * Math.Sin(2.0 * Math.PI * u2);
+        }
+        if (dim % 2 == 1)
+        {
+            double u1 = 1.0 - rng.NextDouble(), u2 = 1.0 - rng.NextDouble();
+            z[dim - 1] = Math.Sqrt(-2.0 * Math.Log(u1)) * Math.Cos(2.0 * Math.PI * u2);
+        }
+        double[] x = new double[dim];
+        for (int i = 0; i < dim; i++)
+        {
+            x[i] = mean[i];
+            for (int j = 0; j <= i; j++) x[i] += l[i, j] * z[j];
+        }
+        return x;
+    }
+
+    [Fact]
+    [Trait("Tier", "Pinned")]
+    public void AComponentsCacheAndSample_AreTheRetiredClassesBitForBit()
+    {
+        foreach (int n in new[] { 1, 2, 3, 7, 12 })
+        {
+            double[,] sigma = Spd(n, 40 + n);
+            GaussianComponent c = Component(sigma);
+            for (int i = 0; i < n; i++) c.Mean[i] = 0.25 * i - 1.0;
+            (double[,] l, double[,] inverse, double logDet) = EarlierFactor(sigma);
+            Assert.Equal(-0.5 * (n * Math.Log(2.0 * Math.PI) + logDet), c.LogNormalizationFactor);
+            for (int i = 0; i < n; i++)
+                for (int j = 0; j < n; j++) Assert.Equal(BitConverter.DoubleToInt64Bits(inverse[i, j]), BitConverter.DoubleToInt64Bits(c.CovarianceInverse[i, j]));
+            for (int s = 0; s < 5; s++)
+                Assert.Equal(Array.ConvertAll(EarlierSample(l, new Random(s), c.Mean), BitConverter.DoubleToInt64Bits),
+                             Array.ConvertAll(c.Sample(new Random(s)), BitConverter.DoubleToInt64Bits));
+        }
+    }
+
+    [Fact]
+    public void AComponentWhoseInverseOverflows_IsRefused()
+    {
+        // [1e-320] factors, but its precision passes double.MaxValue: the component is left unusable, not half-published.
+        GaussianComponent c = Component(new double[,] { { 1e-320 } }, update: false);
+        Assert.Contains("inverse", Assert.Throws<InvalidOperationException>(c.UpdateCache).Message);
+        Assert.True(double.IsNaN(c.LogNormalizationFactor));
+        Assert.True(double.IsNaN(c.CovarianceInverse[0, 0]));
+    }
+
+    [Fact]
+    public void TheDistance_ReadsItsMeanTermThroughTheFactor()
+    {
+        foreach (int n in new[] { 1, 3, 8 })
+        {
+            double[,] c1 = Spd(n, 70 + n), c2 = Spd(n, 90 + n);
+            double[] m1 = new double[n], m2 = new double[n];
+            for (int i = 0; i < n; i++) { m1[i] = 0.3 * i; m2[i] = 1.0 - 0.2 * i; }
+            var bar = new double[n, n];
+            for (int i = 0; i < n; i++) for (int j = 0; j < n; j++) bar[i, j] = 0.5 * (c1[i, j] + c2[i, j]);
+            (_, double[,] inverse, double logDetBar) = EarlierFactor(bar);
+            double mean = 0.0;
+            for (int i = 0; i < n; i++) for (int j = 0; j < n; j++) mean += (m1[i] - m2[i]) * inverse[i, j] * (m1[j] - m2[j]);
+            double expected = mean / 8.0 + 0.5 * (logDetBar - 0.5 * (EarlierFactor(c1).LogDet + EarlierFactor(c2).LogDet));
+            double distance = BhattacharyyaCoefficient.Distance(m1, c1, m2, c2);
+            Assert.True(Math.Abs(distance - expected) <= 1e-13 * Math.Max(1.0, Math.Abs(expected)), $"{distance:R} against {expected:R}");
+            GaussianComponent a = Component(c1), b = Component(c2);
+            Array.Copy(m1, a.Mean, n);
+            Array.Copy(m2, b.Mean, n);
+            Assert.True(Math.Abs(BhattacharyyaCoefficient.Distance(a, b) - expected) <= 1e-13 * Math.Max(1.0, Math.Abs(expected)));
+        }
     }
 }

@@ -4,13 +4,16 @@ namespace Maths.LinAlg
 {
     /// <summary>
     /// Strict dense Cholesky <c>A = L·Lᵀ</c> of a symmetric positive-definite matrix: the reference factor for dense
-    /// Gram matrices (BASS's active-term Gram), and the full rebuild that an incremental update is checked against.
+    /// Gram matrices (BASS's active-term Gram), the full rebuild that an incremental update is checked against, and the
+    /// factor of a Gaussian's covariance (GMM's components, the Bhattacharyya distance, the scene export's ellipsoids).
     /// <list type="bullet">
     /// <item><b>Strict.</b> There is no pivot floor. The first pivot that is not finite and positive stops the
     /// factorization, <see cref="FailedAt"/> says where, and the factor refuses to solve. LinAlg reports; whether a
     /// singular design is admissible under some other prior is the caller's decision.</item>
-    /// <item><b>Solve-oriented.</b> No inverse is formed. Solves, <c>bᵀA⁻¹b</c>, the log-determinant and
-    /// <c>N(0, A⁻¹)</c> draws all go through the two triangular solves.</item>
+    /// <item><b>Solve-oriented.</b> Its own reads form no inverse. Solves, <c>bᵀA⁻¹b</c>, the log-determinant and
+    /// <c>N(0, A⁻¹)</c> draws all go through the two triangular solves; <c>N(μ, A)</c> draws through L
+    /// (<see cref="AddSample"/>). A caller that keeps a precision matrix forms one on demand
+    /// (<see cref="TryWriteInverseTo"/>), refused where it overflows.</item>
     /// <item><b>Row at a time.</b> Rows are factored in order (Cholesky–Banachiewicz) into packed row-major storage,
     /// each row the bordered extension of the factor above it: the step a birth reuses.</item>
     /// </list>
@@ -23,6 +26,7 @@ namespace Maths.LinAlg
         private readonly double[] _relative;   // d_j / A(j,j) per row
         private readonly double[] _sqrtDiagonal;   // √A(j,j), for the condition estimate
         private readonly double[] _columnSums;     // scratch for ‖D^(−½)·A·D^(−½)‖₁
+        private double[]? _inverseFactor;          // L⁻¹, packed as L, formed on demand by TryWriteInverseTo
         private double _equilibratedNorm1 = double.NaN;
         private int _n;
         private bool _valid;
@@ -208,6 +212,63 @@ namespace Maths.LinAlg
             if (result.Length != _n) throw new ArgumentException("The result length must equal the matrix order.", nameof(result));
             z.CopyTo(result);
             BackSolveInPlace(result);
+        }
+
+        /// <summary>
+        /// Writes <c>A⁻¹ = (L⁻¹)ᵀ·L⁻¹</c> into <paramref name="target"/>, forming L⁻¹ by forward substitution on demand; true
+        /// when every entry is finite. A valid factor can have an inverse past <see cref="double.MaxValue"/>: <c>[1e-320]</c>
+        /// factors, but its reciprocal overflows. Then this returns false and <paramref name="target"/> holds no inverse. For a
+        /// caller that keeps a precision matrix; a solve or <see cref="InverseQuadraticForm"/> needs none.
+        /// </summary>
+        public bool TryWriteInverseTo(double[,] target)
+        {
+            ArgumentNullException.ThrowIfNull(target);
+            RequireValid();
+            int n = _n;
+            if (target.GetLength(0) != n || target.GetLength(1) != n)
+                throw new ArgumentException($"The target must be {n} × {n}.", nameof(target));
+            _inverseFactor ??= new double[_l.Length];
+            double[] inv = _inverseFactor;   // L⁻¹, packed lower triangle as L
+            for (int i = 0; i < n; i++)
+            {
+                int ri = Row(i);
+                double lii = _l[ri + i];
+                inv[ri + i] = 1.0 / lii;
+                if (!double.IsFinite(inv[ri + i])) return false;
+                for (int j = 0; j < i; j++)
+                {
+                    double sum = 0.0;
+                    for (int k = j; k < i; k++) sum -= _l[ri + k] * inv[Row(k) + j];
+                    inv[ri + j] = sum / lii;
+                    if (!double.IsFinite(inv[ri + j])) return false;
+                }
+            }
+            for (int i = 0; i < n; i++)
+                for (int j = i; j < n; j++)
+                {
+                    double sum = 0.0;
+                    for (int k = j; k < n; k++) sum += inv[Row(k) + i] * inv[Row(k) + j];
+                    if (!double.IsFinite(sum)) return false;
+                    target[i, j] = sum;
+                    target[j, i] = sum;
+                }
+            return true;
+        }
+
+        /// <summary>
+        /// Adds <c>L·z</c> to <paramref name="x"/>, each row accumulated into x in column order: with x the mean and z standard
+        /// normals, a draw of <c>N(x, A)</c>, the covariance-factor draw (<see cref="SampleInnovation"/> is the precision-factor
+        /// one).
+        /// </summary>
+        public void AddSample(ReadOnlySpan<double> z, Span<double> x)
+        {
+            RequireValid(z.Length);
+            if (x.Length != _n) throw new ArgumentException($"Expected length {_n}, got {x.Length}.", nameof(x));
+            for (int i = 0; i < _n; i++)
+            {
+                int ri = Row(i);
+                for (int j = 0; j <= i; j++) x[i] += _l[ri + j] * z[j];
+            }
         }
 
         private static int Row(int i) => i * (i + 1) / 2;

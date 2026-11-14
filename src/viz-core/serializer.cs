@@ -261,7 +261,7 @@ namespace Viz.Renderers
             var covs = layer.Covariances.Span;
             var result = new double[layer.K * outDim * outDim];
             var tmp = new double[outDim, outDim];
-            var chol = new CholeskyDecomposition(outDim);
+            var chol = new DenseCholesky(outDim);
             int srcStride = srcDim * srcDim;
             int outStride = outDim * outDim;
 
@@ -289,7 +289,8 @@ namespace Viz.Renderers
                     throw new InvalidOperationException(
                         $"Gaussian layer '{layer.Name}', component {k}: the covariance's leading {copyDim}×{copyDim} block is not " +
                         $"positive semidefinite to the display's ε (it fails at row {chol.FailedAt}), so its ellipsoid has no shape to draw.");
-                chol.WriteLTo(result.AsSpan(k * outStride, outStride));
+                for (int r = 0; r < outDim; r++)
+                    for (int c = 0; c < outDim; c++) result[k * outStride + r * outDim + c] = chol.Factor(r, c);   // 0 above the diagonal
             }
             return result;
         }

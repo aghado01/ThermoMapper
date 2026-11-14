@@ -25,7 +25,6 @@ namespace Clustering.Statistical.GMM
             int d = a.Mean.Length;
 
             double[,] sigmaBar = new double[d, d];
-            double[,] sigmaBarInv = new double[d, d];
 
             for (int i = 0; i < d; i++)
                 for (int j = 0; j < d; j++)
@@ -34,24 +33,15 @@ namespace Clustering.Statistical.GMM
             if (!double.IsFinite(a.LogNormalizationFactor)) throw new ArgumentException(NoFactor("Component a's covariance"), nameof(a));
             if (!double.IsFinite(b.LogNormalizationFactor)) throw new ArgumentException(NoFactor("Component b's covariance"), nameof(b));
 
-            var chol = new CholeskyDecomposition(d);
+            var chol = new DenseCholesky(d);
             Factor(chol, sigmaBar, "The averaged covariance (Σ₁ + Σ₂)/2", null);
-            chol.WriteInverseTo(sigmaBarInv);
             double logDetSigmaBar = chol.LogDet;
 
             // ln|Σ| recovered from cached LogNormalizationFactor = −½(D·ln(2π) + ln|Σ|).
             double logDetA = -(2.0 * a.LogNormalizationFactor + d * 2.0 * HalfLn2Pi);
             double logDetB = -(2.0 * b.LogNormalizationFactor + d * 2.0 * HalfLn2Pi);
 
-            double mahalTerm = 0.0;
-            for (int i = 0; i < d; i++)
-            {
-                double row = 0.0;
-                for (int j = 0; j < d; j++)
-                    row += sigmaBarInv[i, j] * (a.Mean[j] - b.Mean[j]);
-                mahalTerm += row * (a.Mean[i] - b.Mean[i]);
-            }
-            mahalTerm *= 0.125;
+            double mahalTerm = 0.125 * MeanTerm(chol, a.Mean, b.Mean);
 
             double logDetTerm = 0.5 * (logDetSigmaBar - 0.5 * (logDetA + logDetB));
             return mahalTerm + logDetTerm;
@@ -71,17 +61,16 @@ namespace Clustering.Statistical.GMM
             int d = mean1.Length;
 
             double[,] sigmaBar = new double[d, d];
-            double[,] sigmaBarInv = new double[d, d];
 
             for (int i = 0; i < d; i++)
                 for (int j = 0; j < d; j++)
                     sigmaBar[i, j] = 0.5 * (cov1[i, j] + cov2[i, j]);
 
-            var chol = new CholeskyDecomposition(d);
+            var chol = new DenseCholesky(d);
 
             Factor(chol, sigmaBar, "The averaged covariance (Σ₁ + Σ₂)/2", null);
-            chol.WriteInverseTo(sigmaBarInv);
             double logDetSigmaBar = chol.LogDet;
+            double mahalTerm = 0.125 * MeanTerm(chol, mean1, mean2);
 
             Factor(chol, cov1, "The first covariance", nameof(cov1));
             double logDetCov1 = chol.LogDet;
@@ -89,23 +78,21 @@ namespace Clustering.Statistical.GMM
             Factor(chol, cov2, "The second covariance", nameof(cov2));
             double logDetCov2 = chol.LogDet;
 
-            double mahalTerm = 0.0;
-            for (int i = 0; i < d; i++)
-            {
-                double row = 0.0;
-                for (int j = 0; j < d; j++)
-                    row += sigmaBarInv[i, j] * (mean1[j] - mean2[j]);
-                mahalTerm += row * (mean1[i] - mean2[i]);
-            }
-            mahalTerm *= 0.125;
-
             double logDetTerm = 0.5 * (logDetSigmaBar - 0.5 * (logDetCov1 + logDetCov2));
 
             return mahalTerm + logDetTerm;
         }
 
-        // Factors Σ, refusing one with no factor (CholeskyDecomposition.FailedAt): the distance has no value there.
-        private static void Factor(CholeskyDecomposition chol, double[,] sigma, string what, string? parameter)
+        // (μ₁ − μ₂)ᵀ Σ̄⁻¹ (μ₁ − μ₂) = ‖L⁻¹(μ₁ − μ₂)‖², a sum of squares through the factor of Σ̄, with no inverse formed.
+        private static double MeanTerm(DenseCholesky sigmaBar, double[] mean1, double[] mean2)
+        {
+            var delta = new double[mean1.Length];
+            for (int i = 0; i < delta.Length; i++) delta[i] = mean1[i] - mean2[i];
+            return sigmaBar.InverseQuadraticForm(delta);
+        }
+
+        // Factors Σ, refusing one with no factor (DenseCholesky.FailedAt): the distance has no value there.
+        private static void Factor(DenseCholesky chol, double[,] sigma, string what, string? parameter)
         {
             chol.Decompose(sigma);
             if (chol.FailedAt >= 0)
