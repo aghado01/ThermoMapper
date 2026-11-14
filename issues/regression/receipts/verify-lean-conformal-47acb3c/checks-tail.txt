@@ -1,0 +1,3 @@
+Follow-up 2e: the weighted layer cake on 4000 random cases (largest share 0.789); the event inequality on 1288 refusals of 4000 random fold-structured cases at every theta and gamma; end to end over every ordering on 84 bags, within the refined bound (largest share 0.400) and 2c(w_max) (largest share 0.400), the Markov form at every theta in 0.1 steps, and equal weights giving slice 9's merged bound
+
+All assertions hold.
