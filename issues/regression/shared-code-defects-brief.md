@@ -63,16 +63,80 @@ Commissioned by the user on 2026-11-13 through the coordinating session. Both de
 
 Newest first. Each gives the commits, the gates' results, defects found, decisions for the user and "Doc changes owed".
 
-### In progress (2026-11-14)
+### 2026-11-14 — Slice 5's decision 1, measured: the condition estimate's cost per sampler step
 
-- *Slice 5's decision 1, measured only:* the condition estimate's cost per Gibbs step. The coordinating session relayed the user's yes on 2026-11-14. Nothing is built and no default changes.
-  - *Arms.* Per-step wall time of each BAPS sampler with `BapsAdmission` as landed, against admitting on positive definiteness alone. The seeds are the same, and the draws are confirmed bit for bit first.
-  - *Regimes.*
-    - The 1-D cubic P-spline at a small, a middle and a large basis, each at several ratios of observations to basis functions.
-    - `HierarchicalPSpline`'s five sites.
-    - One or two tensor layouts.
-  - *Also measured:* the estimator's solve count per call.
-  - *Method.* Probe code and data go in `artifacts/shared-code-defects/probe/`. Timed blocks run at High priority, pinned, with the arms interleaved.
+The coordinating session relayed the user's yes on 2026-11-14. This is a measurement only: nothing is built and no default changes. The decision it serves is whether `BapsAdmission`'s estimate stays on every sampler step.
+
+**Method.**
+- *The stage.* A `git archive` of HEAD `79e858f` with two probe-only patches, never committed:
+  - `BapsAdmission` gains a switch, so one arm admits on positive definiteness alone, and an estimate counter;
+  - `ConditionEstimate` counts the solves per call.
+- *Where the files are.* The probe, its stage patch, its run script and its CSVs are in `artifacts/shared-code-defects/probe/` (`BapsGateCostProbe.cs`, `baps-gate-cost-{summary,rows}.csv`).
+- *Steps per case.*
+  - First, the two arms' draws are compared bit for bit: 20 burn-in steps and 30 draws, covering every coefficient, λ, σ², τ², η and component τ². All 19 cases matched.
+  - Then the estimates per step and the solves per estimate are counted over 200 steps.
+  - Then come 7 interleaved pairs of blocks of about 0.5 s each, with the gate first on even repetitions. The blocks run at process High, thread Highest and affinity 0xFF, after a warm-up of at least 40 runs or 1.5 s and a 300 ms settle.
+  - A step's time is the block over the steps (burn-in plus 2 draws, one chain). The table gives the median of 7 and the range.
+- *Load.* Over the blocks, 6 to 17 of the 18 logical processors were busy (the last column). Interleaving puts the drift on both arms, and the ranges show it. A ratio near 1.05 or below sits inside them.
+- *What the difference is.* Both arms pay the ‖E‖₁ pass, which `BandCholesky` makes before every factorization. So the difference is the estimate's solves and its three work vectors.
+
+| sampler | regime | gate µs/step (range) | PD alone µs/step (range) | ratio | extra bytes/step | estimates/step | solves/estimate (seen) | busy cores |
+|---|---|---|---|---|---|---|---|---|
+| Baps Gibbs | 1-D, ν = 12, n/ν = 2 | 6.9 (6.3–10.0) | 4.1 (3.5–4.5) | 1.66 | 496 | 1.00 | 6.49 (5–11) | 6.0–14.0 |
+| Baps Gibbs | 1-D, ν = 12, n/ν = 10 | 10.1 (9.0–11.5) | 7.0 (6.3–7.3) | 1.45 | 496 | 1.00 | 7.07 (5–10) | 9.1–13.4 |
+| Baps Gibbs | 1-D, ν = 12, n/ν = 50 | 24.6 (21.8–28.3) | 20.8 (19.7–24.4) | 1.18 | 496 | 1.00 | 7.17 (6–9) | 8.1–11.3 |
+| Baps Gibbs | 1-D, ν = 48, n/ν = 2 | 32.8 (30.1–36.0) | 23.6 (22.8–26.3) | 1.39 | 1360 | 1.00 | 5.10 (5–7) | 7.9–11.5 |
+| Baps Gibbs | 1-D, ν = 48, n/ν = 10 | 90.7 (89.3–96.4) | 85.2 (75.1–88.1) | 1.06 | 1360 | 1.00 | 5.04 (5–7) | 9.7–14.0 |
+| Baps Gibbs | 1-D, ν = 48, n/ν = 50 | 381.9 (345.3–451.7) | 363.2 (345.0–366.5) | 1.05 | 1360 | 1.00 | 5.04 (5–7) | 9.1–15.4 |
+| Baps Gibbs | 1-D, ν = 192, n/ν = 2 | 309.9 (275.7–337.5) | 256.8 (209.2–315.1) | 1.21 | 4816 | 1.00 | 6.72 (5–9) | 7.7–17.0 |
+| Baps Gibbs | 1-D, ν = 192, n/ν = 10 | 1209.8 (991.1–1367.1) | 1121.1 (1014.5–1288.8) | 1.08 | 4816 | 1.00 | 6.29 (5–7) | 7.1–16.1 |
+| Baps Gibbs | 1-D, ν = 192, n/ν = 50 | 5281.1 (4879.9–5692.0) | 5132.3 (4802.9–5442.4) | 1.03 | 4816 | 1.00 | 5.08 (5–9) | 8.8–10.9 |
+| Baps LocallyAdaptiveGibbs | 1-D, ν = 48, n/ν = 10 | 93.1 (89.8–98.3) | 84.2 (77.3–87.2) | 1.11 | 1360 | 1.00 | 5.07 (5–7) | 8.2–12.2 |
+| Baps Collapsed | 1-D, ν = 48, n/ν = 10 | 17.5 (16.9–19.1) | 8.7 (7.9–9.6) | 2.00 | 1360 | 1.00 | 5.03 (5–7) | 7.3–12.9 |
+| Hierarchical Centred | 1-D, ν = 24, R = 8, n/ν = 5 each | 110.2 (98.2–118.5) | 90.0 (82.8–109.1) | 1.22 | 1568 | 2.00 | 5.82 (5–9) | 6.2–9.8 |
+| Hierarchical CollapsedPopulation | 1-D, ν = 24, R = 8, n/ν = 5 each | 165.1 (156.4–174.8) | 141.1 (132.9–160.5) | 1.17 | 1568 | 2.00 | 5.79 (5–9) | 8.6–11.5 |
+| Hierarchical ParameterExpanded | 1-D, ν = 24, R = 8, n/ν = 5 each | 231.2 (205.0–256.4) | 215.5 (198.8–240.6) | 1.07 | 1568 | 2.00 | 6.19 (5–10) | 8.9–12.3 |
+| Hierarchical Centred | 1-D, ν = 96, R = 8, n/ν = 5 each | 1404.7 (1258.7–1441.4) | 1312.8 (1187.0–1530.8) | 1.07 | 5024 | 2.00 | 6.02 (5–9) | 10.1–14.6 |
+| Hierarchical CollapsedPopulation | 1-D, ν = 96, R = 8, n/ν = 5 each | 5433.6 (4945.4–5998.2) | 5146.6 (4955.7–5628.6) | 1.06 | 5024 | 2.00 | 6.42 (5–11) | 11.6–13.7 |
+| Hierarchical ParameterExpanded | 1-D, ν = 96, R = 8, n/ν = 5 each | 2772.6 (2663.7–2999.8) | 2833.8 (2611.7–3314.6) | 0.98 | 5024 | 2.00 | 5.78 (5–11) | 9.1–12.0 |
+| Baps AnisotropicGibbs | tensor 8x8 | 266.6 (251.0–302.4) | 209.6 (187.8–217.8) | 1.27 | 1744 | 1.00 | 7.03 (5–9) | 7.7–11.9 |
+| Baps AnisotropicGibbs | tensor 16x16 | 3053.9 (2555.1–3109.8) | 2492.4 (2135.3–2567.3) | 1.23 | 6352 | 1.00 | 6.91 (5–9) | 7.4–10.4 |
+
+**Readings.**
+- *1-D Gibbs.* The ratio falls as the rest of the step grows: from 1.66 at ν = 12, n/ν = 2 to 1.03 at ν = 192, n/ν = 50.
+  - Basis-dominated steps pay most: 1.21 to 1.66 at n/ν = 2.
+  - Data-dominated steps pay 3% to 18% at n/ν = 50.
+- *The collapsed scheme* doubles its step (2.00). Each step is one factored solve and the evidence, and the estimate costs as much as both.
+- *Locally adaptive*, at the middle point: 1.11.
+- *Hierarchical*, two estimates per step:
+  - ν = 24: 1.07 to 1.22;
+  - ν = 96: 0.98 to 1.07, inside the ranges.
+- *Tensor*, anisotropic: 1.27 at 8×8 and 1.23 at 16×16.
+- *Solves per estimate:* 5.0 to 7.2 on average. Between 5 and 11 were seen, never 4.
+- *Allocation.* The estimate allocates per call, so the gate arm allocates about 0.5 KB more per step at ν = 12 and about 4.8 KB more at ν = 192. That churn is part of its time.
+
+**Options.** Each is listed with what it costs and what it loses. No default is recommended from this grid.
+1. *Keep the estimate on every factorization, as landed.*
+   - Costs: the ratios above. That is up to 1.66 on small basis-dominated 1-D steps, 2.0 in the collapsed scheme, and 1.2 to 1.3 on tensor steps, but little on large data-dominated steps.
+   - Loses: nothing.
+2. *Estimate in the deterministic solves only (`PenalizedSpline`, `AnisotropicTensorSpline`), and admit sampler factorizations on positive definiteness.*
+   - Costs: nothing per Gibbs step. The collapsed scheme's step is `PenalizedSpline.SolveFactored`, so it keeps its 2.0 unless that solve is counted as a sampler step.
+   - Loses: refusal of a sampler system that stays positive definite with κ(E) above 1e14. That includes an unidentified design (strict alone admitted 88 of 234 in slice 5's probe) and a drawn λ far out (the 1e20 points). Such a draw carries no reliable digits.
+3. *Estimate once per sampler, at the trace-balance point λ_ref, and check positive definiteness per step.*
+   - The rule depends on the configuration alone, so a resumed run matches bit for bit.
+   - Costs: one estimate per run.
+   - Loses: the per-step check of a drawn λ far out. Slice 5's probe refused every unidentified design at every box point, its centre included, so the design check itself holds.
+4. *Estimate every k-th step*, with k fixed by the configuration and the step index carried in the chain's state.
+   - Costs: about 1/k of option 1's.
+   - Loses: a refusal arrives up to k − 1 steps late, or never for an excursion that returns between checks.
+5. *Alongside any of these:* an estimate that reuses workspace vectors cuts option 1's allocation and part of its time, and checks the same thing. Under options 2 to 4, `BandCholesky`'s ‖E‖₁ pass could also run only when an estimate is asked. Neither was measured.
+
+**What the numbers cover.**
+- The 1-D cubic Gibbs sampler on a 3 × 3 grid: ν = 12, 48 and 192, each at n/ν = 2, 10 and 50.
+- The locally adaptive and collapsed schemes at one point: ν = 48, n/ν = 10.
+- `HierarchicalPSpline`'s three schemes, which reach its five sites, at ν = 24 and 96, with R = 8 and n/ν = 5 each.
+- Two tensor layouts.
+- Not covered: the locally adaptive and collapsed schemes across sizes, other tensor layouts, the hierarchical sampler with anisotropic smoothing, and a quiet machine.
 
 ### 2026-11-14 — E8's readouts read a fit of several named outputs (outside the defects, at the user's word)
 
