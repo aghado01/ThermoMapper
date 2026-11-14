@@ -6553,10 +6553,11 @@ theorem sum_mass_mul_sub_le (T : Finset ℝ) (m : ℝ → ℝ) (hm : ∀ v ∈ T
     rw [sum_insert hMT, hsplit]
     nlinarith [mul_le_mul_of_nonneg_left hGM (sub_nonneg.2 hbM), sq_nonneg (b - M)]
 
-/-- **The layer cake for a super-uniform p-value**: `E(b − π)⁺ ≤ b²/2` when `P(π ≤ x) ≤ x` at every
-level below `b`. -/
+/-- **The layer cake for a super-uniform p-value**: `E(b − π)⁺ ≤ b²/2` when `π ≥ 0` and
+`P(π ≤ x) ≤ x` at every level `0 ≤ x < b`. -/
 theorem sum_mul_max_sub_le {Ω : Type*} [Fintype Ω] (P : Ω → ℝ) (hP : ∀ ω, 0 ≤ P ω) (π : Ω → ℝ)
-    (b : ℝ) (hsu : ∀ x, x < b → ∑ ω, P ω * (if π ω ≤ x then 1 else 0) ≤ x) :
+    (hπ : ∀ ω, 0 ≤ π ω) (b : ℝ)
+    (hsu : ∀ x, 0 ≤ x → x < b → ∑ ω, P ω * (if π ω ≤ x then 1 else 0) ≤ x) :
     ∑ ω, P ω * max 0 (b - π ω) ≤ b ^ 2 / 2 := by
   classical
   set s := univ.filter fun ω => π ω < b with hs
@@ -6617,17 +6618,17 @@ theorem sum_mul_max_sub_le {Ω : Type*} [Fintype Ω] (P : Ω → ℝ) (hP : ∀ 
       · intro h
         exact ⟨lt_of_le_of_lt h hvb, h⟩
     rw [hall]
-    exact hsu _ hvb
+    exact hsu _ (hπ ω₀) hvb
 
 /-- **Averaging super-uniform p-values with fixed weights costs a factor `2`** (the arithmetic
-mean's factor, as in slice 9's merged bound): with `λ ≥ 0` summing to one and each `π_k`
+mean's factor, as in slice 9's merged bound): with `λ ≥ 0` summing to one and each `π_k ≥ 0`
 super-uniform below `2c`, the average is at most `c` with chance at most `2c`. Where the average
 is at most `c`, `Σ λ_k (2c − π_k)⁺ ≥ c`; each term averages at most `(2c)²/2` by the layer
 cake. -/
 theorem merge_le_two {Ω κ : Type*} [Fintype Ω] (P : Ω → ℝ) (hP : ∀ ω, 0 ≤ P ω) (K : Finset κ)
     (lam : κ → ℝ) (hlam : ∀ k ∈ K, 0 ≤ lam k) (hlam1 : ∑ k ∈ K, lam k = 1) (π : κ → Ω → ℝ)
-    {c : ℝ} (hc : 0 < c)
-    (hsu : ∀ k ∈ K, ∀ x, x < 2 * c → ∑ ω, P ω * (if π k ω ≤ x then 1 else 0) ≤ x) :
+    (hπ : ∀ k ∈ K, ∀ ω, 0 ≤ π k ω) {c : ℝ} (hc : 0 < c)
+    (hsu : ∀ k ∈ K, ∀ x, 0 ≤ x → x < 2 * c → ∑ ω, P ω * (if π k ω ≤ x then 1 else 0) ≤ x) :
     ∑ ω, P ω * (if ∑ k ∈ K, lam k * π k ω ≤ c then 1 else 0) ≤ 2 * c := by
   have hpt : ∀ ω, c * (if ∑ k ∈ K, lam k * π k ω ≤ c then 1 else 0) ≤
       ∑ k ∈ K, lam k * max 0 (2 * c - π k ω) := by
@@ -6643,7 +6644,7 @@ theorem merge_le_two {Ω κ : Type*} [Fintype Ω] (P : Ω → ℝ) (hP : ∀ ω,
     · rw [mul_zero]
       exact sum_nonneg fun k hk => mul_nonneg (hlam k hk) (le_max_left _ _)
   have hlc : ∀ k ∈ K, ∑ ω, P ω * max 0 (2 * c - π k ω) ≤ (2 * c) ^ 2 / 2 := fun k hk =>
-    sum_mul_max_sub_le P hP (π k) (2 * c) (hsu k hk)
+    sum_mul_max_sub_le P hP (π k) (hπ k hk) (2 * c) (hsu k hk)
   have hsum : c * ∑ ω, P ω * (if ∑ k ∈ K, lam k * π k ω ≤ c then 1 else 0) ≤
       ∑ k ∈ K, lam k * ((2 * c) ^ 2 / 2) := by
     calc c * ∑ ω, P ω * (if ∑ k ∈ K, lam k * π k ω ≤ c then 1 else 0)
@@ -6715,7 +6716,7 @@ theorem cvPlus_merged_weighted {Ω : Type*} [Fintype Ω] (P : Ω → ℝ) (hP : 
     (U : Finset ι) (K : Finset κ) (hK : K.Nonempty) (fold : ι → κ) (hfold : ∀ i ∈ U, fold i ∈ K)
     (w : ι → ℝ) (hw : ∀ i ∈ U, 0 ≤ w i) (wt : ℝ) (hwt : 0 < wt) (beaten : Ω → ι → Prop)
     [∀ ω, DecidablePred (beaten ω)] [DecidableEq κ] {α : ℝ} (hα : 0 < α)
-    (hsu : ∀ k ∈ K, ∀ x, x < 2 * ((α * (∑ i ∈ U, w i + wt) + (K.card - 1) * wt) /
+    (hsu : ∀ k ∈ K, ∀ x, 0 ≤ x → x < 2 * ((α * (∑ i ∈ U, w i + wt) + (K.card - 1) * wt) /
         (∑ i ∈ U, w i + K.card * wt)) →
       ∑ ω, P ω * (if (∑ i ∈ (U.filter fun i => fold i = k).filter (fun i => ¬ beaten ω i), w i +
           wt) / (∑ i ∈ U.filter (fun i => fold i = k), w i + wt) ≤ x then 1 else 0) ≤ x) :
@@ -6738,10 +6739,15 @@ theorem cvPlus_merged_weighted {Ω : Type*} [Fintype Ω] (P : Ω → ℝ) (hP : 
     simp only
     rw [← sum_div, sum_add_distrib, sum_const, nsmul_eq_mul,
       sum_fiberwise_of_maps_to (s := U) (t := K) (g := fold) hfold, div_self hD.ne']
+  have hπ : ∀ k ∈ K, ∀ ω, 0 ≤ (∑ i ∈ (U.filter fun i => fold i = k).filter (fun i => ¬ beaten ω i),
+      w i + wt) / (∑ i ∈ U.filter (fun i => fold i = k), w i + wt) := fun k _ ω =>
+    div_nonneg
+      (add_nonneg (sum_nonneg fun i hi => hw i (mem_filter.1 (mem_filter.1 hi).1).1) hwt.le)
+      (add_nonneg (sum_nonneg fun i hi => hw i (mem_filter.1 hi).1) hwt.le)
   refine le_trans (sum_le_sum fun ω _ => mul_le_mul_of_nonneg_left ?_ (hP ω))
     (merge_le_two P hP K lam hlam hlam1 (fun k ω =>
       (∑ i ∈ (U.filter fun i => fold i = k).filter (fun i => ¬ beaten ω i), w i + wt) /
-        (∑ i ∈ U.filter (fun i => fold i = k), w i + wt)) hc hsu)
+        (∑ i ∈ U.filter (fun i => fold i = k), w i + wt)) hπ hc hsu)
   by_cases h : (1 - α) * (∑ i ∈ U, w i + wt) ≤ ∑ i ∈ U.filter (beaten ω), w i
   · rw [if_pos h, if_pos (cv_merged_of_refused U K hK fold hfold w hw wt hwt (beaten ω) h)]
   · rw [if_neg h]
@@ -7011,6 +7017,396 @@ theorem coverage_across_likelihoodRatio {β' γ Z α' : Type*} [Fintype β'] [Fi
             (Fintype.card β' * Fintype.card γ) := by ring
 
 end WeightedAcross
+
+/-! ### Slice 14's follow-ups: merged K-fold CV+ under likelihood-ratio weights
+
+With likelihood-ratio weights the folds' weights depend on which unit is the test, so the
+fixed-weight average of `WeightedMerge` does not apply. Markov's thresholds `θ W_k`, proportional to
+each block's own weight (a fold with the test unit), are fixed given that block as a set, and each
+block's weighted rank is super-uniform there: the weighted layer cake. The test unit's weight enters
+the refusal only through `(K − 1) w_t`, bounded by any `γ` at least the weight of a unit the rule
+can refuse. -/
+
+section WeightedMergeLR
+
+variable {ι : Type*} [Fintype ι] [DecidableEq ι]
+
+omit [Fintype ι] [DecidableEq ι] in
+/-- **The weighted layer cake.** Whatever the scores, with weights `q ≥ 0` on `C`, the weight-sum
+of `(b − weightLe(u))⁺` is at most `b²/2`: the units whose weight-below is at most `x` weigh at most
+`x` (`sum_weight_refused_le`), so `weightLe` is super-uniform under `q`. -/
+theorem sum_weight_mul_max_sub_le (C : Finset ι) (s q : ι → ℝ) (hq : ∀ j ∈ C, 0 ≤ q j) (b : ℝ) :
+    ∑ u ∈ C, q u * max 0 (b - weightLe C s q u) ≤ b ^ 2 / 2 := by
+  have hsu : ∀ x, 0 ≤ x → x < b →
+      ∑ u : C, q u * (if weightLe C s q u ≤ x then 1 else 0) ≤ x := by
+    intro x hx _
+    rw [sum_coe_sort C (fun u => q u * (if weightLe C s q u ≤ x then 1 else 0))]
+    simp only [mul_ite, mul_one, mul_zero]
+    rw [← sum_filter]
+    exact sum_weight_refused_le C s q hq hx
+  have h := sum_mul_max_sub_le (fun u : C => q u) (fun u => hq u u.2)
+    (fun u : C => weightLe C s q u) (fun u => sum_nonneg fun j hj => hq j (mem_filter.1 hj).1) b
+    hsu
+  rwa [sum_coe_sort C (fun u => q u * max 0 (b - weightLe C s q u))] at h
+
+/-- **One block's layer cake under likelihood-ratio weights.** Over the reorderings of a block `C`
+holding the test position `t` (a fold with the test unit), each weighed by the test unit's `w`, with
+a score equivariant on `C` (the fold's fit reads neither): the test unit's `(θ W_C − V)⁺` averages
+at most `θ²/2` times `W_C`. Here `W_C` is the block's weight and `V` the block's weight scoring at
+most the test unit, itself included. Given the block as a set, the test unit is `u` with chance
+`w(z_u)/W_C`, and the threshold `θ W_C` is fixed. -/
+theorem sum_permsOn_mul_max_sub_le {Z : Type*} {C : Finset ι} {t : ι} (ht : t ∈ C)
+    {S : (ι → Z) → ι → ℝ} (hS : Equivariant C S) (z : ι → Z) (w : Z → ℝ) (hw : ∀ v, 0 ≤ w v)
+    (θ : ℝ) :
+    ∑ σ ∈ permsOn C, w (z (σ t)) * max 0 (θ * ∑ j ∈ C, w (z (σ j)) -
+        weightLe C (S (z ∘ σ)) (fun j => w (z (σ j))) t) ≤
+      θ ^ 2 / 2 * ∑ σ ∈ permsOn C, w (z (σ t)) * ∑ j ∈ C, w (z (σ j)) := by
+  set WC := ∑ j ∈ C, w (z j) with hWC
+  have hsumC : ∀ σ ∈ permsOn C, ∑ j ∈ C, w (z (σ j)) = WC := fun σ hσ =>
+    sum_equiv σ (fun j => (mem_iff_of_mem_permsOn hσ j).symm) fun j _ => rfl
+  have hwl : ∀ σ ∈ permsOn C, weightLe C (S (z ∘ σ)) (fun j => w (z (σ j))) t =
+      weightLe C (S z) (fun j => w (z j)) (σ t) := fun σ hσ => by
+    have hfun : S (z ∘ σ) = S z ∘ σ := funext fun i => hS σ hσ z i
+    rw [hfun, show (fun j => w (z (σ j))) = (fun j => w (z j)) ∘ σ from rfl, weightLe_comp hσ]
+  set f : ι → ℝ := fun u => w (z u) * max 0 (θ * WC - weightLe C (S z) (fun j => w (z j)) u)
+    with hf
+  have hL : ∑ σ ∈ permsOn C, w (z (σ t)) * max 0 (θ * ∑ j ∈ C, w (z (σ j)) -
+      weightLe C (S (z ∘ σ)) (fun j => w (z (σ j))) t) = ∑ σ ∈ permsOn C, f (σ t) :=
+    sum_congr rfl fun σ hσ => by rw [hsumC σ hσ, hwl σ hσ, hf]
+  have hR : ∑ σ ∈ permsOn C, w (z (σ t)) * ∑ j ∈ C, w (z (σ j)) =
+      ∑ σ ∈ permsOn C, (fun u => w (z u) * WC) (σ t) :=
+    sum_congr rfl fun σ hσ => by rw [hsumC σ hσ]
+  rw [hL, hR]
+  have hc : (0 : ℝ) < C.card := by exact_mod_cast card_pos.2 ⟨t, ht⟩
+  refine (mul_le_mul_iff_of_pos_left hc).1 ?_
+  rw [card_mul_sum_permsOn ht f, mul_left_comm, card_mul_sum_permsOn ht (fun u => w (z u) * WC)]
+  have hcake := sum_weight_mul_max_sub_le C (S z) (fun j => w (z j)) (fun j _ => hw _) (θ * WC)
+  have hG : (0 : ℝ) ≤ (permsOn C).card := Nat.cast_nonneg _
+  calc ((permsOn C).card : ℝ) * ∑ u ∈ C, f u ≤ (permsOn C).card * ((θ * WC) ^ 2 / 2) :=
+        mul_le_mul_of_nonneg_left hcake hG
+    _ = θ ^ 2 / 2 * ((permsOn C).card * ∑ u ∈ C, w (z u) * WC) := by
+        rw [← sum_mul, ← hWC]
+        ring
+
+/-- Sums over the blocks: block `C k` is fold `k` with the test position `t`. -/
+theorem sum_blocks_filter {κ : Type*} [Fintype κ] {t : ι} (fold : ι → κ)
+    {C : κ → Finset ι} (hC : ∀ k i, i ∈ C k ↔ i = t ∨ fold i = k) (f : ι → ℝ)
+    (p : κ → ι → Prop) [∀ k, DecidablePred (p k)] :
+    ∑ k, ∑ j ∈ (C k).filter (p k), f j =
+      ∑ k, (if p k t then f t else 0) +
+        ∑ j ∈ (univ.erase t).filter (fun j => p (fold j) j), f j := by
+  classical
+  have hCk : ∀ k, C k = insert t ((univ.erase t).filter fun j => fold j = k) := fun k => by
+    ext j
+    by_cases hj : j = t
+    · simp [hC, hj]
+    · simp [hC, hj]
+  have hnot : ∀ k, t ∉ ((univ.erase t).filter fun j => fold j = k).filter (p k) := fun k h => by
+    simp at h
+  have h1 : ∀ k, ∑ j ∈ (C k).filter (p k), f j = (if p k t then f t else 0) +
+      ∑ j ∈ ((univ.erase t).filter fun j => fold j = k).filter (p k), f j := fun k => by
+    rw [hCk k, filter_insert]
+    split_ifs with h
+    · rw [sum_insert (hnot k)]
+    · rw [zero_add]
+  rw [sum_congr rfl fun k _ => h1 k, sum_add_distrib]
+  congr 1
+  rw [← sum_fiberwise_of_maps_to (s := (univ.erase t).filter fun j => p (fold j) j) (t := univ)
+    (g := fold) fun _ _ => mem_univ _]
+  refine sum_congr rfl fun k _ => sum_congr ?_ fun _ _ => rfl
+  ext j
+  simp only [mem_filter, mem_erase, mem_univ, and_true]
+  constructor
+  · rintro ⟨⟨hj, hk⟩, hp⟩
+    refine ⟨⟨hj, ?_⟩, hk⟩
+    rw [hk]
+    exact hp
+  · rintro ⟨⟨hj, hp⟩, hk⟩
+    refine ⟨⟨hj, hk⟩, ?_⟩
+    rw [← hk]
+    exact hp
+
+omit [DecidableEq ι] in
+/-- The blocks' weights: each holds the test position, so they sum to the whole weight plus `K − 1`
+copies of the test unit's. -/
+theorem sum_blocks {κ : Type*} [Fintype κ] {t : ι} (fold : ι → κ)
+    {C : κ → Finset ι} (hC : ∀ k i, i ∈ C k ↔ i = t ∨ fold i = k) (q : ι → ℝ) :
+    ∑ k, ∑ j ∈ C k, q j = ∑ i, q i + (Fintype.card κ - 1) * q t := by
+  classical
+  have h := sum_blocks_filter fold hC q (fun _ _ => True)
+  have hf : ∀ k, (C k).filter (fun _ => True) = C k := fun k =>
+    filter_true_of_mem fun _ _ => trivial
+  have hf' : (univ.erase t).filter (fun _ => True) = univ.erase t :=
+    filter_true_of_mem fun _ _ => trivial
+  simp only [hf, hf', if_true, sum_const, card_univ, nsmul_eq_mul] at h
+  have he := add_sum_erase univ q (mem_univ t)
+  rw [h]
+  linarith
+
+/-- **A weighted CV+ refusal leaves the blocks' slack large.** Training units in folds `fold`, the
+test position `t` in every block `C k`; unit `j`'s comparison with the test unit is under its fold's
+score `s (fold j)`. If the units the test unit is stranger than carry at least `1 − α` of the weight
+`W`, then for `θ ≤ 1`, `Σ_k (θ W_k − V_k) ≥ (θ − α) W − (1 − θ)(K − 1) γ`. Here `W_k` is block
+`k`'s weight, `V_k` its weight scoring at most the test unit, itself included, and `γ` is at least
+the test unit's weight when that is at most `α W`, which a refusal needs. -/
+theorem blocks_slack_of_refused {κ : Type*} [Fintype κ] {t : ι} (fold : ι → κ)
+    {C : κ → Finset ι} (hC : ∀ k i, i ∈ C k ↔ i = t ∨ fold i = k) (s : κ → ι → ℝ) (q : ι → ℝ)
+    (hq : ∀ i, 0 ≤ q i) {α θ γ : ℝ} (hθ1 : θ ≤ 1) (hγ : q t ≤ α * ∑ i, q i → q t ≤ γ)
+    (href : (1 - α) * ∑ i, q i ≤
+      ∑ j ∈ univ.filter (fun j => j ≠ t ∧ s (fold j) t < s (fold j) j), q j) :
+    (θ - α) * ∑ i, q i - (1 - θ) * (Fintype.card κ - 1) * γ ≤
+      ∑ k, (θ * ∑ j ∈ C k, q j - weightLe (C k) (s k) q t) := by
+  have hK : (1 : ℝ) ≤ Fintype.card κ := by exact_mod_cast Fintype.card_pos_iff.2 ⟨fold t⟩
+  have hA := sum_blocks fold hC q
+  have hB := sum_blocks_filter fold hC q (fun k j => s k j ≤ s k t)
+  simp only [le_refl, if_true, sum_const, card_univ, nsmul_eq_mul] at hB
+  have hV : ∑ k, weightLe (C k) (s k) q t =
+      ∑ k, ∑ j ∈ (C k).filter (fun j => s k j ≤ s k t), q j := rfl
+  have he := add_sum_erase univ q (mem_univ t)
+  have hsplit := sum_filter_add_sum_filter_not (univ.erase t)
+    (fun j => s (fold j) j ≤ s (fold j) t) q
+  have hbeat : (univ.erase t).filter (fun j => ¬ s (fold j) j ≤ s (fold j) t) =
+      univ.filter (fun j => j ≠ t ∧ s (fold j) t < s (fold j) j) := by
+    ext j
+    simp only [mem_filter, mem_erase, mem_univ, and_true, true_and, not_le]
+  rw [hbeat] at hsplit
+  have hU0 : 0 ≤ ∑ j ∈ (univ.erase t).filter (fun j => s (fold j) j ≤ s (fold j) t), q j :=
+    sum_nonneg fun j _ => hq j
+  have hqt : q t ≤ α * ∑ i, q i := by linarith
+  have hqγ := hγ hqt
+  have hprod : 0 ≤ (1 - θ) * (Fintype.card κ - 1) * (γ - q t) :=
+    mul_nonneg (mul_nonneg (by linarith) (by linarith)) (by linarith)
+  rw [sum_sub_distrib, ← mul_sum, hA, hV, hB]
+  nlinarith
+
+/-- **Merged K-fold CV+ with likelihood-ratio weights, Markov's form** (our statement). Over the
+orderings of a data set `z`, each weighed by the test unit's likelihood ratio `w`, the folds are
+given by `fold` and block `C k` is fold `k` with the test position `t`; fold `k`'s score `S k` is
+equivariant on its block (a fit to the other folds). Weighted CV+ refuses when the units the test
+unit is stranger than, each under its fold's fit, carry at least `1 − α` of the weight `W`, the test
+unit's own included. For `θ ≤ 1`, and `γ` at least every weight at most `α W`, the refused weight
+times `(θ − α) W − (1 − θ)(K − 1) γ` is at most `θ²/2` times the ordering sum of
+`w_t (W + (K − 1) w_t)`. -/
+theorem cvPlus_merged_likelihoodRatio_markov {Z κ : Type*} [Fintype κ] {t : ι}
+    (fold : ι → κ) {C : κ → Finset ι} (hC : ∀ k i, i ∈ C k ↔ i = t ∨ fold i = k)
+    (S : κ → (ι → Z) → ι → ℝ) (hS : ∀ k, Equivariant (C k) (S k)) (z : ι → Z) (w : Z → ℝ)
+    (hw : ∀ v, 0 ≤ w v) {α θ γ : ℝ} (hθ1 : θ ≤ 1)
+    (hγ : ∀ u, w (z u) ≤ α * ∑ i, w (z i) → w (z u) ≤ γ) :
+    ((θ - α) * ∑ i, w (z i) - (1 - θ) * (Fintype.card κ - 1) * γ) *
+        ∑ σ : Equiv.Perm ι, (if (1 - α) * ∑ i, w (z (σ i)) ≤ ∑ j ∈ univ.filter (fun j =>
+          j ≠ t ∧ S (fold j) (z ∘ σ) t < S (fold j) (z ∘ σ) j), w (z (σ j))
+          then w (z (σ t)) else 0) ≤
+      θ ^ 2 / 2 * ∑ σ : Equiv.Perm ι, w (z (σ t)) *
+        (∑ i, w (z i) + (Fintype.card κ - 1) * w (z (σ t))) := by
+  set F : κ → Equiv.Perm ι → ℝ := fun k σ => w (z (σ t)) * max 0 (θ * ∑ j ∈ C k, w (z (σ j)) -
+    weightLe (C k) (S k (z ∘ σ)) (fun j => w (z (σ j))) t) with hF
+  -- each ordering: a refusal leaves the blocks' slack large
+  have hpt : ∀ σ : Equiv.Perm ι, ((θ - α) * ∑ i, w (z i) - (1 - θ) * (Fintype.card κ - 1) * γ) *
+      (if (1 - α) * ∑ i, w (z (σ i)) ≤ ∑ j ∈ univ.filter (fun j =>
+        j ≠ t ∧ S (fold j) (z ∘ σ) t < S (fold j) (z ∘ σ) j), w (z (σ j))
+        then w (z (σ t)) else 0) ≤ ∑ k, F k σ := by
+    intro σ
+    have hWσ : ∑ i, w (z (σ i)) = ∑ i, w (z i) := Equiv.sum_comp σ (fun i => w (z i))
+    have hF0 : 0 ≤ ∑ k, F k σ := sum_nonneg fun k _ => mul_nonneg (hw _) (le_max_left _ _)
+    split_ifs with h
+    · have hsl := blocks_slack_of_refused (α := α) (θ := θ) (γ := γ)
+        (s := fun k => S k (z ∘ σ)) fold hC (fun j => w (z (σ j))) (fun i => hw _) hθ1
+        (fun h' => hγ (σ t) (by rw [← hWσ]; exact h')) h
+      beta_reduce at hsl
+      rw [hWσ] at hsl
+      calc ((θ - α) * ∑ i, w (z i) - (1 - θ) * (Fintype.card κ - 1) * γ) * w (z (σ t))
+          ≤ (∑ k, (θ * ∑ j ∈ C k, w (z (σ j)) -
+              weightLe (C k) (S k (z ∘ σ)) (fun j => w (z (σ j))) t)) * w (z (σ t)) :=
+            mul_le_mul_of_nonneg_right hsl (hw _)
+        _ ≤ (∑ k, max 0 (θ * ∑ j ∈ C k, w (z (σ j)) -
+              weightLe (C k) (S k (z ∘ σ)) (fun j => w (z (σ j))) t)) * w (z (σ t)) :=
+            mul_le_mul_of_nonneg_right (sum_le_sum fun k _ => le_max_right _ _) (hw _)
+        _ = ∑ k, F k σ := by
+            rw [sum_mul]
+            refine sum_congr rfl fun k _ => ?_
+            simp only [hF]
+            ring
+    · rw [mul_zero]
+      exact hF0
+  -- each block: its layer cake over the cosets of its reorderings
+  have hre : ∀ (H : Finset (Equiv.Perm ι)) (g : Equiv.Perm ι → ℝ),
+      (H.card : ℝ) * ∑ σ : Equiv.Perm ι, g σ = ∑ σ : Equiv.Perm ι, ∑ τ ∈ H, g (σ * τ) := by
+    intro H g
+    rw [sum_comm, sum_congr rfl fun τ _ =>
+      Fintype.sum_equiv (Equiv.mulRight τ) (fun σ => g (σ * τ)) g fun σ => rfl, sum_const,
+      nsmul_eq_mul]
+  have hblock : ∀ k, ∑ σ : Equiv.Perm ι, F k σ ≤
+      θ ^ 2 / 2 * ∑ σ : Equiv.Perm ι, w (z (σ t)) * ∑ j ∈ C k, w (z (σ j)) := by
+    intro k
+    have htk : t ∈ C k := (hC k t).2 (Or.inl rfl)
+    have hH : (0 : ℝ) < (permsOn (C k)).card := by exact_mod_cast card_permsOn_pos (C k)
+    refine (mul_le_mul_iff_of_pos_left hH).1 ?_
+    rw [hre (permsOn (C k)) (F k), mul_left_comm,
+      hre (permsOn (C k)) (fun σ => w (z (σ t)) * ∑ j ∈ C k, w (z (σ j))), mul_sum]
+    refine sum_le_sum fun σ _ => ?_
+    exact sum_permsOn_mul_max_sub_le htk (hS k) (z ∘ σ) w hw θ
+  -- assemble
+  have hsum := sum_le_sum fun σ (_ : σ ∈ (univ : Finset (Equiv.Perm ι))) => hpt σ
+  rw [← mul_sum] at hsum
+  refine hsum.trans ?_
+  rw [sum_comm]
+  calc ∑ k, ∑ σ : Equiv.Perm ι, F k σ
+      ≤ ∑ k, θ ^ 2 / 2 * ∑ σ : Equiv.Perm ι, w (z (σ t)) * ∑ j ∈ C k, w (z (σ j)) :=
+        sum_le_sum fun k _ => hblock k
+    _ = θ ^ 2 / 2 * ∑ σ : Equiv.Perm ι, w (z (σ t)) * ∑ k, ∑ j ∈ C k, w (z (σ j)) := by
+        rw [← mul_sum, sum_comm]
+        simp only [mul_sum]
+    _ = θ ^ 2 / 2 * ∑ σ : Equiv.Perm ι, w (z (σ t)) *
+          (∑ i, w (z i) + (Fintype.card κ - 1) * w (z (σ t))) := by
+        congr 1
+        refine sum_congr rfl fun σ _ => ?_
+        rw [sum_blocks fold hC (fun j => w (z (σ j))), Equiv.sum_comp σ (fun i => w (z i))]
+
+/-- **Merged K-fold CV+ with likelihood-ratio weights** (our statement; follow-up 2's open item).
+In the setting of `cvPlus_merged_likelihoodRatio_markov`, with `γ` at least every unit's weight,
+weighted CV+ refuses with at most `min(1, 2c(γ))` of the weight, where
+`c(γ) = (α W + (K − 1) γ)/(W + (K − 1) γ)`: the position-weight bound `2c` with the test unit's
+weight replaced by `γ`. At equal weights it is slice 9's merged bound. -/
+theorem cvPlus_merged_likelihoodRatio {Z κ : Type*} [Fintype κ] {t : ι}
+    (fold : ι → κ) {C : κ → Finset ι} (hC : ∀ k i, i ∈ C k ↔ i = t ∨ fold i = k)
+    (S : κ → (ι → Z) → ι → ℝ) (hS : ∀ k, Equivariant (C k) (S k)) (z : ι → Z) (w : Z → ℝ)
+    (hw : ∀ v, 0 ≤ w v) {α γ : ℝ} (hα : 0 < α) (hW : 0 < ∑ i, w (z i))
+    (hγ : ∀ u, w (z u) ≤ γ) :
+    ∑ σ : Equiv.Perm ι, (if (1 - α) * ∑ i, w (z (σ i)) ≤ ∑ j ∈ univ.filter (fun j =>
+        j ≠ t ∧ S (fold j) (z ∘ σ) t < S (fold j) (z ∘ σ) j), w (z (σ j))
+        then w (z (σ t)) else 0) ≤
+      min 1 (2 * (α * ∑ i, w (z i) + (Fintype.card κ - 1) * γ) /
+        (∑ i, w (z i) + (Fintype.card κ - 1) * γ)) * ∑ σ : Equiv.Perm ι, w (z (σ t)) := by
+  have hK : (1 : ℝ) ≤ Fintype.card κ := by exact_mod_cast Fintype.card_pos_iff.2 ⟨fold t⟩
+  have hγ0 : 0 ≤ γ := (hw _).trans (hγ t)
+  have hRT : ∑ σ : Equiv.Perm ι, (if (1 - α) * ∑ i, w (z (σ i)) ≤ ∑ j ∈ univ.filter (fun j =>
+      j ≠ t ∧ S (fold j) (z ∘ σ) t < S (fold j) (z ∘ σ) j), w (z (σ j))
+      then w (z (σ t)) else 0) ≤ ∑ σ : Equiv.Perm ι, w (z (σ t)) :=
+    sum_le_sum fun σ _ => by split_ifs <;> linarith [hw (z (σ t))]
+  have hm := cvPlus_merged_likelihoodRatio_markov (α := α) (γ := γ)
+    (θ := 2 * (α * ∑ i, w (z i) + (Fintype.card κ - 1) * γ) /
+      (∑ i, w (z i) + (Fintype.card κ - 1) * γ)) fold hC S hS z w hw
+  set W := ∑ i, w (z i) with hWdef
+  set L := α * W + (Fintype.card κ - 1) * γ with hLdef
+  set N := W + (Fintype.card κ - 1) * γ with hNdef
+  have hN : 0 < N := by nlinarith
+  have hL : 0 < L := by nlinarith [mul_pos hα hW]
+  rcases le_or_gt N (2 * L) with h2 | h2
+  · rw [min_eq_left ((one_le_div hN).2 h2), one_mul]
+    exact hRT
+  · have hθ1 : 2 * L / N ≤ 1 := (div_le_one hN).2 h2.le
+    rw [min_eq_right hθ1]
+    have hm' := hm hθ1 (fun u _ => hγ u)
+    have hD : (2 * L / N - α) * W - (1 - 2 * L / N) * (Fintype.card κ - 1) * γ = L := by
+      have e : (2 * L / N - α) * W - (1 - 2 * L / N) * (Fintype.card κ - 1) * γ =
+          2 * L / N * N - L := by
+        rw [hLdef, hNdef]
+        ring
+      rw [e, div_mul_cancel₀ _ hN.ne']
+      ring
+    rw [hD] at hm'
+    have hS2 : ∑ σ : Equiv.Perm ι, w (z (σ t)) * (W + (Fintype.card κ - 1) * w (z (σ t))) ≤
+        N * ∑ σ : Equiv.Perm ι, w (z (σ t)) := by
+      rw [mul_sum]
+      refine sum_le_sum fun σ _ => ?_
+      rw [hNdef]
+      nlinarith [mul_nonneg (mul_nonneg (hw (z (σ t))) (sub_nonneg.2 hK))
+        (sub_nonneg.2 (hγ (σ t)))]
+    have hN' : N ≠ 0 := hN.ne'
+    refine le_of_mul_le_mul_left ?_ hL
+    calc L * ∑ σ : Equiv.Perm ι, (if (1 - α) * ∑ i, w (z (σ i)) ≤ ∑ j ∈ univ.filter (fun j =>
+          j ≠ t ∧ S (fold j) (z ∘ σ) t < S (fold j) (z ∘ σ) j), w (z (σ j))
+          then w (z (σ t)) else 0)
+        ≤ (2 * L / N) ^ 2 / 2 * ∑ σ : Equiv.Perm ι, w (z (σ t)) *
+            (W + (Fintype.card κ - 1) * w (z (σ t))) := hm'
+      _ ≤ (2 * L / N) ^ 2 / 2 * (N * ∑ σ : Equiv.Perm ι, w (z (σ t))) :=
+          mul_le_mul_of_nonneg_left hS2 (by positivity)
+      _ = L * (2 * L / N * ∑ σ : Equiv.Perm ι, w (z (σ t))) := by
+          field_simp
+
+/-- **The refined form**: with `γ` at least every weight at most `α W` (the units the rule can
+refuse) and `2L ≤ N`, `L = α W + (K − 1) γ`, `N = W + (K − 1) γ`, the refused weight is at most
+`2L (W + (K − 1) e)/N²` of the whole, `e = Σ w²/W` the test unit's mean weight. Written here times
+`N² W`. It reads `γ` below the bag's largest weight when that unit is too heavy to refuse. -/
+theorem cvPlus_merged_likelihoodRatio_refined {Z κ : Type*} [Fintype κ] {t : ι}
+    (fold : ι → κ) {C : κ → Finset ι} (hC : ∀ k i, i ∈ C k ↔ i = t ∨ fold i = k)
+    (S : κ → (ι → Z) → ι → ℝ) (hS : ∀ k, Equivariant (C k) (S k)) (z : ι → Z) (w : Z → ℝ)
+    (hw : ∀ v, 0 ≤ w v) {α γ : ℝ} (hα : 0 < α) (hγ0 : 0 ≤ γ) (hW : 0 < ∑ i, w (z i))
+    (hγ : ∀ u, w (z u) ≤ α * ∑ i, w (z i) → w (z u) ≤ γ)
+    (h2 : 2 * (α * ∑ i, w (z i) + (Fintype.card κ - 1) * γ) ≤
+      ∑ i, w (z i) + (Fintype.card κ - 1) * γ) :
+    (∑ σ : Equiv.Perm ι, (if (1 - α) * ∑ i, w (z (σ i)) ≤ ∑ j ∈ univ.filter (fun j =>
+        j ≠ t ∧ S (fold j) (z ∘ σ) t < S (fold j) (z ∘ σ) j), w (z (σ j))
+        then w (z (σ t)) else 0)) * (∑ i, w (z i) + (Fintype.card κ - 1) * γ) ^ 2 *
+        ∑ i, w (z i) ≤
+      2 * (α * ∑ i, w (z i) + (Fintype.card κ - 1) * γ) *
+        ((∑ i, w (z i)) ^ 2 + (Fintype.card κ - 1) * ∑ i, w (z i) ^ 2) *
+          ∑ σ : Equiv.Perm ι, w (z (σ t)) := by
+  have hK : (1 : ℝ) ≤ Fintype.card κ := by exact_mod_cast Fintype.card_pos_iff.2 ⟨fold t⟩
+  have hm := cvPlus_merged_likelihoodRatio_markov (α := α) (γ := γ)
+    (θ := 2 * (α * ∑ i, w (z i) + (Fintype.card κ - 1) * γ) /
+      (∑ i, w (z i) + (Fintype.card κ - 1) * γ)) fold hC S hS z w hw
+  set W := ∑ i, w (z i) with hWdef
+  set L := α * W + (Fintype.card κ - 1) * γ with hLdef
+  set N := W + (Fintype.card κ - 1) * γ with hNdef
+  set R := ∑ σ : Equiv.Perm ι, (if (1 - α) * ∑ i, w (z (σ i)) ≤ ∑ j ∈ univ.filter (fun j =>
+      j ≠ t ∧ S (fold j) (z ∘ σ) t < S (fold j) (z ∘ σ) j), w (z (σ j))
+      then w (z (σ t)) else 0) with hRdef
+  set X := ∑ σ : Equiv.Perm ι, w (z (σ t)) * (W + (Fintype.card κ - 1) * w (z (σ t))) with hXdef
+  set T := ∑ σ : Equiv.Perm ι, w (z (σ t)) with hTdef
+  have hN : 0 < N := by nlinarith
+  have hL : 0 < L := by nlinarith [mul_pos hα hW]
+  have hθ1 : 2 * L / N ≤ 1 := (div_le_one hN).2 h2
+  have hm' := hm hθ1 hγ
+  have hD : (2 * L / N - α) * W - (1 - 2 * L / N) * (Fintype.card κ - 1) * γ = L := by
+    have e : (2 * L / N - α) * W - (1 - 2 * L / N) * (Fintype.card κ - 1) * γ =
+        2 * L / N * N - L := by
+      rw [hLdef, hNdef]
+      ring
+    rw [e, div_mul_cancel₀ _ hN.ne']
+    ring
+  rw [hD] at hm'
+  have hN' : N ≠ 0 := hN.ne'
+  have hRN : R * N ^ 2 ≤ 2 * L * X := by
+    have key : L * (R * N ^ 2) ≤ L * (2 * L * X) := by
+      calc L * (R * N ^ 2) = (L * R) * N ^ 2 := by ring
+        _ ≤ ((2 * L / N) ^ 2 / 2 * X) * N ^ 2 := mul_le_mul_of_nonneg_right hm' (sq_nonneg N)
+        _ = L * (2 * L * X) := by
+            field_simp
+    exact le_of_mul_le_mul_left key hL
+  -- the ordering averages: given the bag, the test unit is `u` with chance `w(z_u)/W`
+  have hG : (0 : ℝ) < Fintype.card (Equiv.Perm ι) := by exact_mod_cast Fintype.card_pos
+  have hI : (0 : ℝ) < Fintype.card ι := by exact_mod_cast Fintype.card_pos_iff.2 ⟨t⟩
+  have hA := sum_perm_apply t (fun u => w (z u) * (W + (Fintype.card κ - 1) * w (z u)))
+  have hB := sum_perm_apply t (fun u => w (z u))
+  rw [div_eq_div_iff hG.ne' hI.ne'] at hA hB
+  rw [← hXdef] at hA
+  rw [← hTdef, ← hWdef] at hB
+  have hsq : ∑ u, w (z u) * (W + (Fintype.card κ - 1) * w (z u)) =
+      W ^ 2 + (Fintype.card κ - 1) * ∑ i, w (z i) ^ 2 := by
+    have e : ∀ u, w (z u) * (W + (Fintype.card κ - 1) * w (z u)) =
+        w (z u) * W + (Fintype.card κ - 1) * w (z u) ^ 2 := fun u => by ring
+    rw [sum_congr rfl fun u _ => e u, sum_add_distrib, ← sum_mul, ← mul_sum, ← hWdef]
+    ring
+  rw [hsq] at hA
+  have hXW : X * W = (W ^ 2 + (Fintype.card κ - 1) * ∑ i, w (z i) ^ 2) * T := by
+    have h3 : X * W * Fintype.card ι =
+        (W ^ 2 + (Fintype.card κ - 1) * ∑ i, w (z i) ^ 2) * T * Fintype.card ι := by
+      calc X * W * Fintype.card ι = (X * Fintype.card ι) * W := by ring
+        _ = ((W ^ 2 + (Fintype.card κ - 1) * ∑ i, w (z i) ^ 2) *
+              Fintype.card (Equiv.Perm ι)) * W := by rw [hA]
+        _ = (W ^ 2 + (Fintype.card κ - 1) * ∑ i, w (z i) ^ 2) *
+              (W * Fintype.card (Equiv.Perm ι)) := by ring
+        _ = (W ^ 2 + (Fintype.card κ - 1) * ∑ i, w (z i) ^ 2) * (T * Fintype.card ι) := by
+            rw [hB]
+        _ = (W ^ 2 + (Fintype.card κ - 1) * ∑ i, w (z i) ^ 2) * T * Fintype.card ι := by ring
+    exact mul_right_cancel₀ hI.ne' h3
+  calc R * N ^ 2 * W ≤ 2 * L * X * W := mul_le_mul_of_nonneg_right hRN hW.le
+    _ = 2 * L * (W ^ 2 + (Fintype.card κ - 1) * ∑ i, w (z i) ^ 2) * T := by
+        rw [mul_assoc, hXW]
+        ring
+
+end WeightedMergeLR
 
 /-! ### Slice 15: posterior conformal prediction (Zhang and Candès, arXiv 2409.19712) -/
 

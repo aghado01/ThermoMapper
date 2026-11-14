@@ -22,8 +22,11 @@ Results of 2026-11-09 (recorded in conformal-lemmas.md, slice 9):
    folds. Each fold's symmetric fit ranks the fold with the test as any function of the other folds; the
    test is u with chance w_u / W given the bag. Annealing over the rankings maximizes the exact miss rate.
    Result of 2026-11-13: nothing past slice 9's unweighted merged bound or past E[2c] in 24 configurations
-   (K <= 4, n + 1 <= 7, weights 1..20). The largest shares found were 0.326 and 0.292. The averaging proof
-   needs fixed fold weights, which likelihood ratios break, so the bound stays open (conformal-lemmas.md).
+   (K <= 4, n + 1 <= 7, weights 1..20). The largest shares found were 0.326 and 0.292. Later that day the
+   merged bound was proved with the test's weight replaced by a cap read from the bag
+   (cvPlus_merged_likelihoodRatio and its refined form, follow-up 2e in conformal-lemmas.md). The rerun
+   asserts it in every configuration: the largest share found is 0.322, and it is below E[2c] in 17 of the 24.
+   Whether E[2c] itself bounds the miss rate stays open.
 Run: python -I -X utf8 conformal-searches.py [--milp]
 Quick exact fixed-bag checks only: python -I -X utf8 conformal-searches.py --exact-bags
 Likelihood-ratio merged search only: python -I -X utf8 conformal-searches.py --weights
@@ -200,25 +203,45 @@ def lr_merged_anneal(K, m, w, alpha, steps, seed):
     n = N - 1
     b0 = Q(2) * (alpha * (n + 1) + K - 1) / (n + K)
     e2c = sum(Q(w[u], W) * 2 * (alpha * W + (K - 1) * w[u]) / (W + (K - 1) * w[u]) for u in range(N))
-    return best, b0, e2c
+    return best, b0, e2c, lr_merged_proven(K, w, alpha)
+
+
+def lr_merged_proven(K, w, alpha):
+    """The proven merged bound (cvPlus_merged_likelihoodRatio and its refined form): the smaller of
+    min(1, 2c(w_max)) and min(1, 2L(W + (K - 1)e)/N^2), gamma the largest weight at most alpha W."""
+    W = sum(w)
+    gm = max(w)
+    simple = min(Q(1), 2 * (alpha * W + (K - 1) * gm) / (W + (K - 1) * gm))
+    small = [x for x in w if x <= alpha * W]
+    if not small:
+        return Q(0)
+    g = max(small)
+    L, N = alpha * W + (K - 1) * g, W + (K - 1) * g
+    e = Q(sum(x * x for x in w), W)
+    refined = min(Q(1), 2 * L * (W + (K - 1) * e) / N ** 2) if 2 * L <= N else Q(1)
+    return min(simple, refined)
 
 
 def weighted_search():
-    """Slice 14's follow-ups: is there a merged K-fold bound under likelihood-ratio weights? The averaging
-    argument needs fixed fold weights, which likelihood ratios make data-dependent; this searches for a case
-    past slice 9's unweighted merged bound B0 or past E[2c], c from the test's weight."""
+    """Slice 14's follow-ups: merged K-fold CV+ under likelihood-ratio weights. Searches for a case past
+    slice 9's unweighted merged bound B0, past E[2c] (c from the test's weight, unproven), and checks the
+    proven bound, reporting how much of it the worst case found uses."""
     rr = random.Random(11)
-    worst_b0 = worst_e2c = 0.0
+    worst_b0 = worst_e2c = worst_pr = 0.0
     for trial in range(24):
         K, m = rr.choice([(2, 1), (2, 2), (3, 1), (2, 3), (4, 1), (3, 2)])
         w = [rr.choice([1, 1, 2, 3, 5, 8, 20]) for _ in range(K * m + 1)]
         alpha = Q(rr.randint(1, 8), 20)
-        best, b0, e2c = lr_merged_anneal(K, m, w, alpha, 1500 if K * m + 1 <= 5 else 600, rr.randint(0, 10 ** 6))
+        best, b0, e2c, pr = lr_merged_anneal(K, m, w, alpha, 1500 if K * m + 1 <= 5 else 600,
+                                             rr.randint(0, 10 ** 6))
+        assert best <= pr, (K, m, w, alpha, best, pr)
         worst_b0 = max(worst_b0, float(best / b0))
         worst_e2c = max(worst_e2c, float(best / e2c))
+        worst_pr = max(worst_pr, float(best / pr)) if pr else worst_pr
         print(f"K = {K}, m = {m}, alpha = {alpha}, w = {w}: worst found {float(best):.4f}; B0 {float(b0):.4f}; "
-              f"E[2c] {float(e2c):.4f}{'  EXCEEDS' if best > min(b0, e2c) else ''}", flush=True)
-    print(f"largest share found: of B0 {worst_b0:.3f}, of E[2c] {worst_e2c:.3f}")
+              f"E[2c] {float(e2c):.4f}; proven {float(pr):.4f}{'  EXCEEDS' if best > min(b0, e2c) else ''}",
+              flush=True)
+    print(f"largest share found: of B0 {worst_b0:.3f}, of E[2c] {worst_e2c:.3f}, of the proven bound {worst_pr:.3f}")
 
 
 def main():

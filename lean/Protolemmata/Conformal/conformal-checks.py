@@ -3525,4 +3525,168 @@ print(f"Follow-up 2d: refused weight at most 2 alpha W + W_max on {n_cnt} random
       f"unit's w, at most 2 alpha + W_max / W on {n_ord} data sets (largest share {float(worst_ord):.3f})")
 
 print()
+print("=== Slice 14 follow-up 2e: merged K-fold CV+ under likelihood-ratio weights ===")
+# Weighted CV+ with K folds. Given the bag, the test is unit u with chance w_u / W and the folds are a uniform
+# partition of the rest: every ordering of the bag, weighed by the test unit's w. Fold k's block B_k is the
+# fold with the test; W_k is its weight and V_k the weight in it scoring at most the test, itself included.
+# (a) The weighted layer cake: sum_u q_u (b - weightLe(u))^+ <= b^2 / 2, whatever the scores, for q >= 0.
+#     Given B_k as a set and the units outside it, the test is u in B_k with chance w_u / W_k, so
+#     E (theta W_k - V_k)^+ <= theta^2 E W_k / 2: the threshold theta W_k is fixed given that block.
+# (b) A refusal gives sum_k (theta W_k - V_k) >= (theta - alpha) W - (1 - theta)(K - 1) gamma for 0 <= theta <= 1,
+#     with gamma at least the test's weight. A refusal needs w_t <= alpha W, so gamma may be the largest weight in
+#     the bag at most alpha W.
+# (c) So P(refused) ((theta - alpha) W - (1 - theta)(K - 1) gamma) <= theta^2 (W + (K - 1) e) / 2, with
+#     e = sum w^2 / W the test's mean weight. At theta = 2L/N, L = alpha W + (K - 1) gamma, N = W + (K - 1) gamma:
+#     P <= 2 L (W + (K - 1) e) / N^2; with gamma the largest weight, P <= 2L/N = 2c(gamma), c of follow-up 2
+#     with the test's weight replaced by gamma. At equal weights 2c is slice 9's merged bound.
+
+
+def w_le_2e(s, q, C, u):
+    return sum(q[j] for j in C if s[j] <= s[u])
+
+
+# (a) the weighted layer cake, deterministic
+n_cake2, worst_cake2 = 0, Q(0)
+rr = random.Random(2600)
+for trial in range(4000):
+    N = rr.randint(1, 7)
+    C = list(range(N))
+    s = [rr.randint(0, 3) for _ in C]
+    q = [Q(rr.choice([0, 1, 1, 2, 3, 7])) for _ in C]
+    W = sum(q)
+    b = Q(rr.randint(-2, 30), 10) * (W if W else 1)
+    lhs = sum(q[u] * max(Q(0), b - w_le_2e(s, q, C, u)) for u in C)
+    assert lhs <= b * b / 2, (s, q, b)
+    if b:
+        worst_cake2 = max(worst_cake2, lhs / (b * b / 2))
+    n_cake2 += 1
+
+# (b) the event inequality, random folds, scores per fold with ties, weights with zeros
+n_ev, n_ev_ref = 0, 0
+rr = random.Random(2610)
+for trial in range(4000):
+    K = rr.randint(1, 4)
+    fold = [k for k in range(K) for _ in range(rr.randint(1, 3))]
+    n = len(fold)
+    q = [Q(rr.choice([0, 1, 2, 3, 6])) for _ in range(n)]
+    qt = Q(rr.choice([0, 1, 2, 3, 6]))
+    s = [[rr.randint(0, 3) for _ in range(n)] for _ in range(K)]
+    st = [rr.randint(0, 3) for _ in range(K)]
+    alpha = Q(rr.randint(0, 20), 20)
+    W = sum(q) + qt
+    beaten = sum(q[j] for j in range(n) if st[fold[j]] < s[fold[j]][j])
+    n_ev += 1
+    if not beaten >= (1 - alpha) * W:
+        continue
+    n_ev_ref += 1
+    assert qt <= alpha * W
+    Wk = [qt + sum(q[j] for j in range(n) if fold[j] == k) for k in range(K)]
+    Vk = [qt + sum(q[j] for j in range(n) if fold[j] == k and s[k][j] <= st[k]) for k in range(K)]
+    for gamma in {qt, alpha * W, max(q + [qt])}:
+        if gamma < qt:
+            continue
+        for th in range(11):
+            theta = Q(th, 10)
+            assert sum(theta * Wk[k] - Vk[k] for k in range(K)) >= \
+                (theta - alpha) * W - (1 - theta) * (K - 1) * gamma
+
+
+def lr_bounds_2e(w, alpha, K):
+    """The proven bounds for a bag with weights w: (refined, simple, Markov at theta)."""
+    W = sum(w)
+    small = [x for x in w if x <= alpha * W]
+    e = sum(x * x for x in w) / W
+    ES = W + (K - 1) * e
+    if small:
+        g = max(small)
+        L, N = alpha * W + (K - 1) * g, W + (K - 1) * g
+        refined = min(Q(1), 2 * L * ES / N ** 2) if 2 * L <= N else Q(1)
+    else:
+        g, refined = None, Q(0)
+    gm = max(w)
+    simple = min(Q(1), 2 * (alpha * W + (K - 1) * gm) / (W + (K - 1) * gm))
+    return refined, simple, g, ES
+
+
+def labelled_fold_partitions(rest, K, m):
+    if K == 0:
+        yield []
+        return
+    for comb in itertools.combinations(rest, m):
+        left = [x for x in rest if x not in comb]
+        for tail in labelled_fold_partitions(left, K - 1, m):
+            yield [list(comb)] + tail
+
+
+# (c) end to end, over every ordering of the bag weighed by the test unit's w: the mean-of-other-folds fit
+# (fold_mus, part 2b's), and the abstract model, a symmetric fit per fold ranking the fold with the test as
+# any function of the units outside them (random rankings, the miss rate exact)
+n_e2e, worst_ref2e, worst_simple2e = 0, Q(0), Q(0)
+rr = random.Random(2620)
+for K, m in ((2, 1), (2, 2), (3, 1), (3, 2), (2, 3), (4, 1)):
+    N = K * m + 1
+    folds = [list(range(k * m, (k + 1) * m)) for k in range(K)]
+    for trial in range(8):
+        vals = [Q(rr.randint(0, 6)) for _ in range(N)]
+        wu = [Q(rr.choice([0, 1, 1, 2, 3, 5, 12])) for _ in range(N)]     # weights by unit, travelling
+        if sum(wu) == 0:
+            continue
+        alpha = Q(rr.randint(1, 9), 20)
+        W = sum(wu)
+        num = den = Q(0)
+        for perm in itertools.permutations(range(N)):
+            y = [vals[p] for p in perm]
+            wp = [wu[p] for p in perm]
+            mus = fold_mus(y, folds)
+            wt = wp[N - 1]
+            num += wt * cv_refuses(y, mus, folds, wp[:N - 1], wt, y[N - 1], alpha)
+            den += wt
+        P = num / den
+        refined, simple, g, ES = lr_bounds_2e(wu, alpha, K)
+        assert P <= refined and P <= simple, (K, m, P, refined, simple)
+        for th in range(11):
+            theta = Q(th, 10)
+            for gamma in ([g] if g is not None else []) + [max(wu)]:
+                D = (theta - alpha) * W - (1 - theta) * (K - 1) * gamma
+                assert P * D <= theta ** 2 * ES / 2
+        if all(x == wu[0] for x in wu):
+            assert simple == min(Q(1), 2 * (alpha * N + K - 1) / (N - 1 + K))
+        if refined:
+            worst_ref2e = max(worst_ref2e, P / refined)
+        worst_simple2e = max(worst_simple2e, P / simple)
+        n_e2e += 1
+    # the abstract model
+    arr = [(u, parts) for u in range(N) for parts in labelled_fold_partitions([x for x in range(N) if x != u], K, m)]
+    Os = sorted({frozenset(x for x in range(N) if x != u and x not in F) for u, parts in arr for F in parts},
+                key=sorted)
+    for trial in range(6):
+        wu = [Q(rr.choice([1, 1, 2, 3, 5, 12])) for _ in range(N)]
+        alpha = Q(rr.randint(1, 9), 20)
+        W = sum(wu)
+        rank = {}
+        for O in Os:
+            comp = [x for x in range(N) if x not in O]
+            rr.shuffle(comp)
+            rank[O] = {x: i for i, x in enumerate(comp)}
+        per = {}
+        for u, parts in arr:
+            bt = sum(wu[i] for F in parts for i in F
+                     if rank[frozenset(x for x in range(N) if x != u and x not in F)][i]
+                     < rank[frozenset(x for x in range(N) if x != u and x not in F)][u])
+            a, b = per.get(u, (0, 0))
+            per[u] = (a + (bt >= (1 - alpha) * W), b + 1)
+        P = sum(Q(wu[u], W) * Q(a, b) for u, (a, b) in per.items())
+        refined, simple, g, ES = lr_bounds_2e(wu, alpha, K)
+        assert P <= refined and P <= simple, (K, m, P, refined, simple)
+        if refined:
+            worst_ref2e = max(worst_ref2e, P / refined)
+        worst_simple2e = max(worst_simple2e, P / simple)
+        n_e2e += 1
+print(f"Follow-up 2e: the weighted layer cake on {n_cake2} random cases (largest share {float(worst_cake2):.3f}); "
+      f"the event inequality on {n_ev_ref} refusals of {n_ev} random fold-structured cases at every theta and gamma; "
+      f"end to end over every ordering on {n_e2e} bags, within the refined bound (largest share "
+      f"{float(worst_ref2e):.3f}) and 2c(w_max) (largest share {float(worst_simple2e):.3f}), the Markov form at "
+      f"every theta in 0.1 steps, and equal weights giving slice 9's merged bound")
+
+print()
 print("All assertions hold.")

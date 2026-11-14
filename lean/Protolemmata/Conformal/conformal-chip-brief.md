@@ -4,9 +4,10 @@ CB-1 to CB-4 were proved on 2026-11-06, E35's M-1 and M-2 on 2026-11-08, and E16
 
 ## Slice 14's follow-ups: the weighted distribution, cross-fitted forms and CB-3 under weights (2026-11-13)
 
-Status: commissioned 2026-11-13 by the user ("Lean first, 15 meanwhile", in the conformal C# chip's thread), relayed by that chip and the main session. All three items were proved on 2026-11-13 and reported under Reports (d81f293, 38f2e3f, 2928b06). The user added two items, both proved:
+Status: commissioned 2026-11-13 by the user ("Lean first, 15 meanwhile", in the conformal C# chip's thread), relayed by that chip and the main session. All three items were proved on 2026-11-13 and reported under Reports (d81f293, 38f2e3f, 2928b06). The user added further items, all proved:
 - JAWS's likelihood-ratio weights for the cross-fitted forms;
-- weighted K-fold CV+, by one fold under likelihood ratios and by merging under position weights.
+- weighted K-fold CV+, by one fold under likelihood ratios and by merging under position weights;
+- under likelihood ratios, the tournament across folds (7e2b905) and the merged bound (follow-up 2e, which also corrects the averaging lemmas' hypotheses).
 
 **Why now.** Slice 14's C# (`c19ce98`; its [report](../../../issues/regression/conformal-layer-brief.md#2026-11-13--slice-14-the-weighted-rule-under-shift)) lists follow-ups that each need a guarantee before their C# (decision 7 on the layer plan). The C# chip builds the ratio estimator and slice 15 meanwhile, then these three as their Lean lands.
 
@@ -229,6 +230,26 @@ The user asked for this on 2026-11-08 ("Yes, start it"), relayed by the BASS ext
 ## Reports
 
 Newest first.
+
+### 2026-11-13 — slice 14's follow-ups: the merged K-fold bound under likelihood-ratio weights proved, and the averaging lemmas' hypotheses corrected
+
+The statements are in the ledger, under "Follow-up 2e". The new declarations are PROOF-CLOSED, with the standard three axioms only. The checks ran first.
+
+- *The merged bound* (`cvPlus_merged_likelihoodRatio`, ours).
+  - Under likelihood-ratio weights, weighted K-fold CV+ misses with at most min(1, 2c(w_max)) of the weight, with c(γ) = (αW + (K − 1)γ)/(W + (K − 1)γ).
+  - This is follow-up 2's 2c with the test unit's weight replaced by the bag's largest.
+  - Markov's thresholds proportional to each block's own weight are fixed given that block. The fixed fold weights, which likelihood ratios break, were not needed.
+  - A refined form (`cvPlus_merged_likelihoodRatio_refined`) caps γ at the largest weight at most αW and uses the test unit's mean weight.
+  - Still open: whether E[2c(w_t)] holds, with the test unit's own weight. In the adversarial search the proven bound held everywhere (worst share 0.322) and was below E[2c] in 17 of 24 configurations.
+- *A defect corrected in 2928b06.*
+  - `sum_mul_max_sub_le`, `merge_le_two` and `cvPlus_merged_weighted` required super-uniformity at negative levels too. No law meets that, so they held vacuously.
+  - They now take π ≥ 0 and levels 0 ≤ x. The conclusions, the 2c bound and its checks are unchanged.
+- *For the C#:*
+  - Under likelihood ratios, report the smaller of min(1, 2c(w_max)) and the refined form for K-fold CV+. It serves many units; the tournament serves many folds of few units, and the one-fold bound two folds.
+  - The defect asks no C# change: the 2c bound it reports stands, and its Lean now says something.
+- *For the `#print axioms` file:*
+  - new: `sum_weight_mul_max_sub_le`, `sum_permsOn_mul_max_sub_le`, `sum_blocks_filter`, `sum_blocks`, `blocks_slack_of_refused`, `cvPlus_merged_likelihoodRatio_markov`, `cvPlus_merged_likelihoodRatio`, `cvPlus_merged_likelihoodRatio_refined`;
+  - restated: `sum_mul_max_sub_le`, `merge_le_two`, `cvPlus_merged_weighted`.
 
 ### 2026-11-13 — slice 14's follow-ups: the open K-fold items, the tournament across folds proved and the merged bound open
 

@@ -2,7 +2,7 @@
 
 Pins the contract of the engine's conformal layer, one layer over retained draws and pointwise densities for every model with a pointwise density ([E16](../../../issues/regression/bass/extensions-brief.md#conformal-bayes-the-consumer)). The layer owns coverage and the score owns width. These are the finite statements of that split. They are the sibling of [GuardedEstimator](../BASS/guarded-estimator-lemmas.md): there, means valid whatever the emulator does; here, prediction sets valid whatever the model does. Written from the [chip brief](conformal-chip-brief.md).
 
-**Status (2026-11-13).** Proved in `lean/Enthymemata/ConformalValidity.lean`, namespace `Conformal`, with no apologies (PROOF-CLOSED, 450 declarations counting E35's M-1 and M-2 and slices 9, 10, 12, 13, 14, 15, 16 and 18, and slice 14's follow-ups 1, 2 and 3 at the end of this page; `#print axioms` shows `propext`, `Classical.choice`, `Quot.sound` only):
+**Status (2026-11-13).** Proved in `lean/Enthymemata/ConformalValidity.lean`, namespace `Conformal`, with no apologies (PROOF-CLOSED, 458 declarations counting E35's M-1 and M-2 and slices 9, 10, 12, 13, 14, 15, 16 and 18, and slice 14's follow-ups 1, 2 and 3 at the end of this page; `#print axioms` shows `propext`, `Classical.choice`, `Quot.sound` only):
 - CB-1: `card_rankLe_le`, `coverage_orderings`, `coverage_orderings_eq`, `coverage_strict_le`, `coverage_orderings_le`, `rank_uniform`, `coverage_tieBreak`, `coverage_given`, `coverage_law`, `coverage_stratum`;
 - CB-2: `split_coverage`, `exchangeable_given_training`, `cqr_ordConnected`;
 - CB-4: `sum_jointU`, `post_addOneIn`, `integratedScore_equivariant`, `latentScore_equivariant`, `latentScore_eq`, `sum_jointU_addOneIn`, `integratedScore_le_latentScore`, `accepts_latent_of_mixed`, `mixed_counterexample`;
@@ -986,7 +986,7 @@ Barber, Candès, Ramdas and Tibshirani 2023 (arXiv 2202.13415v5), read in TeX: A
     - Averaging super-uniform p-values with fixed weights costs a factor 2, so P ≤ 2c.
     - At equal weights 2c is slice 9's merged bound.
   - *Not covered.*
-    - A merged bound with likelihood-ratio weights: the λ_k then depend on the data, and the averaging argument needs them fixed.
+    - A merged bound with likelihood-ratio weights: the λ_k then depend on the data, and the averaging argument needs them fixed. Proved later the same day by another route (follow-up 2e).
     - The tournament across folds under weights.
 - *For the C#:*
   - the jackknife+, the n-fold cross-conformal set and the tournament can take weights fixed by position, at 2α plus the swap distances, with the test position's weight the largest;
@@ -1037,13 +1037,13 @@ Our statements, the weighted form of slice 9's merged bound, at the user's ask o
   - λ_k = (W_k + w_t)/(W + K w_t), fixed when the weights are fixed by position;
   - c = (α(W + w_t) + (K − 1) w_t)/(W + K w_t).
 - *Averaging with fixed weights* (`merge_le_two`).
-  - If each π_k is super-uniform below 2c, the average is at most c with chance at most 2c: the arithmetic mean's factor 2, as in slice 9's merged bound.
+  - If each π_k ≥ 0 is super-uniform at the levels 0 ≤ x < 2c, the average is at most c with chance at most 2c: the arithmetic mean's factor 2, as in slice 9's merged bound. (As first committed, the levels included negative x, which made the three theorems vacuous; corrected in follow-up 2e.)
   - The proof goes through a finite layer cake: Σ_v m_v (b − v) ≤ b²/2 when the mass up to each level is at most the level (`sum_mass_mul_sub_le`). So E(b − π)⁺ ≤ b²/2 for a super-uniform π (`sum_mul_max_sub_le`).
 - *The bound* (`cvPlus_merged_weighted`).
   - With weights fixed by position and each fold's p-value super-uniform, CV+ refuses with chance at most 2c.
   - At equal weights 2c is slice 9's 2(ℓ + K − 1)/(n + K).
 - *A hypothesis taken, not derived here.* Each fold's super-uniformity is a hypothesis of the theorem. On exchangeable data with the test position's weight the largest in the fold, it is Barber et al.'s Theorem 2 within the fold. `refused_le_swap_tv` states that over all units (`univ`), so applying it needs the fold, with the test unit, as the index type.
-- *Not covered.* A merged bound with likelihood-ratio weights: the λ_k then depend on the data, and the averaging argument needs them fixed. For likelihood ratios the one-fold bound in follow-up 2 serves.
+- *Not covered.* A merged bound with likelihood-ratio weights: the λ_k then depend on the data, and the averaging argument needs them fixed. For likelihood ratios the one-fold bound in follow-up 2 serves. Proved later the same day by another route (follow-up 2e).
 - *For the C#:* K-fold CV+ under position weights can report 2c.
 
 **Checks.**
@@ -1072,7 +1072,7 @@ At the user's ask on 2026-11-13 ("lets work on the remaining still open"). Prove
 - *Where it serves.* With K + 1 folds of similar weight, W_max/W is about 1/(K + 1), so this is the many-folds bound under likelihood ratios. The one-fold bound (`cvPlus_oneFold_likelihoodRatio`) serves two folds.
 - *What it reads.* W_max includes the test unit's imagined fold-mates. It is bounded by m times the largest weight the ratio can take; a ratio bounded by w̄ gives W_max ≤ m w̄.
 
-**The merged bound under likelihood-ratio weights: open.**
+**The merged bound under likelihood-ratio weights: open here; proved in follow-up 2e, with the test unit's weight replaced by a cap read from the bag.**
 - *Why the proof fails.* Under position weights the folds' p-values are averaged with fixed weights λ_k (`cvPlus_merged_weighted`). Likelihood ratios make λ_k and c depend on which unit is the test, and the averaging argument needs them fixed.
 - *What the search found.* `conformal-searches.py --weights` anneals over every symmetric fit in an abstract model, 24 configurations with K ≤ 4, n + 1 ≤ 7 and weights 1–20. It found nothing past slice 9's unweighted merged bound or past E[2c]: the largest shares were 0.326 and 0.292.
 - *Status.* That is evidence, not a statement the layer may report. Under likelihood ratios the layer reports the one-fold bound for few folds and the tournament bound for many.
@@ -1080,3 +1080,62 @@ At the user's ask on 2026-11-13 ("lets work on the remaining still open"). Prove
 **Checks.**
 - The counting core on 5,000 random fold-structured comparisons, with ties, weights with zeros and α up to 1. The largest share of the bound used is 0.560.
 - The coverage over every fold and slot permutation, weighted by the test unit's likelihood ratio, on 59 data sets. The largest share of the bound used is 0.278.
+
+### Follow-up 2e — the merged bound under likelihood-ratio weights, and the averaging lemmas' hypotheses corrected
+
+At the user's ask on 2026-11-13 ("im asking for more work on it"). Proved on 2026-11-13 in `ConformalValidity.lean`, section `WeightedMergeLR`, PROOF-CLOSED, with the standard three axioms only. The checks (section "Slice 14 follow-up 2e") ran first.
+
+**The merged bound under likelihood-ratio weights** (our statements). This closes the open item above, with the test unit's weight replaced by a cap read from the bag.
+- *What the fixed weights were for.* Markov's thresholds can be θ W_k, proportional to each block's weight, where a block is a fold with the test unit. W_k is fixed given the block as a set. Given that, the test unit is u with chance w_u/W_k, so the block's weight V_k scoring at most the test unit is super-uniform there.
+- *The weighted layer cake* (`sum_weight_mul_max_sub_le`). Σ_u q_u (b − weightLe(u))⁺ ≤ b²/2, for any scores and q ≥ 0.
+- *One block* (`sum_permsOn_mul_max_sub_le`). Over the block's reorderings, each weighed by the test unit's w, E(θW_k − V_k)⁺ ≤ θ²/2 · E W_k.
+- *The refusal's slack* (`sum_blocks_filter`, `sum_blocks`, `blocks_slack_of_refused`).
+  - The blocks' weights sum to W + (K − 1)w_t.
+  - A refusal gives Σ_k (θW_k − V_k) ≥ (θ − α)W − (1 − θ)(K − 1)γ for θ ≤ 1, with γ at least the test unit's weight.
+  - A refusal needs w_t ≤ αW, so γ need bound only the weights at most αW.
+- *Markov's form* (`cvPlus_merged_likelihoodRatio_markov`).
+  - Over every ordering of the bag, each weighed by the test unit's likelihood ratio: P(refused) · ((θ − α)W − (1 − θ)(K − 1)γ) ≤ θ²/2 · (W + (K − 1)e).
+  - Here e = Σw²/W is the test unit's mean weight.
+  - Each block's average runs over the cosets of its reorderings.
+- *The bound* (`cvPlus_merged_likelihoodRatio`).
+  - Take θ = 2L/N, with L = αW + (K − 1)γ, N = W + (K − 1)γ and γ the bag's largest weight. Then P(refused) ≤ min(1, 2c(γ)), with c(γ) = L/N.
+  - This is follow-up 2's position-weight 2c with the test unit's weight replaced by the bag's largest.
+  - At equal weights it is slice 9's merged bound in its α form (`cvPlus_merged_alpha`).
+- *The refined form* (`cvPlus_merged_likelihoodRatio_refined`).
+  - Take γ the largest weight at most αW, with 2L ≤ N. Then P(refused) ≤ 2L(W + (K − 1)e)/N².
+  - It helps when a unit is too heavy to be refused.
+- *What it reads.* W and the bag's weights (the training units' and the test point's own) are observed, so the layer computes both bounds per test point. The bound holds given each bag, so the miss rate over bags is at most its average.
+- *Still open.* Whether E[2c(w_t)] bounds it, with the test unit's own weight in c. The two are not ordered: the proven bound is often the smaller (see the checks).
+- *Which bound serves.* Miscoverage bounds at α = 0.1, for weights of mean 1 with the ratio capped at w̄; the one-fold bound is at the fold's mean weight.
+
+| w̄ | n | K | one fold | tournament | merged |
+|---|---|---|---|---|---|
+| 1 | 20 | 2 | 0.191 | 0.676 | 0.282 |
+| 1 | 100 | 10 | 0.918 | 0.299 | 0.347 |
+| 1 | 1000 | 5 | 0.498 | 0.400 | 0.207 |
+| 3 | 20 | 2 | 0.191 | 1.629 | 0.425 |
+| 3 | 100 | 5 | 0.481 | 0.794 | 0.391 |
+| 3 | 100 | 10 | 0.918 | 0.497 | 0.580 |
+| 3 | 1000 | 10 | 0.991 | 0.500 | 0.247 |
+
+  Under likelihood ratios the merged bound serves many units, the tournament many folds of few units, and the one-fold bound two folds.
+- *For the C#:* K-fold CV+ under likelihood-ratio weights can report the smaller of min(1, 2c(w_max)) and the refined form. Here w_max is the bag's largest weight, the test point's included. The layer reports the least of these, the one-fold bound and the tournament bound.
+
+**The averaging lemmas' hypotheses, corrected.** This was a defect in follow-up 2c (2928b06).
+- `sum_mul_max_sub_le`, `merge_le_two` and `cvPlus_merged_weighted` assumed P(π ≤ x) ≤ x for every x below the bound, negative x included.
+  - No law meets that: at x = −1 the left side is at least 0.
+  - So the three theorems held vacuously.
+- They now take π ≥ 0, and super-uniformity for 0 ≤ x only. That is what a p-value gives and what the proofs use. `cvPlus_merged_weighted` derives π ≥ 0 from its weights.
+- The conclusions are unchanged, and so are the numeric checks behind them.
+- Found while reusing the layer cake here. A search of the module for super-uniformity hypotheses over real levels found no other.
+
+**Checks.**
+- The weighted layer cake on 4,000 random cases. The largest share used is 0.789.
+- The refusal's slack on 1,288 refusals among 4,000 random fold-structured cases, at every θ in steps of 0.1 and three choices of γ.
+- End to end over every ordering on 84 bags. The fits are the mean of the other folds and the abstract model of symmetric fits.
+  - Every bag stays within both bounds, and within the Markov form at every θ in steps of 0.1.
+  - The largest share used is 0.400.
+  - Equal weights give slice 9's merged bound.
+- The adversarial search (`conformal-searches.py --weights`), rerun against the proven bound.
+  - The bound holds in all 24 configurations, and the worst case found uses at most 0.322 of it.
+  - It is below E[2c] in 17 of them, above it in one, and both are trivial in 6. The refined γ makes the difference where a unit is too heavy to be refused. Neither bound dominates the other.
