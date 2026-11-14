@@ -132,6 +132,22 @@ Commissioned by the user on 2026-11-10: the GBASS chip takes slices 4 and 5, whi
 - **Docs.** Chips leave `docs/` alone. Give each slice report a **Doc changes owed** heading for the offline docs pass. Notation-ledger entries stay in `issues/`.
 - **Messages.** Send the other worker a short message directly when a shared file or interface needs coordination. Send the coordinator a short event with a report link when a slice lands or needs a decision. Results and receipts go in the report. Sessions do not read each other's transcripts. [Repository DocOps](../../../AGENTS.md#docops--conventions-for-issues)
 
+## Slice 7, slice 6's two follow-ups, commissioned (2026-11-13)
+
+Commissioned by the user on 2026-11-13 ("Yes, both"), from slice 6's report. The GBASS chip takes them in order, each reported to the main session and verified before the next.
+
+1. **Why ln σ² and M mix worse with the step on.** Slice 6 measured them at 0.33 to 1.13 of their ESS per sweep, even on the weak fixture.
+   - *The candidate cause:* s's wider excursions widen u, which σ²'s conditional reads.
+   - *The measurement:* hold σ² and rerun the weak fixture's mixing, the step on against off.
+   - *The decision it serves:* whether the step should skip a sweep's σ² block or move σ with s.
+   - *Building:* a change confined to the opt-in step that stays exact at every rung may be built in this slice, gated by Geweke from exact starts, resume bit for bit and the mixing table. A change that touches the default sweep is reported with its argument and waits for the user.
+2. **An automatic default by cases per level.** Slice 6's step gains on weak data and costs on well-pinned data.
+   - *The measurement:* mixing, the step on against off, over a grid of cases per level, with noise large and small against s, more than one noise law, and several seeds. Read ln s's gain beside ln σ²'s and M's costs, after item 1's change if there is one.
+   - *The decision it serves:* whether the step switches itself on for weakly pinned groups, and by what rule. A rule is proposed only where the grid shows one regime boundary that holds across its laws and seeds.
+   - *Building:* switching it on by default changes default fits, so the grid and the proposed rule go to the user first. The option stays as it is until they decide.
+
+**As before:** the shared-file rules above. The E8 chip is building its slice 7e in `subspaces/` and the BASS readouts, and the conformal chip is on its slice 15. Mixing runs go at below-normal priority with capped threads, since the machine is shared. Each report ends with **Doc changes owed**.
+
 ## Not in this brief
 
 - A slope correlated with its intercept (decision 6's follow-up).
