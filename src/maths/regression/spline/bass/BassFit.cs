@@ -113,6 +113,36 @@ public sealed record BassFit(
     }
 
     /// <summary>
+    /// The group-level split form at new groups, opt-in (<see cref="Conformal.GroupConformal"/>; the conformal layer's call for new
+    /// groups): <paramref name="heldOut"/>, the cases of groups held out of the fit, at their <paramref name="responses"/>, and
+    /// <paramref name="cases"/> on their grids, each read by the new-group density (<see cref="CandidateLogDensity"/>), one score per held-out
+    /// group. Under <see cref="Conformal.GroupScore.WorstCase"/> every case of a new group is held at once, under <see cref="Conformal.GroupScore.OneCase"/> one case
+    /// drawn from it; both need the held-out and the new groups drawn alike, their sizes included. The case-level call's strata rule is not read,
+    /// since the units are groups. The groups are each held-out case's label in <paramref name="groupOf"/>, or its level of the grouping named
+    /// <paramref name="grouping"/>, or else its cell where every effect reads one grouping and its column is given: a cell is one level of every
+    /// grouping jointly, so crossed and nested designs name their groups. <paramref name="data"/> must be the data the fit was run on.
+    /// </summary>
+    /// <param name="data">The data the fit was run on.</param>
+    /// <param name="heldOut">The held-out groups' cases, every one in a new group.</param>
+    /// <param name="responses">Each held-out case's response.</param>
+    /// <param name="cases">The test cases, every one in a new group.</param>
+    /// <param name="grids">Each test case's candidate values, ascending.</param>
+    /// <param name="groupOf">Each held-out case's group; null reads <paramref name="grouping"/> or the cells.</param>
+    /// <param name="grouping">The grouping whose levels are the groups; null reads <paramref name="groupOf"/> or the cells.</param>
+    /// <param name="alpha">α.</param>
+    /// <param name="score">How each held-out group is scored.</param>
+    /// <param name="seed">The draws' seed under <see cref="Conformal.GroupScore.OneCase"/>.</param>
+    /// <param name="unseenLevels">What a level no training case took does: refused by default, so a new group's level asks for
+    /// <see cref="UnseenLevel.OutsideEverySubset"/>, unless its column is left out.</param>
+    /// <param name="quadrature">Takes a noise whose new-group density is an integral over the latent (<see cref="BassWidenedMixture"/>).</param>
+    public Conformal.ConformalPrediction GroupConformal(BassData data, PredictionCases heldOut, IReadOnlyList<double> responses, PredictionCases cases,
+                                              IReadOnlyList<double[]> grids, IReadOnlyList<int>? groupOf = null, string? grouping = null,
+                                              double alpha = 0.1, Conformal.GroupScore score = Conformal.GroupScore.WorstCase, int seed = 0,
+                                              UnseenLevel unseenLevels = UnseenLevel.Refuse, bool quadrature = false)
+        => BassCandidates.GroupUnits(ModelOn(data), Terms, Draws, DrawWeights, heldOut, responses, cases, grids, groupOf, grouping, alpha, score, seed,
+                                     unseenLevels, quadrature);
+
+    /// <summary>
     /// The cells of a random-effect fit on <paramref name="data"/>, the data the fit was run on (<see cref="BassGroupCells"/>): one level of
     /// every grouping jointly, each training case's and, when <paramref name="cases"/> are given, each candidate's, with new groups marked.
     /// Cases are exchangeable only within a cell, so the conformal layer's strata are taken from these, on the training density

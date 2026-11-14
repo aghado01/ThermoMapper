@@ -38,6 +38,13 @@ internal static class BassCandidates
                                                  int[]? strata, UnseenLevel unseenLevels, bool quadrature = false, bool cdf = false,
                                                  IReadOnlyList<double>? caseWeights = null,
                                                  LatentTreatment observationLatents = LatentTreatment.Integrated, int seed = 0)
+        => LogDensity(model, terms, draws, weights, cases, grids, strata, unseenLevels, quadrature, cdf, caseWeights, observationLatents, seed, groupUnits: false);
+
+    // groupUnits: the group-level call's seams (GroupUnits), whose units are whole groups, so the cases' strata rule, which serves case units, is not read.
+    private static CandidateLogDensity LogDensity(BassModel model, BassTermTable terms, IReadOnlyList<IReadOnlyList<BassDraw>> draws,
+                                                  IReadOnlyList<double>? weights, PredictionCases cases, IReadOnlyList<double[]> grids,
+                                                  int[]? strata, UnseenLevel unseenLevels, bool quadrature, bool cdf,
+                                                  IReadOnlyList<double>? caseWeights, LatentTreatment observationLatents, int seed, bool groupUnits)
     {
         ArgumentNullException.ThrowIfNull(cases);
         ArgumentNullException.ThrowIfNull(grids);
@@ -73,7 +80,7 @@ internal static class BassCandidates
             BassGroupCells cells = BassGroupCells.Of(model, cases, unseenLevels);
             int[] cellOf = cells.Candidates!;
             candidateCells = cellOf;
-            if (strata is null && Math.Max(cells.TrainingCells, cellOf.Length == 0 ? 0 : cellOf.Max() + 1) > 1)
+            if (!groupUnits && strata is null && Math.Max(cells.TrainingCells, cellOf.Length == 0 ? 0 : cellOf.Max() + 1) > 1)
                 throw new ArgumentException("Under random effects cases are exchangeable only within a cell, one level of every grouping jointly, and these "
                                             + "cases and the training cases span more than one: give each case its cell's stratum (BassFit.GroupCells).", nameof(strata));
             if (strata is not null)
@@ -197,6 +204,78 @@ internal static class BassCandidates
             FormsReason = "a new group's effect is integrated from its prior while the training units' terms condition on theirs, so the full step's "
                           + "in-sample scores would read the candidate by another density, which undercovers (CB-4).",
         };
+    }
+
+    /// <summary>
+    /// The group-level split form at new groups (<see cref="GroupConformal"/>; the opt-in group-units call, the user's choice of 2026-11-14):
+    /// <paramref name="heldOut"/>'s cases at their <paramref name="responses"/> and <paramref name="cases"/> on their grids, each read by the
+    /// new-group density, with one score per held-out group. Every case must be of a new group. The groups are read from one of:
+    /// <list type="bullet">
+    /// <item><paramref name="groupOf"/>, each held-out case's label;</item>
+    /// <item><paramref name="grouping"/>, a grouping whose levels are the groups, each case's level of it new;</item>
+    /// <item>otherwise the cells, which name the groups only where every effect reads one grouping and its column is given. A cell is one level of
+    /// every grouping jointly (<see cref="BassGroupCells"/>): under crossed or nested groupings one held-out subject seen at two sites spans
+    /// two cells, and a case whose grouping column is left out is a cell of its own, so those designs name their groups.</item>
+    /// </list>
+    /// </summary>
+    internal static ConformalPrediction GroupUnits(BassModel model, BassTermTable terms, IReadOnlyList<IReadOnlyList<BassDraw>> draws,
+                                                   IReadOnlyList<double>? weights, PredictionCases heldOut, IReadOnlyList<double> responses,
+                                                   PredictionCases cases, IReadOnlyList<double[]> grids, IReadOnlyList<int>? groupOf, string? grouping,
+                                                   double alpha, GroupScore score, int seed, UnseenLevel unseenLevels, bool quadrature)
+    {
+        ArgumentNullException.ThrowIfNull(heldOut);
+        ArgumentNullException.ThrowIfNull(responses);
+        RandomEffectsBlock block = model.RandomEffects ?? throw new NotSupportedException("A fit without random effects reads no group: its cases "
+                                                                                          + "share one cell, and the case-level split form serves them.");
+        if (groupOf is not null && grouping is not null)
+            throw new ArgumentException("Give the groups by their labels or by a grouping's name, not both.", nameof(grouping));
+        if (responses.Count != heldOut.Cases)
+            throw new ArgumentException($"One response per held-out case is required: {responses.Count} for {heldOut.Cases} cases.", nameof(responses));
+        CandidateLogDensity calibration = LogDensity(model, terms, draws, weights, heldOut, [.. responses.Select(y => new[] { y })], null, unseenLevels,
+                                                     quadrature, false, null, LatentTreatment.Integrated, 0, groupUnits: true);
+        CandidateLogDensity test = LogDensity(model, terms, draws, weights, cases, grids, null, unseenLevels, quadrature, false, null,
+                                              LatentTreatment.Integrated, 0, groupUnits: true);
+        if (calibration.NewGroup is not { } calibrationNew || Array.Exists(calibrationNew, f => !f))
+            throw new ArgumentException("A held-out case's groups are all known to the fit: the held-out groups are scored as new groups.", nameof(heldOut));
+        if (test.NewGroup is not { } testNew || Array.Exists(testNew, f => !f))
+            throw new ArgumentException("A test case's groups are all known to the fit: such cases take the case-level split form within their cell.", nameof(cases));
+        int[] labels = groupOf is not null ? [.. groupOf]
+            : grouping is not null ? Named(block, heldOut, cases, grouping, unseenLevels)
+            : ByCells(block, heldOut, calibration);
+        return GroupConformal.Density(calibration, labels, test, alpha, score, seed);
+    }
+
+    // Each held-out case's level of the named grouping, numbered by first appearance; every case's level of it, held out or test, a new one.
+    private static int[] Named(RandomEffectsBlock block, PredictionCases heldOut, PredictionCases cases, string grouping, UnseenLevel unseenLevels)
+    {
+        int k = Enumerable.Range(0, block.Count).FirstOrDefault(j => block.Groupings[j].Name == grouping, -1);
+        if (k < 0)
+            throw new ArgumentException($"No effect of this fit reads a grouping '{grouping}'; its groupings are "
+                                        + string.Join(", ", block.Groupings.Select(g => $"'{g.Name}'").Distinct()) + ".", nameof(grouping));
+        foreach ((PredictionCases set, string name) in new[] { (heldOut, nameof(heldOut)), (cases, nameof(cases)) })
+        {
+            int[] known = set.GroupsOf(block.Layout(k), block.Groupings[k], unseenLevels);
+            int at = Array.FindIndex(known, g => g >= 0);
+            if (at >= 0)
+                throw new ArgumentException($"Case {at}'s level of '{grouping}' is one the fit knows: its group is not a new one.", name);
+        }
+        string[] levels = heldOut.GroupLabelsOf(block.Layout(k), block.Groupings[k])
+                          ?? throw new ArgumentException($"No column gives the grouping '{grouping}', so it names no group.", nameof(heldOut));
+        var numbers = new Dictionary<string, int>(StringComparer.Ordinal);
+        return [.. levels.Select(l => numbers.TryGetValue(l, out int g) ? g : numbers[l] = numbers.Count)];
+    }
+
+    // The cells, where they are the groups: every effect reads one grouping, and a column gives it.
+    private static int[] ByCells(RandomEffectsBlock block, PredictionCases heldOut, CandidateLogDensity calibration)
+    {
+        string[] names = [.. block.Groupings.Select(g => g.Name).Distinct()];
+        if (names.Length > 1)
+            throw new ArgumentException($"This fit's effects read {names.Length} groupings ({string.Join(", ", names.Select(n => $"'{n}'"))}), and a "
+                                        + "cell is one level of every grouping jointly, so a held-out group seen at several levels of another grouping spans "
+                                        + "cells: name the grouping whose levels are the groups, or give each held-out case's group.", nameof(heldOut));
+        if (heldOut.GroupLabelsOf(block.Layout(0), block.Groupings[0]) is null)
+            throw new ArgumentException($"No column gives the grouping '{names[0]}', so each held-out case is a cell of its own: give each case's group.", nameof(heldOut));
+        return calibration.Cells!;
     }
 
     /// <summary>A latent v from its exact conditional given the residual (e, s², m) at likelihood power 1: Student t's, the exponential's
