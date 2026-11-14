@@ -6,7 +6,8 @@ namespace Maths.Regression.Spline.Baps;
 /// The numerical gate every BAPS solve applies to its factored system, <c>ZᵀZ + λP</c> and its kin: the strict factor is
 /// positive definite and its estimated equilibrated condition number (<see cref="ISpdFactor.EquilibratedCondition"/>) is at
 /// most <see cref="MaxCondition"/>. Both are scale-free, so a valid fit in small units is admitted. A refused system throws
-/// where it is solved.
+/// where it is solved. A deterministic solve estimates at every factorization; a sampler estimates where its
+/// <see cref="ConditionCheck"/> says (<see cref="SamplerAdmission"/>).
 /// </summary>
 /// <remarks>
 /// At κ(E) = 10¹⁴ a backward-stable solve still keeps about two digits (κ·ε ≈ 0.02). Measured on the nine tensor layouts of

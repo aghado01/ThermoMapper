@@ -66,14 +66,23 @@ public sealed class PenalizedSpline
 
     /// <summary>β̂(λ) = A⁻¹Zᵀy, RSS_pen(λ) = yᵀy − β̂ᵀZᵀy and the factor of A = ZᵀZ + λP — what an exact conditional draw
     /// of (σ², β) given λ needs.</summary>
-    internal PenalizedSolve SolveFactored(double lambda)
+    internal PenalizedSolve SolveFactored(double lambda) => SolveFactored(lambda, null, null);
+
+    /// <summary>As <see cref="SolveFactored(double)"/>, with a sampler's condition check: its <paramref name="admission"/>
+    /// weighs the terms (ZᵀZ at 1, P at λ) and records into <paramref name="tally"/>. Without one, the solve is
+    /// deterministic and estimates at every factorization (<see cref="BapsAdmission"/>).</summary>
+    internal PenalizedSolve SolveFactored(double lambda, SamplerAdmission? admission, ConditionTally? tally)
     {
         var band = (double[,])_gram.Clone();          // ZᵀZ
         _penalty.AccumulateInto(band, _nu, lambda);   // + λP
         var chol = new BandCholesky(_nu, _bw, BandFactorization.Ldlt);
+        double spread = admission?.Spread([1.0, lambda]) ?? 1.0;
         chol.DecomposeBanded(band);
-        if (!BapsAdmission.Admits(chol))
-            throw new InvalidOperationException($"ZᵀZ + λP is not admissible: not positive definite, or its equilibrated condition past 1e14 at λ = {lambda} ({chol.Status}).");
+        string? refused = admission is null
+            ? BapsAdmission.Admits(chol) ? null : SamplerAdmission.Refused
+            : admission.Admit(chol, spread, tally!);
+        if (refused is not null)
+            throw new InvalidOperationException($"ZᵀZ + λP is not admissible: {refused} at λ = {lambda} ({chol.Status}).");
         double[] beta = chol.Solve(_zty);
 
         double bBeta = 0.0;                            // RSS_pen = yᵀy − β̂ᵀZᵀy
@@ -95,11 +104,13 @@ public sealed class PenalizedSpline
     /// </summary>
     public double RemlLogEvidence(double lambda) => RemlLogEvidence(lambda, out _);
 
-    // The evidence and the solve behind it, which the collapsed sampler keeps for the accepted λ's conditional draw.
-    internal double RemlLogEvidence(double lambda, out PenalizedSolve solve)
+    // The evidence and the solve behind it, which the collapsed sampler keeps for the accepted λ's conditional draw, checked
+    // by the sampler's admission where it passes one.
+    internal double RemlLogEvidence(double lambda, out PenalizedSolve solve, SamplerAdmission? admission = null,
+                                    ConditionTally? tally = null)
     {
         if (!(lambda > 0.0)) throw new ArgumentOutOfRangeException(nameof(lambda), "Smoothing λ must be positive.");
-        solve = SolveFactored(lambda);
+        solve = SolveFactored(lambda, admission, tally);
         int r = _penalty.Nullity;
         double minusTwoEll = (_n - r) * Math.Log(solve.RssPen) - (_nu - r) * Math.Log(lambda) + solve.Factor.LogDet;
         return -0.5 * minusTwoEll;

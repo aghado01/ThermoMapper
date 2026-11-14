@@ -67,6 +67,8 @@ public enum BapsScheme
 /// the Metropolis rate on log λ for the collapsed scheme, and for the anisotropic scheme 1 with the slice update and,
 /// with the Newton update (two conjugate blocks and one Metropolis block), <c>(2 + a)/3</c> with a its Newton step's rate. <paramref name="ChainSeeds"/> are the resolved per-chain
 /// seeds, and <paramref name="Checkpoint"/> the run's restart state when it was requested.
+/// <paramref name="ConditionRecords"/> holds what the run's condition checks saw at the scheme's system
+/// (<see cref="ConditionRecord"/>), in every <see cref="ConditionCheck"/> mode.
 /// <para>
 /// In <see cref="BapsScheme.AnisotropicGibbs"/> each draw's λ is the geometric mean of its components' λⱼ, so the λ
 /// summaries read the overall smoothing and equal λ itself when the components agree. Each λⱼ's posterior is
@@ -90,7 +92,8 @@ public sealed record BapsResult(
     int[] ChainSeeds,
     EnsembleCheckpoint? Checkpoint,
     double[]? LocalSmoothing = null,
-    IReadOnlyList<ConvergenceDiagnostic>? ComponentLogLambdaConvergence = null)
+    IReadOnlyList<ConvergenceDiagnostic>? ComponentLogLambdaConvergence = null,
+    IReadOnlyList<ConditionRecord>? ConditionRecords = null)
 {
     /// <summary>σ²'s posterior median and 95% interval, read from the retained draws.</summary>
     public PosteriorInterval Sigma2Interval => Interval(d => d.Sigma2);
@@ -185,6 +188,7 @@ public sealed partial class Baps
     private readonly SmoothingVarianceUpdate _componentUpdate;   // and its update of their logs
     private readonly NoiseVariancePrior? _noisePrior;   // null: each scheme's default
     private readonly double _responseVariance;   // the response's sample variance, the anisotropic chains' start
+    private readonly ConditionCheck _check;      // where the samplers estimate their system's condition
 
     /// <param name="design">The banded design Z (n × ν).</param>
     /// <param name="y">The responses.</param>
@@ -200,10 +204,12 @@ public sealed partial class Baps
     /// <param name="noisePrior">The prior on σ² (<see cref="NoiseVariancePrior"/>); null takes each scheme's default: the
     /// inverse gamma for the isotropic Gibbs schemes, Jeffreys for the anisotropic and collapsed schemes. The collapsed
     /// scheme takes only Jeffreys, which its evidence assumes.</param>
+    /// <param name="conditionCheck">Where the samplers estimate their system's condition (<see cref="ConditionCheck"/>):
+    /// at every factorization by default. A run every mode admits draws the same chain in each.</param>
     public Baps(double[,] design, double[] y, IBandPenalty penalty,
                        double priorShape = 1e-3, double priorScale = 1e-3, double mhLogStep = 0.6, double phi = 1.0,
                        ISmoothingVariancePriorChoice? componentPrior = null, SmoothingVarianceUpdate componentUpdate = SmoothingVarianceUpdate.Slice,
-                       NoiseVariancePrior? noisePrior = null)
+                       NoiseVariancePrior? noisePrior = null, ConditionCheck conditionCheck = ConditionCheck.EveryFactorization)
     {
         ArgumentNullException.ThrowIfNull(design);
         ArgumentNullException.ThrowIfNull(y);
@@ -238,6 +244,9 @@ public sealed partial class Baps
         if (noisePrior is not (null or NoiseVariancePrior.InverseGamma or NoiseVariancePrior.Jeffreys))
             throw new ArgumentOutOfRangeException(nameof(noisePrior));
         _noisePrior = noisePrior;
+        if (conditionCheck is not (ConditionCheck.EveryFactorization or ConditionCheck.Screened or ConditionCheck.ReferenceOnly))
+            throw new ArgumentOutOfRangeException(nameof(conditionCheck));
+        _check = conditionCheck;
         double mean = 0.0, sumSq = 0.0;
         foreach (double v in y) mean += v / _n;
         foreach (double v in y) sumSq += (v - mean) * (v - mean);
@@ -285,9 +294,11 @@ public sealed partial class Baps
             throw new ArgumentException("The collapsed scheme's evidence integrates σ² under the Jeffreys prior.", nameof(scheme));
 
         // The shell gives each chain a kernel stream and a readout stream. Only the collapsed scheme's conditional draws
-        // use the readout stream, so the λ chain does not depend on them.
+        // use the readout stream, so the λ chain does not depend on them. The condition check is the run's, read once at its
+        // reference point where the mode takes a reading; the chains share it and keep their own records.
+        SamplerAdmission admission = Admission(scheme);
         (EnsembleRun summary, IReadOnlyList<IChainRun<BapsState>> runs) = new ChainEnsemble().Run<BapsState>(
-            new BapsEnsemble(this, scheme), chains, masterSeed, burn, samples, rHatTarget, batchSize, minEssPerChain,
+            new BapsEnsemble(this, scheme, admission), chains, masterSeed, burn, samples, rHatTarget, batchSize, minEssPerChain,
             checkpoint, resumeFrom);
 
         // Every summary is read from the retained draws: each chain's sums in draw order, then over chains, and the pooled
@@ -300,9 +311,11 @@ public sealed partial class Baps
         int nLoc = _localTerms;
         double[]? localField = scheme == BapsScheme.LocallyAdaptiveGibbs && nLoc > 0 ? new double[nLoc] : null;
         var posteriorDraws = new IReadOnlyList<BapsDraw>[chains];
+        var tallies = new ConditionTally[chains];
         int idx = 0;
         for (int c = 0; c < chains; c++)
         {
+            tallies[c] = ((BapsChainRun)runs[c]).State.Tally;
             DrawStore<BapsDraw> draws = ((BapsChainRun)runs[c]).Draws;
             posteriorDraws[c] = draws.ToArray();
             var coefSum = new double[_nu];
@@ -333,20 +346,74 @@ public sealed partial class Baps
             PosteriorInterval.Quantile(allLam, 0.975),
             sigSum / total, summary.FunctionalRHat[0], (int)total, posteriorDraws,
             summary.Monitored[0], summary.Monitored[1], summary.Verdict, summary.AcceptanceRate, summary.ChainSeeds, summary.Checkpoint,
-            localField, scheme == BapsScheme.AnisotropicGibbs ? summary.Monitored[2..] : null);
+            localField, scheme == BapsScheme.AnisotropicGibbs ? summary.Monitored[2..] : null, [admission.Record(tallies)]);
+    }
+
+    // The scheme's system and its condition check. The reference point is trace balance, fixed by the configuration alone:
+    // each penalty term at λ₀ = tr ZᵀZ / tr Pₖ against the data's ZᵀZ, and the locally adaptive multipliers at their prior
+    // mean 1, so every local term sits at the global λ₀.
+    internal SamplerAdmission Admission(BapsScheme scheme)
+    {
+        double gramTrace = SamplerAdmission.Trace(_gram0, _nu);
+        if (scheme == BapsScheme.AnisotropicGibbs)
+        {
+            var anisotropic = (IAnisotropicPenalty)_penalty;
+            var reference = new double[_components + 1];
+            var bands = new List<double[,]> { _gram0 };
+            reference[0] = 1.0;
+            var unit = new double[_components];
+            for (int j = 0; j < _components; j++)
+            {
+                var component = new double[_bw + 1, _nu];
+                Array.Clear(unit);
+                unit[j] = 1.0;
+                anisotropic.AccumulateComponents(component, _nu, unit);
+                reference[j + 1] = SamplerAdmission.Balance(gramTrace, SamplerAdmission.Trace(component, _nu));
+                bands.Add(component);
+            }
+            return SamplerAdmission.Banded(_check, "ZᵀZ + Σⱼ λⱼPⱼ", reference, _nu, _bw, SamplerAdmission.Pattern(_nu, bands), () =>
+            {
+                var band = (double[,])_gram0.Clone();
+                anisotropic.AccumulateComponents(band, _nu, reference.AsSpan(1));
+                return band;
+            });
+        }
+        var penalty = new double[_bw + 1, _nu];
+        _penalty.AccumulateInto(penalty, _nu, 1.0);
+        double lambda0 = SamplerAdmission.Balance(gramTrace, SamplerAdmission.Trace(penalty, _nu));
+        if (scheme == BapsScheme.LocallyAdaptiveGibbs)
+        {
+            var local = (ILocallyAdaptivePenalty)_penalty;
+            var reference = new double[_localTerms + 1];
+            Array.Fill(reference, lambda0);
+            reference[0] = 1.0;
+            return SamplerAdmission.Banded(_check, "ZᵀZ + Dᵀdiag(λᵢ)D", reference, _nu, _bw,
+                                           SamplerAdmission.Pattern(_nu, [_gram0], [_penalty.Bandwidth]), () =>
+            {
+                var band = (double[,])_gram0.Clone();
+                local.AccumulateInto(band, _nu, reference[1..]);
+                return band;
+            });
+        }
+        return SamplerAdmission.Banded(_check, "ZᵀZ + λP", [1.0, lambda0], _nu, _bw, SamplerAdmission.Pattern(_nu, [_gram0, penalty]), () =>
+        {
+            var band = (double[,])_gram0.Clone();
+            _penalty.AccumulateInto(band, _nu, lambda0);
+            return band;
+        });
     }
 
     // log p(u | y) up to a constant on u = ln λ: the profiled evidence plus the uniform-edf prior density |d edf/du|, with
-    // the solve behind the evidence.
-    private double MarginalLogTarget(double lambda, out PenalizedSolve solve)
-        => _model.RemlLogEvidence(lambda, out solve) + Math.Log(_model.EdfSlope(lambda));
+    // the solve behind the evidence, checked by the run's admission into the chain's records.
+    private double MarginalLogTarget(double lambda, out PenalizedSolve solve, SamplerAdmission admission, ConditionTally tally)
+        => _model.RemlLogEvidence(lambda, out solve, admission, tally) + Math.Log(_model.EdfSlope(lambda));
 
     /// <summary>
     /// The ensemble-shell client for one scheme: it starts and restores chains, fingerprints the run for checkpoints, and
     /// names the functionals the shell monitors. Those are log λ and log σ², which get split R̂ and bulk and tail ESS and
     /// gate an early stop.
     /// </summary>
-    private sealed class BapsEnsemble(Baps owner, BapsScheme scheme) : IEnsembleModel<BapsState>
+    private sealed class BapsEnsemble(Baps owner, BapsScheme scheme, SamplerAdmission admission) : IEnsembleModel<BapsState>
     {
         // log λ and log σ², then, in the anisotropic scheme, each component's log λⱼ.
         public int FunctionalDim => 2 + (scheme == BapsScheme.AnisotropicGibbs ? owner._components : 0);
@@ -367,12 +434,13 @@ public sealed partial class Baps
         }
 
         // The kernel stream drives the scan; the readout stream serves the collapsed scheme's conditional draws.
-        public IChainRun<BapsState> StartChain(int chainSeed, int readoutSeed) => new BapsChainRun(owner, scheme,
-            new BlockScan<BapsState>(owner.Blocks(scheme), BapsState.Start(owner, scheme), new Xoshiro256PlusPlus(chainSeed),
-                                     state => state.Copy()),
+        public IChainRun<BapsState> StartChain(int chainSeed, int readoutSeed) => new BapsChainRun(owner, scheme, admission,
+            new BlockScan<BapsState>(owner.Blocks(scheme, admission), BapsState.Start(owner, scheme, admission),
+                                     new Xoshiro256PlusPlus(chainSeed), state => state.Copy()),
             new Xoshiro256PlusPlus(readoutSeed), new DrawStore<BapsDraw>());
 
-        /// <summary>The design, the responses, the penalty order, the hyperparameters and the scheme.</summary>
+        /// <summary>The design, the responses, the penalty order, the hyperparameters and the scheme, and the condition
+        /// check where it is not the default, so a run's records resume under the mode that started them.</summary>
         public string Fingerprint
         {
             get
@@ -380,14 +448,17 @@ public sealed partial class Baps
                 var f = new RunFingerprint().Add("BAPS").Add((int)scheme).Add(owner._n).Add(owner._nu).Add(owner._nullity)
                                             .Add(owner._penalty.Bandwidth).Add(owner._penalty.GetType().FullName!);
                 foreach (double v in owner._z) f.Add(v);
-                return f.Add(owner._y).Add(owner._priorShape).Add(owner._priorScale).Add(owner._mhLogStep)
-                        .Add(owner._phi).Add(owner._componentChoice.ToString()!).Add((int)owner._componentUpdate)
-                        .Add(owner._noisePrior is NoiseVariancePrior p ? (int)p : -1).ToString();
+                f.Add(owner._y).Add(owner._priorShape).Add(owner._priorScale).Add(owner._mhLogStep)
+                 .Add(owner._phi).Add(owner._componentChoice.ToString()!).Add((int)owner._componentUpdate)
+                 .Add(owner._noisePrior is NoiseVariancePrior p ? (int)p : -1);
+                if (owner._check != ConditionCheck.EveryFactorization) f.Add("condition check").Add((int)owner._check);
+                return f.ToString();
             }
         }
 
         public IChainRun<BapsState> RestoreChain(IChainState state) => state is BapsChainState s
-            ? new BapsChainRun(owner, scheme, BlockScan<BapsState>.Restore(owner.Blocks(scheme), s.Scan, x => x.Copy()),
+            ? new BapsChainRun(owner, scheme, admission,
+                               BlockScan<BapsState>.Restore(owner.Blocks(scheme, admission), s.Scan, x => x.Copy()),
                                Xoshiro256PlusPlus.Restore(s.Readout.Item1, s.Readout.Item2, s.Readout.Item3, s.Readout.Item4),
                                s.Draws.Copy())
             : throw new ArgumentException("Not a BAPS chain's restart state.", nameof(state));
@@ -403,12 +474,14 @@ public sealed partial class Baps
     /// recording; each sampling step records the draw, so the chain's streams are the same however its steps are split
     /// into rounds or runs.
     /// </summary>
-    private sealed class BapsChainRun(Baps owner, BapsScheme scheme, BlockScan<BapsState> scan, Xoshiro256PlusPlus readout,
-                                      DrawStore<BapsDraw> draws) : IResumableChainRun<BapsState>
+    private sealed class BapsChainRun(Baps owner, BapsScheme scheme, SamplerAdmission admission, BlockScan<BapsState> scan,
+                                      Xoshiro256PlusPlus readout, DrawStore<BapsDraw> draws) : IResumableChainRun<BapsState>
     {
         private readonly GaussianConditional _gaussian = new(owner._nu);   // the collapsed scheme's conditional β draw
 
         public DrawStore<BapsDraw> Draws => draws;           // every post-burn draw, in order
+
+        public BapsState State => scan.State;                // the state the scan updates, with its condition records
 
         public IChain<BapsState> Chain => scan;
 
@@ -452,7 +525,7 @@ public sealed partial class Baps
                                     scheme == BapsScheme.LocallyAdaptiveGibbs ? (double[])state.Eta.Clone() : null);
 
             double lambda = Math.Exp(state.LogLambda);
-            (double[] betaHat, double rssPen, BandCholesky factor) = state.Solve ?? owner._model.SolveFactored(lambda);
+            (double[] betaHat, double rssPen, BandCholesky factor) = state.Solve ?? owner._model.SolveFactored(lambda, admission, state.Tally);
             double sigma2 = ConjugateUpdates.NormalVariance(0.0, 0.0, owner._n - owner._nullity, rssPen).Sample(readout);
             var beta = new double[owner._nu];
             _gaussian.Perturb(factor, betaHat, readout, beta, Math.Sqrt(sigma2));   // v ~ N(0, A⁻¹), scaled by σ
@@ -464,16 +537,17 @@ public sealed partial class Baps
     /// A BAPS chain's state: the coefficients β and the variances σ² and τ² (the Gibbs schemes), the local multipliers η
     /// and the squared differences they weigh (the locally adaptive scheme), the components' log smoothing variances
     /// ln τⱼ² (the anisotropic scheme), and log λ with its log target and the solve behind it (the collapsed scheme).
-    /// Nothing modifies a solve, so copies share it.
+    /// Nothing modifies a solve, so copies share it. The condition records ride here, so a snapshot carries them.
     /// </summary>
     private sealed class BapsState
     {
         public double[] Beta = null!, Eta = null!, SquaredDifferences = null!, LogComponentTau2 = null!;
         public double Sigma2 = 1.0, Tau2 = 1.0, LogLambda, Evidence;
         public PenalizedSolve? Solve;
+        public ConditionTally Tally = new();
 
         // β at 0, σ² = τ² = 1, η at 1 (unadapted, the global smoothing), every τⱼ² = 1, and log λ = 0.
-        public static BapsState Start(Baps owner, BapsScheme scheme)
+        public static BapsState Start(Baps owner, BapsScheme scheme, SamplerAdmission admission)
         {
             int nLoc = owner._localTerms;
             var state = new BapsState
@@ -488,7 +562,7 @@ public sealed partial class Baps
                 state.Sigma2 = owner._responseVariance;
                 Array.Fill(state.LogComponentTau2, Math.Log(owner._responseVariance));
             }
-            if (scheme == BapsScheme.Collapsed) state.Evidence = owner.MarginalLogTarget(1.0, out state.Solve);
+            if (scheme == BapsScheme.Collapsed) state.Evidence = owner.MarginalLogTarget(1.0, out state.Solve, admission, state.Tally);
             return state;
         }
 
@@ -496,35 +570,44 @@ public sealed partial class Baps
         {
             Beta = (double[])Beta.Clone(), Eta = (double[])Eta.Clone(), SquaredDifferences = (double[])SquaredDifferences.Clone(),
             LogComponentTau2 = (double[])LogComponentTau2.Clone(),
-            Sigma2 = Sigma2, Tau2 = Tau2, LogLambda = LogLambda, Evidence = Evidence, Solve = Solve,
+            Sigma2 = Sigma2, Tau2 = Tau2, LogLambda = LogLambda, Evidence = Evidence, Solve = Solve, Tally = Tally.Copy(),
         };
     }
 
     // The scheme's blocks in sweep order: the block Gibbs scan of the Gibbs schemes, or the collapsed Metropolis step on
-    // log λ. Each chain builds its own, since they hold scratch.
-    private IBlock<BapsState>[] Blocks(BapsScheme scheme) => scheme switch
+    // log λ. Each chain builds its own, since they hold scratch; the run's condition check is shared.
+    private IBlock<BapsState>[] Blocks(BapsScheme scheme, SamplerAdmission admission) => scheme switch
     {
-        BapsScheme.Collapsed => new IBlock<BapsState>[] { new LogLambdaBlock(this) },
+        BapsScheme.Collapsed => new IBlock<BapsState>[] { new LogLambdaBlock(this, admission) },
         BapsScheme.LocallyAdaptiveGibbs => new IBlock<BapsState>[]
         {
-            new CoefficientBlock(this, scheme), new NoiseBlock(this, scheme), new PenaltyBlock(this, adaptive: true), new LocalBlock(this),
+            new CoefficientBlock(this, scheme, admission), new NoiseBlock(this, scheme), new PenaltyBlock(this, adaptive: true), new LocalBlock(this),
         },
         BapsScheme.AnisotropicGibbs => new IBlock<BapsState>[]
         {
-            new CoefficientBlock(this, scheme), new NoiseBlock(this, scheme), new ComponentSmoothingBlock(this),
+            new CoefficientBlock(this, scheme, admission), new NoiseBlock(this, scheme), new ComponentSmoothingBlock(this),
         },
-        _ => new IBlock<BapsState>[] { new CoefficientBlock(this, scheme), new NoiseBlock(this, scheme), new PenaltyBlock(this, adaptive: false) },
+        _ => new IBlock<BapsState>[]
+        {
+            new CoefficientBlock(this, scheme, admission), new NoiseBlock(this, scheme), new PenaltyBlock(this, adaptive: false),
+        },
     };
 
     // β | σ², τ², y ~ N(β̂, σ²A⁻¹) with A = ZᵀZ + λP and λ = σ²/τ², or, in the locally adaptive scheme,
     // A = ZᵀZ + Dᵀdiag(λ_i)D with λ_i = λ·η_i, or, in the anisotropic scheme, A = ZᵀZ + Σⱼ λⱼPⱼ with λⱼ = σ²/τⱼ²;
-    // β̂ = A⁻¹Zᵀy.
-    private sealed class CoefficientBlock(Baps owner, BapsScheme scheme) : IBlock<BapsState>
+    // β̂ = A⁻¹Zᵀy. The run's admission checks each factor against the terms' coefficients, ZᵀZ's fixed at 1.
+    private sealed class CoefficientBlock(Baps owner, BapsScheme scheme, SamplerAdmission admission) : IBlock<BapsState>
     {
         private readonly double[,] _band = new double[owner._bw + 1, owner._nu];
         private readonly BandCholesky _factor = new(owner._nu, owner._bw, BandFactorization.Ldlt);
         private readonly double[] _weights = new double[owner._localTerms];   // λ_i = (σ²/τ²)·η_i
         private readonly double[] _componentLambdas = new double[owner._components];   // λⱼ = σ²/τⱼ²
+        private readonly double[] _terms = new double[1 + scheme switch   // every term's coefficient, ZᵀZ's first
+        {
+            BapsScheme.LocallyAdaptiveGibbs => owner._localTerms,
+            BapsScheme.AnisotropicGibbs => owner._components,
+            _ => 1,
+        }];
         private readonly GaussianConditional _gaussian = new(owner._nu);
 
         public string Name => "coefficients";
@@ -534,29 +617,35 @@ public sealed partial class Baps
             int nu = owner._nu;
             double lambda = state.Sigma2 / state.Tau2;
             Array.Copy(owner._gram0, _band, owner._gram0.Length);
+            _terms[0] = 1.0;
             if (scheme == BapsScheme.AnisotropicGibbs)
             {
-                for (int j = 0; j < _componentLambdas.Length; j++) _componentLambdas[j] = state.Sigma2 * Math.Exp(-state.LogComponentTau2[j]);
+                for (int j = 0; j < _componentLambdas.Length; j++)
+                    _terms[j + 1] = _componentLambdas[j] = state.Sigma2 * Math.Exp(-state.LogComponentTau2[j]);
                 ((IAnisotropicPenalty)owner._penalty).AccumulateComponents(_band, nu, _componentLambdas);
+                double spread = admission.Spread(_terms);
                 _factor.DecomposeBanded(_band);
-                if (!BapsAdmission.Admits(_factor))
+                if (admission.Admit(_factor, spread, state.Tally) is string refused)
                     throw new InvalidOperationException(
-                        $"ZᵀZ + Σⱼ λⱼPⱼ is not admissible: not positive definite, or its equilibrated condition past 1e14 at λ = [{string.Join(", ", _componentLambdas)}] ({_factor.Status}).");
+                        $"ZᵀZ + Σⱼ λⱼPⱼ is not admissible: {refused} at λ = [{string.Join(", ", _componentLambdas)}] ({_factor.Status}).");
             }
             else if (scheme == BapsScheme.LocallyAdaptiveGibbs)
             {
-                for (int i = 0; i < _weights.Length; i++) _weights[i] = lambda * state.Eta[i];
+                for (int i = 0; i < _weights.Length; i++) _terms[i + 1] = _weights[i] = lambda * state.Eta[i];
                 ((ILocallyAdaptivePenalty)owner._penalty).AccumulateInto(_band, nu, _weights);
+                double spread = admission.Spread(_terms);
                 _factor.DecomposeBanded(_band);
-                if (!BapsAdmission.Admits(_factor))
-                    throw new InvalidOperationException($"ZᵀZ + Dᵀdiag(λᵢ)D is not admissible: not positive definite, or its equilibrated condition past 1e14 at global λ = {lambda} ({_factor.Status}).");
+                if (admission.Admit(_factor, spread, state.Tally) is string refused)
+                    throw new InvalidOperationException($"ZᵀZ + Dᵀdiag(λᵢ)D is not admissible: {refused} at global λ = {lambda} ({_factor.Status}).");
             }
             else
             {
+                _terms[1] = lambda;
                 owner._penalty.AccumulateInto(_band, nu, lambda);
+                double spread = admission.Spread(_terms);
                 _factor.DecomposeBanded(_band);
-                if (!BapsAdmission.Admits(_factor))
-                    throw new InvalidOperationException($"ZᵀZ + λP is not admissible: not positive definite, or its equilibrated condition past 1e14 at λ = {lambda} ({_factor.Status}).");
+                if (admission.Admit(_factor, spread, state.Tally) is string refused)
+                    throw new InvalidOperationException($"ZᵀZ + λP is not admissible: {refused} at λ = {lambda} ({_factor.Status}).");
             }
             _gaussian.Draw(_factor, owner._zty, rng, state.Beta, Math.Sqrt(state.Sigma2));
             return true;
@@ -627,23 +716,26 @@ public sealed partial class Baps
     }
 
     // Random-walk Metropolis on log λ against the REML evidence under the uniform-edf prior, β and σ² integrated out. Each
-    // proposal's evaluation factors A once; an accepted proposal's solve moves into the state for the draw at that λ.
+    // proposal's evaluation factors A once; an accepted proposal's solve moves into the state for the draw at that λ. Each
+    // factorization is checked by the run's admission into the chain's records.
     private sealed class LogLambdaBlock : IBlock<BapsState>
     {
         private readonly Baps _owner;
         private readonly Func<double, double> _target;
         private PenalizedSolve? _proposed;   // the last proposal's solve
+        private ConditionTally _tally = null!;   // the updating chain's records
 
-        public LogLambdaBlock(Baps owner)
+        public LogLambdaBlock(Baps owner, SamplerAdmission admission)
         {
             _owner = owner;
-            _target = u => owner.MarginalLogTarget(Math.Exp(u), out _proposed);
+            _target = u => owner.MarginalLogTarget(Math.Exp(u), out _proposed, admission, _tally);
         }
 
         public string Name => "log λ (collapsed)";
 
         public bool Update(BapsState state, Xoshiro256PlusPlus rng)
         {
+            _tally = state.Tally;
             if (!RandomWalkMetropolis.Step(ref state.LogLambda, ref state.Evidence, _owner._mhLogStep, _target, rng)) return false;
             state.Solve = _proposed;
             return true;

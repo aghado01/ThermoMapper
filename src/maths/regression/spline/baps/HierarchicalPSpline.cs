@@ -31,6 +31,8 @@ namespace Maths.Regression.Spline.Baps;
 /// summaries read the overall smoothing. Each τ_0j²'s posterior is <see cref="ComponentSmoothingVarianceInterval"/>, and
 /// <see cref="ComponentSmoothingVarianceConvergence"/> holds the shell's diagnostics on each log τ_0j², which also gate
 /// an early stop.</para>
+/// <para><see cref="ConditionRecords"/> holds what the run's condition checks saw at each system its sweep factors
+/// (<see cref="ConditionRecord"/>), in every <see cref="ConditionCheck"/> mode.</para>
 /// </remarks>
 public sealed record HierarchicalResult(
     double[] PopulationCoefficients,
@@ -50,7 +52,8 @@ public sealed record HierarchicalResult(
     ConvergenceVerdict Verdict,
     int[] ChainSeeds,
     EnsembleCheckpoint? Checkpoint,
-    IReadOnlyList<ConvergenceDiagnostic>? ComponentSmoothingVarianceConvergence = null)
+    IReadOnlyList<ConvergenceDiagnostic>? ComponentSmoothingVarianceConvergence = null,
+    IReadOnlyList<ConditionRecord>? ConditionRecords = null)
 {
     /// <summary>σ²'s posterior median and 95% interval, read from the retained draws.</summary>
     public PosteriorInterval NoiseVarianceInterval => Interval(d => d.NoiseVariance);
@@ -224,6 +227,11 @@ public sealed partial class HierarchicalPSpline
     private readonly NoiseVariancePrior _noisePrior;
     private readonly HalfTDeviationPrior? _halfT;   // null: the inverse-gamma prior on τ_u²
     private readonly double _halfTScale;        // the half-t prior's resolved scale A
+    private readonly ConditionCheck _check;     // where the sweep estimates its systems' condition
+
+    // The systems a sweep factors, each with its own condition check and records.
+    internal const int ReplicateSite = 0, PopulationSite = 1, CollapsedSite = 2, ExpandedDeviationSite = 3,
+                      ExpandedPopulationSite = 4, Sites = 5;
 
     /// <param name="design">The banded design Z shared by every replicate (n × ν).</param>
     /// <param name="responses">The replicates' responses, each of length n.</param>
@@ -241,11 +249,15 @@ public sealed partial class HierarchicalPSpline
     /// <see cref="ScaledWeibullPrior"/>, resolved against the design and every replicate's responses pooled.</param>
     /// <param name="componentUpdate">With anisotropic smoothing, how the ln τ_0j² are updated
     /// (<see cref="SmoothingVarianceUpdate"/>).</param>
+    /// <param name="noisePrior">The prior on σ² (<see cref="NoiseVariancePrior"/>).</param>
+    /// <param name="conditionCheck">Where the sweep estimates its systems' condition (<see cref="ConditionCheck"/>): at
+    /// every factorization by default. A run every mode admits draws the same chain in each.</param>
     public HierarchicalPSpline(double[,] design, double[][] responses, IBandPenalty penalty,
                                double priorShape = 1e-3, double priorScale = 1e-3, HalfTDeviationPrior? deviationPrior = null,
                                bool anisotropicSmoothing = false, ISmoothingVariancePriorChoice? componentPrior = null,
                                SmoothingVarianceUpdate componentUpdate = SmoothingVarianceUpdate.Slice,
-                               NoiseVariancePrior noisePrior = NoiseVariancePrior.InverseGamma)
+                               NoiseVariancePrior noisePrior = NoiseVariancePrior.InverseGamma,
+                               ConditionCheck conditionCheck = ConditionCheck.EveryFactorization)
     {
         ArgumentNullException.ThrowIfNull(design);
         ArgumentNullException.ThrowIfNull(responses);
@@ -270,6 +282,9 @@ public sealed partial class HierarchicalPSpline
         if (componentUpdate is not (SmoothingVarianceUpdate.Newton or SmoothingVarianceUpdate.Slice))
             throw new ArgumentOutOfRangeException(nameof(componentUpdate));
         _componentUpdate = componentUpdate;
+        if (conditionCheck is not (ConditionCheck.EveryFactorization or ConditionCheck.Screened or ConditionCheck.ReferenceOnly))
+            throw new ArgumentOutOfRangeException(nameof(conditionCheck));
+        _check = conditionCheck;
 
         _gram = new double[_gramBw + 1, _nu];
         _design.Accumulate(null, _gram, null, null);
@@ -366,8 +381,10 @@ public sealed partial class HierarchicalPSpline
                 : "The half-t prior samples with the parameter-expanded sweep.", nameof(scheme));
         int reps = _responses.Length;
 
+        // Each system's condition check is the run's, read once at its reference point where the mode takes a reading.
+        SamplerAdmission?[] admissions = Admissions(sweep);
         (EnsembleRun summary, IReadOnlyList<IChainRun<SweepState>> runs) = new ChainEnsemble().Run<SweepState>(
-            new HierarchicalEnsemble(this, retainReplicates, start, sweep), chains, masterSeed, burn, samples, rHatTarget,
+            new HierarchicalEnsemble(this, retainReplicates, start, sweep, admissions), chains, masterSeed, burn, samples, rHatTarget,
             batchSize, minEssPerChain, checkpoint, resumeFrom);
 
         // Every summary is read from the retained draws, chain by chain in draw order; without retained replicate draws,
@@ -419,11 +436,187 @@ public sealed partial class HierarchicalPSpline
         }
         int components = Components;
         RHatDiagnostic[] rHatPopulation = summary.FunctionalRHat[(3 + components)..];
+        var records = new List<ConditionRecord>();
+        for (int site = 0; site < Sites; site++)
+        {
+            if (admissions[site] is not SamplerAdmission admission) continue;
+            var tallies = new ConditionTally[chains];
+            for (int c = 0; c < chains; c++) tallies[c] = ((HierarchicalChainRun)runs[c]).State.Tallies[site];
+            records.Add(admission.Record(tallies));
+        }
         return new HierarchicalResult(beta0Sum, repMeans, sigSum / total, tauUSum / total, tau0Sum / total, total,
                                       posteriorDraws, mean0Sum, repConditionalMeans,
                                       summary.Monitored[0], summary.Monitored[1], summary.Monitored[2], rHatPopulation,
                                       RHatDiagnostic.Worst(rHatPopulation), summary.Verdict, summary.ChainSeeds, summary.Checkpoint,
-                                      _anisotropic is null ? null : summary.Monitored[3..]);
+                                      _anisotropic is null ? null : summary.Monitored[3..], records);
+    }
+
+    // Each system the sweep factors, with its condition check. The reference point is trace balance against the system's
+    // leading term, fixed by the configuration alone:
+    //  · ZᵀZ/σ² + I/τ_u² and ξ²ZᵀZ/σ² + I/σ_η²: I at λ̄ = tr ZᵀZ / ν against ZᵀZ, so σ²/τ_u² = λ̄;
+    //  · (R/τ_u²)I + Σⱼ Pⱼ/τ_0j²: each Pⱼ at ν / tr Pⱼ against I;
+    //  · R·ZᵀZ/σ² + Σⱼ Pⱼ/τ_0j²: each Pⱼ at tr ZᵀZ / tr Pⱼ against ZᵀZ;
+    //  · the collapsed precision: its data term at σ²/τ_u² = λ̄, as the replicate system's, and each Pⱼ at trace balance
+    //    against that term (CollapsedReference).
+    internal SamplerAdmission?[] Admissions(HierarchicalScheme sweep)
+    {
+        var admissions = new SamplerAdmission?[Sites];
+        double gramTrace = SamplerAdmission.Trace(_gram, _nu), mean = SamplerAdmission.Balance(gramTrace, _nu);
+        double[,] Diagonal(double[,] gram)
+        {
+            var band = (double[,])gram.Clone();
+            for (int j = 0; j < _nu; j++) band[0, j] += mean;
+            return band;
+        }
+        if (sweep == HierarchicalScheme.ParameterExpanded)
+        {
+            admissions[ExpandedDeviationSite] = SamplerAdmission.Banded(_check, "ξ²ZᵀZ/σ² + I/σ_η²", [1.0, mean], _nu, _gramBw,
+                                                                        SamplerAdmission.Pattern(_nu, [_gram]), () => Diagonal(_gram));
+            int bw = Math.Max(_gramBw, _penaltyBw);
+            double[][,] terms = PenaltyTerms(bw);
+            double[] reference = PenaltyReference(gramTrace, terms);
+            var bands = new List<double[,]> { _gram };
+            bands.AddRange(terms);
+            admissions[ExpandedPopulationSite] = SamplerAdmission.Banded(_check, "R·ZᵀZ/σ² + P/τ_0²", reference, _nu, bw,
+                SamplerAdmission.Pattern(_nu, bands), () =>
+                {
+                    var band = new double[bw + 1, _nu];
+                    for (int d = 0; d <= _gramBw; d++)
+                        for (int j = 0; j < _nu; j++) band[d, j] = _gram[d, j];
+                    AccumulatePenalty(band, reference.AsSpan(1));
+                    return band;
+                });
+            return admissions;
+        }
+        admissions[ReplicateSite] = SamplerAdmission.Banded(_check, "ZᵀZ/σ² + I/τ_u²", [1.0, mean], _nu, _gramBw,
+                                                            SamplerAdmission.Pattern(_nu, [_gram]), () => Diagonal(_gram));
+        if (sweep is HierarchicalScheme.CollapsedPopulation or HierarchicalScheme.CollapsedInterweaved)
+        {
+            CollapsedReference collapsed = Collapsed();
+            admissions[CollapsedSite] = SamplerAdmission.Dense(_check, "β_0's collapsed precision", _nu, () =>
+            {
+                var a = new double[_nu, _nu];
+                double[][,] penalties = _componentDense ?? [_penaltyDense];
+                for (int c = 0; c < penalties.Length; c++)
+                    for (int i = 0; i < _nu; i++)
+                        for (int j = 0; j < _nu; j++) a[i, j] += penalties[c][i, j] * collapsed.Penalty[c];
+                for (int k = 0; k < _nu; k++)
+                {
+                    double lambda = Math.Max(0.0, _gramValues[k]), weight = _responses.Length * lambda / (collapsed.Mean + lambda);
+                    double[] v = _gramVectors[k];
+                    for (int i = 0; i < _nu; i++)
+                        for (int j = 0; j < _nu; j++) a[i, j] += weight * v[i] * v[j];
+                }
+                return a;
+            });
+        }
+        else
+        {
+            double[][,] terms = PenaltyTerms(_penaltyBw);
+            double[] reference = PenaltyReference(_nu, terms);
+            admissions[PopulationSite] = SamplerAdmission.Banded(_check, "(R/τ_u²)I + P/τ_0²", reference, _nu, _penaltyBw,
+                SamplerAdmission.Pattern(_nu, terms), () =>
+                {
+                    var band = new double[_penaltyBw + 1, _nu];
+                    for (int j = 0; j < _nu; j++) band[0, j] = 1.0;
+                    AccumulatePenalty(band, reference.AsSpan(1));
+                    return band;
+                });
+        }
+        return admissions;
+    }
+
+    // The population penalty's terms at unit weight, in band storage at bandwidth bw: P, or each component Pⱼ.
+    private double[][,] PenaltyTerms(int bw)
+    {
+        if (_anisotropic is null)
+        {
+            var p = new double[bw + 1, _nu];
+            _penalty.AccumulateInto(p, _nu, 1.0);
+            return [p];
+        }
+        var terms = new double[_anisotropic.Components][,];
+        var unit = new double[_anisotropic.Components];
+        for (int c = 0; c < terms.Length; c++)
+        {
+            Array.Clear(unit);
+            unit[c] = 1.0;
+            terms[c] = new double[bw + 1, _nu];
+            _anisotropic.AccumulateComponents(terms[c], _nu, unit);
+        }
+        return terms;
+    }
+
+    // The leading term's coefficient 1, then each penalty term at trace balance against a leading trace.
+    private static double[] PenaltyReference(double leading, double[][,] terms)
+    {
+        var reference = new double[terms.Length + 1];
+        reference[0] = 1.0;
+        for (int c = 0; c < terms.Length; c++)
+            reference[c + 1] = SamplerAdmission.Balance(leading, SamplerAdmission.Trace(terms[c], terms[c].GetLength(1)));
+        return reference;
+    }
+
+    // Σⱼ wⱼPⱼ into band storage: P at w₀ with one smoothing, else each component at its own.
+    private void AccumulatePenalty(double[,] band, ReadOnlySpan<double> weights)
+    {
+        if (_anisotropic is null) _penalty.AccumulateInto(band, _nu, weights[0]);
+        else _anisotropic.AccumulateComponents(band, _nu, weights);
+    }
+
+    /// <summary>
+    /// The collapsed precision's reference point. Its data term R·Σₖ λₖ/(σ² + τ_u²λₖ)·vₖvₖᵀ is a sum of ZᵀZ's eigen-terms
+    /// λₖvₖvₖᵀ, each with its own coefficient; at σ² = λ̄ = tr ZᵀZ / ν and τ_u² = 1 those are R/(λ̄ + λₖ). A step's ratio on
+    /// term k, (λ̄ + λₖ)/(σ² + τ_u²λₖ), is monotone in λₖ, so the eigen-terms' extremes sit at the smallest positive and
+    /// the largest eigenvalue, <see cref="Low"/> and <see cref="High"/> (0 when ZᵀZ has none). Each penalty term's
+    /// coefficient is at trace balance against the data term there.
+    /// </summary>
+    internal sealed record CollapsedReference(double Mean, double Low, double High, double[] Penalty);
+
+    /// <summary>The collapsed precision's max ρ / min ρ at (σ², τ_u²) and the penalty terms' coefficients: the eigen-terms
+    /// at the extreme eigenvalues, where their monotone ratio peaks, and each penalty term.</summary>
+    internal static double CollapsedSpread(CollapsedReference reference, double sigma2, double tauU2, ReadOnlySpan<double> penalty)
+    {
+        double lo = double.PositiveInfinity, hi = 0.0;
+        if (reference.High > 0.0)
+            for (int e = 0; e < 2; e++)
+            {
+                double lambda = e == 0 ? reference.Low : reference.High;
+                double rho = (reference.Mean + lambda) / (sigma2 + tauU2 * lambda);
+                lo = Math.Min(lo, rho);
+                hi = Math.Max(hi, rho);
+            }
+        for (int c = 0; c < penalty.Length; c++)
+        {
+            double rho = penalty[c] / reference.Penalty[c];
+            lo = Math.Min(lo, rho);
+            hi = Math.Max(hi, rho);
+        }
+        return hi / lo;
+    }
+
+    internal CollapsedReference Collapsed()
+    {
+        double gramTrace = SamplerAdmission.Trace(_gram, _nu), mean = SamplerAdmission.Balance(gramTrace, _nu);
+        double low = double.PositiveInfinity, high = 0.0, dataTrace = 0.0;
+        foreach (double value in _gramValues)
+        {
+            double lambda = Math.Max(0.0, value);
+            if (!(lambda > 0.0)) continue;
+            low = Math.Min(low, lambda);
+            high = Math.Max(high, lambda);
+            dataTrace += _responses.Length * lambda / (mean + lambda);
+        }
+        if (!(high > 0.0)) low = 0.0;
+        double[][,] penalties = _componentDense ?? [_penaltyDense];
+        var penalty = new double[penalties.Length];
+        for (int c = 0; c < penalties.Length; c++)
+        {
+            double trace = 0.0;
+            for (int j = 0; j < _nu; j++) trace += penalties[c][j, j];
+            penalty[c] = SamplerAdmission.Balance(dataTrace, trace);
+        }
+        return new CollapsedReference(mean, low, high, penalty);
     }
 
     /// <summary>
@@ -539,7 +732,7 @@ public sealed partial class HierarchicalPSpline
     /// consensus map an early stop also waits on.
     /// </summary>
     private sealed class HierarchicalEnsemble(HierarchicalPSpline owner, bool retainReplicates, HierarchicalStart start,
-                                              HierarchicalScheme scheme)
+                                              HierarchicalScheme scheme, SamplerAdmission?[] admissions)
         : IEnsembleModel<SweepState>
     {
         public int FunctionalDim => 3 + owner.Components + owner._nu;
@@ -566,13 +759,14 @@ public sealed partial class HierarchicalPSpline
             SweepState state = start == HierarchicalStart.Fixed
                 ? SweepState.Start(reps, owner._nu, owner.Components)
                 : SweepState.Overdispersed(reps, owner._nu, owner.Components, owner._responseVariance, new Xoshiro256PlusPlus(seeds[0]));
-            var scan = new BlockScan<SweepState>(owner.Blocks(scheme), state, new Xoshiro256PlusPlus(seeds[1]), x => x.Copy());
+            var scan = new BlockScan<SweepState>(owner.Blocks(scheme, admissions), state, new Xoshiro256PlusPlus(seeds[1]), x => x.Copy());
             return new HierarchicalChainRun(scan, retainReplicates, new DrawStore<HierarchicalDraw>(), Zeros(reps, owner._nu),
                                             Zeros(reps, owner._nu));
         }
 
         /// <summary>The design, the responses, the penalty order, the priors, the start, the scheme and whether replicate
-        /// draws are retained.</summary>
+        /// draws are retained, and the condition check where it is not the default, so a run's records resume under the
+        /// mode that started them.</summary>
         public string Fingerprint
         {
             get
@@ -583,13 +777,15 @@ public sealed partial class HierarchicalPSpline
                 foreach (double[] y in owner._responses) f.Add(y);
                 f.Add(owner._a0).Add(owner._b0).Add(owner._halfT is null ? 0 : 1).Add(owner._halfT?.Degrees ?? 0.0)
                  .Add(owner._halfTScale);
-                return f.Add(retainReplicates ? 1 : 0).Add((int)start).Add((int)scheme).Add(owner.Components)
-                        .Add(owner._componentChoice.ToString()!).Add((int)owner._componentUpdate).Add((int)owner._noisePrior).ToString();
+                f.Add(retainReplicates ? 1 : 0).Add((int)start).Add((int)scheme).Add(owner.Components)
+                 .Add(owner._componentChoice.ToString()!).Add((int)owner._componentUpdate).Add((int)owner._noisePrior);
+                if (owner._check != ConditionCheck.EveryFactorization) f.Add("condition check").Add((int)owner._check);
+                return f.ToString();
             }
         }
 
         public IChainRun<SweepState> RestoreChain(IChainState state) => state is HierarchicalChainState s
-            ? new HierarchicalChainRun(BlockScan<SweepState>.Restore(owner.Blocks(scheme), s.Scan, x => x.Copy()), retainReplicates,
+            ? new HierarchicalChainRun(BlockScan<SweepState>.Restore(owner.Blocks(scheme, admissions), s.Scan, x => x.Copy()), retainReplicates,
                                        s.Draws.Copy(), Clone(s.ReplicateSums), Clone(s.ReplicateMeanSums))
             : throw new ArgumentException("Not a hierarchical P-spline chain's restart state.", nameof(state));
     }
@@ -610,6 +806,7 @@ public sealed partial class HierarchicalPSpline
         : IResumableChainRun<SweepState>
     {
         public DrawStore<HierarchicalDraw> Draws => draws;           // every post-burn draw, in order
+        public SweepState State => scan.State;                  // the state the scan updates, with its condition records
         public double[][] ReplicateSums => replicateSums;       // Σ β_r, accumulated only without retained replicate draws
         public double[][] ReplicateMeanSums => replicateMeanSums;
 
@@ -698,35 +895,44 @@ public sealed partial class HierarchicalPSpline
         return copy;
     }
 
-    // The scheme's blocks in sweep order, each with its own scratch, so every chain builds its own.
-    private IBlock<SweepState>[] Blocks(HierarchicalScheme scheme) => scheme switch
+    // The scheme's blocks in sweep order, each with its own scratch, so every chain builds its own; the run's condition
+    // checks are shared.
+    private IBlock<SweepState>[] Blocks(HierarchicalScheme scheme, SamplerAdmission?[] admissions) => scheme switch
     {
         HierarchicalScheme.CollapsedPopulation => new IBlock<SweepState>[]
         {
-            new CollapsedPopulationBlock(this), new ReplicateBlock(this, _gram, _zty), new NoiseBlock(this),
-            new DeviationBlock(this), new SmoothingBlock(this),
+            new CollapsedPopulationBlock(this, admissions[CollapsedSite]!), new ReplicateBlock(this, _gram, _zty, admissions[ReplicateSite]!),
+            new NoiseBlock(this), new DeviationBlock(this), new SmoothingBlock(this),
         },
         HierarchicalScheme.Interweaved => new IBlock<SweepState>[]
         {
-            new ReplicateBlock(this, _gram, _zty), new PopulationBlock(this), new NoiseBlock(this), new DeviationBlock(this),
-            new ScaleInterweaveBlock(this), new SmoothingBlock(this),
+            new ReplicateBlock(this, _gram, _zty, admissions[ReplicateSite]!), new PopulationBlock(this, admissions[PopulationSite]!),
+            new NoiseBlock(this), new DeviationBlock(this), new ScaleInterweaveBlock(this), new SmoothingBlock(this),
         },
         HierarchicalScheme.CollapsedInterweaved => new IBlock<SweepState>[]
         {
-            new CollapsedPopulationBlock(this), new ReplicateBlock(this, _gram, _zty), new NoiseBlock(this),
-            new DeviationBlock(this), new ScaleInterweaveBlock(this), new SmoothingBlock(this),
+            new CollapsedPopulationBlock(this, admissions[CollapsedSite]!), new ReplicateBlock(this, _gram, _zty, admissions[ReplicateSite]!),
+            new NoiseBlock(this), new DeviationBlock(this), new ScaleInterweaveBlock(this), new SmoothingBlock(this),
         },
         HierarchicalScheme.ParameterExpanded => new IBlock<SweepState>[]
         {
-            new ExpandedDeviationBlock(this), new ExpandedPopulationBlock(this), new ExpansionScaleBlock(this),
-            new ExpansionVarianceBlock(this), new NoiseBlock(this), new SmoothingBlock(this),
+            new ExpandedDeviationBlock(this, admissions[ExpandedDeviationSite]!), new ExpandedPopulationBlock(this, admissions[ExpandedPopulationSite]!),
+            new ExpansionScaleBlock(this), new ExpansionVarianceBlock(this), new NoiseBlock(this), new SmoothingBlock(this),
         },
         _ => new IBlock<SweepState>[]
         {
-            new ReplicateBlock(this, _gram, _zty), new PopulationBlock(this), new NoiseBlock(this), new DeviationBlock(this),
-            new SmoothingBlock(this),
+            new ReplicateBlock(this, _gram, _zty, admissions[ReplicateSite]!), new PopulationBlock(this, admissions[PopulationSite]!),
+            new NoiseBlock(this), new DeviationBlock(this), new SmoothingBlock(this),
         },
     };
+
+    // The population penalty's coefficients after the leading term's: 1/τ_0², or each component's 1/τ_0j².
+    private static void PenaltyWeights(SweepState state, double[] terms)
+    {
+        if (state.LogTau02.Length == 0) terms[1] = 1.0 / state.Tau02;
+        else
+            for (int c = 0; c < state.LogTau02.Length; c++) terms[c + 1] = Math.Exp(-state.LogTau02[c]);
+    }
 
     // Z·β, the curve a coefficient vector draws at the design rows.
     private double[] DesignTimes(double[] beta)
@@ -745,7 +951,8 @@ public sealed partial class HierarchicalPSpline
     /// The sweep's state: each replicate's curve β_r, the population curve β_0, the three variances, and the conditional
     /// means the last sweep drew around (fresh arrays each sweep, so a retained draw can keep them). The parameter-expanded
     /// sweep also carries η_r, ξ and σ_η², with β_r = β_0 + ξη_r and τ_u² = ξ²σ_η² kept in step. With anisotropic
-    /// smoothing it carries each ln τ_0j², and τ_0² is their geometric mean.
+    /// smoothing it carries each ln τ_0j², and τ_0² is their geometric mean. Each system's condition records ride here, so
+    /// a snapshot carries them.
     /// </summary>
     private sealed class SweepState
     {
@@ -757,6 +964,7 @@ public sealed partial class HierarchicalPSpline
         public double[] PopulationMean = null!;
         public double[][] Eta = null!;
         public double Xi = 1.0, EtaVariance = 1.0;
+        public ConditionTally[] Tallies = ConditionTally.Fresh(Sites);
 
         // Overdispersed (HierarchicalStart.Overdispersed): each variance at v·exp(2z) and the population coefficients at
         // N(0, v) draws. The replicate curves are drawn first in every sweep, so their start is never read.
@@ -802,7 +1010,7 @@ public sealed partial class HierarchicalPSpline
                 Replicates = new double[Replicates.Length][], Population = (double[])Population.Clone(),
                 Sigma2 = Sigma2, TauU2 = TauU2, Tau02 = Tau02, LogTau02 = (double[])LogTau02.Clone(),
                 ReplicateMeans = new double[ReplicateMeans.Length][], PopulationMean = (double[])PopulationMean.Clone(),
-                Eta = new double[Eta.Length][], Xi = Xi, EtaVariance = EtaVariance,
+                Eta = new double[Eta.Length][], Xi = Xi, EtaVariance = EtaVariance, Tallies = ConditionTally.Copy(Tallies),
             };
             for (int rr = 0; rr < Replicates.Length; rr++)
             {
@@ -824,11 +1032,13 @@ public sealed partial class HierarchicalPSpline
 
     // β_r | · ~ N(Q_r⁻¹(Zᵀy_r/σ² + β_0/τ_u²), Q_r⁻¹) with Q_r = ZᵀZ/σ² + I/τ_u², shared by all replicates, so it is
     // factored once per sweep.
-    private sealed class ReplicateBlock(HierarchicalPSpline owner, double[,] gram, double[][] zty) : IBlock<SweepState>
+    private sealed class ReplicateBlock(HierarchicalPSpline owner, double[,] gram, double[][] zty, SamplerAdmission admission)
+        : IBlock<SweepState>
     {
         private readonly double[,] _band = new double[owner._gramBw + 1, owner._nu];
         private readonly BandCholesky _factor = new(owner._nu, owner._gramBw, BandFactorization.Ldlt);
         private readonly double[] _rhs = new double[owner._nu];
+        private readonly double[] _terms = new double[2];   // ZᵀZ's and I's coefficients
         private readonly GaussianConditional _gaussian = new(owner._nu);
 
         public string Name => "replicates";
@@ -839,9 +1049,12 @@ public sealed partial class HierarchicalPSpline
             for (int d = 0; d <= owner._gramBw; d++)
                 for (int j = 0; j < nu; j++) _band[d, j] = gram[d, j] / state.Sigma2;
             for (int j = 0; j < nu; j++) _band[0, j] += 1.0 / state.TauU2;
+            _terms[0] = 1.0 / state.Sigma2;
+            _terms[1] = 1.0 / state.TauU2;
+            double spread = admission.Spread(_terms);
             _factor.DecomposeBanded(_band);
-            if (!BapsAdmission.Admits(_factor))
-                throw new InvalidOperationException($"ZᵀZ/σ² + I/τ_u² is not admissible: not positive definite, or its equilibrated condition past 1e14 ({_factor.Status}).");
+            if (admission.Admit(_factor, spread, state.Tallies[ReplicateSite]) is string refused)
+                throw new InvalidOperationException($"ZᵀZ/σ² + I/τ_u² is not admissible: {refused} ({_factor.Status}).");
             for (int rr = 0; rr < zty.Length; rr++)
             {
                 for (int j = 0; j < nu; j++) _rhs[j] = zty[rr][j] / state.Sigma2 + state.Population[j] / state.TauU2;
@@ -853,12 +1066,13 @@ public sealed partial class HierarchicalPSpline
 
     // β_0 | · ~ N(Q_0⁻¹ Σβ_r/τ_u², Q_0⁻¹) with Q_0 = (R/τ_u²) I + P/τ_0², or Σⱼ Pⱼ/τ_0j² with anisotropic smoothing: the
     // identity term keeps it proper despite P's null space.
-    private sealed class PopulationBlock(HierarchicalPSpline owner) : IBlock<SweepState>
+    private sealed class PopulationBlock(HierarchicalPSpline owner, SamplerAdmission admission) : IBlock<SweepState>
     {
         private readonly double[] _weights = new double[owner.Components];
         private readonly double[,] _band = new double[owner._penaltyBw + 1, owner._nu];
         private readonly BandCholesky _factor = new(owner._nu, owner._penaltyBw, BandFactorization.Ldlt);
         private readonly double[] _rhs = new double[owner._nu];
+        private readonly double[] _terms = new double[1 + Math.Max(1, owner.Components)];   // I's, then the penalty's
         private readonly GaussianConditional _gaussian = new(owner._nu);
 
         public string Name => "population";
@@ -869,9 +1083,12 @@ public sealed partial class HierarchicalPSpline
             Array.Clear(_band);
             for (int j = 0; j < nu; j++) _band[0, j] = reps / state.TauU2;
             owner.AccumulatePopulationPenalty(_band, state, _weights);
+            _terms[0] = reps / state.TauU2;
+            PenaltyWeights(state, _terms);
+            double spread = admission.Spread(_terms);
             _factor.DecomposeBanded(_band);
-            if (!BapsAdmission.Admits(_factor))
-                throw new InvalidOperationException($"(R/τ_u²)I + P/τ_0² is not admissible: not positive definite, or its equilibrated condition past 1e14 ({_factor.Status}).");
+            if (admission.Admit(_factor, spread, state.Tallies[PopulationSite]) is string refused)
+                throw new InvalidOperationException($"(R/τ_u²)I + P/τ_0² is not admissible: {refused} ({_factor.Status}).");
             Array.Clear(_rhs);
             for (int rr = 0; rr < reps; rr++)
                 for (int j = 0; j < nu; j++) _rhs[j] += state.Replicates[rr][j];
@@ -941,12 +1158,22 @@ public sealed partial class HierarchicalPSpline
     // N(Zβ_0, σ²I + τ_u²ZZᵀ), so β_0's precision is P/τ_0² + R·Zᵀ(σ²I + τ_u²ZZᵀ)⁻¹Z and its linear term
     // Σ_r Zᵀ(σ²I + τ_u²ZZᵀ)⁻¹y_r. With ZᵀZ = V diag(λ) Vᵀ these are R·V diag(λ/(σ² + τ_u²λ)) Vᵀ and
     // V diag(1/(σ² + τ_u²λ)) Vᵀ Σ_r Zᵀy_r, with no cancellation as τ_u² → 0. The precision is dense (ν × ν).
-    private sealed class CollapsedPopulationBlock(HierarchicalPSpline owner) : IBlock<SweepState>
+    private sealed class CollapsedPopulationBlock(HierarchicalPSpline owner, SamplerAdmission admission) : IBlock<SweepState>
     {
         private readonly double[,] _precision = new double[owner._nu, owner._nu];
         private readonly DenseCholesky _factor = new(owner._nu);
         private readonly double[] _rhs = new double[owner._nu];
+        private readonly CollapsedReference _reference = owner.Collapsed();
+        private readonly double[] _penaltyTerms = new double[Math.Max(1, owner.Components)];   // 1/τ_0², or each 1/τ_0j²
         private readonly GaussianConditional _gaussian = new(owner._nu);
+
+        private double Spread(SweepState state)
+        {
+            if (state.LogTau02.Length == 0) _penaltyTerms[0] = 1.0 / state.Tau02;
+            else
+                for (int c = 0; c < _penaltyTerms.Length; c++) _penaltyTerms[c] = Math.Exp(-state.LogTau02[c]);
+            return CollapsedSpread(_reference, state.Sigma2, state.TauU2, _penaltyTerms);
+        }
 
         public string Name => "population (collapsed)";
 
@@ -979,9 +1206,10 @@ public sealed partial class HierarchicalPSpline
                     for (int j = 0; j < nu; j++) _precision[i, j] += weight * v[i] * v[j];
                 }
             }
+            double spread = Spread(state);
             _factor.Decompose(_precision);
-            if (!BapsAdmission.Admits(_factor))
-                throw new InvalidOperationException($"β_0's collapsed precision is not admissible: not positive definite, or its equilibrated condition past 1e14 ({_factor.Status}).");
+            if (admission.Admit(_factor, spread, state.Tallies[CollapsedSite]) is string refused)
+                throw new InvalidOperationException($"β_0's collapsed precision is not admissible: {refused} ({_factor.Status}).");
             state.PopulationMean = _gaussian.Draw(_factor, _rhs, rng, state.Population);
             return true;
         }
@@ -1030,12 +1258,13 @@ public sealed partial class HierarchicalPSpline
 
     // η_r | ξ, σ_η², β_0, σ², y (HierarchicalScheme.ParameterExpanded): y_r − Zβ_0 = ξZη_r + ε with η_r ~ N(0, σ_η² I), so
     // the precision ξ²ZᵀZ/σ² + I/σ_η² is shared by the replicates and banded, and the linear term is ξZᵀ(y_r − Zβ_0)/σ².
-    private sealed class ExpandedDeviationBlock(HierarchicalPSpline owner) : IBlock<SweepState>
+    private sealed class ExpandedDeviationBlock(HierarchicalPSpline owner, SamplerAdmission admission) : IBlock<SweepState>
     {
         private readonly double[,] _band = new double[owner._gramBw + 1, owner._nu];
         private readonly BandCholesky _factor = new(owner._nu, owner._gramBw, BandFactorization.Ldlt);
         private readonly double[] _rhs = new double[owner._nu];
         private readonly double[] _gramBeta0 = new double[owner._nu];
+        private readonly double[] _terms = new double[2];   // ZᵀZ's and I's coefficients; ZᵀZ's reaches 0 with ξ
         private readonly GaussianConditional _gaussian = new(owner._nu);
 
         public string Name => "deviations (expanded)";
@@ -1047,9 +1276,12 @@ public sealed partial class HierarchicalPSpline
             for (int d = 0; d <= owner._gramBw; d++)
                 for (int j = 0; j < nu; j++) _band[d, j] = xi * xi * owner._gram[d, j] / state.Sigma2;
             for (int j = 0; j < nu; j++) _band[0, j] += 1.0 / state.EtaVariance;
+            _terms[0] = xi * xi / state.Sigma2;
+            _terms[1] = 1.0 / state.EtaVariance;
+            double spread = admission.Spread(_terms);
             _factor.DecomposeBanded(_band);
-            if (!BapsAdmission.Admits(_factor))
-                throw new InvalidOperationException($"ξ²ZᵀZ/σ² + I/σ_η² is not admissible: not positive definite, or its equilibrated condition past 1e14 ({_factor.Status}).");
+            if (admission.Admit(_factor, spread, state.Tallies[ExpandedDeviationSite]) is string refused)
+                throw new InvalidOperationException($"ξ²ZᵀZ/σ² + I/σ_η² is not admissible: {refused} ({_factor.Status}).");
             for (int i = 0; i < nu; i++)
             {
                 double g = 0.0;
@@ -1074,12 +1306,13 @@ public sealed partial class HierarchicalPSpline
 
     // β_0 | η, ξ, σ², τ_0², y (HierarchicalScheme.ParameterExpanded): y_r − ξZη_r = Zβ_0 + ε, so the precision is
     // R·ZᵀZ/σ² + P/τ_0², banded, and the linear term Σ_r (Zᵀy_r − ξZᵀZη_r)/σ².
-    private sealed class ExpandedPopulationBlock(HierarchicalPSpline owner) : IBlock<SweepState>
+    private sealed class ExpandedPopulationBlock(HierarchicalPSpline owner, SamplerAdmission admission) : IBlock<SweepState>
     {
         private readonly double[] _weights = new double[owner.Components];
         private readonly double[,] _band = new double[Math.Max(owner._gramBw, owner._penaltyBw) + 1, owner._nu];
         private readonly BandCholesky _factor = new(owner._nu, Math.Max(owner._gramBw, owner._penaltyBw), BandFactorization.Ldlt);
         private readonly double[] _rhs = new double[owner._nu];
+        private readonly double[] _terms = new double[1 + Math.Max(1, owner.Components)];   // ZᵀZ's, then the penalty's
         private readonly GaussianConditional _gaussian = new(owner._nu);
 
         public string Name => "population (expanded)";
@@ -1091,9 +1324,12 @@ public sealed partial class HierarchicalPSpline
             for (int d = 0; d <= owner._gramBw; d++)
                 for (int j = 0; j < nu; j++) _band[d, j] = reps * owner._gram[d, j] / state.Sigma2;
             owner.AccumulatePopulationPenalty(_band, state, _weights);
+            _terms[0] = reps / state.Sigma2;
+            PenaltyWeights(state, _terms);
+            double spread = admission.Spread(_terms);
             _factor.DecomposeBanded(_band);
-            if (!BapsAdmission.Admits(_factor))
-                throw new InvalidOperationException($"R·ZᵀZ/σ² + P/τ_0² is not admissible: not positive definite, or its equilibrated condition past 1e14 ({_factor.Status}).");
+            if (admission.Admit(_factor, spread, state.Tallies[ExpandedPopulationSite]) is string refused)
+                throw new InvalidOperationException($"R·ZᵀZ/σ² + P/τ_0² is not admissible: {refused} ({_factor.Status}).");
             for (int i = 0; i < nu; i++)
             {
                 double s = 0.0;
