@@ -134,6 +134,7 @@ Hand-over state between turns is an "In progress" entry here.
   - *Target 7,* `cond1_unitScale_le`, concludes κ₁(E(c)) ≤ q · √n · (M / m) · ‖E(c′)⁻¹‖₁ for any q bounding the nonzeros in a column. That is the quantity slice 6's screen computes (`SamplerAdmission`, `5f7fac5`).
 - **The two departures stand.** The composed result is stated in norms alone, so it does not rest on reading the Rayleigh extremes as eigenvalues. The bracket is how the screen takes its ratios.
 - **Receipts:** `artifacts/verify-lean-21096ad/`, with the axioms file and the summary tracked in [receipts](../../../issues/regression/receipts/verify-lean-21096ad/).
+- **Verified again at `94f6b37`,** after `0be098f` added the smallest instance as Lean `example`s and four helper declarations: 17 of 17 checks, 2,055 jobs, meta-ci PASS, and all 69 theorems on the three standard axioms. The seven examples discharge each main theorem's hypotheses at S₁ = diag(1, 0), S₂ = diag(0, 1), c′ = (1, 1), c = (2, 3), and BAPS's form at Z = (1 0), P = diag(0, 1). Receipts in [verify-lean-94f6b37](../../../issues/regression/receipts/verify-lean-94f6b37/).
 
 ### 2026-11-14 — targets 5 to 7 proved: a penalized system's admission
 
