@@ -85,31 +85,54 @@ Hand-over state between turns is an "In progress" entry here.
 
 ## Reports
 
-### In progress (2026-11-13) — the open items, commissioned by the user
+### 2026-11-13 — the extension: four open items closed
 
 On 2026-11-13 the user asked for four of the report's open items. They are posed in the lemmas' "Extension" section (`1ef4846`) and taken smallest first. The frame's sign convention went to E8's owner through the coordinating session; it is a `src/` item.
 
 **Landed:**
 - `42a449c`, AS-1(d): `IsOrthProj.eigenvalues_mem`, `IsOrthProj.rank_eq_trace`.
 - `8d9837b`, AS-4(viii) in general: `leading_moves_of_not_conformal`, with `outer_mulVec`, `bessel_pair` and `eigvec_dot`.
-- `12a63da`, AS-3(c): `mh_flux_symm`, `birthFlux_eq_deathFlux`, `birth_death_flux`. Dimension matching is `measurePreserving_piFinSuccAbove`. The death flux's measurability is a hypothesis.
-- `0af5b2d`, AS-2(d)(i):
-  - `fourierCoeffOn_of_hasDerivAt_off_countable`, Fourier by parts with a derivative off a countable set. A hinge's kinks need it, and Mathlib's form does not take them.
-  - `wirtinger_periodic`, `integral_reflect`, `wirtinger_interval`. `ContinuousPoincare` joins the barrel.
+- `12a63da`, AS-3(c): `mh_flux_symm`, `birthFlux_eq_deathFlux`, `birth_death_flux`.
+- `0af5b2d`, AS-2(d)(i): `fourierCoeffOn_of_hasDerivAt_off_countable`, `wirtinger_periodic`, `integral_reflect`, `wirtinger_interval`.
+- The commits after this entry's predecessor, AS-2(d)(ii) and (iii):
+  - `ProductVariance`: `sq_integral_le`, `var_prod_le`, `varM_nonneg`, `varM_le`, `abs_varM_le`, `varM_comp_equiv`, `measurable_varM_section`, `coordVarPi`, `measurable_coordVar`, `integral_pi_succ`, `efron_stein_pi`.
+  - `ContinuousPoincare`: `abs_integral_le_of_abs_le`, `uniformIcc`, `uniformIcc_isProbabilityMeasure`, `integral_uniformIcc`, `varM_uniformIcc`, `integral_integral_update`, `poincare_pi`, `varM_eq_sub`, `covM`, `energyM`, `integral_sq_lin`, `covM_form`, `energyM_form`, `matrix_poincare_pi`.
+  - `ProductVariance` joins the barrel.
 
-Every new declaration prints only `propext`, `Classical.choice` and `Quot.sound`.
+**Declarations to print axioms for:** `IsOrthProj.rank_eq_trace`, `leading_moves_of_not_conformal`, `mh_flux_symm`, `birth_death_flux`, `wirtinger_interval`, `efron_stein_pi`, `poincare_pi`, `matrix_poincare_pi`. Every declaration printed only `propext`, `Classical.choice` and `Quot.sound`.
+
+**What changed or proved false.** Nothing proved false. Two things were added that the plan did not foresee:
+- *A Fourier integration by parts with a derivative off a countable set.* A hinge's kinks need it, and Mathlib's version asks a one-sided derivative at every point.
+- *Efron–Stein proved directly by induction over coordinates.* The plan had it through `CommutingMeans`, but its full mean, P_∅, needs a marginal for signed integrals, which Mathlib carries only for nonnegative ones (`lmarginal`).
+
+**Hypotheses that remain, by statement:**
+- `birth_death_flux` takes the death flux's measurability (`hmD`), which follows from measurable pr, q and L_M and is not derived.
+- `wirtinger_interval` and `matrix_poincare_pi` take a bounded measurable derivative, which covers hinges of any degree.
+- The truncated normal's constant stays with the checks.
+
+**The line E8's brief can take,** adding to the earlier one:
+> The matrix Poincaré check is proved on the continuous product of uniforms (`matrix_poincare_pi`, `lean/Enthymemata/ActiveSubspace/ContinuousPoincare.lean`). No hypothesis is left but the fit's regularity, which hinges of any degree meet. A reading above 1 beyond rounding is a defect under uniform inputs by theorem, and under one truncated normal component by the checked bound. Also proved: a projection's rank is its trace, and every non-conformal change of units moves some C's leading direction.
+
+**The line BPPR's brief can take,** adding to the earlier one:
+> The moves balance as measures (`mh_flux_symm`, `birth_death_flux`). Dimension matching is proved as measure preservation of inserting a ridge (`measurePreserving_piFinSuccAbove`). What the code must keep is that prior and proposal densities are taken against one base measure, which slice 2's Geweke gate exercises.
 
 **Gates:**
 - `lean` on each module.
-- `lake build Enthymemata.ActiveSubspace`, clean after the linter pass. One fix: `rank_eq_trace` takes `classical` in its proof, not a decidability instance in its statement.
-- `scripts/meta-ci.ps1 -NoBuild`: PASS.
-- A scoped cache fetch, `lake exe cache get Mathlib.Analysis.Fourier.AddCircle`, brought 14 files. D: had 34 GB free before and after.
-- The machine ran at 100% CPU with 3 GB free throughout, so compiles took 2 to 22 minutes each.
+- `lake build Enthymemata.ActiveSubspace`, 2,967 jobs, clean with no warnings after the linter passes.
+- `scripts/meta-ci.ps1 -NoBuild`: PASS. All six modules are `PROOF-CLOSED`.
+- One scoped cache fetch, `Mathlib.Analysis.Fourier.AddCircle`: 14 files, with D: at 34 GB free before and after.
+- The machine ran at 100% CPU with 3 GB free throughout, so compiles took 0.5 to 22 minutes.
+- My build script had shown only the last 60 lines of `lake` output, which hid early errors for two rounds. It now shows them all.
 
-**In progress:**
-- AS-2(d)(ii), Efron–Stein on a product of probability measures: `sq_integral_le` and `var_prod_le` (two blocks), then induction over coordinates through `measurePreserving_piFinSuccAbove`. Drafted in `lean/Enthymemata/ActiveSubspace/ProductVariance.lean`, uncommitted and not yet compiled. It is left out of the barrel until it compiles, so the working tree's meta-CI reads red while it is present.
-- AS-2(d)(iii), the glue (uniform laws, the integrated one-variable form, the matrix check), follows it.
-- **Running:** nothing.
+**Follow-ups,** none with a decision waiting:
+- Derive `hmD` from measurable pr, q and L_M.
+- Bakry–Émery for the truncated normal.
+- AS-4(iii)'s class-level converse.
+- The promotion review of the six modules.
+
+**Doc changes owed,** beyond the earlier entry's:
+- `docs/Maths/Regression/ActiveSubspaces.md`: the matrix check proved on the continuous uniform law.
+- The page that will carry BPPR's sampler: the measure form of its moves.
 
 ### 2026-11-13 — AS-2's hypothesis corrected after review
 

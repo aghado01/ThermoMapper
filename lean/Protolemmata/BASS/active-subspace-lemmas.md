@@ -2,7 +2,7 @@
 
 These are the statements that E8's readouts ([active-subspace-brief.md](../../../issues/regression/bass/active-subspace-brief.md), slices 5 and 7) and E36's sampler ([bppr-brief.md](../../../issues/regression/bass/bppr-brief.md), decision 5) rest on. They were commissioned on 2026-11-13 by the [chip brief](active-subspace-lean-chip-brief.md); before that the four existed only as names (handoff of 2026-11-10, item 8). The numeric checks are [`active-subspace-checks.py`](active-subspace-checks.py).
 
-**Status (2026-11-13).** All four are proved, with no apologies, in `lean/Enthymemata/ActiveSubspace/`: `ProjectionMean` (AS-1), `MatrixPoincare` (AS-2), `DirectionMoves` (AS-3) and `Refit` (AS-4). The barrel is `Enthymemata/ActiveSubspace.lean` and the namespace `ActiveSubspace`. Each main result prints only `propext`, `Classical.choice` and `Quot.sound`. The checks pass 44 of 44. Two hypotheses stay hypotheses, as posed: the one-variable Poincaré inequality (AS-2) and the continuous reversible-jump form (AS-3). Each target's own status line follows.
+**Status (2026-11-13).** All four are proved, with no apologies, in `lean/Enthymemata/ActiveSubspace/`: `ProjectionMean` (AS-1), `MatrixPoincare` (AS-2), `DirectionMoves` (AS-3) and `Refit` (AS-4). The barrel is `Enthymemata/ActiveSubspace.lean` and the namespace `ActiveSubspace`. Each main result prints only `propext`, `Classical.choice` and `Quot.sound`. The checks pass 44 of 44. The extension (below) closed the two hypotheses the first round left: the uniform's one-variable inequality, now proved on the continuous product law (AS-2(d)), and the reversible-jump moves in measure form (AS-3(c)). The truncated normal's constant still rests on the checks. Each target's own status line follows.
 
 **What posing changed** (findings before any Lean):
 1. **AS-1(c): the cross-rank distance is not Ye and Lim's.** ½‖P_s − P‖²_F = |k_s − k|/2 + Σ sin²θᵢ holds (checked to 5·10⁻¹⁵). But Ye and Lim's chordal metric on subspaces of all dimensions is |k − l| + Σ sin²θᵢ, with the rank term at weight 1. That is their Table 3, and their §7 shows it equals the symmetric directional distance. The two agree when the ranks are equal.
@@ -68,7 +68,7 @@ These are the statements that E8's readouts ([active-subspace-brief.md](../../..
 
 ## AS-2 — the matrix Poincaré check
 
-**Status (2026-11-13).** (a), (b), the matrix form and (c)'s algebra are proved in `ActiveSubspace/MatrixPoincare.lean`, no apologies, reusing `efron_stein` (`Enthymemata/BassSensitivity.lean`, SG-1(d)). The one-variable inequality is a hypothesis, as posed, in its integrated form (corrected after review, below). Checks AS-2a to AS-2e pass.
+**Status (2026-11-13).** (a), (b), the matrix form and (c)'s algebra are proved in `ActiveSubspace/MatrixPoincare.lean`, no apologies, reusing `efron_stein` (`Enthymemata/BassSensitivity.lean`, SG-1(d)). The one-variable inequality is a hypothesis here, as posed, in its integrated form (corrected after review, below). AS-2(d) in the extension proves it for the uniform and proves the matrix check on the continuous product of uniforms (`matrix_poincare_pi`). Checks AS-2a to AS-2e pass.
 
 **Claims.** ρ is a product law on the inputs, f has m outputs, and D = diag(c₁, …, c_p).
 - **(a) The reduction.** Cov_ρ(f) ≼ E_ρ[J D Jᵀ] holds exactly when Var(vᵀf) ≤ Σᵢ cᵢ E[(∂ᵢ vᵀf)²] for every v ∈ ℝᵐ. This holds because vᵀCov(f)v = Var(vᵀf) and vᵀE[JDJᵀ]v = Σᵢ cᵢ E[(Σ_j v_j J_ji)²], and ∂ᵢ(vᵀf) = Σ_j v_j J_ji.
@@ -242,7 +242,7 @@ It does not mark one for the laws E8 already reports as not applicable: mixtures
 
 Four of the report's open items, taken in order of size. The numeric checks already cover each one: AS-1a for (d), AS-4b's SVD construction for (viii) in general, AS-3d for the continuous moves, and AS-2c to AS-2e for the constants.
 
-**Status (2026-11-13).** AS-1(d), AS-4(viii) in general, AS-3(c) and AS-2(d)(i) are proved, with no apologies. AS-2(d)(ii), Efron–Stein on a product of probability measures, is drafted in `ActiveSubspace/ProductVariance`. AS-2(d)(iii), the glue, follows it.
+**Status (2026-11-13).** All four are proved, with no apologies: AS-1(d), AS-4(viii) in general, AS-3(c), and AS-2(d) in all three parts. Every declaration prints only `propext`, `Classical.choice` and `Quot.sound`.
 
 ### AS-1(d) — a projection's trace is its rank
 
@@ -283,6 +283,16 @@ Four of the report's open items, taken in order of size. The numeric checks alre
   - `fourierCoeffOn_of_hasDerivAt_off_countable` is the new piece. It is Fourier integration by parts with a derivative off a countable set, which a hinge's kinks need: Mathlib's form asks a one-sided derivative at every point.
   - `wirtinger_periodic` is built on it.
   - `wirtinger_interval` holds for h continuous on [a, b], with a derivative off a countable set that is measurable and bounded.
-- *(ii), drafted* in `ActiveSubspace/ProductVariance`: `sq_integral_le` and `var_prod_le` (two blocks), then induction over coordinates.
-- *(iii)* goes into `ContinuousPoincare`.
+- *(ii), proved* in `ActiveSubspace/ProductVariance`:
+  - `sq_integral_le`, and the two-block step `var_prod_le` (the law of total variance, then Jensen on the inner average, then Fubini);
+  - `varM_comp_equiv` and `integral_pi_succ`;
+  - `efron_stein_pi`, by induction over coordinates, splitting off coordinate 0 with `measurePreserving_piFinSuccAbove`. It holds for bounded measurable F under any finite product of probability measures.
+- *(iii), proved* in `ContinuousPoincare`:
+  - `uniformIcc`, with `integral_uniformIcc` and `varM_uniformIcc`;
+  - `integral_integral_update`, which integrates out coordinate i;
+  - `poincare_pi`, the scalar form;
+  - `covM_form` and `energyM_form`;
+  - `matrix_poincare_pi`: Cov(f) ≼ E[J diag(((bᵢ − aᵢ)/π)²) Jᵀ] under the product of uniforms.
+
+  The hypotheses that remain are the fit's regularity only: bounded measurable outputs and partials, with sections along each coordinate continuous and differentiable off a countable set. Hinges of any degree meet them.
 - *The truncated normal's bound* stays with the checks, since Bakry–Émery is a separate project.
