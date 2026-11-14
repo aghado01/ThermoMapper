@@ -9,25 +9,28 @@ namespace Maths.Geometry
     /// Y and Y·Q are different points for every r×r orthogonal Q ≠ I.
     ///
     /// <para><b>The canonical metric</b> of Edelman, Arias and Smith (1998), the quotient of the orthogonal group's bi-invariant metric
-    /// by O(n − r) (Absil, Mahony and Sepulchre 2008, chapter 5's notes, read; the formula from EAS, cited from memory):
-    /// ⟨Δ, Δ⟩ = tr(Δᵀ(I − ½YYᵀ)Δ). A tangent vector Δ = YA + QB, with A skew and Q orthonormal and orthogonal to Y, has squared norm
+    /// by O(n − r), as Zimmermann (2017, §2, read) states it after EAS §2.4: ⟨Δ, Δ⟩ = tr(Δᵀ(I − ½YYᵀ)Δ). A tangent vector Δ = YA + QB, with A skew and Q orthonormal and orthogonal to Y, has squared norm
     /// ½‖A‖² + ‖B‖², so turning the frame within its span weighs half what moving the span does.</para>
     ///
     /// <para><b>Exp</b> is the closed-form geodesic Y(t) = [Y Q] exp(t·[A, −Bᵀ; B, 0]) [I; 0], the first r columns of the orthogonal
-    /// group's one-parameter subgroup through the horizontal lift. <b>Log</b> is Zimmermann's iteration (2017, cited from memory):
-    /// complete [YᵀZ; QᵀZ] to a rotation V, then turn V's last block by exp(−C) until the lower-right block C of log V vanishes, which
-    /// makes log V a horizontal lift and its first block column the tangent of a geodesic from Y to Z. The completion is first aligned
-    /// to a symmetric lower block (a Procrustes step), so that V starts near the identity for nearby frames. Q spans only the part of
-    /// Z off Y's span, so a pure turn within the span is log(YᵀZ) directly. The exponentials and logarithms of the small skew and
-    /// rotation blocks are <see cref="MatrixFunctions.SkewExponential"/> and <see cref="MatrixFunctions.TryRotationLogarithm"/>,
-    /// read from symmetric eigensystems, so no angle passes through an arccos near zero and a small distance keeps its digits.</para>
+    /// group's one-parameter subgroup through the horizontal lift (EAS §2.4.2, as Zimmermann §2 states it). <b>Log</b> is Zimmermann's iteration (2017, arXiv 1604.05054v5,
+    /// §3, read): complete [YᵀZ; QᵀZ] to a rotation V, then turn V's last block by exp(−C) until the lower-right block C of log V
+    /// vanishes, which makes log V a horizontal lift and its first block column the tangent of a geodesic from Y to Z. The completion
+    /// is first aligned to a symmetric lower block (his Procrustes step), so that V starts near the identity for nearby frames. His
+    /// convergence theorem (§4) proves linear convergence, ‖C‖ at least halving each step, for ‖Y − Z‖₂ &lt; 0.0912.
+    ///
+    /// Two changes extend it. Q spans only the part of Z off Y's span, of rank k ≤ n − r, so the rotation is (r + k)-square instead
+    /// of 2r: n &lt; 2r works, a pure turn within the span is log(YᵀZ) directly, and k = 1 needs no iteration. The completion is also
+    /// made det +1, which removes the failure his appendix exhibits in St(4, 2) at distance π/2, where his V₀ has det −1. The
+    /// exponentials and logarithms of the small skew and rotation blocks are <see cref="MatrixFunctions.SkewExponential"/> and
+    /// <see cref="MatrixFunctions.TryRotationLogarithm"/>, read from symmetric eigensystems, so no angle passes through an arccos near
+    /// zero and a small distance keeps its digits.</para>
     ///
     /// <para><b>Domain.</b> Log converges for frames that are not far apart: in a sweep over n ≤ 8 and r ≤ 4, every pair at canonical
     /// distance up to 2.7, with the round trip to about 2·10⁻¹⁴, and most at 2.9. It throws <see cref="InvalidOperationException"/> where
     /// the iteration does not converge, where a rotation block reaches a half-turn, or where Z = YQ with det Q = −1: all far-apart
     /// frames, the last on or past the cut locus, where the log is not unique. <see cref="Distance"/> is the norm of the log, so it
-    /// throws there too.
-    /// Exp takes any tangent vector, and reads a vector off the tangent space through its tangent part.</para>
+    /// throws there too. Exp takes any tangent vector, and reads a vector off the tangent space through its tangent part.</para>
     /// </summary>
     public readonly struct StiefelManifold : IRiemannianManifold
     {

@@ -210,6 +210,32 @@ public sealed class StiefelManifoldTests
         }
     }
 
+    [Theory]
+    [InlineData(1.0)]
+    [InlineData(Math.PI / 2)]
+    [InlineData(2.0)]
+    public void Log_ResolvesZimmermannsCriticalCompletion(double t)
+    {
+        // Zimmermann (2017, arXiv 1604.05054v5, appendix "A critical special case"): in St(4,2), U = ½[1 1 1 1; 1 1 −1 −1]ᵀ and the
+        // horizontal unit tangent Δ = ½[−1 1 −1 1; 0 0 0 0]ᵀ. At t = π/2 his Procrustes completion V₀ has det −1, so its principal
+        // logarithm fails, and he notes that flipping a sign of the completion would work. The completion here is made det +1.
+        var st = new StiefelManifold(4, 2);
+        double[] u = { 0.5, 0.5, 0.5, 0.5, 0.5, 0.5, -0.5, -0.5 };
+        double[] delta = { -0.5, 0.5, -0.5, 0.5, 0.0, 0.0, 0.0, 0.0 };
+        var z = new double[8];
+        st.ExpMap(u, delta.Select(x => t * x).ToArray(), z);
+        if (t == Math.PI / 2)
+        {
+            double[] paper = { -0.5, 0.5, -0.5, 0.5, 0.5, 0.5, -0.5, -0.5 };
+            for (int i = 0; i < 8; i++) Assert.Equal(paper[i], z[i], 1e-15);
+        }
+
+        var log = new double[8];
+        st.LogMap(u, z, log);
+        for (int i = 0; i < 8; i++) Assert.Equal(t * delta[i], log[i], 1e-14);
+        Assert.Equal(t, st.Distance(u, z), 1e-14);
+    }
+
     [Fact]
     public void Log_RefusesFramesOnTheCutLocus()
     {
