@@ -51,10 +51,43 @@ namespace Maths.LinAlg
         /// </summary>
         public static void Orient(double[] axis)
         {
+            if (!Reversed(axis)) return;
+            for (int j = 0; j < axis.Length; j++) axis[j] = -axis[j];
+        }
+
+        /// <summary>
+        /// Signs a singular pair in place by <see cref="Orient(double[])"/>'s rule on <paramref name="axis"/>, negating
+        /// <paramref name="partner"/> with it, so the pair's outer product is unchanged.
+        /// </summary>
+        public static void Orient(double[] axis, double[] partner)
+        {
+            if (!Reversed(axis)) return;
+            for (int j = 0; j < axis.Length; j++) axis[j] = -axis[j];
+            for (int j = 0; j < partner.Length; j++) partner[j] = -partner[j];
+        }
+
+        /// <summary>
+        /// Signs each column of <paramref name="vectors"/> (the axes as columns, as an eigensolver returns them) in place by
+        /// <see cref="Orient(double[])"/>'s rule, so the axes no longer carry the solver's arbitrary signs.
+        /// </summary>
+        public static void OrientColumns(double[,] vectors)
+        {
+            int p = vectors.GetLength(0), k = vectors.GetLength(1);
+            for (int c = 0; c < k; c++)
+            {
+                int best = 0;
+                for (int i = 1; i < p; i++) if (Math.Abs(vectors[i, c]) > Math.Abs(vectors[best, c])) best = i;
+                if (p > 0 && vectors[best, c] < 0.0)
+                    for (int i = 0; i < p; i++) vectors[i, c] = -vectors[i, c];
+            }
+        }
+
+        // Whether the axis's largest-magnitude entry, the first on ties, is negative.
+        private static bool Reversed(double[] axis)
+        {
             int best = 0;
             for (int j = 1; j < axis.Length; j++) if (Math.Abs(axis[j]) > Math.Abs(axis[best])) best = j;
-            if (axis.Length > 0 && axis[best] < 0.0)
-                for (int j = 0; j < axis.Length; j++) axis[j] = -axis[j];
+            return axis.Length > 0 && axis[best] < 0.0;
         }
 
         public static Func<double[], double[]> MakeProjector(PcaResult pca)
