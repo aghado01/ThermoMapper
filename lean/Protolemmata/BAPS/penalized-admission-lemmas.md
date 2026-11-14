@@ -2,7 +2,7 @@
 
 BAPS factors A(c) = Σₖ cₖSₖ at every sampler step, and a gate (`BapsAdmission`) admits a factor that is positive definite with an estimated κ₁ of its unit-diagonal scaling E(c) at most 10¹⁴. Slice 6 of the [defects brief](../../../issues/regression/shared-code-defects-brief.md#slice-6-the-samplers-condition-check-as-a-setting) builds a screen on a bound relative to one reference point, and the [BAPS follow-up's admission input](../../../issues/regression/bass/extensions-brief.md#input-for-the-follow-up-admission-and-singular-systems-2026-11-14) states the two failures behind the gate. These are the statements both rest on. They were commissioned on 2026-11-14, as targets 5 to 7 of the [chip brief](../BASS/active-subspace-lean-chip-brief.md#added-targets-a-penalized-systems-admission-2026-11-14). The coordinating session derived them that day and checked them against no run. The numeric checks are [`penalized-admission-checks.py`](penalized-admission-checks.py).
 
-**Status (2026-11-14).** All three are proved, with no apologies, in `lean/Enthymemata/PenalizedAdmission.lean`, namespace `PenalizedAdmission`. Each main result prints only `propext`, `Classical.choice` and `Quot.sound`. The checks pass 17 of 17. Target 7 is the restated chain (`90fa6ce`). No statement proved false. Each target's own status line follows.
+**Status (2026-11-14).** All three are proved, with no apologies, in `lean/Enthymemata/PenalizedAdmission.lean`, namespace `PenalizedAdmission`. Each main result prints only `propext`, `Classical.choice` and `Quot.sound`. Target 7 is the restated chain (`90fa6ce`). No statement proved false. Two follow-ups landed the same day (`7f535b3`): the Rayleigh extremes are the extreme eigenvalues (PA-6), and the column step's constant is (1 + √n)/2, sharp, which makes the composed factor q·(1 + √n)/2 (PA-7(c2′), (d′)). The checks pass 23 of 23. Each target's own status line follows.
 
 **What posing changed** (findings before any Lean):
 1. **PA-7: the first statement's chain held, and the same pieces gave a constant √q smaller.**
@@ -12,6 +12,18 @@ BAPS factors A(c) = Σₖ cₖSₖ at every sampler step, and a gate (`BapsAdmis
    - The first statement, κ₁(E(c)) ≤ q·√(qn)·(M/m)·κ₁(E(c′)), follows from the restated one, since ‖E(c′)‖₁ ≥ 1 and q ≥ 1.
 2. **What the banded families use of the proved factor (a reading).** The checks ran 240 families built from a cubic B-spline Gram and second-difference penalties, with n from 6 to 29 and q up to 7. The largest κ₁(E(c)) / ((M/m)·κ₁(E(c′))) was 1.007, against a proved q·√n of up to 38. (d)'s own bound was met to at most 0.145 of itself. Whether a smaller factor holds for every family is open. The sweep measures the slack.
 3. **Van der Sluis's q in practice (a reading), off the path now.** On three banded unit-diagonal matrices, a local search over diagonal scalings found κ₂(B) / min_F κ₂(FBF) ≈ 1.000, 1.013 and 1.105, against q = 3, 5 and 7.
+4. **Follow-up: the column step's √n is (1 + √n)/2, and that constant is sharp.**
+   - For P symmetric positive semidefinite with λ_max(P) ≤ μ, a column u = Peⱼ has ‖u‖² ≤ μ·uⱼ. So the rest of its absolute sum is at most √(n − 1)·√(uⱼ(μ − uⱼ)), and ‖u‖₁ ≤ μ(1 + √n)/2.
+   - A rank-one μvvᵀ attains it. At n = k² that is v = (k + 1, 1, …, 1), and at n = 4 it is a Lean theorem.
+   - For n ≥ 4, E⁻¹ also attains it in the limit, for a unit-diagonal E. Take unit vectors xᵢ with Σᵢ vᵢxᵢ = 0: their Gram matrix has a unit diagonal and v in its kernel.
+   - So the step admits no better constant, even on the matrices the gate sees. Against √n it gains a factor approaching 2.
+5. **Follow-up: whether a smaller factor holds for every family (searches, readings).**
+   - *The factor q is reached:* c₁J + c₂I gives κ₁(E(c)) / ((M/m)·‖E(c′)⁻¹‖₁) → n = q.
+   - *The inverse part's reading stays near 1.* T = ‖E(c)⁻¹‖₁ / ((M/m)·‖E(c′)⁻¹‖₁) read 1.00, 1.18, 1.20, 1.23, 1.00 and 1.05 at n = 3, 4, 6, 8, 12 and 16, while its proved bound (1 + √n)/2 grows from 1.37 to 2.50. R/q read at most 1.20.
+   - *The search covers every family.* Every family gives m·A(c′) ≼ A(c) ≼ M·A(c′), and every pair satisfying it is a two-term family: S₁ = (A − mA′)/(M − m), S₂ = (MA′ − A)/(M − m). So the search runs over pairs.
+   - *Each reading is a lower bound* from a local search; the higher dimensions search worst.
+   - *Conjecture:* the inverse part is bounded by a constant, which would give κ₁(E(c)) ≤ C·q·(M/m)·‖E(c′)⁻¹‖₁ for every family. Open. Each step of the chain alone is sharp, so a proof must use how E(c) and E(c′) are coupled.
+
 
 **Symbols.** n the order. Sₖ are n × n real symmetric positive semidefinite, for k in a nonempty finite index set. c and c′ are coefficient vectors with every entry positive, c′ the reference point (c_ref in the defects brief), and A(c) = Σₖ cₖSₖ. ρₖ = cₖ / c′ₖ, m = minₖ ρₖ and M = maxₖ ρₖ. λ_min and λ_max are the extreme eigenvalues of a symmetric matrix, and κ₂ = λ_max / λ_min where it is positive definite. ‖A‖₁ is the largest column absolute sum, and κ₁(A) = ‖A‖₁‖A⁻¹‖₁. E(c) = D^{-1/2}A(c)D^{-1/2} with D = diag A(c), the unit-diagonal scaling. q bounds the nonzeros in any row (equally, any column) of every A(c).
 
@@ -77,8 +89,7 @@ BAPS factors A(c) = Σₖ cₖSₖ at every sampler step, and a gate (`BapsAdmis
 
 **Lean (proved), through Rayleigh bounds.**
 - *Definitions.* `lamMin A` and `lamMax A` are the infimum and supremum of xᵀAx / xᵀx over x ≠ 0, and `cond2 A` is their ratio.
-  - For a symmetric A these are the extreme eigenvalues and κ₂. The Lean does not prove that identification.
-  - No bridge to Mathlib's `Matrix.IsHermitian.eigenvalues` landed. It is a follow-up with no decision waiting.
+  - For a symmetric A these are the extreme eigenvalues, so `cond2` is κ₂. The bridge is `lamMin_eq_iInf_eigenvalues` and `lamMax_eq_iSup_eigenvalues`, through Mathlib's `Matrix.IsHermitian.spectral_theorem` (`form_eq_sum_eigenvalues`, `eigenvector_facts`). It landed as a follow-up (`7f535b3`). The results above do not use it.
 - *The ratios enter as a bracket:* m·c′ₖ ≤ cₖ ≤ M·c′ₖ for every k. With c′ > 0 that is m ≤ ρₖ ≤ M, and min ρ and max ρ are the tightest bracket.
 - (a): `form_comb_bound`.
 - (b): `lamMin_comb_ge` and `lamMax_comb_le`.
@@ -92,7 +103,7 @@ BAPS factors A(c) = Σₖ cₖSₖ at every sampler step, and a gate (`BapsAdmis
 
 Restated on 2026-11-14 (`90fa6ce`) from the defects chip's chain; finding 1 says how it differs from the first statement.
 
-**Status:** proved (`diag_comb_bound`, `lamMin_unitScale_ge`, `norm1_le_card`, `norm1_le_sqrt_card`, `mulVec_sq_le_norm1`, `cond1_unitScale_le`). Checks PA-7(a) to (d) pass.
+**Status:** proved (`diag_comb_bound`, `lamMin_unitScale_ge`, `norm1_le_card`, `norm1_le_sqrt_card`, `mulVec_sq_le_norm1`, `cond1_unitScale_le`). The follow-up proves (c2′) and (d′) below (`norm1_le_half_one_add_sqrt`, `norm1_columnWitness`, `cond1_unitScale_le_sharp`). Checks PA-7(a) to (d), (c2′) and (d′) pass.
 
 **Claims.** With A(c′) positive definite (so A(c) is too, PA-5(b)), ρ against c′, and q bounding the nonzeros in any column of A(c):
 - **(a) The diagonal.** Every (Sₖ)ᵢᵢ ≥ 0, so m·A(c′)ᵢᵢ ≤ A(c)ᵢᵢ ≤ M·A(c′)ᵢᵢ.
@@ -149,6 +160,18 @@ Restated on 2026-11-14 (`90fa6ce`) from the defects chip's chain; finding 1 says
 - ‖A‖₂ is the least β with ‖Ax‖ ≤ β‖x‖ for every x, so the norm lines are stated for such a β, in squares. (c2) reads: if ‖Ax‖ ≤ β‖x‖ for every x, then ‖A‖₁ ≤ √n·β. (c3) reads: for a symmetric A, ‖Ax‖ ≤ ‖A‖₁‖x‖ for every x. No operator norm is defined.
 
 **Prior art.** The chain is the defects chip's (`76851ee`). Its pieces are textbook; the norm lines are standard comparisons. (c3) is Schur's test.
+
+**Follow-up (2026-11-14): the column step sharpened.**
+- **(c2′)** For P symmetric positive semidefinite with zᵀPz ≤ μ‖z‖² for every z: ‖P‖₁ ≤ μ·(1 + √n)/2. Attained: P = vvᵀ/12 with v = (3, 1, 1, 1) has λ_max = 1 and ‖P‖₁ = 3/2 = (1 + √4)/2.
+- **(d′)** With the hypotheses of (d): κ₁(E(c)) ≤ q·((1 + √n)/2)·(M/m)·‖E(c′)⁻¹‖₁. (d) follows from it, since (1 + √n)/2 ≤ √n.
+- *Proof of (c2′).*
+  - For u = Peⱼ: ‖u‖² ≤ μ·uⱼ (`sq_norm_le_form`), so Σ_{i≠j} uᵢ² ≤ μuⱼ − uⱼ², and Cauchy–Schwarz gives Σ_{i≠j}|uᵢ| ≤ √(n−1)·√(μuⱼ − uⱼ²) = s·r.
+  - With x = uⱼ − μ/2: x² + r² = μ²/4, and (x + sr)² ≤ (1 + s²)(x² + r²) = nμ²/4.
+  - So uⱼ + sr ≤ μ/2 + √n·μ/2.
+- *Proof of (d′).* As (d), with (c2′) for P = E(c)⁻¹ and μ = 1/λ_min(E(c)) (`form_inv_le`) in place of (c2).
+- *Checks:* 400 random PSD matrices, none above the constant. The rank-one witnesses at n = 4, 9, 16 and 25 are exact. The unit-diagonal Gram construction reads (1 + √n)/2 to five places at n = 4, 9, 16, 25 and 49. On 120 banded families, κ₁(E(c)) reached at most 0.240 of (d′)'s bound.
+- *Lean:* `norm1_le_half_one_add_sqrt`, `form_inv_le`, `norm1_columnWitness` and `cond1_unitScale_le_sharp`. `cond1_unitScale_le` is now its corollary, with its statement unchanged.
+- *Decision:* the proved part of S becomes q·(1 + √n) with the defects chip's factor 2 for rounding, in place of 2·q·√n. Finding 5 says what a further gain would need.
 
 **Off the path: Jacobi scaling.** The first statement's route. Recorded here and not queued: no decision rests on it now.
 - *The statement:* for B positive definite with unit diagonal and at most q nonzeros in any row, and F any positive diagonal, κ₂(B) ≤ q·κ₂(FBF).

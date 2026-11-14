@@ -123,6 +123,46 @@ Hand-over state between turns is an "In progress" entry here.
 
 ## Reports
 
+### 2026-11-14 — the penalized admission's two follow-ups: the eigenvalue bridge and the sharp column step
+
+At the user's request ("do them anyway"), after the targets were verified (`af5cd65`).
+
+**Landed:** `7f535b3`, the module `lean/Enthymemata/PenalizedAdmission.lean`. The checks gained six items and pass 23 of 23. The new [penalized-admission-searches.py](../BAPS/penalized-admission-searches.py) gives the readings.
+
+**What is proved.**
+- *The bridge.* `lamMin_eq_iInf_eigenvalues` and `lamMax_eq_iSup_eigenvalues`: for a symmetric A, the Rayleigh extremes are Mathlib's least and greatest `Matrix.IsHermitian.eigenvalues`. So `cond2` is κ₂, and the first departure from the wording is closed.
+  - The proof goes through `Matrix.IsHermitian.spectral_theorem`: xᵀAx = Σᵢ λᵢ(Uᵀx)ᵢ² with (Uᵀx)ᵀ(Uᵀx) = xᵀx (`form_eq_sum_eigenvalues`, `eigenvector_facts`).
+  - The module now imports `Mathlib.Analysis.Matrix.Spectrum` (2,634 jobs). The earlier results still use no spectral theorem.
+- *The sharp column step.* `norm1_le_half_one_add_sqrt`: a symmetric positive semidefinite P with form at most μ‖·‖² has ‖P‖₁ ≤ μ(1 + √n)/2. `norm1_columnWitness` attains it at n = 4 with P = vvᵀ/12, v = (3, 1, 1, 1).
+- *The composed bound with it.* `cond1_unitScale_le_sharp`: κ₁(E(c)) ≤ q·((1 + √n)/2)·(M/m)·‖E(c′)⁻¹‖₁. `cond1_unitScale_le` keeps its statement and is now this theorem's corollary.
+
+**What the searches read** (the protolemma's findings 4 and 5):
+- (1 + √n)/2 is sharp for the column step, even for a unit-diagonal E (n ≥ 4).
+- q is reached by c₁J + c₂I.
+- The inverse part's reading stays near 1 up to n = 16, at most 1.23, while its proved bound grows to 2.50. The search runs over every family at once: every family gives m·A(c′) ≼ A(c) ≼ M·A(c′), and every such pair is a two-term family.
+- Conjecture, open: κ₁(E(c)) ≤ C·q·(M/m)·‖E(c′)⁻¹‖₁ with C a constant. Each step alone is sharp, so a proof needs the coupling between E(c) and E(c′).
+
+**Self-review.**
+- *Pass 1, statements against the claims.* The bridge's two equalities are stated with Mathlib's own `eigenvalues`, over `⨅`/`⨆` on a nonempty finite index.
+- *Pass 2, can the hypotheses be met.* The column witness meets every hypothesis of `norm1_le_half_one_add_sqrt` and attains its bound, so the theorem is not vacuous and its constant is exact.
+- *Pass 3, proof repairs.* The first draft's key inequality failed under `nlinarith`. It now goes through an explicit identity, (wμ/2)² − (x + sr)² = (sx − r)², by `linear_combination`. A check's tolerance was set below rounding at condition 10⁹ and was loosened to 10⁻⁶. The readings themselves were unchanged.
+
+**Declarations to print axioms for** (10 new): `form_inv_le`, `norm1_le_half_one_add_sqrt`, `columnWitness` (a definition), `form_columnWitness`, `norm1_columnWitness`, `cond1_unitScale_le_sharp`, `form_eq_sum_eigenvalues`, `eigenvector_facts`, `lamMin_eq_iInf_eigenvalues`, `lamMax_eq_iSup_eigenvalues`. Also `cond1_unitScale_le`, which was proved again. Each prints only `propext`, `Classical.choice` and `Quot.sound`.
+
+**The line the defects brief can take** (slice 6), replacing the earlier one's constant:
+> The screen's bound is proved with a sharp column step (`cond1_unitScale_le_sharp`): κ₁(E(c)) ≤ q·((1 + √n)/2)·(M/m)·‖E(c_ref)⁻¹‖₁ in exact arithmetic, so the screen admits when q·(1 + √n)·(M/m)·‖E_ref⁻¹‖₁ ≤ 10¹⁴, with the 2 for rounding. The column constant is attained, so a smaller factor would have to use how E(c) and E(c_ref) are coupled. Searches over every family read that part near 1, which is open as a conjecture.
+
+**Gates:**
+- The checks pass 23 of 23.
+- `lake build Enthymemata.PenalizedAdmission`: 2,634 jobs, with no warnings.
+- `scripts/meta-ci.ps1 -NoBuild`: PASS, with `PenalizedAdmission.lean` `PROOF-CLOSED` at 89 declarations.
+- No cache fetch. D: had about 33 GB free.
+
+**Follow-ups:**
+- *The conjecture:* a constant C with κ₁(E(c)) ≤ C·q·(M/m)·‖E(c′)⁻¹‖₁ for every family. It would shrink S's proved part from q·(1 + √n) to about 2C·q. Open.
+- *A banded pattern's q.* A column whose entries all approach 1 needs its support to be a clique of the pattern. A band of half-width w has cliques of only w + 1, so ‖E‖₁ ≤ q may be loose on BAPS's patterns. Not posed.
+- *The promotion review* of `PenalizedAdmission`.
+
 ### 2026-11-14 — targets 5 to 7 verified from a clean archive (coordinating session)
 
 - **Commit:** `21096ad` (the Lean is `212752f`), through `scripts/verify-lean.ps1` with `-Module Enthymemata.PenalizedAdmission` and `Protolemmata\BAPS\penalized-admission-checks.py`.
