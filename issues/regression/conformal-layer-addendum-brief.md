@@ -45,6 +45,50 @@ As in the archived brief: each slice is reported here, then waits for the main s
 
 Newest first.
 
+### 2026-11-14 — Slice 15's precision rule at the calibration split's size; slice 12a's k̂ stays opt-in
+
+Built at the user's pick (2026-11-14, "Slice 15 precision rule"). With it, the user settled slice 12a's k̂ diagnostic as opt-in. That is already the code's default (`ConformalOptions.LeaveOneOutParetoK`, false), so no code changes for it, and the open list can drop it.
+
+**Landed** on `main`, nothing pushed:
+- `591eace`:
+  - `ScoreMixture.PrecisionAt(calibrationUnits)` and its readout `PrecisionChoice` (m, the size, the mean ESS and self-weight there, and whether the rule is met);
+  - `ScoreMixture.Weights` now takes m at its units' count;
+  - `ScoreMixtureTests` gains two tests.
+- *What changes for existing calls.* Only a call whose calibration split differs from n − 1, n the training split's size, gets a different m. At n − 1 (the existing end-to-end test's 400 against 399) every value is unchanged, bit for bit. A fixed `Precision` stands at every size, as before. The fit-level `Precision` and its readings are the choice at n − 1.
+
+**What it computes.**
+- *The finding.* The rule (theirs, §6.1) chooses the largest m whose randomized weights have mean ESS above 100 and mean self-weight at most 1/30. It reads them on the training split, each point against the other n − 1. Their splits are the same size. Here, fitted at 1,000 and calibrated at 399, a test case stands against 399 units, not 999. Its ESS is about 0.4 of the reading, and its self-weight about 2.5 times. A test case whose own weight passes α gets the whole space.
+- *The rule at the calibration's size.* Each training point's weight sums over the others (the sum and the sum of squares) are rescaled by N/(n − 1). These are their expected sums over N units. The rule's two conditions are then read on the rescaled sums.
+- *Why it stays valid.* The choice reads the count and the training split alone, never the calibration's values, so the weights stay a fixed function of the inputs and the coverage stays exact.
+- *Its approximation.* The rescaling reads expected sums. A point's self-weight is convex in its others' sum, so the rescaled self-weight reads a little low where the weights concentrate. The ESS it reads is likewise slightly low, which makes the rule slightly conservative where it decides.
+
+**Gates.**
+- *The finding, repaired* (fitted on 1,000, 2,000 replications of 399 calibration units and a test case, α 0.1):
+
+  | Reading | m | Whole space | Marginal | Clusters 1 / 2 | Mean finite width |
+  |---|---|---|---|---|---|
+  | the training's own | 500 | 13.4% | 0.9275 | 0.925 / 0.930 | 2.240 |
+  | at the calibration's size | 45 | 0.0% | 0.9155 | 0.913 / 0.918 | 2.190 |
+
+  At 399 the rule is met: mean ESS 100.0, self-weight 0.0145. The training's own m 500 read ESS 107.2 and self-weight 0.0189 on 999 others. The training's marginal 0.9275 is inflated by its whole-space sets.
+- *The rescaling against pools actually drawn* (each point against 399 others drawn at random, the same draws):
+  - at the m it took (35 on this fit): ESS 100.36 against 100.69, self-weight 0.01318 against 0.01324;
+  - at m 500: 45.91 against 46.20, and 0.04507 against 0.04640, 2.9% low, as convexity says.
+- *Equal splits:*
+  - `PrecisionAt(n − 1)` is the fit's choice and readings exactly, and `Weights` at n − 1 units matches the direct weights at `Precision` bit for bit;
+  - a smaller split takes a smaller m (199 ≤ 399 ≤ 999), and the choice is cached per size;
+  - a fixed m stands at 99 units, with its readings there and the rule not met;
+  - a size below 1 is refused.
+- *Existing classes,* slice 15's `ScoreMixtureTests` and `PosteriorConformalTests`, pass unchanged.
+- *Per commit,* the selected classes and the pinned tier: ScoreMixtureTests, the one class reading the file, with the pinned tier: Maths.Regression.Tests 49 of 49; Maths.Oracle.Tests compiles the file and selects no class; Maths.Samplers.Tests compiles neither file; PosteriorConformalTests run beside it, 5 of 5.
+
+**Defects found: none.** The finding was the rule reading the wrong pool size.
+
+**Doc changes owed:**
+- the posterior-conformal section's hyperparameters: the rule read at the calibration split's size, the rescaling and its slight low reading where weights concentrate, and the table above;
+- the API rows for `PrecisionAt` and `PrecisionChoice`;
+- the waiting list: slice 12a's k̂ settled opt-in.
+
 ### 2026-11-14 — BASS's opt-in group-units call for `GroupConformal` (item 16, (b))
 
 Built as commissioned (the user's choice of (b), 2026-11-14; the Open list's specification, c94f244).
