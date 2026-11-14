@@ -64,16 +64,15 @@ Commissioned by the user on 2026-11-14 through the coordinating session. They si
    - a coefficient held at 1 in both, as ZᵀZ's is, enters with ratio 1.
    - *Form:* the quadratic-form line is the core. Say whether the eigenvalue lines are proved through Mathlib's ordered eigenvalues or through Rayleigh bounds.
    - *Decision:* slice 6's screen rests on it. Sharpness says the window of c the solve carries widens only with another form of the solve (the follow-up's direction 2), never with a better inequality.
-7. **From the bound to what the gate reads.**
-   - *Jacobi scaling.* For B positive definite with unit diagonal and at most q nonzeros in any row, and F any positive diagonal: κ₂(B) ≤ q · κ₂(FBF). The sketch:
-     - |B_ij| ≤ 1, so every row's absolute sum is at most q and λ_max(B) ≤ q;
-     - λ_max(FBF) ≥ max f_i²;
-     - λ_min(B) ≥ λ_min(FBF) / max f_i².
-   - *Norms.* For a symmetric matrix ‖A‖₂ ≤ ‖A‖₁. With at most q nonzeros in a column ‖A‖₁ ≤ √q · ‖A‖₂, and for any n × n matrix ‖A‖₁ ≤ √n · ‖A‖₂.
-   - *Composed.* With q bounding the nonzeros in a row of every A(c): κ₁(E(c)) ≤ q · √(qn) · (M / m) · κ₁(E(c_ref)). A congruence by a positive diagonal keeps each Sₖ positive semidefinite, which is how target 6 enters.
-   - *Prior art:* van der Sluis (1969, Numer. Math. 14:14–23) for the scaling; the theorem numbers 4.1 (factor n) and 4.3 (factor q) are from a secondary citation, arXiv 1110.2805. Higham (2002), Corollary 7.6, for the factor n. Say what each states, read or from abstracts.
-   - *Outside Lean:* the gate reads an estimate of κ₁ that errs low, with no proved bound on its shortfall. That factor stays with the defects chip's sweep.
-   - *Decision:* the part of S that is proved, q · √(qn) if the chain holds, against the part that is measured. Give the defects brief a line it can take, and tell the defects chip by message when the chain's constant is settled either way.
+7. **From the bound to what the gate reads.** Restated on 2026-11-14 from the defects chip's derivation (`76851ee`, its In-progress entry). That chain is tighter than the first statement here and needs no scaling theorem.
+   - *The diagonal.* Every (Sₖ)_ii ≥ 0, so A(c)_ii lies between m and M times A(c′)_ii.
+   - *The scaled matrix's smallest eigenvalue.* λ_min(E(c)) ≥ (m / M) · λ_min(E(c′)).
+   - *Norms.* ‖E(c)‖₁ ≤ q, from a unit diagonal, entries of at most 1 in absolute value and at most q nonzeros in a column. For any n × n matrix ‖A‖₁ ≤ √n · ‖A‖₂, and for a symmetric one ‖A‖₂ ≤ ‖A‖₁.
+   - *Composed.* κ₁(E(c)) ≤ q · √n · (M / m) · ‖E(c′)⁻¹‖₁.
+   - *Outside these hypotheses:* one hierarchical coefficient, ξ², can reach 0. The screen hands that step to the estimate.
+   - *Outside Lean:* rounding. The screen multiplies the bound by 2 for it, and the defects chip's sweep tests that. The per-step estimate is a lower bound on κ₁ by its construction, which is the direction the screen needs. The reference's ‖E(c′)⁻¹‖₁ is read exactly from n solves, so no estimator's shortfall enters.
+   - *Off the path:* the Jacobi-scaling bound κ₂(B) ≤ q · κ₂(FBF) for a unit-diagonal B (van der Sluis 1969, Numer. Math. 14:14–23) was the first statement's route. No decision rests on it now, so it is recorded here and not queued.
+   - *Decision:* whether the screen admits only what the estimate admits by proof in exact arithmetic, with rounding alone left to the sweep. Give the defects brief a line it can take, and tell the defects chip by message when the chain is settled either way.
 
 **Order.** 5, then 6, then 7. Numeric checks before any Lean, as for the first four: exact rational arithmetic for the quadratic-form lines, seeded random families with rank-deficient Sₖ with and without a common null vector, and small banded cases built from a B-spline Gram and difference penalties.
 
