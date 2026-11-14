@@ -94,7 +94,7 @@ On 2026-11-13 the user asked for four of the report's open items. They are posed
 - `8d9837b`, AS-4(viii) in general: `leading_moves_of_not_conformal`, with `outer_mulVec`, `bessel_pair` and `eigvec_dot`.
 - `12a63da`, AS-3(c): `mh_flux_symm`, `birthFlux_eq_deathFlux`, `birth_death_flux`.
 - `0af5b2d`, AS-2(d)(i): `fourierCoeffOn_of_hasDerivAt_off_countable`, `wirtinger_periodic`, `integral_reflect`, `wirtinger_interval`.
-- The commits after this entry's predecessor, AS-2(d)(ii) and (iii):
+- `0f5cdd5` and `6f08bfc`, AS-2(d)(ii) and (iii):
   - `ProductVariance`: `sq_integral_le`, `var_prod_le`, `varM_nonneg`, `varM_le`, `abs_varM_le`, `varM_comp_equiv`, `measurable_varM_section`, `coordVarPi`, `measurable_coordVar`, `integral_pi_succ`, `efron_stein_pi`.
   - `ContinuousPoincare`: `abs_integral_le_of_abs_le`, `uniformIcc`, `uniformIcc_isProbabilityMeasure`, `integral_uniformIcc`, `varM_uniformIcc`, `integral_integral_update`, `poincare_pi`, `varM_eq_sub`, `covM`, `energyM`, `integral_sq_lin`, `covM_form`, `energyM_form`, `matrix_poincare_pi`.
   - `ProductVariance` joins the barrel.
