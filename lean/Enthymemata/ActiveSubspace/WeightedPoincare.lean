@@ -1,8 +1,11 @@
+import Enthymemata.ActiveSubspace.ContinuousPoincare
 import Mathlib.Analysis.Calculus.Deriv.Pow
 import Mathlib.Analysis.SpecialFunctions.ExpDeriv
 import Mathlib.MeasureTheory.Integral.DivergenceTheorem
 import Mathlib.MeasureTheory.Integral.DominatedConvergence
 import Mathlib.MeasureTheory.Integral.IntervalIntegral.FundThmCalculus
+import Mathlib.Probability.ConditionalProbability
+import Mathlib.Probability.Distributions.Gaussian.Real
 
 /-!
 # Active subspaces — Bakry–Émery on an interval (AS-2(e))
@@ -20,6 +23,13 @@ Together, `∫ g² e^{−V} ≤ κ⁻¹ ∫ h′² e^{−V}`.
 
 * `poincare_weighted`: the inequality, with the weighted mean given by `∫ (h − m) e^{−V} = 0`.
 * `poincare_truncNormal`: `V = (x − μ)²/(2σ²)`, so the constant is `σ²`.
+* `hasPoincareOn_of_density`: the same for a law, `HasPoincareOn ν a b κ⁻¹` when `ν ∝ e^{−V}` on
+  `[a, b]`.
+* `truncNormal μ v a b`, `gaussianReal μ v` conditioned on `[a, b]`, with
+  `hasPoincareOn_truncNormal`: its constant is `v`, so its coordinates join uniform ones in
+  `matrix_poincare_prod_box` (`ae_mem_truncNormal`).
+* `matrix_poincare_box_mixed`: the matrix check on E8's laws, each input uniform or a truncated
+  normal, with `Dᵢ` its constant.
 -/
 
 open MeasureTheory Set Real
@@ -201,5 +211,151 @@ theorem poincare_truncNormal (hab : a < b) {μ σ : ℝ} (hσ : 0 < σ) {h h' : 
   rwa [one_div, inv_inv] at h
 
 end Weighted
+
+section Laws
+
+open ProbabilityTheory
+open scoped NNReal
+
+variable {a b : ℝ}
+
+/-- **AS-2(e) as a law.** A probability law `ν` with `∫ φ dν = C ∫ₐᵇ φ e^{−V}` for every `φ`
+(`ν ∝ e^{−V}` on `[a, b]`), with `V″ ≥ κ > 0` on `[a, b]`, has the one-variable constant `κ⁻¹`. -/
+theorem hasPoincareOn_of_density (hab : a < b) {V V' V'' : ℝ → ℝ} {κ : ℝ} (hκ : 0 < κ)
+    (hV : ∀ x, HasDerivAt V (V' x) x) (hV' : ∀ x, HasDerivAt V' (V'' x) x)
+    (hV''c : Continuous V'') (hV''κ : ∀ x ∈ Icc a b, κ ≤ V'' x)
+    (ν : Measure ℝ) [IsProbabilityMeasure ν] {C : ℝ}
+    (hν : ∀ φ : ℝ → ℝ, ∫ x, φ x ∂ν = C * ∫ x in a..b, φ x * exp (-V x)) :
+    HasPoincareOn ν a b κ⁻¹ := by
+  intro h h' s K hs hc hd hm hK
+  have hVc : Continuous V := continuous_iff_continuousAt.2 fun x => (hV x).continuousAt
+  have hωc : Continuous fun x => exp (-V x) := Real.continuous_exp.comp hVc.neg
+  have hZ : 1 = C * ∫ x in a..b, exp (-V x) := by
+    have h1 := hν fun _ => 1
+    simp only [integral_const, probReal_univ, smul_eq_mul, mul_one, one_mul] at h1
+    exact h1
+  have hZnn : 0 ≤ ∫ x in a..b, exp (-V x) :=
+    intervalIntegral.integral_nonneg hab.le fun x _ => (Real.exp_pos _).le
+  have hC0 : 0 ≤ C := by nlinarith
+  set m := ∫ x, h x ∂ν with hmdef
+  have hhi : IntervalIntegrable (fun x => h x * exp (-V x)) volume a b :=
+    (hc.mul hωc.continuousOn).intervalIntegrable_of_Icc hab.le
+  have hmean : ∫ x in a..b, (h x - m) * exp (-V x) = 0 := by
+    have e1 : ∀ x, (h x - m) * exp (-V x) = h x * exp (-V x) - m * exp (-V x) := fun x => by
+      ring
+    simp only [e1]
+    rw [intervalIntegral.integral_sub hhi ((hωc.intervalIntegrable a b).const_mul m),
+      intervalIntegral.integral_const_mul]
+    have hm' : m = C * ∫ x in a..b, h x * exp (-V x) := hν h
+    rw [hm']
+    linear_combination (∫ x in a..b, h x * exp (-V x)) * hZ
+  have hW := poincare_weighted hab hκ hV hV' hV''c hV''κ hs hc hd hm (fun x _ => hK x) m hmean
+  have hvar : varM ν h = C * ∫ x in a..b, (h x - m) ^ 2 * exp (-V x) :=
+    hν fun x => (h x - m) ^ 2
+  have hen : ∫ x, h' x ^ 2 ∂ν = C * ∫ x in a..b, h' x ^ 2 * exp (-V x) :=
+    hν fun x => h' x ^ 2
+  rw [hvar, hen]
+  calc C * ∫ x in a..b, (h x - m) ^ 2 * exp (-V x)
+      ≤ C * (κ⁻¹ * ∫ x in a..b, h' x ^ 2 * exp (-V x)) := mul_le_mul_of_nonneg_left hW hC0
+    _ = κ⁻¹ * (C * ∫ x in a..b, h' x ^ 2 * exp (-V x)) := by ring
+
+/-- The normal law `N(μ, v)` truncated to `[a, b]`: `gaussianReal μ v` conditioned on `[a, b]`. -/
+noncomputable def truncNormal (μ : ℝ) (v : ℝ≥0) (a b : ℝ) : Measure ℝ :=
+  ProbabilityTheory.cond (gaussianReal μ v) (Icc a b)
+
+theorem truncNormal_isProbabilityMeasure (hab : a < b) (μ : ℝ) {v : ℝ≥0} (hv : v ≠ 0) :
+    IsProbabilityMeasure (truncNormal μ v a b) := by
+  unfold truncNormal
+  refine cond_isProbabilityMeasure fun h0 => ?_
+  have h1 := gaussianReal_absolutelyContinuous' μ hv h0
+  rw [Real.volume_Icc, ENNReal.ofReal_eq_zero] at h1
+  linarith
+
+/-- The truncated normal lives on `[a, b]`. -/
+theorem ae_mem_truncNormal (μ : ℝ) (v : ℝ≥0) (a b : ℝ) :
+    ∀ᵐ t ∂(truncNormal μ v a b), t ∈ Icc a b := by
+  unfold truncNormal ProbabilityTheory.cond
+  exact Measure.ae_smul_measure (ae_restrict_mem measurableSet_Icc) _
+
+/-- Integrals under the truncated normal, as `e^{−(x−μ)²/(2v)}`-weighted integrals over `[a, b]`. -/
+theorem integral_truncNormal (hab : a < b) (μ : ℝ) {v : ℝ≥0} (hv : v ≠ 0) (φ : ℝ → ℝ) :
+    ∫ x, φ x ∂(truncNormal μ v a b) =
+      (gaussianReal μ v (Icc a b)).toReal⁻¹ * (Real.sqrt (2 * π * v))⁻¹ *
+        ∫ x in a..b, φ x * exp (-((x - μ) ^ 2 / (2 * (v : ℝ)))) := by
+  have hpdf : ∀ x, (gaussianPDF μ v x).toReal * φ x =
+      (Real.sqrt (2 * π * v))⁻¹ * (φ x * exp (-((x - μ) ^ 2 / (2 * (v : ℝ))))) := fun x => by
+    rw [toReal_gaussianPDF, gaussianPDFReal, neg_div]
+    ring
+  rw [truncNormal, ProbabilityTheory.cond, integral_smul_measure, ENNReal.toReal_inv,
+    gaussianReal_of_var_ne_zero μ hv,
+    setIntegral_withDensity_eq_setIntegral_toReal_smul (measurable_gaussianPDF μ v)
+      (ae_of_all _ fun _ => ENNReal.ofReal_lt_top) φ measurableSet_Icc,
+    integral_Icc_eq_integral_Ioc, ← intervalIntegral.integral_of_le hab.le]
+  simp only [smul_eq_mul, hpdf, intervalIntegral.integral_const_mul]
+  ring
+
+/-- **AS-2(e), the truncated normal as a law.** `N(μ, v)` truncated to `[a, b]` has the
+one-variable Poincaré constant `v` on `[a, b]`: Bakry–Émery with `V″ = 1/v`. -/
+theorem hasPoincareOn_truncNormal (hab : a < b) (μ : ℝ) {v : ℝ≥0} (hv : v ≠ 0) :
+    HasPoincareOn (truncNormal μ v a b) a b v := by
+  haveI := truncNormal_isProbabilityMeasure hab μ hv
+  have hv0 : (0 : ℝ) < v := NNReal.coe_pos.2 (pos_iff_ne_zero.2 hv)
+  have hV : ∀ x, HasDerivAt (fun x => (x - μ) ^ 2 / (2 * (v : ℝ))) ((x - μ) / v) x := by
+    intro x
+    have h1 : HasDerivAt (fun x => (x - μ) ^ 2) (2 * (x - μ)) x := by
+      simpa using ((hasDerivAt_id x).sub_const μ).fun_pow 2
+    refine (h1.div_const (2 * (v : ℝ))).congr_deriv ?_
+    field_simp
+    try ring
+  have hV' : ∀ x, HasDerivAt (fun x => (x - μ) / (v : ℝ)) (1 / v) x := by
+    intro x
+    simpa using ((hasDerivAt_id x).sub_const μ).div_const (v : ℝ)
+  have h := hasPoincareOn_of_density hab (κ := 1 / v) (one_div_pos.2 hv0) hV hV'
+    continuous_const (fun _ _ => le_rfl) (truncNormal μ v a b) (integral_truncNormal hab μ hv)
+  rwa [one_div, inv_inv] at h
+
+/-- **AS-2(d) and (e), on E8's laws.** Each input is uniform on `[aᵢ, bᵢ]`, or, for `i ∈ N`, the
+normal `N(μᵢ, vᵢ)` truncated to it. Then `Cov(f) ≼ E[J D Jᵀ]` with `Dᵢ = ((bᵢ − aᵢ)/π)²` for a
+uniform input and `Dᵢ = vᵢ` for a truncated normal, every hypothesis asked only on the box. -/
+theorem matrix_poincare_box_mixed {o : Type*} [Finite o] {n : ℕ} (a b : Fin n → ℝ)
+    (hab : ∀ i, a i < b i) (N : Finset (Fin n)) (μ : Fin n → ℝ) (v : Fin n → ℝ≥0)
+    (hv : ∀ i ∈ N, v i ≠ 0)
+    {f : (Fin n → ℝ) → o → ℝ} (hf : ∀ p, Measurable fun x => f x p) {C : ℝ}
+    (hC : ∀ x, (∀ i, x i ∈ Icc (a i) (b i)) → ∀ p, |f x p| ≤ C)
+    (J : (Fin n → ℝ) → Matrix o (Fin n) ℝ) (hJ : ∀ p i, Measurable fun x => J x p i) {K : ℝ}
+    (hK : ∀ x, (∀ i, x i ∈ Icc (a i) (b i)) → ∀ p i, |J x p i| ≤ K)
+    (s : Fin n → (Fin n → ℝ) → Set ℝ) (hs : ∀ i x, (s i x).Countable)
+    (hcont : ∀ p i x, (∀ j, x j ∈ Icc (a j) (b j)) →
+      ContinuousOn (fun t => f (Function.update x i t) p) (Icc (a i) (b i)))
+    (hder : ∀ p i x, (∀ j, x j ∈ Icc (a j) (b j)) → ∀ t ∈ Ioo (a i) (b i) \ s i x,
+      HasDerivAt (fun t => f (Function.update x i t) p) (J (Function.update x i t) p i) t) :
+    (energyM (Measure.pi fun i =>
+        if i ∈ N then truncNormal (μ i) (v i) (a i) (b i) else uniformIcc (a i) (b i)) J
+        (fun i => if i ∈ N then (v i : ℝ) else ((b i - a i) / π) ^ 2) -
+      covM (Measure.pi fun i =>
+        if i ∈ N then truncNormal (μ i) (v i) (a i) (b i) else uniformIcc (a i) (b i)) f
+      ).PosSemidef := by
+  haveI : ∀ i, IsProbabilityMeasure
+      (if i ∈ N then truncNormal (μ i) (v i) (a i) (b i) else uniformIcc (a i) (b i)) := by
+    intro i
+    by_cases hi : i ∈ N
+    · simp only [hi, ↓reduceIte]
+      exact truncNormal_isProbabilityMeasure (hab i) (μ i) (hv i hi)
+    · simp only [hi, ↓reduceIte]
+      exact uniformIcc_isProbabilityMeasure (hab i)
+  refine matrix_poincare_prod_box _ a b _ hab (fun i => ?_) (fun i => ?_) hf hC J hJ hK s hs
+    hcont hder
+  · by_cases hi : i ∈ N
+    · simp only [hi, ↓reduceIte]
+      exact hasPoincareOn_truncNormal (hab i) (μ i) (hv i hi)
+    · simp only [hi, ↓reduceIte]
+      exact hasPoincareOn_uniformIcc (hab i)
+  · by_cases hi : i ∈ N
+    · simp only [hi, ↓reduceIte]
+      exact ae_mem_truncNormal (μ i) (v i) (a i) (b i)
+    · simp only [hi, ↓reduceIte]
+      exact ae_mem_uniformIcc (a i) (b i)
+
+end Laws
 
 end ActiveSubspace

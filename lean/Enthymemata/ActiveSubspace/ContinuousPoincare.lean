@@ -21,6 +21,12 @@ The statements of `Protolemmata/BASS/active-subspace-lemmas.md`, AS-2(d).
   uniforms itself. `matrix_poincare_box`: the same with every hypothesis asked only on the box,
   through `clampBox` and `ae_mem_box`, so unbounded hinges and kinks that move with the other
   coordinates (a rotated hinge) are covered.
+* **Any product law.** `HasPoincareOn ν a b c`: `ν` has the one-variable inequality with constant
+  `c` on the sections a fit has along `[a, b]`. `poincare_prod`, `matrix_poincare_prod` and
+  `matrix_poincare_prod_box` take a product of such laws, each with its own constant, so
+  coordinates of different laws mix. The uniform law is one (`hasPoincareOn_uniformIcc`), and
+  `poincare_pi`, `matrix_poincare_pi` and `matrix_poincare_box` are its case. The truncated normal
+  is another (`hasPoincareOn_truncNormal`, in `WeightedPoincare`).
 -/
 
 open MeasureTheory Set Complex
@@ -312,6 +318,25 @@ theorem varM_uniformIcc {a b : ℝ} (hab : a < b) (h : ℝ → ℝ) :
       (b - a)⁻¹ * ∫ t in a..b, (h t - (b - a)⁻¹ * ∫ y in a..b, h y) ^ 2 := by
   simp only [varM, integral_uniformIcc hab]
 
+/-- `ν` has the one-variable Poincaré inequality with constant `c` on the sections a fit has along
+`[a, b]`: every `h` continuous on `[a, b]`, with a bounded measurable derivative `h′` off a
+countable set (a hinge's kinks), has `Var_ν h ≤ c E_ν[h′²]`. -/
+def HasPoincareOn (ν : Measure ℝ) (a b c : ℝ) : Prop :=
+  ∀ ⦃h h' : ℝ → ℝ⦄ ⦃s : Set ℝ⦄ ⦃K : ℝ⦄, s.Countable → ContinuousOn h (Icc a b) →
+    (∀ x ∈ Ioo a b \ s, HasDerivAt h (h' x) x) → Measurable h' → (∀ x, |h' x| ≤ K) →
+    varM ν h ≤ c * ∫ x, h' x ^ 2 ∂ν
+
+/-- The uniform law on `[a, b]` has the constant `((b − a)/π)²` (`wirtinger_interval`). -/
+theorem hasPoincareOn_uniformIcc {a b : ℝ} (hab : a < b) :
+    HasPoincareOn (uniformIcc a b) a b (((b - a) / π) ^ 2) := by
+  intro h h' s K hs hc hd hm hK
+  rw [varM_uniformIcc hab, integral_uniformIcc hab]
+  exact wirtinger_interval hab hs hc hd hm hK
+
+/-- The uniform law on `[a, b]` lives on `[a, b]`. -/
+theorem ae_mem_uniformIcc (a b : ℝ) : ∀ᵐ t ∂(uniformIcc a b), t ∈ Icc a b :=
+  Measure.ae_smul_measure (ae_restrict_mem measurableSet_Icc) _
+
 end Uniform
 
 section Glue
@@ -343,11 +368,48 @@ theorem integral_integral_update {n : ℕ} (μ : Fin n → Measure α)
   simp only [hsymm, Fin.update_insertNth]
   simp
 
+/-- **AS-2(d)(iii), the scalar form, on any product law.** Under a product of laws `νᵢ`, each with
+the one-variable inequality with constant `cᵢ` on `[aᵢ, bᵢ]` (`HasPoincareOn`), a bounded
+measurable `F` whose sections along each coordinate are continuous on `[aᵢ, bᵢ]`, with a bounded
+measurable derivative `Dᵢ` off a countable set, satisfies `Var F ≤ Σᵢ cᵢ E[Dᵢ²]`: Efron–Stein
+(`efron_stein_pi`), each coordinate's inequality on its sections, and the coordinate integrated
+back out. -/
+theorem poincare_prod {n : ℕ} (ν : Fin n → Measure ℝ) [∀ i, IsProbabilityMeasure (ν i)]
+    (a b c : Fin n → ℝ) (hν : ∀ i, HasPoincareOn (ν i) (a i) (b i) (c i))
+    {F : (Fin n → ℝ) → ℝ} (hF : Measurable F) {C : ℝ} (hC : ∀ x, |F x| ≤ C)
+    (D : Fin n → (Fin n → ℝ) → ℝ) (hD : ∀ i, Measurable (D i)) {K : ℝ}
+    (hK : ∀ i x, |D i x| ≤ K) (s : Fin n → (Fin n → ℝ) → Set ℝ) (hs : ∀ i x, (s i x).Countable)
+    (hcont : ∀ i x, ContinuousOn (fun t => F (Function.update x i t)) (Icc (a i) (b i)))
+    (hder : ∀ i x, ∀ t ∈ Ioo (a i) (b i) \ s i x,
+      HasDerivAt (fun t => F (Function.update x i t)) (D i (Function.update x i t)) t) :
+    varM (Measure.pi ν) F ≤ ∑ i, c i * ∫ x, D i x ^ 2 ∂(Measure.pi ν) := by
+  refine (efron_stein_pi n ν F hF C hC).trans (Finset.sum_le_sum fun i _ => ?_)
+  have hpt : ∀ x, varM (ν i) (fun t => F (Function.update x i t)) ≤
+      c i * ∫ t, D i (Function.update x i t) ^ 2 ∂(ν i) := fun x =>
+    hν i (hs i x) (hcont i x) (hder i x) ((hD i).comp (measurable_update x)) (fun t => hK i _)
+  have hD2 : Measurable fun x => D i x ^ 2 := (hD i).pow_const 2
+  have hD2C : ∀ x, |D i x ^ 2| ≤ K ^ 2 := fun x => by
+    rw [abs_pow]
+    exact pow_le_pow_left₀ (abs_nonneg _) (hK i x) 2
+  have hint1 : Integrable (fun x => varM (ν i) (fun t => F (Function.update x i t)))
+      (Measure.pi ν) :=
+    integrable_of_bdd _ (measurable_coordVar ν i hF) (fun x => abs_varM_le _ fun t => hC _)
+  have hΨ : Measurable fun x => ∫ t, D i (Function.update x i t) ^ 2 ∂(ν i) :=
+    (hD2.comp measurable_update').stronglyMeasurable.integral_prod_right'.measurable
+  have hint2 : Integrable (fun x => c i * ∫ t, D i (Function.update x i t) ^ 2 ∂(ν i))
+      (Measure.pi ν) :=
+    (integrable_of_bdd _ hΨ (fun x => abs_integral_le_of_abs_le _ fun t => hD2C _)).const_mul _
+  calc coordVarPi ν i F
+      ≤ ∫ x, c i * ∫ t, D i (Function.update x i t) ^ 2 ∂(ν i) ∂(Measure.pi ν) :=
+        integral_mono hint1 hint2 hpt
+    _ = c i * ∫ x, D i x ^ 2 ∂(Measure.pi ν) := by
+        rw [MeasureTheory.integral_const_mul, integral_integral_update ν i hD2 hD2C]
+
 /-- **AS-2(d)(iii), the scalar form.** Under a product of uniform laws on `[aᵢ, bᵢ]`, a bounded
 measurable `F` whose sections along each coordinate are continuous, with a bounded measurable
 derivative `Dᵢ` off a countable set, satisfies
-`Var F ≤ Σᵢ ((bᵢ − aᵢ)/π)² E[Dᵢ²]`: Efron–Stein (`efron_stein_pi`), Wirtinger on each section
-(`wirtinger_interval`), and the coordinate integrated back out. -/
+`Var F ≤ Σᵢ ((bᵢ − aᵢ)/π)² E[Dᵢ²]`: `poincare_prod` with Wirtinger's constant on each coordinate
+(`hasPoincareOn_uniformIcc`). -/
 theorem poincare_pi {n : ℕ} (a b : Fin n → ℝ) (hab : ∀ i, a i < b i)
     {F : (Fin n → ℝ) → ℝ} (hF : Measurable F) {C : ℝ} (hC : ∀ x, |F x| ≤ C)
     (D : Fin n → (Fin n → ℝ) → ℝ) (hD : ∀ i, Measurable (D i)) {K : ℝ}
@@ -360,36 +422,8 @@ theorem poincare_pi {n : ℕ} (a b : Fin n → ℝ) (hab : ∀ i, a i < b i)
         ∫ x, D i x ^ 2 ∂(Measure.pi fun i => uniformIcc (a i) (b i)) := by
   haveI : ∀ i, IsProbabilityMeasure (uniformIcc (a i) (b i)) := fun i =>
     uniformIcc_isProbabilityMeasure (hab i)
-  refine (efron_stein_pi n (fun i => uniformIcc (a i) (b i)) F hF C hC).trans
-    (Finset.sum_le_sum fun i _ => ?_)
-  have hpt : ∀ x, varM (uniformIcc (a i) (b i)) (fun t => F (Function.update x i t)) ≤
-      ((b i - a i) / π) ^ 2 * ∫ t, D i (Function.update x i t) ^ 2 ∂(uniformIcc (a i) (b i)) := by
-    intro x
-    rw [varM_uniformIcc (hab i), integral_uniformIcc (hab i)]
-    exact wirtinger_interval (hab i) (hs i x) (hcont i x) (hder i x)
-      ((hD i).comp (measurable_update x)) (fun t => hK i _)
-  have hD2 : Measurable fun x => D i x ^ 2 := (hD i).pow_const 2
-  have hD2C : ∀ x, |D i x ^ 2| ≤ K ^ 2 := fun x => by
-    rw [abs_pow]
-    exact pow_le_pow_left₀ (abs_nonneg _) (hK i x) 2
-  have hint1 : Integrable (fun x => varM (uniformIcc (a i) (b i))
-      (fun t => F (Function.update x i t))) (Measure.pi fun i => uniformIcc (a i) (b i)) :=
-    integrable_of_bdd _ (measurable_coordVar (fun i => uniformIcc (a i) (b i)) i hF)
-      (fun x => abs_varM_le _ fun t => hC _)
-  have hΨ : Measurable fun x => ∫ t, D i (Function.update x i t) ^ 2 ∂(uniformIcc (a i) (b i)) :=
-    (hD2.comp measurable_update').stronglyMeasurable.integral_prod_right'.measurable
-  have hint2 : Integrable (fun x => ((b i - a i) / π) ^ 2 *
-      ∫ t, D i (Function.update x i t) ^ 2 ∂(uniformIcc (a i) (b i)))
-      (Measure.pi fun i => uniformIcc (a i) (b i)) :=
-    (integrable_of_bdd _ hΨ (fun x => abs_integral_le_of_abs_le _ fun t => hD2C _)).const_mul _
-  calc coordVarPi (fun i => uniformIcc (a i) (b i)) i F
-      ≤ ∫ x, ((b i - a i) / π) ^ 2 *
-          ∫ t, D i (Function.update x i t) ^ 2 ∂(uniformIcc (a i) (b i))
-            ∂(Measure.pi fun i => uniformIcc (a i) (b i)) :=
-        integral_mono hint1 hint2 hpt
-    _ = ((b i - a i) / π) ^ 2 * ∫ x, D i x ^ 2 ∂(Measure.pi fun i => uniformIcc (a i) (b i)) := by
-        rw [MeasureTheory.integral_const_mul,
-          integral_integral_update (fun i => uniformIcc (a i) (b i)) i hD2 hD2C]
+  exact poincare_prod (fun i => uniformIcc (a i) (b i)) a b (fun i => ((b i - a i) / π) ^ 2)
+    (fun i => hasPoincareOn_uniformIcc (hab i)) hF hC D hD hK s hs hcont hder
 
 end Glue
 
@@ -516,12 +550,14 @@ theorem energyM_form {X : Type*} [MeasurableSpace X] {n : ℕ} (P : Measure X)
   exact Finset.sum_comm
 
 omit [Fintype o] in
-/-- **AS-2(d)(iii), the matrix check on continuous laws.** Under a product of uniform laws on
-`[aᵢ, bᵢ]`, bounded measurable outputs `f` whose sections along each coordinate are continuous with
-derivative `J` (bounded, measurable) off a countable set satisfy
-`Cov(f) ≼ E[J D Jᵀ]`, `D = diag(((bᵢ − aᵢ)/π)²)`: the matrix check of E8's slice 5, proved on the
-law it reads, with no hypothesis left but the regularity of the fit. -/
-theorem matrix_poincare_pi [Finite o] {n : ℕ} (a b : Fin n → ℝ) (hab : ∀ i, a i < b i)
+/-- **AS-2(d)(iii), the matrix check on any product law.** Under a product of laws `νᵢ`, each with
+the one-variable inequality with constant `cᵢ` on `[aᵢ, bᵢ]` (`HasPoincareOn`), bounded measurable
+outputs `f` whose sections along each coordinate are continuous with derivative `J` (bounded,
+measurable) off a countable set satisfy `Cov(f) ≼ E[J diag(c) Jᵀ]`. Each coordinate keeps its own
+law and constant, so uniform and truncated-normal coordinates mix. -/
+theorem matrix_poincare_prod [Finite o] {n : ℕ} (ν : Fin n → Measure ℝ)
+    [∀ i, IsProbabilityMeasure (ν i)] (a b c : Fin n → ℝ)
+    (hν : ∀ i, HasPoincareOn (ν i) (a i) (b i) (c i))
     {f : (Fin n → ℝ) → o → ℝ} (hf : ∀ p, Measurable fun x => f x p) {C : ℝ}
     (hC : ∀ x p, |f x p| ≤ C) (J : (Fin n → ℝ) → Matrix o (Fin n) ℝ)
     (hJ : ∀ p i, Measurable fun x => J x p i) {K : ℝ} (hK : ∀ x p i, |J x p i| ≤ K)
@@ -529,11 +565,8 @@ theorem matrix_poincare_pi [Finite o] {n : ℕ} (a b : Fin n → ℝ) (hab : ∀
     (hcont : ∀ p i x, ContinuousOn (fun t => f (Function.update x i t) p) (Icc (a i) (b i)))
     (hder : ∀ p i x, ∀ t ∈ Ioo (a i) (b i) \ s i x,
       HasDerivAt (fun t => f (Function.update x i t) p) (J (Function.update x i t) p i) t) :
-    (energyM (Measure.pi fun i => uniformIcc (a i) (b i)) J (fun i => ((b i - a i) / π) ^ 2) -
-      covM (Measure.pi fun i => uniformIcc (a i) (b i)) f).PosSemidef := by
+    (energyM (Measure.pi ν) J c - covM (Measure.pi ν) f).PosSemidef := by
   haveI : Fintype o := Fintype.ofFinite o
-  haveI : ∀ i, IsProbabilityMeasure (uniformIcc (a i) (b i)) := fun i =>
-    uniformIcc_isProbabilityMeasure (hab i)
   rw [loewner_iff _ _ (covM_isHermitian _ f) (energyM_isHermitian _ J _)]
   intro v
   rw [covM_form _ hf hC, energyM_form _ hJ hK]
@@ -545,12 +578,35 @@ theorem matrix_poincare_pi [Finite o] {n : ℕ} (a b : Fin n → ℝ) (hab : ∀
     refine (Finset.abs_sum_le_sum_abs _ _).trans (Finset.sum_le_sum fun p _ => ?_)
     rw [abs_mul]
     exact mul_le_mul_of_nonneg_left (hK x p i) (abs_nonneg _)
-  exact poincare_pi a b hab (F := fun x => v ⬝ᵥ f x)
+  exact poincare_prod ν a b c hν (F := fun x => v ⬝ᵥ f x)
     (Finset.measurable_sum _ fun p _ => (hf p).const_mul (v p)) hbd
     (fun i x => ∑ p, v p * J x p i)
     (fun i => Finset.measurable_sum _ fun p _ => (hJ p i).const_mul (v p)) hDbd s hs
     (fun i x => continuousOn_finsetSum _ fun p _ => continuousOn_const.mul (hcont p i x))
     (fun i x t ht => HasDerivAt.fun_sum fun p _ => (hder p i x t ht).const_mul (v p))
+
+omit [Fintype o] in
+/-- **AS-2(d)(iii), the matrix check on continuous laws.** Under a product of uniform laws on
+`[aᵢ, bᵢ]`, bounded measurable outputs `f` whose sections along each coordinate are continuous with
+derivative `J` (bounded, measurable) off a countable set satisfy
+`Cov(f) ≼ E[J D Jᵀ]`, `D = diag(((bᵢ − aᵢ)/π)²)`: the matrix check of E8's slice 5, proved on the
+law it reads, with no hypothesis left but the regularity of the fit. It is `matrix_poincare_prod`
+with Wirtinger's constant on each coordinate. -/
+theorem matrix_poincare_pi [Finite o] {n : ℕ} (a b : Fin n → ℝ) (hab : ∀ i, a i < b i)
+    {f : (Fin n → ℝ) → o → ℝ} (hf : ∀ p, Measurable fun x => f x p) {C : ℝ}
+    (hC : ∀ x p, |f x p| ≤ C) (J : (Fin n → ℝ) → Matrix o (Fin n) ℝ)
+    (hJ : ∀ p i, Measurable fun x => J x p i) {K : ℝ} (hK : ∀ x p i, |J x p i| ≤ K)
+    (s : Fin n → (Fin n → ℝ) → Set ℝ) (hs : ∀ i x, (s i x).Countable)
+    (hcont : ∀ p i x, ContinuousOn (fun t => f (Function.update x i t) p) (Icc (a i) (b i)))
+    (hder : ∀ p i x, ∀ t ∈ Ioo (a i) (b i) \ s i x,
+      HasDerivAt (fun t => f (Function.update x i t) p) (J (Function.update x i t) p i) t) :
+    (energyM (Measure.pi fun i => uniformIcc (a i) (b i)) J (fun i => ((b i - a i) / π) ^ 2) -
+      covM (Measure.pi fun i => uniformIcc (a i) (b i)) f).PosSemidef := by
+  haveI : ∀ i, IsProbabilityMeasure (uniformIcc (a i) (b i)) := fun i =>
+    uniformIcc_isProbabilityMeasure (hab i)
+  exact matrix_poincare_prod (fun i => uniformIcc (a i) (b i)) a b
+    (fun i => ((b i - a i) / π) ^ 2) (fun i => hasPoincareOn_uniformIcc (hab i)) hf hC J hJ hK s hs
+    hcont hder
 
 
 section Box
@@ -583,15 +639,73 @@ theorem clampBox_update {a b : Fin n → ℝ} (x : Fin n → ℝ) (i : Fin n) {t
     simp only [clampBox, Function.update_self, min_eq_right ht.2, max_eq_right ht.1]
   · simp only [clampBox, Function.update_of_ne hj]
 
+/-- A product of laws each living on its interval lives on the box. -/
+theorem ae_mem_box_pi (ν : Fin n → Measure ℝ) [∀ i, IsProbabilityMeasure (ν i)]
+    {a b : Fin n → ℝ} (hν : ∀ i, ∀ᵐ t ∂(ν i), t ∈ Icc (a i) (b i)) :
+    ∀ᵐ x ∂(Measure.pi ν), ∀ i, x i ∈ Icc (a i) (b i) :=
+  ae_all_iff.2 fun i => Measure.tendsto_eval_ae_ae.eventually (hν i)
+
 /-- The box has full measure under the product of uniform laws. -/
 theorem ae_mem_box {a b : Fin n → ℝ} (hab : ∀ i, a i < b i) :
     ∀ᵐ x ∂(Measure.pi fun i => uniformIcc (a i) (b i)), ∀ i, x i ∈ Icc (a i) (b i) := by
   haveI : ∀ i, IsProbabilityMeasure (uniformIcc (a i) (b i)) := fun i =>
     uniformIcc_isProbabilityMeasure (hab i)
-  refine ae_all_iff.2 fun i => ?_
-  have hi : ∀ᵐ t ∂(uniformIcc (a i) (b i)), t ∈ Icc (a i) (b i) :=
-    Measure.ae_smul_measure (ae_restrict_mem measurableSet_Icc) _
-  exact Measure.tendsto_eval_ae_ae.eventually hi
+  exact ae_mem_box_pi _ fun i => ae_mem_uniformIcc (a i) (b i)
+
+omit [Fintype o] in
+/-- **AS-2(d)(iii), on the box, for any product law.** `matrix_poincare_prod` with every
+hypothesis asked only on the box `Πᵢ [aᵢ, bᵢ]`, for laws `νᵢ` that live on their intervals. The fit
+is read through `clampBox`, which changes nothing under the law. -/
+theorem matrix_poincare_prod_box [Finite o] (ν : Fin n → Measure ℝ)
+    [∀ i, IsProbabilityMeasure (ν i)] (a b c : Fin n → ℝ) (hab : ∀ i, a i < b i)
+    (hν : ∀ i, HasPoincareOn (ν i) (a i) (b i) (c i))
+    (hsupp : ∀ i, ∀ᵐ t ∂(ν i), t ∈ Icc (a i) (b i))
+    {f : (Fin n → ℝ) → o → ℝ} (hf : ∀ p, Measurable fun x => f x p) {C : ℝ}
+    (hC : ∀ x, (∀ i, x i ∈ Icc (a i) (b i)) → ∀ p, |f x p| ≤ C)
+    (J : (Fin n → ℝ) → Matrix o (Fin n) ℝ) (hJ : ∀ p i, Measurable fun x => J x p i) {K : ℝ}
+    (hK : ∀ x, (∀ i, x i ∈ Icc (a i) (b i)) → ∀ p i, |J x p i| ≤ K)
+    (s : Fin n → (Fin n → ℝ) → Set ℝ) (hs : ∀ i x, (s i x).Countable)
+    (hcont : ∀ p i x, (∀ j, x j ∈ Icc (a j) (b j)) →
+      ContinuousOn (fun t => f (Function.update x i t) p) (Icc (a i) (b i)))
+    (hder : ∀ p i x, (∀ j, x j ∈ Icc (a j) (b j)) → ∀ t ∈ Ioo (a i) (b i) \ s i x,
+      HasDerivAt (fun t => f (Function.update x i t) p) (J (Function.update x i t) p i) t) :
+    (energyM (Measure.pi ν) J c - covM (Measure.pi ν) f).PosSemidef := by
+  set κ := clampBox a b with hκ
+  have hmem : ∀ x i, κ x i ∈ Icc (a i) (b i) := fun x i => clampBox_mem hab x i
+  have hupd : ∀ x i, ∀ t ∈ Icc (a i) (b i),
+      κ (Function.update x i t) = Function.update (κ x) i t := fun x i t ht =>
+    clampBox_update x i ht
+  have hmain := matrix_poincare_prod ν a b c hν (f := fun x => f (κ x))
+    (fun p => (hf p).comp (measurable_clampBox a b)) (fun x p => hC _ (hmem x) p)
+    (fun x => J (κ x)) (fun p i => (hJ p i).comp (measurable_clampBox a b))
+    (fun x p i => hK _ (hmem x) p i) (fun i x => s i (κ x)) (fun i x => hs i (κ x))
+    (fun p i x => (hcont p i (κ x) (hmem x)).congr fun t ht => by
+      simp only [hupd x i t ht])
+    (fun p i x t ht => by
+      have hin : t ∈ Icc (a i) (b i) := Ioo_subset_Icc_self ht.1
+      have hd := hder p i (κ x) (hmem x) t ht
+      have hev : (fun t' => f (κ (Function.update x i t')) p) =ᶠ[nhds t]
+          fun t' => f (Function.update (κ x) i t') p := by
+        filter_upwards [Ioo_mem_nhds ht.1.1 ht.1.2] with t' ht'
+        rw [hupd x i t' (Ioo_subset_Icc_self ht')]
+      rw [hupd x i t hin]
+      exact hd.congr_of_eventuallyEq hev)
+  have hfix : ∀ᵐ x ∂(Measure.pi ν), κ x = x :=
+    (ae_mem_box_pi ν hsupp).mono fun x hx => clampBox_of_mem hx
+  have hcov : covM (Measure.pi ν) (fun x => f (κ x)) = covM (Measure.pi ν) f := by
+    ext p q
+    have e1 : ∫ x, f (κ x) p * f (κ x) q ∂(Measure.pi ν) = ∫ x, f x p * f x q ∂(Measure.pi ν) :=
+      integral_congr_ae (hfix.mono fun x hx => by simp only [hx])
+    have e2 : ∀ r : o, ∫ x, f (κ x) r ∂(Measure.pi ν) = ∫ x, f x r ∂(Measure.pi ν) := fun r =>
+      integral_congr_ae (hfix.mono fun x hx => by simp only [hx])
+    simp only [covM, e1, e2]
+  have hen : energyM (Measure.pi ν) (fun x => J (κ x)) c = energyM (Measure.pi ν) J c := by
+    ext p q
+    have e3 : ∀ i, ∫ x, J (κ x) p i * J (κ x) q i ∂(Measure.pi ν) =
+        ∫ x, J x p i * J x q i ∂(Measure.pi ν) := fun i =>
+      integral_congr_ae (hfix.mono fun x hx => by simp only [hx])
+    simp only [energyM, e3]
+  rwa [hcov, hen] at hmain
 
 omit [Fintype o] in
 /-- **AS-2(d)(iii), on the box.** The matrix check with every hypothesis asked only on the box
@@ -610,48 +724,11 @@ theorem matrix_poincare_box [Finite o] (a b : Fin n → ℝ) (hab : ∀ i, a i <
       HasDerivAt (fun t => f (Function.update x i t) p) (J (Function.update x i t) p i) t) :
     (energyM (Measure.pi fun i => uniformIcc (a i) (b i)) J (fun i => ((b i - a i) / π) ^ 2) -
       covM (Measure.pi fun i => uniformIcc (a i) (b i)) f).PosSemidef := by
-  set κ := clampBox a b with hκ
-  have hmem : ∀ x i, κ x i ∈ Icc (a i) (b i) := fun x i => clampBox_mem hab x i
-  have hupd : ∀ x i, ∀ t ∈ Icc (a i) (b i),
-      κ (Function.update x i t) = Function.update (κ x) i t := fun x i t ht =>
-    clampBox_update x i ht
-  have hmain := matrix_poincare_pi a b hab (f := fun x => f (κ x))
-    (fun p => (hf p).comp (measurable_clampBox a b)) (fun x p => hC _ (hmem x) p)
-    (fun x => J (κ x)) (fun p i => (hJ p i).comp (measurable_clampBox a b))
-    (fun x p i => hK _ (hmem x) p i) (fun i x => s i (κ x)) (fun i x => hs i (κ x))
-    (fun p i x => (hcont p i (κ x) (hmem x)).congr fun t ht => by
-      simp only [hupd x i t ht])
-    (fun p i x t ht => by
-      have hin : t ∈ Icc (a i) (b i) := Ioo_subset_Icc_self ht.1
-      have hd := hder p i (κ x) (hmem x) t ht
-      have hev : (fun t' => f (κ (Function.update x i t')) p) =ᶠ[nhds t]
-          fun t' => f (Function.update (κ x) i t') p := by
-        filter_upwards [Ioo_mem_nhds ht.1.1 ht.1.2] with t' ht'
-        rw [hupd x i t' (Ioo_subset_Icc_self ht')]
-      rw [hupd x i t hin]
-      exact hd.congr_of_eventuallyEq hev)
-  have hae := ae_mem_box hab
-  have hfix : ∀ᵐ x ∂(Measure.pi fun i => uniformIcc (a i) (b i)), κ x = x :=
-    hae.mono fun x hx => clampBox_of_mem hx
-  have hcov : covM (Measure.pi fun i => uniformIcc (a i) (b i)) (fun x => f (κ x)) =
-      covM (Measure.pi fun i => uniformIcc (a i) (b i)) f := by
-    ext p q
-    have e1 : ∫ x, f (κ x) p * f (κ x) q ∂(Measure.pi fun i => uniformIcc (a i) (b i)) =
-        ∫ x, f x p * f x q ∂(Measure.pi fun i => uniformIcc (a i) (b i)) :=
-      integral_congr_ae (hfix.mono fun x hx => by simp only [hx])
-    have e2 : ∀ r : o, ∫ x, f (κ x) r ∂(Measure.pi fun i => uniformIcc (a i) (b i)) =
-        ∫ x, f x r ∂(Measure.pi fun i => uniformIcc (a i) (b i)) := fun r =>
-      integral_congr_ae (hfix.mono fun x hx => by simp only [hx])
-    simp only [covM, e1, e2]
-  have hen : energyM (Measure.pi fun i => uniformIcc (a i) (b i)) (fun x => J (κ x))
-        (fun i => ((b i - a i) / π) ^ 2) =
-      energyM (Measure.pi fun i => uniformIcc (a i) (b i)) J (fun i => ((b i - a i) / π) ^ 2) := by
-    ext p q
-    have e3 : ∀ i, ∫ x, J (κ x) p i * J (κ x) q i ∂(Measure.pi fun i => uniformIcc (a i) (b i)) =
-        ∫ x, J x p i * J x q i ∂(Measure.pi fun i => uniformIcc (a i) (b i)) := fun i =>
-      integral_congr_ae (hfix.mono fun x hx => by simp only [hx])
-    simp only [energyM, e3]
-  rwa [hcov, hen] at hmain
+  haveI : ∀ i, IsProbabilityMeasure (uniformIcc (a i) (b i)) := fun i =>
+    uniformIcc_isProbabilityMeasure (hab i)
+  exact matrix_poincare_prod_box (fun i => uniformIcc (a i) (b i)) a b
+    (fun i => ((b i - a i) / π) ^ 2) hab (fun i => hasPoincareOn_uniformIcc (hab i))
+    (fun i => ae_mem_uniformIcc (a i) (b i)) hf hC J hJ hK s hs hcont hder
 
 end Box
 
