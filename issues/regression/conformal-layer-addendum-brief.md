@@ -20,7 +20,21 @@ Opened 2026-11-14 at the user's word ("that brief was getting way too long, adde
 - **Slice 15's precision rule** reads the training split's ESS: with 1,000 training and 399 calibration points it chose m of 294 to 500, and 7% of the sets were the whole space. It decides whether the fit takes the calibration split's size and scales the target itself.
 - **Slice 15's alternation speed** along the factorization's flat directions. It decides the cost at large n.
 - **τ through richer features,** the ratio estimator's open follow-up. It decides whether the layer offers a nonparametric τ.
-- **BASS's seam for `GroupConformal`** (the GBASS follow-ups' report): `BassCandidates` refuses held-out groups in one stratum, so BASS cannot yet feed group-level units. Either (a) `BassCandidates` exempts new-group cases from its strata rule, loosening what the case-level split forms accept from BASS, or (b) BASS gains an opt-in group-units call. It decides how BASS feeds group-level units; the user's (the handoff's item 16).
+- **BASS's opt-in group-units call for `GroupConformal`**, decided by the user on 2026-11-14 ("I'd choose (b) for item 16"; the handoff's item 16) and commissioned to this chip.
+  - *What it is.* A separate opt-in call on BASS's side. The existing case-level refusal stays.
+  - *Why.* The caller chooses the unit that receives a rank:
+    - under `WorstCase`, each held-out group gives its least-conforming case, and the target is every case of one new group at once;
+    - under `OneCase`, the target is one case drawn uniformly from the group;
+    - both need calibration and test groups drawn alike, including how their sizes arise.
+    The report's 0.893 for one pooled case comes from the random-intercept fixture alone. It is no general guarantee for pooled cases.
+  - *Group membership.* Read it from `Cells` only where a cell identifies the intended held-out group. A cell is one level of every grouping jointly (`BassGroupCells`), so:
+    - under crossed effects, one held-out subject seen at two sites occupies two cells;
+    - a case whose grouping column is left out is a cell of its own.
+    For those designs the call takes explicit group labels or a named grouping. It reuses BASS's new-group density and passes the labels to `GroupConformal.Density`, which already takes them.
+  - *The closing test,* end to end:
+    - two held-out subjects with repeated cases across sites;
+    - the calibration counts two groups and reproduces the explicit-label p-values;
+    - BASS's ordinary case-level call still refuses that same pooled stratum.
 - **Slice 12a's k̂ diagnostic,** opt-in or on by default (the handoff's waiting list).
 
 ## Working rules
