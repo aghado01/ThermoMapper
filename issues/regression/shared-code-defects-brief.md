@@ -63,6 +63,16 @@ Commissioned by the user on 2026-11-13 through the coordinating session. Both de
 
 Newest first. Each gives the commits, the gates' results, defects found, decisions for the user and "Doc changes owed".
 
+### 2026-11-13 — Slice 3 verified from a clean archive (coordinating session)
+
+- **Run:** `scripts/verify-csharp.ps1` on a clean archive of HEAD `badc0d9`, the Commit selection over slice 3's fourteen files (`c9f9a84`). All fourteen lie in the regression project's compile closure.
+- **Selection:** 237 of 313 classes, with the pinned tier and without the slow tier's 71 methods.
+- **Result:** 2,659 executed, 2,659 passed, 0 failed, 0 not executed (29 min). `DrawWeightRangeTests` is among them.
+- **The source change was read:** nothing found. Each reader forms a ratio, so the power-of-two scaling cancels and ordinary weights keep their bits. The positivity checks still read the raw weights.
+- **The two shared files:** the commit's diff of `SubspacePosterior.cs` and `CoActivePosterior.cs` holds this slice's lines only, and E8 slice 7e's orientation stands in the archive.
+- **Not rerun here:** the `Maths.Oracle.Tests` selection, whose R oracles time out under this machine's load. It stands on the chip's run (112 of 116, the four timeouts passing when rerun singly).
+- **Receipts:** `artifacts/verify-defects-s3-f1d70d5/` (named for the HEAD when the run was queued; its snapshot line records `badc0d9`), tracked in [receipts](receipts/verify-defects-s3-f1d70d5/).
+
 ### 2026-11-13 — Slice 2 verified from clean archives (coordinating session)
 
 - **The standard run:** `scripts/verify-csharp.ps1` on a clean archive of HEAD `78d5077`, the Commit selection over slice 2's six files (`37eb63c`). It selects within the regression test project only: 2 of 308 classes, 79 executed, 79 passed, 0 not executed.

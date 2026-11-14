@@ -1,0 +1,14 @@
+src/maths/regression/PredictiveChecks.cs
+src/maths/regression/WeightScale.cs
+src/maths/regression/spline/bass/BassPointwise.cs
+src/maths/regression/spline/bass/BassResidualDependence.cs
+src/maths/regression/spline/bass/calibration/NestedCalibration.cs
+src/maths/regression/spline/bass/posterior/BassJointDraws.cs
+src/maths/regression/spline/bass/posterior/BassPrediction.cs
+src/maths/regression/spline/bass/presentation/PosteriorSummary.cs
+src/maths/regression/spline/bass/projection/BassProjectionComparison.cs
+src/maths/regression/spline/bass/sensitivity/SobolDecomposition.cs
+src/maths/regression/subspaces/CoActivePosterior.cs
+src/maths/regression/subspaces/SubspacePosterior.cs
+src/maths/regression/subspaces/Whitening.cs
+tests/regression/DrawWeightRangeTests.cs
