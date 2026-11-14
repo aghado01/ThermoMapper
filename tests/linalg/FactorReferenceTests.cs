@@ -97,17 +97,18 @@ public sealed class FactorReferenceTests
         FactorStatus s = Factor(kind, new double[,] { { 1, 1 }, { 1, 1 } });
         Assert.True(s.Finite);
         Assert.False(s.PositiveDefinite);
-        Assert.Equal(1, s.FlooredPivots);
+        Assert.Equal(kind == "dense" ? 0 : 1, s.FlooredPivots);   // the dense factor is strict: it stops there
     }
 
     [Theory]
     [MemberData(nameof(Factorizations))]
     public void Status_TinyScaleIdentity_IsFlooredButPerfectlyConditioned(string kind)
     {
-        // The absolute floor clamps every pivot of 1e-20·I; the pivot ratio shows it is a scale effect, not rank.
+        // The band factors' absolute floor clamps every pivot of 1e-20·I; the pivot ratio shows it is a scale effect, not
+        // rank. The dense factor is strict and floors none.
         FactorStatus s = Factor(kind, new double[,] { { 1e-20, 0 }, { 0, 1e-20 } });
         Assert.True(s.PositiveDefinite);
-        Assert.Equal(2, s.FlooredPivots);
+        Assert.Equal(kind == "dense" ? 0 : 2, s.FlooredPivots);
         Assert.Equal(1.0, s.PivotRatio);
     }
 

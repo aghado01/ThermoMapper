@@ -246,7 +246,7 @@ namespace Viz.Renderers
         // Compute flat [K×3×3] Cholesky factors from a GaussianLayer.
         // The viewer always renders in 3D, so we emit a 3×3 factor regardless of
         // the source covariance dimension:
-        //   D == 3: straight copy + Cholesky.
+        //   D == 3: straight copy + Cholesky; a singular block takes the ε below, relative to its largest variance.
         //   D <  3: embed the D×D covariance into the top-left of a 3×3 block;
         //           fill the remaining diagonal with a tiny ε so the Cholesky is
         //           numerically stable. The resulting ellipsoid is a thin disc /
@@ -277,9 +277,18 @@ namespace Viz.Renderers
 
                 chol.Decompose(tmp);
                 if (chol.FailedAt >= 0)
+                {
+                    // A singular block is a flat ellipsoid: it takes the ε the missing dimensions take, relative to its
+                    // largest variance, and draws as a thin one. The viewer needs an invertible map for its normals.
+                    double largest = 1.0;
+                    for (int r = 0; r < outDim; r++) largest = Math.Max(largest, tmp[r, r]);
+                    for (int r = 0; r < outDim; r++) tmp[r, r] += SerializerCovEps * largest;
+                    chol.Decompose(tmp);
+                }
+                if (chol.FailedAt >= 0)
                     throw new InvalidOperationException(
-                        $"Gaussian layer '{layer.Name}', component {k}: the covariance's leading {copyDim}×{copyDim} block has no " +
-                        $"finite Cholesky factor (it diverged at row {chol.FailedAt}), so its ellipsoid has no shape to draw.");
+                        $"Gaussian layer '{layer.Name}', component {k}: the covariance's leading {copyDim}×{copyDim} block is not " +
+                        $"positive semidefinite to the display's ε (it fails at row {chol.FailedAt}), so its ellipsoid has no shape to draw.");
                 chol.WriteLTo(result.AsSpan(k * outStride, outStride));
             }
             return result;

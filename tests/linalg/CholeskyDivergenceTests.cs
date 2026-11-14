@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 using Maths.LinAlg;
 using Maths.Rng;
 using Xunit;
@@ -7,11 +8,10 @@ using static Maths.LinAlg.Tests.FactorReferenceTests;
 namespace Maths.LinAlg.Tests;
 
 /// <summary>
-/// <see cref="CholeskyDecomposition"/> where its absolute pivot floor cannot carry the matrix. Two cases: a smooth
-/// kernel's covariance, whose spectrum falls below rounding, so that floored pivots let the later rows overflow; and a
-/// finite matrix whose pivot overflows while L stays finite, or whose L⁻¹ overflows. Each is refused as
-/// <see cref="DenseCholesky"/> refuses a failed factor. Every finite factor, floored or not, reads bit for bit as the
-/// class read it before (shared-code defects brief, slice 2).
+/// <see cref="CholeskyDecomposition"/> without its pivot floor: the first pivot that is not finite and positive stops it at
+/// <see cref="DenseCholesky"/>'s row, an L⁻¹ that overflows fails it, and a failed factor is refused. On every input the
+/// two agree, failure row, <see cref="FactorStatus"/>, factor and <c>LogDet</c>; where the floor never reached a pivot, the
+/// class reads bit for bit as before (shared-code defects brief, slice 2 and its follow-up).
 /// </summary>
 public sealed class CholeskyDivergenceTests
 {
@@ -28,25 +28,17 @@ public sealed class CholeskyDivergenceTests
         return k;
     }
 
-    // Rank one at 1e200, one entry 2ε above it: the second pivot is 0 and floored, so the third row's entry is the
-    // rounding over 1e-6, 4.4e190, and its pivot, 1e200 − 1e200 − (4.4e190)², overflows to −∞. L stays finite.
-    internal static double[,] OverflowingPivot()
-    {
-        double big = 1e200, off = big * (1 + 2 * Math.ScaleB(1.0, -52));
-        return new[,] { { big, big, big }, { big, big, off }, { big, off, big } };
-    }
-
-    // Tridiagonal: 0 then 1 on the diagonal, s = √1e-12 beside it. Every pivot is exactly 0 and floored, so L is exactly
-    // bidiagonal, s on its diagonal and 1 below it, and finite; L⁻¹'s first column is (−1)^i/s^(i+1), past
-    // double.MaxValue from row 51.
+    // L bidiagonal, 2^-20 on its diagonal and 1 below it, so A = LLᵀ is positive definite and factors exactly in powers of
+    // two; L⁻¹'s first column is (−1)^i·2^(20(i+1)), past double.MaxValue from row 51.
     internal static double[,] OverflowingInverse(int n)
     {
-        double s = Math.Sqrt(1e-12);
+        double d = Math.ScaleB(1.0, -20);
         var a = new double[n, n];
+        a[0, 0] = d * d;
         for (int i = 1; i < n; i++)
         {
-            a[i, i] = 1.0;
-            a[i, i - 1] = a[i - 1, i] = s;
+            a[i, i] = 1.0 + d * d;
+            a[i, i - 1] = a[i - 1, i] = d;
         }
         return a;
     }
@@ -60,41 +52,106 @@ public sealed class CholeskyDivergenceTests
         Assert.Throws<InvalidOperationException>(() => c.Sample(new Random(1), new double[n]));
     }
 
+    private static IEnumerable<double[,]> Ladder()
+    {
+        var rng = new Xoshiro256PlusPlus(seed: 2026);
+        for (int t = 0; t < 60; t++)
+        {
+            int n = 1 + (int)(rng.NextUInt64() % 40);
+            double[,] a = DenseSpd(n, rng);
+            double scale = Math.ScaleB(1.0, (int)(rng.NextUInt64() % 120) - 80);   // 2^-80 to 2^39, past the old floor
+            for (int i = 0; i < n; i++) for (int j = 0; j < n; j++) a[i, j] *= scale;
+            yield return a;
+        }
+        foreach (int n in new[] { 50, 100, 200, 401 })
+            foreach (double length in new[] { 0.05, 0.1, 0.5, 1.0 })
+                yield return SquaredExponential(n, length);
+        var tiny = new double[40, 40];
+        for (int i = 0; i < 40; i++) tiny[i, i] = 1e-13;
+        yield return tiny;
+        yield return new double[,] { { 1, 2 }, { 2, 1 } };
+        yield return new double[,] { { 1e-300, 1e300 }, { 1e300, 1 } };
+        yield return new double[,] { { 2, 0, 0 }, { 0, 2, 0 }, { 0, double.NaN, 2 } };
+    }
+
+    [Fact]
+    public void EveryInput_FailsWhereTheStrictFactorFails_AndOtherwiseIsItsFactor()
+    {
+        int failed = 0, held = 0;
+        foreach (double[,] a in Ladder())
+        {
+            int n = a.GetLength(0);
+            var c = new CholeskyDecomposition(n);
+            c.Decompose(a);
+            var d = new DenseCholesky(n);
+            d.Decompose(a);
+            Assert.Equal(d.FailedAt, c.FailedAt);
+            Assert.Equal(d.Status, c.Status);
+            Assert.Equal(BitConverter.DoubleToInt64Bits(d.LogDet), BitConverter.DoubleToInt64Bits(c.LogDet));
+            if (c.FailedAt >= 0)
+            {
+                AssertRefused(c, n);
+                failed++;
+                continue;
+            }
+            held++;
+            var l = new double[n * n];
+            c.WriteLTo(l);
+            for (int i = 0; i < n; i++) for (int j = 0; j < n; j++) Assert.Equal(d.Factor(i, j), l[i * n + j]);
+            Assert.Equal(0, c.Status.FlooredPivots);
+        }
+        Assert.True(failed >= 15 && held >= 60, $"{failed} failed, {held} held.");
+    }
+
     [Theory]
     [InlineData(50, 0.1)]
     [InlineData(100, 0.5)]
-    [InlineData(200, 0.2)]
     [InlineData(401, 0.05)]
-    public void ASmoothKernelsDivergingFactor_IsRefused(int n, double length)
+    public void ASmoothKernelBelowRounding_IsRefused(int n, double length)
     {
         var c = new CholeskyDecomposition(n);
         c.Decompose(SquaredExponential(n, length));
-        Assert.False(c.Status.Finite);
-        AssertRefused(c, n);
+        Assert.False(c.Status.PositiveDefinite);
         Assert.InRange(c.FailedAt, 1, n - 1);
+        AssertRefused(c, n);
     }
 
     [Fact]
-    public void AFinitePivotThatOverflows_IsRefused_ThoughLStaysFinite()
+    public void ASmallScaleIdentity_IsFactoredExactly()
     {
-        var c = new CholeskyDecomposition(3);
-        c.Decompose(OverflowingPivot());
-        Assert.False(c.Status.Finite);
-        Assert.Equal(2, c.Status.FlooredPivots);
-        AssertRefused(c, 3);
-        Assert.Equal(2, c.FailedAt);
+        // The old floor read every variance of 1e-13·I as 1e-12, ten times too large.
+        const int n = 40;
+        var a = new double[n, n];
+        for (int i = 0; i < n; i++) a[i, i] = 1e-13;
+        var c = new CholeskyDecomposition(n);
+        c.Decompose(a);
+        Assert.Equal(-1, c.FailedAt);
+        Assert.Equal(n * Math.Log(1e-13), c.LogDet, 9);
+        double[] x = c.Solve([.. new double[n - 1], 1.0]);
+        Assert.True(Math.Abs(x[n - 1] - 1e13) <= 1e-14 * 1e13, $"{x[n - 1]:R}");
+        var s = c.Sample(new Random(3), new double[n]);
+        Assert.All(s, v => Assert.InRange(Math.Abs(v), 0.0, 1e-5));
     }
 
     [Fact]
-    public void AnInverseFactorThatOverflows_IsRefused_ThoughLAndThePivotsAreFinite()
+    public void APivotThatIsNotFinite_IsRefused()
+    {
+        var c = new CholeskyDecomposition(2);
+        c.Decompose(new double[,] { { 1e-300, 1e300 }, { 1e300, 1 } });
+        Assert.Equal(1, c.FailedAt);
+        Assert.False(c.Status.Finite);
+        AssertRefused(c, 2);
+    }
+
+    [Fact]
+    public void AnInverseFactorThatOverflows_IsRefused_ThoughThePivotsArePositive()
     {
         const int n = 60;
         var c = new CholeskyDecomposition(n);
         c.Decompose(OverflowingInverse(n));
-        Assert.True(c.Status.Finite);
-        Assert.Equal(n, c.Status.FlooredPivots);
-        AssertRefused(c, n);
+        Assert.True(c.Status.PositiveDefinite);
         Assert.Equal(51, c.FailedAt);
+        AssertRefused(c, n);
     }
 
     [Fact]
@@ -135,50 +192,23 @@ public sealed class CholeskyDivergenceTests
         Assert.Equal(q, p);
     }
 
-    // Floored factors that stay finite are read, not refused: the floor's rule is not this class's to change here.
-    [Theory]
-    [InlineData(50, 1.0)]
-    [InlineData(401, 0.5)]
-    public void AFlooredFactorThatStaysFinite_IsRead(int n, double length)
-    {
-        var c = new CholeskyDecomposition(n);
-        c.Decompose(SquaredExponential(n, length));
-        Assert.True(c.Status.Finite);
-        Assert.True(c.Status.FlooredPivots > 0);
-        Assert.Equal(-1, c.FailedAt);
-        Assert.True(double.IsFinite(c.LogDet));
-        Assert.All(c.Solve(new double[n]), v => Assert.Equal(0.0, v));
-    }
-
-    // Every finite factor, floored or not, against the class before 2026-11-13, verbatim: the factor, LogDet, the inverse,
-    // a solve and a sample, bit for bit.
+    // Where the old floor never reached a pivot, the class against itself before 2026-11-13, verbatim: the factor, LogDet,
+    // the inverse, a solve and a sample, bit for bit.
     [Fact]
     [Trait("Tier", "Pinned")]
-    public void EveryFiniteFactor_ReadsAsTheEarlierClassBitForBit()
+    public void EveryFactorTheFloorNeverReached_ReadsAsTheEarlierClassBitForBit()
     {
         var rng = new Xoshiro256PlusPlus(seed: 1113);
-        var cases = new System.Collections.Generic.List<double[,]>();
         for (int t = 0; t < 60; t++)
         {
             int n = 1 + (int)(rng.NextUInt64() % 40);
             double[,] a = DenseSpd(n, rng);
-            double scale = Math.ScaleB(1.0, (int)(rng.NextUInt64() % 120) - 80);   // 2^-80 to 2^39: the floor reached below about 2^-39
+            double scale = Math.ScaleB(1.0, (int)(rng.NextUInt64() % 78) - 38);   // 2^-38 to 2^39: every pivot above 1e-12
             for (int i = 0; i < n; i++) for (int j = 0; j < n; j++) a[i, j] *= scale;
-            cases.Add(a);
-        }
-        cases.Add(SquaredExponential(50, 1.0));
-        cases.Add(SquaredExponential(401, 0.5));
-        var identity = new double[40, 40];
-        for (int i = 0; i < 40; i++) identity[i, i] = 1e-13;
-        cases.Add(identity);
-        int floored = 0;
-        foreach (double[,] a in cases)
-        {
-            int n = a.GetLength(0);
             var c = new CholeskyDecomposition(n);
             c.Decompose(a);
             Assert.Equal(-1, c.FailedAt);
-            if (c.Status.FlooredPivots > 0) floored++;
+            Assert.True(c.Status.MinPivot > 1e-12);
             var earlier = new EarlierCholesky(n);
             earlier.Decompose(a);
             Assert.Equal(Bits(earlier.LogDet), Bits(c.LogDet));
@@ -194,7 +224,6 @@ public sealed class CholeskyDivergenceTests
             Assert.Equal(Array.ConvertAll(earlier.Solve(b), Bits), Array.ConvertAll(c.Solve(b), Bits));
             Assert.Equal(Array.ConvertAll(earlier.Sample(new Random(n), b), Bits), Array.ConvertAll(c.Sample(new Random(n), b), Bits));
         }
-        Assert.True(floored >= 10, $"Only {floored} of the cases reached the floor.");
     }
 
     private static long Bits(double v) => BitConverter.DoubleToInt64Bits(v);

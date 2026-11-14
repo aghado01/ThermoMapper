@@ -104,15 +104,15 @@ namespace Clustering.Statistical.GMM
             return mahalTerm + logDetTerm;
         }
 
-        // Factors Σ, refusing one with no finite factor (CholeskyDecomposition.FailedAt): the distance has no value there.
+        // Factors Σ, refusing one with no factor (CholeskyDecomposition.FailedAt): the distance has no value there.
         private static void Factor(CholeskyDecomposition chol, double[,] sigma, string what, string? parameter)
         {
             chol.Decompose(sigma);
             if (chol.FailedAt >= 0)
                 throw new ArgumentException(
-                    $"{NoFactor(what)} It diverged at row {chol.FailedAt}, after {chol.Status.FlooredPivots} pivots floored at 1e-12.", parameter);
+                    $"{NoFactor(what)} It is not positive definite to working precision at row {chol.FailedAt}.", parameter);
         }
 
-        private static string NoFactor(string what) => $"{what} has no finite Cholesky factor, so the distance has no value.";
+        private static string NoFactor(string what) => $"{what} has no Cholesky factor, so the distance has no value.";
     }
 }

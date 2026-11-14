@@ -1,5 +1,6 @@
 using System;
 using System.IO;
+using System.Text.Json;
 using Clustering.Statistical.GMM;
 using Viz;
 using Viz.Renderers;
@@ -9,8 +10,8 @@ namespace VizCore.Tests;
 
 /// <summary>
 /// The callers of <see cref="Maths.LinAlg.CholeskyDecomposition"/> on a covariance with no finite factor: GMM's component
-/// cache, the Bhattacharyya distance and the scene export's ellipsoids each refuse it, where they read wrong finite
-/// numbers or exported a meaningless factor before (shared-code defects brief, slice 2).
+/// cache and the Bhattacharyya distance refuse it, where they read wrong finite numbers before; the scene export draws a
+/// singular block thin, as it draws the dimensions a layer lacks, and refuses an indefinite one (shared-code defects brief, slice 2).
 /// </summary>
 public sealed class GaussianFactorRefusalTests
 {
@@ -80,21 +81,67 @@ public sealed class GaussianFactorRefusalTests
         Assert.Equal(0.0, BhattacharyyaCoefficient.Distance(good, good), 12);
     }
 
-    [Fact]
-    public void TheExport_RefusesAnEllipsoidWithNoFiniteFactor()
+    // The exported factor of one 3-D component, from the scene's JSON.
+    private static double[] ExportedFactor(double[] covariance)
     {
-        // Rank one at 1e200 with one entry 2ε above it: L stays finite, but its last pivot overflows to −∞ under the floor.
-        double big = 1e200, off = big * (1 + 2 * Math.ScaleB(1.0, -52));
-        double[] covariance = [big, big, big, big, big, off, big, off, big];
-        var layer = new GaussianLayer("overflow", new double[3], covariance, [1.0], 1, 3);
+        var layer = new GaussianLayer("g", new double[3], covariance, [1.0], 1, 3);
         var scene = new ScenePackage(new PointCloud(new double[3], 1, 3), [], [], [], [], [layer], [], null, 0, SceneRenderHints.Default);
-        var refusal = Assert.Throws<InvalidOperationException>(() => new JsonExportRenderTarget().Render(scene, new MemoryStream()));
-        Assert.Contains("component 0", refusal.Message);
-
-        var fine = new GaussianLayer("fine", new double[3], [2.0, 0.5, 0.0, 0.5, 1.0, 0.0, 0.0, 0.0, 1.0], [1.0], 1, 3);
-        var ok = new ScenePackage(new PointCloud(new double[3], 1, 3), [], [], [], [], [fine], [], null, 0, SceneRenderHints.Default);
         var output = new MemoryStream();
-        new JsonExportRenderTarget().Render(ok, output);
-        Assert.True(output.Length > 0);
+        new JsonExportRenderTarget().Render(scene, output);
+        using var json = JsonDocument.Parse(output.ToArray());
+        JsonElement factor = json.RootElement.GetProperty("gaussian_layers")[0].GetProperty("cholesky_l");
+        var l = new double[9];
+        for (int i = 0; i < 9; i++) l[i] = factor[i].GetDouble();
+        return l;
+    }
+
+    // L·Lᵀ against Σ + ridge·I, entrywise relative to Σ's largest variance.
+    private static double Gap(double[] l, double[] covariance, double ridge)
+    {
+        double largest = Math.Max(covariance[0], Math.Max(covariance[4], covariance[8])), gap = 0.0;
+        for (int r = 0; r < 3; r++)
+            for (int c = 0; c < 3; c++)
+            {
+                double s = 0.0;
+                for (int k = 0; k < 3; k++) s += l[r * 3 + k] * l[c * 3 + k];
+                gap = Math.Max(gap, Math.Abs(s - covariance[r * 3 + c] - (r == c ? ridge : 0.0)) / largest);
+            }
+        return gap;
+    }
+
+    [Fact]
+    public void TheExport_DrawsASingularBlockThin_AndRefusesAnIndefiniteOne()
+    {
+        // A block of rank two takes the missing dimensions' ε, relative to its largest variance: a thin ellipsoid.
+        double[] flat = [2.0, 0.5, 0.0, 0.5, 1.0, 0.0, 0.0, 0.0, 0.0];
+        double[] l = ExportedFactor(flat);
+        Assert.All(l, v => Assert.True(double.IsFinite(v)));
+        Assert.True(Gap(l, flat, 2e-8) <= 1e-15, $"{Gap(l, flat, 2e-8):E2}");
+        Assert.Equal(Math.Sqrt(2e-8), l[8], 15);
+
+        // Rank one at 1e200 with one entry 2ε above it, which overflowed the floored factor: now a thin needle.
+        double big = 1e200, off = big * (1 + 2 * Math.ScaleB(1.0, -52));
+        double[] needle = [big, big, big, big, big, off, big, off, big];
+        double[] n = ExportedFactor(needle);
+        Assert.All(n, v => Assert.True(double.IsFinite(v)));
+        Assert.True(Gap(n, needle, 1e-8 * big) <= 1e-12, $"{Gap(n, needle, 1e-8 * big):E2}");
+
+        // A positive definite block exports its own factor, as before.
+        double[] fine = [2.0, 0.5, 0.0, 0.5, 1.0, 0.0, 0.0, 0.0, 1.0];
+        Assert.True(Gap(ExportedFactor(fine), fine, 0.0) <= 1e-15);
+
+        // An indefinite block is no ellipsoid, at any ε.
+        double[] indefinite = [1.0, 2.0, 0.0, 2.0, 1.0, 0.0, 0.0, 0.0, 1.0];
+        var refusal = Assert.Throws<InvalidOperationException>(() => ExportedFactor(indefinite));
+        Assert.Contains("component 0", refusal.Message);
+    }
+
+    [Fact]
+    public void AWarmStartWithASingularCovariance_IsRefused()
+    {
+        var gmm = new GaussianMixtureModel(1, 2);
+        Assert.Throws<InvalidOperationException>(() => gmm.InitializeWithParameters([[0.0, 0.0]], [new double[,] { { 1, 1 }, { 1, 1 } }], [1.0]));
+        gmm.InitializeWithParameters([[0.0, 0.0]], [new double[,] { { 1, 0.5 }, { 0.5, 1 } }], [1.0]);
+        Assert.True(double.IsFinite(gmm.Components[0].LogNormalizationFactor));
     }
 }
