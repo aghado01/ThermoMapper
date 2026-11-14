@@ -1,0 +1,4 @@
+Commit selection, every test project swept with test-select -ListOnly over changed.txt:
+Maths.Regression.Tests: 26 of 322 classes selected
+Maths.Oracle.Tests: 5 changed files in its closure, 0 of 39 classes selected
+every other test project: all 6 paths outside its compile closure

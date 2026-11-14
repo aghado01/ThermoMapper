@@ -1,0 +1,6 @@
+src/maths/regression/spline/baps/Baps.cs
+src/maths/regression/spline/baps/BapsAdmission.cs
+src/maths/regression/spline/baps/HierarchicalPSpline.cs
+src/maths/regression/spline/baps/PenalizedSpline.cs
+src/maths/regression/spline/baps/SamplerAdmission.cs
+tests/regression/BapsConditionCheckTests.cs
