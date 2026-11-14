@@ -76,6 +76,7 @@ internal static partial class BassActiveSubspaces
                                                                                                    int patterns)
     {
         Fingerprint(fit, data);
+        RefuseSeveralOutputs(data, "E8's active subspace reads a scalar or functional fit", nameof(data));
         BassInputs inputs = BassInputs.Prepare(data, fit.Transform);
         Frame frame = FrameOf(inputs, fit.Transform, fit.Config.Structure.Degree, fit.Config.Structure.ResolvedHingeNormalization, spec.Measures, spec.Sample,
                               spec.Metric, spec.Route, spec.Points, spec.Dimension);
@@ -566,6 +567,7 @@ internal static partial class BassActiveSubspaces
     private static Side DirectSide(BassFit fit, BassData data, IReadOnlyList<double>? output, string name)
     {
         Fingerprint(fit, data);
+        RefuseSeveralOutputs(data, "A co-active pair of two fits reads each side as a scalar or functional fit", name == "Output" ? "data" : "otherData");
         BassInputs inputs = BassInputs.Prepare(data, fit.Transform);
         double[]? a = OutputOf(output, data, name);
         BassDraw[] pooled = [.. fit.Draws.SelectMany(c => c)];
@@ -642,6 +644,7 @@ internal static partial class BassActiveSubspaces
     {
         ArgumentNullException.ThrowIfNull(spec);
         Fingerprint(fit, data);
+        RefuseSeveralOutputs(data, "Two outputs of one fit are read here from a functional fit", nameof(data));
         if (data.Response is not FunctionalResponse)
             throw new ArgumentException("Two outputs of one fit need a functional response; this fit's is scalar: pair two fits instead.", nameof(data));
         if (spec.OtherDraws is not null) throw new ArgumentException("Two outputs of one fit pair each draw with itself; OtherDraws is for two fits.", nameof(spec));
@@ -940,6 +943,15 @@ internal static partial class BassActiveSubspaces
     }
 
     // ── The frame ─────────────────────────────────────────────────────────────────────────────────────────────────────
+
+    // A fit of several outputs (E34) holds a K-column coefficient block per draw, which these readouts do not read: its co-active pairs and
+    // projected Sobol indices are E34's readouts.
+    private static void RefuseSeveralOutputs(BassData data, string reading, string parameter)
+    {
+        if (data.Response is MultiOutputResponse)
+            throw new ArgumentException($"{reading}; this fit holds several outputs. Read two of its outputs' co-active pair with BassMultiOutput.CoActive "
+                                        + "and one output combination's Sobol indices with BassMultiOutput.Sensitivity.", parameter);
+    }
 
     private static void Fingerprint(BassFit fit, BassData data)
     {
