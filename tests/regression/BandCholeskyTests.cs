@@ -8,7 +8,7 @@ namespace Maths.Regression.Tests;
 
 /// <summary>
 /// Band Cholesky is the engine the banded spline marginal consumes: on a symmetric positive-definite matrix
-/// with half-bandwidth p it must reproduce the dense <see cref="CholeskyDecomposition"/> exactly — same solve
+/// with half-bandwidth p it must reproduce the dense <see cref="DenseCholesky"/> exactly — same solve
 /// A⁻¹b, same log-determinant — at O(n·p²) instead of O(n³). Both factorizations (L·Lᵀ and root-free L·D·Lᵀ)
 /// must agree with the dense reference.
 /// </summary>
@@ -54,10 +54,10 @@ public sealed class BandCholeskyTests
         var b = new double[n];
         for (int i = 0; i < n; i++) b[i] = rng.NextDouble() - 0.5;
 
-        var dense = new CholeskyDecomposition(n);
+        var dense = new DenseCholesky(n);
         dense.Decompose(a);
         var aInv = new double[n, n];
-        dense.WriteInverseTo(aInv);
+        Assert.True(dense.TryWriteInverseTo(aInv));
         var xDense = new double[n];
         for (int i = 0; i < n; i++)
         {
@@ -79,7 +79,7 @@ public sealed class BandCholeskyTests
     }
 
     [Fact]
-    public void CholeskyDecomposition_Solve_MatchesInverseAndResidual()
+    public void DenseCholesky_Solve_MatchesInverseAndResidual()
     {
         const int n = 24;
         var rng = new Xoshiro256PlusPlus(seed: 12321);
@@ -87,13 +87,13 @@ public sealed class BandCholeskyTests
         var b = new double[n];
         for (int i = 0; i < n; i++) b[i] = rng.NextDouble() - 0.5;
 
-        var chol = new CholeskyDecomposition(n);
+        var chol = new DenseCholesky(n);
         chol.Decompose(a);
         double[] x = chol.Solve(b);
 
         // Agree with A⁻¹b from the full inverse, and have a tiny residual A·x − b.
         var aInv = new double[n, n];
-        chol.WriteInverseTo(aInv);
+        Assert.True(chol.TryWriteInverseTo(aInv));
         double maxErr = 0.0, maxResid = 0.0;
         for (int i = 0; i < n; i++)
         {
@@ -122,10 +122,10 @@ public sealed class BandCholeskyTests
         var rng = new Xoshiro256PlusPlus(seed: 4242);
         double[,] a = BandedSpd(n, p, rng);
 
-        var dense = new CholeskyDecomposition(n);
+        var dense = new DenseCholesky(n);
         dense.Decompose(a);
         var aInv = new double[n, n];
-        dense.WriteInverseTo(aInv);
+        Assert.True(dense.TryWriteInverseTo(aInv));
 
         var band = new BandCholesky(n, p, BandFactorization.Ldlt);
         band.Decompose(a);

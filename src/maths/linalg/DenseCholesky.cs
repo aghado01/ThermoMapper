@@ -17,8 +17,7 @@ namespace Maths.LinAlg
     /// <item><b>Row at a time.</b> Rows are factored in order (Cholesky–Banachiewicz) into packed row-major storage,
     /// each row the bordered extension of the factor above it: the step a birth reuses.</item>
     /// </list>
-    /// Only the lower triangle of the input is read. With no pivot near the floor, its factor is bit-identical to
-    /// <see cref="CholeskyDecomposition"/>'s, whose floored, inverse-forming path its existing callers keep.
+    /// Only the lower triangle of the input is read.
     /// </summary>
     public sealed class DenseCholesky : ISpdFactor
     {

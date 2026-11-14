@@ -21,7 +21,7 @@ public sealed class FactorReferenceTests
         double[,] a = DenseSpd(n, new Xoshiro256PlusPlus(seed: 101));
         double[] b = Vector(n, new Xoshiro256PlusPlus(seed: 102));
 
-        var chol = new CholeskyDecomposition(n);
+        var chol = new DenseCholesky(n);
         chol.Decompose(a);
 
         (double[] xRef, double logDetRef) = LuSolve(a, b);
@@ -29,13 +29,11 @@ public sealed class FactorReferenceTests
         Assert.Equal(logDetRef, chol.LogDet, 10);
 
         var inv = new double[n, n];
-        chol.WriteInverseTo(inv);
+        Assert.True(chol.TryWriteInverseTo(inv));
         AssertIdentity(Multiply(a, inv), 1e-10);
 
-        var lFlat = new double[n * n];
-        chol.WriteLTo(lFlat);
         var l = new double[n, n];
-        for (int i = 0; i < n; i++) for (int j = 0; j < n; j++) l[i, j] = lFlat[i * n + j];
+        for (int i = 0; i < n; i++) for (int j = 0; j < n; j++) l[i, j] = chol.Factor(i, j);
         AssertClose(Flatten(a), Flatten(Multiply(l, Transpose(l))), 1e-10);
 
         Assert.True(chol.Status.PositiveDefinite);
@@ -142,7 +140,7 @@ public sealed class FactorReferenceTests
         for (int i = 0; i < n; i++) d[i, i] = lambda[i];
         double[,] a = Multiply(q, Multiply(d, Transpose(q)));
 
-        var chol = new CholeskyDecomposition(n);
+        var chol = new DenseCholesky(n);
         chol.Decompose(a);
         double kappa = 40.0 / 1e-6;
         Assert.True(chol.Status.PivotRatio >= (1.0 / kappa) * (1.0 - 1e-6), $"ratio {chol.Status.PivotRatio:E3} < 1/κ");
@@ -157,7 +155,7 @@ public sealed class FactorReferenceTests
         switch (kind)
         {
             case "dense":
-                var chol = new CholeskyDecomposition(n);
+                var chol = new DenseCholesky(n);
                 chol.Decompose(a);
                 return chol.Status;
             default:

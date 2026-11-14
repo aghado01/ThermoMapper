@@ -14,7 +14,18 @@ namespace Maths.LinAlg.Tests;
 /// </summary>
 public sealed class PivotedCholeskyTests
 {
-    private static double[,] Kernel(int n, double length) => CholeskyDivergenceTests.SquaredExponential(n, length);
+    // A squared-exponential covariance, variance 1, on n evenly spaced points of [0, 1].
+    private static double[,] Kernel(int n, double length)
+    {
+        var k = new double[n, n];
+        for (int i = 0; i < n; i++)
+            for (int j = 0; j <= i; j++)
+            {
+                double r = (i - j) / (double)(n - 1) / length;
+                k[i, j] = k[j, i] = Math.Exp(-0.5 * r * r);
+            }
+        return k;
+    }
 
     private static double Reconstruction(PivotedCholesky f, double[,] a)
     {

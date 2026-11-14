@@ -182,7 +182,7 @@ internal static class CostLevers
             return -0.5 * quad - 0.5 * logDet - 0.5 * Math.Log(oneKOne) - 0.5 * (_n - 1) * Math.Log(2.0 * Math.PI);
         }
 
-        /// <summary>The fit as production writes it: fresh arrays, the interface kernel, <see cref="CholeskyDecomposition"/> (with L⁻¹), two solves.</summary>
+        /// <summary>The fit as production writes it: fresh arrays, the interface kernel, <see cref="DenseCholesky"/>, two solves.</summary>
         public double Verbatim(double t)
         {
             var a = new double[_n, _n];
@@ -191,7 +191,7 @@ internal static class CostLevers
                 a[i, i] = _kernel.Evaluate(0.0, t) + _nugget;
                 for (int j = 0; j < i; j++) { double v = _kernel.Evaluate(_sq[i, j], t); a[i, j] = v; a[j, i] = v; }
             }
-            var chol = new CholeskyDecomposition(_n);
+            var chol = new DenseCholesky(_n);
             chol.Decompose(a);
             return Reduce(chol.LogDet, chol.Solve(_y), chol.Solve(_ones));
         }

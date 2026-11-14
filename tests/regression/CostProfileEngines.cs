@@ -391,7 +391,6 @@ internal static class CostEngines
             var a = new double[n, n];
             var l = new double[n, n];
             var lInv = new double[n, n];
-            var chol = new CholeskyDecomposition(n);
             var strict = new DenseCholesky(n);
             double[] row = new double[n], rowOut = new double[n];
             long fill = (long)n * (n + 1) / 2;
@@ -404,7 +403,7 @@ internal static class CostEngines
                 }
             }
             Fill();
-            chol.Decompose(a);
+            strict.Decompose(a);
             CostKernels.CholeskyStep1(a, l, n);
             var parts = new List<CostProfile.Part>
             {
@@ -412,11 +411,10 @@ internal static class CostEngines
                 new("kernel_fill_interface_call", c => { for (int i = 0; i < c; i++) Fill(); }, fill, "pair"),
                 new("kernel_fill_inline_exp", c => { for (int r = 0; r < c; r++) for (int i = 0; i < n; i++) { a[i, i] = 1.01; for (int j = 0; j < i; j++) { double v = Math.Exp(-sq[i, j] / (2.0 * t)); a[i, j] = v; a[j, i] = v; } } }, fill, "pair"),
                 new("kernel_fill_vector_exp_lower_triangle", c => { for (int r = 0; r < c; r++) for (int i = 0; i < n; i++) { for (int j = 0; j < i; j++) row[j] = -sq[i, j] / (2.0 * t); VectorExp(row, rowOut, i); for (int j = 0; j < i; j++) { a[i, j] = rowOut[j]; a[j, i] = rowOut[j]; } a[i, i] = 1.01; } }, fill, "pair"),
-                new("cholesky_decompose_production", c => { for (int i = 0; i < c; i++) chol.Decompose(a); }, CostKernels.CholeskyStep1Terms(n) + CostKernels.CholeskyStep2Terms(n), "term"),
                 new("cholesky_step1_factor", c => { for (int i = 0; i < c; i++) CostKernels.CholeskyStep1(a, l, n); }, CostKernels.CholeskyStep1Terms(n), "term"),
                 new("cholesky_step2_inverse_of_L", c => { for (int i = 0; i < c; i++) CostKernels.CholeskyStep2(l, lInv, n); }, CostKernels.CholeskyStep2Terms(n), "term"),
                 new("dense_cholesky_strict_factor", c => { for (int i = 0; i < c; i++) strict.Decompose(a); }, CostKernels.DenseFactorTerms(n), "term"),
-                new("two_solves", c => { for (int i = 0; i < c; i++) { Sink = chol.Solve(y)[0]; Sink = chol.Solve(y)[1]; } }, 2.0 * n * (n + 1), "term"),
+                new("two_solves", c => { for (int i = 0; i < c; i++) { Sink = strict.Solve(y)[0]; Sink = strict.Solve(y)[1]; } }, 2.0 * n * (n + 1), "term"),
                 new("three_n_by_n_allocations", c => { for (int i = 0; i < c; i++) { ObjectSink = new double[n, n]; ObjectSink = new double[n, n]; ObjectSink = new double[n, n]; } }, 3, "array"),
             };
             CostProfile.Point(block, $"fit n={n}", parts);

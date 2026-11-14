@@ -35,10 +35,9 @@ namespace Maths.LinAlg
     /// </para>
     /// <para>
     /// Allocate once with <see cref="BandCholesky(int,int,BandFactorization,bool)"/>, then call <see cref="Decompose"/>
-    /// each time the matrix changes (the inner-loop MCMC pattern). By default it mirrors
-    /// <see cref="CholeskyDecomposition"/>'s 1e-12 diagonal floor — a soft guard against a near-interpolating
-    /// (over-knotted) design without throwing; the floor is applied to the variance so the two conventions clamp to
-    /// the same D = 1e-12.
+    /// each time the matrix changes (the inner-loop MCMC pattern). By default it floors a pivot at 1e-12 — a soft
+    /// guard against a near-interpolating (over-knotted) design without throwing; the floor is applied to the variance
+    /// so the two conventions clamp to the same D = 1e-12.
     /// </para>
     /// <para>
     /// A strict factor (<see cref="Strict"/>) has no floor, as <see cref="DenseCholesky"/>: the first pivot that is not

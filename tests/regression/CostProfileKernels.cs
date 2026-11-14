@@ -298,7 +298,7 @@ internal static class CostKernels
         return true;
     }
 
-    /// <summary><see cref="CholeskyDecomposition"/>'s first pass, in its own arrays: the factor, floored.</summary>
+    /// <summary>The retired floored Cholesky's first pass, in its own arrays: the factor, floored.</summary>
     internal static void CholeskyStep1(double[,] sigma, double[,] l, int dim)
     {
         for (int i = 0; i < dim; i++)
@@ -319,7 +319,7 @@ internal static class CostKernels
             }
     }
 
-    /// <summary><see cref="CholeskyDecomposition"/>'s second pass: L⁻¹ by forward substitution, which BGP's fit never reads.</summary>
+    /// <summary>The retired floored Cholesky's second pass: L⁻¹ by forward substitution, which BGP's fit never reads.</summary>
     internal static void CholeskyStep2(double[,] l, double[,] lInv, int dim)
     {
         for (int i = 0; i < dim; i++)
@@ -647,24 +647,22 @@ internal static class CostKernels
         foreach (int n in new[] { 50, 100, 200, 400, 800, 1600 })
         {
             double[,] a = DenseSpd(n, 300 + n);
-            var chol = new CholeskyDecomposition(n);
             var strict = new DenseCholesky(n);
             var l = new double[n, n];
             var lInv = new double[n, n];
             double[] rhs = Random(n, 13);
             long t1 = CholeskyStep1Terms(n), t2 = CholeskyStep2Terms(n);
-            chol.Decompose(a);
+            strict.Decompose(a);
             CholeskyStep1(a, l, n);
             CholeskyStep2(l, lInv, n);
             CostProfile.Row("kernels:bgp", $"n={n}", "(count)", "step1_terms", t1);
             CostProfile.Row("kernels:bgp", $"n={n}", "(count)", "step2_terms", t2);
             var parts = new List<CostProfile.Part>
             {
-                new("production_decompose", c => { for (int i = 0; i < c; i++) chol.Decompose(a); }, t1 + t2, "term"),
                 new("replica_step1_factor", c => { for (int i = 0; i < c; i++) CholeskyStep1(a, l, n); }, t1, "term"),
                 new("replica_step2_inverse_of_L", c => { for (int i = 0; i < c; i++) CholeskyStep2(l, lInv, n); }, t2, "term"),
                 new("dense_cholesky_strict_factor", c => { for (int i = 0; i < c; i++) strict.Decompose(a); }, DenseFactorTerms(n), "term"),
-                new("production_solve", c => { for (int i = 0; i < c; i++) Sink = chol.Solve(rhs)[0]; }, 2L * n * (n + 1) / 2, "term"),
+                new("production_solve", c => { for (int i = 0; i < c; i++) Sink = strict.Solve(rhs)[0]; }, 2L * n * (n + 1) / 2, "term"),
                 new("new_n_by_n_array", c => { for (int i = 0; i < c; i++) ObjectSink = new double[n, n]; }, 1, "array"),
             };
             CostProfile.Point("kernels:bgp", $"n={n}", parts);

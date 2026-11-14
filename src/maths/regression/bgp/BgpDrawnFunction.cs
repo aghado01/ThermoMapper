@@ -97,52 +97,9 @@ public sealed partial class BgpSampler
         return new BgpDrawnFunction(values, trainingAt, caseAt, noise, [.. _gp.Responses], ChainLengths.Of(result.BandwidthDraws), _unknownScale);
     }
 
-    // A pivot below this share of the largest variance ends the factor: the rest of the covariance is left out.
+    // A pivot below this share of the largest variance ends the pivoted factor (PivotedCholesky): the rest of the covariance
+    // is left out.
     private const double PivotTolerance = 1e-12;
-
-    // Cholesky with diagonal pivoting of a positive semidefinite covariance given by its lower triangle (Harbrecht, Peters and Schneider
-    // 2012): each step takes the largest remaining diagonal, and the factor stops where every remaining one is at most PivotTolerance of
-    // the largest variance. Row a of the factor (p × p, row-major, in the points' own order) holds a's loadings on the columns kept, so
-    // the covariance is LLᵀ up to the remaining diagonals, each below the tolerance. Returns the columns kept. An unpivoted factor with a
-    // floor fails here: the posterior covariance of a smooth kernel at close inputs has a spectrum that falls below rounding, and floored
-    // pivots let its rounding grow without bound.
-    internal static int PivotedFactor(double[,] lower, double[] factor)
-    {
-        int p = lower.GetLength(0);
-        Array.Clear(factor, 0, p * p);
-        var remaining = new double[p];
-        var order = new int[p];
-        double largest = 0.0;
-        for (int a = 0; a < p; a++)
-        {
-            remaining[a] = lower[a, a];
-            order[a] = a;
-            largest = Math.Max(largest, remaining[a]);
-        }
-        double tolerance = PivotTolerance * largest;
-        int k = 0;
-        for (; k < p; k++)
-        {
-            int best = k;
-            for (int i = k + 1; i < p; i++) if (remaining[order[i]] > remaining[order[best]]) best = i;
-            double pivot = remaining[order[best]];
-            if (!(pivot > tolerance)) break;
-            (order[k], order[best]) = (order[best], order[k]);
-            int at = order[k];
-            double root = Math.Sqrt(pivot);
-            factor[at * p + k] = root;
-            for (int i = k + 1; i < p; i++)
-            {
-                int q = order[i];
-                double s = q >= at ? lower[q, at] : lower[at, q];
-                for (int c = 0; c < k; c++) s -= factor[q * p + c] * factor[at * p + c];
-                double v = s / root;
-                factor[q * p + k] = v;
-                remaining[q] -= v * v;
-            }
-        }
-        return k;
-    }
 
     // A stream per chain from the seed: SplitMix64 over the seed and the chain's index gives xoshiro's four words.
     private static Xoshiro256PlusPlus Stream(int seed, int chain)

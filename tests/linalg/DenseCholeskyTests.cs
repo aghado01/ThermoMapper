@@ -74,23 +74,6 @@ public sealed class DenseCholeskyTests
         AssertIdentity(Multiply(a, cov), 1e-12);
     }
 
-    [Fact]
-    public void Factor_IsTheFlooredFactor_WhereNoPivotIsFloored()
-    {
-        // Same Cholesky–Banachiewicz order as CholeskyDecomposition, so with no pivot near the floor they agree exactly.
-        const int n = 12;
-        double[,] a = DenseSpd(n, new Xoshiro256PlusPlus(seed: 62));
-        var strict = new DenseCholesky(n);
-        strict.Decompose(a);
-        var floored = new CholeskyDecomposition(n);
-        floored.Decompose(a);
-        var l = new double[n * n];
-        floored.WriteLTo(l);
-        for (int i = 0; i < n; i++) for (int j = 0; j < n; j++) Assert.Equal(l[i * n + j], strict.Factor(i, j));
-        Assert.Equal(floored.LogDet, strict.LogDet);
-        Assert.Equal(floored.Status, strict.Status);
-    }
-
     [Theory]
     [InlineData(1.0, 1.0, 1.0, 1, 0.0)]      // singular: the second pivot is exactly 0
     [InlineData(1.0, 2.0, 1.0, 1, -3.0)]     // indefinite: the second pivot is 1 − 4
@@ -123,7 +106,7 @@ public sealed class DenseCholeskyTests
     [Fact]
     public void TinyScaleIdentity_IsFactoredExactly()
     {
-        // The floored factors clamp every pivot of 1e-20·I; the strict factor has no floor to hit.
+        // The band factors' default floor clamps every pivot of 1e-20·I; the strict factor has no floor to hit.
         var f = new DenseCholesky(2);
         f.Decompose(new double[,] { { 1e-20, 0 }, { 0, 1e-20 } });
         Assert.True(f.Status.PositiveDefinite);
@@ -193,7 +176,7 @@ public sealed class DenseCholeskyTests
         Assert.Equal(f.Status.MinRelativePivot, f.RelativePivot(2));
     }
 
-    public static TheoryData<string> AllFactorizations => new() { "strict", "dense", "band-chol", "band-ldlt" };
+    public static TheoryData<string> AllFactorizations => new() { "strict", "band-chol", "band-ldlt" };
 
     [Theory]
     [MemberData(nameof(AllFactorizations))]
@@ -260,10 +243,6 @@ public sealed class DenseCholeskyTests
                 var strict = new DenseCholesky(n);
                 strict.Decompose(a);
                 return strict.Status;
-            case "dense":
-                var chol = new CholeskyDecomposition(n);
-                chol.Decompose(a);
-                return chol.Status;
             default:
                 var band = new BandCholesky(n, n - 1, kind == "band-ldlt" ? BandFactorization.Ldlt : BandFactorization.Cholesky);
                 band.Decompose(a);
