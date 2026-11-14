@@ -95,6 +95,37 @@ The measurement's options 2 and 4 are not built. Option 2 costs what *reference 
 
 **Files.** `src/maths/regression/spline/baps/**`, `src/maths/linalg/BandCholesky.cs` for option 5, and their tests.
 
+## Slice 7: "screened" as the samplers' default
+
+Decided by the user on 2026-11-14, on [slice 6's report](#2026-11-14--slice-6-the-samplers-condition-check-as-a-setting) and its [verification](#2026-11-14--slice-6-verified-from-clean-archives-coordinating-session).
+
+**The change.**
+- `ConditionCheck`'s default becomes `Screened` on `Baps` and `HierarchicalPSpline`. `EveryFactorization` and `ReferenceOnly` stay as named modes, and `EveryFactorization` stays the reference the tests compare against.
+- The screen takes the sharper constant, (1 + √ν)/2 in place of √ν (`cond1_unitScale_le_sharp`, verified at `dd57650`).
+- Both land together and are verified in one cycle.
+
+**First, before any code moves: checkpoints and pins.** Today only a non-default mode enters a run's fingerprint. Read what the default change does to:
+- a checkpoint written under the old default and resumed after the change;
+- every pinned hash, fingerprint and golden value a default run reaches;
+- any test that reads a default run's refusal text or its `ConditionRecord`.
+
+The shape to find moves no pinned value and leaves no existing checkpoint without a way to resume. The two modes draw the same chain and refuse the same steps, which is what makes such a shape possible. If none meets both, stop and report the candidates with what each one moves: regenerating a pin, or orphaning a checkpoint, is the user's call and its own question.
+
+**What a default run now shows differently.** State each in the report:
+- the refusal's text, where a default run refuses;
+- `ConditionRecord` on a healthy run: no estimates and no largest estimate, with the reference condition and the widest ratio read in their place;
+- one exact reading per run, ν solves, before the first draw.
+
+**Gates.**
+- A default run draws the chain it drew before, bit for bit, over the measurement's 19 cases and every pinned draw.
+- The invariant sweep again under the sharper constant: no step where the screen admits and the estimate refuses, with the slack table.
+- Resume in each mode, and across the change as the first section settles it.
+- Every test project the changed files select classes in, named in the report with its count. `Maths.Samplers.Tests` was missed in slice 6's gates.
+- The pinned tier at each commit; the regression assembly once at the end.
+- No cost probe: the constant moves fall-through only, and slice 6's probe saw none.
+
+**Files.** `src/maths/regression/spline/baps/**` and their tests.
+
 ## Working rules
 
 - **Order.** Slice 1, then slice 2. They touch different code, so slice 2's reading starts when slice 1 lands. The coordinating session verifies each landed slice from a clean archive ([scripts/verify-csharp.ps1](../../scripts/verify-csharp.ps1)).
