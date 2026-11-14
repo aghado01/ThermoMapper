@@ -292,6 +292,66 @@ Each report gives the commits, gate results, coverage and width by fit, cost, de
 
 Newest first.
 
+### 2026-11-13 — Slice 14's follow-up 2: the cross-fitted forms under weights
+
+Built at the user's decision 12 once its Lean was verified by the main session: `38f2e3f` (`crossFit_likelihoodRatio`, `crossFit_weighted_swap_tv`, the jackknife+ and tournament forms, `cvPlus_oneFold_likelihoodRatio`), and `7e2b905` (`cvPlus_merged_weighted`, `coverage_across_likelihoodRatio`).
+
+**Landed** on `main`, nothing pushed:
+- `000839b`:
+  - `CrossConformal.JackknifePlus`, `Pairwise`, both `Density` overloads and both `Tournament` overloads take `ShiftWeights`.
+  - `JackknifePlusInterval.WeightedAlpha`.
+  - `CrossConformal.CvPlus(readings, assumptions, alpha, CvPlusWeights)`, with `CvPlusWeights(Weights, Weighting, RatioBound)`, `CvPlusWeighting` (`LikelihoodRatio`, `Position`) and `CvPlusInterval.WeightedAlpha`. A weighted case carries its own `CvPlusBounds`.
+  - `ConformalSet.Coverage` under the weighted rule: 1 − 2α for the cross-fitted forms.
+  - `WeightedCrossFitTests`.
+- *Nothing else existing changes:* equal weights give the counts' forms bit for bit.
+
+**What it computes.**
+- *The rule* (`strangeWeight`). The candidate is refused when the units it is stranger than carry at least 1 − α of the weight, its own included. As a p-value: π = (the weight it is not stranger than + its own)/W, accepted where π > α.
+  - In the pairwise and density forms, "stranger" is the held-out score above the candidate's.
+  - In the tournament it is a lost game.
+  - Whatever the comparisons, the refused units carry at most 2α of the weight (`sum_weight_strange_le`, Lei's lemma).
+- *The weighted jackknife+* (`JackRefusesW`). y is refused where the upper ends below it, or the lower ends above it, carry at least 1 − α of the weight. The upper end is the least upper end whose weight at or below reaches (1 − α)·W, the lower end alike. That is Barber et al.'s weighted quantiles with the test's mass at ±∞; it is +∞ or −∞ where the test's own weight is more than α of W.
+- *What the weights state decides the guarantee:*
+  - *Likelihood ratios* travelling with the units, w(x) or w(y) per candidate (JAWS): at most 2α missed, with no further term.
+  - *Weights fixed by position,* the candidate's the largest: 2α plus the swap distances, which the layer cannot read; 2α on exchangeable data.
+  - Either way the sets report 1 − 2α.
+- *Weighted CV+* takes the jackknife+'s weighted ends on the folds' predictions. Its bounds are per case:
+  - *Likelihood ratios:*
+    - one fold's, 1 − min(1, α·W_tot/(W_k + w_t)) at the fold of largest weight, under `MergedRanks`, which serves few folds;
+    - and, given a bound w̄ on the ratio, across folds 1 − 2α − W_max/W_tot. W_max is the larger of the heaviest fold and fold size × w̄, which covers the test's imagined fold-mates. It applies under `FoldTournament` and serves many folds.
+    - No merged bound: it is open under likelihood ratios.
+  - *Position weights:* the merged 1 − 2c, c = (α(W + w_t) + (K − 1)w_t)/(W + K·w_t), under `MergedRanks` and only where the test's weight is the largest; slice 9's merged bound at equal weights.
+
+**Gates.**
+- *By enumeration, likelihood ratios:* 1,500 bags of 3 to 9 units, responses on a lattice so residuals tie, weights with zeros, the fit the mean of the rest (symmetric). Over every placement of the test unit, weighted by its ratio, the weighted jackknife+ and the weighted pairwise set each miss at most 2α of the weight; the largest share of 2α used is 0.500 for each.
+- *Equal weights* give the counts' forms bit for bit: the jackknife+, the pairwise set, the tournament and CV+, whose intervals keep the shared bounds. Per-case weights give each case its own call, and report 1 − 2α.
+- *Covariate shift,* JAWS's setting: training x uniform, test x of density 2x, a straight line fitted to sin 2πx with noise growing in x, 100 units, 2,000 replications, α 0.1, se 0.0067:
+  - the jackknife+ covers 0.915 with the true ratio, against 0.859 unweighted;
+  - CV+ with 10 folds 0.914 against 0.859. Its one-fold bound averages 0.282 there: one fold's bound is weak with many folds, which the across-folds bound serves.
+- *CV+'s bounds by hand,* three folds of weights 3, 2 and 4:
+  - position weights give 1 − 2c, and apply only with the test's weight the largest;
+  - likelihood ratios give the one-fold value and, with w̄ = 3, the across-folds value, the coverage the larger;
+  - without w̄ the across-folds bound does not apply.
+- *The refusals:*
+  - weights for other units, cases or candidates, in every form;
+  - a ratio bound with position weights, or a ratio bound not positive;
+  - an undefined weighting.
+- *Existing classes,* the cross-conformal, CV+ and tournament tests: unchanged and passing.
+- *Per commit,* the selected classes and the pinned tier: 1,204 of 1,204.
+
+**Defects found: none.**
+
+**Follow-ups, each with the decision it would change.**
+- *A merged K-fold bound under likelihood ratios:* open in the Lean, with no counterexample found. It would decide whether weighted CV+ reports near 2α with few heavy folds.
+- *The ratio's bound w̄* is the caller's to state, as the estimator's quality is (slice 14's follow-up). A ratio clipped at w̄ would supply it by construction. Decides whether `DensityRatio` offers clipping.
+
+**Doc changes owed** (for the offline docs pass): `docs/Maths/Regression/ConformalPrediction.md`, the cross-fitted section:
+- the weighted rule and Lei's lemma;
+- the two kinds of weights and their guarantees;
+- weighted CV+'s three bounds and what each needs;
+- the gates' numbers;
+- API rows for the weights on every cross-fitted form, `CvPlusWeights` and `CvPlusWeighting`.
+
 ### 2026-11-13 — Slice 14's follow-up 1: the weighted predictive distribution
 
 Built at the user's decision 12 ("Lean first, 15 meanwhile") once its Lean (`d81f293`; `pit_weighted`, `sum_mul_wPitCdf`, `wPit_estimated`) was verified by the main session on a clean archive of `38f2e3f`.
