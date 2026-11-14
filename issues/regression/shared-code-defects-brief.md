@@ -63,6 +63,15 @@ Commissioned by the user on 2026-11-13 through the coordinating session. Both de
 
 Newest first. Each gives the commits, the gates' results, defects found, decisions for the user and "Doc changes owed".
 
+### In progress (2026-11-13)
+
+- *Slice 5, `BandCholesky` strict by default:* decided by the user on 2026-11-13. `PivotedCholesky`'s solve is still undecided and untouched.
+- *The user's correction to slice 4's note on rollout.*
+  - BARS's banded g-prior already asks for strict mode.
+  - The BAPS penalized and tensor splines use the floored default but reject any factor that reports a floored pivot.
+  - So the switch can admit a valid small-scale fit that BAPS rejects today. That direction is qualified explicitly, beside singular-design refusal and the public λx = λy = 1e20 tensor cases.
+- *Next:* read `BandCholesky`'s floor, strict mode and every caller; then the switch, the three qualifications, the gates and the report.
+
 ### 2026-11-13 — Slice 4 verified from clean archives (coordinating session)
 
 Over the nineteen files of `f448931`, `43bd61f`, `ff5d635`, `e6dc220` and the review fix `78603a2`.
