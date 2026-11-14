@@ -144,6 +144,15 @@ The shape to find moves no pinned value and leaves no existing checkpoint withou
 
 Newest first. Each gives the commits, the gates' results, defects found, decisions for the user and "Doc changes owed".
 
+### 2026-11-14 — Slice 7 verified from a clean archive (coordinating session)
+
+- **Run:** `scripts/verify-csharp.ps1` at HEAD `1441600`, the Commit selection over `1441600`'s four files.
+- **Result:** regression 228 of 228 (25 of 325 classes and the pinned tier). A sweep of all 27 test projects with `test-select -ListOnly` found no other project selecting a class.
+- **Read:** the source diff. The default flips on both constructors, the screen's factor is m·(1 + √ν)/2 as `cond1_unitScale_le_sharp` states it, and the fingerprint rule's code is untouched.
+- **Slice 6's sweep, closed.** That sweep covered the 22 projects under folders named `*.Tests`. The five it missed are smoke and analysis programs with no test class, so nothing was skipped.
+- **Not run here:** the whole regression assembly, 3,458 of 3,458 on the chip's own run.
+- **Receipts:** `artifacts/verify-defects-s7-1441600/`, with the counters, snapshot, changed files and the sweep tracked in [receipts](receipts/verify-defects-s7-1441600/).
+
 ### 2026-11-14 — Slice 7: "screened" as the samplers' default
 
 **Commits.**
