@@ -120,6 +120,8 @@ Under "Reports" below, newest first, per slice: what landed by commit; the gates
 
 ### E8's readouts on a fit of several outputs (chip, 2026-11-13)
 
+*Superseded by `c543297`:* E8's entry points now read a fit of several named outputs, replacing the refusals below. Its report and doc changes owed are in `issues/regression/shared-code-defects-brief.md` (`72427ad`).
+
 The user's call, after asking to pick up "E34's co-active pairs across outputs": those pairs are built (`BassMultiOutput.CoActive`, slice 3, `7b4a19f`), and E8's open-items note listing them as deferred is an archived record, which stays as it was. The gap was E8's own entry points on a fit of several outputs: `BassFit.ActiveSubspace` threw `IndexOutOfRangeException`, and with an output metric, `CoActiveSubspace` for two outputs of the fit, and a two-fit pair with such a fit on either side each refused with "this fit's response is scalar". They now refuse with their reason and name `BassMultiOutput.CoActive` and `BassMultiOutput.Sensitivity` (`BassActiveSubspace.RefuseSeveralOutputs`, at `Read`, `DirectSide` and the one-fit `CoActive`). Sobol, effects, the polynomial-chaos reading and the gradient readout already refused with E34's pointer. The E8 session heard the shape before the edit.
 - *Gate:* `MultiOutputReadoutTests.E8sReadouts_RefuseSeveralOutputs_NamingE34s`, each entry's parameter and message, and E34's reading of the same pair beside them; Commit selection with the pinned tier 2,599 of 2,599. Landed in `d9152e6`.
 - *Verified by the main session on 2026-11-13,* from one clean archive of `01eb63d` with zero skips ([receipts](../receipts/verify-e34-guards-d9152e6/)): regression 2,599 of 2,599 and Oracle 57 of 57.
