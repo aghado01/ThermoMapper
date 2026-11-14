@@ -137,6 +137,7 @@ Carried:
     - `LinearAlgebra.md` and `ActiveSubspaces.md`, from the LinAlg consolidation;
     - `BASS.md` and `ActiveSubspaces.md`, from 7d;
     - `MultiOutput.md` and `BASS.md`, from E34.
+    - `ConformalPrediction.md`'s two links to the conformal-layer brief, now in `issues/regression/archive/bass-gbass-khaos-activespaces/briefs/`, with the addendum brief beside it (`ac7b31d`).
 
     The ~200 links into `docs/.archive/BayesianRegression.md` wait until the docs layout settles.
 13. **The defects chip's decisions** (2026-11-13), with measurements in its [reports](shared-code-defects-brief.md#reports). The first four are **decided by the user and built,** as the chip's brief records them; two are new.
