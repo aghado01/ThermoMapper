@@ -1,6 +1,6 @@
 # Active subspaces on the BASS core: E8's build (chip brief)
 
-Date: 2026-11-08. Status: slices 0–6 complete; slice 7's plan approved by the user (2026-11-10); slice 7a (`7b2ca7a`) verified 2026-11-11; slice 7b (`70a2aa2`) verified 2026-11-11; slice 7c (`015d977`) verified 2026-11-11; slice 7d, the training-range hinge rule the user chose for projected fits (2026-11-11), landed (`566c1f1` to `6aff134`) and was verified 2026-11-13 (2,502 of 2,502 from a clean archive of `788d249`). Commissioned by the user on 2026-11-08 ("kick off e8"), after KHAOS's last slice; slice 5, the Grassmann discussion's items the user settled, commissioned 2026-11-08 ("ill take as recommended"). Every slice landed and was verified by the coordinating session on 2026-11-08: slice 0 (`15fb495`, `9e3028d`, `aa62879`), slice 1 (`95294f8`, `9dfcc6d`, `1385b86`), slice 2 (`8c7db77`, `3cdc2e8`), slice 3 (`84fe230`, `1049055`), slice 4 (`20aeb06`, `bc72014`) and slice 5 (`def59f3`, `9d2ff23`, `95d2900`, `a54a537`). The follow-ups, commissioned 2026-11-10: slice 6 (`276af70`, `e9d8827`, `30df59e`, `9a669b6`, report `3c26660`) verified by the coordinating session on 2026-11-10; slice 7's plan (below, "Slice 7's plan") waits for the user's decisions; E36's brief follows its verification. Written by the main session from [E8's entry](extensions-brief.md#active-subspace-analysis), [gap G3](lineage-gaps-register.md#g3-sobol-indices-and-active-subspaces-have-different-standing), [the lineage review's separability question](lineage-review.md#separability-is-what-the-closed-forms-rest-on), the [Astra notes](../discussion/astra-grassman-stiefel-pca-extensions.md), and the [Grassmann discussion](../discussion/grassmann-stiefel-subspaces-brief.md)'s report so far. Reports go under "Reports" below, newest first.
+Date: 2026-11-08. Status: slices 0–6 complete; slice 7's plan approved by the user (2026-11-10); slice 7a (`7b2ca7a`) verified 2026-11-11; slice 7b (`70a2aa2`) verified 2026-11-11; slice 7c (`015d977`) verified 2026-11-11; slice 7d, the training-range hinge rule the user chose for projected fits (2026-11-11), landed (`566c1f1` to `6aff134`) and was verified 2026-11-13 (2,502 of 2,502 from a clean archive of `788d249`); slice 7e, the frame's column signs, commissioned by the user on 2026-11-13 (below). Commissioned by the user on 2026-11-08 ("kick off e8"), after KHAOS's last slice; slice 5, the Grassmann discussion's items the user settled, commissioned 2026-11-08 ("ill take as recommended"). Every slice landed and was verified by the coordinating session on 2026-11-08: slice 0 (`15fb495`, `9e3028d`, `aa62879`), slice 1 (`95294f8`, `9dfcc6d`, `1385b86`), slice 2 (`8c7db77`, `3cdc2e8`), slice 3 (`84fe230`, `1049055`), slice 4 (`20aeb06`, `bc72014`) and slice 5 (`def59f3`, `9d2ff23`, `95d2900`, `a54a537`). The follow-ups, commissioned 2026-11-10: slice 6 (`276af70`, `e9d8827`, `30df59e`, `9a669b6`, report `3c26660`) verified by the coordinating session on 2026-11-10; slice 7's plan (below, "Slice 7's plan") waits for the user's decisions; E36's brief follows its verification. Written by the main session from [E8's entry](extensions-brief.md#active-subspace-analysis), [gap G3](lineage-gaps-register.md#g3-sobol-indices-and-active-subspaces-have-different-standing), [the lineage review's separability question](lineage-review.md#separability-is-what-the-closed-forms-rest-on), the [Astra notes](../discussion/astra-grassman-stiefel-pca-extensions.md), and the [Grassmann discussion](../discussion/grassmann-stiefel-subspaces-brief.md)'s report so far. Reports go under "Reports" below, newest first.
 
 ## Why
 
@@ -168,6 +168,26 @@ Nothing is built until the user decides the items marked **Decision** below. The
 | 7c. The comparison | The report above, with cross-fitting opt-in | the criteria against their direct computation; cross-fitting's folds disjoint and its frames from the other folds only; a function with no low-dimensional structure, where the refit does not win |
 
 **The cost row:** native against projected fit time and M, and the pushforward readout per draw.
+
+### Slice 7e: the frame's column signs, commissioned (2026-11-13)
+
+Commissioned by the user on 2026-11-13 ("Yes, commission it"), from the active-subspace Lean chip's finding as the second coordinating session relayed it (the [handoff](../coordination-handoff-2026-11-11.md#waiting-on-the-user)'s waiting-list item 14).
+
+**The finding.** `BassProjection` copies `SubspacePosterior.MeanCVectors` into its frame exactly as `DenseEigen` returns them (`BassProjection.cs:136`), and nothing fixes a column's sign. A projected refit is invariant in law under a column's sign flip, but not draw for draw. So a solver change that flips a column, as `75523c4` could have, moves the refit's draws and every pin on a projected fit.
+
+**The rule.** `PCA.Orient` (`src/maths/linalg/PCA.cs`): each column's largest-magnitude entry is positive, the first on ties. It is the repository's convention for principal axes, and `MoMPCA` follows it. Where two entries of opposite sign nearly tie in magnitude, the sign stays rounding-sensitive under this rule or any like it.
+
+**What to build.**
+- Orient the eigenvectors where `SubspacePosterior` forms them. `Eigen` (line 221) gives both `MeanCVectors` and `ProjectionVectors`; each draw's basis comes from the solve at line 23. The frame, `BassProjectionComparison`'s exact check (line 97) and every other reader then see one sign.
+- Apply the rule to any other direction the readouts return as vectors (the co-active directions among them). List each, and say why any stays as the solver returns it.
+- `BassDecomposition.cs:418` writes the rule out for the output components. Make it call `PCA.Orient`, or a paired form beside it in LinAlg for its left and right vectors, if its bits do not change.
+
+**Gates.**
+- A frame read from a solve with a column's sign flipped equals the unflipped frame bit for bit, and the refit's draws then match.
+- `BassProjectionComparison` accepts its own analysis and refuses another, as now.
+- *The exception to "Fitting untouched":* projected fits' draws move once, wherever the solver's sign differed from the rule. List every pin that moves, with its old and new value and the column that flipped. No other fit's draw moves: the pinned tier at each commit, the whole assembly at the end.
+
+**Report** under Reports, with the doc changes owed (`ActiveSubspaces.md`, slice 7's section: the frame's sign convention).
 
 ## Gates common to every slice
 
