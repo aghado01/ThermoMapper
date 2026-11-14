@@ -8,4 +8,8 @@
   <ItemGroup>
     <Compile Include="../../src/clustering/geometric/kmeans/*.cs" Link="kmeans/%(Filename)%(Extension)" />
   </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="../Maths.Rng/Maths.Rng.csproj" />
+  </ItemGroup>
 </Project>
