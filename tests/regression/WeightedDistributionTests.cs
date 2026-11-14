@@ -261,16 +261,14 @@ public sealed class WeightedDistributionTests(ITestOutputHelper output)
             Assert.Throws<ArgumentException>(() => SplitConformal.Distribution(calibration, candidates, weights));
             Assert.Throws<ArgumentException>(() => ConformalBayes.Distribution(training, candidates, new ConformalOptions { Weights = weights }));
         }
-        foreach (ConformalOptions options in new[]
-        {
-            new ConformalOptions { Weights = good, MarginBounds = MarginBounds.Carried },
-            new ConformalOptions { Weights = good, Inflate = true },
-        })
-            Assert.Contains("weighted ranks", Assert.Throws<ArgumentException>(() => ConformalBayes.Distribution(training, candidates, options)).Message);
-        // Unequal weights: each case reads its weighted ranks, the error readouts unread.
+        Assert.Contains("weighted ranks", Assert.Throws<ArgumentException>(() => ConformalBayes.Distribution(training, candidates,
+                                                                                    new ConformalOptions { Weights = good, MarginBounds = MarginBounds.Kept })).Message);
+        // Unequal weights: each case reads its weighted ranks, and its error readouts weighed (follow-up 3): the inflated shares, and no
+        // band without the margin asked for.
         ConformalDistribution d = ConformalBayes.Distribution(training, candidates, new ConformalOptions { Weights = good }).Distributions[1];
         Assert.NotNull(d.Weighted);
-        Assert.Null(d.Margin);
+        Assert.NotNull(d.Margin!.WeightedInflatedLower);
+        Assert.True(double.IsNaN(d.CoverageUnderError(0.1)));
         Assert.Equal(0.9, d.Coverage(0.1), 12);
         Assert.False(d.WholeSpace(0.1));
     }

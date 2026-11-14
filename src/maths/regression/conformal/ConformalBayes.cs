@@ -850,9 +850,10 @@ public static class ConformalBayes
     /// The existing distribution and its monotonicity flag are retained. Alpha is queried on the returned distribution.
     /// <para>With <see cref="ConformalOptions.Weights"/> each case whose weights are not all one value reads its weighted ranks
     /// (<see cref="ConformalDistribution.Weighted"/>, slice 14's follow-up 1): its PIT exactly uniform under covariate or response shift
-    /// with the true ratio, for draws from the posterior (<c>pit_weighted</c>, the full form with an equivariant score). The error readouts
-    /// count units, so under weights none is read (<see cref="ConformalDistribution.Margin"/> is null) and the carried band, the inflated
-    /// rule and the refinement are refused.</para>
+    /// with the true ratio, for draws from the posterior (<c>pit_weighted</c>, the full form with an equivariant score). Its error readouts
+    /// are weighed (slice 14's follow-up 3, <see cref="ConformalCdfMargin.Weighted"/>): the inflated rule's shares per tail and, with the
+    /// uniform or carried margin, the band at each α; the counts by level and the PIT counts are not read. The kept turns' bounds and the
+    /// refinement are refused under weights.</para>
     /// </summary>
     public static ConformalDistributions Distribution(PointwiseLogDensity training, CandidateLogDensity candidates, ConformalOptions options)
     {
@@ -870,9 +871,10 @@ public static class ConformalBayes
             throw new ArgumentException("Margin refinement needs a margin, a seam and a positive finite tolerance.", nameof(options));
         if (options.Weights is { } shift)
         {
-            if (options.MarginBounds is not null || options.Inflate || options.MarginRefinement is not null)
-                throw new ArgumentException("Under weights the distribution reads the weighted ranks alone: the carried band, the inflated rule and the "
-                                            + "refinement count units rather than weighing them, and are not built for weights.", nameof(options));
+            if (options.MarginBounds == MarginBounds.Kept || options.MarginRefinement is not null)
+                throw new ArgumentException("Under weights the distribution reads the weighted ranks, their inflated rule and their band under uniform or "
+                                            + "carried bounds: the kept turns' bounds and the refinement count units rather than weighing them, and are not "
+                                            + "built for weights.", nameof(options));
             if (shift.UnitCount != training.Units.Units)
                 throw new ArgumentException($"One weight per training unit is required: {shift.UnitCount} weights for {training.Units.Units} units.", nameof(options));
             if (shift.UnitsByCase is { } byCase && byCase.Count != candidates.Cases)
@@ -905,7 +907,7 @@ public static class ConformalBayes
             int[] members = units.TryGetValue(h, out List<int>? found) ? [.. found] : [];
             var scorer = new CdfScorer(unitLogCdf, rows, logWeights, members);
             ShiftWeights? shift = options?.Weights;
-            var margins = options is null || shift is not null ? null : new CdfMarginScorer(training, rows, logWeights, members, options, scorer);
+            var margins = options is null ? null : new CdfMarginScorer(training, rows, logWeights, members, options, scorer);
             foreach (int t in cases)
             {
                 int g = candidates.Grids[t].Length, offset = candidates.Offset(t);
@@ -921,14 +923,17 @@ public static class ConformalBayes
                 {
                     scorer.Score(candidates.Values, candidateLogCdf, offset + b0, Math.Min(Batch, g - b0), below, tied, own, b0,
                                  unitWeights, weightBelow, weightAtOrBelow);
-                    margins?.Read(candidates, offset + b0, Math.Min(Batch, g - b0), scorer.CopyWeights(Math.Min(Batch, g - b0)), own, b0, readings!);
+                    margins?.Read(candidates, offset + b0, Math.Min(Batch, g - b0), scorer.CopyWeights(Math.Min(Batch, g - b0)), own, b0, readings!,
+                                  unitWeights, shift?.Candidates);
                 }
                 double unitTotal = 0.0;
                 if (unitWeights is not null) foreach (double w in unitWeights) unitTotal += w;
                 distributions[t] = new ConformalDistribution(t, h, members.Length + 1, candidates.Grids[t], below, tied, ConformalForm.Full,
                                                              CdfScores.Fall(below, tied), CdfScores.ScoreFall(own))
                 {
-                    Margin = margins?.Finish(training, candidates, t, readings!), Inflated = options?.Inflate ?? false,
+                    Margin = margins?.Finish(training, candidates, t, readings!, unitWeights,
+                                             unitWeights is null ? null : [.. Enumerable.Range(offset, g).Select(c => shift!.Candidates[c])]),
+                    Inflated = options?.Inflate ?? false,
                     Weighted = unitWeights is null ? null : CdfScores.Ranks(weightBelow!, weightAtOrBelow!, unitTotal, shift!.Candidates, offset),
                 };
             }

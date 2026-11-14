@@ -17,7 +17,21 @@ public readonly record struct ConformalPitBounds(double Lower, double Upper);
 /// </summary>
 public sealed record CdfMarginReading(double[] PositionErrors, double[]? CarriedErrors, bool CandidateFlagged, bool[]? FlaggedUnits,
     int Flagged, int[]? Fragile, int[]? DegenerateAccepted, int[]? PitLowerCounts, int[]? PitUpperCounts,
-    int InflatedLowerRank, int InflatedUpperRank);
+    int InflatedLowerRank, int InflatedUpperRank)
+{
+    /// <summary>Under shift weights (slice 14's follow-up 3): the weighted inflated rule's share in the lower tail, the weight of the
+    /// units whose score is at most the candidate's within their two bounds, the candidate's own included, over the total; NaN
+    /// unweighted.</summary>
+    public double WeightedLower { get; init; } = double.NaN;
+
+    /// <summary>Under shift weights: the upper tail's share, the weight of the units the candidate's score is at most within their
+    /// bounds; NaN unweighted.</summary>
+    public double WeightedUpper { get; init; } = double.NaN;
+
+    /// <summary>Under shift weights with the margin: the ordering's scores, the units then the candidate, which the band reads at each
+    /// α; null otherwise.</summary>
+    internal CdfScore[]? Scores { get; init; }
+}
 
 /// <summary>
 /// Reduces CDF-score errors to two-tail union and PIT counts over a fixed/refined response grid. All numerical readouts are
@@ -44,14 +58,36 @@ public sealed class ConformalCdfMargin
     public int[]? PitUpperCounts { get; }
     public int RefinementProbes { get; }
 
+    private readonly double[]? _unitWeights, _candidateWeights;   // under weights: the stratum's units', and the candidate's per grid value
+
+    /// <summary>Whether the readouts are weighted (slice 14's follow-up 3): the case weighed by unequal shift weights. The counts by
+    /// level and the PIT counts are then not read, being counts; the inflated rule reads <see cref="WeightedInflatedLower"/> and
+    /// <see cref="WeightedInflatedUpper"/>, and the margin <see cref="WeightedBand"/>.</summary>
+    public bool Weighted => _unitWeights is not null;
+
+    /// <summary>Under weights, each grid value's weighted inflated share in the lower tail (<c>WAcceptsInflated</c> on the CDF score):
+    /// the inflated set holds y_g where both tails' shares exceed α/2, refusing at most α (<c>coverage_inflated_weighted</c> per tail).</summary>
+    public double[]? WeightedInflatedLower { get; }
+
+    /// <summary>Under weights, each grid value's weighted inflated share in the upper tail.</summary>
+    public double[]? WeightedInflatedUpper { get; }
+
     internal ConformalCdfMargin(int units, ConformalOptions options, double multiple, double[] unitCarried,
-        CdfMarginReading[] readings, List<CdfMarginReading> probes)
+        CdfMarginReading[] readings, List<CdfMarginReading> probes, double[]? unitWeights = null, double[]? candidateWeights = null)
     {
         Units = units; Bounds = options.MarginBounds; Inflation = options.InflationBounds; Multiple = multiple;
         ErrorLevel = options.ErrorLevel; UnitCarriedErrors = unitCarried; Readings = readings;
         InflatedLowerRanks = readings.Select(r => r.InflatedLowerRank).ToArray();
         InflatedUpperRanks = readings.Select(r => r.InflatedUpperRank).ToArray();
         RefinementProbes = probes.Count;
+        if (unitWeights is not null)
+        {
+            _unitWeights = unitWeights;
+            _candidateWeights = candidateWeights;
+            WeightedInflatedLower = readings.Select(r => r.WeightedLower).ToArray();
+            WeightedInflatedUpper = readings.Select(r => r.WeightedUpper).ToArray();
+            return;
+        }
         if (Bounds is null) return;
         Counts = new int[units + 1]; PitLowerCounts = new int[units + 1]; PitUpperCounts = new int[units + 1];
         Array.Fill(PitLowerCounts, units);
@@ -71,6 +107,32 @@ public sealed class ConformalCdfMargin
         if (kept == 0) Array.Clear(PitLowerCounts);
         FlaggedCount = Bounds == MarginBounds.Kept ? flagged : null;
     }
+
+    /// <summary>
+    /// Under weights with the margin, M̂ at α: the largest share of the weight, over the grid's values, of the units fragile in either tail
+    /// at α/2, counted once (<c>WFragileEstimated</c> per tail on the CDF score, <c>sum_wfragile_le_estimated</c>), under the same bounds
+    /// as the counts' band. The plain weighted set then refuses at most α + M̂. Null unweighted or without the margin.
+    /// </summary>
+    public double? WeightedBand(double alpha)
+    {
+        if (_unitWeights is null || Bounds is null) return null;
+        double most = 0.0;
+        var weights = new double[_unitWeights.Length + 1];
+        Array.Copy(_unitWeights, weights, _unitWeights.Length);
+        for (int g = 0; g < Readings.Count; g++)
+        {
+            CdfMarginReading r = Readings[g];
+            if (r.Scores is null) continue;
+            weights[^1] = _candidateWeights![g];
+            double[] bounds = Bounds == MarginBounds.Uniform ? Enumerable.Repeat(r.CarriedErrors!.Max(), r.Scores.Length).ToArray() : r.CarriedErrors!;
+            most = Math.Max(most, CdfMarginCounts.WeightedBand(r.Scores, bounds, weights, alpha));
+        }
+        return most;
+    }
+
+    /// <summary>Under weights: 1 − α − ν for the inflated set, 1 − α − M̂ − ν for the plain one, NaN without the margin.</summary>
+    internal double WeightedCoverageUnderError(double alpha, bool inflated)
+        => inflated ? 1.0 - alpha - ErrorLevel : WeightedBand(alpha) is double band ? 1.0 - alpha - band - ErrorLevel : double.NaN;
 
     internal double CoverageUnderError(int k, int units, bool inflated)
     {
@@ -129,19 +191,38 @@ internal static class CdfMarginCounts
                       : (strict ? a.Minus(b) < -shift : a.Minus(b) <= -shift);
 
     internal static CdfMarginReading Read(CdfScore[] scores, double[] held, double[]? carried, bool ownFlag, bool[]? flags,
-        MarginBounds? mode, InflationBounds inflation)
+        MarginBounds? mode, InflationBounds inflation, double[]? weights = null)
     {
         int m = scores.Length, candidate = m - 1;
         double maxHeld = held.Max();
         double[] inflationErrors = inflation == InflationBounds.Uniform ? Enumerable.Repeat(maxHeld, m).ToArray() : held;
         int low = 0, high = 0;
+        double lowWeight = 0.0, highWeight = 0.0, total = 0.0;
         for (int j = 0; j < m; j++)
         {
             double e = inflationErrors[j] + inflationErrors[candidate];
-            if (AtMost(scores[j], scores[candidate], e)) low++;
-            if (AtMost(scores[candidate], scores[j], e)) high++;
+            if (AtMost(scores[j], scores[candidate], e))
+            {
+                low++;
+                if (weights is not null) lowWeight += weights[j];
+            }
+            if (AtMost(scores[candidate], scores[j], e))
+            {
+                high++;
+                if (weights is not null) highWeight += weights[j];
+            }
+            if (weights is not null) total += weights[j];
         }
         int d = flags?.Count(f => f) ?? 0;
+        if (weights is not null)
+        {
+            // Under weights (slice 14's follow-up 3) the counts by level are not read; the scores are kept for the band at each α.
+            double lower = total > 0.0 ? lowWeight / total : 1.0, upper = total > 0.0 ? highWeight / total : 1.0;
+            return new(held, carried, ownFlag, flags, d, null, null, null, null, low, high)
+            {
+                WeightedLower = lower, WeightedUpper = upper, Scores = mode is null || ownFlag ? null : scores,
+            };
+        }
         if (mode is null || ownFlag)
             return new(held, carried, ownFlag, flags, d, null, null, null, null, low, high);
         var band = new int[m + 1]; var accepted = mode == MarginBounds.Kept ? new int[m + 1] : null;
@@ -171,6 +252,37 @@ internal static class CdfMarginCounts
             }
         }
         return new(held, carried, ownFlag, flags, d, band, accepted, pitLow, pitHigh, low, high);
+    }
+
+    /// <summary>
+    /// The weight share of the units, the candidate among them, fragile in either tail at α/2 under per-unit bounds, counted once: in the
+    /// lower tail, more than α/2 of the weight at most its score within their two bounds, and at most α/2 of it, itself counted, at least
+    /// twice those bounds below; the upper tail mirrored. The counts' band at level k is this at equal weights and α/2 between k/m and
+    /// (k + 1)/m.
+    /// </summary>
+    internal static double WeightedBand(CdfScore[] scores, double[] bounds, double[] weights, double alpha)
+    {
+        int m = scores.Length;
+        double total = 0.0;
+        foreach (double w in weights) total += w;
+        if (!(total > 0.0)) return 0.0;
+        double half = 0.5 * alpha, band = 0.0;
+        for (int u = 0; u < m; u++)
+        {
+            double inflatedLow = 0.0, inflatedHigh = 0.0, shiftLow = weights[u], shiftHigh = weights[u];
+            for (int j = 0; j < m; j++)
+            {
+                double e = bounds[j] + bounds[u], doubled = 2 * e;
+                if (AtMost(scores[j], scores[u], e)) inflatedLow += weights[j];
+                if (AtMost(scores[u], scores[j], e)) inflatedHigh += weights[j];
+                if (j != u && Below(scores[j], scores[u], doubled, false)) shiftLow += weights[j];
+                if (j != u && Below(scores[u], scores[j], doubled, false)) shiftHigh += weights[j];
+            }
+            bool lowFragile = inflatedLow / total > half && shiftLow / total <= half;
+            bool highFragile = inflatedHigh / total > half && shiftHigh / total <= half;
+            if (lowFragile || highFragile) band += weights[u];
+        }
+        return band / total;
     }
 }
 
@@ -311,7 +423,8 @@ internal sealed class CdfMarginScorer
 
     private double Efficiency(double[] p) => _training.ChainLengths is null ? 1 : PredictiveChecks.RelativeEfficiency(p, _training.ChainLengths);
 
-    internal void Read(CandidateLogDensity candidates, int first, int count, double[] weights, CdfScore[] own, int at, CdfMarginReading[] into)
+    internal void Read(CandidateLogDensity candidates, int first, int count, double[] weights, CdfScore[] own, int at, CdfMarginReading[] into,
+                       double[]? unitWeights = null, IReadOnlyList<double>? candidateWeights = null)
     {
         var efficiency = new double[count]; var ess = new double[count]; var supported = new bool[count];
         for (int b = 0; b < count; b++)
@@ -351,11 +464,13 @@ internal sealed class CdfMarginScorer
                 (bool flagged, bool[] units) = _proxy.Flags(w, ess[b], efficiency[b]); ownFlag = flagged;
                 flags = [.. units, flagged];
             }
-            into[at + b] = CdfMarginCounts.Read(scores, errors, carried, ownFlag, flags, _options.MarginBounds, _options.InflationBounds);
+            double[]? shift = unitWeights is null ? null : [.. unitWeights, candidateWeights![first + b]];
+            into[at + b] = CdfMarginCounts.Read(scores, errors, carried, ownFlag, flags, _options.MarginBounds, _options.InflationBounds, shift);
         }
     }
 
-    internal ConformalCdfMargin Finish(PointwiseLogDensity training, CandidateLogDensity candidates, int t, CdfMarginReading[] readings)
+    internal ConformalCdfMargin Finish(PointwiseLogDensity training, CandidateLogDensity candidates, int t, CdfMarginReading[] readings,
+                                       double[]? unitWeights = null, double[]? candidateWeights = null)
     {
         var probes = new List<CdfMarginReading>();
         if (_options.MarginRefinement is { } refinement)
@@ -382,6 +497,6 @@ internal sealed class CdfMarginScorer
                 cells.Push((cell.Lo, y, cell.Left, reading[0])); cells.Push((y, cell.Hi, reading[0], cell.Right));
             }
         }
-        return new(N + 1, _options, _multiple, _carried, readings, probes);
+        return new(N + 1, _options, _multiple, _carried, readings, probes, unitWeights, candidateWeights);
     }
 }

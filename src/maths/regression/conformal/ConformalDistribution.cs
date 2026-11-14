@@ -63,8 +63,14 @@ public sealed record ConformalDistribution(int Case, int Stratum, int Units, dou
     /// </summary>
     public WeightedRanks? Weighted { get; init; }
 
-    /// <summary>The conditional fixed/refined-grid coverage diagnostic at alpha; NaN for an uncomputed plain margin.</summary>
-    public double CoverageUnderError(double alpha) => WholeSpace(alpha) ? 1.0 : Margin?.CoverageUnderError(Level(alpha), Units, Inflated) ?? double.NaN;
+    /// <summary>The conditional fixed/refined-grid coverage diagnostic at alpha; NaN for an uncomputed plain margin. Where weighed
+    /// (slice 14's follow-up 3): 1 − α − ν for the inflated set, 1 − α − M̂ − ν for the plain one (<see cref="ConformalCdfMargin.WeightedBand"/>).</summary>
+    public double CoverageUnderError(double alpha)
+    {
+        if (WholeSpace(alpha)) return 1.0;
+        if (Weighted is not null) return Margin?.WeightedCoverageUnderError(Checked(alpha), Inflated) ?? double.NaN;
+        return Margin?.CoverageUnderError(Level(alpha), Units, Inflated) ?? double.NaN;
+    }
 
     /// <summary>Whether Q rises along the grid, so the case has a distribution there: the counts' <see cref="Fall"/>, or the weighted
     /// ranks' where the case was weighed.</summary>
@@ -115,6 +121,13 @@ public sealed record ConformalDistribution(int Case, int Stratum, int Units, dou
     /// <summary>Each tail inflated by its held CDF-score errors; requires the options overload's error readouts.</summary>
     public bool AcceptsInflated(int g, double alpha)
     {
+        if (Weighted is not null)
+        {
+            // The weighted inflated rule (slice 14's follow-up 3): both tails' shares above α/2.
+            if (Margin?.WeightedInflatedLower is not { } lower) throw new InvalidOperationException("CDF-score inflation requires the full-step options overload.");
+            double half = 0.5 * Checked(alpha);
+            return lower[g] > half && Margin.WeightedInflatedUpper![g] > half;
+        }
         int k = Level(alpha);
         if (k == 0) return true;
         if (Margin is null) throw new InvalidOperationException("CDF-score inflation requires the full-step options overload.");
