@@ -7,10 +7,13 @@
 # build in artifacts/verify-main/ are removed afterwards unless -Keep. -NoRun stops after extracting
 # the snapshot; pair it with -Keep to look at the snapshot. A relative -ChangedFile is read from the
 # directory the script is called from.
+# The selection runs in one test project, the regression project unless -Project names another
+# (tests/<Name>.Tests/<Name>.Tests.csproj). Run once per test project the changed sources reach.
 # Runs below normal priority on two processors: the machine is shared.
 param(
     [Parameter(Mandatory)][string]$Name,
     [string]$ChangedFile,
+    [string]$Project,
     [string]$RepoRoot = (Split-Path $PSScriptRoot),
     [switch]$NoRun,
     [switch]$Keep
@@ -42,7 +45,8 @@ Tee-Object -FilePath (Join-Path $out 'snapshot.txt')
 
 if (-not $NoRun) {
     $changed = Get-Content -LiteralPath $ChangedFile | Where-Object { $_ -and -not $_.StartsWith('#') }
-    & .\scripts\test-select.ps1 -SourceRoot $snap -Scope Commit -Changed $changed -ArtifactsRoot "$work\bin\" *> (Join-Path $out 'commit.log')
+    $projectArgs = if ($Project) { @{ Project = $Project } } else { @{} }
+    & .\scripts\test-select.ps1 -SourceRoot $snap -Scope Commit -Changed $changed -ArtifactsRoot "$work\bin\" @projectArgs *> (Join-Path $out 'commit.log')
     "exit $LASTEXITCODE" | Out-File -Append (Join-Path $out 'commit.log')
     $trx = Get-ChildItem -LiteralPath $work -Recurse -Filter *.trx | Sort-Object LastWriteTime | Select-Object -Last 1
     if ($trx) {

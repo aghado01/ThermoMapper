@@ -172,6 +172,8 @@ Each slice is verified from a clean archive before the next one starts on the sa
   - It archives HEAD into `artifacts/verify-main/snap`, leaving out `r/`, then runs `scripts/test-select.ps1 -Scope Commit` over the changed files listed in `-ChangedFile`. That list is `git diff --name-only <last verified>..HEAD -- src tests projects`.
   - It copies the TRX, its counters and the log to `artifacts/verify-<Name>/`, then removes `verify-main`.
   - It runs below normal priority on two processors.
+  - **The selection runs in one test project,** the regression project unless `-Project` names another (the second coordinating session found this on 2026-11-13). Run it once for each test project the changed sources reach: a change to `src/maths/linalg/PCA.cs`, for one, selects `MoMPCATests` and `SubspaceAnnealerTests` in `Maths.Geometry.Tests`.
+  - Gated tests behind `BASS_QUALIFICATION` are run separately, from a fresh snapshot with a `dotnet test --filter` over the named tests, since `test-select` takes no filter.
 - **Lean:** [verify-lean.ps1](../../scripts/verify-lean.ps1).
   - It archives `<Commit>`'s `lean/` into `artifacts/verify-lean-<Commit>/` and links `.lake/packages` to the real packages with a junction.
   - It then runs the checks script, `lake build <Module>`, `#print axioms` through `-AxiomsFile` (`import <Module>`, then one `#print axioms` line per new result) and `meta-ci -NoBuild`.
