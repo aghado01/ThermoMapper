@@ -1,0 +1,2 @@
+Passed 00:00:13.2361228 Maths.Regression.Tests.WeightedDistributionTests.Measurement_TheFullStepsPitUnderCovariateShift_OnExactDraws
+    the full step's PIT under covariate shift, largest deviation at the deciles in se: unweighted 8.35, the true ratio 1.51

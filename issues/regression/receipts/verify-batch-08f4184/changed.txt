@@ -1,0 +1,13 @@
+src/maths/geometry/manifolds/StiefelManifold.cs
+src/maths/linalg/MatrixFunctions.cs
+src/maths/regression/conformal/ConformalBayes.cs
+src/maths/regression/conformal/ConformalDistribution.cs
+src/maths/regression/conformal/CrossConformal.cs
+src/maths/regression/conformal/CvPlus.cs
+src/maths/regression/conformal/SplitConformal.cs
+src/maths/regression/conformal/SplitPitCalibration.cs
+src/maths/regression/conformal/Tournament.cs
+tests/geometry/StiefelManifoldTests.cs
+tests/linalg/RotationFunctionsTests.cs
+tests/regression/WeightedCrossFitTests.cs
+tests/regression/WeightedDistributionTests.cs

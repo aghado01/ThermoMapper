@@ -1,0 +1,4 @@
+regression  total 2589 executed 2589 passed 2589 failed 0 notExecuted 0  [HEAD 08f4184; snapshot files 2275]
+oracle  total 105 executed 105 passed 105 failed 0 notExecuted 0  [HEAD 562c818; snapshot files 2275]
+geometry  total 19 executed 19 passed 19 failed 0 notExecuted 0  [HEAD 4c9bac1; snapshot files 2278]
+linalg  total 13 executed 13 passed 13 failed 0 notExecuted 0  [HEAD 4c9bac1; snapshot files 2278]

@@ -41,6 +41,8 @@ The type had no consumers, and no tests.
 
 ### 2026-11-13: done (`6a55e2f`)
 
+**Verified by the main session on 2026-11-13,** the Commit selection in each test project the changed files reach, each from a clean archive with zero skips, in one batch with conformal slice 14's follow-ups 1 and 2 ([receipts](../regression/receipts/verify-batch-08f4184/)): Geometry 19 of 19 and LinAlg 13 of 13 at `4c9bac1`, Oracle 105 of 105 at `562c818`, both after the reading against Zimmermann 2017 (`562c818`), and regression 2,589 of 2,589 at `08f4184`, whose compile closure holds `MatrixFunctions.cs` and not `StiefelManifold.cs`.
+
 **Landed.**
 - `StiefelManifold`: the canonical Distance, Log, Exp and Norm.
 - `MatrixFunctions.SkewExponential`, `RotationLogarithm` and `TryRotationLogarithm`. The existing members are unchanged, byte for byte.
