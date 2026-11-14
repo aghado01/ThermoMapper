@@ -1,6 +1,7 @@
 import Mathlib.Algebra.Order.BigOperators.Ring.Finset
 import Mathlib.Algebra.Order.Star.Real
 import Mathlib.Algebra.QuadraticDiscriminant
+import Mathlib.Analysis.Matrix.Spectrum
 import Mathlib.Analysis.Real.Sqrt
 import Mathlib.LinearAlgebra.Matrix.NonsingularInverse
 import Mathlib.LinearAlgebra.Matrix.PosDef
@@ -23,12 +24,16 @@ scaling `E(c)` at most `10¹⁴`. The statements, checks and prior art are in
 * **PA-7, the chain to the gate.** The diagonal (`diag_comb_bound`), the scaled matrix's least
   Rayleigh quotient (`lamMin_unitScale_ge`), the norm lines (`norm1_le_card`,
   `norm1_le_sqrt_card`, `mulVec_sq_le_norm1`), and
-  `κ₁(E(c)) ≤ q·√n·(M/m)·‖E(c′)⁻¹‖₁` (`cond1_unitScale_le`).
+  `κ₁(E(c)) ≤ q·((1 + √n)/2)·(M/m)·‖E(c′)⁻¹‖₁` (`cond1_unitScale_le_sharp`), whose column step
+  `‖P‖₁ ≤ λ_max(P)·(1 + √n)/2` (`norm1_le_half_one_add_sqrt`) is attained (`norm1_columnWitness`);
+  the first chain's `q·√n` (`cond1_unitScale_le`) follows.
 
-`λ_min` and `λ_max` are the infimum and supremum of the Rayleigh quotient (`lamMin`, `lamMax`),
-and `‖·‖₂` enters only through bounds `‖Ax‖ ≤ β‖x‖`, so no spectral theorem and no operator norm
-is used. A coefficient vector's ratio to the reference enters as a bracket `m ≤ ρₖ ≤ M`; the least
-and greatest `ρₖ` are its tightest choice.
+`λ_min` and `λ_max` are the infimum and supremum of the Rayleigh quotient (`lamMin`, `lamMax`), and
+the results above use no spectral theorem. For a symmetric matrix they are its least and greatest
+eigenvalues (`lamMin_eq_iInf_eigenvalues`, `lamMax_eq_iSup_eigenvalues`), through Mathlib's
+`Matrix.IsHermitian.spectral_theorem`. `‖·‖₂` enters only through bounds `‖Ax‖ ≤ β‖x‖`, and no
+operator norm is defined. A coefficient vector's ratio to the reference enters as a bracket
+`m ≤ ρₖ ≤ M`; the least and greatest `ρₖ` are its tightest choice.
 -/
 
 open Matrix Finset
@@ -630,6 +635,75 @@ theorem inv_mulVec_sq_le [DecidableEq n] {A : Matrix n n ℝ} (hu : IsUnit A.det
     calc u ⬝ᵥ u * (u ⬝ᵥ u * lamMin A ^ 2) = (lamMin A * (u ⬝ᵥ u)) ^ 2 := by ring
       _ ≤ _ := h3
 
+/-- `zᵀA⁻¹z ≤ ‖z‖² / λ_min(A)` for an invertible `A` with `λ_min(A) > 0`. -/
+theorem form_inv_le [DecidableEq n] {A : Matrix n n ℝ} (hu : IsUnit A.det) (hl : 0 < lamMin A)
+    (z : n → ℝ) : z ⬝ᵥ A⁻¹ *ᵥ z ≤ 1 / lamMin A * (z ⬝ᵥ z) := by
+  have h1 := dot_sq_le z (A⁻¹ *ᵥ z)
+  have h2 := inv_mulVec_sq_le hu hl z
+  have hz := dot_self_nonneg z
+  have h3 : (z ⬝ᵥ A⁻¹ *ᵥ z) ^ 2 ≤ (1 / lamMin A * (z ⬝ᵥ z)) ^ 2 := by
+    calc _ ≤ (z ⬝ᵥ z) * ((A⁻¹ *ᵥ z) ⬝ᵥ (A⁻¹ *ᵥ z)) := h1
+      _ ≤ (z ⬝ᵥ z) * ((1 / lamMin A) ^ 2 * (z ⬝ᵥ z)) := mul_le_mul_of_nonneg_left h2 hz
+      _ = _ := by ring
+  exact (abs_le_of_sq_le_sq' h3 (mul_nonneg (one_div_pos.2 hl).le hz)).2
+
+/-- **PA-7(c2′), the column step, sharp.** A symmetric positive semidefinite `P` whose form is at
+most `μ‖·‖²` has `‖P‖₁ ≤ μ (1 + √n) / 2`. A column `u = Peⱼ` has `‖u‖² ≤ μ uⱼ`, and the rest of
+its absolute sum is at most `√(n−1) · √(μuⱼ − uⱼ²)`. A rank-one `μvvᵀ` attains the constant. -/
+theorem norm1_le_half_one_add_sqrt [Nonempty n] {P : Matrix n n ℝ} (hs : Pᵀ = P)
+    (hp : ∀ x, 0 ≤ x ⬝ᵥ P *ᵥ x) {μ : ℝ} (hμ0 : 0 ≤ μ) (hμ : ∀ z, z ⬝ᵥ P *ᵥ z ≤ μ * (z ⬝ᵥ z)) :
+    norm1 P ≤ μ * (1 + √(Fintype.card n)) / 2 := by
+  classical
+  refine norm1_le fun j => ?_
+  set u : n → ℝ := P *ᵥ Pi.single j 1 with hudef
+  have hu : ∀ i, u i = P i j := fun i => by simp [hudef]
+  have ha : u j = Pi.single j 1 ⬝ᵥ P *ᵥ Pi.single j 1 := by rw [single_form, hu]
+  have hsq : u ⬝ᵥ u ≤ μ * u j := by
+    have := sq_norm_le_form hs hp hμ0 hμ (Pi.single j 1)
+    rwa [← ha] at this
+  have ha0 : 0 ≤ u j := by rw [ha]; exact hp _
+  have hN1 : (1 : ℝ) ≤ Fintype.card n := by exact_mod_cast Fintype.card_pos
+  have haa : u j ^ 2 ≤ u ⬝ᵥ u := by
+    have := Finset.single_le_sum (f := fun i => u i * u i) (fun i _ => mul_self_nonneg (u i))
+      (Finset.mem_univ j)
+    simpa [sq, dotProduct] using this
+  have hsplit : ∑ i, |P i j| = u j + ∑ i ∈ univ.erase j, |u i| := by
+    rw [← add_sum_erase _ _ (mem_univ j)]
+    simp only [← hu, abs_of_nonneg ha0]
+  have hrest : ∑ i ∈ univ.erase j, u i ^ 2 = u ⬝ᵥ u - u j ^ 2 := by
+    rw [eq_sub_iff_add_eq, show u ⬝ᵥ u = ∑ i, u i * u i from rfl, ← add_sum_erase _ _ (mem_univ j)]
+    simp only [sq]
+    ring
+  have hcard : ((univ.erase j).card : ℝ) = Fintype.card n - 1 := by
+    rw [card_erase_of_mem (mem_univ j), card_univ, Nat.cast_sub Fintype.card_pos, Nat.cast_one]
+  set T := ∑ i ∈ univ.erase j, |u i|
+  have hT0 : 0 ≤ T := sum_nonneg fun i _ => abs_nonneg _
+  have hT2 : T ^ 2 ≤ (Fintype.card n - 1) * (μ * u j - u j ^ 2) := by
+    have := sum_mul_sq_le_sq_mul_sq (univ.erase j) (fun _ => (1 : ℝ)) (fun i => |u i|)
+    simp only [one_mul, one_pow, sum_const, nsmul_eq_mul, mul_one, sq_abs] at this
+    rw [hcard, hrest] at this
+    exact this.trans (mul_le_mul_of_nonneg_left (by linarith) (by linarith))
+  have hpos : 0 ≤ μ * u j - u j ^ 2 := by nlinarith
+  set s := √(Fintype.card n - 1 : ℝ)
+  set r := √(μ * u j - u j ^ 2)
+  have hs2 : s ^ 2 = Fintype.card n - 1 := Real.sq_sqrt (by linarith)
+  have hr2 : r ^ 2 = μ * u j - u j ^ 2 := Real.sq_sqrt hpos
+  have hs0 : 0 ≤ s := Real.sqrt_nonneg _
+  have hr0 : 0 ≤ r := Real.sqrt_nonneg _
+  have hTsr : T ≤ s * r := by
+    have h : T ^ 2 ≤ (s * r) ^ 2 := by rw [mul_pow, hs2, hr2]; exact hT2
+    exact (abs_le_of_sq_le_sq' h (mul_nonneg hs0 hr0)).2
+  set w := √(Fintype.card n : ℝ)
+  have hw2 : w ^ 2 = Fintype.card n := Real.sq_sqrt (by linarith)
+  have hw0 : 0 ≤ w := Real.sqrt_nonneg _
+  have he : (w * μ / 2) ^ 2 - (u j - μ / 2 + s * r) ^ 2 = (s * (u j - μ / 2) - r) ^ 2 := by
+    linear_combination (μ ^ 2 / 4) * hw2 - (μ ^ 2 / 4) * hs2 - (1 + s ^ 2) * hr2
+  have hkey : (u j - μ / 2 + s * r) ^ 2 ≤ (w * μ / 2) ^ 2 := by
+    nlinarith [sq_nonneg (s * (u j - μ / 2) - r)]
+  have hkey' := (abs_le_of_sq_le_sq' hkey (by positivity)).2
+  rw [hsplit]
+  linarith
+
 end Norms
 
 section Scaling
@@ -757,14 +831,14 @@ theorem inv_norm1_le_lamMin [Nonempty n] [DecidableEq n] {A : Matrix n n ℝ} (h
   rw [one_div, inv_mul_le_iff₀ hNpos]
   exact hle x
 
-/-- **PA-7(d), composed.** With `A(c′)` positive definite and at most `q` nonzeros in any column of
-`A(c)`: `κ₁(E(c)) ≤ q · √n · (M/m) · ‖E(c′)⁻¹‖₁`. -/
-theorem cond1_unitScale_le [Nonempty n] [DecidableEq n] (hS : ∀ k, (S k).PosSemidef)
+/-- **PA-7(d′), composed, with the sharp column step.** With `A(c′)` positive definite and at most
+`q` nonzeros in any column of `A(c)`: `κ₁(E(c)) ≤ q · ((1 + √n)/2) · (M/m) · ‖E(c′)⁻¹‖₁`. -/
+theorem cond1_unitScale_le_sharp [Nonempty n] [DecidableEq n] (hS : ∀ k, (S k).PosSemidef)
     (hm0 : 0 < m) (hM0 : 0 < M) (hm : ∀ k, m * c' k ≤ c k) (hM : ∀ k, c k ≤ M * c' k)
     (hpd : (comb S c').PosDef) {q : ℕ}
     (hq : ∀ j, (univ.filter fun i => comb S c i j ≠ 0).card ≤ q) :
     cond1 (unitScale (comb S c)) ≤
-      q * √(Fintype.card n) * (M / m) * norm1 (unitScale (comb S c'))⁻¹ := by
+      q * ((1 + √(Fintype.card n)) / 2) * (M / m) * norm1 (unitScale (comb S c'))⁻¹ := by
   set A := comb S c
   set A' := comb S c'
   set E := unitScale A
@@ -790,20 +864,151 @@ theorem cond1_unitScale_le [Nonempty n] [DecidableEq n] (hS : ∀ k, (S k).PosSe
   have hnE : norm1 E ≤ q := norm1_le_card hsE hpE (fun i => unitScale_diag (hd i))
     (fun j => (card_le_card fun i hi => by
       simp only [mem_filter] at hi ⊢; exact ⟨hi.1, unitScale_ne_zero hi.2⟩).trans (hq j))
-  have hninv : norm1 E⁻¹ ≤ √(Fintype.card n) * (1 / lamMin E) :=
-    norm1_le_sqrt_card (one_div_pos.2 hlEpos).le (inv_mulVec_sq_le huE hlEpos)
+  have hninv : norm1 E⁻¹ ≤ 1 / lamMin E * (1 + √(Fintype.card n)) / 2 :=
+    norm1_le_half_one_add_sqrt (inv_transpose_eq hsE) (form_inv_nonneg huE hpE)
+      (one_div_pos.2 hlEpos).le (form_inv_le huE hlEpos)
   have hrecip : 1 / lamMin E ≤ M / m * N' := by
     calc 1 / lamMin E ≤ 1 / (m / M * (1 / N')) := one_div_le_one_div_of_le hlow hlE
       _ = M / m * N' := by field_simp
   calc cond1 E = norm1 E * norm1 E⁻¹ := rfl
-    _ ≤ q * (√(Fintype.card n) * (1 / lamMin E)) :=
+    _ ≤ q * (1 / lamMin E * (1 + √(Fintype.card n)) / 2) :=
         mul_le_mul hnE hninv (norm1_nonneg _) (Nat.cast_nonneg _)
-    _ ≤ q * (√(Fintype.card n) * (M / m * N')) :=
-        mul_le_mul_of_nonneg_left (mul_le_mul_of_nonneg_left hrecip (Real.sqrt_nonneg _))
-          (Nat.cast_nonneg _)
+    _ ≤ q * (M / m * N' * (1 + √(Fintype.card n)) / 2) := by
+        gcongr
+    _ = _ := by ring
+
+/-- **PA-7(d), composed.** With `A(c′)` positive definite and at most `q` nonzeros in any column of
+`A(c)`: `κ₁(E(c)) ≤ q · √n · (M/m) · ‖E(c′)⁻¹‖₁`. It follows from `cond1_unitScale_le_sharp`,
+since `(1 + √n)/2 ≤ √n`. -/
+theorem cond1_unitScale_le [Nonempty n] [DecidableEq n] (hS : ∀ k, (S k).PosSemidef)
+    (hm0 : 0 < m) (hM0 : 0 < M) (hm : ∀ k, m * c' k ≤ c k) (hM : ∀ k, c k ≤ M * c' k)
+    (hpd : (comb S c').PosDef) {q : ℕ}
+    (hq : ∀ j, (univ.filter fun i => comb S c i j ≠ 0).card ≤ q) :
+    cond1 (unitScale (comb S c)) ≤
+      q * √(Fintype.card n) * (M / m) * norm1 (unitScale (comb S c'))⁻¹ := by
+  have h := cond1_unitScale_le_sharp hS hm0 hM0 hm hM hpd hq
+  have h1 : (1 : ℝ) ≤ √(Fintype.card n) := by
+    rw [show (1 : ℝ) = √1 from Real.sqrt_one.symm]
+    exact Real.sqrt_le_sqrt (by exact_mod_cast Fintype.card_pos)
+  have h0 : 0 ≤ M / m * norm1 (unitScale (comb S c'))⁻¹ :=
+    mul_nonneg (div_pos hM0 hm0).le (norm1_nonneg _)
+  refine h.trans ?_
+  calc (q : ℝ) * ((1 + √(Fintype.card n)) / 2) * (M / m) * norm1 (unitScale (comb S c'))⁻¹
+      = q * ((1 + √(Fintype.card n)) / 2) * (M / m * norm1 (unitScale (comb S c'))⁻¹) := by ring
+    _ ≤ q * √(Fintype.card n) * (M / m * norm1 (unitScale (comb S c'))⁻¹) :=
+        mul_le_mul_of_nonneg_right (mul_le_mul_of_nonneg_left (by linarith) (Nat.cast_nonneg _)) h0
     _ = _ := by ring
 
 end Scaling
+
+/-! ### The Rayleigh extremes are the extreme eigenvalues -/
+
+section Spectrum
+
+variable [DecidableEq n] {A : Matrix n n ℝ}
+
+/-- The spectral theorem in coordinates: with `U` the eigenvector matrix and `y = Uᵀx`,
+`xᵀAx = Σᵢ λᵢ yᵢ²` and `yᵀy = xᵀx`. -/
+theorem form_eq_sum_eigenvalues (hA : A.IsHermitian) (x : n → ℝ) :
+    x ⬝ᵥ A *ᵥ x =
+        ∑ i, hA.eigenvalues i * ((hA.eigenvectorUnitary : Matrix n n ℝ)ᵀ *ᵥ x) i ^ 2 ∧
+      ((hA.eigenvectorUnitary : Matrix n n ℝ)ᵀ *ᵥ x) ⬝ᵥ
+          ((hA.eigenvectorUnitary : Matrix n n ℝ)ᵀ *ᵥ x) = x ⬝ᵥ x := by
+  set U : Matrix n n ℝ := ↑hA.eigenvectorUnitary
+  have hstar : star U = Uᵀ := by rw [star_eq_conjTranspose, conjTranspose_eq_transpose_of_trivial]
+  have hUU : U * Uᵀ = 1 := by rw [← hstar]; exact Unitary.coe_mul_star_self _
+  have hspec : A = U * diagonal hA.eigenvalues * Uᵀ := by
+    have h := hA.spectral_theorem
+    rw [Unitary.conjStarAlgAut_apply] at h
+    rw [← hstar]
+    simpa [Unitary.coe_star, RCLike.ofReal_real_eq_id] using h
+  set y := Uᵀ *ᵥ x
+  have hxU : x ᵥ* U = y := by rw [← mulVec_transpose]
+  constructor
+  · conv_lhs => rw [hspec, ← mulVec_mulVec, ← mulVec_mulVec, dotProduct_mulVec, hxU]
+    simp only [dotProduct, mulVec_diagonal]
+    exact sum_congr rfl fun i _ => by ring
+  · calc y ⬝ᵥ y = x ᵥ* U ⬝ᵥ y := by rw [hxU]
+      _ = x ⬝ᵥ U *ᵥ (Uᵀ *ᵥ x) := (dotProduct_mulVec x U y).symm
+      _ = x ⬝ᵥ x := by rw [mulVec_mulVec, hUU, one_mulVec]
+
+theorem eigenvector_facts (hA : A.IsHermitian) (j : n) :
+    ⇑(hA.eigenvectorBasis j) ⬝ᵥ A *ᵥ ⇑(hA.eigenvectorBasis j) = hA.eigenvalues j ∧
+      ⇑(hA.eigenvectorBasis j) ⬝ᵥ ⇑(hA.eigenvectorBasis j) = 1 := by
+  have hstar : star (hA.eigenvectorUnitary : Matrix n n ℝ) =
+      (hA.eigenvectorUnitary : Matrix n n ℝ)ᵀ := by
+    rw [star_eq_conjTranspose, conjTranspose_eq_transpose_of_trivial]
+  have hy := (form_eq_sum_eigenvalues hA ⇑(hA.eigenvectorBasis j)).2
+  rw [← hstar, hA.star_eigenvectorUnitary_mulVec j] at hy
+  have h1 : ⇑(hA.eigenvectorBasis j) ⬝ᵥ ⇑(hA.eigenvectorBasis j) = 1 := by
+    rw [← hy]; simp
+  refine ⟨?_, h1⟩
+  rw [hA.mulVec_eigenvectorBasis j, dotProduct_smul, h1, smul_eq_mul, mul_one]
+
+/-- **The bridge.** For a symmetric `A`, the least Rayleigh quotient is the least eigenvalue. -/
+theorem lamMin_eq_iInf_eigenvalues [Nonempty n] (hA : A.IsHermitian) :
+    lamMin A = ⨅ i, hA.eigenvalues i := by
+  apply le_antisymm
+  · refine le_ciInf fun j => ?_
+    have h := lamMin_mul_le A ⇑(hA.eigenvectorBasis j)
+    rwa [(eigenvector_facts hA j).1, (eigenvector_facts hA j).2, mul_one] at h
+  · refine le_lamMin fun x => ?_
+    obtain ⟨h1, h2⟩ := form_eq_sum_eigenvalues hA x
+    rw [h1, ← h2, dotProduct, mul_sum]
+    refine sum_le_sum fun i _ => ?_
+    rw [← sq]
+    exact mul_le_mul_of_nonneg_right (ciInf_le (Set.finite_range _).bddBelow i) (sq_nonneg _)
+
+/-- **The bridge.** For a symmetric `A`, the greatest Rayleigh quotient is the greatest
+eigenvalue. -/
+theorem lamMax_eq_iSup_eigenvalues [Nonempty n] (hA : A.IsHermitian) :
+    lamMax A = ⨆ i, hA.eigenvalues i := by
+  apply le_antisymm
+  · refine lamMax_le fun x => ?_
+    obtain ⟨h1, h2⟩ := form_eq_sum_eigenvalues hA x
+    rw [h1, ← h2, dotProduct, mul_sum]
+    refine sum_le_sum fun i _ => ?_
+    rw [← sq]
+    exact mul_le_mul_of_nonneg_right (le_ciSup (Set.finite_range _).bddAbove i) (sq_nonneg _)
+  · refine ciSup_le fun j => ?_
+    have h := form_le_lamMax_mul A ⇑(hA.eigenvectorBasis j)
+    rwa [(eigenvector_facts hA j).1, (eigenvector_facts hA j).2, mul_one] at h
+
+end Spectrum
+
+/-- The column step's witness at `n = 4`: `P = vvᵀ/12` with `v = (3, 1, 1, 1)`. -/
+noncomputable def columnWitness : Matrix (Fin 4) (Fin 4) ℝ :=
+  (1 / 12 : ℝ) • vecMulVec ![3, 1, 1, 1] ![3, 1, 1, 1]
+
+theorem form_columnWitness (z : Fin 4 → ℝ) :
+    z ⬝ᵥ columnWitness *ᵥ z = (3 * z 0 + z 1 + z 2 + z 3) ^ 2 / 12 := by
+  simp [columnWitness, vecMulVec, dotProduct, mulVec, Fin.sum_univ_four]
+  ring
+
+/-- **PA-7(c2′) is sharp.** `vvᵀ/12` with `v = (3, 1, 1, 1)` is symmetric positive semidefinite with
+form at most `‖·‖²`, and its first column's absolute sum is `3/2 = (1 + √4)/2`. -/
+theorem norm1_columnWitness :
+    columnWitnessᵀ = columnWitness ∧ (∀ z, 0 ≤ z ⬝ᵥ columnWitness *ᵥ z) ∧
+      (∀ z, z ⬝ᵥ columnWitness *ᵥ z ≤ 1 * (z ⬝ᵥ z)) ∧
+      norm1 columnWitness = 1 * (1 + √(Fintype.card (Fin 4))) / 2 := by
+  have hs : columnWitnessᵀ = columnWitness := by
+    ext i j; simp [columnWitness, vecMulVec, mul_comm]
+  have hp : ∀ z, 0 ≤ z ⬝ᵥ columnWitness *ᵥ z := fun z => by
+    rw [form_columnWitness]; positivity
+  have hb : ∀ z, z ⬝ᵥ columnWitness *ᵥ z ≤ 1 * (z ⬝ᵥ z) := fun z => by
+    rw [form_columnWitness]
+    simp only [dotProduct, Fin.sum_univ_four, one_mul]
+    nlinarith [sq_nonneg (z 0 - 3 * z 1), sq_nonneg (z 0 - 3 * z 2), sq_nonneg (z 0 - 3 * z 3),
+      sq_nonneg (z 1 - z 2), sq_nonneg (z 1 - z 3), sq_nonneg (z 2 - z 3)]
+  have h4 : √(Fintype.card (Fin 4) : ℝ) = 2 := by
+    rw [Fintype.card_fin, show ((4 : ℕ) : ℝ) = 2 ^ 2 by norm_num, Real.sqrt_sq (by norm_num)]
+  refine ⟨hs, hp, hb, le_antisymm (norm1_le_half_one_add_sqrt hs hp zero_le_one hb) ?_⟩
+  rw [h4]
+  have := colSum_le_norm1 columnWitness 0
+  have hc : ∑ i, |columnWitness i 0| = 3 / 2 := by
+    simp [columnWitness, vecMulVec, Fin.sum_univ_four, abs_of_nonneg]
+    norm_num
+  linarith
 
 /-! ### The smallest instance
 

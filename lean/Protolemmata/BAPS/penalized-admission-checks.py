@@ -453,6 +453,118 @@ report(f"PA-7(a)-(d) the diagonal in [m, M], λ_min(E(c)) ≥ (m/M)·λ_min(E(c�
 report("PA-7(d) reading: largest κ₁(E(c)) / ((M/m)·κ₁(E(c_ref))), the share of the proved factor in use",
        f"{worst['plain']:.3f}", True)
 
+# ---------------------------------------------------------------- PA-7, follow-ups: the sharp column step and the bridge
+
+print("== PA-7 follow-ups: the sharp column step, the composed form with it, the eigenvalue bridge")
+viol = 0
+worst = 0.0
+for t in range(400):
+    n = int(rng.integers(1, 20))
+    G = rng.standard_normal((int(rng.integers(1, n + 1)), n))
+    P = G.T @ G
+    r = norm1(P) / (lam(P)[1] * (1 + math.sqrt(n)) / 2)
+    worst = max(worst, r)
+    viol += r > 1 + 1e-12
+report("PA-7(c2′) ‖P‖₁ ≤ λ_max(P)·(1 + √n)/2 for symmetric PSD P, 400 random", f"largest share {worst:.4f}", viol == 0)
+
+reads = []
+ok = True
+for n in [4, 9, 16, 25]:
+    k = math.isqrt(n)
+    v = np.r_[k + 1, np.ones(n - 1)]
+    P = np.outer(v, v) / (2 * k * (k + 1))
+    r1 = norm1(P) / lam(P)[1]
+    ok &= abs(r1 - (1 + k) / 2) < 1e-12
+    reads.append(f"n={n}: rank one {r1:.6f}")
+report("PA-7(c2′) attained: vvᵀ with v = (√n + 1, 1, …, 1) gives (1 + √n)/2 at n = k² (Lean: `norm1_columnWitness`, n = 4)",
+       "; ".join(reads), ok)
+
+
+def gram_with_kernel(v):
+    """Unit vectors x_i with Σ vᵢxᵢ = 0, so their Gram matrix has a unit diagonal and v in its kernel."""
+    n = len(v)
+    W = np.linalg.qr(rng.standard_normal((n, n)))[0]
+    e1, Wp = W[:, 0], W[:, 1:]
+    lo, hi = 0.0, math.pi / 2
+    for _ in range(200):
+        mid = (lo + hi) / 2
+        X = np.cos(mid) * e1[:, None] + np.sin(mid) * Wp
+        if np.linalg.norm(X @ v[1:]) > abs(v[0]):
+            lo = mid
+        else:
+            hi = mid
+    X = np.cos(lo) * e1[:, None] + np.sin(lo) * Wp
+    Xall = np.column_stack([-(X @ v[1:]) / v[0], X])
+    return Xall.T @ Xall
+
+
+reads = []
+ok = True
+for n in [4, 9, 16, 25, 49]:
+    th = 0.5 * math.atan(math.sqrt(n - 1))
+    v = np.r_[math.cos(th), np.full(n - 1, math.sin(th) / math.sqrt(n - 1))]
+    B = gram_with_kernel(v)
+    E = unit_scale(B + 1e-9 * np.eye(n))
+    r = lam(E)[0] * norm1(np.linalg.inv(E))
+    ok &= abs(np.diag(B) - 1).max() < 1e-12 and r > (1 + math.sqrt(n)) / 2 * (1 - 1e-4) and r <= (1 + math.sqrt(n)) / 2 * (1 + 1e-6)  # E has condition ~1e9 here
+    reads.append(f"n={n}: {r:.5f} of {(1 + math.sqrt(n)) / 2:.5f}")
+report("PA-7(c2′) attained by a unit-diagonal E for n ≥ 4: λ_min(E)·‖E⁻¹‖₁ → (1 + √n)/2, E a Gram matrix with kernel v",
+       "; ".join(reads), ok)
+
+chain_bad = 0
+worst_sharp = 0.0
+for t in range(120):
+    n = int(rng.integers(6, 30))
+    x = np.sort(rng.uniform(0, 1, int(rng.integers(2, 3 * n))))
+    Z = bspline_design(x, n)
+    D = d2f(n)
+    S = [Z.T @ Z, D.T @ D] if t % 2 == 0 else [Z.T @ Z] + [np.outer(D[i], D[i]) for i in range(n - 2)]
+    K = len(S)
+    c = np.r_[1.0, np.exp(rng.uniform(-7, 7, K - 1))]
+    cr = np.r_[1.0, np.exp(rng.uniform(-7, 7, K - 1))]
+    A = sum(ck * Sk for ck, Sk in zip(c, S))
+    Ar = sum(ck * Sk for ck, Sk in zip(cr, S))
+    if lam(Ar)[0] <= 1e-12 * lam(Ar)[1] or lam(A)[0] <= 1e-12 * lam(A)[1]:
+        continue
+    pattern = np.zeros((n, n), bool)
+    for Sk in S:
+        pattern |= Sk != 0
+    q = int(pattern.sum(axis=1).max())
+    rho = c / cr
+    E, Er = unit_scale(A), unit_scale(Ar)
+    bound = q * (1 + math.sqrt(n)) / 2 * rho.max() / rho.min() * norm1(np.linalg.inv(Er))
+    worst_sharp = max(worst_sharp, kappa1(E) / bound)
+    chain_bad += kappa1(E) > bound * (1 + 1e-6)
+report("PA-7(d′) κ₁(E(c)) ≤ q·((1 + √n)/2)·(M/m)·‖E(c′)⁻¹‖₁ on banded families", f"{chain_bad} violations; largest share {worst_sharp:.3f}",
+       chain_bad == 0)
+
+reads = []
+ok = True
+for n in [3, 5, 9, 17]:
+    S = [np.ones((n, n)), np.eye(n)]  # A(c) = c1 J + c2 I, dense, q = n
+    tp, t = 1 - 1e-3, 1 - 1e-7       # E = t J + (1 - t) I with t = c1 / (c1 + c2)
+    cp = np.array([tp, 1 - tp])
+    c = np.array([t, 1 - t])
+    A = sum(ck * Sk for ck, Sk in zip(c, S))
+    Ap = sum(ck * Sk for ck, Sk in zip(cp, S))
+    rho = c / cp
+    R = kappa1(unit_scale(A)) / (rho.max() / rho.min() * norm1(np.linalg.inv(unit_scale(Ap))))
+    ok &= R > 0.99 * n and R <= n * (1 + math.sqrt(n)) / 2
+    reads.append(f"n={n}: {R:.4f}")
+report("PA-7(d′) reading: the factor q is reached, c₁J + c₂I gives κ₁(E(c)) / ((M/m)·‖E(c′)⁻¹‖₁) → n = q", "; ".join(reads), ok)
+
+bad = 0
+for t in range(200):
+    n = int(rng.integers(1, 12))
+    G = rng.standard_normal((n, n))
+    A = G + G.T
+    w = np.linalg.eigvalsh(A)
+    # the Rayleigh extremes over many directions never pass the eigenvalues, and the eigenvectors reach them
+    X = rng.standard_normal((n, 200))
+    rq = np.einsum('ij,ij->j', X, A @ X) / np.einsum('ij,ij->j', X, X)
+    bad += rq.min() < w[0] - 1e-9 or rq.max() > w[-1] + 1e-9
+report("PA-6 bridge: every Rayleigh quotient lies in [λ_min, λ_max] of eigvalsh, 200 symmetric A", f"{bad} violations", bad == 0)
+
 # ---------------------------------------------------------------- summary
 fails = [lbl for lbl, ok in RESULTS if not ok]
 print(f"\n{len(RESULTS) - len(fails)} of {len(RESULTS)} PASS")
