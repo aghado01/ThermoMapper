@@ -1,3 +1,4 @@
+import Enthymemata.ActiveSubspace.ProjectionMean
 import Mathlib.Algebra.Order.Field.Basic
 import Mathlib.Data.Real.Basic
 import Mathlib.LinearAlgebra.Matrix.Block
@@ -34,6 +35,8 @@ factors (`IsHingeSum`).
 * `pullback_ker`, `pullback_range`: under every invertible `L`, `ker C_z = L⁻¹ ker C_x` and
   `range C_z = Lᵀ range C_x`, so a rank-`k` `C`'s leading `k` (its range) is carried whatever `L`
   is.
+* `leading_moves_of_not_conformal`: every `L` with `LLᵀ` not a multiple of `I` moves the leading
+  eigenvector of some positive semidefinite `C`, built on two eigenvectors of `LLᵀ`.
 * `leading_moves`, `leading_C_coord`, `leading_pullback_coord`: `C = diag(1, ½)`, `L = diag(1, 2)`:
   `C`'s leading eigenvectors are the multiples of `e₁`, `LᵀCL`'s those of `e₂`, and `Lᵀe₁` is not
   leading for `LᵀCL`. The leading direction moves from `x₁` to `x₂`.
@@ -245,6 +248,135 @@ def IsLeading (C : Matrix n n ℝ) (v : n → ℝ) : Prop :=
   v ≠ 0 ∧ ∃ μ : ℝ, C *ᵥ v = μ • v ∧ ∀ w, w ⬝ᵥ (C *ᵥ w) ≤ μ * (w ⬝ᵥ w)
 
 end Scale
+
+section General
+
+variable {n : Type*} [Fintype n] [DecidableEq n]
+
+omit [DecidableEq n] in
+/-- A rank-one matrix applied to a vector. -/
+theorem outer_mulVec (a b w : n → ℝ) : vecMulVec a b *ᵥ w = (b ⬝ᵥ w) • a := by
+  ext k
+  simp only [mulVec, dotProduct, vecMulVec_apply, Pi.smul_apply, smul_eq_mul, Finset.sum_mul]
+  exact Finset.sum_congr rfl fun _ _ => by ring
+
+omit [DecidableEq n] in
+theorem dot_self_nonneg (w : n → ℝ) : 0 ≤ w ⬝ᵥ w :=
+  Finset.sum_nonneg fun i _ => mul_self_nonneg (w i)
+
+omit [DecidableEq n] in
+/-- Bessel's inequality for an orthonormal pair. -/
+theorem bessel_pair (u₁ u₂ w : n → ℝ) (h11 : u₁ ⬝ᵥ u₁ = 1) (h22 : u₂ ⬝ᵥ u₂ = 1)
+    (h12 : u₁ ⬝ᵥ u₂ = 0) : (u₁ ⬝ᵥ w) ^ 2 + (u₂ ⬝ᵥ w) ^ 2 ≤ w ⬝ᵥ w := by
+  have h := dot_self_nonneg (w - (u₁ ⬝ᵥ w) • u₁ - (u₂ ⬝ᵥ w) • u₂)
+  have e1 : w ⬝ᵥ u₁ = u₁ ⬝ᵥ w := dotProduct_comm _ _
+  have e2 : w ⬝ᵥ u₂ = u₂ ⬝ᵥ w := dotProduct_comm _ _
+  have e3 : u₂ ⬝ᵥ u₁ = 0 := by rw [dotProduct_comm, h12]
+  simp only [sub_dotProduct, dotProduct_sub, smul_dotProduct, dotProduct_smul, smul_eq_mul, e1,
+    e2, e3, h11, h22, h12] at h
+  nlinarith [h]
+
+/-- The eigenvectors of a symmetric matrix are orthonormal as plain vectors. -/
+theorem eigvec_dot {A : Matrix n n ℝ} (hA : A.IsHermitian) (i j : n) :
+    (⇑(hA.eigenvectorBasis i) : n → ℝ) ⬝ᵥ ⇑(hA.eigenvectorBasis j) = if i = j then 1 else 0 := by
+  have h := orthonormal_iff_ite.1 hA.eigenvectorBasis.orthonormal i j
+  rw [EuclideanSpace.inner_eq_star_dotProduct] at h
+  simpa [dotProduct_comm] using h
+
+/-- **AS-4(viii), in general.** If `LLᵀ` is not a multiple of `I` (`L` is not conformal), some
+positive semidefinite `C` has a leading eigenvector `v` whose image `Lᵀv` does not lead `LᵀCL`:
+the leading direction moves under every non-conformal change of units. -/
+theorem leading_moves_of_not_conformal (L : Matrix n n ℝ)
+    (hL : ∀ c : ℝ, L * Lᵀ ≠ c • (1 : Matrix n n ℝ)) :
+    ∃ (C : Matrix n n ℝ) (v : n → ℝ), C.PosSemidef ∧ IsLeading C v ∧
+      ¬ IsLeading (Lᵀ * C * L) (Lᵀ *ᵥ v) := by
+  have hpsd : (L * Lᵀ).PosSemidef := by
+    have := posSemidef_self_mul_conjTranspose L
+    rwa [conjTranspose_eq_transpose_of_trivial] at this
+  have hS : (L * Lᵀ).IsHermitian := hpsd.1
+  set μ := hS.eigenvalues with hμdef
+  set u : n → n → ℝ := fun k => ⇑(hS.eigenvectorBasis k) with hudef
+  have hu : ∀ k, (L * Lᵀ) *ᵥ u k = μ k • u k := fun k => hS.mulVec_eigenvectorBasis k
+  have hdot : ∀ k l, u k ⬝ᵥ u l = if k = l then 1 else 0 := fun k l => eigvec_dot hS k l
+  -- two distinct eigenvalues
+  obtain ⟨i, j, hij⟩ : ∃ i j, μ j < μ i := by
+    by_contra hne
+    push Not at hne
+    rcases isEmpty_or_nonempty n with hn | ⟨⟨k⟩⟩
+    · exact hL 0 (by ext a; exact isEmptyElim a)
+    · apply hL (μ k)
+      have hd : diagonal μ = μ k • (1 : Matrix n n ℝ) := by
+        ext a b
+        by_cases hab : a = b
+        · subst hab
+          simp [le_antisymm (hne a k) (hne k a)]
+        · simp [hab]
+      conv_lhs => rw [eq_eigU hS]
+      rw [← hμdef, hd, Matrix.mul_smul, Matrix.mul_one, Matrix.smul_mul, eigU_mul_transpose]
+  have hji : j ≠ i := fun h => (lt_irrefl _ (h ▸ hij))
+  have hμj : 0 ≤ μ j := hpsd.eigenvalues_nonneg j
+  have hμi : 0 < μ i := lt_of_le_of_lt hμj hij
+  have hii : u i ⬝ᵥ u i = 1 := by simp [hdot]
+  have hjj : u j ⬝ᵥ u j = 1 := by simp [hdot]
+  have hij0 : u i ⬝ᵥ u j = 0 := by simp [hdot, hji.symm]
+  have hji0 : u j ⬝ᵥ u i = 0 := by rw [dotProduct_comm, hij0]
+  set ci : ℝ := (μ i + μ j) / (2 * μ i) with hci
+  have hci0 : 0 < ci := by positivity
+  have hci1 : ci < 1 := by rw [hci, div_lt_one (by positivity)]; linarith
+  have hcimu : μ j < μ i * ci := by
+    have h : μ i * ci = (μ i + μ j) / 2 := by
+      rw [hci, mul_div_assoc', div_eq_iff (by positivity)]
+      ring
+    rw [h]
+    linarith
+  set C : Matrix n n ℝ := ci • vecMulVec (u i) (u i) + vecMulVec (u j) (u j) with hC
+  have hCv : ∀ w, C *ᵥ w = (ci * (u i ⬝ᵥ w)) • u i + (u j ⬝ᵥ w) • u j := by
+    intro w
+    rw [hC, add_mulVec, smul_mulVec, outer_mulVec, outer_mulVec, smul_smul]
+  have hray : ∀ w, w ⬝ᵥ (C *ᵥ w) = ci * (u i ⬝ᵥ w) ^ 2 + (u j ⬝ᵥ w) ^ 2 := by
+    intro w
+    rw [hCv, dotProduct_add, dotProduct_smul, dotProduct_smul, smul_eq_mul, smul_eq_mul,
+      dotProduct_comm w (u i), dotProduct_comm w (u j)]
+    ring
+  refine ⟨C, u j, ?_, ⟨?_, 1, ?_, fun w => ?_⟩, ?_⟩
+  · have h1 := (posSemidef_vecMulVec_self_star (u i)).smul hci0.le
+    have h2 := posSemidef_vecMulVec_self_star (u j)
+    simp only [star_trivial] at h1 h2
+    exact h1.add h2
+  · intro h0
+    rw [h0, dotProduct_zero] at hjj
+    exact zero_ne_one hjj
+  · rw [hCv, hij0, hjj, mul_zero, zero_smul, zero_add, one_smul]
+  · rw [hray, one_mul]
+    have hb := bessel_pair (u i) (u j) w hii hjj hij0
+    nlinarith [sq_nonneg (u i ⬝ᵥ w)]
+  · rintro ⟨hne, m, heig, hrayL⟩
+    -- the eigenvalue at Lᵀuⱼ is μⱼ
+    have hLv : (Lᵀ * C * L) *ᵥ (Lᵀ *ᵥ u j) = μ j • (Lᵀ *ᵥ u j) := by
+      have hre : (Lᵀ * C * L) *ᵥ (Lᵀ *ᵥ u j) = Lᵀ *ᵥ (C *ᵥ ((L * Lᵀ) *ᵥ u j)) := by
+        simp only [mulVec_mulVec, Matrix.mul_assoc]
+      rw [hre, hu j, mulVec_smul, hCv, hij0, hjj, mul_zero, zero_smul, zero_add, one_smul,
+        mulVec_smul]
+    rw [hLv] at heig
+    obtain ⟨k, hk⟩ := Function.ne_iff.1 hne
+    have hm : m = μ j := by
+      have := congrFun heig k
+      simp only [Pi.smul_apply, smul_eq_mul, Pi.zero_apply] at this hk
+      exact (mul_right_cancel₀ hk this).symm
+    -- the Rayleigh quotient at Lᵀuᵢ is μᵢ cᵢ, above μⱼ
+    have hq := hrayL (Lᵀ *ᵥ u i)
+    have hLw : L *ᵥ (Lᵀ *ᵥ u i) = μ i • u i := by rw [mulVec_mulVec, hu i]
+    have hlhs : (Lᵀ *ᵥ u i) ⬝ᵥ ((Lᵀ * C * L) *ᵥ (Lᵀ *ᵥ u i)) = μ i ^ 2 * ci := by
+      rw [← mulVec_mulVec, ← mulVec_mulVec, hLw, dotProduct_mulVec, vecMul_transpose, hLw,
+        mulVec_smul, dotProduct_smul, smul_dotProduct, hray, hii, hji0]
+      simp only [smul_eq_mul]
+      ring
+    have hrhs : (Lᵀ *ᵥ u i) ⬝ᵥ (Lᵀ *ᵥ u i) = μ i := by
+      rw [dotProduct_mulVec, vecMul_transpose, hLw, smul_dotProduct, hii, smul_eq_mul, mul_one]
+    rw [hlhs, hrhs, hm] at hq
+    nlinarith [hcimu, hμi]
+
+end General
 
 section Example
 
