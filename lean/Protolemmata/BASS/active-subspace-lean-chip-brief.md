@@ -123,6 +123,18 @@ Hand-over state between turns is an "In progress" entry here.
 
 ## Reports
 
+### 2026-11-14 — targets 5 to 7 verified from a clean archive (coordinating session)
+
+- **Commit:** `21096ad` (the Lean is `212752f`), through `scripts/verify-lean.ps1` with `-Module Enthymemata.PenalizedAdmission` and `Protolemmata\BAPS\penalized-admission-checks.py`.
+- **Result:** 17 of 17 checks; 2,055 jobs with no warnings and no errors; meta-ci PASS.
+- **Axioms:** every theorem of the module, 65 in all, prints `propext`, `Classical.choice` and `Quot.sound` only. The report's 23 are among them.
+- **Statements, read for an instance that meets them:**
+  - *Target 5* asks for positive semidefinite terms and positive coefficients, nothing else. `penalized_det_eq_zero_iff` holds for any Z and any λ > 0.
+  - *Target 6* asks for the bracket m·c′ₖ ≤ cₖ ≤ M·c′ₖ and positive definiteness at c′. `comb_diagPair_posDef` shows the smallest instance meets them, and `cond2_diagPair` that it attains M / m.
+  - *Target 7,* `cond1_unitScale_le`, concludes κ₁(E(c)) ≤ q · √n · (M / m) · ‖E(c′)⁻¹‖₁ for any q bounding the nonzeros in a column. That is the quantity slice 6's screen computes (`SamplerAdmission`, `5f7fac5`).
+- **The two departures stand.** The composed result is stated in norms alone, so it does not rest on reading the Rayleigh extremes as eigenvalues. The bracket is how the screen takes its ratios.
+- **Receipts:** `artifacts/verify-lean-21096ad/`, with the axioms file and the summary tracked in [receipts](../../../issues/regression/receipts/verify-lean-21096ad/).
+
 ### 2026-11-14 — targets 5 to 7 proved: a penalized system's admission
 
 **Landed:** `212752f`.
