@@ -1,0 +1,20 @@
+tests/Archivory.Tests/Archivory.Tests.csproj : closure 0; selected 0 of 3; not run
+tests/Clustering.Graphical.CumulativeField.Tests/Clustering.Graphical.CumulativeField.Tests.csproj : closure 4; selected 0 of 3; not run
+tests/Clustering.Graphical.SPC.Tests/Clustering.Graphical.SPC.Tests.csproj : closure 4; selected 0 of 1; not run
+tests/Graphs.Primitives.Tests/Graphs.Primitives.Tests.csproj : closure 4; selected 0 of 2; not run
+tests/Maths.Distance.Tests/Maths.Distance.Tests.csproj : closure 4; selected 0 of 1; not run
+tests/Maths.Distributions.Tests/Maths.Distributions.Tests.csproj : closure 0; selected 0 of 17; not run
+tests/Maths.Geometry.Tests/Maths.Geometry.Tests.csproj : closure 4; selected 0 of 9; not run
+tests/Maths.LinAlg.Tests/Maths.LinAlg.Tests.csproj : closure 9; selected 12 of 21; Slice
+tests/Maths.Oracle.Tests/Maths.Oracle.Tests.csproj : closure 5; selected 28 of 39; Commit
+tests/Maths.Regression.Tests/Maths.Regression.Tests.csproj : closure 10; selected 308 of 314; left to verify-csharp.ps1
+tests/Maths.Samplers.Tests/Maths.Samplers.Tests.csproj : closure 4; selected 1 of 31; Commit
+tests/Maths.Topology.Tests/Maths.Topology.Tests.csproj : closure 0; selected 0 of 1; not run
+tests/RepoAudit.Tests/RepoAudit.Tests.csproj : closure 0; selected 0 of 2; not run
+tests/StorageAudit.Tests/StorageAudit.Tests.csproj : closure 0; selected 0 of 7; not run
+tests/Synthetic.Tests/Synthetic.Tests.csproj : closure 4; selected 0 of 8; not run
+tests/TDA.DimReduction.Tests/TDA.DimReduction.Tests.csproj : closure 4; selected 0 of 8; not run
+tests/TDA.Mapper.Tests/TDA.Mapper.Tests.csproj : closure 6; selected 0 of 10; Slice
+tests/TDA.Ph.Tests/TDA.Ph.Tests.csproj : closure 4; selected 0 of 43; not run
+tests/TestHarness.Runner.Tests/TestHarness.Runner.Tests.csproj : closure 0; selected 0 of 2; not run
+tests/VizCore.Tests/VizCore.Tests.csproj : closure 8; selected 2 of 85; Slice

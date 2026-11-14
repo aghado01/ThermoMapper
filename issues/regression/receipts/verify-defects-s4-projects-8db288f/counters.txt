@@ -1,0 +1,5 @@
+Maths.LinAlg.Tests (Slice) total 190 passed 190 failed 0 skipped 0
+TDA.Mapper.Tests (Slice) total 28 passed 28 failed 0 skipped 0
+VizCore.Tests (Slice) total 705 passed 703 failed 0 skipped 2
+Maths.Oracle.Tests (Commit) total 147 passed 146 failed 1 skipped 0
+Maths.Samplers.Tests (Commit) total 8 passed 8 failed 0 skipped 0

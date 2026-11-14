@@ -63,6 +63,22 @@ Commissioned by the user on 2026-11-13 through the coordinating session. Both de
 
 Newest first. Each gives the commits, the gates' results, defects found, decisions for the user and "Doc changes owed".
 
+### 2026-11-13 — Slice 4 verified from clean archives (coordinating session)
+
+Over the nineteen files of `f448931`, `43bd61f`, `ff5d635`, `e6dc220` and the review fix `78603a2`.
+
+- **The regression project:** `scripts/verify-csharp.ps1` on a clean archive of HEAD `a3ed9c0`, the Commit selection: 308 of 314 classes, 3,049 executed, 3,049 passed, 0 not executed.
+- **The other projects,** from a clean archive of HEAD `8db288f`, after a sweep of every test project for the classes the files select (`closure.txt`):
+  - `Maths.LinAlg.Tests`, whole: 190 of 190.
+  - `TDA.Mapper.Tests`, whole: 28 of 28.
+  - `VizCore.Tests`, whole: 703 passed and 2 skipped of 705. The skips are the two Möbius golden drafts.
+  - `Maths.Samplers.Tests`, by selection: 8 of 8.
+  - `Maths.Oracle.Tests`, by selection with the pinned tier: 146 of 147.
+- **The one failure** is `DiagramMetricsTransportParityTests.DiagramDistances_MatchT4TransportAndLpAssign(p: 1)`: `transport_oracle.R` timed out after 120 s, inside the R call. The test names none of the changed types, and its p = 2 case passed. It is the report's finding for the TDA owner, and no part of this slice.
+- **The other nine projects** that compile a changed file have no selected class and did not run.
+- **The source was read** at `e6dc220`, and the two notes it drew landed in `78603a2`: the scene export's ε relative at every scale, and the remainder pass's cost in `PivotedCholesky`'s doc. Nothing else was found.
+- **Receipts:** `artifacts/verify-defects-s4-a3ed9c0/` and `artifacts/verify-defects-s4-projects-8db288f/`, tracked in [receipts](receipts/) with the project script as it ran.
+
 ### 2026-11-13 — Slice 4: slice 2's three decisions, built
 
 The user chose on 2026-11-13: the review's recommendations (`discussion/astra-shared-code-cleanup.md`), with this chip's two adjustments. The scene export draws a singular block instead of refusing it, and the pivoted factor's remainder check reads the off-diagonals too. The review's order: the floor first, the pivoted factor apart, the callers migrated and qualified, the legacy class deleted in its own commit.
