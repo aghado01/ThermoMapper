@@ -239,8 +239,7 @@ public sealed class WeightedConformalTests(ITestOutputHelper output)
         var weights = ShiftWeights.ByCase([.. x.Select(v => 1.0 + v * v)], [2.0], candidates.Grids);
         foreach (ConformalOptions bad in new[]
         {
-            new ConformalOptions { Weights = weights, MarginBounds = MarginBounds.Carried },
-            new ConformalOptions { Weights = weights, Inflate = true },
+            new ConformalOptions { Weights = weights, MarginBounds = MarginBounds.Kept },
             new ConformalOptions { Weights = weights, FallbackShare = 0.1 },
             new ConformalOptions { Weights = weights, Score = FullStepScore.LeaveOneOut },
         })
@@ -250,7 +249,11 @@ public sealed class WeightedConformalTests(ITestOutputHelper output)
         ConformalSet set = ConformalBayes.FullStep(training, candidates, new ConformalOptions { Weights = weights }).Sets[0];
         Assert.Equal(0.1, set.WeightedAlpha);
         Assert.Equal(0.9, set.Coverage, 12);
-        Assert.Null(set.Margin);
+        // Its margin record holds the weighted inflated rule's readings (slice 14's follow-up 3); the band was not asked for, so the coverage
+        // under error is not read.
+        Assert.NotNull(set.Margin!.WeightedInflated);
+        Assert.Null(set.Margin.WeightedFragile);
+        Assert.True(double.IsNaN(set.CoverageUnderError));
     }
 
     // ---- Behind the qualification switch ----

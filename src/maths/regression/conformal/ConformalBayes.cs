@@ -94,9 +94,11 @@ public sealed record ConformalOptions
     /// The weighted rule's weights (<see cref="ShiftWeights"/>, the conformal layer's slice 14), opt-in: one per training unit in the
     /// partition's order and one per candidate column. Each case's set ranks its candidate by the weight of its stratum's units scoring at
     /// or below it, its own included, accepting where that passes α of the total (<c>weightLe</c>, <c>coverage_weighted</c>). A case whose
-    /// stratum's weights and candidate weights all equal one value takes CB-1's set, bit for bit. Under weights the margin, the inflated
-    /// rule, the fallback rule, Hoff's score and the margin's refinement are refused, each counting units rather than weighing them. The
-    /// full step's predictive distribution reads them too (<see cref="ConformalDistribution.Weighted"/>, slice 14's follow-up 1).
+    /// stratum's weights and candidate weights all equal one value takes CB-1's set, bit for bit. Under weights the margin under uniform or
+    /// carried bounds and the inflated rule are weighed (slice 14's follow-up 3, <see cref="ConformalMargin.WeightedFragile"/>,
+    /// <see cref="ConformalMargin.WeightedInflated"/>); the kept turns' bounds, the fallback rule, Hoff's score and the margin's refinement
+    /// are refused, each counting units rather than weighing them. The full step's predictive distribution reads them too
+    /// (<see cref="ConformalDistribution.Weighted"/>, slice 14's follow-up 1).
     /// </summary>
     public ShiftWeights? Weights { get; init; }
 }
@@ -264,6 +266,38 @@ public sealed record ConformalMargin(double Multiple, double[] CandidateErrors, 
     public bool Computed => Bounds is not null;
 
     /// <summary>
+    /// Under the weighted rule (<see cref="ConformalSet.WeightedAlpha"/>, slice 14's follow-up 3), the estimated band's share of the weight
+    /// at each grid value (<c>WFragileEstimated</c>, <c>sum_wfragile_le_estimated</c>): the units, the candidate among them, that the
+    /// weighted inflated rule accepts with at most α of the weight at j = u or s_j + 2ε_j + 2ε_u ≤ s_u, under the same bounds as
+    /// <see cref="Fragile"/>. It dominates the exact score's weighted-fragile share M, with the weights travelling with the units, so the
+    /// plain weighted set refuses at most α + M̂ (<c>coverage_close_weighted</c>). NaN outside every draw's support; null without the margin
+    /// or the weights.
+    /// </summary>
+    public double[]? WeightedFragile { get; init; }
+
+    /// <summary>
+    /// Under the weighted rule, the weighted inflated rule's p-value at each grid value (<c>WAcceptsInflated</c>): the weight of the units
+    /// whose estimate, lowered by its bound, is at most the candidate's raised by its own, the candidate's included, over the total, under
+    /// the same bounds as <see cref="InflatedRanks"/>. The inflated set accepts where it exceeds α, keeping every value the exact score
+    /// accepts, so it refuses at most α (<c>coverage_inflated_weighted</c>). Null without the weights.
+    /// </summary>
+    public double[]? WeightedInflated { get; init; }
+
+    /// <summary>M̂ under the weighted rule: the largest <see cref="WeightedFragile"/> over the grid's values inside some draw's support,
+    /// any of which may be the truth; null without it.</summary>
+    public double? WeightedCount
+    {
+        get
+        {
+            if (WeightedFragile is null) return null;
+            double most = 0.0;
+            foreach (double v in WeightedFragile)
+                if (v > most) most = v;
+            return most;
+        }
+    }
+
+    /// <summary>
     /// m̂: the largest band over the grid's values inside some draw's support, since any of them may be the truth; under
     /// <see cref="MarginBounds.Kept"/> the largest of the band plus <see cref="DegenerateAccepted"/> over the values whose candidate turn
     /// is kept, 0 where none is. With <see cref="Refined"/>, over the probes as well. Null when the margin was not computed.
@@ -397,6 +431,9 @@ public sealed record ConformalSet(int Case, int Stratum, int Units, int Level, d
         {
             if (WholeSpace) return 1.0;
             if (Margin is null) return Coverage;
+            // Under the weighted rule (slice 14's follow-up 3): 1 − α − M̂ − ν for the plain set, 1 − α − ν for the inflated one.
+            if (WeightedAlpha is not null)
+                return Inflated ? Coverage - ErrorLevel : Margin.WeightedCount is double band ? Coverage - band - ErrorLevel : double.NaN;
             if (Margin.FlaggedCount is int flagged)
                 return Inflated ? Coverage - (double)flagged / Units - ErrorLevel
                      : 1.0 - (double)(Level + Margin.Count!.Value + flagged) / Units - 2.0 * ErrorLevel;
@@ -423,7 +460,8 @@ public sealed record ConformalSet(int Case, int Stratum, int Units, int Level, d
     /// <summary>Whether the inflated rule accepts grid value <paramref name="g"/>. It accepts every value the plain rule does,
     /// since raising the candidate's estimate and lowering the units' only adds units at or below it. With no margin, the split
     /// form's, it is the plain rule.</summary>
-    public bool AcceptsInflated(int g) => WholeSpace || (Margin is null ? AcceptsPlain(g) : Margin.InflatedRanks[g] > Level);
+    public bool AcceptsInflated(int g) => WholeSpace || (Margin is null ? AcceptsPlain(g)
+        : WeightedAlpha is double a && Margin.WeightedInflated is { } weighed ? weighed[g] > a : Margin.InflatedRanks[g] > Level);
 
     /// <summary>
     /// How much more the inflated set holds than the plain one, as a share of the plain set: (|I| − |A|)/|A|, read on the grid's
@@ -616,9 +654,10 @@ public static class ConformalBayes
         ShiftWeights? shift = options.Weights;
         if (shift is not null)
         {
-            if (options.MarginBounds is not null || options.Inflate || options.FallbackShare is not null || leaveOneOut || options.MarginRefinement is not null)
-                throw new ArgumentException("Under weights the full step reads the weighted rule alone: the margin, the inflated rule, the fallback rule, "
-                                            + "Hoff's score and the margin's refinement count units rather than weighing them, and are not built for weights.", nameof(options));
+            if (options.MarginBounds == MarginBounds.Kept || options.FallbackShare is not null || leaveOneOut || options.MarginRefinement is not null)
+                throw new ArgumentException("Under weights the full step reads the weighted rule, its margin under uniform or carried bounds and its "
+                                            + "inflated rule: the kept turns' bounds, the fallback rule, Hoff's score and the margin's refinement count "
+                                            + "units rather than weighing them, and are not built for weights.", nameof(options));
             if (shift.UnitCount != training.Units.Units)
                 throw new ArgumentException($"One weight per training unit is required: {shift.UnitCount} weights for {training.Units.Units} units.", nameof(options));
             if (shift.UnitsByCase is { } byCase && byCase.Count != candidates.Cases)
@@ -684,6 +723,8 @@ public static class ConformalBayes
                 // The units' weights this case is ranked under: shared, or its own where they move with the case.
                 double[]? unitWeights = shift is null ? null : [.. members.Select(u => shift.UnitsFor(t)[u])];
                 scorer.UnitWeights = unitWeights;
+                scorer.CandidateWeights = shift?.Candidates;
+                scorer.WeightedAlpha = alpha;
                 int g = candidates.Grids[t].Length, offset = candidates.Offset(t);
                 var r = new Reading(g);
                 Reading? ra = halves is null ? null : new Reading(g), rb = halves is null ? null : new Reading(g);
@@ -701,12 +742,27 @@ public static class ConformalBayes
                     double total = 0.0;
                     foreach (double w in unitWeights) total += w;
                     var weighted = new double[g];
+                    var inflatedWeight = new double[g];
                     for (int j = 0; j < g; j++)
                     {
                         double wc = shift.Candidates[offset + j], all = total + wc;
                         weighted[j] = all > 0.0 ? (r.WeightLe[j] + wc) / all : 1.0;
+                        inflatedWeight[j] = all > 0.0 ? (r.WeightInflated[j] + wc) / all : 1.0;
                     }
-                    sets[t] = new ConformalSet(t, h, m, k, candidates.Grids[t], weighted, r.Below, r.Tied, r.Own, r.Ess, null, false, nu) { WeightedAlpha = alpha };
+                    // Its margin, weighed (slice 14's follow-up 3): the band's share and the inflated rule's p-values beside the counts.
+                    bool weighedBand = options.MarginBounds is not null;
+                    var weighedMargin = new ConformalMargin(scorer.Multiple, r.CandidateErrors, r.UniformErrors, weighedBand ? r.CandidateCarried : null,
+                                                            weighedBand ? r.CarriedUniform : null, weighedBand ? scorer.UnitCarriedErrors : null,
+                                                            weighedBand ? r.Fragile : null, r.InflatedRanks, r.ParetoK,
+                                                            PredictiveChecks.ParetoKThreshold(Math.Max(2, rows.Length)), options.MarginBounds, options.InflationBounds)
+                    {
+                        WeightedFragile = weighedBand ? r.WeightBand : null,
+                        WeightedInflated = inflatedWeight,
+                    };
+                    sets[t] = new ConformalSet(t, h, m, k, candidates.Grids[t], weighted, r.Below, r.Tied, r.Own, r.Ess, weighedMargin, options.Inflate, nu)
+                    {
+                        WeightedAlpha = alpha,
+                    };
                     continue;
                 }
                 (double splitMass, int disagreements) = SplitHalf(candidates.Grids[t], r, ra, rb, k);
@@ -1030,6 +1086,51 @@ public static class ConformalBayes
         return count;
     }
 
+    /// <summary>
+    /// The weight share of the WFragileEstimated units of <paramref name="scores"/>, the stratum's units then the candidate, under per-unit
+    /// bounds <paramref name="errors"/> (<c>sum_wfragile_le_estimated</c>): those the weighted inflated rule accepts, more than α of the
+    /// weight with s_j − ε_j ≤ s_u + ε_u, with at most α of it at j = u or s_j + 2ε_j + 2ε_u ≤ s_u. Each sum is read on the sorted values
+    /// with their running weights; rankShift's comparison as the count's, s_j + 2ε_j ≤ s_u − 2ε_u. The weights are normalized here; a
+    /// total of 0 gives 0.
+    /// </summary>
+    internal static double WeightedBand(ReadOnlySpan<double> scores, ReadOnlySpan<double> errors, IReadOnlyList<double> unitWeights,
+                                        double candidateWeight, double alpha)
+    {
+        int m = scores.Length;
+        double total = candidateWeight;
+        for (int j = 0; j < m - 1; j++) total += unitWeights[j];
+        if (!(total > 0.0)) return 0.0;
+        double Share(int j) => (j < m - 1 ? unitWeights[j] : candidateWeight) / total;
+        double[] lowered = new double[m], raised = new double[m];
+        int[] lowOrder = new int[m], highOrder = new int[m];
+        for (int j = 0; j < m; j++)
+        {
+            lowered[j] = scores[j] - errors[j];
+            raised[j] = scores[j] + 2 * errors[j];
+            lowOrder[j] = highOrder[j] = j;
+        }
+        Array.Sort(lowered, lowOrder);
+        Array.Sort(raised, highOrder);
+        var lowRunning = new double[m + 1];
+        var highRunning = new double[m + 1];
+        for (int j = 0; j < m; j++)
+        {
+            lowRunning[j + 1] = lowRunning[j] + Share(lowOrder[j]);
+            highRunning[j + 1] = highRunning[j] + Share(highOrder[j]);
+        }
+        double band = 0.0;
+        for (int u = 0; u < m; u++)
+        {
+            double su = scores[u], eu = errors[u], top = su + eu;
+            if (!(lowRunning[CountWhere(lowered, v => v <= top)] > alpha)) continue;
+            double floor = su - 2 * eu;
+            double shift = highRunning[CountWhere(raised, v => v <= floor)];
+            if (!(su + 2 * eu <= floor)) shift += Share(u);
+            if (shift <= alpha) band += Share(u);
+        }
+        return band;
+    }
+
     // The leading entries of sorted values for which a predicate monotone in the value holds.
     private static int CountWhere(ReadOnlySpan<double> sorted, Func<double, bool> holds)
     {
@@ -1138,17 +1239,18 @@ public static class ConformalBayes
         public Reading(int count)
             : this(new int[count], new int[count], new double[count], new double[count], new double[count], new double[count],
                    new double[count], new double[count], new int[count], new int[count], new double[count], new double[count],
-                   new double[count], new int[count], new bool[count], new int[count], new double[count], 0) { }
+                   new double[count], new int[count], new bool[count], new int[count], new double[count], new double[count],
+                   new double[count], 0) { }
 
         private Reading(int[] below, int[] tied, double[] own, double[] ess, double[] candidateErrors, double[] uniformErrors,
                         double[] candidateCarried, double[] carriedUniform, int[] fragile, int[] inflatedRanks, double[] paretoK,
                         double[] efficiency, double[] logPredictive, int[] flagged, bool[] candidateFlagged, int[] degenerateAccepted,
-                        double[] weightLe, int start)
+                        double[] weightLe, double[] weightInflated, double[] weightBand, int start)
         {
             Below = below; Tied = tied; Own = own; Ess = ess; CandidateErrors = candidateErrors; UniformErrors = uniformErrors;
             CandidateCarried = candidateCarried; CarriedUniform = carriedUniform; Fragile = fragile; InflatedRanks = inflatedRanks;
             ParetoK = paretoK; Efficiency = efficiency; LogPredictive = logPredictive; Flagged = flagged; CandidateFlagged = candidateFlagged;
-            DegenerateAccepted = degenerateAccepted; WeightLe = weightLe; Start = start;
+            DegenerateAccepted = degenerateAccepted; WeightLe = weightLe; WeightInflated = weightInflated; WeightBand = weightBand; Start = start;
         }
 
         public int[] Below { get; }
@@ -1168,13 +1270,15 @@ public static class ConformalBayes
         public bool[] CandidateFlagged { get; }   // under the kept turns' bounds: the candidate's own turn flagged
         public int[] DegenerateAccepted { get; }   // under the kept turns' bounds: flagged units the inflated rule accepts
         public double[] WeightLe { get; }   // under weights: the weight of the units scoring at or below the candidate
+        public double[] WeightInflated { get; }   // under weights: the weight of the units the inflated rule counts for the candidate
+        public double[] WeightBand { get; }   // under weights with the margin: the estimated band's share of the weight
 
         /// <summary>The first grid value of this slice.</summary>
         public int Start { get; }
 
         public Reading Slice(int start) => new(Below, Tied, Own, Ess, CandidateErrors, UniformErrors, CandidateCarried, CarriedUniform, Fragile,
                                                InflatedRanks, ParetoK, Efficiency, LogPredictive, Flagged, CandidateFlagged, DegenerateAccepted,
-                                               WeightLe, start);
+                                               WeightLe, WeightInflated, WeightBand, start);
     }
 
     /// <summary>
@@ -1439,6 +1543,12 @@ public static class ConformalBayes
         /// each candidate into <see cref="Reading.WeightLe"/>.</summary>
         public double[]? UnitWeights { get; set; }
 
+        /// <summary>Under weights, every candidate column's weight, read at the batch's columns for the weighted band.</summary>
+        public IReadOnlyList<double>? CandidateWeights { get; set; }
+
+        /// <summary>Under weights, α, which the weighted band's tests read.</summary>
+        public double WeightedAlpha { get; set; }
+
         /// <summary>The readings of <paramref name="count"/> candidates from column <paramref name="first"/> into
         /// <paramref name="into"/> from its start. Its steps are apart for the cost row: <see cref="Weigh"/>, <see cref="Multiply"/>,
         /// <see cref="Count"/>.</summary>
@@ -1516,8 +1626,9 @@ public static class ConformalBayes
             Span<double> carried = into.CandidateCarried.AsSpan(at, count), carriedUniform = into.CarriedUniform.AsSpan(at, count);
             below.Clear();
             tied.Clear();
-            Span<double> weightLe = into.WeightLe.AsSpan(at, count);
+            Span<double> weightLe = into.WeightLe.AsSpan(at, count), weightInflated = into.WeightInflated.AsSpan(at, count);
             weightLe.Clear();
+            weightInflated.Clear();
             for (int b = 0; b < count; b++)
             {
                 inflated[b] = 1;   // the candidate itself
@@ -1567,7 +1678,11 @@ public static class ConformalBayes
                     if (score < candidate) below[b]++;
                     else if (score == candidate) tied[b]++;
                     if (UnitWeights is not null && score <= candidate) weightLe[b] += UnitWeights[i];
-                    if (score - error <= candidate + ownError[b]) inflated[b]++;
+                    if (score - error <= candidate + ownError[b])
+                    {
+                        inflated[b]++;
+                        if (UnitWeights is not null) weightInflated[b] += UnitWeights[i];
+                    }
                     if (error > uniform[b]) uniform[b] = error;
                     if (band) a1[b] = Math.Max(error, orderings);   // the unit's carried bound, in the spent sum's place
                     row[b] = score;
@@ -1604,6 +1719,7 @@ public static class ConformalBayes
                     if (band)
                     {
                         into.Fragile[at + b] = -1;
+                        into.WeightBand[at + b] = double.NaN;
                         carriedUniform[b] = double.NaN;
                     }
                     continue;
@@ -1620,10 +1736,15 @@ public static class ConformalBayes
                 {
                     // One bound for every position, the held ordering's largest.
                     int rank = 1;
-                    double bound = uniform[b];
+                    double bound = uniform[b], weight = 0.0;
                     for (int i = 0; i < n; i++)
-                        if (scores[i] - bound <= own[b] + bound) rank++;
+                        if (scores[i] - bound <= own[b] + bound)
+                        {
+                            rank++;
+                            if (UnitWeights is not null) weight += UnitWeights[i];
+                        }
                     inflated[b] = rank;
+                    if (UnitWeights is not null) weightInflated[b] = weight;
                 }
                 if (_kept && into.CandidateFlagged[at + b])
                 {
@@ -1631,6 +1752,14 @@ public static class ConformalBayes
                     carriedUniform[b] = double.NaN;
                     into.ParetoK[at + b] = inflated[b] > _level ? ParetoK(candidates, first + b, into.Efficiency[at + b]) : double.NaN;
                     continue;
+                }
+                if (band && UnitWeights is not null)
+                {
+                    // The weighted band (slice 14's follow-up 3), read before the count's sorts the scores.
+                    Span<double> weighed = _bounds.Length >= n + 1 ? _bounds.AsSpan(0, n + 1) : (_bounds = new double[n + 1]).AsSpan();
+                    for (int i = 0; i < n; i++) weighed[i] = _margin == MarginBounds.Uniform ? largest : _first[i * count + b];
+                    weighed[n] = _margin == MarginBounds.Uniform ? largest : carried[b];
+                    into.WeightBand[at + b] = WeightedBand(scores, weighed, UnitWeights, CandidateWeights![first + b], WeightedAlpha);
                 }
                 if (band && _margin == MarginBounds.Uniform) into.Fragile[at + b] = EstimatedBand(scores, largest, _level);   // sorts the scores
                 else if (band)
