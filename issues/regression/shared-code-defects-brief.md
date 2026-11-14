@@ -88,16 +88,65 @@ Newest first. Each gives the commits, the gates' results, defects found, decisio
 - **Slice 2** was verified later the same day (the entry above). This archive holds its source (`37eb63c`), so the regression assembly passed with the refusal in place.
 - **Receipts:** `artifacts/verify-defects-s1-e39924c/`, with the changed-file list, counters and snapshot line tracked in [receipts](receipts/verify-defects-s1-e39924c/).
 
-### In progress (2026-11-13)
+### 2026-11-13 — Slice 3: BASS's draw weights over their whole range
 
-- *Slice 3, BASS's draw weights over their whole range:* added by the user to this chip on 2026-11-13, after the review in `discussion/astra-shared-code-cleanup.md`.
-- *Uncommitted:*
-  - the shared routine `src/maths/regression/WeightScale.cs` and its eleven readers, plus `PredictiveChecks.Rows`' fallback;
-  - the tests, in `tests/regression/DrawWeightRangeTests.cs`.
-  - On HEAD's code, 9 of the 14 new tests fail; on the build, all 14 pass.
-- *Shared files.* `SubspacePosterior.cs` and `CoActivePosterior.cs` also hold another session's uncommitted eigenvector orientation (E8, slice 7e). This slice commits only its own hunks, staged from the tested snapshot.
-- *Running:* the regression assembly whole, from the snapshot at `artifacts/chip-defects/tree`.
-- *Next:* commit, then the report.
+Added by the user to this chip on 2026-11-13, after the review in `discussion/astra-shared-code-cleanup.md`. It is slice 1's decision for BASS's own readers.
+
+**Commit.** `c9f9a84` fix(regression): BASS's draw-weight readers keep every finite weight's share.
+
+**The readers.** Eleven sites normalized linear weights through a plain sum or summed raw weights times values. All of them read `BassFit.DrawWeights`, an emulator's weights, or a subspace posterior's weights:
+- *the selection:* `Draws3.Select`, which prediction, gradients, sensitivity, the active subspaces and the multi-output readouts read;
+- *the summaries:* `PosteriorSummary.Over` (the fit's summary, the Sobol summaries) and `SobolDecomposition`'s means;
+- *the resamplers:* `NestedCalibrationSampler.OuterDraws` and `BassJointDraws`' resampling;
+- *the residual check:* its posterior mean, and `BassDrawFit.MeanOffset`;
+- *the projection report:* its mean term count;
+- *the subspaces:* `Whitening.Normalized`, `SubspacePosterior.Of` and `CoActivePosterior.Of`.
+
+`DrawSample.Quantile` already reads weights relative to the largest, and `PredictiveChecks.Rows` was repaired in slice 1. The pointwise and candidate densities pass the weights to `Rows`.
+
+**The repair.**
+- *One routine, `WeightScale`* (`src/maths/regression/WeightScale.cs`). Each reader takes its weights scaled by 2^−e, the power of two that brings the largest into [1, 2), then does its own arithmetic unchanged.
+- *Why ordinary weights keep their bits.* Each reader forms a ratio: a normalized weight, a weighted mean, a cumulative pick against u·Σ. The scaling is exact wherever the scaled weight is normal, and it cancels in the ratio, so ordinary weights give the bits they gave.
+- *Why the extremes now read.* A sum of n scaled weights is below 2n, and a weighted sum of values stays below twice the values' own absolute sum.
+- *Where the exponent comes from.* The selection takes it over the requested draws, repeats included; the Sobol means over the defined draws; every other reader over all its weights.
+- *What stays as it was.* Zero-weight behavior and every refusal message at each entry point. The summary still drops a zero-weight draw from its count and range, testing the raw weight.
+- *`PredictiveChecks.Rows`' fallback* now calls the same routine, with the same arithmetic.
+
+**The gates.** Acceptance from the review: both extreme rows reproduce the ordinary row; equal weights resample the same indices at a fixed seed; the selection normalizes over the requested draws, repeats included; zero-weight behavior and the ordinary-range pins hold.
+- *The reproduction*, `tests/regression/DrawWeightRangeTests.cs`, with the rows `[1, 1]`, `[1e308, 1e308]` (the sum overflows) and `[5e307, 5e307]` (the sum is finite but the weighted sums overflow). It also uses exact power-of-two multiples (2^±1000) and subnormal weights where their ratios are exact.
+  - On HEAD's code, 9 of the 14 tests fail:
+    - the selection read `[0, 0]`;
+    - the summary's mean read NaN at `[1e308, 1e308]` and ∞ at `[5e307, 5e307]`;
+    - every outer calibration draw fell to the last draw;
+    - the joint draws resampled other ancestors;
+    - the subspace weights normalized to 0;
+    - the projection's mean term count read NaN;
+    - the residual check threw on a non-finite residual.
+  - The 5 that pass on HEAD are the cases that never overflowed, and the pinned comparison.
+  - On the build, all 14 pass.
+- *What the tests check.*
+  - The two summary values read mean 3, SD 1 and median 3 at every row.
+  - The selection, the subspace posteriors, the outer draws, the joint draws, and the fit's summary, prediction and sensitivity read the ordinary row's values. So do the residual check and the projection report. Power-of-two multiples match bit for bit; the extreme rows match within 10⁻¹¹ relative.
+  - The pinned test compares 2,000 SMC-like weight vectors with the earlier selection and summary, kept verbatim, bit for bit.
+- *The whole regression assembly*, from a snapshot of `77f80ba` plus the fourteen files: 3,341 of 3,341 (50 min).
+- *`Maths.Oracle.Tests`*, which reaches the readers through 22 classes, by selection with its pinned tier: 112 of 116.
+  - The 4 failures are R oracles timing out at 120 s on the loaded machine: `bass_enumeration_oracle.R` three times and `gbass_readouts_oracle.R` once. Each failed inside the R call, before any comparison.
+  - Rerun one at a time, all 21 cases of those 4 tests pass (17 min).
+- *The merged state.* E8 slice 7e (`199abd7`, the eigenvectors' signs) and conformal slice 15 (`55f4b93`) landed during the run, slice 7e in two of this slice's files. So the commit gate ran again from `048bbc4` plus the fourteen files, by selection (236 of 312 classes) with the pinned tier: 2,646 of 2,646 (12 min).
+- Receipts are in `artifacts/shared-code-defects/receipts/` (`slice3-*`).
+
+**Shared files.** E8 slice 7e committed its eigenvector orientation to `SubspacePosterior.cs` and `CoActivePosterior.cs` while this slice's gates ran.
+- This slice's three lines in each sit beside that work, and its commit is the working tree, which is that HEAD plus them.
+- A first staging, from the snapshot taken before slice 7e landed, would have reverted slice 7e's lines. Its staged diff showed it before any commit, and it was unstaged.
+
+**Defects found.** None in the slice's code. My own test first built `2·1e308/3`, an infinite weight; it was rewritten to divide first before any run counted.
+
+**Decisions for the user.** None for this slice. Slice 2's three decisions stand.
+
+**Doc changes owed.**
+- *`docs/Maths/Regression/BASS.md`*, `DrawWeights` (line 699): every view reads any finite weights, over their whole range, by `WeightScale`'s rule. Ordinary weights read as before.
+- *`docs/Maths/Regression/Regression.md`*, the weighted draws (line 214): one rule for linear and log weights, `WeightScale` and `Rows`.
+- *`docs/Maths/Regression/ActiveSubspaces.md`*, the summaries (line 65) and the posterior (line 105): `SubspacePosterior` and `CoActivePosterior` read their weights over the same range.
 
 ### 2026-11-13 — Slice 2: `CholeskyDecomposition` on a near-singular covariance
 
