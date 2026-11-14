@@ -19,6 +19,8 @@ The statements of `Protolemmata/BASS/active-subspace-lemmas.md`, AS-1. Projectio
   `tr Q − 2 tr(Q P̄)` is at least `Σᵢ min 0 (1 − 2μᵢ)`, attained by the projection onto any span of
   eigenvectors holding every eigenvalue above ½ and none below. `summaryLoss_le` puts them together:
   the rank summary is least, and an eigenvalue of exactly ½ is indifferent.
+* **(d)** `IsOrthProj.eigenvalues_mem`, `IsOrthProj.rank_eq_trace`: a projection's eigenvalues are
+  `0` or `1`, so its rank is its trace and `k_s = tr P_s` is a theorem.
 * **(c)** `half_frobSq_cross_rank`: `½‖P_s − UUᵀ‖²_F = (tr P_s − k)/2 + Σᵢ (1 − cos²θᵢ)`, with the
   `cos²θᵢ` the eigenvalues of `UᵀP_sU`, which lie in `[0, 1]` (`compress_eigenvalues_mem`).
 -/
@@ -81,6 +83,42 @@ theorem IsOrthProj.frobSq_sub {P Q : Matrix n n ℝ} (hP : IsOrthProj P) (hQ : I
   rw [frobSq_eq_trace, transpose_sub, hP.1, hQ.1, sub_mul, mul_sub, mul_sub, hP.2, hQ.2,
     trace_sub, trace_sub, trace_sub, trace_mul_comm Q P]
   ring
+
+/-- **AS-1(d).** A projection's eigenvalues are `0` or `1`: `P v = μ v` gives `μ² v = μ v`. -/
+theorem IsOrthProj.eigenvalues_mem {P : Matrix n n ℝ} (hP : IsOrthProj P) (i : n) :
+    hP.isHermitian.eigenvalues i = 0 ∨ hP.isHermitian.eigenvalues i = 1 := by
+  set μ := hP.isHermitian.eigenvalues i
+  set v : n → ℝ := ⇑(hP.isHermitian.eigenvectorBasis i)
+  have hv : P *ᵥ v = μ • v := hP.isHermitian.mulVec_eigenvectorBasis i
+  have hvv : P *ᵥ (P *ᵥ v) = P *ᵥ v := by rw [mulVec_mulVec, hP.2]
+  rw [hv, mulVec_smul, hv, smul_smul] at hvv
+  have hne : v ≠ 0 := by
+    intro h0
+    have h1 := hP.isHermitian.eigenvectorBasis.orthonormal.1 i
+    have h2 : hP.isHermitian.eigenvectorBasis i = 0 := by
+      ext k
+      simpa [v] using congrFun h0 k
+    rw [h2, norm_zero] at h1
+    exact zero_ne_one h1
+  obtain ⟨k, hk⟩ := Function.ne_iff.1 hne
+  have hcomp := congrFun hvv k
+  simp only [Pi.smul_apply, smul_eq_mul, Pi.zero_apply] at hcomp hk
+  have hμ : μ * μ = μ := mul_right_cancel₀ hk hcomp
+  rcases mul_eq_zero.1 (show μ * (μ - 1) = 0 by linarith) with h | h
+  · exact Or.inl h
+  · exact Or.inr (by linarith)
+
+omit [DecidableEq n] in
+/-- **AS-1(d).** A projection's rank is its trace, so the rank `k_s` is `tr P_s`. -/
+theorem IsOrthProj.rank_eq_trace {P : Matrix n n ℝ} (hP : IsOrthProj P) :
+    (P.rank : ℝ) = P.trace := by
+  classical
+  have htr := hP.isHermitian.trace_eq_sum_eigenvalues
+  simp only [RCLike.ofReal_real_eq_id, id] at htr
+  rw [htr, hP.isHermitian.rank_eq_card_non_zero_eigs, Fintype.card_subtype, Finset.card_filter]
+  push_cast
+  refine Finset.sum_congr rfl fun i _ => ?_
+  rcases hP.eigenvalues_mem i with h | h <;> simp [h]
 
 section Mean
 
