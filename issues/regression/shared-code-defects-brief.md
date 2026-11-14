@@ -131,7 +131,7 @@ Newest first. Each gives the commits, the gates' results, defects found, decisio
 
 **Defects found.**
 - None in the slice's code.
-- *The defect left by design* (decision 1): a floored factor that stays finite is read, and its `LogDet` and solves are wrong by O(1). `Status.FlooredPivots` is its only signal, and no caller reads it.
+- *The defect left by design* (decision 1): a floored factor that stays finite is read, and its `LogDet` and solves can carry order-one error. `Status.FlooredPivots` is its only signal, and no caller reads it.
 - *Where GMM leans on the floor.*
   - `CovarianceRegularization` may be 0.
   - `InitializeWithParameters` takes covariances as given.
@@ -140,10 +140,14 @@ Newest first. Each gives the commits, the gates' results, defects found, decisio
 
 **Decisions for the user.** All three are unbuilt.
 1. *The floor's rule.*
-   - *Measured.* The absolute 10⁻¹² fires on scale alone. Once it fires, every output is wrong by O(1), because the floored pivot replaces the true one by orders of magnitude.
+   - *Measured.* The absolute 10⁻¹² fires on scale alone, and flooring can introduce order-one error. A pivot at the floor is unchanged. Wherever flooring raised a pivot by orders of magnitude, the outputs carry the errors above: at κ = 1, 10⁻¹³·I has every variance multiplied by ten.
      - A floor relative to the largest diagonal would make the class scale-invariant: each κ column of the ladder would read the same at every s. Once it fires, it is just as wrong.
      - Pivots negative beyond rounding (the stored matrices at κ ≥ 10¹⁸) are floored silently today.
-   - *Recommendation: no floor.* Report a pivot that is not positive, as `DenseCholesky` does, and let callers regularize: GMM already adds its ridge and the export its ε. If a floor stays, make it relative to the largest diagonal, and refuse pivots below −n·ε·max A_jj.
+   - *Recommendation: no floor.* Report a pivot that is not positive, as `DenseCholesky` does, and let callers regularize. If a floor stays, make it relative to the largest diagonal, and refuse pivots below −n·ε·max A_jj.
+     - Corrected 2026-11-13 (review in `discussion/astra-shared-code-cleanup.md`): not every caller regularizes.
+     - GMM's EM adds its ridge, but its warm start and a regularization of 0 take covariances as given.
+     - The export's ε fills only the display dimensions a layer lacks; it copies a supplied block as given.
+     - Under no floor, a singular covariance in any of these is refused. Those refusals are acceptance cases.
    - *What changes.* GMM's numbers move only where the floor fires today, in the cases above. There `UpdateCache` would throw instead of returning a floored fit.
 2. *A pivoted factor in the linear algebra.*
    - *Measured.* Diagonal pivoting, stopped at 10⁻¹² of the largest diagonal, factors every kernel of the reproduction at rank 8 to 57. Its ‖A − LLᵀ‖_F/‖A‖_F is at most 1.3·10⁻¹³, on the same kernels where the floored factor overflowed or floored up to 398 pivots.
@@ -158,13 +162,16 @@ Newest first. Each gives the commits, the gates' results, defects found, decisio
      - the callers: `GaussianComponent`, `BhattacharyyaCoefficient` (both overloads) and the scene export;
      - the tests: `DenseCholeskyTests` (2 comparisons), `FactorReferenceTests` (3 sites), `BandCholeskyTests` (3) and `CholeskyDivergenceTests`;
      - the cost profiles `CostProfileKernels`, `CostProfileLevers` and `CostProfileEngines`, which time the class as BGP's earlier path.
-   - *Bits.* `DenseCholesky`'s factor, `LogDet` and `Status` equal this class's bit for bit where no pivot is floored. An inverse rebuilt from solves would move GMM's Σ⁻¹ in its last bits.
+   - *Bits.* `DenseCholesky`'s factor, `LogDet` and `Status` equal this class's bit for bit where no pivot is floored.
+     - An inverse writer that ports this class's L⁻¹ path keeps GMM's Σ⁻¹ bit for bit, where one rebuilt from solves would not.
+     - It must refuse an inverse that overflows: `[1e-320]` has a finite factor and `LogDet`, but its reciprocal overflows.
+     - Reading Bhattacharyya's mean term through `InverseQuadraticForm` would move its distances in their last bits.
    - *Recommendation.* Retire it once decision 1 removes the floor, and give `DenseCholesky` an inverse writer and an Lz sample so GMM loses nothing. Keep it if the floor stays: the floor is then the whole difference between the two.
 
 **Doc changes owed.**
 - *`docs/Maths/LinearAlgebra.md`:*
   - the API list (line 95): `CholeskyDecomposition` gains `FailedAt`;
-  - "Dense Cholesky (`CholeskyDecomposition`)" (line 193): the refusal, its three triggers, and the reads that throw, before a first `Decompose` too. Also the floored factor that stays finite: it is read, and wrong by O(1) once a pivot floors, with the ladder's numbers; and the floor fires on scale alone.
+  - "Dense Cholesky (`CholeskyDecomposition`)" (line 193): the refusal, its three triggers, and the reads that throw, before a first `Decompose` too. Also the floored factor that stays finite: it is read, and flooring can introduce order-one error, with the ladder's numbers; and the floor fires on scale alone.
 - *`docs/Clustering/GaussianMixtures.md`:*
   - line 45: `UpdateCache` throws on a covariance with no finite factor, leaving Σ⁻¹ and the log-normalizer NaN;
   - the warm start (line 89): a singular warm-start covariance is floored and read, or refused when its factor is not finite;
