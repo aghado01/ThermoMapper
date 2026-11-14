@@ -1,0 +1,8 @@
+src/maths/linalg/PCA.cs
+src/maths/regression/spline/bass/output/BassDecomposition.cs
+src/maths/regression/spline/bass/projection/BassProjection.cs
+src/maths/regression/subspaces/CoActivePosterior.cs
+src/maths/regression/subspaces/OutputSide.cs
+src/maths/regression/subspaces/RankPosterior.cs
+src/maths/regression/subspaces/SubspacePosterior.cs
+tests/regression/FrameSignTests.cs
