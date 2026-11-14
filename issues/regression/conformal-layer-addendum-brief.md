@@ -30,6 +30,67 @@ As in the archived brief: each slice is reported here, then waits for the main s
 
 Newest first.
 
+### 2026-11-14 — GBASS's two follow-ups: group-level units for new groups, and the layer's cell rule
+
+Built at the user's pick (2026-11-14, "GBASS's two follow-ups"). The cell rule was built as the coordinator approved it, as one change: the field, BASS's wiring and the refusal. The defects chip was told before `Pointwise.cs` was touched and confirmed it had nothing pending there.
+
+**Landed** on `main`, nothing pushed:
+- `5ce91b9`:
+  - `GroupConformal.Density` and `GroupScore` (`WorstCase`, `OneCase`), with `GroupConformalTests`;
+  - `Cells` (optional, default null, length checked) on `PointwiseLogDensity` (one per observation) and `CandidateLogDensity` (one per case);
+  - `BassPointwise.LogDensity` and `BassCandidates` set them from `BassGroupCells`, read only; `BassFit.cs` and `BassGroupCells` are untouched;
+  - the refusal, `ConformalBayes.CheckCells`, read by `ConformalBayes.Check` and `SplitDraws.Check`, with `ConformalCellRuleTests`.
+
+**A — group-level units for new groups.**
+- *What it computes.* The split density form with held-out groups as its units. There are m = G + 1 units, k = ⌊αm⌋, and CB-1's rule (B + T + 1)/m > k/m on one score per group:
+  - the worst-case score, a group's least-conforming case: a new group's cases are held all at once;
+  - the one-case score, one case drawn per group on a seeded stream: one case is held.
+- *Conditions.* The calibration groups are held out and scored as new groups. The groups must be drawn alike, their sizes included. Strata are not read.
+- *Refused.* A calibration or test case whose group the fit knows (`NewGroup` false).
+- *Sources.* The idea is Dunn, Wasserman and Ramdas's, as the agreement names it. Their paper is not on the shelf, so the construction rests on CB-1 alone, and the docstring says so.
+
+**B — the cell rule.** Where both seams give cells, a case in a known group ranks only among units of its own cell. This holds in the full step (every path through `Check`: `FullStep`, `Scores`, the distribution, the CDF margin's probes, CBMA) and in the split forms (every path through `SplitDraws`: density, distribution, cross-conformal, tournament, risk-controlled sets).
+- *Exempt.*
+  - A case of a new group;
+  - a seam without cells;
+  - a stratum no unit holds;
+  - training strata no candidate ranks in, so LOO and WAIC's single-stratum partitions stay as they are;
+  - `GroupConformal`, whose units are groups and so span cells.
+- *What it adds to BASS's own checks.* BASS checked the training partition's strata (`BassFit.PointwiseLogDensity`) and the candidates' strata among themselves (`BassCandidates`), but never a candidate's stratum against the training units' cells. Strata relabelled among the candidates passed both checks and put each case among another cell's units. The layer now refuses that: the BASS test relabels the crossed fixture's strata, and the full step refuses.
+
+**Changes to existing calls (flagged as asked).**
+- *Results: none.* Cells are read only by the check. With cells and without them, the full step's and the split form's p-values match exactly.
+- *Refusals: one kind.* A call with a known-group candidate in a stratum whose units lie in another cell, or span cells, is now refused where it was served. That is the call above. No existing test makes one: the E21 classes pass unchanged (`RandomEffectsCandidateTests` 25 of 25, `RandomInterceptTests` 19 of 19).
+
+**Gates.**
+- *Group units* (79 held-out groups of 3 to 8 cases, a new group drawn alike, 2,000 replications, α 0.1): worst-case group units hold the new group whole 0.8925, one-case group units hold one case 0.8945; case units hold it whole only 0.7565 and one case 0.8930; se 0.0067.
+- *Singleton groups:* identical to the case-level split form. *One-case:* seeded. The refusals are covered.
+- *The cell rule:* the full step and the split forms each:
+  - serve each case in its cell's stratum, with the p-values unchanged;
+  - refuse a case among another cell's units, and a stratum spanning cells;
+  - exempt new-group cases, a seam without cells and the group-level form.
+- *BASS's seams* carry `BassGroupCells`' training and candidate cells exactly, and the relabelled call is refused.
+- *Per commit,* the selected classes and the pinned tier: Maths.Regression.Tests 303 of 325 classes, 3,033 of 3,033; Maths.Oracle.Tests 28 of 39 classes, 147 of 147; Maths.Samplers.Tests compiles none of these files.
+
+**Finding: the group-units condition on sizes.** The first fixture fixed the new group at 6 cases against calibration groups of 3 to 8. Its rates read low: worst-case 0.8845 and one-case 0.8800 against 0.9, se 0.0067. A probe at 20,000 replications on fresh seeds split this into two causes:
+- *Mostly an unlucky sample.* On the same 2,000 draws, the true 90% band held y₀ only 0.8820 of the time. At 20,000 replications the one-case rate sits on that control: 0.9052 against 0.9032.
+- *A real size effect under the worst-case score.* At a fixed size of 6 it ran about 0.006 under the control (0.8969 and 0.8901). With the size drawn alike it matched the control: 0.9011 against 0.9015.
+
+The fixture now draws the new group's size alike, and the docstring states the condition.
+
+**Defects found: none.**
+
+**Open, for the coordinator: BASS cannot build `GroupConformal`'s calibration seam yet.** `BassCandidates` refuses null strata when cells span more than one, and strata inside cells conflict with the group form's single stratum. Held-out groups, each its own new cell, are therefore refused at the builder. The choice belongs to GBASS and the coordinator:
+- (a) `BassCandidates` exempts new-group cases from its strata rule, as the layer's rule exempts them. This loosens what the case-level split forms accept from BASS.
+- (b) An opt-in group-units call on BASS's side.
+
+Either way, `GroupConformal` could then read its groups from the seam's `Cells` when no labels are given.
+
+**Doc changes owed:**
+- the conformal layer's API rows for `GroupConformal`, `GroupScore` and the two `Cells` fields;
+- the new-groups section: group units, the two scores and what each covers, the size condition, and the probe's numbers;
+- the strata section: the cell rule, where it is read, its exemptions, and what it adds to BASS's checks.
+
 ### 2026-11-14 — Slice 18's follow-up: the smoothed cell law for the log score
 
 Built at the user's pick (2026-11-14, "Smoothed cell law for log score"), the first of slice 18's follow-ups.
