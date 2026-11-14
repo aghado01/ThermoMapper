@@ -87,19 +87,29 @@ Hand-over state between turns is an "In progress" entry here.
 
 ### In progress (2026-11-13) — the open items, commissioned by the user
 
-- **The commission.** On 2026-11-13 the user asked for four of the report's open items: AS-2's continuous form (Wirtinger, continuous Efron–Stein and the glue), AS-3's measure form, AS-4(viii) in general, and trace equals rank. They are posed in the lemmas' "Extension" section and taken smallest first: AS-1(d), AS-4(viii), AS-3(c), AS-2(d).
-- **Routed.** The frame's sign convention went to E8's owner through the coordinating session; it is a `src/` item.
-- **Uncommitted:** nothing beyond the posing. **Running:** nothing.
+On 2026-11-13 the user asked for four of the report's open items. They are posed in the lemmas' "Extension" section (`1ef4846`) and taken smallest first. The frame's sign convention went to E8's owner through the coordinating session; it is a `src/` item.
 
-### 2026-11-13 — verified from a clean archive (coordinating session)
+**Landed:**
+- `42a449c`, AS-1(d): `IsOrthProj.eigenvalues_mem`, `IsOrthProj.rank_eq_trace`.
+- `8d9837b`, AS-4(viii) in general: `leading_moves_of_not_conformal`, with `outer_mulVec`, `bessel_pair` and `eigvec_dot`.
+- `12a63da`, AS-3(c): `mh_flux_symm`, `birthFlux_eq_deathFlux`, `birth_death_flux`. Dimension matching is `measurePreserving_piFinSuccAbove`. The death flux's measurability is a hypothesis.
+- `0af5b2d`, AS-2(d)(i):
+  - `fourierCoeffOn_of_hasDerivAt_off_countable`, Fourier by parts with a derivative off a countable set. A hinge's kinks need it, and Mathlib's form does not take them.
+  - `wirtinger_periodic`, `integral_reflect`, `wirtinger_interval`. `ContinuousPoincare` joins the barrel.
 
-- **Commit:** `42c980d`, through `scripts/verify-lean.ps1` with `-Module Enthymemata.ActiveSubspace` and this folder's checks.
-- **Checks:** 44 of 44.
-- **Build:** 2,642 jobs, with no warnings and no errors.
-- **Axioms:** every theorem of the four modules, 73 in all, prints `propext`, `Classical.choice` and `Quot.sound` only. The axioms file was generated from the modules' own declarations, not from the report's list.
-- **meta-ci:** PASS; the four modules read as proof-closed.
-- **Statements:** read against the lemmas at `6a3268d`. The two points of the entry below were the outcome, and the archived commit holds both corrected hypotheses.
-- **Receipts:** `artifacts/verify-lean-42c980d/`, with the axioms file and the summary tracked in [receipts](../../../issues/regression/receipts/verify-lean-42c980d/). The run on `6a3268d`, before the correction, passed the same gates (`artifacts/verify-lean-6a3268d/`).
+Every new declaration prints only `propext`, `Classical.choice` and `Quot.sound`.
+
+**Gates:**
+- `lean` on each module.
+- `lake build Enthymemata.ActiveSubspace`, clean after the linter pass. One fix: `rank_eq_trace` takes `classical` in its proof, not a decidability instance in its statement.
+- `scripts/meta-ci.ps1 -NoBuild`: PASS.
+- A scoped cache fetch, `lake exe cache get Mathlib.Analysis.Fourier.AddCircle`, brought 14 files. D: had 34 GB free before and after.
+- The machine ran at 100% CPU with 3 GB free throughout, so compiles took 2 to 22 minutes each.
+
+**In progress:**
+- AS-2(d)(ii), Efron–Stein on a product of probability measures: `sq_integral_le` and `var_prod_le` (two blocks), then induction over coordinates through `measurePreserving_piFinSuccAbove`. Drafted in `lean/Enthymemata/ActiveSubspace/ProductVariance.lean`, uncommitted and not yet compiled. It is left out of the barrel until it compiles, so the working tree's meta-CI reads red while it is present.
+- AS-2(d)(iii), the glue (uniform laws, the integrated one-variable form, the matrix check), follows it.
+- **Running:** nothing.
 
 ### 2026-11-13 — AS-2's hypothesis corrected after review
 

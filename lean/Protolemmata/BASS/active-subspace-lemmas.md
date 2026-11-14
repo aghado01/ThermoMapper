@@ -242,13 +242,13 @@ It does not mark one for the laws E8 already reports as not applicable: mixtures
 
 Four of the report's open items, taken in order of size. The numeric checks already cover each one: AS-1a for (d), AS-4b's SVD construction for (viii) in general, AS-3d for the continuous moves, and AS-2c to AS-2e for the constants.
 
-**Status (2026-11-13).** Posed. Nothing proved yet.
+**Status (2026-11-13).** AS-1(d), AS-4(viii) in general, AS-3(c) and AS-2(d)(i) are proved, with no apologies. AS-2(d)(ii), Efron–Stein on a product of probability measures, is drafted in `ActiveSubspace/ProductVariance`. AS-2(d)(iii), the glue, follows it.
 
 ### AS-1(d) — a projection's trace is its rank
 
 **Claim.** For Pᵀ = P and P² = P, rank P = tr P. Each eigenvalue satisfies μ² = μ, so it is 0 or 1, and tr P = Σμ counts the units, which is the rank.
 
-**Lean (planned,** `ProjectionMean`**).** `IsOrthProj.rank_eq_trace`, through `rank_eq_card_non_zero_eigs` and `trace_eq_sum_eigenvalues`. It makes k_s = tr P_s a theorem and not a definition.
+**Lean (proved,** `ProjectionMean`**).** `IsOrthProj.eigenvalues_mem` (0 or 1) and `IsOrthProj.rank_eq_trace`, through `rank_eq_card_non_zero_eigs` and `trace_eq_sum_eigenvalues`. k_s = tr P_s is now a theorem.
 
 ### AS-4(viii) in general — every non-conformal L moves some leading direction
 
@@ -260,7 +260,7 @@ Four of the report's open items, taken in order of size. The numeric checks alre
 - The Rayleigh quotient at Lᵀuᵢ is σᵢ²cᵢ, which is larger. So Lᵀuⱼ does not lead.
 - No invertibility is needed: Lᵀuⱼ = 0 cannot lead.
 
-**Lean (planned,** `Refit`**).** `leading_moves_of_not_conformal`.
+**Lean (proved,** `Refit`**).** `leading_moves_of_not_conformal`, with the helpers `outer_mulVec`, `bessel_pair` and `eigvec_dot`. Its hypothesis is ∀ c, LLᵀ ≠ c·I. It reaches the real spectral theorem through `ProjectionMean`'s `eq_eigU`.
 
 ### AS-3(c) — the moves in measure form
 
@@ -268,7 +268,7 @@ Four of the report's open items, taken in order of size. The numeric checks alre
 - **(i) Metropolis–Hastings is reversible in measure.** For measurable A and B, the flux from A to B equals the flux from B to A: ∫_A∫_B π(x)q(x, y)min(1, r(x, y)) dν(y)dν(x) is symmetric. The integrand is min(π(x)q(x, y), π(y)q(y, x)) for nonnegative π and q, and Tonelli swaps the order. With the sphere of the active coordinates and its surface measure as ν, this is the change move. The hypothesis that carries the weight is that prior and proposal are densities against the same ν.
 - **(ii) Birth and death in measure.** For each position i, insertion (r, c) ↦ insertNth i r c carries ν ⊗ ν^M to ν^{M+1} (`measurePreserving_piFinSuccAbove`). That is the dimension matching, with Jacobian 1 as a measure fact. With π_M = w(M)Π pr(cⱼ) L_M(c) and q densities against ν, the flux from A ⊆ R^M to B ⊆ R^{M+1} through births at i equals the flux back through deaths at i.
 
-**Lean (planned,** `DirectionMoves`**).** `mh_flux_symm`, and `birth_death_flux` per position.
+**Lean (proved,** `DirectionMoves`**).** `mh_flux_symm`, for any s-finite ν. `birth_death_flux` per position, for a σ-finite ν, with `birthRatio`, `birthFlux`, `deathFlux` and the pointwise `birthFlux_eq_deathFlux`. The death flux's measurability is a hypothesis (`hmD`): it holds when pr, q and the L_M are measurable.
 
 ### AS-2(d) — the matrix check on continuous laws
 
@@ -278,4 +278,11 @@ Four of the report's open items, taken in order of size. The numeric checks alre
 - **(ii) Efron–Stein on a product of probability measures,** for bounded measurable f: Var f ≤ Σᵢ E[Varᵢ f]. The route is `CommutingMeans` instantiated on bounded measurable functions under `Measure.pi`, with Eᵢ integrating out coordinate i. Its integral identity comes from `measurePreserving_piFinSuccAbove`, which reaches SG-1's continuous case as well.
 - **(iii) The glue.** For f with C¹ sections along each coordinate, under a product of uniforms: Cov(f) ≼ E[J D Jᵀ] with D = diag((bᵢ − aᵢ)²/π²). That is (ii), then (i) on each section, then AS-2(a)'s reduction.
 
-**Lean (planned,** a new module `ActiveSubspace/ContinuousPoincare`**).** The truncated normal's bound stays with the checks, since Bakry–Émery is a separate project.
+**Lean.**
+- *(i), proved* in `ActiveSubspace/ContinuousPoincare`:
+  - `fourierCoeffOn_of_hasDerivAt_off_countable` is the new piece. It is Fourier integration by parts with a derivative off a countable set, which a hinge's kinks need: Mathlib's form asks a one-sided derivative at every point.
+  - `wirtinger_periodic` is built on it.
+  - `wirtinger_interval` holds for h continuous on [a, b], with a derivative off a countable set that is measurable and bounded.
+- *(ii), drafted* in `ActiveSubspace/ProductVariance`: `sq_integral_le` and `var_prod_le` (two blocks), then induction over coordinates.
+- *(iii)* goes into `ContinuousPoincare`.
+- *The truncated normal's bound* stays with the checks, since Bakry–Émery is a separate project.
