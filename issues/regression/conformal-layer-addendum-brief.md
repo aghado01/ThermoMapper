@@ -27,18 +27,57 @@ As in the archived brief: each slice is reported here, then waits for the main s
 
 Newest first.
 
-### In progress — Slice 16, batch predictive inference (started 2026-11-14)
+### 2026-11-14 — Slice 16, batch predictive inference
 
-At the user's pick (2026-11-14, "Slice 16, batches"), under the Lean's section `Batch` (proved 2026-11-10) and Lee, Tchetgen Tchetgen and Dobriban (arXiv 2409.13990v5, read in TeX: §2, Condition 1, Algorithm 1, Theorem 1, the quantile corollary, the selection corollary, the simultaneous bounds).
+Built at the user's pick (2026-11-14, "Slice 16, batches"), under the Lean's section `Batch` (proved 2026-11-10) and Lee, Tchetgen Tchetgen and Dobriban (arXiv 2409.13990v5, read in TeX: §2, Condition 1, Algorithm 1, Theorem 1, the quantile and selection corollaries, the joint-bounds theorem and corollary).
 
-**Plan.** A `BatchConformal` class on calibration scores, scalar units, the scores' bounds S_(0) = inf s and S_(n+1) = sup s given or ±∞:
-- *The quantile of a batch* (their quantile corollary; `batch_interval` with r_(ζ)): [S_(q_L − 1), S_(q_U)] from the law of r_(ζ). Its counts are exact big integers, so m = 1 is split conformal bit for bit.
-- *Simultaneous bounds* on several order statistics of the batch (their joint-bounds theorem; `batch_simultaneous`). F, the box's count, is exact by dynamic programming on L(ρ), with the product over consecutive pairs (the Lean's correction of their typo). Two readings: a given box with its coverage, and their centered search.
-- *Functions of a batch* (Algorithm 1, `batch_coverage`), by enumerating H where C(n + m, m) is small, since it is NP-hard in general. The rank order h̃ is given, h on the ranks by default.
-- *Selection with false claims controlled* (their selection corollary; `batch_exceed`, `false_claim_iff`): the threshold T̂ = S_(q_η) on the scores μ̂·1{y ≤ c}, with at most η false claims with chance at least 1 − α.
-- *Gates* (the archived plan's): each guarantee on exchangeable batches, the counts against enumeration of H, and width against Bonferroni over single sets.
+**Landed** on `main`, nothing pushed:
+- `60ba2cb`: `BatchConformal`, with
+  - `RankLaw` and `Quantile`, giving a `BatchInterval`;
+  - `BoxCoverage`, `Box` and `Simultaneous`, giving `BatchBounds`;
+  - `Function` and `Select`, the latter giving a `BatchSelection`;
+  - and `BatchConformalTests`.
+- *Nothing existing changes.*
 
-**State.** Being written. Nothing committed.
+**What it computes.** Batch sets for functions of m test units' scores from n calibration scores, exchangeable together. The scores' floor and ceiling, S_(0) and S_(n+1), are ±∞ unless given.
+- *The basis.* The test units' sorted ranks are uniform on H = {1 ≤ r_1 ≤ … ≤ r_m ≤ n + 1}, |H| = C(n + m, m), and every sorted test score lies between S_(r_j − 1) and S_(r_j) at once (`card_testRank_mem`, `batch_sandwich`). Each set reads that sandwich on rank sequences holding at least 1 − α of H.
+- *`Quantile`,* the ζ-th smallest score of the batch: [S_(q_L − 1), S_(q_U)], from the exact law of r_(ζ) (their quantile corollary). q_U is the least rank with at most γ of the law above it; q_L the greatest with at most β below. At m = 1 it is split conformal's set.
+- *`Box` and `BoxCoverage`,* several order statistics at once: [S_(w_j − 1), S_(q_j)] with the box's share of H (their joint-bounds theorem, `batch_simultaneous`). The count runs by dynamic programming on L(ρ), with the product over consecutive orders, the Lean's correction of their closed form.
+- *`Simultaneous`:* their centred search, each order's box centred at round(t_j·n/m) and widened by the least a whose share reaches 1 − α, by bisection.
+- *`Function`,* any h monotone in each sorted score: their Algorithm 1, with the rank order h̃ given (h on the ranks by default). It enumerates H twice, refused above 2,000,000 sequences, since computing it is NP-hard in general.
+- *`Select`:* scores μ̂·1{y ≤ c}, the threshold T̂ = S_(q_η), and the units with μ̂ above it declared above c, at most η of them falsely with chance at least 1 − α (their selection corollary; `batch_exceed`, `false_claim_iff`).
+- *Exact levels.* The rank counts are integers (`BigInteger`). A share of H at most γ is the count at most γ·|H| for the given γ read exactly, so whole levels such as (1 − γ)(n + 1) = 18 land on their rank and do not round away from it.
+
+**Gates.**
+- *The counts are enumerations of H:*
+  - the law of r_(ζ) at every k, for n ≤ 6 and m ≤ 4;
+  - 300 random boxes' shares, to 10⁻¹².
+- *At one test unit:* the quantile set is split conformal's, q_U = ⌈(1 − γ)(n + 1)⌉, across five (n, γ), whole levels included.
+- *The batch median* (n 499, m 20, β = γ = 0.05, 4,000 batches): it covers 0.900, within its bound 0.9 + max p = 0.907, with mean width 0.94. Bonferroni over single sets covers 1.000 at mean width 6.07.
+- *The quartiles at once* (n 200, m 40, α 0.1, 3,000 batches): the box holds 0.911 of H at ranks [21, 79] and [121, 179] of 201, and covers 0.914.
+- *The batch mean* (n 12, m 3, scores in [0, 1], 4,000 batches): it covers 0.983 at mean width 0.78 of the range. With unbounded scores the mean's set is the whole line, since a sequence reaching S_(0) = −∞ is always held.
+- *`Function` with h the second smallest and h̃ = r_(2)* is the quantile set exactly.
+- *Selection* (n 200, m 50, μ̂(x) = x, c 0.7, η 2, α 0.1, 3,000 batches): false claims stay within 2 in 0.916 of the batches, with 4.7 units selected on average.
+- *The refusals:*
+  - a batch of none, an order outside 1, …, m, levels summing to 1 or more;
+  - a NaN score, scores outside the floor or ceiling;
+  - orders that do not rise, a box out of order;
+  - an H above the enumeration cap;
+  - negative predictions, η = m.
+- *Per commit,* the selected classes and the pinned tier: 49 of 49 (one class, the new one).
+
+**Defects found: none.**
+
+**Follow-ups, each with the decision it would change.**
+- *The rank order h̃ for the mean.* The default, h on the ranks, is conservative here (0.983 at nominal 0.9). Their remark on choosing h̃ suggests orders closer to h's own. Decides whether `Function` offers a better default for sums and means.
+- *Sparse functions* (their §5: h reading a few order statistics), as `Quantile` reads one. It decides whether functions of a few order statistics avoid the enumeration.
+- *Their upper bound 1 − α + ε* for the quantile, not formalized. The Lean states the lower bound only. Decides whether the layer reports the set's tightness.
+
+**Doc changes owed** (for the offline docs pass): `docs/Maths/Regression/ConformalPrediction.md`, a batch section:
+- the sandwich and the four forms, with the Lean names;
+- exact levels;
+- the gates' numbers;
+- API rows for `BatchConformal`, `BatchInterval`, `BatchBounds` and `BatchSelection`.
 
 ### 2026-11-14 — Slice 14's follow-up 2, completed: weighted CV+'s merged bound under likelihood ratios
 
