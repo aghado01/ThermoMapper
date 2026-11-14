@@ -4,6 +4,29 @@ using Maths.LinAlg;
 
 namespace Maths.Regression.Conformal;
 
+/// <summary>Which law on the grid's cells the proper scores read (<see cref="ConformalDistribution.CellMasses"/>).</summary>
+public enum CellLaw
+{
+    /// <summary>The predictive's own law, Q̄'s rises between grid values: a step function of the calibration ranks, so a cell no calibration
+    /// PIT rises across has no mass.</summary>
+    Steps,
+
+    /// <summary>The smoothed law (<see cref="SmoothedCdf"/>): positive on every cell where the fit's CDF rises, so the log score is finite.
+    /// The split form's, unweighted.</summary>
+    Smoothed,
+}
+
+/// <summary>
+/// The split form's smoothed predictive CDF along a case's grid (slice 18's follow-up): G̃(F̂(y | x)), G̃ the calibration PITs' empirical
+/// CDF interpolated linearly between its knots (0, 0), (PIT₍ᵢ₎, i/(n + 1)) and (1, 1). Between neighbouring PITs it rises where the step
+/// law Q̄ is flat, and it lies inside the conformal band [Q⁻, Q⁺] at every y: it is Q(y, τ) with τ moving linearly across each gap. Where
+/// the fit's CDF rises every cell has mass, so the log score is finite (<c>logLoss_proper</c>'s positivity hypothesis met). Its PIT at the
+/// truth is near uniform, not exactly so: the randomized Q keeps the exact guarantee; this law is for scoring.
+/// </summary>
+/// <param name="Lower">G̃ at each grid value.</param>
+/// <param name="Upper">1 − G̃ at each grid value, read on the tail that holds its digits.</param>
+public sealed record SmoothedCdf(double[] Lower, double[] Upper);
+
 /// <summary>
 /// A case's weighted ranks along its grid (slice 14's follow-up 1; <see cref="ShiftWeights"/>): at each grid value the share of its
 /// stratum's weight, the candidate's own included, that lies below the candidate, Q⁻ = A/(W + w_c), and at or below it with its own,
@@ -62,6 +85,10 @@ public sealed record ConformalDistribution(int Case, int Stratum, int Units, dou
     /// 1 − Q⁻ &gt; α/2, each tail refusing at most α/2 of the weight, so it covers at least 1 − α.
     /// </summary>
     public WeightedRanks? Weighted { get; init; }
+
+    /// <summary>The smoothed predictive CDF along the grid (<see cref="SmoothedCdf"/>, slice 18's follow-up), the split form's where the case is
+    /// unweighted; null for the full step and for a weighed case.</summary>
+    public SmoothedCdf? Smoothed { get; init; }
 
     /// <summary>The conditional fixed/refined-grid coverage diagnostic at alpha; NaN for an uncomputed plain margin. Where weighed
     /// (slice 14's follow-up 3): 1 − α − ν for the inflated set, 1 − α − M̂ − ν for the plain one (<see cref="ConformalCdfMargin.WeightedBand"/>).</summary>
@@ -209,8 +236,10 @@ public sealed record ConformalDistribution(int Case, int Stratum, int Units, dou
     /// The predictive's mass on each of the grid's G + 1 cells, (−∞, g₀], (g₀, g₁], …, (g_{G−1}, ∞): Q̄ at g₀, the rises of Q̄ between grid
     /// values, and 1 − Q̄ at the last (slice 18). A law on the cells, which the proper scores read. Null for a case with no distribution.
     /// </summary>
-    public double[]? CellMasses()
+    public double[]? CellMasses(CellLaw law = CellLaw.Steps)
     {
+        if (law == CellLaw.Smoothed) return SmoothedMasses();
+        if (!Enum.IsDefined(law)) throw new ArgumentOutOfRangeException(nameof(law));
         if (!Monotone) return null;
         var masses = new double[Grid.Length + 1];
         double below = 0.0;
@@ -229,14 +258,27 @@ public sealed record ConformalDistribution(int Case, int Stratum, int Units, dou
     /// proper over the cells for laws positive where the truth is (<c>logLoss_proper</c>, <c>logLoss_strict</c>; Gneiting and Raftery's
     /// Example 3). +∞ where the cell has no mass; NaN for a case with no distribution.
     /// </summary>
-    public double LogScore(double y) => CellMasses() is { } p ? CellScores.Log(p, Cell(y)) : double.NaN;
+    public double LogScore(double y, CellLaw law = CellLaw.Steps) => CellMasses(law) is { } p ? CellScores.Log(p, Cell(y)) : double.NaN;
 
     /// <summary>
     /// The quadratic score at an observed <paramref name="y"/>, Σ p² − 2p of the cell holding it (minus Gneiting and Raftery's quadratic
     /// score, their (18)): strictly proper over the cells, its gap to the truth's Σ (p − q)² (<c>gneitingLoss_gap</c>). NaN for a case with
     /// no distribution.
     /// </summary>
-    public double QuadraticScore(double y) => CellMasses() is { } p ? CellScores.Quadratic(p, Cell(y)) : double.NaN;
+    public double QuadraticScore(double y, CellLaw law = CellLaw.Steps) => CellMasses(law) is { } p ? CellScores.Quadratic(p, Cell(y)) : double.NaN;
+
+    // The smoothed law's mass on each cell: each rise read on the tail that holds both ends' digits; null without the smoothed CDF.
+    private double[]? SmoothedMasses()
+    {
+        if (Smoothed is not { } s) return null;
+        int last = Grid.Length - 1;
+        var masses = new double[Grid.Length + 1];
+        masses[0] = s.Lower[0];
+        for (int g = 1; g <= last; g++)
+            masses[g] = Math.Max(0.0, s.Lower[g] <= 0.5 ? s.Lower[g] - s.Lower[g - 1] : s.Upper[g - 1] - s.Upper[g]);
+        masses[^1] = s.Upper[last];
+        return masses;
+    }
 
     // The cell holding y: the first grid value at or above it, or the cell above the grid.
     private int Cell(double y)
@@ -366,6 +408,37 @@ internal static class CdfScores
             if (g > 0) fall = Math.Max(fall, Math.Max(lower[g - 1] - lower[g], upper[g - 1] - upper[g]));
         }
         return new WeightedRanks(lower, upper, fall);
+    }
+
+    /// <summary>
+    /// The smoothed CDF G̃ at <paramref name="own"/>, the fit's CDF at a candidate, against the calibration PITs <paramref name="sorted"/>
+    /// (<see cref="SmoothedCdf"/>): with B PITs below it and T tied, (B + T)/m at a tie; otherwise (B + f)/m with f the candidate's place
+    /// between its neighbouring knots, PIT₍B₎ (or 0) and PIT₍B+1₎ (or 1), read on the scale that holds all three's digits, and the
+    /// complement (m − 1 − B + (1 − f))/m alike.
+    /// </summary>
+    public static (double Lower, double Upper) Smooth(CdfScore[] sorted, CdfScore own)
+    {
+        int n = sorted.Length, m = n + 1;
+        (int below, int tied) = Rank(sorted, own);
+        if (tied > 0) return ((double)(below + tied) / m, (double)(m - below - tied) / m);
+        double ua = below == 0 ? 0.0 : sorted[below - 1].Lower, ub = below == n ? 1.0 : sorted[below].Lower;
+        double va = below == 0 ? 1.0 : sorted[below - 1].Upper, vb = below == n ? 0.0 : sorted[below].Upper;
+        double f, rest;
+        if (ub <= 0.5)
+        {
+            double span = ub - ua;
+            f = span > 0.0 ? (own.Lower - ua) / span : 0.5;
+            rest = span > 0.0 ? (ub - own.Lower) / span : 0.5;
+        }
+        else
+        {
+            double span = va - vb;
+            f = span > 0.0 ? (va - own.Upper) / span : 0.5;
+            rest = span > 0.0 ? (own.Upper - vb) / span : 0.5;
+        }
+        f = Math.Clamp(f, 0.0, 1.0);
+        rest = Math.Clamp(rest, 0.0, 1.0);
+        return ((below + f) / m, (m - 1 - below + rest) / m);
     }
 
     /// <summary>The largest fall of the candidate's own score between neighbouring grid values.</summary>

@@ -82,13 +82,24 @@ public sealed class SplitPitCalibration
             var below = new int[grid.Length];
             var tied = new int[grid.Length];
             for (int g = 0; g < grid.Length; g++) (below[g], tied[g]) = CdfScores.Rank(units, own[g]);
+            WeightedRanks? weighed = weights is null ? null : Weigh(weights, t, h, candidates.Offset(t), below, tied);
             distributions[t] = new ConformalDistribution(t, h, units.Length + 1, grid, below, tied, ConformalForm.Split,
                                                          CdfScores.Fall(below, tied), CdfScores.ScoreFall(own))
             {
-                Weighted = weights is null ? null : Weigh(weights, t, h, candidates.Offset(t), below, tied),
+                Weighted = weighed,
+                Smoothed = weighed is null ? SmoothAlong(units, own) : null,
             };
         }
         return new ConformalDistributions(distributions, ConformalForm.Split);
+    }
+
+    // The smoothed CDF along a case's grid (slice 18's follow-up).
+    private static SmoothedCdf SmoothAlong(CdfScore[] units, CdfScore[] own)
+    {
+        var lower = new double[own.Length];
+        var upper = new double[own.Length];
+        for (int g = 0; g < own.Length; g++) (lower[g], upper[g]) = CdfScores.Smooth(units, own[g]);
+        return new SmoothedCdf(lower, upper);
     }
 
     // Case t's weighted ranks: the stratum's unit weights summed along its sorted order, so the units below are the first B and those at or
@@ -215,6 +226,13 @@ public sealed class SplitPredictiveDistribution
         if (_running is null) return (below + tau * (tied + 1)) / Units;
         (double lower, double upper) = Shares(below, below + tied);
         return lower + tau * (upper - lower);
+    }
+
+    /// <summary>The smoothed CDF G̃(F̂(y | x)) at any finite response (<see cref="SmoothedCdf"/>); NaN where the readouts are weighted.</summary>
+    public double SmoothedAt(double y)
+    {
+        if (!double.IsFinite(y)) throw new ArgumentOutOfRangeException(nameof(y));
+        return _running is null ? CdfScores.Smooth(_sorted, _score(y)).Lower : double.NaN;
     }
 
     /// <summary>The infimum of responses where Q(y, ½) reaches p, including the two unbounded outer ranks.</summary>
