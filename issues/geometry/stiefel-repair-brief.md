@@ -73,3 +73,5 @@ The type had no consumers, and no tests.
 **Follow-ups, each with the decision it would change.**
 - *The embedded metric as an option.* It changes which metric frames are averaged under. It needs a general matrix exponential (Padé scaling and squaring) in LinAlg, and a shooting Log. It waits for a consumer that wants the embedded metric.
 - *Zimmermann 2017 is not on disk.* Its algorithm is checked here by properties, not against the paper. If the user adds it, the convergence radius it proves can replace the probe's measured range in the docstring.
+  - The paper is R. Zimmermann, "A matrix-algebraic algorithm for the Riemannian logarithm on the Stiefel manifold under the canonical metric", *SIAM J. Matrix Anal. Appl.* 38(2), 2017 (cited from memory, with its arXiv number not known here).
+  - arXiv 1603.06757, added on 2026-11-13 and checked, is a different Zimmermann. Hernando, Igual and Quintana-Ortí (2017) speed up the Brouwer–Zimmermann algorithm for the minimum distance of a random linear code over GF(2), so it bears on nothing here.
