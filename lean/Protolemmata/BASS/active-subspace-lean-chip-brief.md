@@ -102,7 +102,15 @@ Hand-over state between turns is an "In progress" entry here.
 **E8's line, corrected:**
 > The matrix Poincaré check is proved under the product of uniform inputs (`matrix_poincare_box`, `lean/Enthymemata/ActiveSubspace/ContinuousPoincare.lean`). It covers every fit whose sections along each input are continuous on the box and differentiable off a countable set (which may move with the other inputs), with bounded measurable partials on the box. That includes hinges of any degree, axis-aligned or rotated, as a projected refit reads them in x.
 
-**In progress:** AS-2(e), Bakry–Émery on an interval for the truncated normal's σ². `WeightedPoincare.lean` is drafted and uncommitted, with compile errors being worked.
+**In progress (hand-over, 2026-11-13, stopped at the usage limit):** AS-2(e), Bakry–Émery on an interval, for the truncated normal's σ².
+- *The file.* `lean/Enthymemata/ActiveSubspace/WeightedPoincare.lean` is untracked, uncommitted and outside the barrel, so the working tree's meta-CI reads red while it is present. Every committed state is green.
+- *The proof's structure is in place:* by parts with kinks, then the Bochner identity through Ψ = V′W²e^{V}, then pointwise AM–GM. `poincare_truncNormal` is the corollary.
+- *Three compile errors remain at the last run:*
+  - line 112, `ring` in the Ψ derivative identity: the `2 − 1` exponent or the coefficient of `linear_combination` needs checking against the goal's printed form;
+  - line 166, a type mismatch in `hstep3` after `rw [hsum, hA, hB, …] at hmono`;
+  - line 176, the `change` restating `hstep3` in `Q` and `T`.
+- *Next:* the product theorem with each coordinate's Poincaré inequality as a hypothesis, so that uniform and truncated-normal coordinates mix as in E8's check. Payne–Weinberger, the other half of min(σ², (b − a)²/π²), stays open.
+- **Running:** nothing.
 
 ### 2026-11-13 — the extension: four open items closed
 
