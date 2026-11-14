@@ -68,7 +68,7 @@ These are the statements that E8's readouts ([active-subspace-brief.md](../../..
 
 ## AS-2 — the matrix Poincaré check
 
-**Status (2026-11-13).** (a), (b), the matrix form and (c)'s algebra are proved in `ActiveSubspace/MatrixPoincare.lean`, no apologies, reusing `efron_stein` (`Enthymemata/BassSensitivity.lean`, SG-1(d)). The one-variable inequality is a hypothesis here, as posed, in its integrated form (corrected after review, below). AS-2(d) in the extension proves it for the uniform and proves the matrix check on the continuous product of uniforms (`matrix_poincare_pi`). Checks AS-2a to AS-2e pass.
+**Status (2026-11-13).** (a), (b), the matrix form and (c)'s algebra are proved in `ActiveSubspace/MatrixPoincare.lean`, no apologies, reusing `efron_stein` (`Enthymemata/BassSensitivity.lean`, SG-1(d)). The one-variable inequality is a hypothesis here, as posed, in its integrated form (corrected after review, below). AS-2(d) in the extension proves it for the uniform and proves the matrix check on the continuous product of uniforms (`matrix_poincare_pi`). AS-2(e) proves the truncated normal's σ² (Bakry–Émery on an interval). Checks AS-2a to AS-2e pass.
 
 **Claims.** ρ is a product law on the inputs, f has m outputs, and D = diag(c₁, …, c_p).
 - **(a) The reduction.** Cov_ρ(f) ≼ E_ρ[J D Jᵀ] holds exactly when Var(vᵀf) ≤ Σᵢ cᵢ E[(∂ᵢ vᵀf)²] for every v ∈ ℝᵐ. This holds because vᵀCov(f)v = Var(vᵀf) and vᵀE[JDJᵀ]v = Σᵢ cᵢ E[(Σ_j v_j J_ji)²], and ∂ᵢ(vᵀf) = Σ_j v_j J_ji.
@@ -297,4 +297,21 @@ Four of the report's open items, taken in order of size. The numeric checks alre
   The hypotheses that remain are the fit's regularity only: bounded measurable outputs and partials, with sections along each coordinate continuous and differentiable off a countable set.
   - *The kink set may move with the other coordinates* (`s i x`), so a hinge in rotated coordinates (a projected refit read in x) is covered. The coordinating session's review found that the first form, with `s i` fixed, covered only axis-aligned kinks.
   - *Every hypothesis is asked only on the box* in `matrix_poincare_box`. It reads f and J through `clampBox`, which changes nothing under the law because the box has full measure (`ae_mem_box`). So a fit unbounded off the box, as every hinge is, is covered. The same review found that `matrix_poincare_pi` asks its bounds on all of ℝⁿ, which a hinge does not meet without that step.
-- *The truncated normal's bound* stays with the checks, since Bakry–Émery is a separate project.
+- *The truncated normal's σ²* is proved in AS-2(e) below. The (b − a)²/π² half of its min, Payne–Weinberger, stays with the checks.
+
+### AS-2(e) — Bakry–Émery on an interval
+
+**Claims.** V on ℝ has derivatives V′ and V″ everywhere, with V″ continuous and V″ ≥ κ > 0 on [a, b]. h is continuous on [a, b], with a measurable derivative h′ off a countable set, bounded on [a, b].
+- **(i)** If m is the e^{−V}-weighted mean, ∫ₐᵇ (h − m)e^{−V} = 0, then ∫ₐᵇ (h − m)²e^{−V} ≤ κ⁻¹ ∫ₐᵇ h′²e^{−V}. Divided by the normalizer: Var_π h ≤ κ⁻¹ E_π[h′²] for π ∝ e^{−V} on [a, b].
+- **(ii)** For N(μ, σ²) truncated to [a, b], V = (x − μ)²/(2σ²) and κ = σ⁻², so the constant is σ² on every interval.
+
+**Proof.** Let g = h − m and W(x) = ∫ₐˣ g e^{−V}. W vanishes at a, and at b by the mean's definition, so h needs no boundary condition.
+- By parts, kinks allowed: ∫ g²e^{−V} = −∫ W h′.
+- Ψ = V′W²e^{V} vanishes at both ends, and Ψ′ = V″W²e^{V} + 2V′Wg + V′²W²e^{V}. So ∫ g²e^{−V} − ∫ V″W²e^{V} = ∫ (g + V′We^{V})²e^{−V} ≥ 0.
+- Pointwise, −Wh′ ≤ ½V″W²e^{V} + ½h′²e^{−V}/V″.
+
+Together, ∫ g²e^{−V} ≤ ∫ h′²e^{−V}/V″ ≤ κ⁻¹ ∫ h′²e^{−V}. The middle bound is Brascamp–Lieb's form on the interval. It is not stated separately.
+
+**Lean (proved,** `WeightedPoincare`**).** `poincare_weighted` is (i) and `poincare_truncNormal` is (ii). Both derivative identities go through `integral_eq_of_hasDerivAt_off_countable_of_le`, as AS-2(d)(i)'s step by parts did.
+
+**Prior art.** Bakry and Émery (1985), from memory. The route through W and Ψ was derived here, with no source read.

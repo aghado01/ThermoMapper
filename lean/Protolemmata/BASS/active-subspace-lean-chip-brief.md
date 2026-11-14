@@ -85,6 +85,35 @@ Hand-over state between turns is an "In progress" entry here.
 
 ## Reports
 
+### 2026-11-13 — AS-2(e), Bakry–Émery on an interval
+
+**Landed:** `1aaa85a`, `ActiveSubspace/WeightedPoincare`, with `poincare_weighted` and `poincare_truncNormal`. It joins the barrel.
+
+**The statement.** V has V′ and V″ everywhere, with V″ continuous and V″ ≥ κ > 0 on [a, b]. h is continuous on [a, b], with a measurable derivative off a countable set, bounded on [a, b]. If ∫ₐᵇ (h − m)e^{−V} = 0, then ∫ₐᵇ (h − m)²e^{−V} ≤ κ⁻¹ ∫ₐᵇ h′²e^{−V}. The truncated normal N(μ, σ²) on [a, b] gets σ², on every interval.
+
+**What changed or proved false.** Nothing proved false.
+- The proof is one-dimensional, with no ODE or semigroup: by parts with kinks, one identity for Ψ = V′W²e^{V}, then AM–GM pointwise. It passes through Brascamp–Lieb's form, Var h ≤ E[h′²/V″], before bounding 1/V″ by κ⁻¹. That form is not stated separately.
+- The bound on h′ is asked on [a, b] only, as the review asked of the uniform's form.
+- The hand-over's three errors were a sign in a `linear_combination`, and a parse. `c * ∫ x in a..b, f x + d` reads `+ d` into the integrand, so `hstep3` had stated something else. The first integral is now parenthesized.
+
+**Declarations to print axioms for:** `poincare_weighted` and `poincare_truncNormal`. Each prints only `propext`, `Classical.choice` and `Quot.sound`.
+
+**The line E8's brief can take,** adding to the earlier ones:
+> For one normal component N(μ, σ²) truncated to [a, b], σ² is proved as that coordinate's one-variable constant (`poincare_truncNormal`, Bakry–Émery, `lean/Enthymemata/ActiveSubspace/WeightedPoincare.lean`). The (b − a)²/π² half of min(σ², (b − a)²/π²) still rests on the checks (Payne–Weinberger, open). The matrix check that mixes uniform and truncated-normal coordinates still rests on AS-2(b)'s finite form and the checks, until the product step with each coordinate's inequality as a hypothesis lands.
+
+**Gates:**
+- `lean` on the module.
+- `lake build Enthymemata.ActiveSubspace`, 2,968 jobs, with no warnings.
+- `scripts/meta-ci.ps1 -NoBuild`: PASS. All seven modules are `PROOF-CLOSED`.
+- No cache fetch. D: had 33.5 GB free at the end.
+
+**Follow-ups:**
+- The product step with each coordinate's Poincaré inequality as a hypothesis, so uniform and truncated-normal coordinates mix in one matrix check. It is the next step here.
+- Payne–Weinberger. It decides whether E8 may use min(σ², (b − a)²/π²) by theorem, or σ² alone. Open.
+- The promotion review of the seven modules.
+
+**Doc changes owed:** `docs/Maths/Regression/ActiveSubspaces.md`: the truncated normal's σ² is proved.
+
 ### 2026-11-13 — the extension verified from a clean archive (coordinating session)
 
 - **Commit:** `36bd90e`, through `scripts/verify-lean.ps1` with `-Module Enthymemata.ActiveSubspace` and this folder's checks.
@@ -113,16 +142,6 @@ Hand-over state between turns is an "In progress" entry here.
 
 **E8's line, corrected:**
 > The matrix Poincaré check is proved under the product of uniform inputs (`matrix_poincare_box`, `lean/Enthymemata/ActiveSubspace/ContinuousPoincare.lean`). It covers every fit whose sections along each input are continuous on the box and differentiable off a countable set (which may move with the other inputs), with bounded measurable partials on the box. That includes hinges of any degree, axis-aligned or rotated, as a projected refit reads them in x.
-
-**In progress (hand-over, 2026-11-13, stopped at the usage limit):** AS-2(e), Bakry–Émery on an interval, for the truncated normal's σ².
-- *The file.* `lean/Enthymemata/ActiveSubspace/WeightedPoincare.lean` is untracked, uncommitted and outside the barrel, so the working tree's meta-CI reads red while it is present. Every committed state is green.
-- *The proof's structure is in place:* by parts with kinks, then the Bochner identity through Ψ = V′W²e^{V}, then pointwise AM–GM. `poincare_truncNormal` is the corollary.
-- *Three compile errors remain at the last run:*
-  - line 112, `ring` in the Ψ derivative identity: the `2 − 1` exponent or the coefficient of `linear_combination` needs checking against the goal's printed form;
-  - line 166, a type mismatch in `hstep3` after `rw [hsum, hA, hB, …] at hmono`;
-  - line 176, the `change` restating `hstep3` in `Q` and `T`.
-- *Next:* the product theorem with each coordinate's Poincaré inequality as a hypothesis, so that uniform and truncated-normal coordinates mix as in E8's check. Payne–Weinberger, the other half of min(σ², (b − a)²/π²), stays open.
-- **Running:** nothing.
 
 ### 2026-11-13 — the extension: four open items closed
 
