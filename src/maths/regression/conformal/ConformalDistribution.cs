@@ -205,6 +205,52 @@ public sealed record ConformalDistribution(int Case, int Stratum, int Units, dou
         return total;
     }
 
+    /// <summary>
+    /// The predictive's mass on each of the grid's G + 1 cells, (−∞, g₀], (g₀, g₁], …, (g_{G−1}, ∞): Q̄ at g₀, the rises of Q̄ between grid
+    /// values, and 1 − Q̄ at the last (slice 18). A law on the cells, which the proper scores read. Null for a case with no distribution.
+    /// </summary>
+    public double[]? CellMasses()
+    {
+        if (!Monotone) return null;
+        var masses = new double[Grid.Length + 1];
+        double below = 0.0;
+        for (int g = 0; g < Grid.Length; g++)
+        {
+            double at = Mid(g);
+            masses[g] = at - below;
+            below = at;
+        }
+        masses[^1] = 1.0 - below;
+        return masses;
+    }
+
+    /// <summary>
+    /// The log score at an observed <paramref name="y"/>, −ln p of the cell holding it (Gressmann et al.'s log-loss on the cells): strictly
+    /// proper over the cells for laws positive where the truth is (<c>logLoss_proper</c>, <c>logLoss_strict</c>; Gneiting and Raftery's
+    /// Example 3). +∞ where the cell has no mass; NaN for a case with no distribution.
+    /// </summary>
+    public double LogScore(double y) => CellMasses() is { } p ? CellScores.Log(p, Cell(y)) : double.NaN;
+
+    /// <summary>
+    /// The quadratic score at an observed <paramref name="y"/>, Σ p² − 2p of the cell holding it (minus Gneiting and Raftery's quadratic
+    /// score, their (18)): strictly proper over the cells, its gap to the truth's Σ (p − q)² (<c>gneitingLoss_gap</c>). NaN for a case with
+    /// no distribution.
+    /// </summary>
+    public double QuadraticScore(double y) => CellMasses() is { } p ? CellScores.Quadratic(p, Cell(y)) : double.NaN;
+
+    // The cell holding y: the first grid value at or above it, or the cell above the grid.
+    private int Cell(double y)
+    {
+        if (double.IsNaN(y)) throw new ArgumentException("The observation is NaN.", nameof(y));
+        int lo = 0, hi = Grid.Length;
+        while (lo < hi)
+        {
+            int mid = (lo + hi) >>> 1;
+            if (Grid[mid] >= y) hi = mid; else lo = mid + 1;
+        }
+        return lo;
+    }
+
     // Q⁺ − Q⁻ = (T + 1)/m, or the weighted ranks' difference.
     private double Spread(int g) => Weighted is { } w ? w.Upper[g] - w.Lower[g] : (Tied[g] + 1.0) / Units;
 
@@ -270,6 +316,21 @@ internal readonly record struct CdfScore(double Lower, double Upper) : IComparab
         double f = Math.Exp(logCdf);
         if (logCdf <= -Ln2) return (f, 1.0 - f);
         return (f, f == 1.0 ? -logCdf : -((f - 1.0) * logCdf / Math.Log(f)));
+    }
+}
+
+/// <summary>Proper scores of a law on finitely many outcomes at an observed outcome (slice 18; Gressmann et al., Gneiting and Raftery).</summary>
+internal static class CellScores
+{
+    /// <summary>The log-loss, −ln p_y; +∞ where p_y is 0.</summary>
+    public static double Log(double[] p, int outcome) => p[outcome] > 0.0 ? -Math.Log(p[outcome]) : double.PositiveInfinity;
+
+    /// <summary>The quadratic loss, Σ p² − 2p_y.</summary>
+    public static double Quadratic(double[] p, int outcome)
+    {
+        double squares = 0.0;
+        foreach (double v in p) squares += v * v;
+        return squares - 2.0 * p[outcome];
     }
 }
 
