@@ -63,13 +63,29 @@ Commissioned by the user on 2026-11-13 through the coordinating session. Both de
 
 Newest first. Each gives the commits, the gates' results, defects found, decisions for the user and "Doc changes owed".
 
+### 2026-11-13 — Slice 2 verified from clean archives (coordinating session)
+
+- **The standard run:** `scripts/verify-csharp.ps1` on a clean archive of HEAD `78d5077`, the Commit selection over slice 2's six files (`37eb63c`). It selects within the regression test project only: 2 of 308 classes, 79 executed, 79 passed, 0 not executed.
+- **The other projects.** Five of the six files lie outside that project, so each test project that reaches them ran whole, from a clean archive of HEAD `ed7df5d`:
+  - `Maths.LinAlg.Tests`: 179 of 179, `CholeskyDivergenceTests` among them.
+  - `TDA.Mapper.Tests`: 28 of 28.
+  - `VizCore.Tests`: 699 passed and 2 skipped of 701, `GaussianFactorRefusalTests` among them. The skips are the two Möbius golden drafts, skipped before this slice.
+- **The sweep behind that choice** (`closure-78d5077.txt`): `Cholesky.cs` compiles into 14 test projects.
+  - The name graph selects classes in three: linear algebra (7 of 19), VizCore (2 of 85) and regression (2 of 308).
+  - Mapper holds three of the files and reaches the component without naming it.
+  - `Clustering.Graphical.CumulativeField.Tests` also ran whole in the sweep's first pass: 15 of 15.
+  - The other nine have no selected class and did not run.
+- **The whole regression assembly** less its slow tier passed with the refusal in place, under slice 1's run (2,922 of 2,922 at `e39924c`).
+- **The source change was read:** nothing found. A non-finite entry of L shows in its own row's pivot, and every read is gated on one flag.
+- **Receipts:** `artifacts/verify-defects-s2-e429b29/` and `artifacts/verify-defects-s2-projects-ed7df5d/`. The lists, the counters and the one-off project script are tracked in [receipts](receipts/).
+
 ### 2026-11-13 — Slice 1 verified from a clean archive (coordinating session)
 
 - **Run:** `scripts/verify-csharp.ps1` on a clean archive of HEAD `e39924c`, the Commit selection over slice 1's three files (`f50753f`).
 - **Selection:** 288 of 308 classes of the regression assembly, with the pinned tier and without the slow tier's 71 methods.
 - **Result:** 2,922 executed, 2,922 passed, 0 failed, 0 not executed (26 min). `WeightReaderTests` is among them.
 - **The source change was read:** ordinary weights take the earlier expression, so their bits hold; nothing was found.
-- **Slice 2 is not yet verified.** The archive holds its source (`37eb63c`), so the regression assembly passed with the refusal in place. The linear algebra, Mapper and VizCore selections are still to run.
+- **Slice 2** was verified later the same day (the entry above). This archive holds its source (`37eb63c`), so the regression assembly passed with the refusal in place.
 - **Receipts:** `artifacts/verify-defects-s1-e39924c/`, with the changed-file list, counters and snapshot line tracked in [receipts](receipts/verify-defects-s1-e39924c/).
 
 ### In progress (2026-11-13)

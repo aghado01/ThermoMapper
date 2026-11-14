@@ -1,0 +1,6 @@
+src/clustering/statistical/gmm/BhattacharyyaCoefficient.cs
+src/clustering/statistical/gmm/GaussianComponent.cs
+src/maths/linalg/Cholesky.cs
+src/viz-core/serializer.cs
+tests/VizCore.Tests/GaussianFactorRefusalTests.cs
+tests/linalg/CholeskyDivergenceTests.cs
