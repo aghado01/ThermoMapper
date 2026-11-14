@@ -86,7 +86,7 @@ public sealed class AnisotropicTensorSpline
     /// Nelder–Mead from each axis's balance point <c>λ_ref = tr(ZᵀZ)/tr(P_axis)</c>, within <c>λ_ref·[10⁻⁸, 10⁸]</c> per
     /// axis. The evidence levels off as an axis's λ grows when the data have no curvature along that axis (they lie in its
     /// null space), so an axis that ends at its box's edge is flagged rather than reported as an interior optimum. A trial
-    /// point whose system is not numerically positive definite counts as infeasible.
+    /// point whose system is not admissible (<see cref="BapsAdmission"/>) counts as infeasible.
     /// </summary>
     /// <param name="tolerance">Convergence on ln λ, and on the evidence relative to its size.</param>
     /// <param name="maxEvaluations">The evidence evaluations allowed.</param>
@@ -102,7 +102,7 @@ public sealed class AnisotropicTensorSpline
             u =>
             {
                 try { return -RemlLogEvidence(Math.Exp(u[0]), Math.Exp(u[1])); }
-                catch (InvalidOperationException) { return double.PositiveInfinity; }   // not numerically positive definite
+                catch (InvalidOperationException) { return double.PositiveInfinity; }   // not admissible (BapsAdmission)
             },
             [refX, refY], [1.0, 1.0], lower, upper, tolerance, maxEvaluations);
         const double edge = 1e-6;
@@ -129,9 +129,9 @@ public sealed class AnisotropicTensorSpline
         _penalty.AccumulateComponents(band, _nu, [lambdaX, lambdaY]);      // + λx·Px + λy·Py
         var chol = new BandCholesky(_nu, _bw, BandFactorization.Ldlt);
         chol.DecomposeBanded(band);
-        if (chol.Status is not { PositiveDefinite: true, FlooredPivots: 0 })
+        if (!BapsAdmission.Admits(chol))
             throw new InvalidOperationException(
-                $"ZᵀZ + λx·Px + λy·Py is not numerically positive definite at (λx, λy) = ({lambdaX}, {lambdaY}) ({chol.Status}).");
+                $"ZᵀZ + λx·Px + λy·Py is not admissible: not positive definite, or its equilibrated condition past 1e14 at (λx, λy) = ({lambdaX}, {lambdaY}) ({chol.Status}).");
         logDetA = chol.LogDet;
         return chol;
     }

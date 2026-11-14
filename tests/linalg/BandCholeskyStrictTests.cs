@@ -37,7 +37,7 @@ public sealed class BandCholeskyStrictTests
     {
         var rng = new Xoshiro256PlusPlus(seed: 3);
         double[,] a = BandSpd(12, 3, rng);
-        var floored = new BandCholesky(12, 3, mode);
+        var floored = new BandCholesky(12, 3, mode, strict: false);
         var strict = new BandCholesky(12, 3, mode, strict: true);
         floored.Decompose(a);
         strict.Decompose(a);
@@ -107,7 +107,7 @@ public sealed class BandCholeskyStrictTests
             a[i, i] = 2e-20;
             if (i > 0) { a[i, i - 1] = -1e-20; a[i - 1, i] = -1e-20; }
         }
-        var floored = new BandCholesky(n, 1, mode);
+        var floored = new BandCholesky(n, 1, mode, strict: false);
         var strict = new BandCholesky(n, 1, mode, strict: true);
         floored.Decompose(a);
         strict.Decompose(a);

@@ -539,24 +539,24 @@ public sealed partial class Baps
                 for (int j = 0; j < _componentLambdas.Length; j++) _componentLambdas[j] = state.Sigma2 * Math.Exp(-state.LogComponentTau2[j]);
                 ((IAnisotropicPenalty)owner._penalty).AccumulateComponents(_band, nu, _componentLambdas);
                 _factor.DecomposeBanded(_band);
-                if (_factor.Status is not { PositiveDefinite: true, FlooredPivots: 0 })
+                if (!BapsAdmission.Admits(_factor))
                     throw new InvalidOperationException(
-                        $"ZᵀZ + Σⱼ λⱼPⱼ is not numerically positive definite at λ = [{string.Join(", ", _componentLambdas)}] ({_factor.Status}).");
+                        $"ZᵀZ + Σⱼ λⱼPⱼ is not admissible: not positive definite, or its equilibrated condition past 1e14 at λ = [{string.Join(", ", _componentLambdas)}] ({_factor.Status}).");
             }
             else if (scheme == BapsScheme.LocallyAdaptiveGibbs)
             {
                 for (int i = 0; i < _weights.Length; i++) _weights[i] = lambda * state.Eta[i];
                 ((ILocallyAdaptivePenalty)owner._penalty).AccumulateInto(_band, nu, _weights);
                 _factor.DecomposeBanded(_band);
-                if (_factor.Status is not { PositiveDefinite: true, FlooredPivots: 0 })
-                    throw new InvalidOperationException($"ZᵀZ + Dᵀdiag(λᵢ)D is not numerically positive definite at global λ = {lambda} ({_factor.Status}).");
+                if (!BapsAdmission.Admits(_factor))
+                    throw new InvalidOperationException($"ZᵀZ + Dᵀdiag(λᵢ)D is not admissible: not positive definite, or its equilibrated condition past 1e14 at global λ = {lambda} ({_factor.Status}).");
             }
             else
             {
                 owner._penalty.AccumulateInto(_band, nu, lambda);
                 _factor.DecomposeBanded(_band);
-                if (_factor.Status is not { PositiveDefinite: true, FlooredPivots: 0 })
-                    throw new InvalidOperationException($"ZᵀZ + λP is not numerically positive definite at λ = {lambda} ({_factor.Status}).");
+                if (!BapsAdmission.Admits(_factor))
+                    throw new InvalidOperationException($"ZᵀZ + λP is not admissible: not positive definite, or its equilibrated condition past 1e14 at λ = {lambda} ({_factor.Status}).");
             }
             _gaussian.Draw(_factor, owner._zty, rng, state.Beta, Math.Sqrt(state.Sigma2));
             return true;

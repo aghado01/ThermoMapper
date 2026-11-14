@@ -72,8 +72,8 @@ public sealed class PenalizedSpline
         _penalty.AccumulateInto(band, _nu, lambda);   // + λP
         var chol = new BandCholesky(_nu, _bw, BandFactorization.Ldlt);
         chol.DecomposeBanded(band);
-        if (chol.Status is not { PositiveDefinite: true, FlooredPivots: 0 })
-            throw new InvalidOperationException($"ZᵀZ + λP is not numerically positive definite at λ = {lambda} ({chol.Status}).");
+        if (!BapsAdmission.Admits(chol))
+            throw new InvalidOperationException($"ZᵀZ + λP is not admissible: not positive definite, or its equilibrated condition past 1e14 at λ = {lambda} ({chol.Status}).");
         double[] beta = chol.Solve(_zty);
 
         double bBeta = 0.0;                            // RSS_pen = yᵀy − β̂ᵀZᵀy
@@ -144,7 +144,7 @@ public sealed class PenalizedSpline
         _penalty.AccumulateInto(band, _nu, 1.0);      // + P
         var chol = new BandCholesky(_nu, _bw, BandFactorization.Ldlt);
         chol.DecomposeBanded(band);
-        if (chol.Status is not { PositiveDefinite: true, FlooredPivots: 0 })
+        if (!BapsAdmission.Admits(chol))
             throw new InvalidOperationException($"ZᵀZ + P is singular: the design does not identify the penalty null space ({chol.Status}).");
 
         var w = new double[_nu, _nu];                  // columns of W = L⁻ᵀD^{−½}

@@ -159,7 +159,7 @@ public sealed class FactorReferenceTests
                 chol.Decompose(a);
                 return chol.Status;
             default:
-                var band = new BandCholesky(n, n - 1, kind == "band-ldlt" ? BandFactorization.Ldlt : BandFactorization.Cholesky);
+                var band = new BandCholesky(n, n - 1, kind == "band-ldlt" ? BandFactorization.Ldlt : BandFactorization.Cholesky, strict: false);
                 band.Decompose(a);
                 return band.Status;
         }

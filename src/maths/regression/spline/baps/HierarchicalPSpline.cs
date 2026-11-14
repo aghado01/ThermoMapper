@@ -840,8 +840,8 @@ public sealed partial class HierarchicalPSpline
                 for (int j = 0; j < nu; j++) _band[d, j] = gram[d, j] / state.Sigma2;
             for (int j = 0; j < nu; j++) _band[0, j] += 1.0 / state.TauU2;
             _factor.DecomposeBanded(_band);
-            if (_factor.Status is not { PositiveDefinite: true, FlooredPivots: 0 })
-                throw new InvalidOperationException($"ZᵀZ/σ² + I/τ_u² is not numerically positive definite ({_factor.Status}).");
+            if (!BapsAdmission.Admits(_factor))
+                throw new InvalidOperationException($"ZᵀZ/σ² + I/τ_u² is not admissible: not positive definite, or its equilibrated condition past 1e14 ({_factor.Status}).");
             for (int rr = 0; rr < zty.Length; rr++)
             {
                 for (int j = 0; j < nu; j++) _rhs[j] = zty[rr][j] / state.Sigma2 + state.Population[j] / state.TauU2;
@@ -870,8 +870,8 @@ public sealed partial class HierarchicalPSpline
             for (int j = 0; j < nu; j++) _band[0, j] = reps / state.TauU2;
             owner.AccumulatePopulationPenalty(_band, state, _weights);
             _factor.DecomposeBanded(_band);
-            if (_factor.Status is not { PositiveDefinite: true, FlooredPivots: 0 })
-                throw new InvalidOperationException($"(R/τ_u²)I + P/τ_0² is not numerically positive definite ({_factor.Status}).");
+            if (!BapsAdmission.Admits(_factor))
+                throw new InvalidOperationException($"(R/τ_u²)I + P/τ_0² is not admissible: not positive definite, or its equilibrated condition past 1e14 ({_factor.Status}).");
             Array.Clear(_rhs);
             for (int rr = 0; rr < reps; rr++)
                 for (int j = 0; j < nu; j++) _rhs[j] += state.Replicates[rr][j];
@@ -980,8 +980,8 @@ public sealed partial class HierarchicalPSpline
                 }
             }
             _factor.Decompose(_precision);
-            if (_factor.Status is not { PositiveDefinite: true, FlooredPivots: 0 })
-                throw new InvalidOperationException($"β_0's collapsed precision is not numerically positive definite ({_factor.Status}).");
+            if (!BapsAdmission.Admits(_factor))
+                throw new InvalidOperationException($"β_0's collapsed precision is not admissible: not positive definite, or its equilibrated condition past 1e14 ({_factor.Status}).");
             state.PopulationMean = _gaussian.Draw(_factor, _rhs, rng, state.Population);
             return true;
         }
@@ -1048,8 +1048,8 @@ public sealed partial class HierarchicalPSpline
                 for (int j = 0; j < nu; j++) _band[d, j] = xi * xi * owner._gram[d, j] / state.Sigma2;
             for (int j = 0; j < nu; j++) _band[0, j] += 1.0 / state.EtaVariance;
             _factor.DecomposeBanded(_band);
-            if (_factor.Status is not { PositiveDefinite: true, FlooredPivots: 0 })
-                throw new InvalidOperationException($"ξ²ZᵀZ/σ² + I/σ_η² is not numerically positive definite ({_factor.Status}).");
+            if (!BapsAdmission.Admits(_factor))
+                throw new InvalidOperationException($"ξ²ZᵀZ/σ² + I/σ_η² is not admissible: not positive definite, or its equilibrated condition past 1e14 ({_factor.Status}).");
             for (int i = 0; i < nu; i++)
             {
                 double g = 0.0;
@@ -1092,8 +1092,8 @@ public sealed partial class HierarchicalPSpline
                 for (int j = 0; j < nu; j++) _band[d, j] = reps * owner._gram[d, j] / state.Sigma2;
             owner.AccumulatePopulationPenalty(_band, state, _weights);
             _factor.DecomposeBanded(_band);
-            if (_factor.Status is not { PositiveDefinite: true, FlooredPivots: 0 })
-                throw new InvalidOperationException($"R·ZᵀZ/σ² + P/τ_0² is not numerically positive definite ({_factor.Status}).");
+            if (!BapsAdmission.Admits(_factor))
+                throw new InvalidOperationException($"R·ZᵀZ/σ² + P/τ_0² is not admissible: not positive definite, or its equilibrated condition past 1e14 ({_factor.Status}).");
             for (int i = 0; i < nu; i++)
             {
                 double s = 0.0;

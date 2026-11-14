@@ -491,7 +491,7 @@ internal static class CostKernels
     {
         double[,] band = BandSpd(n, p, 100 + n + p);
         var strict = new BandCholesky(n, p, BandFactorization.Ldlt, strict: true);
-        var floored = new BandCholesky(n, p, BandFactorization.Ldlt);
+        var floored = new BandCholesky(n, p, BandFactorization.Ldlt, strict: false);
         var chol = new BandCholesky(n, p, BandFactorization.Cholesky);
         double[] lt = new double[n * p], dt = new double[n], l = new double[n * p], d = new double[n], w = new double[n * p];
         ToRows(band, n, p, lt, dt);

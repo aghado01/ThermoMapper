@@ -170,7 +170,7 @@ public sealed class ConditionEstimateTests
     {
         // [1e-20] is clamped to the 1e-12 floor, so the solves describe [1e-12] while the scaling reads 1e-20; the mix
         // reported 1e-8 for a matrix whose condition number is 1.
-        var tiny = new BandCholesky(1, 0, BandFactorization.Ldlt);
+        var tiny = new BandCholesky(1, 0, BandFactorization.Ldlt, strict: false);
         tiny.Decompose(new double[,] { { 1e-20 } });
         Assert.Equal(1, tiny.Status.FlooredPivots);
         Assert.Throws<InvalidOperationException>(() => tiny.EquilibratedCondition());

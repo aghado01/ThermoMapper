@@ -35,15 +35,16 @@ namespace Maths.LinAlg
     /// </para>
     /// <para>
     /// Allocate once with <see cref="BandCholesky(int,int,BandFactorization,bool)"/>, then call <see cref="Decompose"/>
-    /// each time the matrix changes (the inner-loop MCMC pattern). By default it floors a pivot at 1e-12 — a soft
-    /// guard against a near-interpolating (over-knotted) design without throwing; the floor is applied to the variance
-    /// so the two conventions clamp to the same D = 1e-12.
+    /// each time the matrix changes (the inner-loop MCMC pattern).
     /// </para>
     /// <para>
-    /// A strict factor (<see cref="Strict"/>) has no floor, as <see cref="DenseCholesky"/>: the first pivot that is not
-    /// finite and positive stops the factorization, <see cref="FailedAt"/> says where, <see cref="LogDet"/> is NaN and
-    /// every solve and draw refuses. On a matrix whose pivots all exceed the floor the two modes compute the same
-    /// factor.
+    /// By default the factor is strict (<see cref="Strict"/>), as <see cref="DenseCholesky"/>: there is no pivot floor, the
+    /// first pivot that is not finite and positive stops the factorization, <see cref="FailedAt"/> says where,
+    /// <see cref="LogDet"/> is NaN and every solve and draw refuses. A caller judges the factor it gets by its scale-free
+    /// condition (<see cref="EquilibratedCondition"/>), not by a pivot's size: an absolute floor misreads a matrix that is
+    /// merely small in scale. A floored factor (<c>strict: false</c>) clamps a pivot at or below 1e-12 to it, on the variance
+    /// so the two conventions clamp to the same D = 1e-12, and reports the clamps in <see cref="Status"/>. On a matrix whose
+    /// pivots all exceed the floor the two modes compute the same factor.
     /// </para>
     /// </remarks>
     public sealed class BandCholesky : ISpdFactor
@@ -66,11 +67,10 @@ namespace Maths.LinAlg
         public double LogDet { get; private set; }
 
         /// <summary>
-        /// What the last factorization found: finiteness, floored pivots and the pivot range before flooring. The
-        /// factor, <see cref="LogDet"/> and the solves keep their floored behavior; this reports it, separating a rank
-        /// problem (a small <see cref="FactorStatus.PivotRatio"/>) from a matrix that is merely small in scale (floored
-        /// pivots with a ratio near 1). A consumer that needs the solves to describe its matrix requires
-        /// <see cref="FactorStatus.FlooredPivots"/> = 0.
+        /// What the last factorization found: finiteness, floored pivots and the pivot range before flooring, up to and
+        /// including any failing pivot of a strict factor. A floored factor's solves keep their floored behavior, which this
+        /// reports, separating a rank problem (a small <see cref="FactorStatus.PivotRatio"/>) from a matrix that is merely
+        /// small in scale (floored pivots with a ratio near 1).
         /// </summary>
         public FactorStatus Status { get; private set; }
 
@@ -93,9 +93,10 @@ namespace Maths.LinAlg
         /// <param name="dim">Matrix order n.</param>
         /// <param name="bandwidth">Lower half-bandwidth p; clamped to n−1 (a dense matrix is the limiting case).</param>
         /// <param name="factorization">Square-root convention; defaults to <see cref="BandFactorization.Cholesky"/>.</param>
-        /// <param name="strict">No pivot floor: a pivot that is not finite and positive stops the factorization.</param>
+        /// <param name="strict">No pivot floor, the default: a pivot that is not finite and positive stops the factorization.
+        /// False floors a pivot at 1e-12.</param>
         public BandCholesky(int dim, int bandwidth, BandFactorization factorization = BandFactorization.Cholesky,
-                            bool strict = false)
+                            bool strict = true)
         {
             if (dim <= 0) throw new ArgumentOutOfRangeException(nameof(dim), "Dimension must be positive.");
             if (bandwidth < 0) throw new ArgumentOutOfRangeException(nameof(bandwidth), "Bandwidth must be non-negative.");
