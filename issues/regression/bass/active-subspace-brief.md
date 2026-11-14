@@ -356,7 +356,10 @@ The user's spec added three corrections, all taken:
 
 **Left unbuilt:** none of the user's spec.
 
-**Follow-up, the user's call:** making the training range BASS's default for any fit whose declared domain is wider than its data. It would move existing results under column mass and the raw ridge.
+**Follow-up, the user's call:** making the training range BASS's default for any fit whose declared domain is wider than its data. It would move existing results under column mass and the raw ridge. **Decided by the user (2026-11-13): no change.**
+- `Box` stays the default for ordinary fits, and `TrainingRange` for projected hinge fits. An explicit setting wins in either case, as built.
+- No width threshold: width cannot tell a prediction allowance from a choice of where the raw ridge's prior is calibrated.
+- For an ordinary fit whose domain is widened only to allow prediction beyond the data, the user's guidance is to state `TrainingRange` explicitly. Doc change owed: `BASS.md`'s basis section.
 
 **Doc changes owed:**
 - `docs/Maths/Regression/BASS.md`: the basis section (the normalization interval and the setting) and the column-mass option (normalized over that interval).
