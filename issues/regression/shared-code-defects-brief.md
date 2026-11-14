@@ -63,14 +63,98 @@ Commissioned by the user on 2026-11-13 through the coordinating session. Both de
 
 Newest first. Each gives the commits, the gates' results, defects found, decisions for the user and "Doc changes owed".
 
-### In progress (2026-11-13)
+### 2026-11-13 — Slice 5: `BandCholesky` strict by default
 
-- *Slice 5, `BandCholesky` strict by default:* decided by the user on 2026-11-13. `PivotedCholesky`'s solve is still undecided and untouched.
-- *The user's correction to slice 4's note on rollout.*
-  - BARS's banded g-prior already asks for strict mode.
-  - The BAPS penalized and tensor splines use the floored default but reject any factor that reports a floored pivot.
-  - So the switch can admit a valid small-scale fit that BAPS rejects today. That direction is qualified explicitly, beside singular-design refusal and the public λx = λy = 1e20 tensor cases.
-- *Next:* read `BandCholesky`'s floor, strict mode and every caller; then the switch, the three qualifications, the gates and the report.
+The user chose on 2026-11-13: strict by default, with the rollout qualified in three directions. Those are a valid small-scale fit that BAPS refuses today, singular-design refusal, and the public λx = λy = 1e20 tensor points. `PivotedCholesky`'s solve is still undecided and untouched.
+
+**The user's correction to slice 4.** Slice 4's decision 1 said that under a strict default the banded marginals would refuse a near-interpolating design the floor carries. That is backwards. BARS's banded g-prior already factors strictly. BAPS refused any factor that reported a floored pivot. So the floor carried no caller. The switch moves BAPS the other way: it can admit a valid fit in small units that the floor refused.
+
+**Commits.**
+- `f128e04` fix(linalg, baps): BandCholesky strict by default; BAPS admits a system by its equilibrated condition.
+
+**What changed.**
+- `BandCholesky`'s `strict` defaults to true, and `strict: false` keeps the 1e-12 floor. Every factor in `src` is now strict: BARS named it already, and BAPS takes the default.
+- `BapsAdmission` (new, internal) admits a factored system when it is positive definite and its estimated κ(E) is at most 1e14. It replaces `Status is { PositiveDefinite: true, FlooredPivots: 0 }` at all eleven BAPS sites:
+  - `PenalizedSpline`: 2;
+  - `Baps`: 3;
+  - `AnisotropicTensorSpline`: 1;
+  - `HierarchicalPSpline`: 5. One of these is β₀'s dense collapsed precision, which never floored, so it gains the condition bound.
+  - The messages say "not admissible".
+- Five places in four test files exercise the floored mode itself, so they now ask for it by name (`strict: false`):
+  - `BandCholeskyStrictTests`: 2;
+  - `ConditionEstimateTests`: 1;
+  - `FactorReferenceTests`: the band kinds of the status helper;
+  - `CostProfileKernels`: the floored kernel.
+
+**Why a condition gate: the probe.**
+- *Setup.* The probe is in `artifacts/shared-code-defects/probe/` and is not committed. It covers the nine tensor layouts of `issues/linalg/spectral-tensor-factorization-report.md`.
+  - *Points per layout.* The box has 26 points: the optimizer's 5×5 grid around each axis's trace balance, plus the nominal (0.7, 2.0). Then λ = 1e12 and λ = 1e20.
+  - *Three families.* Identified. Small-scale: the same design × 2⁻²⁴ with λ × 2⁻⁴⁸. Unidentified: y fixed at 0.5, which leaves the penalty's y-linear null space unidentified.
+  - That makes 756 systems.
+- *Systems admitted by each gate.*
+
+| family, points | today (floored, no floored pivot) | strict alone | strict, relative pivot ≥ 1e-12 | ≥ 1e-10 | BARS's `DesignAdmission` (1e-10, κ ≤ 1e10) | `BapsAdmission` |
+|---|---|---|---|---|---|---|
+| identified, box (234) | 234 | 234 | 234 | 234 | 234 | 234 |
+| identified, λ = 1e12 (9) | 9 | 9 | 9 | 0 | 0 | 9 |
+| identified, λ = 1e20 (9) | 1 | 1 | 0 | 0 | 0 | 0 |
+| small-scale, box (234) | 0 | 234 | 234 | 234 | 234 | 234 |
+| small-scale, λ = 1e12 (9) | 0 | 9 | 9 | 0 | 0 | 9 |
+| small-scale, λ = 1e20 (9) | 1 | 1 | 0 | 0 | 0 | 0 |
+| unidentified, box (234) | 55 | 88 | 5 | 2 | 0 | 0 |
+| unidentified, λ = 1e12 (9) | 0 | 0 | 0 | 0 | 0 | 0 |
+| unidentified, λ = 1e20 (9) | 1 | 1 | 0 | 0 | 0 | 0 |
+
+- *κ(E) of the systems that factor strictly:*
+  - identified box: 6.4 to 7.8·10⁹;
+  - λ = 1e12: 1.3·10¹² to 2.5·10¹³;
+  - unidentified box: 1.2·10¹⁶ to 3.1·10¹⁹;
+  - the one λ = 1e20 survivor (6×16): 2.7·10¹⁹.
+  - The small-scale family reads the same κ as the identified family; the estimate is scale-free.
+- *Strict alone loosens singular refusal* (55 → 88 admitted). What refused those systems was BAPS's floored-pivot check, and it is vacuous once nothing floors.
+- *Relative-pivot floors leak* (5 and 2 admitted). The 1e-10 floor also refuses the public λ = 1e12 points, and so does BARS's gate. Its 1e10 sits only 1.3× above the box's largest κ.
+- *Only the condition separates the families.* The bound of 1e14 is four decades above the box, about 4× above the λ = 1e12 maximum, and two decades below the smallest singular system. At κ·ε ≈ 0.02 a backward-stable solve still keeps about two digits.
+
+**Bits.**
+- On a system the old gate admitted, nothing floored. The two modes differ only where the floor fires, so the strict factor is the same bit for bit. The gate adds a read-only estimate that draws no random numbers. Every fit and draw the old gate admitted is therefore unchanged, and the existing pinned tests pass as they were.
+- A newly admitted small-scale fit is the same fit in other units: β' = β/c bit for bit.
+- *Newly refused systems:* the 55 unidentified box systems, the 6×16 point at 1e20, and any system with κ(E) above 1e14 that never floored. No existing test reaches one.
+
+**Tests.** `tests/regression/BapsAdmissionTests.cs` has 19 cases.
+- `AValidFitInSmallUnits_IsAdmitted_AndIsTheSameFit`. The design is scaled by 2⁻²⁴, on `PenalizedSpline` at λ ∈ {1e-3, 1, 1e3} and on the 8×8 tensor across its box. β' = β/c bit for bit, RSS_pen is equal, and log|A| shifts by ν·log c².
+- `AnUnidentifiedDesign_IsRefusedAcrossTheBox`, on the nine layouts.
+- `AnIdentifiedDesign_IsAdmittedAcrossTheBox_AndAtTheTwelfthPower_ButNotTheTwentieth`, on the nine layouts.
+- *On HEAD before the change, 10 of 19 fail:* the small-scale fit, 8 of the 9 unidentified layouts, and 6×16 at 1e20. The receipt is `artifacts/shared-code-defects/receipts/slice5-reproduction-at-HEAD.trx` (local).
+
+**Gates.** The snapshot is HEAD `23ce73d` plus the slice's 11 files, built in Release, with whole assemblies run.
+- LinAlg: 190 of 190.
+- Samplers: 296 of 296.
+- Regression: 3,403 of 3,403.
+- While the gates ran, HEAD moved to `01eb63d` (`d9152e6`, E8's readouts). That change touches none of this slice's files and uses neither `BandCholesky` nor BAPS, so the gates were not rerun.
+
+**Fresh-eyes review.**
+- Every `BandCholesky` in `src` is strict: BARS names it, and BAPS takes the default behind `BapsAdmission`. No caller lost a floor it relied on.
+- `Admits` short-circuits on a failed factor, so the estimate never runs on one. The estimate also refuses a floored factor, and BAPS never builds one.
+- Every test that constructs a band factor lies in the three gated assemblies.
+
+**Decisions for the user.**
+1. *The estimate's cost in BAPS's Gibbs steps* (not measured). `Admits` estimates κ on every factorization, including every sampler step.
+   - *The arithmetic.* Higham's refinement of Hager's method takes 4 to 11 solves with the factor, usually 4 or 5. Each solve costs about 2νp, against the LDLᵀ factor's νp²/2. That makes the estimate about 16/p to 44/p factorizations' worth.
+     - For the 1-D cubic P-spline (p = 3), that is 5 to 15 factorizations per step.
+     - For the tensor layouts (p in the tens), it is under one.
+   - *No cheap way to admit.* A small relative pivot proves a large κ, but a large one proves nothing; the probe's leaks show it. So the estimate is what admits.
+   - *The options.*
+     - Keep it on every step.
+     - Estimate in the deterministic solves (penalized, REML) only, and let the samplers check positive definiteness alone. The cost is that a drawn λ far out would go unchecked.
+   - A step-time measurement on a 1-D BAPS fixture is worth taking only if the answer to this question turns on it.
+2. *`PivotedCholesky`'s solve* is still open, as in slice 4.
+
+**Doc changes owed.**
+- *`docs/Maths/LinearAlgebra.md`:*
+  - `BandCholesky` is strict by default, and the floor is opt-in by `strict: false` (around lines 269 and 277, and the floor's table row at line 447).
+  - Callers judge a band factor by `EquilibratedCondition`.
+  - Slice 4's "`BandCholesky`'s floor no longer mirrors anything" is superseded: the floor is opt-in.
+- *`docs/Maths/Regression/BAPS.md`, "The rule" (line 171):* replace it with `BapsAdmission`, which admits a system that is positive definite with κ(E) ≤ 1e14. Add the probe's table and the alternatives it rules out: the floored-pivot rule, the relative-pivot floors, and BARS's 1e10.
 
 ### 2026-11-13 — Slice 4 verified from clean archives (coordinating session)
 
@@ -152,7 +236,7 @@ The user chose on 2026-11-13: the review's recommendations (`discussion/astra-sh
 - *Finding: `BandCholesky`'s default floor is the same rule.* It "mirrored" the retired one: an absolute 10⁻¹², on by default, with strict mode a choice. By the same arithmetic it can introduce order-one error at small scale; this slice did not measure it.
 
 **Decisions for the user.**
-1. *`BandCholesky`'s default.* If it becomes strict, the banded marginals refuse a near-interpolating design that the floor now carries, and their numbers move only where the floor fires. If it stays floored, it is the one floored factor left, and its docs should say so. Recommendation: strict by default, as here, with the over-knotted design refused by its caller's prior.
+1. *`BandCholesky`'s default.* If it becomes strict, the banded marginals refuse a near-interpolating design that the floor now carries, and their numbers move only where the floor fires. If it stays floored, it is the one floored factor left, and its docs should say so. Recommendation: strict by default, as here, with the over-knotted design refused by its caller's prior. *Corrected in slice 5:* the floor carried no caller, since BARS factors strictly and BAPS refused a floored pivot; the switch admits a valid small-scale fit instead.
 2. *`PivotedCholesky`'s solve*, when a caller needs one: refuse a right-hand side outside the retained range, or project it to the minimum-norm least-squares answer.
 
 **Doc changes owed.**
