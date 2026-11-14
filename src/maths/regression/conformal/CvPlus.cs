@@ -40,11 +40,18 @@ public sealed record CvPlusBound(double Value, string Theorem, CvPlusAssumptions
 public enum CvPlusWeighting
 {
     /// <summary>
-    /// Likelihood ratios w(z) travelling with the units, the test unit's its own (JAWS's setting): w(x) under covariate shift. Two bounds:
-    /// one fold's, min(1, α·W_tot/(W_k + w_t)) missed at most, read at the fold of largest weight (<c>cvPlus_oneFold_likelihoodRatio</c>),
-    /// which serves few folds; and across folds, 2α + W_max/W, W_max bounding every fold's weight, the test's fold-mates the interval never
-    /// reads included, so it needs a bound on the ratio (<c>coverage_across_likelihoodRatio</c>), which serves many. The merged bound is
-    /// not proved under likelihood ratios.
+    /// Likelihood ratios w(z) travelling with the units, the test unit's its own (JAWS's setting): w(x) under covariate shift. Three bounds,
+    /// the least miss reported:
+    /// <list type="bullet">
+    /// <item>one fold's, min(1, α·W_tot/(W_k + w_t)) missed at most, read at the fold of largest weight (<c>cvPlus_oneFold_likelihoodRatio</c>),
+    /// which serves two folds;</item>
+    /// <item>across folds, 2α + W_max/W, W_max bounding every fold's weight, the test's fold-mates the interval never reads included, so it
+    /// needs a bound on the ratio (<c>coverage_across_likelihoodRatio</c>), which serves many folds of few units;</item>
+    /// <item>merged, the least of min(1, 2c(w_max)), c(γ) = (αW + (K − 1)γ)/(W + (K − 1)γ), W the bag's weight with the test point's and
+    /// w_max its largest weight (<c>cvPlus_merged_likelihoodRatio</c>), and the refined 2L(W + (K − 1)e)/N², L = αW + (K − 1)γ,
+    /// N = W + (K − 1)γ, e = Σw²/W, at γ the largest weight at most αW where 2L ≤ N, 0 where no weight is (no unit can then be refused)
+    /// (<c>cvPlus_merged_likelihoodRatio_refined</c>); it serves many units.</item>
+    /// </list>
     /// </summary>
     LikelihoodRatio,
 
@@ -82,16 +89,17 @@ public sealed class CvPlusBounds
         _weighted = true;
     }
 
-    /// <summary>A weighted case's bounds from its fold weights W_k, its test weight w_t and the largest unit weight.</summary>
+    /// <summary>A weighted case's bounds from its fold weights W_k, its unit weights and its test weight w_t.</summary>
     internal static CvPlusBounds Weighted(int trainingUnits, int folds, int foldSize, int level, CvPlusAssumptions assumptions, double alpha,
-                                          double[] foldWeights, double testWeight, double largestUnit, CvPlusWeights weights)
+                                          double[] foldWeights, IReadOnlyList<double> unitWeights, double testWeight, CvPlusWeights weights)
     {
-        double training = 0.0, heaviest = 0.0;
+        double training = 0.0, heaviest = 0.0, largestUnit = 0.0;
         foreach (double w in foldWeights)
         {
             training += w;
             heaviest = Math.Max(heaviest, w);
         }
+        for (int i = 0; i < unitWeights.Count; i++) largestUnit = Math.Max(largestUnit, unitWeights[i]);
         double total = training + testWeight;
         bool ranks = (assumptions & CvPlusAssumptions.MergedRanks) == CvPlusAssumptions.MergedRanks;
         bool tournament = (assumptions & CvPlusAssumptions.FoldTournament) == CvPlusAssumptions.FoldTournament;
@@ -110,7 +118,30 @@ public sealed class CvPlusBounds
             ? new(Math.Max(0.0, 1.0 - 2.0 * alpha - Math.Max(heaviest, foldSize * bound) / total), "coverage_across_likelihoodRatio",
                   CvPlusAssumptions.FoldTournament, tournament)
             : none("coverage_across_likelihoodRatio", CvPlusAssumptions.FoldTournament);
-        return new(trainingUnits, folds, foldSize, level, assumptions, none("cvPlus_merged_weighted", CvPlusAssumptions.MergedRanks), oneFold, across);
+        var mergedRatio = new CvPlusBound(1.0 - MergedMiss(alpha, folds, unitWeights, testWeight, total), "cvPlus_merged_likelihoodRatio",
+                                          CvPlusAssumptions.MergedRanks, ranks);
+        return new(trainingUnits, folds, foldSize, level, assumptions, mergedRatio, oneFold, across);
+    }
+
+    // The merged bound's miss under likelihood ratios: the least of min(1, 2c(w_max)) and the refined form, over the bag's weights, the test
+    // point's included, W their total.
+    private static double MergedMiss(double alpha, int folds, IReadOnlyList<double> unitWeights, double testWeight, double total)
+    {
+        if (!(total > 0.0)) return 0.0;
+        double largest = testWeight, light = testWeight <= alpha * total ? testWeight : double.NegativeInfinity, squares = testWeight * testWeight;
+        for (int i = 0; i < unitWeights.Count; i++)
+        {
+            double w = unitWeights[i];
+            largest = Math.Max(largest, w);
+            if (w <= alpha * total) light = Math.Max(light, w);
+            squares += w * w;
+        }
+        double extra = folds - 1;
+        double simple = Math.Min(1.0, 2.0 * (alpha * total + extra * largest) / (total + extra * largest));
+        if (double.IsNegativeInfinity(light)) return 0.0;   // no weight at most αW: no unit can be refused
+        double l = alpha * total + extra * light, n = total + extra * light, mean = squares / total;
+        double refined = 2.0 * l <= n ? 2.0 * l * (total + extra * mean) / (n * n) : 1.0;
+        return Math.Min(simple, refined);
     }
 
     internal CvPlusBounds(int trainingUnits, int folds, int foldSize, int level, CvPlusAssumptions assumptions)
@@ -236,15 +267,11 @@ public static partial class CrossConformal
             if (weighed)
             {
                 IReadOnlyList<double> unitWeights = weights!.Weights.UnitsFor(t);
-                double testWeight = weights.Weights.Candidates[t], largest = 0.0;
+                double testWeight = weights.Weights.Candidates[t];
                 var foldWeights = new double[folds];
-                for (int i = 0; i < n; i++)
-                {
-                    foldWeights[readings.FoldOf[i]] += unitWeights[i];
-                    largest = Math.Max(largest, unitWeights[i]);
-                }
+                for (int i = 0; i < n; i++) foldWeights[readings.FoldOf[i]] += unitWeights[i];
                 GridInterval w = WeightedEnds(lower, upper, unitWeights, testWeight, alpha);
-                intervals[t] = new(t, w.Lower, w.Upper, CvPlusBounds.Weighted(n, folds, size, level, assumptions, alpha, foldWeights, testWeight, largest, weights))
+                intervals[t] = new(t, w.Lower, w.Upper, CvPlusBounds.Weighted(n, folds, size, level, assumptions, alpha, foldWeights, unitWeights, testWeight, weights))
                 {
                     WeightedAlpha = alpha,
                 };

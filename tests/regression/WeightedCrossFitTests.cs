@@ -155,7 +155,7 @@ public sealed class WeightedCrossFitTests(ITestOutputHelper output)
         const double alpha = 0.1;
         var rng = new Xoshiro256PlusPlus(2026_1124);
         int[] covered = new int[4];
-        double oneFold = 0.0;
+        double oneFold = 0.0, merged = 0.0;
         for (int r = 0; r < replications; r++)
         {
             double[] x = [.. Enumerable.Range(0, n).Select(_ => rng.NextDouble())];
@@ -189,11 +189,12 @@ public sealed class WeightedCrossFitTests(ITestOutputHelper output)
                                                            new CvPlusWeights(weights, CvPlusWeighting.LikelihoodRatio, RatioBound: 2.0)).Intervals[0];
             if (weighed.Contains(yt)) covered[3]++;
             oneFold += weighed.Bounds.OneFold.Value;
+            merged += weighed.Bounds.Merged.Value;
         }
         double se = Math.Sqrt(alpha * (1 - alpha) / replications);
         double[] rate = [.. covered.Select(c => c / (double)replications)];
         output.WriteLine($"covariate shift: jackknife+ unweighted {rate[0]:F4}, weighted {rate[1]:F4}; CV+ unweighted {rate[2]:F4}, weighted {rate[3]:F4} "
-                         + $"(its one-fold bound {oneFold / replications:F4} on average); se {se:F4}");
+                         + $"(its bounds on average: one fold {oneFold / replications:F4}, merged {merged / replications:F4}); se {se:F4}");
         Assert.True(rate[1] >= 1.0 - 2.0 * alpha - 3.5 * se);
         Assert.True(rate[1] > rate[0] + 3.0 * se, "the weights should help the jackknife+ under the shift");
         Assert.True(rate[3] > rate[2] + 3.0 * se, "the weights should help CV+ under the shift");
@@ -227,8 +228,16 @@ public sealed class WeightedCrossFitTests(ITestOutputHelper output)
                                                      new CvPlusWeights(new ShiftWeights(units, [2.0]), CvPlusWeighting.LikelihoodRatio, RatioBound: 3.0)).Intervals[0];
         Assert.Equal(1.0 - 0.2 * 11.0 / 6.0, ratio.Bounds.OneFold.Value, 12);
         Assert.Equal(Math.Max(0.0, 1.0 - 0.4 - 6.0 / 11.0), ratio.Bounds.Tournament.Value, 12);
-        Assert.False(ratio.Bounds.Merged.Applies);
-        Assert.Equal(Math.Max(1.0 - 0.2 * 11.0 / 6.0, Math.Max(0.0, 1.0 - 0.4 - 6.0 / 11.0)), ratio.Coverage!.Value, 12);
+        // Merged (cvPlus_merged_likelihoodRatio): W = 11 with the test's 2, w_max = 3, so 2c(3) = 2·8.2/17; refined at γ = 2, the largest
+        // weight at most αW = 2.2: L = 6.2, N = 15, e = Σw²/W = 21/11, 2L(W + 2e)/N².
+        double simple = Math.Min(1.0, 2.0 * 8.2 / 17.0), refined = 2.0 * 6.2 * (11.0 + 2.0 * 21.0 / 11.0) / 225.0;
+        Assert.Equal(1.0 - Math.Min(simple, refined), ratio.Bounds.Merged.Value, 12);
+        Assert.True(ratio.Bounds.Merged.Applies);
+        Assert.Equal(new[] { 1.0 - 0.2 * 11.0 / 6.0, Math.Max(0.0, 1.0 - 0.4 - 6.0 / 11.0), 1.0 - Math.Min(simple, refined) }.Max(), ratio.Coverage!.Value, 12);
+        // Every weight above αW: no unit can be refused, the merged bound 1.
+        CvPlusInterval heavy = CrossConformal.CvPlus(folds, CvPlusAssumptions.MergedRanks, 0.1,
+                                                     new CvPlusWeights(new ShiftWeights([1.0, 1.0, 1.0, 1.0, 1.0, 1.0], [1.5]), CvPlusWeighting.LikelihoodRatio)).Intervals[0];
+        Assert.Equal(1.0, heavy.Bounds.Merged.Value);
         CvPlusInterval unbounded = CrossConformal.CvPlus(folds, CvPlusAssumptions.MergedRanks, alpha,
                                                          new CvPlusWeights(new ShiftWeights(units, [2.0]), CvPlusWeighting.LikelihoodRatio)).Intervals[0];
         Assert.False(unbounded.Bounds.Tournament.Applies, "the across-folds bound reads a bound on the ratio");
