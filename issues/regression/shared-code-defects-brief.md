@@ -63,6 +63,84 @@ Commissioned by the user on 2026-11-13 through the coordinating session. Both de
 
 Newest first. Each gives the commits, the gates' results, defects found, decisions for the user and "Doc changes owed".
 
+### In progress (2026-11-14)
+
+- *Slice 5's decision 1, measured only:* the condition estimate's cost per Gibbs step. The coordinating session relayed the user's yes on 2026-11-14. Nothing is built and no default changes.
+  - *Arms.* Per-step wall time of each BAPS sampler with `BapsAdmission` as landed, against admitting on positive definiteness alone. The seeds are the same, and the draws are confirmed bit for bit first.
+  - *Regimes.*
+    - The 1-D cubic P-spline at a small, a middle and a large basis, each at several ratios of observations to basis functions.
+    - `HierarchicalPSpline`'s five sites.
+    - One or two tensor layouts.
+  - *Also measured:* the estimator's solve count per call.
+  - *Method.* Probe code and data go in `artifacts/shared-code-defects/probe/`. Timed blocks run at High priority, pinned, with the arms interleaved.
+
+### 2026-11-14 — E8's readouts read a fit of several named outputs (outside the defects, at the user's word)
+
+*The request.* A message the user wrote for the active-subspaces work reached this session. It asked for three things:
+- route both forms of `fit.ActiveSubspace` for a fit of several named outputs;
+- keep E34's same-fit pairing and E8's cross-fit pairing;
+- refuse output patterns and declared locations.
+
+It also asked for an acceptance test: W_y = aaᵀ against the co-active C_fg of (a, a). The user then let this session continue. The files belong to the E8 and E34 chips, and both heard which files and hunks before the commit. Files held:
+- `BassActiveSubspace.cs`, `BassMultiOutputSubspaces.cs`, `ActiveSubspaces.cs`, `BassMultiOutput.cs` and `BassFit.cs`;
+- `MultiOutputReadoutTests.cs` and `MultiOutputActiveSubspaceTests.cs`.
+
+This builds what E34's brief records as unbuilt in its entry "E8's readouts on a fit of several outputs" (2026-11-13). The work fills these entries:
+- both routes of `BassFit.ActiveSubspace`;
+- the one-fit pair through `BassFit.CoActiveSubspace`;
+- pairs across fits, with a named combination on either side.
+
+**Commits.**
+- `c543297` feat(bass): E8's active subspace and co-active pairs read a fit of several named outputs.
+
+**What changed.**
+- *The active subspace.*
+  - *The draw.* Each draw is read as its terms and H_ka = B_{a+1,k}, taken from its output coefficients. Row zero is the intercept and has no gradient.
+  - *The metric.* W_y is K × K and positive semidefinite, in `MultiOutputResponse.Names` order, with the identity as the default.
+  - *The exact route* reads M = HᵀW_yH through the moment service, as a functional fit does.
+  - *The sampled route* reads `BassMultiOutput.Gradient` in draw batches of about 2²² partials. Changing H alone would have left this route going through `fit.Gradient`, the scalar readout.
+  - *K = 1.* Under the identity, the readout takes the scalar arithmetic (M = bbᵀ), so it is the scalar fit's on the same coefficients, bit for bit.
+  - *The Poincaré check.* Its Jacobi ratio reads a scalar fit's coefficients, so it is not read here. The totals, the bounds and the matrix check are read.
+- *Refused, each with its reason:*
+  - `OutputMetric.Locations`, since named outputs have no location grid;
+  - `OutputPatterns` > 0, since E[JᵀW_yJ] in input space stands alone and the output basis from E[J W_x Jᵀ] is outside this brief;
+  - a metric that is not K × K. The message names the rows as outputs in Names order.
+  - Basis adequacy now refuses a direct fit of several outputs as such; it used to call it scalar.
+- *Pairs within one fit.* On such a fit, `BassFit.CoActiveSubspace(data, spec)` calls `BassMultiOutput.CoActive`, so there is one implementation. Draw d pairs with itself and carries w_d once.
+  - Its sampled route now reads the gradient in the same bounded draw batches. A draw's pair has the same bits in any batch.
+  - `BassMultiOutput.Functional` takes an optional parameter name, which the cross-fit side passes, so its refusal names `Output` or `OtherOutput`.
+- *Pairs across fits.* Either side may take a named combination (`Output` or `OtherOutput`, one weight per output), read through H and E34's gradient. E8's positional selection and product weights are unchanged.
+- *Removed.* `d9152e6` made these three entries refuse such a fit; that refusal and its test, `E8sReadouts_RefuseSeveralOutputs_NamingE34s`, are gone, because the entries now read such a fit. `BassActiveSubspace.RefuseSeveralOutputs` had no other caller.
+- *Unchanged.* Scalar and functional fits compute the same bits. A scalar draw's coefficients now come from its surface's row, which copies the same values.
+
+**Tests.** `MultiOutputActiveSubspaceTests` has 5 tests.
+- *`UnderAaT_TheActiveMatrixIsTheCoActivePairOfAWithItself`.* With a = (0.6, −1.3) and W_y = aaᵀ, each draw's C is compared with C_fg of (a, a) on the same draws:
+  - exact: 4.4e-16 relative;
+  - sampled, against E34's sampled pair on the same 40,000 points: 4.3e-16;
+  - sampled against exact: within five reported standard errors (largest |z| 1.68);
+  - every draw, read across two draw batches, has the same bits as when read alone.
+- *`TwoCombinationsOfOneFit_AreE34sPair_AndEachDrawCarriesItsWeightOnce`.* On both routes the pair is bit for bit, and the weights are w_d (the fixture's are unequal, 1:2:3).
+- *`TwoFits_PairByPosition_WithProductWeights_ANamedCombinationOnEitherSide`.* The named fit is paired against a scalar fit that holds the projected surfaces.
+  - Exact, on each side: the pairs are the one fit's, bit for bit, with weights w_d²/Σw².
+  - Sampled: within 2e-16.
+- *`AtOneOutput_UnderTheIdentity_TheReadoutIsTheScalarFits_BitForBit`.* With no metric and with [[1]]: each draw's C, E[C], the Poincaré totals and bounds, and the matrix check's ratios.
+- *`NamedOutputs_RefuseLocationsPatternsAndAMetricNotKByK`.*
+- `MultiOutputReadoutTests.Fixed` now takes `outputs`, which defaults to 2.
+
+**Gates.** The snapshot is HEAD `8b68d63` plus the 7 files, with whole assemblies run.
+- Regression: 3,408 of 3,408.
+- Oracle: 212 of 214. The two failures are `DiagramMetricsTransportParityTests`, the transport oracle's R timeout recorded in slice 4. The active-subspace and co-active parity tests pass..
+
+**Doc changes owed.** These supersede the ones in E34's entry of 2026-11-13.
+- *`docs/Maths/Regression/ActiveSubspaces.md`*, where the readouts' responses are listed:
+  - a fit of several named outputs reads C = E[JᵀW_yJ] with H_ka = B_{a+1,k} and W_y K × K in `MultiOutputResponse.Names` order;
+  - it refuses locations and output patterns;
+  - its pairs are read within one fit and across fits.
+- *`docs/Maths/Regression/MultiOutput.md`'s readout paragraph:* E8's entry points read such a fit, and `BassFit.CoActiveSubspace(data, spec)` is `BassMultiOutput.CoActive`.
+
+**Follow-up.** The output basis from E[J W_x Jᵀ] for named outputs would decide whether `OutputPatterns` stays refused for such a fit. Building it would give a K-dimensional output space's patterns, and the refusal would become a reading.
+- *HEAD since the snapshot.* It moved to `94b11ae` with conformal changes (`CvPlus.cs`, `WeightedCrossFitTests.cs`). Those share no file and no code path with this change, so the gates were not rerun.
+
 ### 2026-11-14 — Slice 5 verified from a clean archive (coordinating session)
 
 - **Run:** `scripts/verify-csharp.ps1` on one clean archive of HEAD `f1356cb`, the Commit selection over the eleven files of `f128e04` in each test project where they select a class.
