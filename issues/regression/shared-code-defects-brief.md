@@ -63,6 +63,82 @@ Commissioned by the user on 2026-11-13 through the coordinating session. Both de
 
 Newest first. Each gives the commits, the gates' results, defects found, decisions for the user and "Doc changes owed".
 
+### 2026-11-13 — Slice 4: slice 2's three decisions, built
+
+The user chose on 2026-11-13: the review's recommendations (`discussion/astra-shared-code-cleanup.md`), with this chip's two adjustments. The scene export draws a singular block instead of refusing it, and the pivoted factor's remainder check reads the off-diagonals too. The review's order: the floor first, the pivoted factor apart, the callers migrated and qualified, the legacy class deleted in its own commit.
+
+**Commits.**
+- `f448931` fix(linalg): CholeskyDecomposition drops its pivot floor.
+- `43bd61f` feat(linalg): PivotedCholesky, the semidefinite factor BGP's drawn function reads.
+- `ff5d635` refactor(gmm, viz): a Gaussian's covariance factor is DenseCholesky.
+- `e6dc220` chore(linalg): retire CholeskyDecomposition and BGP's own pivoted routine.
+
+**1. The floor dropped (`f448931`).**
+- *The class is strict.* The first pivot that is not finite and positive stops it, at the row `DenseCholesky` stops at, and an L⁻¹ past `double.MaxValue` fails it. On every input of a ladder the two agree on the failure row, `Status`, factor and `LogDet`. The ladder: 60 SPD matrices at scales 2⁻⁸⁰ to 2³⁹, 16 squared-exponential kernels, 10⁻¹³·I, and indefinite and non-finite inputs. 10⁻¹³·I now factors exactly, where the floor read every variance ten times too large.
+- *The earlier class, kept verbatim and pinned*, reads bit for bit on 60 inputs the floor never reached.
+- *The callers.*
+  - GMM's `UpdateCache` and the Bhattacharyya distance refuse a covariance that is not positive definite. A warm start with a singular covariance is refused, an acceptance case.
+  - The scene export draws a singular block as a thin ellipsoid. It adds the ε the missing display dimensions take, relative to its largest variance, and refuses only a block that is still indefinite. The viewer loads all nine entries as a general 3×3 map (`viewer.html`, `buildGaussianGroup`), so a rank-deficient factor would make its normal matrix singular, and the ε keeps it invertible.
+  - Rank one at 10²⁰⁰, which overflowed the floored factor, now exports a finite needle. `[[1, 2, 0], [2, 1, 0], [0, 0, 1]]` is refused, naming its layer and component.
+
+**2. The pivoted factor promoted (`43bd61f`).**
+- *The contract is narrow and sampling-first:* the rank, the loadings in the matrix's own row order, and `Map` from Rank standard normals to a draw of N(0, LLᵀ).
+- *BGP's loop, verbatim.* The loadings match the earlier routine bit for bit (pinned, 40 kernels and low-rank Gram matrices). BGP's drawn function keeps its seeded draws: its tests, including the bit-for-bit candidate, and the conformal tests that read it pass.
+- *The remainder is checked.* The earlier routine read `[[1, 2], [2, 1]]` as rank 1, truncating −3, and `[[0, 1], [1, 0]]` as rank 0. A semidefinite remainder whose diagonals are at most the stop has every entry within it, so the check reads the off-diagonals as well as the diagonal.
+- *Measured: two tolerances.* BGP's joint posterior covariances leave remainders up to 1.2·10⁻¹¹ of their largest variance. That is rounding of the computed covariance, past the 10⁻¹² stop: the first form, which judged the remainder at the stop, refused two of BGP's tests.
+  - The rank still stops at 10⁻¹².
+  - Indefiniteness is judged at its own tolerance, √ε (1.5·10⁻⁸) by default, far below the refused cases.
+  - A remainder `[[0, δ], [δ, 0]]` at δ = 5·10⁻¹¹ is kept at the default and refused at 10⁻¹².
+- *The solve waits*, as the review asked. On a singular matrix it must refuse or project a right-hand side outside L's range, and BGP's sampling needs neither.
+
+**3. The callers moved to `DenseCholesky` (`ff5d635`).**
+- *`TryWriteInverseTo`* forms A⁻¹ on demand. It ports the retired L⁻¹ arithmetic, so GMM's Σ⁻¹ keeps its bits (pinned against the arithmetic kept verbatim). It refuses an inverse that overflows: `[1e-320]` factors, and its reciprocal does not fit, and a power-of-two bidiagonal L⁻¹ overflows at row 51. GMM's component is then left unusable (NaN caches, an exception) rather than holding a partial precision matrix.
+- *`AddSample`* accumulates L·z into the mean in the retired order. GMM's seeded Box–Muller draws match bit for bit (pinned).
+- *The exporter* reads `Factor(i, j)`: the same factor, the same bits.
+- *Bhattacharyya* reads its mean term as ‖L⁻¹δ‖² through `InverseQuadraticForm`, so its distances move in their last bits. They agree with the explicit-inverse formula within 10⁻¹³ relative.
+
+**4. The legacy class retired (`e6dc220`).**
+- *Deleted:* `CholeskyDecomposition` with its own tests, and BGP's own pivoted routine.
+- *Moved to `DenseCholesky`:* `FactorReferenceTests`, `DenseCholeskyTests` and `BandCholeskyTests`.
+- *The cost profiles* time `DenseCholesky` as production. Their two rows that timed the retired path's `Decompose` are gone; the replica kernels of its two passes stay.
+
+**The gates.**
+- *Each commit*, from a snapshot of HEAD plus its files, by selection with the pinned tier:
+  - A: linear algebra 90 of 90, VizCore 9 of 9, regression 80 of 80;
+  - B: linear algebra 14 of 14, regression 145 of 145;
+  - C: linear algebra 93 of 93, VizCore 12 of 12.
+- *The end*, from a snapshot with D:
+  - `Maths.LinAlg.Tests` 190 of 190;
+  - `TDA.Mapper.Tests` 28 of 28;
+  - `VizCore.Tests` 703 passed, with the 2 Möbius skips that stood before;
+  - `Maths.Regression.Tests` 3,370 of 3,370 (18 min);
+  - `Maths.Oracle.Tests` by selection, 145 of 147. The 2 failures are `transport_oracle.R` timing out at 120 s, alone as well as under load. Their test reads `TDA.Ph` and R only, and no TDA code reaches a changed factor, so the timeout stands apart from this slice (below).
+- Receipts are in `artifacts/shared-code-defects/receipts/` (`slice4-*`).
+
+**Defects found.**
+- None in the slice's code.
+- My own first remainder bound refused BGP's covariances, as above. One test used an assertion precision the analyzer refuses, and another rested on noise that could move the rank; both were rewritten before any run counted.
+- *Finding: the transport oracle no longer fits its timeout.* `DiagramMetricsTransportParityTests` (both p) times out in `transport_oracle.R` at 120 s, even run alone. It has nothing to do with this slice, and is for the TDA owner: either the timeout or the fixture's size (s = 100 slices).
+- *Finding: `BandCholesky`'s default floor is the same rule.* It "mirrored" the retired one: an absolute 10⁻¹², on by default, with strict mode a choice. By the same arithmetic it can introduce order-one error at small scale; this slice did not measure it.
+
+**Decisions for the user.**
+1. *`BandCholesky`'s default.* If it becomes strict, the banded marginals refuse a near-interpolating design that the floor now carries, and their numbers move only where the floor fires. If it stays floored, it is the one floored factor left, and its docs should say so. Recommendation: strict by default, as here, with the over-knotted design refused by its caller's prior.
+2. *`PivotedCholesky`'s solve*, when a caller needs one: refuse a right-hand side outside the retained range, or project it to the minimum-norm least-squares answer.
+
+**Doc changes owed.**
+- *`docs/Maths/LinearAlgebra.md`:*
+  - "Dense Cholesky (`CholeskyDecomposition`)" (line 193) and its rows in the API list (line 95), the module table (line 12), the diagram (line 33), the allocation note (line 73) and the storage table (line 81): retired.
+  - `DenseCholesky` gains `TryWriteInverseTo` and `AddSample`, and serves the Gaussians.
+  - A section for `PivotedCholesky`: its contract, the two tolerances, the remainder rule, and the measurements above.
+  - `BandCholesky`'s floor no longer mirrors anything.
+- *`docs/Clustering/GaussianMixtures.md`:*
+  - line 11: `DenseCholesky`;
+  - line 45: `UpdateCache` refuses a covariance not positive definite, or one whose inverse overflows;
+  - the warm start (line 89): a singular covariance is refused;
+  - "Bhattacharyya distance" (line 162): refusal, and the mean term through the factor.
+- *`docs/Maths/Regression/BGP.md`*, the drawn function: it reads `PivotedCholesky`, whose remainder is checked.
+- *Slice 2's "Doc changes owed"* for the floor are superseded: there is no floor left to describe.
+
 ### 2026-11-13 — Slice 3 verified from a clean archive (coordinating session)
 
 - **Run:** `scripts/verify-csharp.ps1` on a clean archive of HEAD `badc0d9`, the Commit selection over slice 3's fourteen files (`c9f9a84`). All fourteen lie in the regression project's compile closure.
