@@ -275,6 +275,63 @@ public sealed class WeightedDistributionTests(ITestOutputHelper output)
         Assert.False(d.WholeSpace(0.1));
     }
 
+    // A standard normal fit: each unit's PIT Φ(y), one draw.
+    private static CandidateLogDensity StandardNormal(double[][] grids)
+    {
+        var cdf = new double[1, grids.Sum(g => g.Length)];
+        var density = new double[1, cdf.Length];
+        int j = 0;
+        foreach (double[] grid in grids)
+            foreach (double y in grid)
+            {
+                cdf[0, j] = Normal.StandardLogCdf(y);
+                density[0, j++] = -0.5 * y * y;
+            }
+        return new CandidateLogDensity(density, grids, []) { LogCdf = cdf };
+    }
+
+    [Fact]
+    public void TheGridFreeReadouts_AreTheGridForms_Weighted()
+    {
+        // 40 calibration units, weights w(x) = 2x and the case's 1.6. On a grid of step 0.01 the grid-free readouts read as the grid form's:
+        // At bit for bit, the interval holding exactly the grid's accepted values, the quantile within the grid's step.
+        var rng = new Xoshiro256PlusPlus(1405);
+        double[] x = [.. Enumerable.Range(0, 40).Select(_ => rng.NextDouble())];
+        double[] ys = [.. x.Select(v => (0.5 + v) * Gaussian(rng))];
+        double[] units = [.. x.Select(v => 2.0 * v)];
+        SplitPitCalibration fit = SplitConformal.CalibrateDistribution(StandardNormal([.. ys.Select(v => new[] { v })]));
+        SplitPredictiveDistribution free = fit.AtCase(y => StandardNormal([[y]]), predictiveQuantile: Normal.StandardQuantile,
+                                                      weights: new ShiftWeights(units, [1.6]));
+        Assert.True(free.Weighted);
+        double[] grid = [.. Enumerable.Range(0, 801).Select(g => -4.0 + 0.01 * g)];
+        ConformalDistribution d = fit.OnGrid(StandardNormal([grid]), ShiftWeights.ByCase(units, [1.6], [grid])).Distributions[0];
+        for (int g = 0; g < grid.Length; g += 7) Assert.Equal(d.At(g, 0.3), free.At(grid[g], 0.3));
+        foreach (double alpha in new[] { 0.1, 0.3, 0.6 })
+        {
+            GridInterval ends = free.Interval(alpha);
+            for (int g = 0; g < grid.Length; g++)
+            {
+                bool inside = grid[g] >= ends.Lower && grid[g] <= ends.Upper;
+                double near = Math.Min(Math.Abs(grid[g] - ends.Lower), Math.Abs(grid[g] - ends.Upper));
+                Assert.True(d.Accepts(g, alpha) == inside || near < 1e-6, $"α {alpha}, y {grid[g]}: the grid accepts {d.Accepts(g, alpha)}, the ends {ends}");
+            }
+        }
+        foreach (double p in new[] { 0.1, 0.5, 0.9 })
+            Assert.InRange(free.Quantile(p), d.Quantile(p) - 0.01 - 1e-6, d.Quantile(p) + 1e-6);
+
+        // Equal weights: the counts' readouts.
+        SplitPredictiveDistribution plain = fit.AtCase(y => StandardNormal([[y]])), equal = fit.AtCase(y => StandardNormal([[y]]),
+                                                       weights: new ShiftWeights([.. units.Select(_ => 1.6)], [1.6]));
+        Assert.False(equal.Weighted);
+        Assert.Equal(plain.Interval(0.2), equal.Interval(0.2));
+        Assert.Equal(plain.Quantile(0.3), equal.Quantile(0.3));
+        Assert.Equal(plain.At(0.4, 0.5), equal.At(0.4, 0.5));
+
+        // Weights that move with y, or for other units, are refused.
+        Assert.Throws<ArgumentException>(() => fit.AtCase(y => StandardNormal([[y]]), weights: new ShiftWeights(units, [1.6, 1.2])));
+        Assert.Throws<ArgumentException>(() => fit.AtCase(y => StandardNormal([[y]]), weights: new ShiftWeights(units[..39], [1.6])));
+    }
+
     // ---- Behind the qualification switch ----
 
     [Fact]

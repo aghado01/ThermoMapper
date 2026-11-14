@@ -122,13 +122,25 @@ public sealed class SplitPitCalibration
     /// The distribution at a fixed test input. At every y, including the initial probe at zero, <paramref name="candidateAt"/> supplies
     /// the same fit's seam with [y] as the selected case's grid. An optional inverse CDF of that case's fitted predictive supplies
     /// the initial root estimate. Crossing brackets use absolute response tolerance and the seam's own two-tail score throughout.
+    /// With <paramref name="weights"/> (one per calibration unit, and one for the case: covariate shift's w(x), constant in y) the readouts
+    /// are the weighted distribution's (slice 14's follow-up 1, <see cref="ConformalDistribution.Weighted"/>), equal weights giving the
+    /// counts' bit for bit. Under response shift the case's weight moves with y; the grid form serves it.
     /// </summary>
     public SplitPredictiveDistribution AtCase(Func<double, CandidateLogDensity> candidateAt, int testCase = 0,
-                                              Func<double, double>? predictiveQuantile = null, double tolerance = 1e-8)
+                                              Func<double, double>? predictiveQuantile = null, double tolerance = 1e-8,
+                                              ShiftWeights? weights = null)
     {
         ArgumentNullException.ThrowIfNull(candidateAt);
         ArgumentOutOfRangeException.ThrowIfNegative(testCase);
         ConformalBisection.CheckTolerance(tolerance);
+        if (weights is not null)
+        {
+            if (weights.UnitCount != _units)
+                throw new ArgumentException($"One weight per calibration unit is required: {weights.UnitCount} weights for {_units} units.", nameof(weights));
+            if (weights.Candidates.Count != 1 || weights.UnitsByCase is { Count: not 1 })
+                throw new ArgumentException("One weight for the case is required, constant in y (covariate shift); the grid form serves weights that move with y.",
+                                            nameof(weights));
+        }
         int? stratum = null;
         CdfScore Read(double y)
         {
@@ -145,7 +157,24 @@ public sealed class SplitPitCalibration
         }
         CdfScore atZero = Read(0.0);
         int h = stratum!.Value;
-        return new SplitPredictiveDistribution(h, Sorted(h), y => y == 0.0 ? atZero : Read(y), predictiveQuantile, tolerance);
+        double[]? running = null;
+        double own = 0.0;
+        if (weights is not null)
+        {
+            // The stratum's weights summed along its sorted order, as the grid form sums them; none where all equal the case's.
+            IReadOnlyList<double> units = weights.UnitsFor(0);
+            int[] order = _order.TryGetValue(h, out int[]? found) ? found : [];
+            own = weights.Candidates[0];
+            running = new double[order.Length + 1];
+            bool equal = true;
+            for (int j = 0; j < order.Length; j++)
+            {
+                running[j + 1] = running[j] + units[order[j]];
+                if (units[order[j]] != own) equal = false;
+            }
+            if (equal) running = null;
+        }
+        return new SplitPredictiveDistribution(h, Sorted(h), y => y == 0.0 ? atZero : Read(y), predictiveQuantile, tolerance, running, own);
     }
 }
 
@@ -157,12 +186,25 @@ public sealed class SplitPredictiveDistribution
     private readonly Func<double, double>? _quantile;
     private readonly double _tolerance;
 
+    private readonly double[]? _running;   // the weight of the first j sorted PITs, where weighted
+    private readonly double _own;
+
     internal SplitPredictiveDistribution(int stratum, CdfScore[] sorted, Func<double, CdfScore> score,
-                                         Func<double, double>? quantile, double tolerance)
-        => (Stratum, _sorted, _score, _quantile, _tolerance) = (stratum, sorted, score, quantile, tolerance);
+                                         Func<double, double>? quantile, double tolerance, double[]? running = null, double own = 0.0)
+        => (Stratum, _sorted, _score, _quantile, _tolerance, _running, _own) = (stratum, sorted, score, quantile, tolerance, running, own);
 
     public int Stratum { get; }
     public int Units => _sorted.Length + 1;
+
+    /// <summary>Whether the readouts are the weighted distribution's: the case's shift weights not all one value.</summary>
+    public bool Weighted => _running is not null;
+
+    // Q⁻ and Q⁺ with B PITs below and B + T at or below, as the grid form reads them.
+    private (double Lower, double Upper) Shares(int below, int atOrBelow)
+    {
+        double total = _running![^1] + _own;
+        return total > 0.0 ? (_running[below] / total, (_running[atOrBelow] + _own) / total) : (0.0, 1.0);
+    }
 
     /// <summary>Q(y, τ) at any finite response. At the held-out response and uniform τ this is the randomized PIT.</summary>
     public double At(double y, double tau)
@@ -170,27 +212,38 @@ public sealed class SplitPredictiveDistribution
         if (!double.IsFinite(y)) throw new ArgumentOutOfRangeException(nameof(y));
         if (!(tau >= 0.0 && tau <= 1.0)) throw new ArgumentOutOfRangeException(nameof(tau));
         (int below, int tied) = CdfScores.Rank(_sorted, _score(y));
-        return (below + tau * (tied + 1)) / Units;
+        if (_running is null) return (below + tau * (tied + 1)) / Units;
+        (double lower, double upper) = Shares(below, below + tied);
+        return lower + tau * (upper - lower);
     }
 
     /// <summary>The infimum of responses where Q(y, ½) reaches p, including the two unbounded outer ranks.</summary>
     public double Quantile(double p)
     {
         if (!(p > 0 && p < 1)) throw new ArgumentOutOfRangeException(nameof(p));
-        // The plateau just above the j-th PIT has Q̄ = (j + ½)/m. Compare as the grid does at floating-point rank boundaries.
+        // The plateau just above the j-th PIT has Q̄ = (j + ½)/m, or the shares' mean where weighted. Compare as the grid does at
+        // floating-point rank boundaries.
         int lo = 0, hi = Units;
         while (lo < hi)
         {
             int mid = lo + ((hi - lo) >> 1);
-            if ((mid + 0.5) / Units < p) lo = mid + 1;
+            if (Mean(mid, mid) < p) lo = mid + 1;
             else hi = mid;
         }
         if (lo == 0) return double.NegativeInfinity;
         if (lo == Units) return double.PositiveInfinity;
         CdfScore pit = _sorted[lo - 1];
         (int below, int tied) = CdfScores.Rank(_sorted, pit);
-        bool strict = (below + 0.5 * (tied + 1)) / Units < p;
+        bool strict = Mean(below, below + tied) < p;
         return Crossing(pit, strict).Upper;
+    }
+
+    // Q̄ with B PITs below and B + T at or below: (B + (T + 1)/2)/m, or (Q⁻ + Q⁺)/2 where weighted.
+    private double Mean(int below, int atOrBelow)
+    {
+        if (_running is null) return (below + 0.5 * (atOrBelow - below + 1)) / Units;
+        (double lower, double upper) = Shares(below, atOrBelow);
+        return 0.5 * (lower + upper);
     }
 
     /// <summary>Closed equi-tailed ends. With k = ⌊αm/2⌋, the fitted CDF must reach PIT k and stay at or below PIT m − k
@@ -198,9 +251,24 @@ public sealed class SplitPredictiveDistribution
     public GridInterval Interval(double alpha)
     {
         SplitConformal.CheckAlpha(alpha);
+        if (_running is not null) return WeightedInterval(alpha);
         int k = (int)Math.Floor(0.5 * alpha * Units);
         if (k == 0) return new(double.NegativeInfinity, double.PositiveInfinity);
         return new(Crossing(_sorted[k - 1], strict: false).Lower, Crossing(_sorted[Units - k - 1], strict: true).Upper);
+    }
+
+    // The weighted set's ends: y is held where Q⁺ > α/2, B + T at least the least j with (R_j + w_c)/W > α/2, and where 1 − Q⁻ > α/2, B below
+    // the least j with 1 − R_j/W not above α/2; each test as the grid form reads it.
+    private GridInterval WeightedInterval(double alpha)
+    {
+        double total = _running![^1] + _own;
+        if (!(total > 0.0)) return new(double.NegativeInfinity, double.PositiveInfinity);
+        int n = _sorted.Length, low = 0, high = 0;
+        while (low < n && !((_running[low] + _own) / total > 0.5 * alpha)) low++;
+        while (high <= n && 1.0 - _running[high] / total > 0.5 * alpha) high++;
+        double lower = low == 0 ? double.NegativeInfinity : Crossing(_sorted[low - 1], strict: false).Lower;
+        double upper = high > n ? double.PositiveInfinity : high == 0 ? double.NegativeInfinity : Crossing(_sorted[high - 1], strict: true).Upper;
+        return new(lower, upper);
     }
 
     private GridInterval Crossing(CdfScore pit, bool strict)
