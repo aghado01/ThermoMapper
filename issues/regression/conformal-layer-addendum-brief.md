@@ -11,31 +11,17 @@ Opened 2026-11-14 at the user's word ("that brief was getting way too long, adde
 - Slice 16, batch predictive inference (`60ba2cb`), slice 17, scores beyond the model's own (`0b91db9`), and slice 18, the guarantee read out (`5b55a6f`), are built and verified. Their reports are below. Every slice in the plan is built.
 - Slice 18's first follow-up, the smoothed cell law for the log score (`b4b7e22`), is built and verified: `CellLaw.Smoothed`, opt-in, for the split form's unweighted cases.
 - GBASS's two follow-ups (`5ce91b9`) are built and verified: `GroupConformal`, group-level units for new groups; and the cell rule, `Cells` on both seams with the layer's refusal.
+- BASS's opt-in group-units call (`b79840f`, the handoff's item 16, (b)) is built and verified: `BassFit.GroupConformal`.
+- Slice 15's precision rule reads at the calibration split's size (`591eace`), built and verified: `ScoreMixture.PrecisionAt`. Fitted at 1,000 and calibrated at 399, m goes from 500 to 45 and the whole-space sets from 13.4% to none.
+- Slice 12a's k̂ diagnostic stays opt-in, as the user settled on 2026-11-14. That is the code's default (`ConformalOptions.LeaveOneOutParetoK`, false).
 - The defects chip owns `PredictiveChecks.cs` and `Pointwise.cs`'s weight check; a change there is agreed with it first (the archived brief's coordination note).
 
 ## Open, each with the decision it would change
 
 - **Slice 17's three follow-ups** (its report): RoBAS-Full, the horseshoe score; CBMA's evidence from the engines' own fits; a grid-free interval for the residual scores.
 - **Slice 18's two remaining follow-ups** (its report): the Lean's calibration at n ≥ 2; a set's own miscoverage bound.
-- **Slice 15's precision rule** reads the training split's ESS: with 1,000 training and 399 calibration points it chose m of 294 to 500, and 7% of the sets were the whole space. It decides whether the fit takes the calibration split's size and scales the target itself.
 - **Slice 15's alternation speed** along the factorization's flat directions. It decides the cost at large n.
 - **τ through richer features,** the ratio estimator's open follow-up. It decides whether the layer offers a nonparametric τ.
-- **BASS's opt-in group-units call for `GroupConformal`**, decided by the user on 2026-11-14 ("I'd choose (b) for item 16"; the handoff's item 16) and commissioned to this chip.
-  - *What it is.* A separate opt-in call on BASS's side. The existing case-level refusal stays.
-  - *Why.* The caller chooses the unit that receives a rank:
-    - under `WorstCase`, each held-out group gives its least-conforming case, and the target is every case of one new group at once;
-    - under `OneCase`, the target is one case drawn uniformly from the group;
-    - both need calibration and test groups drawn alike, including how their sizes arise.
-    The report's 0.893 for one pooled case comes from the random-intercept fixture alone. It is no general guarantee for pooled cases.
-  - *Group membership.* Read it from `Cells` only where a cell identifies the intended held-out group. A cell is one level of every grouping jointly (`BassGroupCells`), so:
-    - under crossed effects, one held-out subject seen at two sites occupies two cells;
-    - a case whose grouping column is left out is a cell of its own.
-    For those designs the call takes explicit group labels or a named grouping. It reuses BASS's new-group density and passes the labels to `GroupConformal.Density`, which already takes them.
-  - *The closing test,* end to end:
-    - two held-out subjects with repeated cases across sites;
-    - the calibration counts two groups and reproduces the explicit-label p-values;
-    - BASS's ordinary case-level call still refuses that same pooled stratum.
-- **Slice 12a's k̂ diagnostic,** opt-in or on by default (the handoff's waiting list).
 
 ## Working rules
 
@@ -55,6 +41,7 @@ Built at the user's pick (2026-11-14, "Slice 15 precision rule"). With it, the u
   - `ScoreMixture.Weights` now takes m at its units' count;
   - `ScoreMixtureTests` gains two tests.
 - *What changes for existing calls.* Only a call whose calibration split differs from n − 1, n the training split's size, gets a different m. At n − 1 (the existing end-to-end test's 400 against 399) every value is unchanged, bit for bit. A fixed `Precision` stands at every size, as before. The fit-level `Precision` and its readings are the choice at n − 1.
+- *Verified by the main session on 2026-11-14,* from a clean archive of `94a37ef` with zero skips: the Commit selection, 49 of 49 ([receipts](receipts/verify-conformal-s15p-591eace/)). `ScoreMixture` is read by `ScoreMixtureTests` alone, so the selection holds every caller.
 
 **What it computes.**
 - *The finding.* The rule (theirs, §6.1) chooses the largest m whose randomized weights have mean ESS above 100 and mean self-weight at most 1/30. It reads them on the training split, each point against the other n − 1. Their splits are the same size. Here, fitted at 1,000 and calibrated at 399, a test case stands against 399 units, not 999. Its ESS is about 0.4 of the reading, and its self-weight about 2.5 times. A test case whose own weight passes α gets the whole space.
@@ -99,6 +86,10 @@ Built as commissioned (the user's choice of (b), 2026-11-14; the Open list's spe
   - `BassCandidates.GroupUnits` behind it. `BassCandidates.LogDensity`'s existing signature now forwards to a private overload, whose one flag skips the case-level strata rule for this call alone.
   - `BassGroupConformalTests`.
 - `BassGroupCells` is unchanged.
+- *Verified by the main session on 2026-11-14,* from a clean archive of `842531c` with zero skips ([receipts](receipts/verify-item16-b79840f/)):
+  - Maths.Regression.Tests' Commit selection, 2,626 of 2,626;
+  - Maths.Oracle.Tests', 57 of 57.
+  - The code was read against item 16's specification: the case-level path forwards with the flag off, so only `GroupUnits` skips the strata rule, and the groups come from labels, a named grouping, or the cells under one grouping with its column given.
 
 **What it computes.**
 - *The seams.* The held-out groups' cases are read at their responses and the test cases on their grids, each by BASS's new-group density (the seam the case-level call builds). The labels go to `GroupConformal.Density`.
