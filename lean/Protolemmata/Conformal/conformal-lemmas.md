@@ -2,7 +2,7 @@
 
 Pins the contract of the engine's conformal layer, one layer over retained draws and pointwise densities for every model with a pointwise density ([E16](../../../issues/regression/bass/extensions-brief.md#conformal-bayes-the-consumer)). The layer owns coverage and the score owns width. These are the finite statements of that split. They are the sibling of [GuardedEstimator](../BASS/guarded-estimator-lemmas.md): there, means valid whatever the emulator does; here, prediction sets valid whatever the model does. Written from the [chip brief](conformal-chip-brief.md).
 
-**Status (2026-11-13).** Proved in `lean/Enthymemata/ConformalValidity.lean`, namespace `Conformal`, with no apologies (PROOF-CLOSED, 425 declarations counting E35's M-1 and M-2 and slices 9, 10, 12, 13, 14, 15, 16 and 18, and slice 14's follow-ups 1 and 2 at the end of this page; `#print axioms` shows `propext`, `Classical.choice`, `Quot.sound` only):
+**Status (2026-11-13).** Proved in `lean/Enthymemata/ConformalValidity.lean`, namespace `Conformal`, with no apologies (PROOF-CLOSED, 446 declarations counting E35's M-1 and M-2 and slices 9, 10, 12, 13, 14, 15, 16 and 18, and slice 14's follow-ups 1, 2 and 3 at the end of this page; `#print axioms` shows `propext`, `Classical.choice`, `Quot.sound` only):
 - CB-1: `card_rankLe_le`, `coverage_orderings`, `coverage_orderings_eq`, `coverage_strict_le`, `coverage_orderings_le`, `rank_uniform`, `coverage_tieBreak`, `coverage_given`, `coverage_law`, `coverage_stratum`;
 - CB-2: `split_coverage`, `exchangeable_given_training`, `cqr_ordConnected`;
 - CB-4: `sum_jointU`, `post_addOneIn`, `integratedScore_equivariant`, `latentScore_equivariant`, `latentScore_eq`, `sum_jointU_addOneIn`, `integratedScore_le_latentScore`, `accepts_latent_of_mixed`, `mixed_counterexample`;
@@ -1002,3 +1002,51 @@ Barber, Candès, Ramdas and Tibshirani 2023 (arXiv 2202.13415v5), read in TeX: A
 - K-fold CV+:
   - the one-fold likelihood-ratio bound on 68 (data, fold) cases over every reordering of the fold and the test unit, attained (share 1.000);
   - the merged position-weight bound 2c on 48 cases over every ordering, using at most 0.284 of it, with equal weights giving slice 9's merged bound.
+
+### Follow-up 3 — CB-3's margin and inflated rule under weights
+
+CB-3's statements with the weighted rule in place of counts. Proved on 2026-11-13 in `ConformalValidity.lean`, section `WeightedMargin`, PROOF-CLOSED, with the standard three axioms only. The checks (section "Slice 14 follow-up 3") ran first.
+
+- *The weighted fragile units* (`weightShift`, `WFragile`).
+  - A fragile unit is accepted by the weighted rule on the exact score (α < `weightLe`).
+  - But at most α of the weight sits at least ε_j + ε_u below it, itself counted.
+- *The deterministic part* (`waccepts_or_fragile`). Estimates within their bounds refuse an exactly accepted unit only when it is weighted-fragile.
+- *The weighted inflated rule* (`WAcceptsInflated`, `wAcceptsInflated_of_accepts`).
+  - It accepts u when more than α of the weight has an estimate, lowered by its bound, at most u's raised by its own.
+  - It keeps every unit the exact score accepts.
+- *The estimated band* (`WFragileEstimated`, `wFragileEstimated_of_fragile`). It holds every weighted-fragile unit, read from the estimates and bounds alone (2ε_j + 2ε_u).
+- *Over orderings, with shift weights w(z_u) and the bounds travelling with the units:*
+  - the estimate's weighted rule refuses at most α + M, where M is the weighted-fragile units' share of the weight (`coverage_close_weighted`);
+  - the weighted inflated rule refuses at most α (`coverage_inflated_weighted`).
+- *Its dominance from any ordering's estimates* (`sum_wfragile_le_estimated`). The exact score's weighted-fragile units weigh at most the band read from any ordering's estimates, with the weights travelling. So the engine can report α + M̂ with M̂ read from what it holds.
+- *For the C#:* weighted full-step sets can report their Monte Carlo error. The margin is α + M̂, with M̂ the estimated band's weight, and the inflated rule keeps 1 − α.
+
+**Checks.**
+- The deterministic statements on 4,000 random cases (scores, estimates within their bounds, bounds, weights).
+- Over every ordering of 116 data sets, with an equivariant score and per-ordering estimates:
+  - the estimate refuses at most α + M, and the inflated rule at most α;
+  - M is at most any ordering's estimated band.
+  - The largest excess of the estimate's refusals over α is 0.133, within M.
+
+### Follow-up 2, continued — K-fold CV+ under position weights, by merging the folds
+
+Our statements, the weighted form of slice 9's merged bound, at the user's ask on 2026-11-13. Proved on 2026-11-13 in `ConformalValidity.lean`, section `WeightedMerge`, PROOF-CLOSED, with the standard three axioms only. The checks ran first: section "Slice 14 follow-up 2c", and part (b) of follow-up 2's.
+
+- *The reduction* (`cv_merged_of_refused`). A weighted CV+ refusal makes Σ_k λ_k π_k ≤ c, where:
+  - π_k = (W_k⁻ + w_t)/(W_k + w_t) is fold k's weighted p-value, W_k⁻ its unbeaten weight;
+  - λ_k = (W_k + w_t)/(W + K w_t), fixed when the weights are fixed by position;
+  - c = (α(W + w_t) + (K − 1) w_t)/(W + K w_t).
+- *Averaging with fixed weights* (`merge_le_two`).
+  - If each π_k is super-uniform below 2c, the average is at most c with chance at most 2c: the arithmetic mean's factor 2, as in slice 9's merged bound.
+  - The proof goes through a finite layer cake: Σ_v m_v (b − v) ≤ b²/2 when the mass up to each level is at most the level (`sum_mass_mul_sub_le`). So E(b − π)⁺ ≤ b²/2 for a super-uniform π (`sum_mul_max_sub_le`).
+- *The bound* (`cvPlus_merged_weighted`).
+  - With weights fixed by position and each fold's p-value super-uniform, CV+ refuses with chance at most 2c.
+  - At equal weights 2c is slice 9's 2(ℓ + K − 1)/(n + K).
+- *A hypothesis taken, not derived here.* Each fold's super-uniformity is a hypothesis of the theorem. On exchangeable data with the test position's weight the largest in the fold, it is Barber et al.'s Theorem 2 within the fold. `refused_le_swap_tv` states that over all units (`univ`), so applying it needs the fold, with the test unit, as the index type.
+- *Not covered.* A merged bound with likelihood-ratio weights: the λ_k then depend on the data, and the averaging argument needs them fixed. For likelihood ratios the one-fold bound in follow-up 2 serves.
+- *For the C#:* K-fold CV+ under position weights can report 2c.
+
+**Checks.**
+- The end-to-end bound 2c on 48 cases over every ordering (follow-up 2's block, part (b)).
+- The finite layer cake on 3,000 random (levels, masses).
+- The averaging lemma on 300 cases of super-uniform weighted-rank p-values. The largest share of 2c used is 0.500.

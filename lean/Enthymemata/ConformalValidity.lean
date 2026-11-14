@@ -6300,6 +6300,455 @@ theorem cvPlus_oneFold_likelihoodRatio {Z : Type*} {C : Finset ι} {t : ι} (ht 
 
 end WeightedCrossFit
 
+/-! ### Slice 14's follow-up 3: CB-3's margin and inflated rule under weights
+
+CB-3's statements with the weighted rule's `weightLe` in place of `rankLe`: the weighted fragile
+units, the weighted inflated rule, and the band read from any ordering's estimates. -/
+
+section WeightedMargin
+
+variable {ι : Type*} [Fintype ι] [DecidableEq ι]
+
+omit [Fintype ι] in
+/-- The weight of the units of `C` at least `δ j` below `s u`, `u` itself always counted. -/
+noncomputable def weightShift (C : Finset ι) (s q δ : ι → ℝ) (u : ι) : ℝ :=
+  ∑ j ∈ C.filter (fun j => j = u ∨ s j + δ j ≤ s u), q j
+
+omit [Fintype ι] in
+/-- **The weighted fragile units** under per-unit error bounds `ε`: accepted by the weighted rule on
+the exact score, but with at most `α` of the weight at least `ε j + ε u` below, itself counted, so
+estimates within their bounds can refuse it. -/
+def WFragile (α : ℝ) (C : Finset ι) (s q ε : ι → ℝ) (u : ι) : Prop :=
+  α < weightLe C s q u ∧ weightShift C s q (fun j => ε j + ε u) u ≤ α
+
+omit [Fintype ι] [DecidableEq ι] in
+/-- **The weighted inflated rule**: accept `u` when more than `α` of the weight has an estimate,
+lowered by its bound, at most `u`'s raised by its own. -/
+def WAcceptsInflated (α : ℝ) (C : Finset ι) (s q ε : ι → ℝ) (u : ι) : Prop :=
+  α < ∑ j ∈ C.filter (fun j => s j - ε j ≤ s u + ε u), q j
+
+omit [Fintype ι] in
+/-- The weighted fragile band read from estimated scores and their bounds alone. -/
+def WFragileEstimated (α : ℝ) (C : Finset ι) (s q ε : ι → ℝ) (u : ι) : Prop :=
+  WAcceptsInflated α C s q ε u ∧ weightShift C s q (fun j => 2 * ε j + 2 * ε u) u ≤ α
+
+omit [Fintype ι] in
+noncomputable instance (α : ℝ) (C : Finset ι) (s q ε : ι → ℝ) (u : ι) :
+    Decidable (WFragile α C s q ε u) :=
+  inferInstanceAs (Decidable (_ ∧ _))
+
+omit [Fintype ι] [DecidableEq ι] in
+noncomputable instance (α : ℝ) (C : Finset ι) (s q ε : ι → ℝ) (u : ι) :
+    Decidable (WAcceptsInflated α C s q ε u) :=
+  inferInstanceAs (Decidable (_ < _))
+
+omit [Fintype ι] in
+noncomputable instance (α : ℝ) (C : Finset ι) (s q ε : ι → ℝ) (u : ι) :
+    Decidable (WFragileEstimated α C s q ε u) :=
+  inferInstanceAs (Decidable (_ ∧ _))
+
+omit [Fintype ι] in
+/-- Estimates within their bounds give each unit at least the exact score's shifted weight. -/
+theorem weightShift_le_weightLe {C : Finset ι} {s ŝ ε q : ι → ℝ} (hq : ∀ j ∈ C, 0 ≤ q j)
+    (hclose : ∀ j ∈ C, |ŝ j - s j| ≤ ε j) {u : ι} (hu : u ∈ C) :
+    weightShift C s q (fun j => ε j + ε u) u ≤ weightLe C ŝ q u := by
+  unfold weightShift weightLe
+  refine sum_le_sum_of_subset_of_nonneg (fun j hj => ?_) fun j hj _ => hq j (mem_filter.1 hj).1
+  rw [mem_filter] at hj ⊢
+  refine ⟨hj.1, ?_⟩
+  rcases hj.2 with rfl | h
+  · exact le_rfl
+  · have hj' := abs_le.1 (hclose j hj.1)
+    have hu' := abs_le.1 (hclose u hu)
+    linarith
+
+omit [Fintype ι] in
+/-- **CB-3 under weights, the deterministic part.** Estimates within their bounds refuse a unit the
+exact score's weighted rule accepts only when that unit is weighted-fragile. -/
+theorem waccepts_or_fragile {α : ℝ} {C : Finset ι} {s ŝ ε q : ι → ℝ} (hq : ∀ j ∈ C, 0 ≤ q j)
+    (hclose : ∀ j ∈ C, |ŝ j - s j| ≤ ε j) {u : ι} (hu : u ∈ C) (h : α < weightLe C s q u) :
+    α < weightLe C ŝ q u ∨ WFragile α C s q ε u := by
+  by_cases hf : weightShift C s q (fun j => ε j + ε u) u ≤ α
+  · exact Or.inr ⟨h, hf⟩
+  · exact Or.inl (lt_of_lt_of_le (not_le.1 hf) (weightShift_le_weightLe hq hclose hu))
+
+omit [Fintype ι] [DecidableEq ι] in
+/-- The weighted inflated rule keeps every unit the exact score's weighted rule accepts. -/
+theorem wAcceptsInflated_of_accepts {α : ℝ} {C : Finset ι} {s ŝ ε q : ι → ℝ}
+    (hq : ∀ j ∈ C, 0 ≤ q j) (hclose : ∀ j ∈ C, |ŝ j - s j| ≤ ε j) {u : ι} (hu : u ∈ C)
+    (h : α < weightLe C s q u) : WAcceptsInflated α C ŝ q ε u := by
+  unfold WAcceptsInflated
+  unfold weightLe at h
+  refine lt_of_lt_of_le h (sum_le_sum_of_subset_of_nonneg (fun j hj => ?_)
+    fun j hj _ => hq j (mem_filter.1 hj).1)
+  rw [mem_filter] at hj ⊢
+  have hj' := abs_le.1 (hclose j hj.1)
+  have hu' := abs_le.1 (hclose u hu)
+  exact ⟨hj.1, by linarith [hj.2]⟩
+
+omit [Fintype ι] in
+/-- **The engine's reading under weights.** A weighted-fragile unit of the exact score sits in the
+band read from the estimated scores and their bounds alone. -/
+theorem wFragileEstimated_of_fragile {α : ℝ} {C : Finset ι} {s ŝ ε q : ι → ℝ}
+    (hq : ∀ j ∈ C, 0 ≤ q j) (hclose : ∀ j ∈ C, |ŝ j - s j| ≤ ε j) {u : ι} (hu : u ∈ C)
+    (h : WFragile α C s q ε u) : WFragileEstimated α C ŝ q ε u := by
+  refine ⟨wAcceptsInflated_of_accepts hq hclose hu h.1, le_trans ?_ h.2⟩
+  unfold weightShift
+  refine sum_le_sum_of_subset_of_nonneg (fun j hj => ?_) fun j hj _ => hq j (mem_filter.1 hj).1
+  rw [mem_filter] at hj ⊢
+  refine ⟨hj.1, ?_⟩
+  rcases hj.2 with h' | h'
+  · exact Or.inl h'
+  · have hj' := abs_le.1 (hclose j hj.1)
+    have hu' := abs_le.1 (hclose u hu)
+    exact Or.inr (by linarith)
+
+theorem weightShift_comp {C : Finset ι} {σ : Equiv.Perm ι} (hσ : σ ∈ permsOn C)
+    (s q ε : ι → ℝ) (u : ι) :
+    weightShift C (s ∘ σ) (q ∘ σ) (fun j => (ε ∘ σ) j + (ε ∘ σ) u) u =
+      weightShift C s q (fun j => ε j + ε (σ u)) (σ u) := by
+  unfold weightShift
+  exact sum_equiv σ (fun j => by simp only [mem_filter, Function.comp_apply,
+    mem_iff_of_mem_permsOn hσ, σ.injective.eq_iff]) fun j _ => rfl
+
+theorem wFragile_comp {α : ℝ} {C : Finset ι} {σ : Equiv.Perm ι} (hσ : σ ∈ permsOn C)
+    (s q ε : ι → ℝ) (u : ι) :
+    WFragile α C (s ∘ σ) (q ∘ σ) (ε ∘ σ) u ↔ WFragile α C s q ε (σ u) := by
+  simp only [WFragile, weightLe_comp hσ, weightShift_comp hσ]
+
+/-- **CB-3 under weights, over orderings.** The exact score is equivariant, the weights `w(z_u)` and
+the error bounds travel with the units, and the estimate `ŝ σ` for the ordering `σ` is anything
+within those bounds. Weighing each ordering by the test unit's `w`, the estimate's weighted rule
+refuses at most `α` plus `M`, the exact score's weighted-fragile units' share of the weight. -/
+theorem coverage_close_weighted {Z : Type*} {C : Finset ι} {t : ι} (ht : t ∈ C)
+    {S : (ι → Z) → ι → ℝ} (hS : Equivariant C S) (z : ι → Z) (w : Z → ℝ) (hw : ∀ v, 0 ≤ w v)
+    (ŝ : Equiv.Perm ι → ι → ℝ) (ε : ι → ℝ)
+    (hclose : ∀ σ ∈ permsOn C, ∀ j ∈ C, |ŝ σ j - S (z ∘ σ) j| ≤ ε (σ j)) {α : ℝ} (hα : 0 ≤ α) :
+    ∑ σ ∈ permsOn C, (if α < weightLe C (ŝ σ) (fun j => w (z (σ j)) / ∑ i ∈ C, w (z i)) t then 0
+        else w (z (σ t))) ≤
+      (α + ∑ u ∈ C.filter (fun u => WFragile α C (S z) (fun j => w (z j) / ∑ i ∈ C, w (z i)) ε u),
+        w (z u) / ∑ i ∈ C, w (z i)) * ∑ σ ∈ permsOn C, w (z (σ t)) := by
+  set q : ι → ℝ := fun j => w (z j) / ∑ i ∈ C, w (z i) with hq
+  have hq0 : ∀ j, 0 ≤ q j := fun j => div_nonneg (hw _) (sum_nonneg fun i _ => hw (z i))
+  -- each ordering: a refusal by the estimate is a refusal by the exact score or a fragile test unit
+  have hpt : ∀ σ ∈ permsOn C, (if α < weightLe C (ŝ σ) (fun j => w (z (σ j)) / ∑ i ∈ C, w (z i)) t
+      then 0 else w (z (σ t))) ≤
+      (if α < weightLe C (S (z ∘ σ)) (fun j => w (z (σ j)) / ∑ i ∈ C, w (z i)) t then 0
+        else w (z (σ t))) + (fun u => if WFragile α C (S z) q ε u then w (z u) else 0) (σ t) := by
+    intro σ hσ
+    have hfun : S (z ∘ σ) = S z ∘ σ := funext fun i => hS σ hσ z i
+    have hqσ : (fun j => w (z (σ j)) / ∑ i ∈ C, w (z i)) = q ∘ σ := rfl
+    simp only
+    by_cases he : α < weightLe C (ŝ σ) (fun j => w (z (σ j)) / ∑ i ∈ C, w (z i)) t
+    · rw [if_pos he]
+      split_ifs <;> linarith [hw (z (σ t))]
+    · rw [if_neg he]
+      by_cases hx : α < weightLe C (S (z ∘ σ)) (fun j => w (z (σ j)) / ∑ i ∈ C, w (z i)) t
+      · rw [if_pos hx, zero_add]
+        rcases waccepts_or_fragile (ε := ε ∘ σ) (fun j _ => hq0 (σ j)) (hclose σ hσ) ht hx with
+          h | h
+        · exact absurd h he
+        · rw [hfun, hqσ, wFragile_comp hσ] at h
+          rw [if_pos h]
+      · rw [if_neg hx]
+        split_ifs <;> linarith [hw (z (σ t))]
+  have hsplit := sum_le_sum hpt
+  rw [sum_add_distrib] at hsplit
+  have hexact := coverage_weighted ht hS z w hw hα
+  have hc : (0 : ℝ) < C.card := by exact_mod_cast card_pos.2 ⟨t, ht⟩
+  -- the fragile term over orderings is the fragile units' share of the weight
+  have hfrag : ∑ σ ∈ permsOn C, (fun u => if WFragile α C (S z) q ε u then w (z u) else 0) (σ t) =
+      (∑ u ∈ C.filter (fun u => WFragile α C (S z) q ε u), q u) *
+        ∑ σ ∈ permsOn C, w (z (σ t)) := by
+    refine mul_left_cancel₀ hc.ne' ?_
+    rw [card_mul_sum_permsOn ht (fun u => if WFragile α C (S z) q ε u then w (z u) else 0),
+      mul_left_comm (C.card : ℝ), card_mul_sum_permsOn ht (fun u => w (z u)), ← sum_filter]
+    rcases (sum_nonneg fun i (_ : i ∈ C) => hw (z i)).eq_or_lt with h0 | hpos
+    · have hz : ∀ i ∈ C, w (z i) = 0 :=
+        (sum_eq_zero_iff_of_nonneg fun i _ => hw (z i)).1 h0.symm
+      rw [sum_eq_zero fun u hu => hz u (mem_filter.1 hu).1, ← h0]
+      ring
+    · rw [hq, ← sum_div]
+      field_simp
+  rw [hfrag] at hsplit
+  linarith
+
+/-- **The weighted inflated rule over orderings** keeps the weighted rule's guarantee, at the price
+of a wider set. -/
+theorem coverage_inflated_weighted {Z : Type*} {C : Finset ι} {t : ι} (ht : t ∈ C)
+    {S : (ι → Z) → ι → ℝ} (hS : Equivariant C S) (z : ι → Z) (w : Z → ℝ) (hw : ∀ v, 0 ≤ w v)
+    (ŝ ε : Equiv.Perm ι → ι → ℝ)
+    (hclose : ∀ σ ∈ permsOn C, ∀ j ∈ C, |ŝ σ j - S (z ∘ σ) j| ≤ ε σ j) {α : ℝ} (hα : 0 ≤ α) :
+    ∑ σ ∈ permsOn C, (if WAcceptsInflated α C (ŝ σ)
+        (fun j => w (z (σ j)) / ∑ i ∈ C, w (z i)) (ε σ) t then 0 else w (z (σ t))) ≤
+      α * ∑ σ ∈ permsOn C, w (z (σ t)) := by
+  have hq0 : ∀ j, 0 ≤ w (z j) / ∑ i ∈ C, w (z i) :=
+    fun j => div_nonneg (hw _) (sum_nonneg fun i _ => hw (z i))
+  refine le_trans (sum_le_sum fun σ hσ => ?_) (coverage_weighted ht hS z w hw hα)
+  by_cases hx : α < weightLe C (S (z ∘ σ)) (fun j => w (z (σ j)) / ∑ i ∈ C, w (z i)) t
+  · rw [if_pos hx, if_pos (wAcceptsInflated_of_accepts (fun j _ => hq0 (σ j)) (hclose σ hσ) ht hx)]
+  · rw [if_neg hx]
+    split_ifs <;> linarith [hw (z (σ t))]
+
+/-- **The weighted margin read from the estimate.** For every ordering, the exact score's
+weighted-fragile units weigh at most the band read from that ordering's estimates, the weights and
+bounds travelling with the units, so the engine can report `α + M̂` with `M̂` read from what it
+holds. -/
+theorem sum_wfragile_le_estimated {Z : Type*} {C : Finset ι} {S : (ι → Z) → ι → ℝ}
+    (hS : Equivariant C S) (z : ι → Z) (q : ι → ℝ) (hq : ∀ j ∈ C, 0 ≤ q j) {σ : Equiv.Perm ι}
+    (hσ : σ ∈ permsOn C) (ŝ ε : ι → ℝ) (hclose : ∀ j ∈ C, |ŝ j - S (z ∘ σ) j| ≤ ε (σ j))
+    (α : ℝ) :
+    ∑ u ∈ C.filter (fun u => WFragile α C (S z) q ε u), q u ≤
+      ∑ u ∈ C.filter (fun u => WFragileEstimated α C ŝ (q ∘ σ) (ε ∘ σ) u), q (σ u) := by
+  have hfun : S (z ∘ σ) = S z ∘ σ := funext fun i => hS σ hσ z i
+  have hqσ : ∀ j ∈ C, 0 ≤ (q ∘ σ) j := fun j hj => hq (σ j) ((mem_iff_of_mem_permsOn hσ j).2 hj)
+  have heq : ∑ u ∈ C.filter (fun u => WFragile α C (S z) q ε u), q u =
+      ∑ u ∈ C.filter (fun u => WFragile α C (S (z ∘ σ)) (q ∘ σ) (ε ∘ σ) u), q (σ u) := by
+    symm
+    refine sum_equiv σ (fun u => ?_) fun u _ => rfl
+    simp only [mem_filter, hfun, wFragile_comp hσ, mem_iff_of_mem_permsOn hσ]
+  rw [heq]
+  refine sum_le_sum_of_subset_of_nonneg (fun u hu => ?_) fun u hu _ => hqσ u (mem_filter.1 hu).1
+  rw [mem_filter] at hu ⊢
+  exact ⟨hu.1, wFragileEstimated_of_fragile hqσ hclose hu.1 hu.2⟩
+
+end WeightedMargin
+
+/-! ### Slice 14's follow-ups: K-fold CV+ under position weights, by merging the folds
+
+The weighted counterpart of slice 9's merged bound. A weighted CV+ refusal makes a fixed-weight
+average of the folds' weighted p-values small; averaging super-uniform p-values with fixed weights
+costs a factor `2`, the arithmetic mean's factor in slice 9's merged bound, here with real-valued
+p-values through a finite layer cake. -/
+
+section WeightedMerge
+
+/-- **A finite layer cake.** Masses `m ≥ 0` on finitely many levels `T`, each at most `b`, whose
+cumulative mass up to every level is at most that level: `Σ m_v (b − v) ≤ b²/2`. -/
+theorem sum_mass_mul_sub_le (T : Finset ℝ) (m : ℝ → ℝ) (hm : ∀ v ∈ T, 0 ≤ m v) (b : ℝ)
+    (hb : ∀ v ∈ T, v ≤ b) (hcum : ∀ v ∈ T, ∑ w ∈ T.filter (· ≤ v), m w ≤ v) :
+    ∑ v ∈ T, m v * (b - v) ≤ b ^ 2 / 2 := by
+  induction T using Finset.induction_on_max generalizing b with
+  | empty =>
+    simp only [sum_empty]
+    positivity
+  | insert M T hM ih =>
+    have hMT : M ∉ T := fun h => lt_irrefl M (hM M h)
+    have hT : ∀ v ∈ T, (insert M T).filter (· ≤ v) = T.filter (· ≤ v) := fun v hv => by
+      rw [filter_insert, if_neg (not_le.2 (hM v hv))]
+    have ih' := ih (fun v hv => hm v (mem_insert_of_mem hv)) M (fun v hv => (hM v hv).le)
+      (fun v hv => by rw [← hT v hv]; exact hcum v (mem_insert_of_mem hv))
+    have hGM : ∑ w ∈ (insert M T).filter (· ≤ M), m w ≤ M := hcum M (mem_insert_self M T)
+    have hfM : (insert M T).filter (· ≤ M) = insert M T := filter_true_of_mem fun v hv => by
+      rcases mem_insert.1 hv with rfl | hv'
+      · exact le_rfl
+      · exact (hM v hv').le
+    rw [hfM, sum_insert hMT] at hGM
+    have hbM : M ≤ b := hb M (mem_insert_self M T)
+    have hmM := hm M (mem_insert_self M T)
+    have hsplit : ∑ v ∈ T, m v * (b - v) =
+        ∑ v ∈ T, m v * (M - v) + (b - M) * ∑ v ∈ T, m v := by
+      rw [mul_sum, ← sum_add_distrib]
+      exact sum_congr rfl fun v _ => by ring
+    rw [sum_insert hMT, hsplit]
+    nlinarith [mul_le_mul_of_nonneg_left hGM (sub_nonneg.2 hbM), sq_nonneg (b - M)]
+
+/-- **The layer cake for a super-uniform p-value**: `E(b − π)⁺ ≤ b²/2` when `P(π ≤ x) ≤ x` at every
+level below `b`. -/
+theorem sum_mul_max_sub_le {Ω : Type*} [Fintype Ω] (P : Ω → ℝ) (hP : ∀ ω, 0 ≤ P ω) (π : Ω → ℝ)
+    (b : ℝ) (hsu : ∀ x, x < b → ∑ ω, P ω * (if π ω ≤ x then 1 else 0) ≤ x) :
+    ∑ ω, P ω * max 0 (b - π ω) ≤ b ^ 2 / 2 := by
+  classical
+  set s := univ.filter fun ω => π ω < b with hs
+  set m : ℝ → ℝ := fun v => ∑ ω ∈ s.filter (fun ω => π ω = v), P ω with hmdef
+  have h1 : ∑ ω, P ω * max 0 (b - π ω) = ∑ ω ∈ s, P ω * (b - π ω) := by
+    rw [hs, sum_filter]
+    refine sum_congr rfl fun ω _ => ?_
+    split_ifs with h
+    · rw [max_eq_right (by linarith)]
+    · rw [max_eq_left (by linarith [not_lt.1 h]), mul_zero]
+  have h2 : ∑ ω ∈ s, P ω * (b - π ω) = ∑ v ∈ s.image π, m v * (b - v) := by
+    refine (sum_image' (fun ω => P ω * (b - π ω)) fun i _ => ?_).symm
+    change (∑ ω ∈ s.filter (fun ω => π ω = π i), P ω) * (b - π i) =
+      ∑ j ∈ s with π j = π i, P j * (b - π j)
+    rw [sum_mul]
+    exact sum_congr rfl fun j hj => by rw [(mem_filter.1 hj).2]
+  rw [h1, h2]
+  refine sum_mass_mul_sub_le _ m (fun v _ => sum_nonneg fun ω _ => hP ω) b
+    (fun v hv => ?_) (fun v hv => ?_)
+  · obtain ⟨ω, hω, rfl⟩ := mem_image.1 hv
+    exact (mem_filter.1 hω).2.le
+  · obtain ⟨ω₀, hω₀, rfl⟩ := mem_image.1 hv
+    have hvb : π ω₀ < b := (mem_filter.1 hω₀).2
+    have himg : (s.image π).filter (· ≤ π ω₀) = (s.filter fun ω => π ω ≤ π ω₀).image π := by
+      ext v
+      simp only [mem_filter, mem_image]
+      constructor
+      · rintro ⟨⟨ω, hω, rfl⟩, hle⟩
+        exact ⟨ω, ⟨hω, hle⟩, rfl⟩
+      · rintro ⟨ω, ⟨hω, hle⟩, rfl⟩
+        exact ⟨⟨ω, hω, rfl⟩, hle⟩
+    have hcum : ∑ w ∈ (s.image π).filter (· ≤ π ω₀), m w =
+        ∑ ω ∈ s.filter (fun ω => π ω ≤ π ω₀), P ω := by
+      rw [himg]
+      refine sum_image' P fun i hi => ?_
+      change ∑ ω ∈ s.filter (fun ω => π ω = π i), P ω =
+        ∑ j ∈ s.filter (fun ω => π ω ≤ π ω₀) with π j = π i, P j
+      have hi' : π i ≤ π ω₀ := (mem_filter.1 hi).2
+      refine sum_congr ?_ fun _ _ => rfl
+      ext j
+      simp only [mem_filter]
+      constructor
+      · rintro ⟨hj, h⟩
+        exact ⟨⟨hj, by rw [h]; exact hi'⟩, h⟩
+      · rintro ⟨⟨hj, _⟩, h⟩
+        exact ⟨hj, h⟩
+    rw [hcum]
+    have hall : ∑ ω ∈ s.filter (fun ω => π ω ≤ π ω₀), P ω =
+        ∑ ω, P ω * (if π ω ≤ π ω₀ then 1 else 0) := by
+      simp only [mul_ite, mul_one, mul_zero]
+      rw [← sum_filter]
+      refine sum_congr ?_ fun _ _ => rfl
+      ext ω
+      simp only [hs, mem_filter, mem_univ, true_and]
+      constructor
+      · rintro ⟨_, h⟩
+        exact h
+      · intro h
+        exact ⟨lt_of_le_of_lt h hvb, h⟩
+    rw [hall]
+    exact hsu _ hvb
+
+/-- **Averaging super-uniform p-values with fixed weights costs a factor `2`** (the arithmetic
+mean's factor, as in slice 9's merged bound): with `λ ≥ 0` summing to one and each `π_k`
+super-uniform below `2c`, the average is at most `c` with chance at most `2c`. Where the average
+is at most `c`, `Σ λ_k (2c − π_k)⁺ ≥ c`; each term averages at most `(2c)²/2` by the layer
+cake. -/
+theorem merge_le_two {Ω κ : Type*} [Fintype Ω] (P : Ω → ℝ) (hP : ∀ ω, 0 ≤ P ω) (K : Finset κ)
+    (lam : κ → ℝ) (hlam : ∀ k ∈ K, 0 ≤ lam k) (hlam1 : ∑ k ∈ K, lam k = 1) (π : κ → Ω → ℝ)
+    {c : ℝ} (hc : 0 < c)
+    (hsu : ∀ k ∈ K, ∀ x, x < 2 * c → ∑ ω, P ω * (if π k ω ≤ x then 1 else 0) ≤ x) :
+    ∑ ω, P ω * (if ∑ k ∈ K, lam k * π k ω ≤ c then 1 else 0) ≤ 2 * c := by
+  have hpt : ∀ ω, c * (if ∑ k ∈ K, lam k * π k ω ≤ c then 1 else 0) ≤
+      ∑ k ∈ K, lam k * max 0 (2 * c - π k ω) := by
+    intro ω
+    split_ifs with h
+    · have : ∑ k ∈ K, lam k * (2 * c - π k ω) ≤ ∑ k ∈ K, lam k * max 0 (2 * c - π k ω) :=
+        sum_le_sum fun k hk => mul_le_mul_of_nonneg_left (le_max_right _ _) (hlam k hk)
+      have e : ∑ k ∈ K, lam k * (2 * c - π k ω) = 2 * c - ∑ k ∈ K, lam k * π k ω := by
+        simp only [mul_sub, sum_sub_distrib]
+        rw [← sum_mul, hlam1]
+        ring
+      linarith
+    · rw [mul_zero]
+      exact sum_nonneg fun k hk => mul_nonneg (hlam k hk) (le_max_left _ _)
+  have hlc : ∀ k ∈ K, ∑ ω, P ω * max 0 (2 * c - π k ω) ≤ (2 * c) ^ 2 / 2 := fun k hk =>
+    sum_mul_max_sub_le P hP (π k) (2 * c) (hsu k hk)
+  have hsum : c * ∑ ω, P ω * (if ∑ k ∈ K, lam k * π k ω ≤ c then 1 else 0) ≤
+      ∑ k ∈ K, lam k * ((2 * c) ^ 2 / 2) := by
+    calc c * ∑ ω, P ω * (if ∑ k ∈ K, lam k * π k ω ≤ c then 1 else 0)
+        = ∑ ω, P ω * (c * (if ∑ k ∈ K, lam k * π k ω ≤ c then 1 else 0)) := by
+          rw [mul_sum]
+          exact sum_congr rfl fun ω _ => by ring
+      _ ≤ ∑ ω, P ω * ∑ k ∈ K, lam k * max 0 (2 * c - π k ω) :=
+          sum_le_sum fun ω _ => mul_le_mul_of_nonneg_left (hpt ω) (hP ω)
+      _ = ∑ k ∈ K, lam k * ∑ ω, P ω * max 0 (2 * c - π k ω) := by
+          simp only [mul_sum]
+          rw [sum_comm]
+          exact sum_congr rfl fun k _ => sum_congr rfl fun ω _ => by ring
+      _ ≤ ∑ k ∈ K, lam k * ((2 * c) ^ 2 / 2) :=
+          sum_le_sum fun k hk => mul_le_mul_of_nonneg_left (hlc k hk) (hlam k hk)
+  rw [← sum_mul, hlam1, one_mul] at hsum
+  nlinarith
+
+variable {ι κ : Type*}
+
+/-- **A weighted CV+ refusal makes the folds' average small.** Training units `U` in folds
+`fold : ι → κ` over `K`, weights `w ≥ 0` fixed by position and the test unit's `wt > 0`; a unit is
+`beaten` when the test unit is stranger than it under its fold's fit. Fold `k`'s weighted p-value
+is `π_k = (W_k⁻ + wt)/(W_k + wt)`, `W_k⁻` its unbeaten weight. If the beaten units carry at least
+`1 − α` of `W + wt`, then `Σ_k λ_k π_k ≤ c` with `λ_k = (W_k + wt)/(W + |K| wt)` and
+`c = (α (W + wt) + (|K| − 1) wt)/(W + |K| wt)`. -/
+theorem cv_merged_of_refused (U : Finset ι) (K : Finset κ) (hK : K.Nonempty) (fold : ι → κ)
+    (hfold : ∀ i ∈ U, fold i ∈ K) (w : ι → ℝ) (hw : ∀ i ∈ U, 0 ≤ w i) (wt : ℝ) (hwt : 0 < wt)
+    (beaten : ι → Prop) [DecidablePred beaten] [DecidableEq κ] {α : ℝ}
+    (href : (1 - α) * (∑ i ∈ U, w i + wt) ≤ ∑ i ∈ U.filter beaten, w i) :
+    ∑ k ∈ K, (∑ i ∈ U.filter (fun i => fold i = k), w i + wt) / (∑ i ∈ U, w i + K.card * wt) *
+        ((∑ i ∈ (U.filter fun i => fold i = k).filter (fun i => ¬ beaten i), w i + wt) /
+          (∑ i ∈ U.filter (fun i => fold i = k), w i + wt)) ≤
+      (α * (∑ i ∈ U, w i + wt) + (K.card - 1) * wt) / (∑ i ∈ U, w i + K.card * wt) := by
+  have hW : 0 ≤ ∑ i ∈ U, w i := sum_nonneg hw
+  have hD : 0 < ∑ i ∈ U, w i + K.card * wt := by
+    have h1 : (1 : ℝ) ≤ K.card := by exact_mod_cast card_pos.2 hK
+    nlinarith
+  have hfk : ∀ k, 0 < ∑ i ∈ U.filter (fun i => fold i = k), w i + wt := fun k =>
+    add_pos_of_nonneg_of_pos (sum_nonneg fun i hi => hw i (mem_filter.1 hi).1) hwt
+  have hterm : ∀ k ∈ K, (∑ i ∈ U.filter (fun i => fold i = k), w i + wt) /
+      (∑ i ∈ U, w i + K.card * wt) *
+        ((∑ i ∈ (U.filter fun i => fold i = k).filter (fun i => ¬ beaten i), w i + wt) /
+          (∑ i ∈ U.filter (fun i => fold i = k), w i + wt)) =
+      (∑ i ∈ (U.filter fun i => fold i = k).filter (fun i => ¬ beaten i), w i + wt) /
+        (∑ i ∈ U, w i + K.card * wt) := fun k _ => by
+    have := (hfk k).ne'
+    field_simp
+  rw [sum_congr rfl hterm, ← sum_div]
+  refine div_le_div_of_nonneg_right ?_ hD.le
+  rw [sum_add_distrib, sum_const, nsmul_eq_mul]
+  have hfib : ∑ k ∈ K, ∑ i ∈ (U.filter fun i => fold i = k).filter (fun i => ¬ beaten i), w i =
+      ∑ i ∈ U.filter (fun i => ¬ beaten i), w i := by
+    rw [← sum_fiberwise_of_maps_to (s := U.filter fun i => ¬ beaten i) (t := K) (g := fold)
+      (fun i hi => hfold i (mem_filter.1 hi).1)]
+    exact sum_congr rfl fun k _ =>
+      sum_congr (by ext i; simp only [mem_filter]; tauto) fun _ _ => rfl
+  rw [hfib]
+  have hsplit := sum_filter_add_sum_filter_not U beaten w
+  linarith
+
+/-- **K-fold CV+ under position weights, by merging the folds** (our statement, the weighted form
+of slice 9's merged bound). On a finite law `P` of the outcomes `ω`, the beaten units and so the
+folds' weighted p-values depend on `ω`; the weights are fixed by position, the test unit's `wt > 0`.
+With each fold's weighted p-value super-uniform below `2c` (on exchangeable data, Barber et al.'s
+Theorem 2 in that fold, `refused_le_swap_tv`, with the test position's weight the largest in it),
+CV+ refuses with chance at most `2c`, `c = (α (W + wt) + (|K| − 1) wt)/(W + |K| wt)`. At equal
+weights `2c` is slice 9's `2(ℓ + K − 1)/(n + K)`. -/
+theorem cvPlus_merged_weighted {Ω : Type*} [Fintype Ω] (P : Ω → ℝ) (hP : ∀ ω, 0 ≤ P ω)
+    (U : Finset ι) (K : Finset κ) (hK : K.Nonempty) (fold : ι → κ) (hfold : ∀ i ∈ U, fold i ∈ K)
+    (w : ι → ℝ) (hw : ∀ i ∈ U, 0 ≤ w i) (wt : ℝ) (hwt : 0 < wt) (beaten : Ω → ι → Prop)
+    [∀ ω, DecidablePred (beaten ω)] [DecidableEq κ] {α : ℝ} (hα : 0 < α)
+    (hsu : ∀ k ∈ K, ∀ x, x < 2 * ((α * (∑ i ∈ U, w i + wt) + (K.card - 1) * wt) /
+        (∑ i ∈ U, w i + K.card * wt)) →
+      ∑ ω, P ω * (if (∑ i ∈ (U.filter fun i => fold i = k).filter (fun i => ¬ beaten ω i), w i +
+          wt) / (∑ i ∈ U.filter (fun i => fold i = k), w i + wt) ≤ x then 1 else 0) ≤ x) :
+    ∑ ω, P ω * (if (1 - α) * (∑ i ∈ U, w i + wt) ≤ ∑ i ∈ U.filter (beaten ω), w i then 1 else 0) ≤
+      2 * ((α * (∑ i ∈ U, w i + wt) + (K.card - 1) * wt) / (∑ i ∈ U, w i + K.card * wt)) := by
+  set D := ∑ i ∈ U, w i + K.card * wt with hDdef
+  set c := (α * (∑ i ∈ U, w i + wt) + (K.card - 1) * wt) / D with hcdef
+  have hW : 0 ≤ ∑ i ∈ U, w i := sum_nonneg hw
+  have h1 : (1 : ℝ) ≤ K.card := by exact_mod_cast card_pos.2 hK
+  have hD : 0 < D := by nlinarith
+  have hc : 0 < c := by
+    rw [hcdef]
+    refine div_pos ?_ hD
+    nlinarith
+  set lam : κ → ℝ := fun k => (∑ i ∈ U.filter (fun i => fold i = k), w i + wt) / D with hlamdef
+  have hlam : ∀ k ∈ K, 0 ≤ lam k := fun k _ =>
+    div_nonneg (add_nonneg (sum_nonneg fun i hi => hw i (mem_filter.1 hi).1) hwt.le) hD.le
+  have hlam1 : ∑ k ∈ K, lam k = 1 := by
+    rw [hlamdef]
+    simp only
+    rw [← sum_div, sum_add_distrib, sum_const, nsmul_eq_mul,
+      sum_fiberwise_of_maps_to (s := U) (t := K) (g := fold) hfold, div_self hD.ne']
+  refine le_trans (sum_le_sum fun ω _ => mul_le_mul_of_nonneg_left ?_ (hP ω))
+    (merge_le_two P hP K lam hlam hlam1 (fun k ω =>
+      (∑ i ∈ (U.filter fun i => fold i = k).filter (fun i => ¬ beaten ω i), w i + wt) /
+        (∑ i ∈ U.filter (fun i => fold i = k), w i + wt)) hc hsu)
+  by_cases h : (1 - α) * (∑ i ∈ U, w i + wt) ≤ ∑ i ∈ U.filter (beaten ω), w i
+  · rw [if_pos h, if_pos (cv_merged_of_refused U K hK fold hfold w hw wt hwt (beaten ω) h)]
+  · rw [if_neg h]
+    split_ifs <;> norm_num
+
+end WeightedMerge
+
 /-! ### Slice 15: posterior conformal prediction (Zhang and Candès, arXiv 2409.19712) -/
 
 section PosteriorConformal

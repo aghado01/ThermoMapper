@@ -228,12 +228,28 @@ The user asked for this on 2026-11-08 ("Yes, start it"), relayed by the BASS ext
 
 Newest first.
 
-### In progress — slice 14's follow-ups
+### 2026-11-13 — slice 14's follow-up 2, continued: K-fold CV+ under position weights by merging the folds, proved
 
-Updated 2026-11-13, in place.
-- *Follow-up 3:* compiled, and its checks pass on their own. It splices next: `python splice_followup.py f3 <count>`, with the count `425 + 16`. The main session verifies follow-ups 1–3 in one clean-archive run once it lands.
-- *The merged K-fold bound under position weights* (`f5.lean`): it compiles standalone, clean (`F5Alone.lean`), its checks pass (`f5_block.py`), and its ledger section and report are drafted. It splices after follow-up 3 (anchor `end WeightedMargin`). Its own checks block goes into `conformal-checks.py` with it.
-- The working files are in `artifacts/chip-conformal-lean/`, which is untracked.
+The statements are in the ledger, under "Slice 14's follow-ups". The new declarations are PROOF-CLOSED, with the standard three axioms only. The checks ran first.
+
+- *The merged bound* (`cvPlus_merged_weighted`, ours). With weights fixed by position and each fold's weighted p-value super-uniform, weighted CV+ refuses with chance at most 2c, with c = (α(W + w_t) + (K − 1) w_t)/(W + K w_t). At equal weights it is slice 9's merged bound.
+- *How.* A refusal makes a fixed-weight average of the folds' p-values at most c (`cv_merged_of_refused`). Averaging costs a factor 2 (`merge_le_two`), through a finite layer cake.
+- *Taken as a hypothesis:* each fold's super-uniformity. On exchangeable data it is Barber et al.'s Theorem 2 in the fold.
+- *For the C#:* K-fold CV+ takes position weights with 2c, and likelihood-ratio weights with follow-up 2's one-fold bound.
+- *For the `#print axioms` file:* `sum_mass_mul_sub_le`, `sum_mul_max_sub_le`, `merge_le_two`, `cv_merged_of_refused`, `cvPlus_merged_weighted`.
+
+### 2026-11-13 — slice 14's follow-up 3: CB-3's margin and inflated rule under weights, proved
+
+The statements are in the ledger, under "Slice 14's follow-ups". The new declarations are PROOF-CLOSED, with the standard three axioms only. The checks ran first.
+
+- *The weighted margin* (`coverage_close_weighted`). Over orderings, with shift weights travelling with the units, the estimate's weighted rule refuses at most α + M, where M is the exact score's weighted-fragile units' share of the weight.
+- *The weighted inflated rule* (`coverage_inflated_weighted`) refuses at most α.
+- *Read from the estimates* (`sum_wfragile_le_estimated`). M is at most the band read from any ordering's estimates and bounds, so the engine can report α + M̂.
+- *For the C#:* weighted full-step sets can carry their Monte Carlo margin and the inflated rule.
+- *For the `#print axioms` file:* `weightShift_le_weightLe`, `waccepts_or_fragile`, `wAcceptsInflated_of_accepts`, `wFragileEstimated_of_fragile`, `wFragile_comp`, `coverage_close_weighted`, `coverage_inflated_weighted`, `sum_wfragile_le_estimated`.
+- *Gates, with the merged K-fold bound below:*
+  - The module build, the axioms probe (13 results, standard three only) and the full checks run (4,225 s) pass.
+  - The working tree's barrel build and meta-ci read red on the active-subspace Lean chip's uncommitted drafts, which it confirmed. So the clean-archive run is the barrel gate for this commit.
 
 ### 2026-11-13 — slice 14's follow-up 2: the cross-fitted forms under weights, proved
 

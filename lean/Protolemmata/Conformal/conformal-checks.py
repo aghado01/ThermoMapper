@@ -3301,4 +3301,154 @@ print(f"Follow-up 2b: weighted K-fold CV+, (a) likelihood-ratio weights within o
       f"cases over every ordering (largest share {float(worst_b):.3f}), equal weights giving slice 9's merged bound")
 
 print()
+print("=== Slice 14 follow-up 3: CB-3's margin and inflated rule under weights ===")
+# The weighted rule refuses u when weightLe(u) <= alpha. With estimates within per-unit bounds eps, a unit
+# the exact score accepts can be refused only if it is weighted-fragile: at most alpha of the weight sits at
+# least eps_j + eps_u below it, itself counted. The inflated rule (estimates lowered by their bounds against
+# the unit's raised by its own) keeps every unit the exact score accepts. Over orderings, with the weights
+# travelling with the units, the estimate refuses at most alpha plus the fragile units' normalized weight,
+# and the inflated rule at most alpha; any ordering's estimates read a band at least that heavy.
+
+
+def w_le(s, q, u):
+    return sum(q[j] for j in range(len(s)) if s[j] <= s[u])
+
+
+def w_shift(s, q, dl, u):
+    return sum(q[j] for j in range(len(s)) if j == u or s[j] + dl(j) <= s[u])
+
+
+def w_fragile(a, s, q, e, u):
+    return a < w_le(s, q, u) and w_shift(s, q, lambda j: e[j] + e[u], u) <= a
+
+
+def w_infl(a, s, q, e, u):
+    return a < sum(q[j] for j in range(len(s)) if s[j] - e[j] <= s[u] + e[u])
+
+
+def w_fragile_est(a, s, q, e, u):
+    return w_infl(a, s, q, e, u) and w_shift(s, q, lambda j: 2 * e[j] + 2 * e[u], u) <= a
+
+
+def near(rr, v, b):
+    return v + Q(rr.randint(-4, 4), 4) * b
+
+
+# (a) the deterministic part
+n_det = 0
+rr = random.Random(2100)
+for trial in range(4000):
+    m = rr.randint(1, 7)
+    s = [Q(rr.randint(0, 8)) for _ in range(m)]
+    e = [Q(rr.randint(0, 3), 2) for _ in range(m)]
+    sh = [near(rr, s[j], e[j]) for j in range(m)]
+    q = [Q(rr.randint(0, 4)) for _ in range(m)]
+    a = Q(rr.randint(0, 12), 2)
+    for u in range(m):
+        if a < w_le(s, q, u):
+            if not a < w_le(sh, q, u):
+                assert w_fragile(a, s, q, e, u)
+            assert w_infl(a, sh, q, e, u)
+        if w_fragile(a, s, q, e, u):
+            assert w_fragile_est(a, sh, q, e, u)
+    n_det += 1
+
+# (b), (c) over orderings: equivariant S (|z_i - mean z|), weights w(z_u) travelling, per-ordering estimates
+n_ord = 0
+worst_margin = Q(0)
+for N in range(1, 6):
+    rr = random.Random(2110 + N)
+    for trial in range(25):
+        z = [Q(rr.randint(0, 6)) for _ in range(N)]
+        wv = {v: Q(rr.randint(0, 4)) for v in set(z)}
+        W = sum(wv[v] for v in z)
+        if W == 0:
+            continue
+        t = rr.randrange(N)
+        a = Q(rr.randint(0, 10), 20)
+        eps = [Q(rr.randint(0, 3), 4) for _ in range(N)]           # each unit's bound, travelling with it
+        mu0 = sum(z) / N
+        S0 = [abs(v - mu0) for v in z]
+        q0 = [wv[v] / W for v in z]
+        M = sum(q0[u] for u in range(N) if w_fragile(a, S0, q0, eps, u))
+        est_ref = inf_ref = den = Q(0)
+        for sig in itertools.permutations(range(N)):
+            zs = [z[sig[i]] for i in range(N)]
+            mu = sum(zs) / N
+            S = [abs(v - mu) for v in zs]
+            q = [wv[v] / W for v in zs]
+            e = [eps[sig[i]] for i in range(N)]
+            sh = [near(rr, S[j], e[j]) for j in range(N)]
+            wt = wv[zs[t]]
+            den += wt
+            est_ref += wt * (not a < w_le(sh, q, t))
+            inf_ref += wt * (not w_infl(a, sh, q, e, t))
+            Mh = sum(q[u] for u in range(N) if w_fragile_est(a, sh, q, e, u))
+            assert M <= Mh                                          # the band read from this ordering
+        assert est_ref <= (a + M) * den and inf_ref <= a * den
+        if den:
+            worst_margin = max(worst_margin, est_ref / den - a)
+        n_ord += 1
+print(f"Follow-up 3: the weighted fragile units carry every refusal the estimates add, the inflated rule keeps "
+      f"every exact acceptance, and the estimated band holds the fragile units, on {n_det} random (scores, "
+      f"estimates, bounds, weights); over every ordering of {n_ord} data sets the estimate refuses at most "
+      f"alpha + M and the inflated rule at most alpha, M at most any ordering's estimated band (largest "
+      f"excess over alpha {float(worst_margin):.3f})")
+
+print()
+print("=== Slice 14 follow-up 2c: merged K-fold CV+ under position weights, the lemmas ===")
+# The end-to-end bound P <= 2c is checked in follow-up 2's block, part (b). Here the two lemmas under it:
+# the finite layer cake, sum_v m_v (b - v) <= b^2/2 when the mass up to each level is at most the level;
+# and averaging super-uniform p-values with fixed weights, P(sum lambda_k pi_k <= c) <= 2c.
+n_cake = 0
+rr = random.Random(2400)
+for trial in range(3000):
+    r = rr.randint(1, 6)
+    levels = sorted(set(Q(rr.randint(0, 40), 10) for _ in range(r)))
+    b = levels[-1] + Q(rr.randint(0, 10), 10)
+    m, cum = [], Q(0)
+    for v in levels:
+        room = v - cum
+        mv = room * Q(rr.randint(0, 10), 10) if room > 0 else Q(0)   # cumulative mass stays <= the level
+        m.append(mv)
+        cum += mv
+    assert sum(mv * (b - v) for mv, v in zip(m, levels)) <= b * b / 2
+    n_cake += 1
+
+# super-uniform p-values: weighted-rank p-values of the test position over every ordering of a small bag,
+# each fold its own bag; the joint law is the product over folds (any dependence would do)
+n_merge, worst_merge = 0, Q(0)
+rr = random.Random(2410)
+for trial in range(300):
+    K = rr.randint(1, 3)
+    folds = []
+    for k in range(K):
+        mk = rr.randint(1, 3)
+        vals = [rr.randint(0, 4) for _ in range(mk + 1)]
+        qw = [Q(rr.randint(1, 3)) for _ in range(mk)]
+        qt = max(qw + [Q(rr.randint(1, 3))])
+        ps = []
+        for perm in itertools.permutations(range(mk + 1)):
+            s = [vals[p] for p in perm]                     # position mk is the test
+            q = qw + [qt]
+            ps.append(sum(q[j] for j in range(mk + 1) if s[j] <= s[mk]) / sum(q))
+        folds.append(ps)
+    for ps in folds:                                       # each is super-uniform
+        for x in set(ps):
+            assert Q(sum(1 for p in ps if p <= x), len(ps)) <= x
+    lam = [Q(rr.randint(1, 4)) for _ in range(K)]
+    lam = [l / sum(lam) for l in lam]
+    c = Q(rr.randint(1, 10), 20)
+    tot = hit = 0
+    for combo in itertools.product(*folds):
+        tot += 1
+        hit += sum(l * p for l, p in zip(lam, combo)) <= c
+    assert Q(hit, tot) <= 2 * c
+    worst_merge = max(worst_merge, Q(hit, tot) / (2 * c))
+    n_merge += 1
+print(f"Follow-up 2c: the finite layer cake on {n_cake} random (levels, masses); averaging super-uniform "
+      f"weighted-rank p-values with fixed weights at most 2c on {n_merge} cases (largest share "
+      f"{float(worst_merge):.3f})")
+
+print()
 print("All assertions hold.")
