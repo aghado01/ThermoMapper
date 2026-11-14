@@ -138,13 +138,16 @@ public static class NestedCalibrationSampler
             double sum = weights.Sum();
             if (!(sum > 0.0) || weights.Any(w => !(w >= 0.0) || double.IsPositiveInfinity(w)))
                 throw new ArgumentException("The emulator's draw weights must be finite, not negative and not all zero.", nameof(emulator));
+            int exponent = WeightScale.Exponent(weights);   // the cumulative weights read scaled, so they stay finite
+            double[] scaled = [.. weights.Select(w => WeightScale.Scaled(w, exponent))];
+            sum = scaled.Sum();
             var drawn = new int[s];
             for (int i = 0; i < s; i++)
             {
                 double u = rng.NextDouble() * sum, cumulative = 0.0;
                 drawn[i] = total - 1;
                 for (int d = 0; d < total; d++)
-                    if ((cumulative += weights[d]) > u) { drawn[i] = d; break; }
+                    if ((cumulative += scaled[d]) > u) { drawn[i] = d; break; }
             }
             return drawn;
         }

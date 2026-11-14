@@ -146,8 +146,11 @@ public sealed class BassJointDraws
                 total += w;
             }
             if (!(total > 0.0)) throw new ArgumentException($"Component {k}'s weights are all zero.", nameof(components));
+            int exponent = WeightScale.Exponent(weights);
             var normalized = new double[weights.Length];
-            for (int d = 0; d < normalized.Length; d++) normalized[d] = weights[d] / total;
+            double sum = 0.0;
+            for (int d = 0; d < normalized.Length; d++) sum += normalized[d] = WeightScale.Scaled(weights[d], exponent);
+            for (int d = 0; d < normalized.Length; d++) normalized[d] /= sum;
             var rng = new Xoshiro256PlusPlus(seeds[k]);
             Resampling.Ancestors(scheme, normalized, rng, draws[k]);
             for (int j = count - 1; j > 0; j--)   // Fisher–Yates

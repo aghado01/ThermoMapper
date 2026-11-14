@@ -153,11 +153,11 @@ public static class PredictiveChecks
             {
                 if (double.IsNaN(scaledTotal))
                 {
-                    scale = Math.ILogB(largest);
+                    scale = WeightScale.Exponent(largest);
                     scaledTotal = 0.0;
-                    foreach (double v in weights) scaledTotal += Math.ScaleB(v, -scale);
+                    foreach (double v in weights) scaledTotal += WeightScale.Scaled(v, scale);
                 }
-                ratio = Math.ScaleB(w, -scale) / scaledTotal;
+                ratio = WeightScale.Scaled(w, scale) / scaledTotal;
                 if (!(ratio >= SmallestNormal))
                 {
                     log[k++] = Math.Log(w) - scale * Math.Log(2.0) - Math.Log(scaledTotal);

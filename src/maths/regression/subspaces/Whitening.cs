@@ -95,12 +95,13 @@ public static class Whitening
         if (weights is null) return [.. Enumerable.Repeat(1.0 / n, n)];
         if (weights.Count != n) throw new ArgumentException($"One weight per point: {weights.Count} for {n}.", name);
         double total = 0.0;
+        int exponent = WeightScale.Exponent(weights);   // scaled, so the sum stays finite
         foreach (double x in weights)
         {
             if (!(x >= 0.0) || double.IsPositiveInfinity(x)) throw new ArgumentException("Weights are nonnegative and finite.", name);
-            total += x;
+            total += WeightScale.Scaled(x, exponent);
         }
         if (!(total > 0.0)) throw new ArgumentException("The weights need a positive sum.", name);
-        return [.. weights.Select(x => x / total)];
+        return [.. weights.Select(x => WeightScale.Scaled(x, exponent) / total)];
     }
 }

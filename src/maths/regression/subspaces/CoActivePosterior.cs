@@ -228,10 +228,11 @@ public sealed class CoActivePosterior
         if (weights.Count != pairs.Count) throw new ArgumentException("One weight per pair.", nameof(weights));
         int p = pairs[0].Cfg.GetLength(0);
         double total = 0.0;
+        int exponent = WeightScale.Exponent(weights);   // scaled, so the sum stays finite
         foreach (double w in weights)
         {
             if (!(w >= 0.0) || double.IsPositiveInfinity(w)) throw new ArgumentException("Weights are nonnegative and finite.", nameof(weights));
-            total += w;
+            total += WeightScale.Scaled(w, exponent);
         }
         if (!(total > 0.0)) throw new ArgumentException("The weights need a positive sum.", nameof(weights));
         var normalized = new double[pairs.Count];
@@ -241,7 +242,7 @@ public sealed class CoActivePosterior
             CoActivePair pair = pairs[s];
             if (pair.Cf.GetLength(0) != p || pair.Cg.GetLength(0) != p || pair.Cfg.GetLength(0) != p || pair.Cfg.GetLength(1) != p)
                 throw new ArgumentException("The pairs share their inputs.", nameof(pairs));
-            double w = normalized[s] = weights[s] / total;
+            double w = normalized[s] = WeightScale.Scaled(weights[s], exponent) / total;
             for (int i = 0; i < p; i++)
                 for (int j = 0; j < p; j++)
                 {

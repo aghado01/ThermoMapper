@@ -166,10 +166,11 @@ public sealed class SubspacePosterior
         if (weights.Count != draws.Count) throw new ArgumentException("One weight per draw.", nameof(weights));
         int p = draws[0].C.GetLength(0), k = draws[0].Basis.GetLength(1);
         double total = 0.0;
+        int exponent = WeightScale.Exponent(weights);   // scaled, so the sum stays finite
         foreach (double w in weights)
         {
             if (!(w >= 0.0) || double.IsPositiveInfinity(w)) throw new ArgumentException("Weights are nonnegative and finite.", nameof(weights));
-            total += w;
+            total += WeightScale.Scaled(w, exponent);
         }
         if (!(total > 0.0)) throw new ArgumentException("The weights need a positive sum.", nameof(weights));
         var normalized = new double[draws.Count];
@@ -180,7 +181,7 @@ public sealed class SubspacePosterior
             DrawSubspace d = draws[s];
             if (d.C.GetLength(0) != p || d.Basis.GetLength(0) != p || d.Basis.GetLength(1) != k)
                 throw new ArgumentException("The draws share their inputs and dimension.", nameof(draws));
-            double w = normalized[s] = weights[s] / total;
+            double w = normalized[s] = WeightScale.Scaled(weights[s], exponent) / total;
             for (int i = 0; i < p; i++)
                 for (int j = 0; j < p; j++)
                 {

@@ -40,14 +40,15 @@ public sealed record PosteriorSummary(double Mean, double Sd, double Min, double
             throw new ArgumentException($"The {weights.Count} weights do not match the {values.Count} values.", nameof(weights));
         var sample = new DrawSample();
         double sum = 0.0, mass = 0.0, min = double.PositiveInfinity, max = double.NegativeInfinity;
-        int draws = 0;
+        int draws = 0, exponent = WeightScale.Exponent(weights);   // the sums read the weights scaled, so they stay finite
         for (int d = 0; d < values.Count; d++)
         {
             double x = values[d], w = weights?[d] ?? 1.0;
             if (!double.IsFinite(x)) throw new ArgumentException("A summary's values must be finite.", nameof(values));
             sample.Add(x, w);   // refuses a negative or infinite weight
-            mass += w;
-            sum += w * x;
+            double scaled = WeightScale.Scaled(w, exponent);
+            mass += scaled;
+            sum += scaled * x;
             if (w == 0.0) continue;
             draws++;
             min = Math.Min(min, x);
@@ -62,7 +63,7 @@ public sealed record PosteriorSummary(double Mean, double Sd, double Min, double
         double mean = sum / mass, squares = 0.0;
         for (int d = 0; d < values.Count; d++)
         {
-            double w = weights?[d] ?? 1.0, e = values[d] - mean;
+            double w = WeightScale.Scaled(weights?[d] ?? 1.0, exponent), e = values[d] - mean;
             squares += w * e * e;
         }
         for (int q = 0; q < quantiles.Length; q++) quantiles[q] = sample.Quantile(probabilities[q]);

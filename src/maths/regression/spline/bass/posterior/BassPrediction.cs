@@ -233,7 +233,10 @@ internal static class Draws3
             total += w;
         }
         if (!(total > 0.0)) throw new ArgumentException("The requested draws carry no weight.", name);
-        for (int d = 0; d < selected.Length; d++) selected[d] /= total;
+        int exponent = WeightScale.Exponent(selected);   // over the requested draws, repeats included
+        double sum = 0.0;
+        for (int d = 0; d < selected.Length; d++) sum += selected[d] = WeightScale.Scaled(selected[d], exponent);
+        for (int d = 0; d < selected.Length; d++) selected[d] /= sum;
         return (draws, selected);
     }
 }

@@ -185,11 +185,15 @@ public sealed class SobolDecomposition
     private double[] Means(int count, Func<int, int, double> index)
     {
         var mean = new double[count];
-        double mass = 0.0;
+        double mass = 0.0, largest = 0.0;
+        if (Weights is not null)
+            for (int d = 0; d < Count; d++)
+                if (IsDefined(d)) largest = Math.Max(largest, Weights[d]);
+        int exponent = WeightScale.Exponent(largest);   // over the defined draws, so their sums stay finite
         for (int d = 0; d < Count; d++)
         {
             if (!IsDefined(d)) continue;
-            double w = Weights?[d] ?? 1.0;
+            double w = Weights is null ? 1.0 : WeightScale.Scaled(Weights[d], exponent);
             mass += w;
             for (int k = 0; k < count; k++) mean[k] += w * index(d, k);
         }

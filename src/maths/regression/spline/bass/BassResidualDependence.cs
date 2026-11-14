@@ -324,10 +324,11 @@ public static class BassResidualDependence
     private static double[] PosteriorMean(BassDrawFit fit, List<BassDraw> pooled, IReadOnlyList<double>? weights, int n, int m)
     {
         double intercept = 0.0, total = 0.0;
+        int exponent = WeightScale.Exponent(weights);
         var coefficients = new Dictionary<int, double>();
         for (int s = 0; s < pooled.Count; s++)
         {
-            double w = weights?[s] ?? 1.0;
+            double w = weights is null ? 1.0 : WeightScale.Scaled(weights[s], exponent);
             if (w == 0.0) continue;
             BassDraw draw = pooled[s];
             intercept += w * draw.Coefficients[0];

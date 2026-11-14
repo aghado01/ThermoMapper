@@ -462,9 +462,10 @@ internal sealed class BassDrawFit
     {
         double[]? sum = null;
         double total = 0.0;
+        int exponent = WeightScale.Exponent(weights);
         for (int s = 0; s < pooled.Count; s++)
         {
-            double weight = weights?[s] ?? 1.0;
+            double weight = weights is null ? 1.0 : WeightScale.Scaled(weights[s], exponent);
             total += weight;
             ReadOnlySpan<double> offset = read(pooled[s]) is { } working ? working.Offset : default;
             if (offset.IsEmpty) continue;

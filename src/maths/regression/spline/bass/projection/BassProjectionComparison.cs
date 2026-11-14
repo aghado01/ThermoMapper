@@ -115,8 +115,10 @@ internal static class BassProjectionComparisons
     {
         BassDraw[] pooled = [.. fit.Draws.SelectMany(c => c)];
         IReadOnlyList<double>? w = fit.DrawWeights;
-        double total = w?.Sum() ?? pooled.Length;
-        double terms = Enumerable.Range(0, pooled.Length).Sum(s => (w?[s] ?? 1.0) * pooled[s].Structure.TermIds.Length) / total;
+        int exponent = WeightScale.Exponent(w);
+        double Weight(int s) => w is null ? 1.0 : WeightScale.Scaled(w[s], exponent);
+        double total = w is null ? pooled.Length : Enumerable.Range(0, pooled.Length).Sum(Weight);
+        double terms = Enumerable.Range(0, pooled.Length).Sum(s => Weight(s) * pooled[s].Structure.TermIds.Length) / total;
         PredictiveCheck loo = PredictiveChecks.PsisLoo(fit.PointwiseLogDensity(data));
         double? rmse = null, explained = null;
         if (mean is not null) (rmse, explained) = Score(mean, response!);
