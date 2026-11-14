@@ -1214,6 +1214,42 @@ public static class ConformalBayes
             throw new ArgumentException("The candidates' chain lengths are not the training density's.", nameof(candidates));
         if (!SameSequence(training.Weights, candidates.Weights))
             throw new ArgumentException("The candidates' draw weights are not the training density's.", nameof(candidates));
+        if (training.Cells is { } cells && candidates.Cells is not null)
+            CheckCells(StrataCells(training.Units.StratumOf, u => training.Units.Members[u].Select(i => cells[i])), candidates, "training units", nameof(candidates));
+    }
+
+    /// <summary>Each stratum's cell, with a second cell it spans or −1: the units' cells as <paramref name="cellsOf"/> reads them.</summary>
+    internal static Dictionary<int, (int Cell, int Other)> StrataCells(IReadOnlyList<int> stratumOf, Func<int, IEnumerable<int>> cellsOf)
+    {
+        var strata = new Dictionary<int, (int Cell, int Other)>();
+        for (int u = 0; u < stratumOf.Count; u++)
+            foreach (int cell in cellsOf(u))
+            {
+                if (!strata.TryGetValue(stratumOf[u], out (int Cell, int Other) held)) strata.Add(stratumOf[u], (cell, -1));
+                else if (held.Other < 0 && held.Cell != cell) strata[stratumOf[u]] = (held.Cell, cell);
+            }
+        return strata;
+    }
+
+    /// <summary>
+    /// The cell rule (E21's slice 5), read where both seams give cells: under random effects cases are exchangeable only within a cell, one
+    /// level of every grouping jointly, so a case in a known group ranks only among units of its own cell. A case of a new group is exempt:
+    /// it reads no training unit's group, and a new group's cases are covered by the group-level form (<see cref="GroupConformal"/>).
+    /// </summary>
+    internal static void CheckCells(IReadOnlyDictionary<int, (int Cell, int Other)>? strata, CandidateLogDensity cases, string units, string parameter)
+    {
+        if (strata is null || cases.Cells is not { } cells) return;
+        const string why = "under random effects a case is exchangeable only with cases of its own cell, one level of every grouping jointly, "
+                           + "so give each case its cell's stratum (CandidateLogDensity.Cells)";
+        for (int t = 0; t < cases.Cases; t++)
+        {
+            int h = cases.StratumOf[t];
+            if (cases.NewGroup?[t] == true || !strata.TryGetValue(h, out (int Cell, int Other) held)) continue;
+            if (held.Other >= 0)
+                throw new ArgumentException($"Case {t} ranks among stratum {h}'s {units}, which span cells {held.Cell} and {held.Other}: {why}.", parameter);
+            if (held.Cell != cells[t])
+                throw new ArgumentException($"Case {t}, of cell {cells[t]}, ranks among stratum {h}'s {units}, of cell {held.Cell}: {why}.", parameter);
+        }
     }
 
     internal static bool SameLatents(IReadOnlyList<LatentReport> a, IReadOnlyList<LatentReport> b)

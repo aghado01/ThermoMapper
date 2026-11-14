@@ -193,6 +193,20 @@ public sealed record PointwiseLogDensity(double[,] Values, UnitPartition Units, 
         }
     }
 
+    /// <summary>
+    /// Each observation's cell under random effects, one level of every grouping jointly, numbered as the engine numbers its candidates'
+    /// (<see cref="CandidateLogDensity.Cells"/>); null, the default, where the engine reads no groups. Cases are exchangeable only within a
+    /// cell, so the conformal layer refuses a candidate in a known group whose stratum's units lie in another cell (E21's slice 5). LOO and
+    /// WAIC do not read it.
+    /// </summary>
+    public int[]? Cells
+    {
+        get;
+        init => field = value is null || value.Length == Units.Observations
+            ? value is null ? null : (int[])value.Clone()
+            : throw new ArgumentException($"One cell per observation is required: {value.Length} cells for {Units.Observations} observations.", nameof(Cells));
+    }
+
     /// <summary>The number of draws S.</summary>
     public int Draws => Values.GetLength(0);
 

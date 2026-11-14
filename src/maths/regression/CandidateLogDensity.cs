@@ -142,6 +142,20 @@ public sealed record CandidateLogDensity
     }
 
     /// <summary>
+    /// Each case's cell under random effects, one level of every grouping jointly, numbered as the training or calibration units' cells
+    /// are (<see cref="PointwiseLogDensity.Cells"/>, or this seam's at the calibration cases); null, the default, where the engine reads no
+    /// groups. Cases are exchangeable only within a cell, so where both seams give cells the conformal layer refuses a case in a known group
+    /// that ranks among units of another cell (E21's slice 5). A case of a new group (<see cref="NewGroup"/>) is exempt.
+    /// </summary>
+    public int[]? Cells
+    {
+        get;
+        init => field = value is null || value.Length == Grids.Count
+            ? value is null ? null : (int[])value.Clone()
+            : throw new ArgumentException($"One cell per case is required: {value.Length} cells for {Grids.Count} cases.", nameof(Cells));
+    }
+
+    /// <summary>
     /// CB-4(c)'s reading of each candidate (the conformal layer's slice 12b), in <see cref="Values"/>' layout: ln f(y | x_t, θ_s, v′_s), the
     /// candidate's observation latents v′ drawn per draw from their conditional given its value, p(v′ | θ_s, y), or that reading's
     /// conditional mean, ln E[f(y | x_t, θ_s, v) | θ_s, y]. <see cref="Values"/> stays ln g(y | x_t, θ_s), each latent integrated, which

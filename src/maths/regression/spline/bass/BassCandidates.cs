@@ -67,10 +67,12 @@ internal static class BassCandidates
         if (grids.Count != n) throw new ArgumentException($"One grid per case is required: {grids.Count} grids for {n} cases.", nameof(grids));
         int[][]? groups = null;
         bool[]? fresh = null;
+        int[]? candidateCells = null;
         if (block is not null)
         {
             BassGroupCells cells = BassGroupCells.Of(model, cases, unseenLevels);
             int[] cellOf = cells.Candidates!;
+            candidateCells = cellOf;
             if (strata is null && Math.Max(cells.TrainingCells, cellOf.Length == 0 ? 0 : cellOf.Max() + 1) > 1)
                 throw new ArgumentException("Under random effects cases are exchangeable only within a cell, one level of every grouping jointly, and these "
                                             + "cases and the training cases span more than one: give each case its cell's stratum (BassFit.GroupCells).", nameof(strata));
@@ -185,8 +187,8 @@ internal static class BassCandidates
                 if (latents[i].Name == BassPointwise.GroupEffects) latents[i] = latents[i] with { Treatment = treatment };
         }
         CandidateLogDensity density = weights is null
-            ? new CandidateLogDensity(values, grids, latents, strata, chains) { LogCdf = logCdfs, ConditionedValues = conditionedValues }
-            : new CandidateLogDensity(values, grids, latents, strata) { Weights = weights, LogCdf = logCdfs, ConditionedValues = conditionedValues };
+            ? new CandidateLogDensity(values, grids, latents, strata, chains) { LogCdf = logCdfs, ConditionedValues = conditionedValues, Cells = candidateCells }
+            : new CandidateLogDensity(values, grids, latents, strata) { Weights = weights, LogCdf = logCdfs, ConditionedValues = conditionedValues, Cells = candidateCells };
         if (!anyNew) return density;
         return density with
         {

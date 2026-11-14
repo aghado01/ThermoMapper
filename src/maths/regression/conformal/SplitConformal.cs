@@ -177,12 +177,14 @@ public sealed record ConformalInterval(int Case, int Stratum, int Units, int Lev
 public sealed record ConformalIntervals(IReadOnlyList<ConformalInterval> Intervals, double Alpha, SplitCalibration Calibration);
 
 // Keep the fit's draw metadata after calibration, so the sorted PITs do not retain the draw-by-calibration matrices.
+// The calibration strata's cells ride along for the cell rule (ConformalBayes.CheckCells); null where the calibration gives none.
 internal readonly record struct SplitDraws(int Count, IReadOnlyList<int>? ChainLengths, IReadOnlyList<double>? Weights,
-                                           IReadOnlyList<LatentReport> Latents)
+                                           IReadOnlyList<LatentReport> Latents, IReadOnlyDictionary<int, (int Cell, int Other)>? StrataCells)
 {
     internal SplitDraws(CandidateLogDensity calibration)
         : this(calibration.Draws, calibration.ChainLengths is { } c ? [.. c] : null,
-               calibration.Weights is { } w ? [.. w] : null, [.. calibration.Latents]) { }
+               calibration.Weights is { } w ? [.. w] : null, [.. calibration.Latents],
+               calibration.Cells is { } cells ? ConformalBayes.StrataCells(calibration.StratumOf, i => [cells[i]]) : null) { }
 
     internal void Check(CandidateLogDensity candidates)
     {
@@ -197,6 +199,7 @@ internal readonly record struct SplitDraws(int Count, IReadOnlyList<int>? ChainL
             throw new ArgumentException($"The candidates' draw weights are not the calibration's: {same}.", nameof(candidates));
         if (!ConformalBayes.SameLatents(Latents, candidates.Latents))
             throw new ArgumentException($"The candidates' latents are not treated as the calibration's are: {same}.", nameof(candidates));
+        ConformalBayes.CheckCells(StrataCells, candidates, "calibration units", nameof(candidates));
     }
 }
 

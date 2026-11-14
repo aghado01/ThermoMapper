@@ -103,9 +103,11 @@ public static class BassPointwise
         double[,] values = collapsed ? Collapsed(model, fit, pooled, partition, nameof(draws)) : Retained(model, fit, pooled, partition, conditioned);
 
         List<LatentReport> latents = Latents(model, pooled, collapsed, conditioned ? LatentTreatment.Conditioned : LatentTreatment.Integrated);
+        // Each observation's cell, numbered as the candidates' (BassGroupCells), for the conformal layer's check that a stratum lies inside one.
+        int[]? cells = model.RandomEffects is null ? null : BassGroupCells.Of(model, null, UnseenLevel.Refuse).Training;
         return weights is null
-            ? new PointwiseLogDensity(values, partition, latents, chains)
-            : new PointwiseLogDensity(values, partition, latents) { Weights = weights };
+            ? new PointwiseLogDensity(values, partition, latents, chains) { Cells = cells }
+            : new PointwiseLogDensity(values, partition, latents) { Weights = weights, Cells = cells };
     }
 
     /// <summary>The group effects' name in the latent report, which the candidate density reports integrated for a new group.</summary>
