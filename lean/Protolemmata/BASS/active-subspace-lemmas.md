@@ -235,3 +235,47 @@ It does not mark one for the laws E8 already reports as not applicable: mixtures
   - (viii): `IsLeading` (an eigenvector whose eigenvalue bounds every Rayleigh quotient), `leading_moves`, `leading_C_coord` and `leading_pullback_coord`. C's leading eigenvectors are the multiples of e₁, LᵀCL's those of e₂, and Lᵀe₁ is not leading for LᵀCL. The general non-conformal L stays with the check;
   - (ix): `hat_invariant` (it needs T invertible only), `rawRidge_moves`;
   - (x): `trainingRange_factor`, `trainingRange_hinge`, `kappa_moves`, `kappa_ratio`.
+
+---
+
+## Extension — the open items closed (commissioned by the user, 2026-11-13)
+
+Four of the report's open items, taken in order of size. The numeric checks already cover each one: AS-1a for (d), AS-4b's SVD construction for (viii) in general, AS-3d for the continuous moves, and AS-2c to AS-2e for the constants.
+
+**Status (2026-11-13).** Posed. Nothing proved yet.
+
+### AS-1(d) — a projection's trace is its rank
+
+**Claim.** For Pᵀ = P and P² = P, rank P = tr P. Each eigenvalue satisfies μ² = μ, so it is 0 or 1, and tr P = Σμ counts the units, which is the rank.
+
+**Lean (planned,** `ProjectionMean`**).** `IsOrthProj.rank_eq_trace`, through `rank_eq_card_non_zero_eigs` and `trace_eq_sum_eigenvalues`. It makes k_s = tr P_s a theorem and not a definition.
+
+### AS-4(viii) in general — every non-conformal L moves some leading direction
+
+**Claim.** If LLᵀ is not a multiple of I, there are a positive semidefinite C and a v with `IsLeading C v` and ¬`IsLeading (LᵀCL) (Lᵀv)`.
+
+**Construction, without SVD.** LLᵀ has eigenpairs with σᵢ² > σⱼ², and uᵢ, uⱼ orthonormal. Take C = cᵢuᵢuᵢᵀ + cⱼuⱼuⱼᵀ with cⱼ = 1 and cᵢ = (σᵢ² + σⱼ²)/(2σᵢ²), so cⱼ > cᵢ while σᵢ²cᵢ > σⱼ²cⱼ.
+- uⱼ leads C, by Bessel for the orthonormal pair.
+- Lᵀuⱼ is an eigenvector of LᵀCL with eigenvalue σⱼ²cⱼ.
+- The Rayleigh quotient at Lᵀuᵢ is σᵢ²cᵢ, which is larger. So Lᵀuⱼ does not lead.
+- No invertibility is needed: Lᵀuⱼ = 0 cannot lead.
+
+**Lean (planned,** `Refit`**).** `leading_moves_of_not_conformal`.
+
+### AS-3(c) — the moves in measure form
+
+**Claims.** On a measurable space with a σ-finite base measure ν, with the target π and the proposal q as densities against ν:
+- **(i) Metropolis–Hastings is reversible in measure.** For measurable A and B, the flux from A to B equals the flux from B to A: ∫_A∫_B π(x)q(x, y)min(1, r(x, y)) dν(y)dν(x) is symmetric. The integrand is min(π(x)q(x, y), π(y)q(y, x)) for nonnegative π and q, and Tonelli swaps the order. With the sphere of the active coordinates and its surface measure as ν, this is the change move. The hypothesis that carries the weight is that prior and proposal are densities against the same ν.
+- **(ii) Birth and death in measure.** For each position i, insertion (r, c) ↦ insertNth i r c carries ν ⊗ ν^M to ν^{M+1} (`measurePreserving_piFinSuccAbove`). That is the dimension matching, with Jacobian 1 as a measure fact. With π_M = w(M)Π pr(cⱼ) L_M(c) and q densities against ν, the flux from A ⊆ R^M to B ⊆ R^{M+1} through births at i equals the flux back through deaths at i.
+
+**Lean (planned,** `DirectionMoves`**).** `mh_flux_symm`, and `birth_death_flux` per position.
+
+### AS-2(d) — the matrix check on continuous laws
+
+**Claims.**
+- **(i) Wirtinger on an interval.** For h continuous on [a, b] with derivative h′ (right derivatives at the ends do) and h′ square-integrable, Var_U(h) ≤ ((b − a)/π)² E_U[h′²] under the uniform U on [a, b].
+  - Proof: even-extend h to period 2(b − a). The extension takes equal values at the ends, so `fourierCoeffOn_of_hasDeriv_right` has no boundary term, and |ĉₙ| ≤ (b − a)/(π|n|)·|ĉₙ(h′)|. Parseval (`hasSum_sq_fourierCoeffOn`) sums it, with the mean the n = 0 coefficient.
+- **(ii) Efron–Stein on a product of probability measures,** for bounded measurable f: Var f ≤ Σᵢ E[Varᵢ f]. The route is `CommutingMeans` instantiated on bounded measurable functions under `Measure.pi`, with Eᵢ integrating out coordinate i. Its integral identity comes from `measurePreserving_piFinSuccAbove`, which reaches SG-1's continuous case as well.
+- **(iii) The glue.** For f with C¹ sections along each coordinate, under a product of uniforms: Cov(f) ≼ E[J D Jᵀ] with D = diag((bᵢ − aᵢ)²/π²). That is (ii), then (i) on each section, then AS-2(a)'s reduction.
+
+**Lean (planned,** a new module `ActiveSubspace/ContinuousPoincare`**).** The truncated normal's bound stays with the checks, since Bakry–Émery is a separate project.

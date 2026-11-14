@@ -85,6 +85,12 @@ Hand-over state between turns is an "In progress" entry here.
 
 ## Reports
 
+### In progress (2026-11-13) — the open items, commissioned by the user
+
+- **The commission.** On 2026-11-13 the user asked for four of the report's open items: AS-2's continuous form (Wirtinger, continuous Efron–Stein and the glue), AS-3's measure form, AS-4(viii) in general, and trace equals rank. They are posed in the lemmas' "Extension" section and taken smallest first: AS-1(d), AS-4(viii), AS-3(c), AS-2(d).
+- **Routed.** The frame's sign convention went to E8's owner through the coordinating session; it is a `src/` item.
+- **Uncommitted:** nothing beyond the posing. **Running:** nothing.
+
 ### 2026-11-13 — verified from a clean archive (coordinating session)
 
 - **Commit:** `42c980d`, through `scripts/verify-lean.ps1` with `-Module Enthymemata.ActiveSubspace` and this folder's checks.
