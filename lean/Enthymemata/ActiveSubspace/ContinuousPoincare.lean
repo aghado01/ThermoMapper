@@ -13,6 +13,8 @@ The statements of `Protolemmata/BASS/active-subspace-lemmas.md`, AS-2(d).
   `wirtinger_periodic`: so, by Parseval on `f − c₀`, `T⁻¹∫|f − c₀|² ≤ (T/2π)² T⁻¹∫|f′|²`.
   `wirtinger_interval`: on `[a, b]` with no end condition, through the even extension
   (`integral_reflect`), `Var_U(h) ≤ ((b − a)/π)² E_U[h′²]` under the uniform law, kinks allowed.
+  `wirtinger_dirichlet`: with zero ends, through the odd extension, `∫ z² ≤ ((b − a)/π)² ∫ z′²`.
+  Payne–Weinberger rests on it (`poincare_logConcave`, in `WeightedPoincare`).
 * **(iii) The glue, scalar form.** `uniformIcc` with `integral_uniformIcc` and `varM_uniformIcc`;
   `integral_integral_update`; `poincare_pi`: under a product of uniforms,
   `Var F ≤ Σᵢ ((bᵢ − aᵢ)/π)² E[Dᵢ²]`.
@@ -281,6 +283,124 @@ theorem wirtinger_interval (hab : a < b) {h h' : ℝ → ℝ} {s : Set ℝ} (hs 
       (b - a)⁻¹ * ∫ x in a..b, h' x ^ 2 := by field_simp
   rw [h2, h3, show 2 * (b - a) / (2 * π) = (b - a) / π by field_simp] at hW
   exact hW
+
+/-- **Wirtinger with zero ends.** For `z` continuous on `[a, b]` and zero at both ends, with a
+derivative off a countable set that is continuous on `[a, b]`: `∫ z² ≤ ((b − a)/π)² ∫ z′²`. The
+proof applies `wirtinger_periodic` to the odd extension `z(max x a) − z(max (2a − x) a)` on
+`[2a − b, b]`, whose mean is zero. -/
+theorem wirtinger_dirichlet (hab : a < b) {z z' : ℝ → ℝ} {s : Set ℝ} (hs : s.Countable)
+    (hc : ContinuousOn z (Icc a b)) (hd : ∀ x ∈ Ioo a b \ s, HasDerivAt z (z' x) x)
+    (hz' : ContinuousOn z' (Icc a b)) (hza : z a = 0) (hzb : z b = 0) :
+    ∫ x in a..b, z x ^ 2 ≤ ((b - a) / π) ^ 2 * ∫ x in a..b, z' x ^ 2 := by
+  have hT : 0 < b - a := by linarith
+  set a' := 2 * a - b with ha'
+  have ha'b : a' < b := by rw [ha']; linarith
+  set f : ℝ → ℝ := fun x => z (max x a) - z (max (2 * a - x) a) with hfdef
+  set F : ℝ → ℂ := fun x => ((f x : ℝ) : ℂ) with hFdef
+  set F' : ℝ → ℂ := fun x => ((z' (a + |x - a|) : ℝ) : ℂ) with hF'def
+  have hmax1 : ∀ x ∈ Icc a' b, max x a ∈ Icc a b := fun x hx =>
+    ⟨le_max_right _ _, max_le hx.2 hab.le⟩
+  have hmax2 : ∀ x ∈ Icc a' b, max (2 * a - x) a ∈ Icc a b := fun x hx =>
+    ⟨le_max_right _ _, max_le (by rw [ha'] at hx; linarith [hx.1]) hab.le⟩
+  have hmaps : ∀ x ∈ Icc a' b, a + |x - a| ∈ Icc a b := by
+    intro x hx
+    rw [ha'] at hx
+    constructor
+    · linarith [abs_nonneg (x - a)]
+    · rcases le_total a x with h1 | h1
+      · rw [abs_of_nonneg (by linarith)]; linarith [hx.2]
+      · rw [abs_of_nonpos (by linarith)]; linarith [hx.1]
+  have hc1 : ContinuousOn (fun x => z (max x a)) (Icc a' b) :=
+    hc.comp (continuous_id.max continuous_const).continuousOn hmax1
+  have hc2 : ContinuousOn (fun x => z (max (2 * a - x) a)) (Icc a' b) :=
+    hc.comp ((continuous_const.sub continuous_id).max continuous_const).continuousOn hmax2
+  have hFc : ContinuousOn F (Icc a' b) := Complex.continuous_ofReal.comp_continuousOn (hc1.sub hc2)
+  have hfa' : f a' = 0 := by
+    simp only [hfdef, ha']
+    rw [max_eq_right (by linarith), show 2 * a - (2 * a - b) = b by ring, max_eq_left hab.le,
+      hza, hzb, sub_self]
+  have hfb : f b = 0 := by
+    simp only [hfdef]
+    rw [max_eq_left hab.le, max_eq_right (by linarith), hza, hzb, sub_self]
+  have hFper : F a' = F b := by simp only [hFdef, hfa', hfb]
+  set s' : Set ℝ := s ∪ (fun y => 2 * a - y) '' s ∪ {a} with hs'def
+  have hs' : s'.Countable := (hs.union (hs.image _)).union (countable_singleton a)
+  have hFd : ∀ x ∈ Ioo a' b \ s', HasDerivAt F (F' x) x := by
+    intro x hx
+    obtain ⟨⟨hx1, hx2⟩, hxs⟩ := hx
+    simp only [hs'def, mem_union, mem_singleton_iff, mem_image, not_or] at hxs
+    obtain ⟨⟨hxs1, hxs2⟩, hxa⟩ := hxs
+    rcases lt_or_gt_of_ne hxa with hlt | hgt
+    · -- left of `a`: `f = z a − z(2a − ·)` near `x`
+      have hin : 2 * a - x ∈ Ioo a b \ s := by
+        refine ⟨⟨by linarith, by rw [ha'] at hx1; linarith⟩, fun hm' => hxs2 ⟨2 * a - x, hm', ?_⟩⟩
+        ring
+      have h1 : HasDerivAt (fun y => 2 * a - y) (-1) x := by
+        simpa using (hasDerivAt_id x).const_sub (2 * a)
+      have hder : HasDerivAt (fun y => z a - z (2 * a - y)) (-(z' (2 * a - x) * (-1))) x :=
+        ((hd _ hin).comp x h1).const_sub (z a)
+      have hev : f =ᶠ[nhds x] fun y => z a - z (2 * a - y) := by
+        filter_upwards [Iio_mem_nhds hlt] with y hy
+        have hy' : y < a := hy
+        simp only [hfdef]
+        rw [max_eq_right hy'.le, max_eq_left (by linarith)]
+      have hval : -(z' (2 * a - x) * (-1)) = z' (a + |x - a|) := by
+        rw [abs_of_neg (by linarith), mul_neg_one, neg_neg]
+        congr 1
+        ring
+      exact ((hder.congr_of_eventuallyEq hev).congr_deriv hval).ofReal_comp
+    · -- right of `a`: `f = z − z a` near `x`
+      have hin : x ∈ Ioo a b \ s := ⟨⟨hgt, hx2⟩, hxs1⟩
+      have hev : f =ᶠ[nhds x] fun y => z y - z a := by
+        filter_upwards [Ioi_mem_nhds hgt] with y hy
+        have hy' : a < y := hy
+        simp only [hfdef]
+        rw [max_eq_left hy'.le, max_eq_right (by linarith)]
+      have hval : z' x = z' (a + |x - a|) := by
+        rw [abs_of_pos (by linarith)]
+        congr 1
+        ring
+      exact (((hd x hin).sub_const (z a)).congr_of_eventuallyEq hev |>.congr_deriv hval).ofReal_comp
+  have hF'c : ContinuousOn F' (Icc a' b) :=
+    Complex.continuous_ofReal.comp_continuousOn (hz'.comp (continuous_const.add
+      (continuous_abs.comp (continuous_id.sub continuous_const))).continuousOn hmaps)
+  have hW := wirtinger_periodic ha'b hs' hFc hFd hFper (memLp_two_of_continuousOn hF'c)
+  -- the mean is zero: the two halves of `f` integrate alike under `x ↦ 2a − x`
+  have hmean : fourierCoeffOn ha'b F 0 = 0 := by
+    rw [fourierCoeffOn_zero, hFdef, intervalIntegral.integral_ofReal, hfdef,
+      intervalIntegral.integral_sub (hc1.intervalIntegrable_of_Icc ha'b.le)
+        (hc2.intervalIntegrable_of_Icc ha'b.le)]
+    have hsym : ∫ x in a'..b, z (max (2 * a - x) a) = ∫ x in a'..b, z (max x a) := by
+      have := intervalIntegral.integral_comp_sub_left (fun x => z (max x a)) (2 * a) (a := a')
+        (b := b)
+      rw [this, show 2 * a - b = a' by rw [ha'], show 2 * a - a' = b by rw [ha']; ring]
+    rw [hsym, sub_self, Complex.ofReal_zero, smul_zero]
+  have hsq : ∀ x, ‖F x - 0‖ ^ 2 = z (a + |x - a|) ^ 2 := by
+    intro x
+    simp only [hFdef, hfdef, sub_zero, Complex.norm_real, Real.norm_eq_abs, sq_abs]
+    rcases le_total a x with h1 | h1
+    · rw [max_eq_left h1, max_eq_right (by linarith), hza, sub_zero, abs_of_nonneg (by linarith),
+        show a + (x - a) = x by ring]
+    · rw [max_eq_right h1, max_eq_left (by linarith), hza, zero_sub, neg_sq,
+        abs_of_nonpos (by linarith), show a + -(x - a) = 2 * a - x by ring]
+  have hvar : ∫ x in a'..b, ‖F x - fourierCoeffOn ha'b F 0‖ ^ 2 = 2 * ∫ x in a..b, z x ^ 2 := by
+    rw [hmean]
+    simp only [hsq]
+    exact integral_reflect hab ((hc.pow 2).intervalIntegrable_of_Icc hab.le)
+  have hen : ∫ x in a'..b, ‖F' x‖ ^ 2 = 2 * ∫ x in a..b, z' x ^ 2 := by
+    simp only [hF'def, Complex.norm_real, Real.norm_eq_abs, sq_abs]
+    exact integral_reflect hab ((hz'.pow 2).intervalIntegrable_of_Icc hab.le)
+  rw [hvar, hen, show b - a' = 2 * (b - a) by rw [ha']; ring] at hW
+  have h2 : (2 * (b - a))⁻¹ * (2 * ∫ x in a..b, z x ^ 2) = (b - a)⁻¹ * ∫ x in a..b, z x ^ 2 := by
+    field_simp
+  have h3 : (2 * (b - a))⁻¹ * (2 * ∫ x in a..b, z' x ^ 2) =
+      (b - a)⁻¹ * ∫ x in a..b, z' x ^ 2 := by field_simp
+  rw [h2, h3, show 2 * (b - a) / (2 * π) = (b - a) / π by field_simp] at hW
+  have key : (b - a)⁻¹ * ∫ x in a..b, z x ^ 2 ≤
+      (b - a)⁻¹ * (((b - a) / π) ^ 2 * ∫ x in a..b, z' x ^ 2) := by
+    calc _ ≤ ((b - a) / π) ^ 2 * ((b - a)⁻¹ * ∫ x in a..b, z' x ^ 2) := hW
+      _ = _ := by ring
+  exact le_of_mul_le_mul_left key (inv_pos.2 hT)
 
 end Wirtinger
 
