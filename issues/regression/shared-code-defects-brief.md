@@ -144,6 +144,19 @@ The shape to find moves no pinned value and leaves no existing checkpoint withou
 
 Newest first. Each gives the commits, the gates' results, defects found, decisions for the user and "Doc changes owed".
 
+### 2026-11-14 — In progress: slice 7, "screened" as the samplers' default
+
+- **Checkpoints and pins, read before any code.**
+  - *Checkpoints.* A BAPS checkpoint (`EnsembleCheckpoint`) is an in-memory object; nothing in `src/` writes one to disk. A checkpoint from before the change cannot reach a process running after it, so no persisted checkpoint is orphaned.
+  - *Pins.* No test in the pinned tier reaches `Baps` or `HierarchicalPSpline`. The draws a default run makes do not move, since the two modes draw the same chain.
+  - *Tests that read a default run's refusal text or records:* none outside `BapsConditionCheckTests`. Its resume test uses the default as every-factorization and moves to the explicit mode.
+  - *Callers:* none outside `spline/baps/`.
+- **The shape: today's fingerprint rule stays.** A mode enters the fingerprint unless it is `EveryFactorization`.
+  - A default run's fingerprint therefore gains the mode. A checkpoint taken under the old default still resumes, given `conditionCheck: EveryFactorization`. A checkpoint taken in slice 6 under `Screened` resumes under the new default.
+  - Each checkpoint resumes only under the mode its records came from.
+  - The alternative, keying on the new default, would let an every-factorization checkpoint resume under screened with mixed records, and would orphan slice 6's screened checkpoints.
+- **Next step.** Make the default change with the sharper constant, (1 + √ν)/2, then the gates.
+
 ### 2026-11-14 — Slice 6 verified from clean archives (coordinating session)
 
 - **Runs:** `scripts/verify-csharp.ps1`, the Commit selection over each commit's files in every test project where they select a class. All 22 test projects were swept with `test-select -ListOnly` first.
