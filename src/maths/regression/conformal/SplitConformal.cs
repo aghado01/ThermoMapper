@@ -248,10 +248,11 @@ public static class SplitConformal
         var scores = new double[calibration.Cases];
         LogPredictive(calibration.Values, rows, logWeights, 0, calibration.Cases, scores);
         var fit = new SplitCalibration(scores, calibration.StratumOf, alpha);
-        WeightedCalibration? weighted = weights is null ? null : Weighted(weights, scores, calibration.StratumOf, alpha, candidates.Values.GetLength(1));
+        WeightedCalibration? shared = weights is { UnitsByCase: null } ? Weighted(weights, scores, calibration.StratumOf, alpha, candidates.Values.GetLength(1), 0, candidates.Cases) : null;
         var sets = new ConformalSet[candidates.Cases];
         for (int t = 0; t < candidates.Cases; t++)
         {
+            WeightedCalibration? weighted = weights is null ? null : shared ?? Weighted(weights, scores, calibration.StratumOf, alpha, candidates.Values.GetLength(1), t, candidates.Cases);
             int h = candidates.StratumOf[t], m = fit.Units(h), k = fit.Level(h);
             double[] grid = candidates.Grids[t];
             if (weighted is not null && !EqualCase(weighted, h, weights!.Candidates, candidates.Offset(t), grid.Length))
@@ -339,10 +340,11 @@ public static class SplitConformal
         var scores = new double[n];
         for (int i = 0; i < n; i++) scores[i] = CqrScore(calibration.Lower[i], calibration.Upper[i], response[i]);
         var fit = new SplitCalibration(scores, calibration.StratumOf, alpha);
-        WeightedCalibration? weighted = weights is null ? null : Weighted(weights, scores, calibration.StratumOf, alpha, cases);
+        WeightedCalibration? shared = weights is { UnitsByCase: null } ? Weighted(weights, scores, calibration.StratumOf, alpha, cases, 0, cases) : null;
         var intervals = new ConformalInterval[cases];
         for (int t = 0; t < cases; t++)
         {
+            WeightedCalibration? weighted = weights is null ? null : shared ?? Weighted(weights, scores, calibration.StratumOf, alpha, cases, t, cases);
             int h = test.StratumOf?[t] ?? 0;
             if (weighted is not null && !weighted.Equal(h, weights!.Candidates[t]))
             {
@@ -380,11 +382,13 @@ public static class SplitConformal
         double tailAlpha = Math.Max(double.Epsilon, alpha / 2);
         var lo = new SplitCalibration(lower, calibration.StratumOf, tailAlpha);
         var hi = new SplitCalibration(upper, calibration.StratumOf, tailAlpha);
-        WeightedCalibration? wlo = weights is null ? null : Weighted(weights, lower, calibration.StratumOf, tailAlpha, cases);
-        WeightedCalibration? whi = weights is null ? null : Weighted(weights, upper, calibration.StratumOf, tailAlpha, cases);
+        WeightedCalibration? sharedLo = weights is { UnitsByCase: null } ? Weighted(weights, lower, calibration.StratumOf, tailAlpha, cases, 0, cases) : null;
+        WeightedCalibration? sharedHi = weights is { UnitsByCase: null } ? Weighted(weights, upper, calibration.StratumOf, tailAlpha, cases, 0, cases) : null;
         var intervals = new AsymmetricConformalInterval[cases];
         for (int t = 0; t < cases; t++)
         {
+            WeightedCalibration? wlo = weights is null ? null : sharedLo ?? Weighted(weights, lower, calibration.StratumOf, tailAlpha, cases, t, cases);
+            WeightedCalibration? whi = weights is null ? null : sharedHi ?? Weighted(weights, upper, calibration.StratumOf, tailAlpha, cases, t, cases);
             int h = test.StratumOf?[t] ?? 0;
             if (wlo is not null && !wlo.Equal(h, weights!.Candidates[t]))
             {
@@ -413,10 +417,11 @@ public static class SplitConformal
         var scores = new double[n];
         for (int i = 0; i < n; i++) scores[i] = ResidualScore(calibration.Center[i], calibration.Scale?[i] ?? 1.0, response[i]);
         var fit = new SplitCalibration(scores, calibration.StratumOf, alpha);
-        WeightedCalibration? weighted = weights is null ? null : Weighted(weights, scores, calibration.StratumOf, alpha, cases);
+        WeightedCalibration? shared = weights is { UnitsByCase: null } ? Weighted(weights, scores, calibration.StratumOf, alpha, cases, 0, cases) : null;
         var intervals = new ConformalInterval[cases];
         for (int t = 0; t < cases; t++)
         {
+            WeightedCalibration? weighted = weights is null ? null : shared ?? Weighted(weights, scores, calibration.StratumOf, alpha, cases, t, cases);
             int h = test.StratumOf?[t] ?? 0;
             if (weighted is not null && !weighted.Equal(h, weights!.Candidates[t]))
             {
@@ -483,12 +488,15 @@ public static class SplitConformal
             ? new(t, h, fit.Units(h), fit.Level(h), c, double.NegativeInfinity, double.PositiveInfinity) { WeightedAlpha = alpha }
             : new(t, h, fit.Units(h), fit.Level(h), c, lower, upper) { WeightedAlpha = alpha };
 
-    // The weighted calibration, its weights laid out as the units and the candidates.
-    private static WeightedCalibration Weighted(ShiftWeights weights, IReadOnlyList<double> scores, int[]? stratumOf, double alpha, int candidates)
+    // The weighted calibration case `t` is ranked under: the units' shared weights, or case t's own where they move with the case.
+    private static WeightedCalibration Weighted(ShiftWeights weights, IReadOnlyList<double> scores, int[]? stratumOf, double alpha, int candidates,
+                                                int t, int cases)
     {
         if (weights.Candidates.Count != candidates)
             throw new ArgumentException($"One weight per candidate is required: {weights.Candidates.Count} weights for {candidates} candidates.", nameof(weights));
-        return new WeightedCalibration(scores, weights.Units, stratumOf, alpha);
+        if (weights.UnitsByCase is { } byCase && byCase.Count != cases)
+            throw new ArgumentException($"One set of unit weights per case is required: {byCase.Count} sets for {cases} cases.", nameof(weights));
+        return new WeightedCalibration(scores, weights.UnitsFor(t), stratumOf, alpha);
     }
 
     // Whether a case's candidate weights all equal its stratum's one weight, so its set is CB-1's.

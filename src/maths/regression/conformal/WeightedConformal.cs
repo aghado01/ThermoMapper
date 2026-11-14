@@ -10,7 +10,7 @@ namespace Maths.Regression.Conformal;
 /// weight included, is at most α of the stratum's total with its own (<c>weightLe</c>). What the weights state decides the guarantee:
 /// <list type="bullet">
 /// <item><b>Covariate shift</b> (Tibshirani, Barber, Candès and Ramdas 2019, Corollary 1): w(x) = dP̃_X/dP_X, the test law's density of
-/// the inputs against the training law's, at each unit's and each case's inputs, constant over a case's grid (<see cref="ByCase"/>). With
+/// the inputs against the training law's, at each unit's and each case's inputs, constant over a case's grid (<see cref="ByCase(IReadOnlyList{double}, IReadOnlyList{double}, IReadOnlyList{double[]})"/>). With
 /// the true ratio the sets cover at least 1 − α under the shifted law (<c>coverage_weighted</c>).</item>
 /// <item><b>Response shift</b> (Podkopaev and Ramdas 2021, Theorem 2): w(y), the response's density ratio, the inputs' law given the
 /// response unchanged: each unit's at its response and each candidate's at its value, so it moves along a grid. The same guarantee. For a
@@ -36,8 +36,45 @@ public sealed record ShiftWeights
         Candidates = Checked(candidates, nameof(candidates));
     }
 
-    /// <summary>Each training or calibration unit's weight, in the units' order.</summary>
+    private ShiftWeights(double[][] unitsByCase, double[] candidates)
+    {
+        Units = [];
+        UnitsByCase = unitsByCase;
+        Candidates = candidates;
+    }
+
+    /// <summary>
+    /// Weights whose units' weights move with the test case (slice 15, posterior conformal prediction): <paramref name="unitsByCase"/>[t]
+    /// the units' weights for test case t, each in the units' order, and <paramref name="candidates"/> as for the shared form. Each case is
+    /// ranked under its own weights; the weighted rule's guarantee holds case by case given whatever chose them, as the kernel's draw does
+    /// (<c>coverage_pcp</c>).
+    /// </summary>
+    public static ShiftWeights PerCase(IReadOnlyList<double[]> unitsByCase, IReadOnlyList<double> candidates)
+    {
+        ArgumentNullException.ThrowIfNull(unitsByCase);
+        ArgumentNullException.ThrowIfNull(candidates);
+        var copies = new double[unitsByCase.Count][];
+        for (int t = 0; t < copies.Length; t++)
+        {
+            copies[t] = Checked(unitsByCase[t] ?? throw new ArgumentException($"Case {t}'s weights are null.", nameof(unitsByCase)), nameof(unitsByCase));
+            if (copies[t].Length != copies[0].Length) throw new ArgumentException("Every case weighs the same units.", nameof(unitsByCase));
+        }
+        return new ShiftWeights(copies, Checked(candidates, nameof(candidates)));
+    }
+
+    /// <summary>Each training or calibration unit's weight, in the units' order; empty where the weights move with the case
+    /// (<see cref="UnitsByCase"/>).</summary>
     public IReadOnlyList<double> Units { get; }
+
+    /// <summary>The units' weights for each test case, where they move with the case (<see cref="PerCase"/>); null where every case shares
+    /// <see cref="Units"/>.</summary>
+    public IReadOnlyList<double[]>? UnitsByCase { get; }
+
+    /// <summary>The units' weights test case <paramref name="case"/> is ranked under.</summary>
+    public IReadOnlyList<double> UnitsFor(int @case) => UnitsByCase?[@case] ?? Units;
+
+    /// <summary>How many units the weights cover.</summary>
+    public int UnitCount => UnitsByCase is { Count: > 0 } byCase ? byCase[0].Length : Units.Count;
 
     /// <summary>Each candidate's weight: per grid column for the density forms, per test case for the closed-form intervals.</summary>
     public IReadOnlyList<double> Candidates { get; }
@@ -55,6 +92,19 @@ public sealed record ShiftWeights
             for (int g = 0; g < grid.Length; g++) columns.Add(cases[t]);
         }
         return new ShiftWeights(units, columns);
+    }
+
+    /// <summary>Per-case unit weights with each case's own weight spread over its grid's columns (<see cref="PerCase"/>).</summary>
+    public static ShiftWeights ByCase(IReadOnlyList<double[]> unitsByCase, IReadOnlyList<double> cases, IReadOnlyList<double[]> grids)
+    {
+        ArgumentNullException.ThrowIfNull(cases);
+        ArgumentNullException.ThrowIfNull(grids);
+        if (cases.Count != grids.Count || unitsByCase.Count != grids.Count)
+            throw new ArgumentException($"One weight and one set of unit weights per case is required for {grids.Count} cases.", nameof(cases));
+        var columns = new List<double>();
+        for (int t = 0; t < grids.Count; t++)
+            for (int g = 0; g < (grids[t] ?? throw new ArgumentException($"Case {t}'s grid is null.", nameof(grids))).Length; g++) columns.Add(cases[t]);
+        return PerCase(unitsByCase, columns);
     }
 
     private static double[] Checked(IReadOnlyList<double> weights, string name)

@@ -617,8 +617,10 @@ public static class ConformalBayes
             if (options.MarginBounds is not null || options.Inflate || options.FallbackShare is not null || leaveOneOut || options.MarginRefinement is not null)
                 throw new ArgumentException("Under weights the full step reads the weighted rule alone: the margin, the inflated rule, the fallback rule, "
                                             + "Hoff's score and the margin's refinement count units rather than weighing them, and are not built for weights.", nameof(options));
-            if (shift.Units.Count != training.Units.Units)
-                throw new ArgumentException($"One weight per training unit is required: {shift.Units.Count} weights for {training.Units.Units} units.", nameof(options));
+            if (shift.UnitCount != training.Units.Units)
+                throw new ArgumentException($"One weight per training unit is required: {shift.UnitCount} weights for {training.Units.Units} units.", nameof(options));
+            if (shift.UnitsByCase is { } byCase && byCase.Count != candidates.Cases)
+                throw new ArgumentException($"One set of unit weights per case is required: {byCase.Count} sets for {candidates.Cases} cases.", nameof(options));
             if (shift.Candidates.Count != candidates.Values.GetLength(1))
                 throw new ArgumentException($"One weight per candidate is required: {shift.Candidates.Count} weights for {candidates.Values.GetLength(1)} candidates.", nameof(options));
         }
@@ -641,11 +643,10 @@ public static class ConformalBayes
             if (k == 0)
             {
                 // CB-1's whole space; under weights only where a case's weights are all equal, the weighted rule reading the rest.
-                double[] stratumWeights = shift is null ? [] : [.. members.Select(u => shift.Units[u])];
                 var weighed = new List<int>();
                 foreach (int t in cases)
                 {
-                    if (shift is not null && !EqualWeights(stratumWeights, shift.Candidates, candidates.Offset(t), candidates.Grids[t].Length))
+                    if (shift is not null && !EqualWeights([.. members.Select(u => shift.UnitsFor(t)[u])], shift.Candidates, candidates.Offset(t), candidates.Grids[t].Length))
                     {
                         weighed.Add(t);
                         continue;
@@ -673,12 +674,14 @@ public static class ConformalBayes
                 }
                 continue;
             }
-            double[]? unitWeights = shift is null ? null : [.. members.Select(u => shift.Units[u])];
             var scorer = new StratumScorer(training.Values, rows, logWeights, members, training.ChainLengths, k, Multiple(nu, m),
-                                           options.MarginBounds, options.InflationBounds, degenerateEss: options.DegenerateEss) { UnitWeights = unitWeights };
+                                           options.MarginBounds, options.InflationBounds, degenerateEss: options.DegenerateEss);
             (StratumScorer A, StratumScorer B)? halves = Halves(training.Values, rows, logWeights, members, training.ChainLengths, k);
             foreach (int t in cases)
             {
+                // The units' weights this case is ranked under: shared, or its own where they move with the case.
+                double[]? unitWeights = shift is null ? null : [.. members.Select(u => shift.UnitsFor(t)[u])];
+                scorer.UnitWeights = unitWeights;
                 int g = candidates.Grids[t].Length, offset = candidates.Offset(t);
                 var r = new Reading(g);
                 Reading? ra = halves is null ? null : new Reading(g), rb = halves is null ? null : new Reading(g);
@@ -1406,7 +1409,7 @@ public static class ConformalBayes
 
         /// <summary>Under weights (slice 14), each member unit's weight, in the members' order: <see cref="Count"/> sums those scoring at or below
         /// each candidate into <see cref="Reading.WeightLe"/>.</summary>
-        public double[]? UnitWeights { get; init; }
+        public double[]? UnitWeights { get; set; }
 
         /// <summary>The readings of <paramref name="count"/> candidates from column <paramref name="first"/> into
         /// <paramref name="into"/> from its start. Its steps are apart for the cost row: <see cref="Weigh"/>, <see cref="Multiply"/>,
