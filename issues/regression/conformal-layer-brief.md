@@ -292,6 +292,19 @@ Each report gives the commits, gate results, coverage and width by fit, cost, de
 
 Newest first.
 
+### In progress — Slice 14's follow-up 3: CB-3's margin and inflated rule under weights (started 2026-11-13)
+
+Its Lean (`2928b06`) was verified by the main session on a clean archive of `7e2b905`.
+
+**Plan.**
+- *3a, the full step's density sets.* The weighted band's share M̂ (`WFragileEstimated`, through `ConformalBayes.WeightedBand`), and the weighted inflated rule's p-values (`WAcceptsInflated`), read beside the counts in the scorer. They land in `ConformalMargin.WeightedFragile`, `WeightedInflated` and `WeightedCount`. `ConformalSet` reads them: 1 − α − M̂ − ν for the plain set, 1 − α − ν for the inflated one. Uniform and carried margins and the inflated rule are allowed under weights; the kept bounds, the fallback rule, Hoff's score and the refinement stay refused.
+- *3b, the full step's predictive distribution:* the two-tailed CDF margin under weights (`CdfMarginScorer`).
+
+**State.** Nothing committed.
+- 3a is applied in the working tree: `ConformalBayes.cs`, the slice 14 refusal test updated in `WeightedConformalTests.cs`, and the new `WeightedMarginTests.cs`. It is not yet built or run.
+- *A change to report:* weighted sets now carry a margin record, as unweighted ones do. Without the band asked for, their `CoverageUnderError` is NaN (not read) where it was 1 − α.
+- *Next:* build, test, the commit selection, the commit, the report; then 3b.
+
 ### 2026-11-13 — Slice 14's follow-up 2: the cross-fitted forms under weights
 
 Built at the user's decision 12 once its Lean was verified by the main session: `38f2e3f` (`crossFit_likelihoodRatio`, `crossFit_weighted_swap_tv`, the jackknife+ and tournament forms, `cvPlus_oneFold_likelihoodRatio`), and `7e2b905` (`cvPlus_merged_weighted`, `coverage_across_likelihoodRatio`).
