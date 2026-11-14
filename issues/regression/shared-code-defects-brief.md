@@ -45,6 +45,56 @@ Commissioned by the user on 2026-11-13 through the coordinating session. Both de
 
 **Gates.** The reproduction fails before the build and passes after. Every existing test of the class holds bit for bit on inputs the floor never reached. The pinned tier at each commit; the linear algebra, clustering and viz-core test projects that reach the class, and the regression assembly, once at the end.
 
+## Slice 6: the samplers' condition check as a setting
+
+Commissioned by the user on 2026-11-14 through the coordinating session, on the [measurement](#2026-11-14--slice-5s-decision-1-measured-the-condition-estimates-cost-per-sampler-step) (`7dca8ff`). It feeds the BAPS follow-up's [admission input](bass/extensions-brief.md#input-for-the-follow-up-admission-and-singular-systems-2026-11-14).
+
+**The decision.** How often a sampler estimates κ(E) becomes a setting of three values. The default is what slice 5 landed, so no default changes in this slice.
+- *Every factorization* (the default): slice 5's behaviour, bit for bit.
+- *Screened:* one estimate per run at a reference point, a scalar bound at each step, and the estimate itself at any step the bound does not clear.
+- *Reference alone:* one estimate per run at the reference point, and positive definiteness at each step. It is the opt-out for a model already known to be sound.
+
+The measurement's options 2 and 4 are not built. Option 2 costs what *reference alone* costs per step and misses an unidentified design. Option 4's k has no value a caller can choose on principle, and its refusal can arrive late or never.
+
+**The bound.** Each sampler's system is A(c) = Σₖ cₖSₖ. Every Sₖ is positive semidefinite and fixed by the design, and every cₖ > 0 is drawn or fixed at 1: ZᵀZ + λP, ZᵀZ + Σⱼ λⱼPⱼ, and ZᵀZ + Σᵢ λᵢdᵢdᵢᵀ for the locally adaptive penalty. With ρₖ = cₖ / c_ref,ₖ, every Rayleigh quotient of A(c) lies between min ρₖ and max ρₖ times A(c_ref)'s, so
+
+κ₂(A(c)) ≤ κ₂(A(c_ref)) · maxₖ ρₖ / minₖ ρₖ.
+
+- *Its standing.* Derived by the coordinating session on 2026-11-14 and checked against no run. Confirm the form at each sampler site, the hierarchical model's five included. A site whose system does not take the form is reported, not forced into it.
+- *From the bound to the gate's reading.* The gate reads a 1-norm estimate on the equilibrated matrix, and the estimate errs low. Carrying the bound to that reading costs three factors: Jacobi scaling against the best diagonal scaling (van der Sluis; Higham, *Accuracy and Stability of Numerical Algorithms*, §7.3), the 1-norm against the 2-norm, and the estimator's shortfall. The screen admits a step when S · κ̂_ref · max ρ / min ρ ≤ `MaxCondition`, where S is a named constant covering the three. Derive S, state the derivation, and let the sweep below test it.
+- *The reference point* is fixed by the configuration alone: trace balance, λ₀ = tr ZᵀZ / tr P for each penalty, which the tensor optimizer's box already centres on. State the choice for the per-row multipliers and the hierarchical terms. A resumed run then decides every step as the uninterrupted one did.
+
+**The invariant.** *Screened* decides every step as *every factorization* does. It admits by the bound only what the estimate would admit, and it estimates otherwise, so the two differ in cost alone. *Every factorization* is the reference the tests compare against.
+
+**Build.**
+- *The setting,* declared on the sampler's configuration. Propose its name and its values' names in the report, by [CONTRIBUTING's vocabulary](../../CONTRIBUTING.md). It reaches the three `Baps` sites, the five `HierarchicalPSpline` sites and the collapsed scheme's solve (`PenalizedSpline.SolveFactored`, the 2.00 case). A deterministic solve outside a sampler keeps its estimate at every factorization.
+- *The refusal's message.* Under the screened rule it states the reference estimate, the ratio and the step's estimate, so a reader sees whether the design or the drawn coefficients failed.
+- *Records on the run's result,* in every mode: the reference estimate where the mode takes one, the widest ratio visited, how many estimates ran and the largest estimate seen. They are reductions of what the steps saw and leave the draws untouched. They ride in the chain's state, so a resumed run reports what the uninterrupted one does.
+- *The measurement's option 5,* as its own commit, since it changes LinAlg's shared factor: the estimate reuses workspace vectors, and `BandCholesky`'s ‖E‖₁ pass runs only for a factorization whose estimate is asked. If the factor's interface does not take that cleanly, report it and leave it.
+
+**For the user, reported and left unbuilt.**
+- *Whether "screened" becomes the default.* Reported with the sweep's slack, the cost table and how often the screen fell through. A default change is the user's.
+- *S,* if its derivation and the sweep disagree.
+- *Any site outside the form.*
+
+**Gates.**
+- *The default mode:* every pinned hash, fingerprint and existing test holds bit for bit.
+- *Same chain:* the three modes draw the same chain bit for bit on every admitted run, over the measurement's 19 cases at least.
+- *The invariant,* on chosen cases and a seeded random sweep, for each sampler form:
+  - designs from well identified to nearly unidentified (y's spread shrinking in the tensor design; x confined toward r distinct values in 1-D);
+  - coefficient ratios over the whole range, up to the refusal and past it;
+  - no step where the screen admits and the estimate refuses;
+  - the slack seen, reported: the largest κ̂(E(c)) / (κ̂_ref · max ρ / min ρ).
+- *Refusals:*
+  - all three modes refuse an unidentified design before the first draw;
+  - *every factorization* and *screened* refuse a coefficient drawn far out at the same step;
+  - *reference alone* admits that step, which is its stated loss.
+- *Resume:* an interrupted and resumed run matches the uninterrupted one bit for bit in each mode, the records included.
+- *Cost:* the measurement's probe (`BapsGateCostProbe`) rerun with the three modes and positive definiteness alone as arms, under the same blocks and load record, with the screen's fall-through count for each case.
+- The pinned tier at each commit; the test projects the changed files select classes in; the regression assembly once at the end.
+
+**Files.** `src/maths/regression/spline/baps/**`, `src/maths/linalg/BandCholesky.cs` for option 5, and their tests.
+
 ## Working rules
 
 - **Order.** Slice 1, then slice 2. They touch different code, so slice 2's reading starts when slice 1 lands. The coordinating session verifies each landed slice from a clean archive ([scripts/verify-csharp.ps1](../../scripts/verify-csharp.ps1)).

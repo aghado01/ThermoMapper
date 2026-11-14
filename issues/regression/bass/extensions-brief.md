@@ -759,8 +759,16 @@ From the second coordinating session, at the user's request. It reads slice 5 of
   3. *A rule for a sampler at the edge.* If the priors keep every drawn system inside the range, state that as a condition on the priors and check it at construction. If they do not, the conditional is truncated to the range, which changes the target and has to be said.
   4. *The bound placed by measured error.* Solve error against a double-double reference, along λ and along a path of designs approaching non-identification, site by site. The truth then comes from outside the estimate that gates.
 - **Against BARS.** There admission is part of the model: a refused design has no prior mass, a move to it scores −∞, and the rule is named with its constants (`DesignAdmission`: relative pivot 10⁻¹⁰, κ(E) ≤ 10¹⁰). That shape fits a design that moves with the knots. BAPS's design does not move, so it can say more: admit the design once, and show every λ in a stated range admissible.
+- **The sampler setting, and what it is to stiffness.** The user decided the per-step estimate on 2026-11-14: a setting of three values, built as [slice 6 of the defects brief](../shared-code-defects-brief.md#slice-6-the-samplers-condition-check-as-a-setting), with the default as landed. Its screened rule rests on one bound. For A(c) = Σₖ cₖSₖ with every Sₖ positive semidefinite and ρₖ = cₖ / c_ref,ₖ, κ₂(A(c)) ≤ κ₂(A(c_ref)) · max ρ / min ρ.
+  - *The bound factors the gate into the two failures above.* The first factor belongs to the design and is identification. The second belongs to the drawn coefficients and is stiffness. A refusal can then say which one failed.
+  - *It prices stiffness and leaves it in place.* In the 1-D μ basis the second factor is exact: (1 − μ_max + λμ_max) / (1 − μ_min + λμ_min) relative to M.
+    - Going up in λ, a penalty with a null space has μ_min = 0, so the factor is about λ and the bound is tight.
+    - Going down, it saturates at 1 / (1 − μ_max) unless ZᵀZ is itself singular.
+    - The form in use therefore carries a window of λ about `MaxCondition` / (S · κ̂_ref) wide. A weakly identified design has a narrow one.
+  - *Direction 2 removes the second factor.* In a form stable in λ the gate is the one design check, and no drawn λ is refused. The screen is the guard until then. It holds for several penalties, where no joint form exists.
+  - *Its records are R1 on every run:* the widest ratio visited and the largest estimate seen. They say how often chains enter the stiff regime, which decides whether direction 2 is built and for which samplers.
 - **Readings owed, each with the decision it serves.**
-  - *R1, the largest κ(E) each sampler's drawn systems reach:* the Gibbs, locally adaptive and anisotropic schemes and the hierarchical model's five sites, on the existing fixtures and on a nearly polynomial truth, over long chains.
+  - *R1, the largest κ(E) each sampler's drawn systems reach:* the Gibbs, locally adaptive and anisotropic schemes and the hierarchical model's five sites, on the existing fixtures and on a nearly polynomial truth, over long chains. Slice 6's records take it on every run once built; the nearly polynomial truth and the long chains are still to run.
     - Decades below the bound: the samplers need no per-step gate once identification is checked at construction.
     - Within a decade or two: the sampler sites need a rule now, ahead of this follow-up.
     - It shares a harness with R2.
