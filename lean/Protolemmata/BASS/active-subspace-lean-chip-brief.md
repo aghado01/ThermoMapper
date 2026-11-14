@@ -123,6 +123,21 @@ Hand-over state between turns is an "In progress" entry here.
 
 ## Reports
 
+### 2026-11-14 — the disproof verified from a clean archive, and rebuilt apart (coordinating session)
+
+At the user's request, ahead of the chip's write-up.
+
+- **Commit:** `fc793df`, through `scripts/verify-lean.ps1` with `-Module Enthymemata.PenalizedAdmission` and the BAPS checks.
+- **Result:** 26 of 26 checks; 2,634 jobs with no warnings and no errors; meta-ci PASS.
+- **Axioms:** every theorem of the module, 89 in all, prints `propext`, `Classical.choice` and `Quot.sound` only, `inverse_part_unbounded` among them.
+- **The statement, read.** For every C there is a two-term positive semidefinite family with the bracket at m = 1 and M = 2 and A(c′) positive definite, whose ‖E(c)⁻¹‖₁ exceeds C·(M/m)·‖E(c′)⁻¹‖₁. These are `cond1_unitScale_le_sharp`'s own hypotheses, and the spike family meets them.
+- **Rebuilt apart from the chip's proof and script,** in exact rationals: v = (3/5, 4/(5r), …) on r² + 1 coordinates, A(c) = 2I − vvᵀ with inverse (I + vvᵀ)/2 by Sherman–Morrison, checked entry by entry.
+  - ‖E(c)⁻¹‖₁ reads 1.47, 3.27, 5.45 and 18.50 at r = 1, 5, 10 and 40.
+  - Each lies above the proved floor 6r/25 and below the proved ceiling (M/m)(1 + √n)/2: 2.41, 6.10, 11.05 and 41.01.
+  - κ₁(E(c)) / ((M/m)·κ₁(E(c′))) grows as well: 0.97, 3.8, 10 and 107. So no constant serves the whole κ₁ bound over every family either.
+- **What it does not say.** The spike family is dense: every column of vvᵀ is full. A banded family with q fixed is the open case, and the chip's search is on it.
+- **Receipts:** `artifacts/verify-lean-fc793df/`, with the axioms file, the summary and the rebuild's script and output tracked in [receipts](../../../issues/regression/receipts/verify-lean-fc793df/).
+
 ### 2026-11-14 — the two follow-ups verified from a clean archive (coordinating session)
 
 - **Commit:** `dd57650` (the Lean is `7f535b3`), through `scripts/verify-lean.ps1` with `-Module Enthymemata.PenalizedAdmission` and the BAPS checks.
