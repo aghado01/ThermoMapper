@@ -6749,6 +6749,269 @@ theorem cvPlus_merged_weighted {Ω : Type*} [Fintype Ω] (P : Ω → ℝ) (hP : 
 
 end WeightedMerge
 
+/-! ### Slice 14's follow-ups: the tournament across folds under likelihood-ratio weights
+
+Slice 9's CV-b with weights. Units play only across folds; a unit is refused when the units it beats
+carry at least `1 − α` of the weight outside its fold plus its own. The refused units weigh at most
+`2αW` plus the heaviest fold, and over the fold and slot permutations, each weighed by the test
+unit's likelihood ratio, the test unit is refused with at most `2α + W_max/W` of the weight. -/
+
+section WeightedAcross
+
+variable {ι β : Type*} [DecidableEq β]
+
+/-- The weight of the units of `C` in other folds than `u`'s that `u` is stranger than. -/
+def strangeAcrossWeight {α' : Type*} [LinearOrder α'] (C : Finset ι) (f : ι → β)
+    (s : ι → ι → α') (q : ι → ℝ) (u : ι) : ℝ :=
+  ∑ j ∈ strangerAcross C f s u, q j
+
+/-- **The weighted counting core across folds** (our statement; Barber et al.'s Step 1 for CV+,
+weighted, as Lei's lemma weighs the jackknife+'s). Units play only across folds. `u` is refused when
+the units it beats carry at least `1 − α` of the weight outside its fold plus its own. Then the
+refused units weigh at most `2αW + W_max`, `W_max` bounding every fold's weight: each refused unit
+loses at most `α W` across folds, and among the refused units each comparison across folds goes at
+most one way. -/
+theorem sum_weight_refused_across_le {α' : Type*} [LinearOrder α'] (C : Finset ι) (f : ι → β)
+    (s : ι → ι → α') (q : ι → ℝ) (hq : ∀ j ∈ C, 0 ≤ q j) {α Wmax : ℝ} (hα0 : 0 ≤ α)
+    (hα1 : α ≤ 1) (hW0 : 0 ≤ Wmax)
+    (hWmax : ∀ u ∈ C, ∑ j ∈ C.filter (fun j => f j = f u), q j ≤ Wmax) :
+    ∑ u ∈ C.filter (fun u => (1 - α) * (∑ j ∈ C, q j - ∑ j ∈ C.filter (fun j => f j = f u), q j +
+        q u) ≤ strangeAcrossWeight C f s q u), q u ≤ 2 * α * ∑ j ∈ C, q j + Wmax := by
+  classical
+  set F := C.filter (fun u => (1 - α) * (∑ j ∈ C, q j -
+    ∑ j ∈ C.filter (fun j => f j = f u), q j + q u) ≤ strangeAcrossWeight C f s q u) with hF
+  set W := ∑ j ∈ C, q j with hW
+  set Q := ∑ u ∈ F, q u with hQ
+  have hFC : F ⊆ C := filter_subset _ _
+  have hqF : ∀ j ∈ F, 0 ≤ q j := fun j hj => hq j (hFC hj)
+  set a : ι → ℝ := fun u => ∑ j ∈ F, if f j ≠ f u ∧ s u j < s j u then q j else 0 with ha
+  set Qf : ι → ℝ := fun u => ∑ j ∈ F, if f j = f u then q j else 0 with hQf
+  set Wf : ι → ℝ := fun u => ∑ j ∈ C.filter (fun j => f j = f u), q j with hWf
+  -- each refused unit: the units it beats in F, against the weight it could beat outside F
+  have hunit : ∀ u ∈ F, Q - Qf u - α * W ≤ a u := by
+    intro u hu
+    have h1 := (mem_filter.1 hu).2
+    have hrest : ∑ j ∈ C \ F, (if f j ≠ f u ∧ s u j < s j u then q j else 0) ≤
+        ∑ j ∈ C \ F, (if f j ≠ f u then q j else 0) :=
+      sum_le_sum fun j hj => by
+        have := hq j (mem_sdiff.1 hj).1
+        split_ifs with h h' <;> first | exact le_rfl | exact absurd h.1 h' | exact this
+    have hsw : strangeAcrossWeight C f s q u =
+        ∑ j ∈ C \ F, (if f j ≠ f u ∧ s u j < s j u then q j else 0) + a u := by
+      unfold strangeAcrossWeight strangerAcross
+      rw [sum_filter, ← sum_sdiff hFC]
+    have hout : ∑ j ∈ C \ F, (if f j ≠ f u then q j else 0) = (W - Q) - (Wf u - Qf u) := by
+      have e1 : ∑ j ∈ C \ F, (if f j ≠ f u then q j else 0) =
+          ∑ j ∈ C \ F, q j - ∑ j ∈ C \ F, (if f j = f u then q j else 0) := by
+        rw [← sum_sub_distrib]
+        exact sum_congr rfl fun j _ => by
+          by_cases h : f j = f u <;> simp [h]
+      have e2 : ∑ j ∈ C \ F, q j = W - Q := by rw [sum_sdiff_eq_sub hFC]
+      have e3 : ∑ j ∈ C \ F, (if f j = f u then q j else 0) = Wf u - Qf u := by
+        have := sum_sdiff hFC (f := fun j => if f j = f u then q j else 0)
+        have hWf' : Wf u = ∑ j ∈ C, (if f j = f u then q j else 0) := by
+          rw [hWf]
+          simp only
+          rw [sum_filter]
+        rw [hWf']
+        change _ = _ - ∑ j ∈ F, (if f j = f u then q j else 0)
+        linarith
+      rw [e1, e2, e3]
+    have hWfu : 0 ≤ Wf u := sum_nonneg fun j hj => hq j (mem_filter.1 hj).1
+    have hqu : 0 ≤ q u := hqF u hu
+    have hst := h1
+    rw [hsw] at hst
+    have h3 : (1 - α) * q u ≥ 0 := mul_nonneg (by linarith) hqu
+    nlinarith [mul_nonneg hα0 hWfu]
+  -- summed with the refused units' weights
+  have hsum : ∑ u ∈ F, q u * (Q - Qf u - α * W) ≤ ∑ u ∈ F, q u * a u :=
+    sum_le_sum fun u hu => mul_le_mul_of_nonneg_left (hunit u hu) (hqF u hu)
+  set S := ∑ u ∈ F, q u * Qf u with hS
+  have hlhs : ∑ u ∈ F, q u * (Q - Qf u - α * W) = Q * Q - S - α * W * Q := by
+    simp only [mul_sub, sum_sub_distrib, ← sum_mul, ← hQ]
+    ring
+  -- each comparison across folds goes at most one way
+  have hpair : 2 * ∑ u ∈ F, q u * a u ≤ Q * Q - S := by
+    have hX : ∑ u ∈ F, q u * a u =
+        ∑ u ∈ F, ∑ j ∈ F, if f j ≠ f u ∧ s u j < s j u then q u * q j else 0 := by
+      refine sum_congr rfl fun u _ => ?_
+      rw [ha, mul_sum]
+      exact sum_congr rfl fun j _ => by split_ifs <;> ring
+    have hY : ∑ u ∈ F, q u * a u =
+        ∑ u ∈ F, ∑ j ∈ F, if f u ≠ f j ∧ s j u < s u j then q u * q j else 0 := by
+      rw [hX, sum_comm]
+      exact sum_congr rfl fun u _ => sum_congr rfl fun j _ => by split_ifs <;> ring
+    have hQQ : Q * Q - S = ∑ u ∈ F, ∑ j ∈ F, if f j = f u then 0 else q u * q j := by
+      have hall : Q * Q = ∑ u ∈ F, ∑ j ∈ F, q u * q j := by rw [hQ, sum_mul_sum]
+      have hS' : S = ∑ u ∈ F, ∑ j ∈ F, if f j = f u then q u * q j else 0 := by
+        rw [hS]
+        refine sum_congr rfl fun u _ => ?_
+        rw [hQf, mul_sum]
+        exact sum_congr rfl fun j _ => by split_ifs <;> ring
+      rw [hall, hS', ← sum_sub_distrib]
+      refine sum_congr rfl fun u _ => ?_
+      rw [← sum_sub_distrib]
+      exact sum_congr rfl fun j _ => by split_ifs <;> ring
+    rw [hQQ, two_mul]
+    nth_rw 1 [hX]
+    rw [hY, ← sum_add_distrib]
+    refine sum_le_sum fun u hu => ?_
+    rw [← sum_add_distrib]
+    refine sum_le_sum fun j hj => ?_
+    have hprod : 0 ≤ q u * q j := mul_nonneg (hqF u hu) (hqF j hj)
+    by_cases hfj : f j = f u
+    · have hfu : ¬ f u ≠ f j := fun h => h hfj.symm
+      simp only [hfj, ne_eq, not_true_eq_false, false_and, if_false, if_true, add_zero, le_refl]
+    · have hfu : f u ≠ f j := fun h => hfj h.symm
+      rw [if_neg hfj]
+      by_cases h1 : s u j < s j u
+      · have h2 : ¬ s j u < s u j := fun h2 => lt_asymm h1 h2
+        rw [if_pos ⟨hfj, h1⟩, if_neg (fun h => h2 h.2), add_zero]
+      · rw [if_neg (fun h => h1 h.2), zero_add]
+        split_ifs
+        · exact le_rfl
+        · exact hprod
+  -- the refused units' same-fold weight is at most the heaviest fold's
+  have hSle : S ≤ Wmax * Q := by
+    rw [hS, hQ, mul_sum]
+    refine sum_le_sum fun u hu => ?_
+    rw [mul_comm]
+    refine mul_le_mul_of_nonneg_right ?_ (hqF u hu)
+    calc Qf u = ∑ j ∈ F.filter (fun j => f j = f u), q j := by rw [hQf, sum_filter]
+      _ ≤ ∑ j ∈ C.filter (fun j => f j = f u), q j :=
+          sum_le_sum_of_subset_of_nonneg (filter_subset_filter _ hFC)
+            fun j hj _ => hq j (mem_filter.1 hj).1
+      _ ≤ Wmax := hWmax u (hFC hu)
+  have hQ0 : 0 ≤ Q := sum_nonneg hqF
+  have hW0' : 0 ≤ W := sum_nonneg hq
+  have hkey : Q * Q ≤ (2 * α * W + Wmax) * Q := by nlinarith
+  rcases hQ0.eq_or_lt with h0 | hpos
+  · rw [← h0]
+    nlinarith
+  · exact le_of_mul_le_mul_right (by linarith) hpos
+
+/-- `ratio_prodPerm` for any real function: averaging over the fold and slot permutations is
+averaging over the units. -/
+theorem sum_prodPerm_apply {β' γ : Type*} [Fintype β'] [Fintype γ] [DecidableEq β']
+    [DecidableEq γ] (t : β' × γ) (g : β' × γ → ℝ) :
+    (∑ p : Equiv.Perm β' × Equiv.Perm γ, g (Equiv.prodCongr p.1 p.2 t)) /
+        Fintype.card (Equiv.Perm β' × Equiv.Perm γ) =
+      (∑ u, g u) / (Fintype.card β' * Fintype.card γ) := by
+  set Y : β' → γ → ℝ := fun b c => g (b, c) with hY
+  have step1 : ∀ π : Equiv.Perm β', (∑ ρ : Equiv.Perm γ, Y (π t.1) (ρ t.2)) /
+      Fintype.card (Equiv.Perm γ) = (∑ c, Y (π t.1) c) / Fintype.card γ :=
+    fun π => sum_perm_apply t.2 (fun c => Y (π t.1) c)
+  have step2 := sum_perm_apply t.1 (fun b => (∑ c, Y b c) / Fintype.card γ)
+  have hcount : ∑ b, ∑ c, Y b c = ∑ u, g u := by rw [← Fintype.sum_prod_type']
+  rw [Fintype.card_prod, Fintype.sum_prod_type]
+  push_cast
+  calc (∑ π : Equiv.Perm β', ∑ ρ : Equiv.Perm γ, g (Equiv.prodCongr (π, ρ).1 (π, ρ).2 t)) /
+          (Fintype.card (Equiv.Perm β') * Fintype.card (Equiv.Perm γ))
+      = (∑ π : Equiv.Perm β', (∑ ρ : Equiv.Perm γ, Y (π t.1) (ρ t.2)) /
+          Fintype.card (Equiv.Perm γ)) / Fintype.card (Equiv.Perm β') := by
+        rw [← sum_div, div_div, mul_comm]
+        rfl
+    _ = (∑ π : Equiv.Perm β', (∑ c, Y (π t.1) c) / Fintype.card γ) /
+          Fintype.card (Equiv.Perm β') := by simp only [step1]
+    _ = (∑ b, (∑ c, Y b c) / Fintype.card γ) / Fintype.card β' := step2
+    _ = (∑ u, g u) / (Fintype.card β' * Fintype.card γ) := by
+        rw [← sum_div, div_div, mul_comm, hcount]
+
+/-- **The tournament across folds with likelihood-ratio weights** (our statement, slice 9's CV-b
+weighted). Units are `(fold, slot)`; the test unit's fold holds it and further units from the
+training law, which the interval never reads, so given the bag the test unit is unit `u` with
+chance `w(z_u)/W` and the folds are uniform: the fold and slot permutations, each weighed by the
+test unit's `w`. The pair score is equivariant under them (a symmetric fit to the other folds).
+Then the weighted cross-fold rule, its total the weight outside the test unit's fold plus its own
+(weighted CV+), refuses with at most `2α + W_max/W` of the weight, written here times `W`. -/
+theorem coverage_across_likelihoodRatio {β' γ Z α' : Type*} [Fintype β'] [Fintype γ]
+    [DecidableEq β'] [DecidableEq γ] [LinearOrder α'] (t : β' × γ)
+    (S : (β' × γ → Z) → β' × γ → β' × γ → α')
+    (hS : ∀ (p : Equiv.Perm β' × Equiv.Perm γ) z i j, S (z ∘ Equiv.prodCongr p.1 p.2) i j =
+      S z (Equiv.prodCongr p.1 p.2 i) (Equiv.prodCongr p.1 p.2 j))
+    (z : β' × γ → Z) (w : Z → ℝ) (hw : ∀ v, 0 ≤ w v) {α Wmax : ℝ} (hα0 : 0 ≤ α) (hα1 : α ≤ 1)
+    (hW0 : 0 ≤ Wmax)
+    (hWmax : ∀ b : β', ∑ j ∈ univ.filter (fun j : β' × γ => j.1 = b), w (z j) ≤ Wmax) :
+    (∑ p : Equiv.Perm β' × Equiv.Perm γ,
+      (if (1 - α) * (∑ u, w (z (Equiv.prodCongr p.1 p.2 u)) -
+          ∑ j ∈ univ.filter (fun j : β' × γ => j.1 = t.1), w (z (Equiv.prodCongr p.1 p.2 j)) +
+          w (z (Equiv.prodCongr p.1 p.2 t))) ≤
+        strangeAcrossWeight univ Prod.fst (S (z ∘ Equiv.prodCongr p.1 p.2))
+          (fun j => w (z (Equiv.prodCongr p.1 p.2 j))) t
+        then w (z (Equiv.prodCongr p.1 p.2 t)) else 0)) * ∑ u, w (z u) ≤
+      (2 * α * ∑ u, w (z u) + Wmax) *
+        ∑ p : Equiv.Perm β' × Equiv.Perm γ, w (z (Equiv.prodCongr p.1 p.2 t)) := by
+  classical
+  set R : β' × γ → Prop := fun u => (1 - α) * (∑ j, w (z j) -
+    ∑ j ∈ univ.filter (fun j : β' × γ => j.1 = u.1), w (z j) + w (z u)) ≤
+      strangeAcrossWeight univ Prod.fst (S z) (fun j => w (z j)) u with hR
+  set Fn : β' × γ → ℝ := fun u => if R u then w (z u) else 0 with hFn
+  -- each permutation: the test unit refused in the permuted data is its image refused in `z`
+  have hpt : ∀ p : Equiv.Perm β' × Equiv.Perm γ,
+      (if (1 - α) * (∑ u, w (z (Equiv.prodCongr p.1 p.2 u)) -
+          ∑ j ∈ univ.filter (fun j : β' × γ => j.1 = t.1), w (z (Equiv.prodCongr p.1 p.2 j)) +
+          w (z (Equiv.prodCongr p.1 p.2 t))) ≤
+        strangeAcrossWeight univ Prod.fst (S (z ∘ Equiv.prodCongr p.1 p.2))
+          (fun j => w (z (Equiv.prodCongr p.1 p.2 j))) t
+        then w (z (Equiv.prodCongr p.1 p.2 t)) else 0) = Fn (Equiv.prodCongr p.1 p.2 t) := by
+    intro p
+    set g := Equiv.prodCongr p.1 p.2 with hg
+    have hfst : ∀ i j : β' × γ, (g i).1 = (g j).1 ↔ i.1 = j.1 := fun i j => by
+      simp only [hg, Equiv.prodCongr_apply, Prod.map_fst, p.1.injective.eq_iff]
+    have htot : ∑ u, w (z (g u)) = ∑ u, w (z u) := Equiv.sum_comp g (fun u => w (z u))
+    have hfold : ∑ j ∈ univ.filter (fun j : β' × γ => j.1 = t.1), w (z (g j)) =
+        ∑ j ∈ univ.filter (fun j : β' × γ => j.1 = (g t).1), w (z j) :=
+      sum_equiv g (fun j => by simp only [mem_filter, mem_univ, true_and, hfst]) fun j _ => rfl
+    have hSg : ∀ i j, S (z ∘ g) i j = S z (g i) (g j) := fun i j => hS p z i j
+    have hstr : strangeAcrossWeight univ Prod.fst (S (z ∘ g)) (fun j => w (z (g j))) t =
+        strangeAcrossWeight univ Prod.fst (S z) (fun j => w (z j)) (g t) := by
+      unfold strangeAcrossWeight strangerAcross
+      refine sum_equiv g (fun j => ?_) fun j _ => rfl
+      simp only [mem_filter, mem_univ, true_and, hSg]
+      constructor
+      · rintro ⟨h1, h2⟩
+        exact ⟨fun h => h1 ((hfst j t).1 h), h2⟩
+      · rintro ⟨h1, h2⟩
+        exact ⟨fun h => h1 ((hfst j t).2 h), h2⟩
+    rw [htot, hfold, hstr]
+  rw [Fintype.sum_congr _ _ hpt]
+  have hcardG : (0 : ℝ) < Fintype.card (Equiv.Perm β' × Equiv.Perm γ) := by
+    exact_mod_cast Fintype.card_pos
+  have hcardU : (0 : ℝ) < Fintype.card β' * Fintype.card γ := by
+    have : (0 : ℝ) < Fintype.card (β' × γ) := by
+      exact_mod_cast Fintype.card_pos_iff.2 ⟨t⟩
+    rwa [Fintype.card_prod, Nat.cast_mul] at this
+  have hA := sum_prodPerm_apply t Fn
+  have hB := sum_prodPerm_apply t (fun u => w (z u))
+  rw [div_eq_div_iff hcardG.ne' hcardU.ne'] at hA hB
+  -- the counting core on the units of `z`
+  have hcount : ∑ u, Fn u ≤ 2 * α * ∑ u, w (z u) + Wmax := by
+    have := sum_weight_refused_across_le univ Prod.fst (S z) (fun j => w (z j))
+      (fun j _ => hw _) hα0 hα1 hW0 (fun u _ => hWmax u.1)
+    rw [sum_filter] at this
+    exact this
+  have hW : 0 ≤ ∑ u, w (z u) := sum_nonneg fun u _ => hw _
+  refine le_of_mul_le_mul_right ?_ hcardU
+  calc ((∑ p : Equiv.Perm β' × Equiv.Perm γ, Fn (Equiv.prodCongr p.1 p.2 t)) *
+          ∑ u, w (z u)) * (Fintype.card β' * Fintype.card γ)
+      = ((∑ p : Equiv.Perm β' × Equiv.Perm γ, Fn (Equiv.prodCongr p.1 p.2 t)) *
+          (Fintype.card β' * Fintype.card γ)) * ∑ u, w (z u) := by ring
+    _ = ((∑ u, Fn u) * Fintype.card (Equiv.Perm β' × Equiv.Perm γ)) * ∑ u, w (z u) := by
+        rw [hA]
+    _ ≤ ((2 * α * ∑ u, w (z u) + Wmax) * Fintype.card (Equiv.Perm β' × Equiv.Perm γ)) *
+          ∑ u, w (z u) :=
+        mul_le_mul_of_nonneg_right (mul_le_mul_of_nonneg_right hcount hcardG.le) hW
+    _ = (2 * α * ∑ u, w (z u) + Wmax) *
+          ((∑ u, w (z u)) * Fintype.card (Equiv.Perm β' × Equiv.Perm γ)) := by ring
+    _ = (2 * α * ∑ u, w (z u) + Wmax) *
+          ((∑ p : Equiv.Perm β' × Equiv.Perm γ, w (z (Equiv.prodCongr p.1 p.2 t))) *
+            (Fintype.card β' * Fintype.card γ)) := by rw [hB]
+    _ = (2 * α * ∑ u, w (z u) + Wmax) *
+          (∑ p : Equiv.Perm β' × Equiv.Perm γ, w (z (Equiv.prodCongr p.1 p.2 t))) *
+            (Fintype.card β' * Fintype.card γ) := by ring
+
+end WeightedAcross
+
 /-! ### Slice 15: posterior conformal prediction (Zhang and Candès, arXiv 2409.19712) -/
 
 section PosteriorConformal

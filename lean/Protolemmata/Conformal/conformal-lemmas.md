@@ -2,7 +2,7 @@
 
 Pins the contract of the engine's conformal layer, one layer over retained draws and pointwise densities for every model with a pointwise density ([E16](../../../issues/regression/bass/extensions-brief.md#conformal-bayes-the-consumer)). The layer owns coverage and the score owns width. These are the finite statements of that split. They are the sibling of [GuardedEstimator](../BASS/guarded-estimator-lemmas.md): there, means valid whatever the emulator does; here, prediction sets valid whatever the model does. Written from the [chip brief](conformal-chip-brief.md).
 
-**Status (2026-11-13).** Proved in `lean/Enthymemata/ConformalValidity.lean`, namespace `Conformal`, with no apologies (PROOF-CLOSED, 446 declarations counting E35's M-1 and M-2 and slices 9, 10, 12, 13, 14, 15, 16 and 18, and slice 14's follow-ups 1, 2 and 3 at the end of this page; `#print axioms` shows `propext`, `Classical.choice`, `Quot.sound` only):
+**Status (2026-11-13).** Proved in `lean/Enthymemata/ConformalValidity.lean`, namespace `Conformal`, with no apologies (PROOF-CLOSED, 450 declarations counting E35's M-1 and M-2 and slices 9, 10, 12, 13, 14, 15, 16 and 18, and slice 14's follow-ups 1, 2 and 3 at the end of this page; `#print axioms` shows `propext`, `Classical.choice`, `Quot.sound` only):
 - CB-1: `card_rankLe_le`, `coverage_orderings`, `coverage_orderings_eq`, `coverage_strict_le`, `coverage_orderings_le`, `rank_uniform`, `coverage_tieBreak`, `coverage_given`, `coverage_law`, `coverage_stratum`;
 - CB-2: `split_coverage`, `exchangeable_given_training`, `cqr_ordConnected`;
 - CB-4: `sum_jointU`, `post_addOneIn`, `integratedScore_equivariant`, `latentScore_equivariant`, `latentScore_eq`, `sum_jointU_addOneIn`, `integratedScore_le_latentScore`, `accepts_latent_of_mixed`, `mixed_counterexample`;
@@ -1050,3 +1050,33 @@ Our statements, the weighted form of slice 9's merged bound, at the user's ask o
 - The end-to-end bound 2c on 48 cases over every ordering (follow-up 2's block, part (b)).
 - The finite layer cake on 3,000 random (levels, masses).
 - The averaging lemma on 300 cases of super-uniform weighted-rank p-values. The largest share of 2c used is 0.500.
+
+### Follow-up 2, continued — the open K-fold items: the tournament across folds under likelihood-ratio weights, and the merged bound
+
+At the user's ask on 2026-11-13 ("lets work on the remaining still open"). Proved on 2026-11-13 in `ConformalValidity.lean`, section `WeightedAcross`, PROOF-CLOSED, with the standard three axioms only. The checks (section "Slice 14 follow-up 2d") ran first.
+
+**The tournament across folds, weighted** (our statements; slice 9's CV-b with weights).
+- *The setting.*
+  - Units are (fold, slot). The test unit's fold holds it and further units from the training law, which the interval never reads.
+  - Units play only across folds: u beats j when its conformity, under the fit leaving out both their folds, is below j's.
+  - u is refused when the units it beats carry at least 1 − α of the weight outside its fold, plus its own. For the test unit that is weighted CV+, its total the training weight plus the test unit's own.
+- *The counting core* (`strangeAcrossWeight`, `sum_weight_refused_across_le`).
+  - Whatever the comparisons, the refused units weigh at most 2αW + W_max, for 0 ≤ α ≤ 1, with W_max bounding every fold's weight.
+  - Each refused unit beats all but α W of the weight across folds. Among the refused units, each comparison across folds goes at most one way, and the same-fold pairs weigh at most W_max times the refused weight.
+  - At m = 1 this is Lei's lemma's 2αW plus the heaviest unit. Unweighted, slice 9's count, 2ℓ + m − 2, is sharper by integrality.
+- *The averaging* (`sum_prodPerm_apply`). `ratio_prodPerm` for any real function: averaging over the fold and slot permutations is averaging over the units.
+- *The coverage* (`coverage_across_likelihoodRatio`).
+  - Given the bag, the test unit is u with chance w(z_u)/W and the folds are uniform. These are the fold and slot permutations, each weighed by the test unit's likelihood ratio.
+  - The pair score is equivariant under them: a symmetric fit to the other folds.
+  - Then weighted CV+ refuses with at most 2α + W_max/W of the weight.
+- *Where it serves.* With K + 1 folds of similar weight, W_max/W is about 1/(K + 1), so this is the many-folds bound under likelihood ratios. The one-fold bound (`cvPlus_oneFold_likelihoodRatio`) serves two folds.
+- *What it reads.* W_max includes the test unit's imagined fold-mates. It is bounded by m times the largest weight the ratio can take; a ratio bounded by w̄ gives W_max ≤ m w̄.
+
+**The merged bound under likelihood-ratio weights: open.**
+- *Why the proof fails.* Under position weights the folds' p-values are averaged with fixed weights λ_k (`cvPlus_merged_weighted`). Likelihood ratios make λ_k and c depend on which unit is the test, and the averaging argument needs them fixed.
+- *What the search found.* `conformal-searches.py --weights` anneals over every symmetric fit in an abstract model, 24 configurations with K ≤ 4, n + 1 ≤ 7 and weights 1–20. It found nothing past slice 9's unweighted merged bound or past E[2c]: the largest shares were 0.326 and 0.292.
+- *Status.* That is evidence, not a statement the layer may report. Under likelihood ratios the layer reports the one-fold bound for few folds and the tournament bound for many.
+
+**Checks.**
+- The counting core on 5,000 random fold-structured comparisons, with ties, weights with zeros and α up to 1. The largest share of the bound used is 0.560.
+- The coverage over every fold and slot permutation, weighted by the test unit's likelihood ratio, on 59 data sets. The largest share of the bound used is 0.278.

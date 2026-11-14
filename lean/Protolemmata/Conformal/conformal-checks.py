@@ -3451,4 +3451,78 @@ print(f"Follow-up 2c: the finite layer cake on {n_cake} random (levels, masses);
       f"{float(worst_merge):.3f})")
 
 print()
+print("=== Slice 14 follow-up 2d: the tournament across folds under likelihood-ratio weights ===")
+# Slice 9's CV-b, weighted. Units (fold, slot) in beta x gamma; the test unit's fold holds it and further units
+# from the training law, which the interval never reads. Units play only across folds: u beats j when its
+# conformity under the fit leaving out both their folds is below j's. With weights q, u is refused when the
+# units it beats weigh at least (1 - alpha)(W - W_fold(u) + q_u): weighted CV+ with the test's own weight.
+# (a) Whatever the comparisons, the refused units weigh at most 2 alpha W + W_max, W_max the heaviest fold.
+# (b) Over the fold and slot permutations, each weighed by the test unit's w(z), the test is refused with at
+#     most 2 alpha + W_max / W of the weight: given the bag, the test is a refused unit with chance their weight.
+
+# (a) the counting lemma, random comparisons with ties and fold sizes free
+n_cnt, worst_cnt = 0, Q(0)
+rr = random.Random(2500)
+for trial in range(5000):
+    nf = rr.randint(1, 5)
+    fold = [f for f in range(nf) for _ in range(rr.randint(1, 3))]
+    N = len(fold)
+    q = [Q(rr.randint(0, 6)) for _ in range(N)]
+    s = [[rr.randint(0, 3) for _ in range(N)] for _ in range(N)]
+    alpha = Q(rr.randint(0, 20), 20)
+    W = sum(q)
+    Wf = {}
+    for i in range(N):
+        Wf[fold[i]] = Wf.get(fold[i], Q(0)) + q[i]
+    ref = sum(q[u] for u in range(N)
+              if sum(q[j] for j in range(N) if fold[j] != fold[u] and s[u][j] < s[j][u])
+              >= (1 - alpha) * (W - Wf[fold[u]] + q[u]))
+    bound = 2 * alpha * W + max(Wf.values())
+    assert ref <= bound
+    if bound:
+        worst_cnt = max(worst_cnt, ref / bound)
+    n_cnt += 1
+
+
+# (b) over the fold and slot permutations, weighted by the test unit's w
+def across_score(z, nb, ng, i, j):
+    """Unit i's conformity under the mean of the units outside both folds."""
+    rest = [z[(b, c)] for b in range(nb) for c in range(ng) if b not in (i[0], j[0])]
+    mu = sum(rest) / len(rest) if rest else Q(0)
+    return -abs(z[i] - mu)
+
+
+n_ord, worst_ord = 0, Q(0)
+rr = random.Random(2510)
+for nb, ng in ((2, 1), (2, 2), (3, 1), (3, 2), (4, 1), (2, 3)):
+    units = [(b, c) for b in range(nb) for c in range(ng)]
+    for trial in range(10):
+        z = {u: Q(rr.randint(0, 6)) for u in units}
+        wv = {v: Q(rr.choice([0, 1, 1, 2, 5, 9])) for v in set(z.values())}
+        W = sum(wv[z[u]] for u in units)
+        if W == 0:
+            continue
+        Wmax = max(sum(wv[z[(b, c)]] for c in range(ng)) for b in range(nb))
+        alpha = Q(rr.randint(1, 9), 20)
+        t = rr.choice(units)
+        num = den = Q(0)
+        for pb in itertools.permutations(range(nb)):
+            for pg in itertools.permutations(range(ng)):
+                zz = {(b, c): z[(pb[b], pg[c])] for (b, c) in units}      # z o prodCongr
+                q = {u: wv[zz[u]] for u in units}
+                Wft = sum(q[(t[0], c)] for c in range(ng))
+                beat = sum(q[j] for j in units if j[0] != t[0] and
+                           across_score(zz, nb, ng, t, j) < across_score(zz, nb, ng, j, t))
+                den += q[t]
+                num += q[t] * (beat >= (1 - alpha) * (W - Wft + q[t]))
+        bound = 2 * alpha + Wmax / W
+        assert num <= bound * den
+        if den:
+            worst_ord = max(worst_ord, (num / den) / bound)
+        n_ord += 1
+print(f"Follow-up 2d: refused weight at most 2 alpha W + W_max on {n_cnt} random fold-structured comparisons "
+      f"(largest share {float(worst_cnt):.3f}); over every fold and slot permutation, weighted by the test "
+      f"unit's w, at most 2 alpha + W_max / W on {n_ord} data sets (largest share {float(worst_ord):.3f})")
+
+print()
 print("All assertions hold.")

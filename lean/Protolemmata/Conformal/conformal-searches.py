@@ -18,8 +18,15 @@ Results of 2026-11-09 (recorded in conformal-lemmas.md, slice 9):
 - model A's worst case is the symmetric (2k - 1)/m for every m <= 6 solved, now a theorem
   (jackknifePlus_orderReading); model B reaches 1/2 at k = 1 for m = 3..6, the parity construction
   that conformal-checks.py verifies.
+3. Slice 14's follow-ups (2026-11-13): weighted K-fold CV+ under likelihood-ratio weights, by merging the
+   folds. Each fold's symmetric fit ranks the fold with the test as any function of the other folds; the
+   test is u with chance w_u / W given the bag. Annealing over the rankings maximizes the exact miss rate.
+   Result of 2026-11-13: nothing past slice 9's unweighted merged bound or past E[2c] in 24 configurations
+   (K <= 4, n + 1 <= 7, weights 1..20). The largest shares found were 0.326 and 0.292. The averaging proof
+   needs fixed fold weights, which likelihood ratios break, so the bound stays open (conformal-lemmas.md).
 Run: python -I -X utf8 conformal-searches.py [--milp]
 Quick exact fixed-bag checks only: python -I -X utf8 conformal-searches.py --exact-bags
+Likelihood-ratio merged search only: python -I -X utf8 conformal-searches.py --weights
 """
 import itertools
 import math
@@ -139,7 +146,85 @@ def exact_bags():
     print("three folds of two, level 1: exact worst 1/7 (30 planes, 105 configurations)")
 
 
+def labelled_partitions(rest, K, m):
+    """Labelled partitions of rest into K folds of m."""
+    if K == 0:
+        yield []
+        return
+    for comb in itertools.combinations(rest, m):
+        left = [x for x in rest if x not in comb]
+        for tail in labelled_partitions(left, K - 1, m):
+            yield [list(comb)] + tail
+
+
+def lr_merged_anneal(K, m, w, alpha, steps, seed):
+    """Weighted K-fold CV+ under likelihood-ratio weights, the abstract model: fold k's symmetric fit ranks
+    F_k with the test as any function of O_k, the units outside them; given the bag the test is u with chance
+    w_u / W and the folds are uniform. Returns the largest exact miss rate found and the candidate bounds."""
+    rr = random.Random(seed)
+    N = K * m + 1
+    W = sum(w)
+    arr = [(u, parts) for u in range(N)
+           for parts in labelled_partitions([x for x in range(N) if x != u], K, m)]
+    Os = sorted({frozenset(x for x in range(N) if x != u and x not in F) for u, parts in arr for F in parts},
+                key=sorted)
+    rank = {}
+    for O in Os:
+        comp = [x for x in range(N) if x not in O]
+        rr.shuffle(comp)
+        rank[O] = {x: i for i, x in enumerate(comp)}
+
+    def miss():
+        per = {}
+        for u, parts in arr:
+            beaten = sum(w[i] for F in parts
+                         for i in F if rank[frozenset(x for x in range(N) if x != u and x not in F)][i]
+                         < rank[frozenset(x for x in range(N) if x != u and x not in F)][u])
+            a, b = per.get(u, (0, 0))
+            per[u] = (a + (beaten >= (1 - alpha) * W), b + 1)
+        return sum(Q(w[u], W) * Q(a, b) for u, (a, b) in per.items())
+
+    cur = best = miss()
+    for s in range(steps):
+        T = 0.05 * (1 - s / steps) + 1e-4
+        O = rr.choice(Os)
+        old = dict(rank[O])
+        a, b = rr.sample(list(old), 2)
+        rank[O][a], rank[O][b] = old[b], old[a]
+        new = miss()
+        if new >= cur or rr.random() < math.exp(float(new - cur) / T):
+            cur = new
+            best = max(best, cur)
+        else:
+            rank[O] = old
+    n = N - 1
+    b0 = Q(2) * (alpha * (n + 1) + K - 1) / (n + K)
+    e2c = sum(Q(w[u], W) * 2 * (alpha * W + (K - 1) * w[u]) / (W + (K - 1) * w[u]) for u in range(N))
+    return best, b0, e2c
+
+
+def weighted_search():
+    """Slice 14's follow-ups: is there a merged K-fold bound under likelihood-ratio weights? The averaging
+    argument needs fixed fold weights, which likelihood ratios make data-dependent; this searches for a case
+    past slice 9's unweighted merged bound B0 or past E[2c], c from the test's weight."""
+    rr = random.Random(11)
+    worst_b0 = worst_e2c = 0.0
+    for trial in range(24):
+        K, m = rr.choice([(2, 1), (2, 2), (3, 1), (2, 3), (4, 1), (3, 2)])
+        w = [rr.choice([1, 1, 2, 3, 5, 8, 20]) for _ in range(K * m + 1)]
+        alpha = Q(rr.randint(1, 8), 20)
+        best, b0, e2c = lr_merged_anneal(K, m, w, alpha, 1500 if K * m + 1 <= 5 else 600, rr.randint(0, 10 ** 6))
+        worst_b0 = max(worst_b0, float(best / b0))
+        worst_e2c = max(worst_e2c, float(best / e2c))
+        print(f"K = {K}, m = {m}, alpha = {alpha}, w = {w}: worst found {float(best):.4f}; B0 {float(b0):.4f}; "
+              f"E[2c] {float(e2c):.4f}{'  EXCEEDS' if best > min(b0, e2c) else ''}", flush=True)
+    print(f"largest share found: of B0 {worst_b0:.3f}, of E[2c] {worst_e2c:.3f}")
+
+
 def main():
+    if "--weights" in sys.argv:
+        weighted_search()
+        return
     exact_bags()
     if "--exact-bags" in sys.argv:
         return

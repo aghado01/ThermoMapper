@@ -230,6 +230,20 @@ The user asked for this on 2026-11-08 ("Yes, start it"), relayed by the BASS ext
 
 Newest first.
 
+### 2026-11-13 — slice 14's follow-ups: the open K-fold items, the tournament across folds proved and the merged bound open
+
+The statements are in the ledger, under "Slice 14's follow-ups". The new declarations are PROOF-CLOSED, with the standard three axioms only. The checks ran first.
+
+- *The tournament across folds under likelihood-ratio weights* (`coverage_across_likelihoodRatio`, ours).
+  - Weighted CV+ misses with at most 2α + W_max/W of the weight, through the weighted counting core `sum_weight_refused_across_le`: refused weight ≤ 2αW + W_max.
+  - This is the many-folds bound under likelihood ratios; the one-fold bound serves two folds.
+- *The merged bound under likelihood-ratio weights stays open.*
+  - The averaging argument needs fixed fold weights, which likelihood ratios break.
+  - An adversarial search (`conformal-searches.py --weights`) found nothing past slice 9's merged bound or E[2c], at most 0.33 of either. It is evidence, not a reportable bound.
+- *For the C#:* under likelihood ratios, K-fold CV+ reports the one-fold bound for few folds and 2α + W_max/W for many.
+- *For the `#print axioms` file:* `sum_weight_refused_across_le`, `sum_prodPerm_apply`, `coverage_across_likelihoodRatio`.
+- *Gates:* the module, the axioms probe, the barrel, meta-ci and the full checks run (1,516 s) pass.
+
 ### 2026-11-13 — slice 14's follow-up 2, continued: K-fold CV+ under position weights by merging the folds, proved
 
 The statements are in the ledger, under "Slice 14's follow-ups". The new declarations are PROOF-CLOSED, with the standard three axioms only. The checks ran first.
