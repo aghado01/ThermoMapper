@@ -15,14 +15,17 @@ Invariants enforced:
      in its active stage; no file can silently evade the build.
   3. Active Lean source uses scoped Mathlib modules; the `import Mathlib`
      umbrella is forbidden.
-  4. The Lemmas and Theorems stages never apologize: no `sorry` token in
-     their Lean files and no `import Enthymemata.*` (which could launder a
-     sorried dependency). Lemmas also cannot import upward from Theorems.
+  4. The Lemmas and Theorems stages never apologize: no `sorry` token and no
+     `axiom` declaration in their Lean files, and no `import Enthymemata.*`
+     (which could launder a sorried dependency). Lemmas also cannot import
+     upward from Theorems. An axiom is the apology the `sorry` grep misses:
+     it compiles, and only `#print axioms` shows it.
   5. Enthymema ledger, per file:
        unstated         — no declarations yet (a prelemma in costume)
-       apologizing(n)   — n sorries outstanding
-       PROOF-CLOSED     — declarations present, zero sorries: review the
-                          statement and dependencies for promotion to Lemmas/.
+       apologizing(...) — sorries and axioms outstanding: apologizing(2),
+                          apologizing(axioms: 3), apologizing(1, axioms: 3)
+       PROOF-CLOSED     — declarations present, no sorry and no axiom: review
+                          the statement and dependencies for promotion to Lemmas/.
 
 Exit 1 on any invariant violation or red build. With -Validate, ledger
 notices (unstated / proof-closed) also fail — taxonomy drift is an error
@@ -137,12 +140,18 @@ foreach ($tier in @('Lemmas', 'Theorems', 'Enthymemata')) {
 }
 
 # --- Invariant 4: verified stages don't apologize ---------------------------
+# An `axiom` declaration, with its attributes and modifiers on the same line. Matched
+# case-sensitively, as Lean reads the keyword, so docstring prose such as "AXIOM :" passes.
+$axiomPattern = '^\s*(@\[[^\]]*\]\s*)?((private|protected|noncomputable)\s+)*axiom\b'
 foreach ($tier in @('Lemmas', 'Theorems')) {
     $verifiedFiles = @(Get-ChildItem -LiteralPath (Join-Path $leanRoot $tier) -Filter *.lean -Recurse) +
                      @(Get-Item -LiteralPath (Join-Path $leanRoot "$tier.lean"))
     foreach ($f in $verifiedFiles) {
         foreach ($m in @(Select-String -LiteralPath $f.FullName -Pattern '\bsorry\b')) {
             $violations += "$tier tier apologizes: $($f.Name):$($m.LineNumber)"
+        }
+        foreach ($m in @(Select-String -LiteralPath $f.FullName -Pattern $axiomPattern -CaseSensitive)) {
+            $violations += "$tier tier postulates an axiom: $($f.Name):$($m.LineNumber)"
         }
         foreach ($m in @(Select-String -LiteralPath $f.FullName -Pattern '^\s*import\s+Enthymemata')) {
             $violations += "$tier tier imports Enthymemata: $($f.Name):$($m.LineNumber)"
@@ -159,16 +168,18 @@ foreach ($tier in @('Lemmas', 'Theorems')) {
 $declPattern = '^\s*(noncomputable\s+)?(private\s+)?(theorem|lemma|def|abbrev|instance|structure|inductive|axiom|opaque)\b'
 $ledger = foreach ($f in Get-ChildItem -LiteralPath (Join-Path $leanRoot 'Enthymemata') -Filter *.lean -Recurse) {
     $sorries = @(Select-String -LiteralPath $f.FullName -Pattern '\bsorry\b').Count
+    $axioms  = @(Select-String -LiteralPath $f.FullName -Pattern $axiomPattern -CaseSensitive).Count
     $decls   = @(Select-String -LiteralPath $f.FullName -Pattern $declPattern).Count
     $imports = @(Select-String -LiteralPath $f.FullName -Pattern '^\s*import\s+\S+').Count
     $siblingModuleDirectory = Join-Path $f.DirectoryName $f.BaseName
     $isBarrel = $decls -eq 0 -and $imports -gt 0 -and
                 (Test-Path -LiteralPath $siblingModuleDirectory -PathType Container)
     if ($isBarrel) { continue }
+    $owed    = @(if ($sorries -gt 0) { "$sorries" }) + @(if ($axioms -gt 0) { "axioms: $axioms" })
     $state   = if ($decls -eq 0) { 'unstated' }
-               elseif ($sorries -eq 0) { 'PROOF-CLOSED' }
-               else { "apologizing($sorries)" }
-    [pscustomobject]@{ File = $f.Name; Decls = $decls; Sorries = $sorries; State = $state }
+               elseif ($owed.Count -eq 0) { 'PROOF-CLOSED' }
+               else { "apologizing($($owed -join ', '))" }
+    [pscustomobject]@{ File = $f.Name; Decls = $decls; Sorries = $sorries; Axioms = $axioms; State = $state }
 }
 
 $ledger | Format-Table -AutoSize | Out-String -Width 120 | Write-Host

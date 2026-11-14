@@ -43,13 +43,17 @@ calling process inherited a stale environment snapshot.
 3. Active Lean source uses scoped Mathlib modules; the `import Mathlib`
    umbrella is forbidden.
 4. The verified stages never apologize: no `sorry` token in their Lean source
-   (including comments), and no `import Enthymemata.*` — an import could
-   launder a sorried dependency into a verified result without the token
-   appearing. `Lemmas` also cannot depend upward on `Theorems`.
+   (including comments), no `axiom` declaration, and no `import Enthymemata.*`
+   — an import could launder a sorried dependency into a verified result
+   without the token appearing. An axiom is the apology the `sorry` grep
+   misses: it compiles, and only `#print axioms` shows it. `Lemmas` also
+   cannot depend upward on `Theorems`.
 5. Enthymema ledger: each file is `unstated` (no declarations yet),
-   `apologizing(n)`, or `PROOF-CLOSED` (declarations, zero sorries — a
-   candidate for semantic review and promotion, not an automatic endorsement).
-   Import-only hierarchical barrels are omitted from the ledger.
+   `apologizing(...)` (sorries and axioms outstanding: `apologizing(2)`,
+   `apologizing(axioms: 3)`, `apologizing(1, axioms: 3)`), or `PROOF-CLOSED`
+   (declarations, no sorry and no axiom — a candidate for semantic review and
+   promotion, not an automatic endorsement). Import-only hierarchical barrels
+   are omitted from the ledger.
 
 Flags: `-Validate` makes ledger notices fail (strict mode); `-NoBuild` skips
 the compile gate (CI runs it after lean-action has already built).
