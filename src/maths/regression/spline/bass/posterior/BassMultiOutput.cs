@@ -21,12 +21,12 @@ public static class BassMultiOutput
         return model;
     }
 
-    internal static double[] Functional(int outputs, IReadOnlyList<double> weights)
+    internal static double[] Functional(int outputs, IReadOnlyList<double> weights, string parameter = "weights")
     {
-        ArgumentNullException.ThrowIfNull(weights);
-        if (weights.Count != outputs) throw new ArgumentException("One functional weight per output is required.", nameof(weights));
+        ArgumentNullException.ThrowIfNull(weights, parameter);
+        if (weights.Count != outputs) throw new ArgumentException("One functional weight per output is required.", parameter);
         var copy = weights.ToArray();
-        if (copy.Any(x => !double.IsFinite(x))) throw new ArgumentException("The output functional must be finite.", nameof(weights));
+        if (copy.Any(x => !double.IsFinite(x))) throw new ArgumentException("The output functional must be finite.", parameter);
         return copy;
     }
 

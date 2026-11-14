@@ -13,10 +13,11 @@ namespace Maths.Regression.Tests;
 
 public sealed class MultiOutputReadoutTests(ITestOutputHelper output)
 {
-    internal static (BassFit Fit, BassData Data) Fixed(string form = "modified", GPriorCentre centre = GPriorCentre.Zero, int count = 40, bool hierarchy = false)
+    internal static (BassFit Fit, BassData Data) Fixed(string form = "modified", GPriorCentre centre = GPriorCentre.Zero, int count = 40, bool hierarchy = false,
+                                                       int outputs = 2)
     {
-        var data = MultiOutputCoefficientTests.Data(2);
-        var config = MultiOutputCoefficientTests.Config(form == "g" ? "raw" : form, centre) with {
+        var data = MultiOutputCoefficientTests.Data(outputs);
+        var config = MultiOutputCoefficientTests.Config(form == "g" ? "raw" : form, centre, outputs) with {
             Sampling = new BassSampling { Chains = 1, BurnIn = 20, Samples = 20, MasterSeed = 20261216 }
         };
         if (form == "g") config = config with { Coefficients = BassCoefficientPrior.G() };
@@ -181,31 +182,6 @@ public sealed class MultiOutputReadoutTests(ITestOutputHelper output)
             Assert.Equal(expected.MainVariance.Cast<double>(), projected.MainVariance.Cast<double>());
             Assert.Equal(expected.TotalVariance.Cast<double>(), projected.TotalVariance.Cast<double>());
         }
-    }
-
-    // E8's readouts take a scalar or functional fit. On a fit of several outputs they refuse with that reason and name E34's readouts, where
-    // E8's active subspace had thrown IndexOutOfRangeException and its co-active entries had called the response scalar.
-    [Fact]
-    public void E8sReadouts_RefuseSeveralOutputs_NamingE34s()
-    {
-        var (fit, data) = Fixed(count: 2);
-        var response = (MultiOutputResponse)data.Response;
-        var scalarData = new BassData(data.Predictors, new ScalarResponse([.. Enumerable.Range(0, response.Cases).Select(i => response[i, 0])]));
-        var scalar = Bass.Fit(fit.Config with { OutputCovariance = null, Sigma2 = Sigma2Prior.InverseGamma(3, 1) }, scalarData, new BassRunOptions { MaxDegreeOfParallelism = 1 });
-        var pair = new CoActiveSpec { Output = [1.0, 0.0], OtherOutput = [0.0, 1.0] };
-        void Refused(Action read, string parameter)
-        {
-            var e = Assert.Throws<ArgumentException>(read);
-            Assert.Equal(parameter, e.ParamName);
-            Assert.Contains("several outputs", e.Message);
-            Assert.Contains("BassMultiOutput.CoActive", e.Message);
-        }
-        Refused(() => fit.ActiveSubspace(data), "data");
-        Refused(() => fit.ActiveSubspace(data, new ActiveSubspaceSpec { OutputMetric = new OutputMetric(new double[,] { { 1, 0 }, { 0, 1 } }) }), "data");
-        Refused(() => fit.CoActiveSubspace(data, pair), "data");
-        Refused(() => fit.CoActiveSubspace(data, scalar, scalarData, new CoActiveSpec { Output = [1.0, 0.0] }), "data");
-        Refused(() => scalar.CoActiveSubspace(scalarData, fit, data, new CoActiveSpec { OtherOutput = [1.0, 0.0] }), "otherData");
-        Assert.NotNull(BassMultiOutput.CoActive(fit, data, pair).Posterior);   // E34's reading of the same pair
     }
 
     [Fact]

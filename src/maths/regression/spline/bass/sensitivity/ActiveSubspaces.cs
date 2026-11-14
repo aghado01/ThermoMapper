@@ -86,7 +86,8 @@ public sealed record ActiveSubspaceSpec
     public IReadOnlyList<int>? Draws { get; init; }
 
     /// <summary>A functional fit's output metric W_y over its training output locations (slice 3): C = E[JᵀW_yJ], J the outputs × inputs
-    /// Jacobian. The identity, F-X6's Q, when null; refused for a scalar fit.</summary>
+    /// Jacobian. For a fit of several named outputs (E34), K × K in <see cref="MultiOutputResponse.Names"/>'s order, without locations. The identity, F-X6's Q,
+    /// when null; refused for a scalar fit.</summary>
     public OutputMetric? OutputMetric { get; init; }
 
     /// <summary>A declared rule for each draw's own k_s (slice 5), read beside the fixed-k readout as <see cref="RankPosterior"/>. There
@@ -94,7 +95,8 @@ public sealed record ActiveSubspaceSpec
     public RankRule? Rank { get; init; }
 
     /// <summary>The output patterns to read (slice 5): for a functional fit, G = E[J W_x Jᵀ]'s leading patterns per draw and for E[G],
-    /// in the input metric W_x = LLᵀ and the output metric's symmetric root. 0, the default, reads none; refused for a scalar fit.</summary>
+    /// in the input metric W_x = LLᵀ and the output metric's symmetric root. 0, the default, reads none; refused for a scalar fit and for
+    /// a fit of several named outputs, whose output basis E34's brief defers.</summary>
     public int OutputPatterns { get; init; }
 
     /// <summary>How E[G] is read when output patterns are asked (spectral-solver brief, E):
@@ -139,10 +141,10 @@ public sealed record MatrixPoincareCheck(IReadOnlyList<double> Ratios, int Viola
 /// The output metric W_y of a functional fit's C = E[JᵀW_yJ] (E8, slice 3; F-X6's Q): a symmetric positive semidefinite m × m matrix over
 /// the output locations, saying which output units and which correlations count. The identity sums the locations' C; quadrature weights
 /// on the diagonal integrate over the output grid. A basis fit's C is then Σ_kk′ (GᵀW_yG)_kk′ E[∇w_k∇w_k′ᵀ], with G = diag(y_s)K the
-/// reconstruction's map.
+/// reconstruction's map. A fit of several named outputs (E34) takes W_y over its K outputs in <see cref="MultiOutputResponse.Names"/>'s order.
 /// <para>The locations are the training ones unless <see cref="Locations"/> declares others (slice 6): a direct fit's output-side factors
 /// are hinges in the output variables, defined across their box, so its J reads at any location there. A basis exists only at its
-/// training locations, so a basis fit refuses them.</para>
+/// training locations, so a basis fit refuses them; named outputs have no locations, so a fit of several outputs refuses them too.</para>
 /// </summary>
 public sealed record OutputMetric(double[,] Matrix)
 {
@@ -163,9 +165,10 @@ public sealed record OutputMetric(double[,] Matrix)
 
 /// <summary>
 /// What E8's co-active readout reads (slice 3; <see cref="BassFit.CoActiveSubspace(BassData, BassFit, BassData, CoActiveSpec?)"/>):
-/// the law, the metric, the route, the draw pairs and, for a functional fit, the output each side reads. Two fits' draws pair by
-/// position, <see cref="Draws"/> with <see cref="OtherDraws"/>, each pair weighted by the product of the two fits' weights, which samples
-/// their posteriors' product; two outputs of one fit pair each draw with itself.
+/// the law, the metric, the route, the draw pairs and, for a functional fit or a fit of several named outputs, the output each side
+/// reads. Two fits' draws pair by position, <see cref="Draws"/> with <see cref="OtherDraws"/>, each pair weighted by the product of the
+/// two fits' weights, which samples their posteriors' product; two outputs of one fit pair each draw with itself, weighted by its weight
+/// once.
 /// </summary>
 public sealed record CoActiveSpec
 {
@@ -195,7 +198,8 @@ public sealed record CoActiveSpec
     public IReadOnlyList<int>? OtherDraws { get; init; }
 
     /// <summary>f's output functional a_f, one weight per training output location, f = a_fᵀy: required where f is read from a functional
-    /// fit, refused for a scalar one. For two outputs of one fit, the first output.</summary>
+    /// fit, refused for a scalar one. For a fit of several named outputs (E34), one weight per output in <see cref="MultiOutputResponse.Names"/>'s order. For
+    /// two outputs of one fit, the first output.</summary>
     public IReadOnlyList<double>? Output { get; init; }
 
     /// <summary>g's output functional a_g, as <see cref="Output"/>, over the second fit's training output locations, or for two outputs of

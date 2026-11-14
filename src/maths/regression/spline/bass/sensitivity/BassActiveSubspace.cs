@@ -21,7 +21,8 @@ namespace Maths.Regression.Spline.Bass.Sensitivity;
 /// error. <see cref="ActiveSubspaceRoute.Auto"/> takes it under a joint sample.</item>
 /// </list>
 /// A draw is read as its terms B_a and H, the coefficient of each term at each output location (one row for a scalar fit; c_a·h_a(ℓ)
-/// for a direct functional fit, h_a its output-side factors; G_ℓk·c_ka for a basis fit, G = diag(y_s)K). Then C = E[JᵀW_yJ] is
+/// for a direct functional fit, h_a its output-side factors; G_ℓk·c_ka for a basis fit, G = diag(y_s)K; for a fit of several named
+/// outputs (E34), H_ka = B_{a+1,k} from the draw's output coefficients, whose intercept row has no gradient). Then C = E[JᵀW_yJ] is
 /// Σ_ab M_ab E[∇B_a∇B_bᵀ] with M = HᵀW_yH, a co-active pair's C_fg is the same form with the two functionals' rows, and the totals behind
 /// the Poincaré check are Σ_ab M_ab·T_ab(v) over the term pairs' totals. The metric (decision 2) is a map L from metric to box
 /// coordinates, C = LᵀC_boxL: diagonal under a product law (1 for the box, 1/width for raw units, the law's standard deviation in box
@@ -76,20 +77,25 @@ internal static partial class BassActiveSubspaces
                                                                                                    int patterns)
     {
         Fingerprint(fit, data);
-        RefuseSeveralOutputs(data, "E8's active subspace reads a scalar or functional fit", nameof(data));
         BassInputs inputs = BassInputs.Prepare(data, fit.Transform);
         Frame frame = FrameOf(inputs, fit.Transform, fit.Config.Structure.Degree, fit.Config.Structure.ResolvedHingeNormalization, spec.Measures, spec.Sample,
                               spec.Metric, spec.Route, spec.Points, spec.Dimension);
-        bool functional = data.Response is FunctionalResponse;
-        if (!functional && spec.OutputMetric is not null) throw new ArgumentException("An output metric applies to a functional fit's outputs; this fit's response is scalar.", nameof(spec));
+        bool functional = data.Response is FunctionalResponse, named = data.Response is MultiOutputResponse;
+        if (!functional && !named && spec.OutputMetric is not null)
+            throw new ArgumentException("An output metric weighs a functional fit's outputs or a fit's several named outputs; this fit's response is scalar.", nameof(spec));
+        if (named) NamedOutputs(spec.OutputMetric, patterns);
         OutputInputs? at = Locations(spec.OutputMetric, fit.Transform);
-        int m = at?.Locations ?? data.Response.Locations;
+        int m = at?.Locations ?? (named ? data.Response.Outputs : data.Response.Locations);
         Patterns(patterns, functional, m);
-        MetricRoots w = Metric(spec.OutputMetric, m);
+        MetricRoots w = Metric(spec.OutputMetric, m, named ? "output, in the response's Names order" : "output location");
+        // A scalar fit, and a fit of one named output under the identity, read the scalar arithmetic: M = bbᵀ and C from b.
+        bool single = !functional && m == 1 && w.W[0, 0] == 1.0;
         double[,]? s0 = patterns > 0 ? w.PsdRoot : null;
         BassDraw[] pooled = [.. fit.Draws.SelectMany(c => c)];
         (int[] selected, double[] weights) = Draws3.Select(spec.Draws, pooled.Length, fit.DrawWeights, nameof(spec));
-        Func<int, Surface> surface = functional ? DirectFunctional(fit, data, inputs, pooled, at) : d => Scalar(fit, pooled[d]);
+        Func<int, Surface> surface = functional ? DirectFunctional(fit, data, inputs, pooled, at)
+                                   : named ? d => Named(fit, pooled[d])
+                                   : d => Scalar(fit, pooled[d]);
         BassMoments? moments = frame.Measure is null ? null : BassMoments.On(inputs, frame.Degree, frame.Measure, frame.Hinges);
 
         var cMetric = new double[selected.Length][,];
@@ -102,7 +108,7 @@ internal static partial class BassActiveSubspaces
             for (int d = 0; d < selected.Length; d++)
             {
                 Surface s = surface(selected[d]);
-                forms[d] = (s.Terms, functional ? Quadratic(s.H, w.W) : Outer(Row(s.H, 0)));
+                forms[d] = (s.Terms, single ? Outer(Row(s.H, 0)) : Quadratic(s.H, w.W));
                 hs![d] = s.H;
             }
         double[][,]? error = null;
@@ -112,8 +118,8 @@ internal static partial class BassActiveSubspaces
             for (int d = 0; d < selected.Length; d++)
             {
                 (BassTerm[] terms, double[,] mm) = forms![d];
-                double[,] cBox = functional ? Symmetric(moments!.GradientCross(terms, terms, mm))
-                                            : moments!.GradientOuterProduct(terms, Coefficients(pooled[selected[d]]));
+                double[,] cBox = single ? moments!.GradientOuterProduct(terms, Row(hs![d], 0))
+                                        : Symmetric(moments!.GradientCross(terms, terms, mm));
                 cMetric[d] = Congruence(cBox, frame.L);
                 draws[d] = DrawSubspace.FromC(cMetric[d], spec.Dimension);
                 if (factors is not null) factors[d] = OutputFactor(termFactors!, terms, hs![d], s0!);
@@ -124,12 +130,13 @@ internal static partial class BassActiveSubspaces
             error = new double[selected.Length][,];
             double[,] root = w.Root;
             PointSet points = PointsOf(frame, spec.Points, spec.Seed);
-            int batch = functional ? (int)Math.Max(1, BatchValues / ((long)points.N * m * frame.P)) : Batch;
+            int batch = functional || named ? (int)Math.Max(1, BatchValues / ((long)points.N * m * frame.P)) : Batch;
             for (int start = 0; start < selected.Length; start += batch)
             {
                 int[] chunk = selected[start..Math.Min(selected.Length, start + batch)];
-                BassGradient g = at is null ? fit.Gradient(data, points.Cases, chunk)
-                                            : BassGradients.Of(fit.ModelFor(data), fit.Terms, fit.Draws, fit.DrawWeights, points.Cases, chunk, spec.OutputMetric!.Locations);
+                BassGradient g = named ? BassMultiOutput.Gradient(fit, data, points.Cases, chunk)
+                               : at is null ? fit.Gradient(data, points.Cases, chunk)
+                               : BassGradients.Of(fit.ModelFor(data), fit.Terms, fit.Draws, fit.DrawWeights, points.Cases, chunk, spec.OutputMetric!.Locations);
                 for (int b = 0; b < chunk.Length; b++)
                 {
                     int bb = b;
@@ -143,7 +150,8 @@ internal static partial class BassActiveSubspaces
         PoincareCheck? poincare = null;
         if (forms is not null)
         {
-            double[,]? jacobi = !functional && LegendreOnBoxes(fit.Terms, pooled, frame, selected) ? Jacobi(fit, data, frame, selected) : null;
+            // The Jacobi measure reads a scalar fit's coefficients; a fit of several outputs holds none.
+            double[,]? jacobi = !functional && !named && LegendreOnBoxes(fit.Terms, pooled, frame, selected) ? Jacobi(fit, data, frame, selected) : null;
             poincare = Poincare(frame, moments!, forms, cMetric, error, jacobi);
         }
         (MatrixPoincareCheck? matrix, MatrixPoincareStatus status) = MatrixCheckIf(spec.MatrixPoincare, frame, moments, forms, hs, w);
@@ -237,6 +245,8 @@ internal static partial class BassActiveSubspaces
         ArgumentNullException.ThrowIfNull(spec);
         TrainingLocationsOnly(spec.OutputMetric);
         Fingerprint(direct, directData);
+        if (directData.Response is MultiOutputResponse)
+            throw new ArgumentException("Adequacy reads a direct-mode functional fit beside the basis fit; this fit holds several named outputs, which have no output locations.", nameof(directData));
         if (directData.Response is not FunctionalResponse)
             throw new ArgumentException("Adequacy reads a direct-mode functional fit beside the basis fit; this fit's response is scalar.", nameof(directData));
         int m = fit.Decomposition.Locations;
@@ -567,10 +577,22 @@ internal static partial class BassActiveSubspaces
     private static Side DirectSide(BassFit fit, BassData data, IReadOnlyList<double>? output, string name)
     {
         Fingerprint(fit, data);
-        RefuseSeveralOutputs(data, "A co-active pair of two fits reads each side as a scalar or functional fit", name == "Output" ? "data" : "otherData");
         BassInputs inputs = BassInputs.Prepare(data, fit.Transform);
-        double[]? a = OutputOf(output, data, name);
         BassDraw[] pooled = [.. fit.Draws.SelectMany(c => c)];
+        if (data.Response is MultiOutputResponse)
+        {
+            // A fit of several outputs, through a combination of its named outputs: H from the output coefficients, the gradient E34's.
+            double[] b = BassMultiOutput.Functional(data.Response.Outputs,
+                                                    output ?? throw new ArgumentException($"A fit of several outputs is read through a combination of its outputs: {name} is required.", name),
+                                                    name);
+            return new Side(fit.Transform, inputs, fit.Config.Structure.Degree, fit.Config.Structure.ResolvedHingeNormalization, pooled.Length, fit.DrawWeights,
+                            d => Named(fit, pooled[d]), b, data.Response.Outputs, (points, chunk) =>
+                            {
+                                BassGradient g = BassMultiOutput.Gradient(fit, data, points.Cases, chunk);
+                                return s => Directional(g, s, b);
+                            });
+        }
+        double[]? a = OutputOf(output, data, name);
         return new Side(fit.Transform, inputs, fit.Config.Structure.Degree, fit.Config.Structure.ResolvedHingeNormalization, pooled.Length, fit.DrawWeights,
                         Surfaces(fit, data, inputs, pooled), a, data.Response.Locations, (points, chunk) =>
                         {
@@ -639,12 +661,13 @@ internal static partial class BassActiveSubspaces
                                     errors, Array.AsReadOnly(selF), Array.AsReadOnly(selG));
     }
 
-    // Two outputs of one functional fit, a_fᵀy and a_gᵀy; each draw pairs with itself.
+    // Two outputs of one functional fit, a_fᵀy and a_gᵀy; each draw pairs with itself. Two combinations of a fit's several named outputs
+    // are E34's pair, BassMultiOutput.CoActive, read by its implementation.
     public static CoActiveAnalysis CoActive(BassFit fit, BassData data, CoActiveSpec spec)
     {
         ArgumentNullException.ThrowIfNull(spec);
         Fingerprint(fit, data);
-        RefuseSeveralOutputs(data, "Two outputs of one fit are read here from a functional fit", nameof(data));
+        if (data.Response is MultiOutputResponse) return BassMultiOutput.CoActive(fit, data, spec);
         if (data.Response is not FunctionalResponse)
             throw new ArgumentException("Two outputs of one fit need a functional response; this fit's is scalar: pair two fits instead.", nameof(data));
         if (spec.OtherDraws is not null) throw new ArgumentException("Two outputs of one fit pair each draw with itself; OtherDraws is for two fits.", nameof(spec));
@@ -812,7 +835,17 @@ internal static partial class BassActiveSubspaces
         return new Surface(terms, h);
     }
 
-    private static double[] Coefficients(BassDraw draw) => draw.Coefficients[1..];
+    // A fit of several named outputs (E34): H_ka = B_{a+1,k}, the draw's output coefficients by term and output, the intercept row left out.
+    private static Surface Named(BassFit fit, BassDraw draw)
+    {
+        BassTerm[] terms = [.. draw.Structure.TermIds.Select(id => fit.Terms[id])];
+        double[,] b = draw.OutputCoefficients ?? throw new ArgumentException("A draw of several outputs carries its output coefficients.", nameof(fit));
+        int k = b.GetLength(1);
+        var h = new double[k, terms.Length];
+        for (int l = 0; l < k; l++)
+            for (int a = 0; a < terms.Length; a++) h[l, a] = b[a + 1, l];
+        return new Surface(terms, h);
+    }
 
     // A direct functional fit's draws: each term's output-side factors at the training output locations, or at declared ones (slice 6),
     // its output normalizer included, times its coefficient (BassSensitivity's conditioned form, at every location).
@@ -944,13 +977,16 @@ internal static partial class BassActiveSubspaces
 
     // ── The frame ─────────────────────────────────────────────────────────────────────────────────────────────────────
 
-    // A fit of several outputs (E34) holds a K-column coefficient block per draw, which these readouts do not read: its co-active pairs and
-    // projected Sobol indices are E34's readouts.
-    private static void RefuseSeveralOutputs(BassData data, string reading, string parameter)
+    // A fit of several named outputs (E34) has outputs, not locations on a grid, so its output metric declares none; and it reads
+    // C = E[JᵀW_yJ] in input space, without the output basis from G = E[J W_x Jᵀ], which E34's brief defers.
+    private static void NamedOutputs(OutputMetric? metric, int patterns)
     {
-        if (data.Response is MultiOutputResponse)
-            throw new ArgumentException($"{reading}; this fit holds several outputs. Read two of its outputs' co-active pair with BassMultiOutput.CoActive "
-                                        + "and one output combination's Sobol indices with BassMultiOutput.Sensitivity.", parameter);
+        if (metric?.Locations is not null)
+            throw new ArgumentException("A fit of several outputs has named outputs, not output locations: its output metric is K × K in the response's Names "
+                                        + "order and declares no Locations.", nameof(metric));
+        if (patterns != 0)
+            throw new ArgumentException("A fit of several named outputs reads C = E[JᵀW_yJ] in input space; output patterns, the output basis from "
+                                        + "G = E[J W_x Jᵀ], are not read for named outputs (E34's brief defers them).", nameof(patterns));
     }
 
     private static void Fingerprint(BassFit fit, BassData data)
@@ -1103,8 +1139,9 @@ internal static partial class BassActiveSubspaces
             throw new ArgumentException("A basis exists only at its training output locations; an output metric's Locations apply to a direct fit.", nameof(metric));
     }
 
-    // W_y over m locations: the identity when none is declared; refused unless m × m, symmetric and positive semidefinite.
-    private static MetricRoots Metric(OutputMetric? declared, int m)
+    // W_y over m locations, or m named outputs: the identity when none is declared; refused unless m × m, symmetric and positive
+    // semidefinite.
+    private static MetricRoots Metric(OutputMetric? declared, int m, string rows = "output location")
     {
         if (declared is null)
         {
@@ -1113,7 +1150,7 @@ internal static partial class BassActiveSubspaces
             return new MetricRoots(identity);
         }
         double[,] w = declared.Matrix ?? throw new ArgumentException("The output metric needs a matrix.");
-        if (w.GetLength(0) != m || w.GetLength(1) != m) throw new ArgumentException($"The output metric is {m} × {m}, one row per output location.");
+        if (w.GetLength(0) != m || w.GetLength(1) != m) throw new ArgumentException($"The output metric is {m} × {m}, one row per {rows}.");
         for (int i = 0; i < m; i++)
             for (int j = 0; j < m; j++)
                 if (!double.IsFinite(w[i, j]) || w[i, j] != w[j, i]) throw new ArgumentException("The output metric is finite and symmetric.");

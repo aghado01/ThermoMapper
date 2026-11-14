@@ -30,8 +30,15 @@ internal static partial class BassActiveSubspaces
         else
         {
             var points = PointsOf(frame, spec.Points, spec.Seed); errors = new CoActiveError[selected.Length];
-            var gradient = BassMultiOutput.Gradient(fit, data, points.Cases, selected);
-            for (int s = 0; s < selected.Length; s++) (pairs[s], errors[s]) = SampledPair(frame, points, Directional(gradient, s, a), Directional(gradient, s, b));
+            // The gradient in draw batches of about BatchValues partials, as E8's functional readouts batch theirs; each draw's pair is the same bits.
+            int batch = (int)Math.Max(1, BatchValues / ((long)points.N * data.Response.Outputs * frame.P));
+            for (int start = 0; start < selected.Length; start += batch)
+            {
+                int end = Math.Min(selected.Length, start + batch);
+                var gradient = BassMultiOutput.Gradient(fit, data, points.Cases, selected[start..end]);
+                for (int s = 0; s < end - start; s++)
+                    (pairs[start + s], errors[start + s]) = SampledPair(frame, points, Directional(gradient, s, a), Directional(gradient, s, b));
+            }
         }
         return new CoActiveAnalysis(frame.Names, frame.Excluded, frame.Route, spec.Metric, frame.Map, frame.Measure, PointCount(frame, spec.Points),
             CoActivePosterior.Of(pairs, weights), errors, selected, null);
