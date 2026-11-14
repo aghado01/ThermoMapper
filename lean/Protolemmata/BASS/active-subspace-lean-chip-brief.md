@@ -85,6 +85,14 @@ Hand-over state between turns is an "In progress" entry here.
 
 ## Reports
 
+### 2026-11-13 — AS-2(e) verified from a clean archive (coordinating session)
+
+- **Commit:** `6d6b446`, through `scripts/verify-lean.ps1` with `-Module Enthymemata.ActiveSubspace` and this folder's checks.
+- **Result:** 44 of 44 checks; 2,968 jobs with no warnings and no errors; meta-ci PASS, the seven modules proof-closed.
+- **Axioms:** every theorem of the seven modules, 125 in all, prints `propext`, `Classical.choice` and `Quot.sound` only. `poincare_weighted` and `poincare_truncNormal` are among them.
+- **Statements:** both were read. Their hypotheses on h are asked on the interval, with kinks on a countable set, and the constant is κ⁻¹, σ² for the truncated normal.
+- **Receipts:** `artifacts/verify-lean-6d6b446/`, with the axioms file and the summary tracked in [receipts](../../../issues/regression/receipts/verify-lean-6d6b446/).
+
 ### 2026-11-13 — AS-2(e), Bakry–Émery on an interval
 
 **Landed:** `1aaa85a`, `ActiveSubspace/WeightedPoincare`, with `poincare_weighted` and `poincare_truncNormal`. It joins the barrel.
