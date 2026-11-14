@@ -8,12 +8,12 @@ Opened 2026-11-14 at the user's word ("that brief was getting way too long, adde
 
 - Slices 0 to 15 are built and verified; slice 14's follow-ups 1 to 3 and its ratio estimator too, on their Lean (decision 12).
 - Follow-up 2 is completed by `3f68330`, the merged K-fold CV+ bound under likelihood ratios, on the Lean at `47acb3c`.
-- Slice 16, batch predictive inference (`60ba2cb`), and slice 18, the guarantee read out (`5b55a6f`), are built and verified. Their reports are below.
+- Slice 16, batch predictive inference (`60ba2cb`), slice 17, scores beyond the model's own (`0b91db9`), and slice 18, the guarantee read out (`5b55a6f`), are built and verified. Their reports are below. Every slice in the plan is built.
 - The defects chip owns `PredictiveChecks.cs` and `Pointwise.cs`'s weight check; a change there is agreed with it first (the archived brief's coordination note).
 
 ## Open, each with the decision it would change
 
-- **Slice 17,** by the user's need.
+- **Slice 17's three follow-ups** (its report): RoBAS-Full, the horseshoe score; CBMA's evidence from the engines' own fits; a grid-free interval for the residual scores.
 - **Slice 18's three follow-ups** (its report): a smoothed cell law for the log score, which is +∞ in a cell the step-function predictive gives no mass; the Lean's calibration at n ≥ 2; a set's own miscoverage bound.
 - **Slice 15's precision rule** reads the training split's ESS: with 1,000 training and 399 calibration points it chose m of 294 to 500, and 7% of the sets were the whole space. It decides whether the fit takes the calibration split's size and scales the target itself.
 - **Slice 15's alternation speed** along the factorization's flat directions. It decides the cost at large n.
@@ -45,6 +45,7 @@ Each is a symmetric score or a rule already proved, so coverage stands on CB-1, 
   - `RiskControlledSets.Density`, giving `HighDensitySets`;
   - `ScoresBeyondTheModelTests`.
 - *Nothing existing changes.*
+- *Verified by the main session on 2026-11-14,* from a clean archive of `ca4ff81` with zero skips: the Commit selection, 48 of 48 ([receipts](receipts/verify-conformal-s17-0b91db9/)).
 
 **What it computes.**
 - *CBMA* (`ModelAveraging`).
