@@ -165,6 +165,8 @@ Newest first.
 
 **Landed** in `5cde502` and the commit that carries this report. Decision 7, the user's call of 2026-11-13: interweaving.
 
+**Verified by the main session on 2026-11-13,** each from a clean archive with zero skips ([receipts](../receipts/verify-e21-s6-4cba94d/)): the Commit selection over the slice's six files, 2,536 of 2,536 at `4cba94d`; the Geweke rows with `BASS_QUALIFICATION=1`, 13 of 13 at `1ef4846`, worst |z| 2.19 on the new rows and 3.17 on the old, as below.
+
 **The step** (`BassGroupScaleInterweavingBlock`, behind `BassSampling.InterweaveGroupScales`).
 - Beside s's centred step (`BassLatentGroupScaleBlock`), which moves s_k only through u_k, the non-centred step holds ũ_k = u_k/(σs_k). A move t = ln(s′/s) scales u_k by eᵗ and moves the offset Z̃u.
 - It accepts on the rung's tempered target at the new reading, plus ln p(s′) − ln p(s) + t. Under a noise the target holds no scale prior, which only a whitening adds, so the step adds it.

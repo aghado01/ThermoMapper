@@ -1,0 +1,182 @@
+Passed 00:00:46.0769552 Maths.Regression.Tests.RandomEffectsNoiseQualificationTests.Geweke_TheSweepLeavesItsJointInvariant(form: "t+scales", b: 0.5, sweep: "replica", seed: 20261113)
+    M          start    0.66092  after 10 sweeps    0.65858  z  -0.53
+    ln tau     start   -2.58780  after 10 sweeps   -2.58644  z   0.43
+    ln sigma2  start    0.28282  after 10 sweeps    0.28220  z  -0.25
+    mean ln v  start    0.34133  after 10 sweeps    0.34320  z   1.30
+    beta       start    0.00000  after 10 sweeps    0.00000  z   0.00
+    ln s       start   -0.00311  after 10 sweeps   -0.00998  z  -0.96
+    atan u0    start   -0.00281  after 10 sweeps   -0.00152  z   0.49
+    ln sum u^2 start    0.39431  after 10 sweeps    0.37853  z  -1.11
+    u energy   start    2.00318  after 10 sweeps    1.99444  z  -0.65
+    atan f0    start   -0.00131  after 10 sweeps    0.00088  z   0.60
+    atan f6    start   -0.00073  after 10 sweeps   -0.00215  z  -0.44
+    z0^2       start    1.00693  after 10 sweeps    1.00046  z  -0.76
+    t+scales at b = 0.5, replica, seed 20261113: worst |z| 1.30
+Passed 00:01:05.2146829 Maths.Regression.Tests.RandomEffectsNoiseQualificationTests.Geweke_TheSweepLeavesItsJointInvariant(form: "t+interweave", b: 1, sweep: "collapse", seed: 20261110)
+    M          start    0.66063  after 10 sweeps    0.65795  z  -0.67
+    ln tau     start   -2.58961  after 10 sweeps   -2.58844  z   0.37
+    ln sigma2  start   -0.22580  after 10 sweeps   -0.22483  z   0.45
+    mean ln v  start    0.21473  after 10 sweeps    0.21493  z   0.14
+    beta       start    0.00000  after 10 sweeps    0.00000  z   0.00
+    ln s       start   -0.02084  after 10 sweeps   -0.02039  z   0.08
+    atan u0    start    0.00653  after 10 sweeps    0.00179  z  -2.72
+    ln sum u^2 start   -0.15449  after 10 sweeps   -0.15828  z  -0.36
+    u energy   start    1.99222  after 10 sweeps    1.99206  z  -0.01
+    atan f0    start    0.00717  after 10 sweeps    0.00045  z  -2.75
+    atan f6    start    0.00761  after 10 sweeps    0.00162  z  -2.82
+    z0^2       start    1.00192  after 10 sweeps    1.00992  z   0.93
+    t+interweave at b = 1, collapse, seed 20261110: worst |z| 2.82
+Passed 00:00:43.7471270 Maths.Regression.Tests.RandomEffectsNoiseQualificationTests.Geweke_TheSweepLeavesItsJointInvariant(form: "nw", b: 0.5, sweep: "replica", seed: 20261110)
+    M          start    0.66058  after 10 sweeps    0.66805  z   1.79
+    ln tau     start   -2.59060  after 10 sweeps   -2.58417  z   2.03
+    ln sigma2  start    0.28410  after 10 sweeps    0.28181  z  -0.90
+    mean ln v  start   -0.18216  after 10 sweeps   -0.18158  z   0.35
+    beta       start    0.30082  after 10 sweeps    0.30010  z  -0.24
+    ln s       start    0.00205  after 10 sweeps    0.00482  z   0.50
+    atan u0    start   -0.00186  after 10 sweeps   -0.00520  z  -1.44
+    ln sum u^2 start    0.39756  after 10 sweeps    0.41900  z   2.00
+    u energy   start    1.99192  after 10 sweeps    2.02839  z   2.68
+    atan f0    start   -0.00647  after 10 sweeps   -0.01245  z  -1.76
+    atan f6    start   -0.00372  after 10 sweeps   -0.00737  z  -1.18
+    z0^2       start    1.00626  after 10 sweeps    0.99720  z  -1.02
+    nw at b = 0.5, replica, seed 20261110: worst |z| 2.68
+Passed 00:00:49.6017748 Maths.Regression.Tests.RandomEffectsNoiseQualificationTests.Geweke_TheSweepLeavesItsJointInvariant(form: "nw+scales", b: 1, sweep: "collapse", seed: 20261113)
+    M          start    0.66078  after 10 sweeps    0.66030  z  -0.13
+    ln tau     start   -2.58551  after 10 sweeps   -2.58443  z   0.35
+    ln sigma2  start   -0.22655  after 10 sweeps   -0.22478  z   0.81
+    mean ln v  start   -0.36236  after 10 sweeps   -0.36218  z   0.11
+    beta       start    0.30174  after 10 sweeps    0.30439  z   0.92
+    ln s       start   -0.00021  after 10 sweeps   -0.00395  z  -0.59
+    atan u0    start   -0.00237  after 10 sweeps   -0.00265  z  -0.18
+    ln sum u^2 start   -0.11244  after 10 sweeps   -0.11625  z  -0.33
+    u energy   start    1.99943  after 10 sweeps    2.01289  z   0.99
+    atan f0    start   -0.00151  after 10 sweeps   -0.00259  z  -0.47
+    atan f6    start   -0.00029  after 10 sweeps    0.00015  z   0.21
+    z0^2       start    0.99641  after 10 sweeps    1.00369  z   0.81
+    nw+scales at b = 1, collapse, seed 20261113: worst |z| 0.99
+Passed 00:00:40.6032980 Maths.Regression.Tests.RandomEffectsNoiseQualificationTests.Geweke_TheSweepLeavesItsJointInvariant(form: "t", b: 0.5, sweep: "replica", seed: 20261110)
+    M          start    0.65465  after 10 sweeps    0.65760  z   0.67
+    ln tau     start   -2.58530  after 10 sweeps   -2.58647  z  -0.36
+    ln sigma2  start    0.28111  after 10 sweeps    0.28040  z  -0.28
+    mean ln v  start    0.34480  after 10 sweeps    0.34455  z  -0.17
+    beta       start    0.00000  after 10 sweeps    0.00000  z   0.00
+    ln s       start    0.00335  after 10 sweeps   -0.00304  z  -1.13
+    atan u0    start   -0.00108  after 10 sweeps    0.00223  z   1.27
+    ln sum u^2 start    0.39009  after 10 sweeps    0.37945  z  -0.93
+    u energy   start    1.97590  after 10 sweeps    1.97765  z   0.13
+    atan f0    start   -0.00332  after 10 sweeps    0.00034  z   1.02
+    atan f6    start   -0.00420  after 10 sweeps    0.00010  z   1.34
+    z0^2       start    1.00533  after 10 sweeps    1.00071  z  -0.55
+    t at b = 0.5, replica, seed 20261110: worst |z| 1.34
+Passed 00:00:42.8258217 Maths.Regression.Tests.RandomEffectsNoiseQualificationTests.Geweke_TheSweepLeavesItsJointInvariant(form: "t+scales", b: 1, sweep: "plain", seed: 20261113)
+    M          start    0.64877  after 10 sweeps    0.65482  z   1.54
+    ln tau     start   -2.59110  after 10 sweeps   -2.58860  z   0.79
+    ln sigma2  start   -0.22500  after 10 sweeps   -0.22486  z   0.07
+    mean ln v  start    0.21319  after 10 sweeps    0.21283  z  -0.27
+    beta       start    0.00000  after 10 sweeps    0.00000  z   0.00
+    ln s       start    0.00067  after 10 sweeps    0.00210  z   0.22
+    atan u0    start   -0.00434  after 10 sweeps   -0.00638  z  -1.15
+    ln sum u^2 start   -0.09811  after 10 sweeps   -0.09298  z   0.42
+    u energy   start    2.01154  after 10 sweeps    2.02241  z   0.80
+    atan f0    start    0.00159  after 10 sweeps   -0.00146  z  -1.26
+    atan f6    start    0.00076  after 10 sweeps   -0.00388  z  -2.19
+    z0^2       start    0.98521  after 10 sweeps    0.99204  z   0.81
+    t+scales at b = 1, plain, seed 20261113: worst |z| 2.19
+Passed 00:01:05.5933703 Maths.Regression.Tests.RandomEffectsNoiseQualificationTests.Geweke_TheSweepLeavesItsJointInvariant(form: "horseshoe+rescale+scales", b: 0.75, sweep: "replica", seed: 20261113)
+    M          start    0.66238  after 10 sweeps    0.65655  z  -1.37
+    ln tau     start   -2.58227  after 10 sweeps   -2.58713  z  -1.53
+    ln sigma2  start    0.00353  after 10 sweeps   -0.00029  z  -1.83
+    mean ln v  start    1.30311  after 10 sweeps    1.30432  z   0.31
+    beta       start    0.00034  after 10 sweeps    0.00096  z   0.41
+    ln s       start    0.01742  after 10 sweeps    0.00723  z  -1.52
+    atan u0    start   -0.00170  after 10 sweeps    0.00146  z   1.28
+    ln sum u^2 start    0.15621  after 10 sweeps    0.13235  z  -1.80
+    u energy   start    2.00056  after 10 sweeps    2.00005  z  -0.04
+    atan f0    start    0.00201  after 10 sweeps    0.00494  z   0.82
+    atan f6    start   -0.00139  after 10 sweeps    0.00002  z   0.47
+    z0^2       start    1.00705  after 10 sweeps    1.00896  z   0.20
+    horseshoe+rescale+scales at b = 0.75, replica, seed 20261113: worst |z| 1.83
+Passed 00:01:06.7092892 Maths.Regression.Tests.RandomEffectsNoiseQualificationTests.Geweke_TheSweepLeavesItsJointInvariant(form: "quantile", b: 1, sweep: "collapse", seed: 20261110)
+    M          start    0.66217  after 10 sweeps    0.66687  z   0.97
+    ln tau     start   -2.58939  after 10 sweeps   -2.59201  z  -0.81
+    ln sigma2  start   -0.22460  after 10 sweeps   -0.22253  z   0.96
+    mean ln v  start   -0.57696  after 10 sweeps   -0.57987  z  -1.27
+    beta       start   -3.75000  after 10 sweeps   -3.75000  z   0.00
+    ln s       start    0.01005  after 10 sweeps    0.00841  z  -0.28
+    atan u0    start   -0.00099  after 10 sweeps   -0.00206  z  -0.36
+    ln sum u^2 start   -0.07976  after 10 sweeps   -0.08096  z  -0.09
+    u energy   start    2.00736  after 10 sweeps    2.00554  z  -0.13
+    atan f0    start   -0.00566  after 10 sweeps    0.00569  z   2.61
+    atan f6    start   -0.00408  after 10 sweeps   -0.00136  z   0.70
+    z0^2       start    1.00080  after 10 sweeps    1.00353  z   0.30
+    quantile at b = 1, collapse, seed 20261110: worst |z| 2.61
+Passed 00:01:41.0052656 Maths.Regression.Tests.RandomEffectsNoiseQualificationTests.Geweke_TheSweepLeavesItsJointInvariant(form: "nw", b: 1, sweep: "collapse", seed: 20261110)
+    M          start    0.65695  after 10 sweeps    0.66150  z   1.24
+    ln tau     start   -2.58793  after 10 sweeps   -2.58631  z   0.52
+    ln sigma2  start   -0.22639  after 10 sweeps   -0.22562  z   0.35
+    mean ln v  start   -0.36107  after 10 sweeps   -0.36042  z   0.40
+    beta       start    0.30316  after 10 sweeps    0.30137  z  -0.62
+    ln s       start    0.01079  after 10 sweeps    0.00620  z  -0.87
+    atan u0    start   -0.00268  after 10 sweeps   -0.00179  z   0.59
+    ln sum u^2 start   -0.08604  after 10 sweeps   -0.09349  z  -0.76
+    u energy   start    2.00252  after 10 sweeps    2.00428  z   0.13
+    atan f0    start   -0.00309  after 10 sweeps   -0.00203  z   0.46
+    atan f6    start   -0.00127  after 10 sweeps   -0.00086  z   0.20
+    z0^2       start    1.00561  after 10 sweeps    1.00833  z   0.30
+    nw at b = 1, collapse, seed 20261110: worst |z| 1.24
+Passed 00:01:11.4462141 Maths.Regression.Tests.RandomEffectsNoiseQualificationTests.Geweke_TheSweepLeavesItsJointInvariant(form: "horseshoe+rescale", b: 0.75, sweep: "replica", seed: 20261110)
+    M          start    0.66055  after 10 sweeps    0.66078  z   0.05
+    ln tau     start   -2.58531  after 10 sweeps   -2.58944  z  -1.30
+    ln sigma2  start   -0.00140  after 10 sweeps   -0.00082  z   0.28
+    mean ln v  start    1.29951  after 10 sweeps    1.29354  z  -1.52
+    beta       start    0.00345  after 10 sweeps    0.00175  z  -1.11
+    ln s       start    0.01205  after 10 sweeps    0.00091  z  -2.06
+    atan u0    start   -0.00149  after 10 sweeps   -0.00199  z  -0.21
+    ln sum u^2 start    0.14291  after 10 sweeps    0.10885  z  -3.17
+    u energy   start    2.01087  after 10 sweeps    1.99647  z  -1.05
+    atan f0    start   -0.00025  after 10 sweeps   -0.00182  z  -0.45
+    atan f6    start   -0.00031  after 10 sweeps    0.00271  z   1.03
+    z0^2       start    0.99432  after 10 sweeps    1.00970  z   1.61
+    horseshoe+rescale at b = 0.75, replica, seed 20261110: worst |z| 3.17
+Passed 00:01:05.0399494 Maths.Regression.Tests.RandomEffectsNoiseQualificationTests.Geweke_TheSweepLeavesItsJointInvariant(form: "t", b: 1, sweep: "plain", seed: 20261110)
+    M          start    0.66063  after 10 sweeps    0.65890  z  -0.44
+    ln tau     start   -2.58961  after 10 sweeps   -2.58650  z   1.00
+    ln sigma2  start   -0.22580  after 10 sweeps   -0.22401  z   0.84
+    mean ln v  start    0.21473  after 10 sweeps    0.21284  z  -1.40
+    beta       start    0.00000  after 10 sweeps    0.00000  z   0.00
+    ln s       start   -0.02084  after 10 sweeps   -0.01645  z   0.81
+    atan u0    start    0.00653  after 10 sweeps    0.00607  z  -0.27
+    ln sum u^2 start   -0.15449  after 10 sweeps   -0.14446  z   0.97
+    u energy   start    1.99222  after 10 sweeps    1.98321  z  -0.67
+    atan f0    start    0.00717  after 10 sweeps    0.00245  z  -1.94
+    atan f6    start    0.00761  after 10 sweeps    0.00548  z  -1.01
+    z0^2       start    1.00192  after 10 sweeps    1.00349  z   0.18
+    t at b = 1, plain, seed 20261110: worst |z| 1.94
+Passed 00:02:32.2212340 Maths.Regression.Tests.RandomEffectsNoiseQualificationTests.Geweke_TheSweepLeavesItsJointInvariant(form: "t", b: 1, sweep: "collapse", seed: 20261110)
+    M          start    0.66063  after 10 sweeps    0.65940  z  -0.31
+    ln tau     start   -2.58961  after 10 sweeps   -2.58726  z   0.75
+    ln sigma2  start   -0.22580  after 10 sweeps   -0.22388  z   0.90
+    mean ln v  start    0.21473  after 10 sweeps    0.21446  z  -0.20
+    beta       start    0.00000  after 10 sweeps    0.00000  z   0.00
+    ln s       start   -0.02084  after 10 sweeps   -0.02096  z  -0.02
+    atan u0    start    0.00653  after 10 sweeps    0.00694  z   0.23
+    ln sum u^2 start   -0.15449  after 10 sweeps   -0.15034  z   0.39
+    u energy   start    1.99222  after 10 sweeps    1.98632  z  -0.44
+    atan f0    start    0.00717  after 10 sweeps    0.00535  z  -0.75
+    atan f6    start    0.00761  after 10 sweeps    0.00566  z  -0.93
+    z0^2       start    1.00192  after 10 sweeps    1.00556  z   0.43
+    t at b = 1, collapse, seed 20261110: worst |z| 0.93
+Passed 00:01:15.3531377 Maths.Regression.Tests.RandomEffectsNoiseQualificationTests.Geweke_TheSweepLeavesItsJointInvariant(form: "horseshoe+rescale", b: 1, sweep: "collapse", seed: 20261110)
+    M          start    0.66150  after 10 sweeps    0.65755  z  -1.04
+    ln tau     start   -2.59180  after 10 sweeps   -2.59129  z   0.16
+    ln sigma2  start   -0.22317  after 10 sweeps   -0.22087  z   1.05
+    mean ln v  start    0.00480  after 10 sweeps    0.00716  z   0.55
+    beta       start   -0.00185  after 10 sweeps    0.00188  z   2.19
+    ln s       start    0.01365  after 10 sweeps    0.00698  z  -1.26
+    atan u0    start   -0.00568  after 10 sweeps   -0.00517  z   0.29
+    ln sum u^2 start   -0.07765  after 10 sweeps   -0.08212  z  -0.45
+    u energy   start    2.00448  after 10 sweeps    2.01585  z   0.84
+    atan f0    start   -0.00983  after 10 sweeps   -0.01027  z  -0.17
+    atan f6    start   -0.00831  after 10 sweeps   -0.00757  z   0.35
+    z0^2       start    0.98888  after 10 sweeps    0.99728  z   0.88
+    horseshoe+rescale at b = 1, collapse, seed 20261110: worst |z| 2.19
