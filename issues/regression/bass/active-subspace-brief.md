@@ -222,9 +222,9 @@ No slice is commissioned. Each item below is drawn from the reports, which hold 
   - The matrix Poincaré check's default. It is opt-in, and with the cache it costs 1.3 to 2 times the readout on scalar and functional fits, and 3 to 5 times on a basis fit.
   - A K × K check for basis fits, which would bring the basis fit's check near the scalar's cost and so bears on the default.
   - A public `outputLocations` on `BassFit.Gradient`, one optional parameter the internal path already takes.
-- *The PBX 9501 replication* (below).
+- *The PBX 9501 replication* (below). The user has deferred it (2026-11-13) to a broader pass over the applications in the papers behind the regression engine.
 
-**Unbuilt, and not asked for** (slices 6 and 7c):
+**Unbuilt** (slices 6 and 7c). The user intends to commission these (2026-11-13), after other loose ends and before BPPR:
 - Co-active output functionals at locations beyond the training ones.
 - Poincaré constants for Student t, empirical and mixture laws. Uniform and truncated normal laws have them.
 - Cross-fitting with groupings or case weights.
