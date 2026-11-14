@@ -85,6 +85,14 @@ Hand-over state between turns is an "In progress" entry here.
 
 ## Reports
 
+### 2026-11-13 — the product step verified from a clean archive (coordinating session)
+
+- **Commit:** `dd06a48`, through `scripts/verify-lean.ps1` with `-Module Enthymemata.ActiveSubspace` and this folder's checks.
+- **Result:** 44 of 44 checks; 3,120 jobs with no warnings and no errors; meta-ci PASS, the seven modules proof-closed.
+- **Axioms:** every theorem of the seven modules, 137 in all, prints `propext`, `Classical.choice` and `Quot.sound` only. `matrix_poincare_prod_box`, `hasPoincareOn_truncNormal` and `matrix_poincare_box_mixed` are among them.
+- **Statements:** `HasPoincareOn`, the product theorems, `truncNormal` (Mathlib's `gaussianReal` conditioned on the interval) and `matrix_poincare_box_mixed` were read; the uniform theorems keep their statements.
+- **Receipts:** `artifacts/verify-lean-dd06a48/`, with the axioms file and the summary tracked in [receipts](../../../issues/regression/receipts/verify-lean-dd06a48/).
+
 ### 2026-11-13 — the product step: any product of one-variable laws, and E8's mixed laws
 
 **Landed:** `e79624a`.
