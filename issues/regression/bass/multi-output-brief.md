@@ -118,6 +118,13 @@ Under "Reports" below, newest first, per slice: what landed by commit; the gates
 
 ## Reports
 
+### E8's readouts on a fit of several outputs (chip, 2026-11-13)
+
+The user's call, after asking to pick up "E34's co-active pairs across outputs": those pairs are built (`BassMultiOutput.CoActive`, slice 3, `7b4a19f`), and E8's open-items note listing them as deferred is an archived record, which stays as it was. The gap was E8's own entry points on a fit of several outputs: `BassFit.ActiveSubspace` threw `IndexOutOfRangeException`, and with an output metric, `CoActiveSubspace` for two outputs of the fit, and a two-fit pair with such a fit on either side each refused with "this fit's response is scalar". They now refuse with their reason and name `BassMultiOutput.CoActive` and `BassMultiOutput.Sensitivity` (`BassActiveSubspace.RefuseSeveralOutputs`, at `Read`, `DirectSide` and the one-fit `CoActive`). Sobol, effects, the polynomial-chaos reading and the gradient readout already refused with E34's pointer. The E8 session heard the shape before the edit.
+- *Gate:* `MultiOutputReadoutTests.E8sReadouts_RefuseSeveralOutputs_NamingE34s`, each entry's parameter and message, and E34's reading of the same pair beside them; Commit selection with the pinned tier 2,599 of 2,599. Landed in `d9152e6`.
+- *Not built (the user's choice of scope):* E8's readouts reading a several-output draw as terms and H = Aᵀ, which would give E[JᵀWJ] over the outputs, pairs through `BassFit.CoActiveSubspace` and pairs across fits.
+- **Doc changes owed:** `docs/Maths/Regression/ActiveSubspaces.md`, where the readouts' responses are listed: a fit of several outputs is refused and read through `BassMultiOutput.CoActive` and `Sensitivity`; `docs/Maths/Regression/MultiOutput.md`'s readout paragraph: E8's entry points refuse such a fit and name these.
+
 ### Slice 4: noise by row and random intercepts (chip, 2026-11-11)
 
 Commissioned 2026-11-11 after slice 5's verification, on E21 complete through its slice 5 (form B under a noise; the b = 1 collapse opt-in; Geweke from exact starts the gate under random effects with a noise). Commits: `7e1b5ad` (stages 1 and 2), `7851c88` (the mixing laws' K-aware step), `fd12a47` (stage 3), `aeca22a` (stage 4); the brief's entries in `00c56ae` and this one.
