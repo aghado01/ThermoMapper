@@ -58,10 +58,13 @@ namespace Maths.LinAlg
         // The diagonal slot _l[0, j] holds L(j,j) for Cholesky, or D(j) for LDLᵀ (where L is unit-diagonal).
         private readonly double[,] _l;
 
-        // From the input, for the condition estimate: √A_jj and ‖D^(−½)·A·D^(−½)‖₁ (scratch: the column sums).
+        // From the input, for the condition estimate: √A_jj and ‖D^(−½)·A·D^(−½)‖₁ (scratch: the column sums), read only by
+        // a factorization asked for it; and the estimate's scratch, built at its first call.
         private readonly double[] _sqrtDiagonal;
         private readonly double[] _columnSums;
         private double _equilibratedNorm1 = double.NaN;
+        private bool _normRead = true;
+        private ConditionWorkspace? _workspace;
 
         /// <summary>ln|A|. For Cholesky 2·Σ_j ln(L_{jj}); for LDLᵀ Σ_j ln(D_j). Valid after <see cref="Decompose"/>.</summary>
         public double LogDet { get; private set; }
@@ -120,7 +123,10 @@ namespace Maths.LinAlg
         /// Square, symmetric, positive-definite matrix of order n with lower half-bandwidth ≤ p. Only the lower
         /// triangle within the band is read.
         /// </param>
-        public void Decompose(double[,] a)
+        /// <param name="condition">Whether <see cref="EquilibratedCondition"/> will be asked of this factorization, the
+        /// default. False skips the ‖E‖₁ pass over A that the estimate needs, and the estimate then refuses; the factor is the
+        /// same either way.</param>
+        public void Decompose(double[,] a, bool condition = true)
         {
             ArgumentNullException.ThrowIfNull(a);
             for (int j = 0; j < _n; j++)                   // load _l from the dense band, then factor in place
@@ -130,7 +136,7 @@ namespace Maths.LinAlg
                 for (int d = 1; d <= dmax; d++)
                     _l[d, j] = a[j + d, j];
             }
-            FactorInPlace();
+            FactorInPlace(condition);
         }
 
         /// <summary>
@@ -138,7 +144,10 @@ namespace Maths.LinAlg
         /// for d = 0..p. This is the allocation-lean entry point — the caller accumulates the band directly,
         /// never materializing the dense ν×ν matrix. Updates <see cref="LogDet"/>; prepares <see cref="Solve(ReadOnlySpan{double})"/>.
         /// </summary>
-        public void DecomposeBanded(double[,] band)
+        /// <param name="band">A in lower-band storage.</param>
+        /// <param name="condition">As in <see cref="Decompose"/>: false skips the ‖E‖₁ pass, for a caller that will not
+        /// estimate this factorization's condition.</param>
+        public void DecomposeBanded(double[,] band, bool condition = true)
         {
             ArgumentNullException.ThrowIfNull(band);
             for (int j = 0; j < _n; j++)                   // load _l from the supplied band, then factor in place
@@ -148,12 +157,15 @@ namespace Maths.LinAlg
                 for (int d = 1; d <= dmax; d++)
                     _l[d, j] = band[d, j];
             }
-            FactorInPlace();
+            FactorInPlace(condition);
         }
 
-        private void FactorInPlace()
+        private void FactorInPlace(bool condition)
         {
-            _equilibratedNorm1 = ConditionEstimate.EquilibratedNorm1(_l, _n, _p, _sqrtDiagonal, _columnSums);   // _l holds A
+            _normRead = condition;
+            _equilibratedNorm1 = condition
+                ? ConditionEstimate.EquilibratedNorm1(_l, _n, _p, _sqrtDiagonal, _columnSums)   // _l holds A
+                : double.NaN;
             if (_mode == BandFactorization.Ldlt) FactorLdlt();
             else FactorCholesky();
         }
@@ -324,15 +336,20 @@ namespace Maths.LinAlg
         // ── Condition ────────────────────────────────────────────────────────────
 
         /// <inheritdoc/>
-        /// <remarks>Refuses after a failed strict factorization, and after any floored pivot: the floored factor's solves
-        /// describe a different matrix from the one whose diagonal and norm the estimate is scaled by.</remarks>
+        /// <remarks>Refuses after a failed strict factorization, after any floored pivot (the floored factor's solves
+        /// describe a different matrix from the one whose diagonal and norm the estimate is scaled by), and after a
+        /// factorization made with <c>condition: false</c>. Its work vectors are the factor's own, so a call allocates
+        /// nothing after the first.</remarks>
         public double EquilibratedCondition()
         {
             RequireFactor();
             if (Status.FlooredPivots > 0)
                 throw new InvalidOperationException(
                     $"{Status.FlooredPivots} pivot(s) were floored, so the solves describe another matrix; factor strictly to estimate the condition.");
-            return ConditionEstimate.Equilibrated(this, _sqrtDiagonal, _equilibratedNorm1);
+            if (!_normRead)
+                throw new InvalidOperationException("This factorization skipped the ‖E‖₁ pass (condition: false); factor with condition: true to estimate it.");
+            _workspace ??= new ConditionWorkspace(this, _sqrtDiagonal);
+            return ConditionEstimate.Equilibrated(_workspace, _equilibratedNorm1);
         }
 
         // ── Gaussian draw ───────────────────────────────────────────────────────

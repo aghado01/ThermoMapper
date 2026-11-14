@@ -10,6 +10,38 @@ namespace Maths.LinAlg
     /// eleven solves. The estimate is ‖E⁻¹v‖₁/‖v‖₁ for vectors it found, so it is a lower bound on the exact norm; in
     /// practice it is rarely below a third of it, but nothing guarantees that.
     /// </summary>
+    /// <summary>
+    /// A factor's condition-estimate scratch, kept across its factorizations: the three work vectors and E⁻¹'s apply,
+    /// v ← D^(½)·A⁻¹·D^(½)·v, over the factor's solve and its √A_jj array, which each factorization refills in place.
+    /// </summary>
+    internal sealed class ConditionWorkspace
+    {
+        public ConditionWorkspace(ISpdFactor factor, double[] sqrtDiagonal)
+        {
+            int n = factor.Dimension;
+            Dimension = n;
+            X = new double[n];
+            Sign = new double[n];
+            Z = new double[n];
+            ApplyInverse = v =>
+            {
+                for (int i = 0; i < n; i++) v[i] *= sqrtDiagonal[i];
+                factor.SolveInPlace(v);
+                for (int i = 0; i < n; i++) v[i] *= sqrtDiagonal[i];
+            };
+        }
+
+        public int Dimension { get; }
+
+        public double[] X { get; }
+
+        public double[] Sign { get; }
+
+        public double[] Z { get; }
+
+        public Action<double[]> ApplyInverse { get; }
+    }
+
     internal static class ConditionEstimate
     {
         private const int MaxIterations = 5;
@@ -28,11 +60,20 @@ namespace Maths.LinAlg
             return equilibratedNorm1 * SymmetricNorm1(n, ApplyInverse);
         }
 
+        /// <summary>κ₁ of the equilibrated matrix, as <see cref="Equilibrated(ISpdFactor, double[], double)"/>, through a
+        /// factor's own <paramref name="workspace"/>: the same bits, with nothing allocated per call.</summary>
+        public static double Equilibrated(ConditionWorkspace workspace, double equilibratedNorm1) =>
+            equilibratedNorm1 * SymmetricNorm1(workspace.Dimension, workspace.ApplyInverse, workspace.X, workspace.Sign, workspace.Z);
+
         /// <summary>A lower-bound estimate of ‖B‖₁ for a symmetric B of order <paramref name="n"/>, given
         /// <paramref name="apply"/>, which overwrites a vector v with Bv.</summary>
-        public static double SymmetricNorm1(int n, Action<double[]> apply)
+        public static double SymmetricNorm1(int n, Action<double[]> apply) =>
+            SymmetricNorm1(n, apply, new double[n], new double[n], new double[n]);
+
+        /// <summary>As <see cref="SymmetricNorm1(int, Action{double[]})"/>, in the caller's work vectors of length
+        /// <paramref name="n"/>, whose contents on entry are never read.</summary>
+        public static double SymmetricNorm1(int n, Action<double[]> apply, double[] x, double[] sign, double[] z)
         {
-            var x = new double[n];
             if (n == 1)
             {
                 x[0] = 1.0;
@@ -43,9 +84,8 @@ namespace Maths.LinAlg
             Array.Fill(x, 1.0 / n);
             apply(x);
             double estimate = Norm1(x);
-            var sign = new double[n];
             for (int i = 0; i < n; i++) sign[i] = Sign(x[i]);
-            var z = (double[])sign.Clone();
+            Array.Copy(sign, z, n);
             apply(z);                                  // Bᵀξ, which is Bξ for symmetric B
             int j = ArgMaxAbs(z);
 

@@ -520,15 +520,14 @@ public sealed class BapsConditionCheckTests(ITestOutputHelper output)
         double[] y = Response(x, 17);
         var penalty = new DifferencePenalty(2);
         SamplerAdmission[] admissions = [.. Modes.Select(m => new Baps(z, y, penalty, conditionCheck: m).Admission(BapsScheme.Gibbs))];
-        var spline = new PenalizedSpline(z, y, penalty);
         double lambda0 = admissions[1].ReferenceWeights[1];
         double far = double.NaN;
         for (int k = 8; k <= 22 && double.IsNaN(far); k++)
         {
-            PenalizedSolve? probe = null;
-            try { probe = spline.SolveFactored(Math.Pow(10.0, k) * lambda0, admissions[2], new ConditionTally()); }
-            catch (InvalidOperationException) { }
-            if (probe is not null && !BapsAdmission.Admits(probe.Factor)) far = Math.Pow(10.0, k) * lambda0;
+            var probe = GramBand(z, 3);
+            penalty.AccumulateInto(probe, 12, Math.Pow(10.0, k) * lambda0);
+            BandCholesky factor = Factor(probe, 12, 3);
+            if (factor.Status.PositiveDefinite && factor.EquilibratedCondition() > BapsAdmission.MaxCondition) far = Math.Pow(10.0, k) * lambda0;
         }
         Assert.False(double.IsNaN(far), "no λ found where the factor is positive definite and κ(E) passes 10¹⁴");
         var tallies = new ConditionTally[3];

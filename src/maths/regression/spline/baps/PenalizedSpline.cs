@@ -77,7 +77,7 @@ public sealed class PenalizedSpline
         _penalty.AccumulateInto(band, _nu, lambda);   // + λP
         var chol = new BandCholesky(_nu, _bw, BandFactorization.Ldlt);
         double spread = admission?.Spread([1.0, lambda]) ?? 1.0;
-        chol.DecomposeBanded(band);
+        chol.DecomposeBanded(band, admission?.Estimates(spread) ?? true);   // the ‖E‖₁ pass only where the estimate runs
         string? refused = admission is null
             ? BapsAdmission.Admits(chol) ? null : SamplerAdmission.Refused
             : admission.Admit(chol, spread, tally!);

@@ -1052,7 +1052,7 @@ public sealed partial class HierarchicalPSpline
             _terms[0] = 1.0 / state.Sigma2;
             _terms[1] = 1.0 / state.TauU2;
             double spread = admission.Spread(_terms);
-            _factor.DecomposeBanded(_band);
+            _factor.DecomposeBanded(_band, admission.Estimates(spread));
             if (admission.Admit(_factor, spread, state.Tallies[ReplicateSite]) is string refused)
                 throw new InvalidOperationException($"ZᵀZ/σ² + I/τ_u² is not admissible: {refused} ({_factor.Status}).");
             for (int rr = 0; rr < zty.Length; rr++)
@@ -1086,7 +1086,7 @@ public sealed partial class HierarchicalPSpline
             _terms[0] = reps / state.TauU2;
             PenaltyWeights(state, _terms);
             double spread = admission.Spread(_terms);
-            _factor.DecomposeBanded(_band);
+            _factor.DecomposeBanded(_band, admission.Estimates(spread));
             if (admission.Admit(_factor, spread, state.Tallies[PopulationSite]) is string refused)
                 throw new InvalidOperationException($"(R/τ_u²)I + P/τ_0² is not admissible: {refused} ({_factor.Status}).");
             Array.Clear(_rhs);
@@ -1279,7 +1279,7 @@ public sealed partial class HierarchicalPSpline
             _terms[0] = xi * xi / state.Sigma2;
             _terms[1] = 1.0 / state.EtaVariance;
             double spread = admission.Spread(_terms);
-            _factor.DecomposeBanded(_band);
+            _factor.DecomposeBanded(_band, admission.Estimates(spread));
             if (admission.Admit(_factor, spread, state.Tallies[ExpandedDeviationSite]) is string refused)
                 throw new InvalidOperationException($"ξ²ZᵀZ/σ² + I/σ_η² is not admissible: {refused} ({_factor.Status}).");
             for (int i = 0; i < nu; i++)
@@ -1327,7 +1327,7 @@ public sealed partial class HierarchicalPSpline
             _terms[0] = reps / state.Sigma2;
             PenaltyWeights(state, _terms);
             double spread = admission.Spread(_terms);
-            _factor.DecomposeBanded(_band);
+            _factor.DecomposeBanded(_band, admission.Estimates(spread));
             if (admission.Admit(_factor, spread, state.Tallies[ExpandedPopulationSite]) is string refused)
                 throw new InvalidOperationException($"R·ZᵀZ/σ² + P/τ_0² is not admissible: {refused} ({_factor.Status}).");
             for (int i = 0; i < nu; i++)

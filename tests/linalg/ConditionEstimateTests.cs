@@ -1,4 +1,5 @@
 using System;
+using System.Linq;
 using Maths.LinAlg;
 using Maths.Rng;
 using Xunit;
@@ -178,6 +179,55 @@ public sealed class ConditionEstimateTests
         var strict = new BandCholesky(1, 0, BandFactorization.Ldlt, strict: true);
         strict.Decompose(new double[,] { { 1e-20 } });
         Assert.Equal(1.0, strict.EquilibratedCondition(), 15);
+    }
+
+    // The band factor keeps its estimate's work vectors across factorizations (shared-code defects brief, slice 6, option 5):
+    // an estimate after others reads as on a fresh factor, bit for bit, and allocates nothing once warm.
+    [Theory]
+    [InlineData(BandFactorization.Ldlt)]
+    [InlineData(BandFactorization.Cholesky)]
+    public void BandEstimate_ReusesItsWorkspace_WithTheBitsOfAFreshFactor(BandFactorization mode)
+    {
+        var rng = new Xoshiro256PlusPlus(seed: 6006);
+        const int n = 40, p = 3;
+        var reused = new BandCholesky(n, p, mode);
+        for (int trial = 0; trial < 12; trial++)
+        {
+            double[,] a = Spd(n, p, trial % 3 == 0 ? 0.02 : 1.0, rng);
+            reused.Decompose(a);
+            double again = reused.EquilibratedCondition();
+            Assert.Equal(BitConverter.DoubleToInt64Bits(Band(a, p, mode).EquilibratedCondition()), BitConverter.DoubleToInt64Bits(again));
+            Assert.Equal(BitConverter.DoubleToInt64Bits(again), BitConverter.DoubleToInt64Bits(reused.EquilibratedCondition()));
+        }
+        for (int i = 0; i < 200; i++) reused.EquilibratedCondition();   // past the JIT's tier-up
+        long before = GC.GetAllocatedBytesForCurrentThread();
+        for (int i = 0; i < 50; i++) reused.EquilibratedCondition();
+        Assert.Equal(0, GC.GetAllocatedBytesForCurrentThread() - before);
+    }
+
+    // A factorization made without its condition skips the ‖E‖₁ pass: the factor, its solves and its log-determinant keep
+    // their bits, and only the estimate refuses until a factorization asks for it again.
+    [Fact]
+    public void AFactorizationWithoutItsCondition_IsTheSameFactor_AndRefusesTheEstimate()
+    {
+        var rng = new Xoshiro256PlusPlus(seed: 6007);
+        const int n = 30, p = 3;
+        double[,] a = Spd(n, p, 0.5, rng);
+        var band = new double[p + 1, n];
+        for (int d = 0; d <= p; d++)
+            for (int j = 0; j + d < n; j++) band[d, j] = a[j + d, j];
+        var b = new double[n];
+        for (int i = 0; i < n; i++) b[i] = rng.NextDouble() - 0.5;
+        var with = new BandCholesky(n, p, BandFactorization.Ldlt);
+        var without = new BandCholesky(n, p, BandFactorization.Ldlt);
+        with.DecomposeBanded(band);
+        without.DecomposeBanded(band, condition: false);
+        Assert.Equal(with.Status, without.Status);
+        Assert.Equal(BitConverter.DoubleToInt64Bits(with.LogDet), BitConverter.DoubleToInt64Bits(without.LogDet));
+        Assert.Equal(with.Solve(b).Select(BitConverter.DoubleToInt64Bits), without.Solve(b).Select(BitConverter.DoubleToInt64Bits));
+        Assert.Throws<InvalidOperationException>(() => without.EquilibratedCondition());
+        without.Decompose(a);
+        Assert.Equal(BitConverter.DoubleToInt64Bits(with.EquilibratedCondition()), BitConverter.DoubleToInt64Bits(without.EquilibratedCondition()));
     }
 
     [Fact]

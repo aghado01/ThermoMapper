@@ -624,7 +624,7 @@ public sealed partial class Baps
                     _terms[j + 1] = _componentLambdas[j] = state.Sigma2 * Math.Exp(-state.LogComponentTau2[j]);
                 ((IAnisotropicPenalty)owner._penalty).AccumulateComponents(_band, nu, _componentLambdas);
                 double spread = admission.Spread(_terms);
-                _factor.DecomposeBanded(_band);
+                _factor.DecomposeBanded(_band, admission.Estimates(spread));
                 if (admission.Admit(_factor, spread, state.Tally) is string refused)
                     throw new InvalidOperationException(
                         $"ZᵀZ + Σⱼ λⱼPⱼ is not admissible: {refused} at λ = [{string.Join(", ", _componentLambdas)}] ({_factor.Status}).");
@@ -634,7 +634,7 @@ public sealed partial class Baps
                 for (int i = 0; i < _weights.Length; i++) _terms[i + 1] = _weights[i] = lambda * state.Eta[i];
                 ((ILocallyAdaptivePenalty)owner._penalty).AccumulateInto(_band, nu, _weights);
                 double spread = admission.Spread(_terms);
-                _factor.DecomposeBanded(_band);
+                _factor.DecomposeBanded(_band, admission.Estimates(spread));
                 if (admission.Admit(_factor, spread, state.Tally) is string refused)
                     throw new InvalidOperationException($"ZᵀZ + Dᵀdiag(λᵢ)D is not admissible: {refused} at global λ = {lambda} ({_factor.Status}).");
             }
@@ -643,7 +643,7 @@ public sealed partial class Baps
                 _terms[1] = lambda;
                 owner._penalty.AccumulateInto(_band, nu, lambda);
                 double spread = admission.Spread(_terms);
-                _factor.DecomposeBanded(_band);
+                _factor.DecomposeBanded(_band, admission.Estimates(spread));
                 if (admission.Admit(_factor, spread, state.Tally) is string refused)
                     throw new InvalidOperationException($"ZᵀZ + λP is not admissible: {refused} at λ = {lambda} ({_factor.Status}).");
             }
