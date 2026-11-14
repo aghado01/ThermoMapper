@@ -205,11 +205,11 @@ public sealed partial class Baps
     /// inverse gamma for the isotropic Gibbs schemes, Jeffreys for the anisotropic and collapsed schemes. The collapsed
     /// scheme takes only Jeffreys, which its evidence assumes.</param>
     /// <param name="conditionCheck">Where the samplers estimate their system's condition (<see cref="ConditionCheck"/>):
-    /// at every factorization by default. A run every mode admits draws the same chain in each.</param>
+    /// screened by default. A run every mode admits draws the same chain in each.</param>
     public Baps(double[,] design, double[] y, IBandPenalty penalty,
                        double priorShape = 1e-3, double priorScale = 1e-3, double mhLogStep = 0.6, double phi = 1.0,
                        ISmoothingVariancePriorChoice? componentPrior = null, SmoothingVarianceUpdate componentUpdate = SmoothingVarianceUpdate.Slice,
-                       NoiseVariancePrior? noisePrior = null, ConditionCheck conditionCheck = ConditionCheck.EveryFactorization)
+                       NoiseVariancePrior? noisePrior = null, ConditionCheck conditionCheck = ConditionCheck.Screened)
     {
         ArgumentNullException.ThrowIfNull(design);
         ArgumentNullException.ThrowIfNull(y);
@@ -440,7 +440,7 @@ public sealed partial class Baps
             new Xoshiro256PlusPlus(readoutSeed), new DrawStore<BapsDraw>());
 
         /// <summary>The design, the responses, the penalty order, the hyperparameters and the scheme, and the condition
-        /// check where it is not the default, so a run's records resume under the mode that started them.</summary>
+        /// check where it is not every factorization, so a run's records resume under the mode that started them.</summary>
         public string Fingerprint
         {
             get

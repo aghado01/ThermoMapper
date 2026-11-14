@@ -5,7 +5,7 @@ using Maths.LinAlg;
 namespace Maths.Regression.Spline.Baps;
 
 /// <summary>
-/// How often a BAPS sampler estimates its system's condition (shared-code defects brief, slice 6). Every sampler step factors
+/// How often a BAPS sampler estimates its system's condition (shared-code defects brief, slices 6 and 7). Every sampler step factors
 /// a system A(c) = Σₖ cₖSₖ: fixed positive semidefinite terms Sₖ and positive coefficients cₖ, drawn or fixed at 1, such as
 /// ZᵀZ + λP. <see cref="BapsAdmission"/>'s rule (positive definite, κ(E) ≤ 10¹⁴) is the check, and this setting says
 /// where its estimate runs. Every mode checks positive definiteness at every step, and a run every mode admits draws the
@@ -13,16 +13,18 @@ namespace Maths.Regression.Spline.Baps;
 /// </summary>
 public enum ConditionCheck
 {
-    /// <summary>The estimate at every factorization, <see cref="BapsAdmission"/>'s rule at each step. The default.</summary>
+    /// <summary>The estimate at every factorization, <see cref="BapsAdmission"/>'s rule at each step: the reference the other two
+    /// modes are checked against.</summary>
     EveryFactorization,
 
     /// <summary>
     /// One exact reading per run at the trace-balance reference point c_ref, then a scalar bound at each step, and the
     /// estimate at any step the bound does not clear. With ρₖ = cₖ / c_ref,ₖ every Rayleigh quotient of A(c) lies within
     /// [min ρ, max ρ] times A(c_ref)'s, which carries to the gate's reading as
-    /// κ₁(E(c)) ≤ m·√ν·(max ρ / min ρ)·‖E(c_ref)⁻¹‖₁, with m the most nonzeros in a column of A. A step whose bound,
-    /// doubled for rounding, is at most 10¹⁴ is admitted unestimated, and the estimate would have admitted it. So it decides
-    /// every step as <see cref="EveryFactorization"/> does, and differs in cost alone.
+    /// κ₁(E(c)) ≤ m·((1 + √ν)/2)·(max ρ / min ρ)·‖E(c_ref)⁻¹‖₁, with m the most nonzeros in a column of A, proved in Lean as
+    /// <c>cond1_unitScale_le_sharp</c>. A step whose bound, doubled for rounding, is at most 10¹⁴ is admitted unestimated,
+    /// and the estimate would have admitted it. So it decides every step as <see cref="EveryFactorization"/> does, and differs
+    /// in cost alone. The default.
     /// </summary>
     Screened,
 
@@ -88,11 +90,13 @@ internal sealed class ConditionTally
 /// <item>xᵀA(c)x lies within [min ρ, max ρ]·xᵀA(c_ref)x, and diag A(c) within [min ρ, max ρ]·diag A(c_ref). So
 /// λ_min(E(c)) ≥ λ_min(E(c_ref)) / s: the two Jacobi scalings differ by factors the ratio already covers.</item>
 /// <item>E(c) has a unit diagonal and entries of at most 1, so ‖E(c)‖₁ ≤ m.</item>
-/// <item>‖E(c)⁻¹‖₁ ≤ √ν·‖E(c)⁻¹‖₂ = √ν / λ_min(E(c)), and ‖E(c_ref)⁻¹‖₂ ≤ ‖E(c_ref)⁻¹‖₁ for a symmetric matrix.</item>
-/// <item>The estimate errs low, so it never reads above κ₁(E(c)) ≤ m·√ν·s·‖E(c_ref)⁻¹‖₁, up to rounding, which the
+/// <item>‖E(c)⁻¹‖₁ ≤ ((1 + √ν)/2)·‖E(c)⁻¹‖₂ = ((1 + √ν)/2) / λ_min(E(c)) for a positive definite matrix, a column step that
+/// is attained, and ‖E(c_ref)⁻¹‖₂ ≤ ‖E(c_ref)⁻¹‖₁ for a symmetric one.</item>
+/// <item>The estimate errs low, so it never reads above κ₁(E(c)) ≤ m·((1 + √ν)/2)·s·‖E(c_ref)⁻¹‖₁, up to rounding, which the
 /// factor 2 covers. Its own shortfall has no bound, so the reference is read exactly, from ν solves.</item>
 /// </list>
-/// In the brief's form S·κ_ref·s, S = 2·m·√ν / ‖E(c_ref)‖₁: it depends on ν and the pattern, not one constant.
+/// The chain is proved in Lean (<c>lean/Enthymemata/PenalizedAdmission.lean</c>, <c>cond1_unitScale_le_sharp</c>) in exact
+/// arithmetic. In the brief's form S·κ_ref·s, S = m·(1 + √ν) / ‖E(c_ref)‖₁: it depends on ν and the pattern.
 /// </remarks>
 internal sealed class SamplerAdmission
 {
@@ -103,7 +107,7 @@ internal sealed class SamplerAdmission
     internal const string Refused = "not positive definite, or its equilibrated condition past 1e14";
 
     private readonly double[]? _referenceWeights;
-    private readonly double _screen;   // 2·m·√ν·‖E(c_ref)⁻¹‖₁; +∞ where the screen clears no step
+    private readonly double _screen;   // 2·m·((1 + √ν)/2)·‖E(c_ref)⁻¹‖₁; +∞ where the screen clears no step
 
     private SamplerAdmission(ConditionCheck check, string system, double[]? referenceWeights, double referenceCondition,
                              double screen)
@@ -122,7 +126,8 @@ internal sealed class SamplerAdmission
     /// <summary>κ₁(E(c_ref)), read exactly; +∞ for a reference that is not positive definite, NaN where not read.</summary>
     public double ReferenceCondition { get; }
 
-    /// <summary>S·κ_ref = 2·m·√ν·‖E(c_ref)⁻¹‖₁: a step at ratio s clears the screen when this times s is at most 10¹⁴.</summary>
+    /// <summary>S·κ_ref = 2·m·((1 + √ν)/2)·‖E(c_ref)⁻¹‖₁: a step at ratio s clears the screen when this times s is at most
+    /// 10¹⁴.</summary>
     public double ScreenScale => _screen;
 
     /// <summary>c_ref, one per term, where the system's ratios are read against coefficients.</summary>
@@ -187,7 +192,7 @@ internal sealed class SamplerAdmission
         if (check == ConditionCheck.ReferenceOnly && !(condition <= BapsAdmission.MaxCondition))
             throw new InvalidOperationException(
                 $"{system} is not admissible at the trace-balance reference point: {(factor.Status.PositiveDefinite ? $"κ₁(E) = {condition:G3} past 1e14" : "not positive definite")} ({factor.Status}). The design leaves the penalty's null space unidentified, or nearly.");
-        double screen = RoundingMargin * pattern * Math.Sqrt(n) * inverseNorm;
+        double screen = RoundingMargin * pattern * (0.5 * (1.0 + Math.Sqrt(n))) * inverseNorm;
         return new SamplerAdmission(check, system, referenceWeights, condition,
                                     double.IsFinite(screen) ? screen : double.PositiveInfinity);
     }

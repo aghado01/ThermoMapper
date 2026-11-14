@@ -595,11 +595,42 @@ public sealed class BapsConditionCheckTests(ITestOutputHelper output)
             Assert.Equal(h.ConditionRecords, hResumed.ConditionRecords);
         }
 
-        // A checkpoint resumes only under the mode that started it.
-        BapsResult screened = new Baps(z, y, new DifferencePenalty(2), conditionCheck: ConditionCheck.Screened)
-            .Run(BapsScheme.Gibbs, chains: 2, masterSeed: 5, burn: 15, samples: 20, checkpoint: true);
-        Assert.Throws<ArgumentException>(() => new Baps(z, y, new DifferencePenalty(2))
-            .Run(BapsScheme.Gibbs, chains: 2, masterSeed: 5, burn: 15, samples: 20, resumeFrom: screened.Checkpoint));
+        // A checkpoint resumes only under the mode that started it (slice 7): one taken under every factorization, the default
+        // before slice 7, is refused by the screened default and resumes when that mode is named; a screened one resumes under
+        // the default.
+        var pinned = new Baps(z, y, new DifferencePenalty(2), conditionCheck: ConditionCheck.EveryFactorization);
+        BapsResult before = pinned.Run(BapsScheme.Gibbs, chains: 2, masterSeed: 5, burn: 15, samples: 20, checkpoint: true);
+        var byDefault = new Baps(z, y, new DifferencePenalty(2));
+        Assert.Throws<ArgumentException>(() => byDefault.Run(BapsScheme.Gibbs, chains: 2, masterSeed: 5, burn: 15, samples: 20, resumeFrom: before.Checkpoint));
+        BapsResult continued = pinned.Run(BapsScheme.Gibbs, chains: 2, masterSeed: 5, burn: 15, samples: 20, resumeFrom: before.Checkpoint);
+        BapsResult screened = byDefault.Run(BapsScheme.Gibbs, chains: 2, masterSeed: 5, burn: 15, samples: 20, checkpoint: true);
+        BapsResult screenedOn = new Baps(z, y, new DifferencePenalty(2), conditionCheck: ConditionCheck.Screened)
+            .Run(BapsScheme.Gibbs, chains: 2, masterSeed: 5, burn: 15, samples: 20, resumeFrom: screened.Checkpoint);
+        Assert.Equal(Bits(Values(continued)), Bits(Values(screenedOn)));
+    }
+
+    // Slice 7: screened is the default on both samplers, and a default run draws what every factorization draws.
+    [Fact]
+    public void TheDefault_IsScreened_AndDrawsTheEveryFactorizationChain()
+    {
+        double[] x = Grid(240);
+        double[,] z = Design1D(24, x);
+        double[] y = Response(x, 29);
+        BapsResult byDefault = new Baps(z, y, new DifferencePenalty(2)).Run(BapsScheme.Gibbs, chains: 2, masterSeed: 3, burn: 20, samples: 30);
+        BapsResult every = new Baps(z, y, new DifferencePenalty(2), conditionCheck: ConditionCheck.EveryFactorization)
+            .Run(BapsScheme.Gibbs, chains: 2, masterSeed: 3, burn: 20, samples: 30);
+        Assert.Equal(Bits(Values(every)), Bits(Values(byDefault)));
+        ConditionRecord record = Assert.Single(byDefault.ConditionRecords!);
+        Assert.Equal(ConditionCheck.Screened, record.Check);
+        Assert.True(double.IsFinite(record.ReferenceCondition));
+
+        double[][] ys = Replicates(Grid(120), 4, 31);
+        double[,] hz = Design1D(24, Grid(120));
+        HierarchicalResult h = new HierarchicalPSpline(hz, ys, new DifferencePenalty(2)).Run(chains: 2, masterSeed: 3, burn: 20, samples: 30);
+        HierarchicalResult hEvery = new HierarchicalPSpline(hz, ys, new DifferencePenalty(2), conditionCheck: ConditionCheck.EveryFactorization)
+            .Run(chains: 2, masterSeed: 3, burn: 20, samples: 30);
+        Assert.Equal(Bits(Values(hEvery)), Bits(Values(h)));
+        Assert.All(h.ConditionRecords!, r => Assert.Equal(ConditionCheck.Screened, r.Check));
     }
 
     [Fact]

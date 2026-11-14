@@ -250,14 +250,14 @@ public sealed partial class HierarchicalPSpline
     /// <param name="componentUpdate">With anisotropic smoothing, how the ln τ_0j² are updated
     /// (<see cref="SmoothingVarianceUpdate"/>).</param>
     /// <param name="noisePrior">The prior on σ² (<see cref="NoiseVariancePrior"/>).</param>
-    /// <param name="conditionCheck">Where the sweep estimates its systems' condition (<see cref="ConditionCheck"/>): at
-    /// every factorization by default. A run every mode admits draws the same chain in each.</param>
+    /// <param name="conditionCheck">Where the sweep estimates its systems' condition (<see cref="ConditionCheck"/>):
+    /// screened by default. A run every mode admits draws the same chain in each.</param>
     public HierarchicalPSpline(double[,] design, double[][] responses, IBandPenalty penalty,
                                double priorShape = 1e-3, double priorScale = 1e-3, HalfTDeviationPrior? deviationPrior = null,
                                bool anisotropicSmoothing = false, ISmoothingVariancePriorChoice? componentPrior = null,
                                SmoothingVarianceUpdate componentUpdate = SmoothingVarianceUpdate.Slice,
                                NoiseVariancePrior noisePrior = NoiseVariancePrior.InverseGamma,
-                               ConditionCheck conditionCheck = ConditionCheck.EveryFactorization)
+                               ConditionCheck conditionCheck = ConditionCheck.Screened)
     {
         ArgumentNullException.ThrowIfNull(design);
         ArgumentNullException.ThrowIfNull(responses);
@@ -765,7 +765,7 @@ public sealed partial class HierarchicalPSpline
         }
 
         /// <summary>The design, the responses, the penalty order, the priors, the start, the scheme and whether replicate
-        /// draws are retained, and the condition check where it is not the default, so a run's records resume under the
+        /// draws are retained, and the condition check where it is not every factorization, so a run's records resume under the
         /// mode that started them.</summary>
         public string Fingerprint
         {
