@@ -4,7 +4,9 @@ CB-1 to CB-4 were proved on 2026-11-06, E35's M-1 and M-2 on 2026-11-08, and E16
 
 ## Slice 14's follow-ups: the weighted distribution, cross-fitted forms and CB-3 under weights (2026-11-13)
 
-Status: commissioned 2026-11-13 by the user ("Lean first, 15 meanwhile", in the conformal C# chip's thread), relayed by that chip and the main session.
+Status: commissioned 2026-11-13 by the user ("Lean first, 15 meanwhile", in the conformal C# chip's thread), relayed by that chip and the main session. All three items were proved on 2026-11-13 and reported under Reports (d81f293, 38f2e3f, 2928b06). The user added two items, both proved:
+- JAWS's likelihood-ratio weights for the cross-fitted forms;
+- weighted K-fold CV+, by one fold under likelihood ratios and by merging under position weights.
 
 **Why now.** Slice 14's C# (`c19ce98`; its [report](../../../issues/regression/conformal-layer-brief.md#2026-11-13--slice-14-the-weighted-rule-under-shift)) lists follow-ups that each need a guarantee before their C# (decision 7 on the layer plan). The C# chip builds the ratio estimator and slice 15 meanwhile, then these three as their Lean lands.
 
