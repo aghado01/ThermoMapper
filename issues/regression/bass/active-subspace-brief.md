@@ -1,6 +1,6 @@
 # Active subspaces on the BASS core: E8's build (chip brief)
 
-Date: 2026-11-08. Status: slices 0–6 complete; slice 7's plan approved by the user (2026-11-10); slice 7a (`7b2ca7a`) verified 2026-11-11; slice 7b (`70a2aa2`) verified 2026-11-11; slice 7c (`015d977`) verified 2026-11-11; slice 7d, the training-range hinge rule the user chose for projected fits (2026-11-11), landed (`566c1f1` to `6aff134`) and was verified 2026-11-13 (2,502 of 2,502 from a clean archive of `788d249`); slice 7e, the frame's column signs, commissioned by the user on 2026-11-13 (below), landed (`9b9e4e1` to `199abd7`) and was verified the same day in seven test projects (below). Commissioned by the user on 2026-11-08 ("kick off e8"), after KHAOS's last slice; slice 5, the Grassmann discussion's items the user settled, commissioned 2026-11-08 ("ill take as recommended"). Every slice landed and was verified by the coordinating session on 2026-11-08: slice 0 (`15fb495`, `9e3028d`, `aa62879`), slice 1 (`95294f8`, `9dfcc6d`, `1385b86`), slice 2 (`8c7db77`, `3cdc2e8`), slice 3 (`84fe230`, `1049055`), slice 4 (`20aeb06`, `bc72014`) and slice 5 (`def59f3`, `9d2ff23`, `95d2900`, `a54a537`). The follow-ups, commissioned 2026-11-10: slice 6 (`276af70`, `e9d8827`, `30df59e`, `9a669b6`, report `3c26660`) verified by the coordinating session on 2026-11-10; slice 7's plan (below, "Slice 7's plan") waits for the user's decisions; E36's brief follows its verification. Written by the main session from [E8's entry](extensions-brief.md#active-subspace-analysis), [gap G3](lineage-gaps-register.md#g3-sobol-indices-and-active-subspaces-have-different-standing), [the lineage review's separability question](lineage-review.md#separability-is-what-the-closed-forms-rest-on), the [Astra notes](../discussion/astra-grassman-stiefel-pca-extensions.md), and the [Grassmann discussion](../discussion/grassmann-stiefel-subspaces-brief.md)'s report so far. Reports go under "Reports" below, newest first.
+Date: 2026-11-08. Status: slices 0–7e complete and verified; no slice is commissioned, and what stays open is under [Open items](#open-items-2026-11-13); slice 7's plan approved by the user (2026-11-10); slice 7a (`7b2ca7a`) verified 2026-11-11; slice 7b (`70a2aa2`) verified 2026-11-11; slice 7c (`015d977`) verified 2026-11-11; slice 7d, the training-range hinge rule the user chose for projected fits (2026-11-11), landed (`566c1f1` to `6aff134`) and was verified 2026-11-13 (2,502 of 2,502 from a clean archive of `788d249`); slice 7e, the frame's column signs, commissioned by the user on 2026-11-13 (below), landed (`9b9e4e1` to `199abd7`) and was verified the same day in seven test projects (below). Commissioned by the user on 2026-11-08 ("kick off e8"), after KHAOS's last slice; slice 5, the Grassmann discussion's items the user settled, commissioned 2026-11-08 ("ill take as recommended"). Every slice landed and was verified by the coordinating session on 2026-11-08: slice 0 (`15fb495`, `9e3028d`, `aa62879`), slice 1 (`95294f8`, `9dfcc6d`, `1385b86`), slice 2 (`8c7db77`, `3cdc2e8`), slice 3 (`84fe230`, `1049055`), slice 4 (`20aeb06`, `bc72014`) and slice 5 (`def59f3`, `9d2ff23`, `95d2900`, `a54a537`). The follow-ups, commissioned 2026-11-10: slice 6 (`276af70`, `e9d8827`, `30df59e`, `9a669b6`, report `3c26660`) verified by the coordinating session on 2026-11-10; slice 7's plan, approved 2026-11-10, was built as 7a to 7c; E36's brief ([`bppr-brief.md`](bppr-brief.md)) is drafted and waits for the user's approval. Written by the main session from [E8's entry](extensions-brief.md#active-subspace-analysis), [gap G3](lineage-gaps-register.md#g3-sobol-indices-and-active-subspaces-have-different-standing), [the lineage review's separability question](lineage-review.md#separability-is-what-the-closed-forms-rest-on), the [Astra notes](../archive/bass-gbass-khaos-activespaces/discussion/astra-grassman-stiefel-pca-extensions.md), and the [Grassmann discussion](../archive/bass-gbass-khaos-activespaces/briefs/grassmann-stiefel-subspaces-brief.md)'s report so far. Reports go under "Reports" below, newest first.
 
 ## Why
 
@@ -12,17 +12,19 @@ It serves any smooth surrogate of a costly code or system: reducing a calibratio
 
 - **Rumsey et al., *Discovering Active Subspaces for High-Dimensional Computer Models*, arXiv 2307.11241.** The method on BASS: C under tensor-product representations through one-dimensional integrals, BASS's posterior propagated, integrals cached across structure changes. **Held** (v1) in `D:\aghado01\codex-scientiae\supellex-private\gauntlet\bayesian\2307.11241v1`, added by the user on 2026-11-08; slice 0 read it.
 - **Co-active subspaces, arXiv 2311.18146,** held in `D:\aghado01\codex-scientiae\supellex-private\gauntlet\bayesian`.
-- **Not held:** 1801.07922 (Zahm et al., vector-valued active subspaces), 1907.11572 (Wycoff, Binois and Wild, C for GPs), 2210.09181 (BPPR).
+- **Not held:** 1801.07922 (Zahm et al., vector-valued active subspaces), 1907.11572 (Wycoff, Binois and Wild, C for GPs). BPPR's paper, 2210.09181 v1, has since been added to the same folder, and E36's brief reads it.
 - **The oracle: `coactivity`,** pinned at `knrumsey/coactivity@35e4573` in `r/renv.lock` (`0a35e5d`), with `lhs` 1.3.0 and `zipfR` 0.6-70, which its code calls and its DESCRIPTION does not declare. It holds `C_bass`, `Cfg_bass`, `C_bass_mc`, `E_bass` and the bassPCA and bassfunc converters, and succeeds `knrumsey/concordance`, which announces itself deprecated (CRAN's `concordance` is an unrelated package). Read-only clones of both sit under `D:\aghado01\packages\bayesian-related`. Slice 0's oracle mode, `r/oracles/active_subspace_oracle.R`, runs `C_bass` on given draws and confirms its defects (Reports). E8 does not depend on it for correctness: it consumes what is built, and its internal checks are strong (below).
 
 ## What is already built
+
+As of the commission, 2026-11-08. E8's own work is under Reports.
 
 - **The moment service** (`BassMoments`): term-pair moments under a `ProductMeasure`, cached, with each factor's value and derivative (`FactorDerivative`). Its consumers are Sobol (`BassSensitivity.Of`), effects, and the basis fit's sensitivity (`BassBasisSensitivity`).
 - **The measures** (`InputMeasures.cs`): `UniformMeasure`, `MixtureMeasure` (normal and Student components), `EmpiricalMeasure`, `CategoricalMeasure`. Each is one input's marginal, so every measure built today is a product measure. A dependent measure enters as a joint sample of points; G4's joint mixture of products is E25's.
 - **The gradient readout** (`BassFit.Gradient` → `BassGradient`, KHAOS slice 4, `8f57487`): ∂f/∂z per draw, case and continuous input, in the input's own units, for hinge and Legendre fits, read from each draw's sampled coefficients. Averaged over any measure's points, it gives a C for any fit.
 - **Coefficient readouts** (`BassSensitivity.FromCoefficients`): exact Sobol indices and the Jacobi derivative measure for Legendre fits under the product uniform law (Lean SG-4(b), `faca090`).
 - **Draw weights** (`BassFit.DrawWeights`) from SMC and the flat histogram.
-- **Geometry and linear algebra:** `GrassmannManifold` (principal angles by thin SVD), `GeometricMedian`, `ThinSvd`, the symmetric eigensolver. **`StiefelManifold` is not to be used:** its distance and log map ignore the frame (the Grassmann discussion's report). E8 needs no frames.
+- **Geometry and linear algebra:** `GrassmannManifold` (principal angles by thin SVD), `GeometricMedian`, `ThinSvd`, the symmetric eigensolver. **`StiefelManifold` is not to be used:** its distance and log map ignore the frame (the Grassmann discussion's report). E8's one frame, slice 7's, is read from ordered eigenvectors and needs no Stiefel code.
 - **Lean:** SG-2 (√V_u is 1-Lipschitz in L²(μ); C has no such bound), SG-5 (`top_eigenspace_ne_subspace_mean`: E[C]'s top eigenspace is not the draws' mean subspace, 54° apart in a three-draw example), SG-4(b) (the Legendre bound total(v) ≤ ½·E[x_v(1−x_v)(∂_v f)²]).
 
 ## Decisions
@@ -62,10 +64,12 @@ One commit per concern; tests with the code they test; each slice ends with its 
 | 3. Functional outputs and co-active pairs | C = E[Jᵀ W_y J] with a declared output metric W_y (F-X6's Q), for direct and basis fits; C_fg = E[∇f ∇gᵀ] for two fits on the same inputs, and for two outputs of one | The basis fit's C against the direct computation on its reconstructed outputs; C_fg's symmetry and its reduction to C at f = g; 2311.18146's examples where they can be run |
 | 4. Dependent inputs | The sampled route on a joint sample of points, with the whitened metric; a measure that says it is a joint sample | Against a product measure the route already gives exactly; equivariance under affine input maps with whitening; a dependent example where the box metric and whitening differ, both reported |
 | 5. The Grassmann discussion's settled items | Per-draw k by a declared rule, opt-in; the output side G = E[J W_x Jᵀ]; the matrix Poincaré check; basis adequacy beside a direct-mode fit; the angles through LinAlg's routine (below) | Without a rule, the fixed-k readout bit for bit as before, apart from the angles; sums of r ridges recover r; tr P̄ against the weighted mean of k_s; the rank summary unbeaten by random projections of every rank, on seeded sweeps; tr G = tr C under the same metrics at W_y = I; a basis fit's G against the direct computation on its reconstructed outputs; the matrix check with equality on cos(πx), failing a deliberately mis-scaled D; adequacy zero on outputs inside the span, the known share outside it; slice 2's angles within arccos's error of the new ones above 10⁻⁶ rad |
+| 6. The readout follow-ups | The seven items under "The follow-ups, commissioned" below | Slice 6's report |
+| 7. Rotate-and-refit, 7a to 7e | The frame, the projected fit and the comparison (7a to 7c, "Slice 7's plan" below); training-range hinges for projected fits (7d); the frame's column signs (7e) | Each sub-slice's report |
 
 ### Slice 5: the Grassmann discussion's settled items
 
-The user settled the [discussion](../discussion/grassmann-stiefel-subspaces-brief.md)'s open items on 2026-11-08 ("ill take as recommended"; "ill go with per-draw k per your recommendation"). Slice 3 had closed without the output side, so they form a slice of their own. The discussion's report has the derivations.
+The user settled the [discussion](../archive/bass-gbass-khaos-activespaces/briefs/grassmann-stiefel-subspaces-brief.md)'s open items on 2026-11-08 ("ill take as recommended"; "ill go with per-draw k per your recommendation"). Slice 3 had closed without the output side, so they form a slice of their own. The discussion's report has the derivations.
 
 - **Per-draw k, opt-in.** The spec takes a declared rule for each draw's k_s and has no default: a share of tr C_s, or the largest relative eigengap up to a declared k_max.
   - *Without a rule,* the readout is unchanged but for the angles' new routine.
@@ -86,6 +90,13 @@ The user settled the [discussion](../discussion/grassmann-stiefel-subspaces-brie
 ### The follow-ups, commissioned (2026-11-10)
 
 Commissioned by the user on 2026-11-10 ("lets send the E8 follow-ups to E8 slice"). Already done elsewhere: per-draw k and the angles (slice 5), `khaos_helpers.R`'s copies, and test-select's name reading. `DenseEigen`'s relative threshold stays the user's LinAlg decision.
+
+**Status (2026-11-13):**
+- Slice 6 landed and was verified on 2026-11-10.
+- Slice 7's plan was approved on 2026-11-10 and built as 7a to 7c; 7d and 7e followed.
+- E36's brief is drafted and waits for the user's approval.
+- `DenseEigen`'s threshold has since been decided in LinAlg: the dense Jacobi solvers stop on the element-wise relative rule (`75523c4`), which retired E8's `ScaledEigen`.
+- The other writers named below are as of 2026-11-10.
 
 **Slice 6, the readout follow-ups.** Build these:
 1. *A basis fit paired with another fit* (slice 3's follow-up): one overload on each class, in the terms-and-H form.
@@ -111,6 +122,8 @@ Commissioned by the user on 2026-11-10 ("lets send the E8 follow-ups to E8 slice
 - *Messages* are terse, and no session reads another's transcript.
 
 ### Slice 7's plan: rotate-and-refit (2026-11-10), for the user's call
+
+**Status:** approved by the user on 2026-11-10 (below), and built as 7a (`7b2ca7a`), 7b (`70a2aa2`) and 7c (`015d977`); 7d and 7e followed. The plan as written:
 
 Nothing is built until the user decides the items marked **Decision** below. The plan follows the brief's four headings, then proposes slices and gates.
 
@@ -171,6 +184,8 @@ Nothing is built until the user decides the items marked **Decision** below. The
 
 ### Slice 7e: the frame's column signs, commissioned (2026-11-13)
 
+**Status:** built (`9b9e4e1` to `199abd7`, report `9283a91`) and verified on 2026-11-13.
+
 Commissioned by the user on 2026-11-13 ("Yes, commission it"), from the active-subspace Lean chip's finding as the second coordinating session relayed it (the [handoff](../coordination-handoff-2026-11-11.md#waiting-on-the-user)'s waiting-list item 14).
 
 **The finding.** `BassProjection` copies `SubspacePosterior.MeanCVectors` into its frame exactly as `DenseEigen` returns them (`BassProjection.cs:136`), and nothing fixes a column's sign. A projected refit is invariant in law under a column's sign flip, but not draw for draw. So a solver change that flips a column, as `75523c4` could have, moves the refit's draws and every pin on a projected fit.
@@ -195,26 +210,47 @@ Commissioned by the user on 2026-11-13 ("Yes, commission it"), from the active-s
 - **Truth from outside the model.** Recovery functions are not drawn from BASS's prior. Their subspaces are known in closed form.
 - **Primitives.** Chosen cases and a seeded random sweep, far ranges included.
 - **The cost row.** Derivative moments per pair, C per draw on each route, the readout at a few thousand draws. Cycle clock, marked indicative.
-- **`docs/Maths`.** The decisions above land on the sensitivity page, or a new page, with their alternatives and implications. New writing takes the module's symbols, and crossings go in `issues/notation-ledger.md`.
+- **`docs/Maths`.** The decisions above land on the sensitivity page, or a new page, with their alternatives and implications. New writing takes the module's symbols, and crossings go in `issues/notation-ledger.md`. *Since 2026-11-10:* chips leave `docs/` alone, and each report lists the doc changes owed (the follow-ups section).
+
+## Open items (2026-11-13)
+
+No slice is commissioned. Each item below is drawn from the reports, which hold its numbers and what each outcome would change.
+
+**Waiting on the user:**
+- *E36's brief* ([`bppr-brief.md`](bppr-brief.md)), which carries BPPR and the directional hinge, for approval.
+- *Slice 6's three calls:*
+  - The matrix Poincaré check's default. It is opt-in, and with the cache it costs 1.3 to 2 times the readout on scalar and functional fits, and 3 to 5 times on a basis fit.
+  - A K × K check for basis fits, which would bring the basis fit's check near the scalar's cost and so bears on the default.
+  - A public `outputLocations` on `BassFit.Gradient`, one optional parameter the internal path already takes.
+- *The PBX 9501 replication* (below).
+
+**Unbuilt, and not asked for** (slices 6 and 7c):
+- Co-active output functionals at locations beyond the training ones.
+- Poincaré constants for Student t, empirical and mixture laws. Uniform and truncated normal laws have them.
+- Cross-fitting with groupings or case weights.
+- A held-out log predictive density in the comparison.
+- Basis fits through a projection.
+
+**Decided since their reports:** the training range as BASS's default for wide declared domains, which the user declined on 2026-11-13 (slice 7d's report).
 
 ## Not in this brief
 
-- **Rotate-and-refit, BPPR and a directional hinge.** They change the model, not a readout. They wait for the user. Rotate-and-refit can take its frame from the ordered eigenvectors of P̄ or E[C], which needs no Stiefel code; Stiefel enters only if a rotation within the span is optimized for a simplicity criterion, as varimax is (the Grassmann discussion, settled 2026-11-08). BPPR's direction prior is still open there.
+- **BPPR and a directional hinge.** They change the model, not a readout. E36's brief holds them, and they wait for the user's approval of it. BPPR's direction prior was settled by the user on 2026-11-08 in the Grassmann discussion: the paper's independent directions. Rotate-and-refit, once listed here, was commissioned on 2026-11-10 and built as slice 7, its frame from E[C]'s ordered eigenvectors with no Stiefel code.
 - **A robust median of subspaces as the default,** per decision 4.
 - **C for BGP** in closed form (Wycoff et al., not held). BGP's gradients are a later consumer.
 - **G4's joint mixture of products** and E25's readouts (ALE, Shapley).
-- **The response envelope and E34.** E34's co-active pairs across outputs use slice 3 once E34 exists.
+- **The response envelope,** E34's option. E34 itself, several outputs on one basis, reads co-active pairs across its outputs through slice 3's `CoActivePosterior` (its slice 3, [`multi-output-brief.md`](multi-output-brief.md)).
 - **2311.18146's PBX 9501 application.** Its 14 materials' data are downloaded to `artifacts/datasets/PBX9501` (2026-11-12, pinned to the authors' commit, outside git; `PROVENANCE.md` there). The authors' script computes each concordance's numerator from saved draws 1 to 10 and its denominator from draws 100 to 1000; a replication pairs the same draws and reports corrected values. It waits for the user.
-- **`StiefelManifold`'s repair,** which waits for a frame consumer.
+- **`StiefelManifold`'s repair,** which waits for a consumer that optimizes over frames. Slice 7's frame needs none.
 
 ## Working rules
 
 - On `main`, committing by pathspec with nothing left staged and nothing pushed. Commit messages describe the work, with no attribution lines ([CLAUDE.md](../../../CLAUDE.md)). Leave `basin-hold-validation.csv` and `path-profile-validation.csv` out of every commit.
-- Other sessions may be writing in the checkout; the Grassmann discussion edits only its own brief. Before editing a file, check `git diff -- <file>` for changes you did not make; build from a snapshot (`git archive HEAD` plus your files); commit only compiling states. Shared docs (`docs/Maths/BayesianRegression.md`, the notation ledger, `extensions-brief.md`) are edited and committed in one step.
+- Other sessions may be writing in the checkout; the Grassmann discussion edits only its own brief. Before editing a file, check `git diff -- <file>` for changes you did not make; build from a snapshot (`git archive HEAD` plus your files); commit only compiling states. Chips leave `docs/` alone (AGENTS.md, 2026-11-10) and list the doc changes owed in each report; `extensions-brief.md` and the notation ledger are edited and committed in one step.
 - Builds set `ArtifactsRoot` inline into `artifacts\chip-e8\`, deleted at the end.
 - Heavy runs at below-normal priority with capped threads, MSBuild node reuse off; the machine is shared. Tests run by [targeted runs](../../../CONTRIBUTING.md#testing-standards) (`scripts/test-select.ps1`, `-SourceRoot` at your snapshot): the selected classes per edit, with the pinned tier per commit, the whole assembly once at the slice's end.
 - **Sources:** read a paper before stating what it says, and mark anything cited from memory. When a source is not on disk, ask the main session; it asks the user, who may add it. Fetch nothing yourself.
-- **The Grassmann discussion** (`../discussion/grassmann-stiefel-subspaces-brief.md`) is the user's. Read its report before slice 2, and take its conclusions where the user has settled them. Raise a conflict with this brief's decisions with the main session; don't resolve it on your own.
+- **The Grassmann discussion** (`../archive/bass-gbass-khaos-activespaces/briefs/grassmann-stiefel-subspaces-brief.md`) is the user's. Read its report before slice 2, and take its conclusions where the user has settled them. Raise a conflict with this brief's decisions with the main session; don't resolve it on your own.
 - New beside old; a removal is its own question to the user, with what is lost.
 - Findings framed by problem class, not by any one application.
 - A follow-up goes in a report with the decision it would change and what each outcome would do.
@@ -893,7 +929,7 @@ The value moments under the mixture pay for the Student component's quadrature t
 **Landed** on `main`, nothing pushed:
 - `15fb495`, the reference functions and their gates (`tests/regression/ActiveSubspaceReferences.cs`, `ActiveSubspaceReferenceTests.cs`).
 - `9e3028d`, the oracle mode and its defect tests (`r/oracles/active_subspace_oracle.R`, `tests/oracle/ActiveSubspaceDefectParityTests.cs`).
-- The docs commit carrying this report: `r/README.md`'s row for the mode, five rows in [Corrections to the sources](../../../docs/Maths/BayesianRegression.md#corrections-to-the-sources), and the Sources lines above.
+- The docs commit carrying this report: `r/README.md`'s row for the mode, five rows in [Corrections to the sources](../../../docs/Maths/Regression/Sources&Changes.md#corrections-to-the-sources), and the Sources lines above.
 
 **The paper, read** (v1, main text and supplement). What E8 takes from it:
 - C_ij through I₁ = ∫h′_{m₁}h_{m₂}ρ, I₂ = ∫h_{m₁}h_{m₂}ρ and I₃ = ∫h′_{m₁}h′_{m₂}ρ per input (its eq. Cij). That is the moment service's factor pairs with derivative factors, slice 1's work.
