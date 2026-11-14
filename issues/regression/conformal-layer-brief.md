@@ -292,41 +292,74 @@ Each report gives the commits, gate results, coverage and width by fit, cost, de
 
 Newest first.
 
-### In progress — Slice 15, posterior conformal prediction (started 2026-11-13)
+### 2026-11-13 — Slice 15, posterior conformal prediction
 
-Started at the main session's word after slice 14's verification, under the Lean's slice 15 (section `PosteriorConformal`) and Zhang and Candès (arXiv 2409.19712v2, read in TeX: §2, §6 and its hyperparameter rules, Theorems 1, 3 and 4, Proposition 2).
+Built at the user's "ok 14 then 15", under the Lean's section `PosteriorConformal` (`coverage_pcp`, `coverage_pcp_marginal`, `pcp_cluster_gap`) and Zhang and Candès (arXiv 2409.19712v2, read in TeX: §2, §6 with its hyperparameter rules, Theorems 1, 3 and 4, Proposition 2).
 
-**Plan, in two parts.**
-- *15a, the rule given the memberships.* It is slice 14's weighted rule, with unit weights that move with the test case: `ShiftWeights` gains weights per case.
-  - *Randomized,* their Theorem 1. L ~ Multinomial(m, π(x_test)), drawn per case on a seeded stream, and w_i ∝ Π_k π_k(x_i)^{L_k}, the test's own included. Exact given L, so exactly marginal (`coverage_pcp`, `coverage_pcp_marginal`).
-  - *KL,* their Theorem 3. w_i ∝ exp(−m·KL(π(x_test) ‖ π(x_i))), fixed given the covariates, the test's the largest. The per-cluster gap is α + Σ_K q_K Σ_k |π_k(K) − π_k(test)|, half their constant (`pcp_cluster_gap`); it is read at the memberships given as a diagnostic, since it needs the true ones.
-  - The split forms and the full step take weights per case. Each case reports its draw and its weights' ESS.
-- *15b, the membership estimator* on a training split: their matching fit.
-  - Logistic fits τ_t(x) = P(score ≤ ξ_t | x) at the score's nine deciles.
-  - A simplex-constrained factorization τ ≈ Σ_k π_k γ_k, k-means++-initialized, alternating projected updates and least squares.
-  - Memberships at new inputs by the same projection.
-  - J by their R² rule, and m by their effective-sample-size and self-weight rule on the training split.
-  - Fitted on the training split, π̂ is a fixed function of x, so their symmetry condition holds without refitting per y.
-- *Gates:*
-  - the rule's exact given-L statement over enumerated test identities;
-  - on a two-cluster heteroscedastic fixture with known memberships: marginal coverage, per-cluster coverage near nominal, and width against Mondrian strata, beside the unweighted split;
-  - KL weights with their gap read;
-  - per-case weights matching per-case calls;
-  - the refusals;
-  - 15b: memberships recovered up to labels, and end-to-end coverage with the estimate.
+**Landed** on `main`, nothing pushed:
+- `55f4b93`:
+  - `PosteriorConformal.Weights(unitMemberships, caseMemberships, precision, seed, grids, weighting)` returns `PosteriorWeights`: the weights per case, each case's draw, ESS, self-weight and, for the KL weights, cluster gap. The weighting is `PosteriorWeighting.Randomized` (the default) or `KullbackLeibler`.
+  - `ScoreMixture.Fit(features, scores, ScoreMixtureOptions)`, with `Memberships`, `Weights`, `Levels`, `Profiles`, `RSquared`, `Precision`, `MeanEffectiveSampleSize`, `MeanSelfWeight` and `PrecisionRuleMet`.
+  - `PosteriorConformalTests` (5) and `ScoreMixtureTests` (5).
+- *Upgrades:* `ShiftWeights` takes unit weights per test case (`PerCase`, a `ByCase` overload, `UnitsByCase`, `UnitsFor`, `UnitCount`). The split forms (density, CQR, asymmetric CQR, residual) and the full step rank each case under its own. Shared weights behave as before; no default changes.
 
-**State (2026-11-13, paused at the usage limit).** Nothing committed; all in the working tree.
-- *15a, built and green:* `PosteriorConformal.cs` (randomized and KL weights, draws, ESS, self-weights, KL gaps; `GivenDraws` internal), per-case `ShiftWeights` in `WeightedConformal.cs`, `SplitConformal.cs` and `ConformalBayes.cs`. `PosteriorConformalTests` 5/5 and `WeightedConformalTests` 7/7 pass.
-  - Given-L exactness: the largest excess over α, across 4,000 enumerated draws, is −0.0001.
-  - Two clusters, known memberships, m = 20: randomized 0.904 marginal, 0.900 and 0.909 per cluster; KL 0.915 (gap 0.063); Mondrian 0.898; unweighted 0.889, with 0.975 and 0.808 per cluster.
-- *15b, written, one gate open:* `ScoreMixture.cs` (logistic τ via `DensityRatio`, k-means++ and alternating factorization, active-set simplex step, J and m rules) and `ScoreMixtureTests`.
-  - The simplex sweep, the end-to-end test and the refusals pass. End to end, with estimated memberships: 0.922 marginal, 0.921 and 0.922 per cluster, against 0.826 in the wide cluster unweighted.
-  - The recovery gate fails: mean error 0.043 and profiles within 0.046, but the error near the right edge, x of 0.86 to 0.96, reaches 0.155 to 0.19, the spline's last segment.
-- *Open:*
-  - The fit is slow: 35 s for n = 1,000 even after an anti-cycling stop in the active set. Profile the alternation and the solver's iteration counts (`SimplexSolver.Iterations`).
-  - Settle the recovery gate's basis or size.
-  - Run the end-to-end test with training size equal to calibration size. At 1,000 against 399 the m rule chose 294 to 500, and 8.5% of sets were the whole space. Document that the ESS target is read on the training split.
-  - Then qualification, the commit, the report and E16's line.
+**What it computes.**
+- *15a, the rule given the memberships.*
+  - *Randomized weights* (their Theorem 1). Each case draws L ~ Multinomial(m, π(x_test)) on a seeded stream of its own, and wᵢ ∝ Π_k π_k(xᵢ)^{L_k}, the test's own weight included. The rule is exact given L, so exact marginally.
+  - *KL weights* (their Theorem 3). wᵢ ∝ exp(−m·KL(π(x_test) ‖ π(xᵢ))); the test's own weight is 1, the largest. At the true memberships, miscoverage given the inputs is at most α + Σᵢ qᵢ Σ_k |π_k(xᵢ) − π_k(x_test)|, half their constant. The gap is read at the memberships given, as a diagnostic.
+- *15b, the memberships on a training split* (their §6 matching algorithm).
+  - *Levels:* the training scores' quantiles at t/(s + 1), s = 9; repeated levels, or levels every score reaches, are dropped.
+  - *τ_t(x) = P(R ≤ ξ_t | x)* by Bayes' rule from the density ratio of the inputs at or below the level against those above, their (6.4). The ratio comes from the logistic two-sample fit (`DensityRatio`) on the caller's features. They fit it by linear least squares because their π is refitted with the test point for every candidate y; fitted on a separate training split, π is fitted once.
+  - *The factorization* τᵢ ≈ Σ_k π_ik·γ_k, πᵢ on the simplex. Five k-means++ starts, then alternating least squares for γ and an exact active-set simplex step for π, where they take mirror-descent steps. A pass that lowers the residual by less than 10⁻⁷ of itself stops it, 300 passes at most.
+  - *The rules* (their §6.1). J grows until R² gains less than 0.05. m is the largest in [5, 500], by bisection, whose training-split randomized weights have mean ESS above 100 and mean self-weight at most 1/30.
+  - *Memberships at new inputs:* τ there, then the simplex step against γ. That is a fixed function of the inputs, so their symmetry condition holds, and the randomized weights' coverage is exact whatever the estimate's quality; the quality decides each cluster's coverage.
+
+**Gates.**
+- *Exact given L, by enumeration:* 400 data sets of 6 points in 3 clusters, every draw at m = 3 (4,000 draws), every position of the test. The refused chance given L is at most α; its largest excess over α is −0.0001.
+- *The draws:* seeded per case, so a case's draw does not depend on the others; each sums to m; the mean is mπ (3.629 for 3.6, se 0.025). The KL weights and gap are checked by hand.
+- *Per-case weights* give each case what it gets when called alone, in every split form and the full step. Equal weights within a case give CB-1's sets bit for bit.
+- *Two clusters, known memberships.* x is uniform, the memberships meet at ½, and the residual's spread is 0.2 and 1.0. n = 199, 3,000 replications, m = 20, se 0.0055 marginal:
+
+  | rule | marginal | cluster 1 | cluster 2 | mean width |
+  |---|---|---|---|---|
+  | unweighted | 0.889 | 0.975 | 0.808 | 2.58, 2.58 |
+  | Mondrian (dominant membership) | 0.898 | 0.892 | 0.904 | 0.85, 3.28 |
+  | randomized | 0.904 | 0.900 | 0.909 | 1.16, 3.42 |
+  | KL (gap 0.063) | 0.915 | 0.911 | 0.919 | 1.22, 3.52 |
+
+  The randomized weights' mean ESS is 53. Mondrian is the oracle here, since its strata are the clusters.
+- *The simplex step, a sweep:* 600 problems, J from 1 to 6, s from 1 to 9, repeated profiles, scales from 10⁻³ to 10³. The KKT conditions hold (largest relative spread 1.8·10⁻¹⁰), and no random simplex point does better.
+- *The factorization from the true τ:* π within 2.7·10⁻⁴ and γ within 1.7·10⁻⁴ up to labels; R² is 1 at J = 2, and J = 3 gains nothing.
+- *Recovery from 1,000 training points*, on a linear-spline basis with knots 0.1 to 0.9:
+  - J = 2 is chosen (R² 0, 0.985, 0.994).
+  - The memberships' mean error is 0.043: largest 0.154 within the knots and 0.190 beyond. The profiles are within 0.046.
+  - The error is τ's, the logistic fits' noise toward the inputs' edges, since the factorization alone recovers to 3·10⁻⁴.
+- *End to end:* fitted on a training split of 400, then 2,000 replications of 399 calibration units and a test case. With the estimated memberships, coverage is 0.904 marginal, and 0.911 and 0.895 per cluster; unweighted, 0.898, with 0.986 and 0.806. Widths are 1.04 and 3.29 against 2.57. m = 27; no set was the whole space.
+- *The refusals:*
+  - memberships: negative, NaN, zero rows, mismatched clusters, none; precision below 1; an undefined weighting; grids per case;
+  - draws the memberships cannot produce;
+  - per-case weights for other cases or other units;
+  - the mixture: mismatched or non-finite scores, scores of one value, every option out of range, a fixed J above the distinct profiles, features of another width.
+- *Per commit,* the selected classes and the pinned tier: 1,184 of 1,184.
+
+**Cost.** The fit at n = 1,000 takes 5.7 s, 5.3 s of it the factorization: 1,941 passes over 11 alternations, two active-set iterations per solve. An internal `ScoreMixtureCost` records it.
+
+**Defects found: none in existing code.** Two were closed in building, before any commit:
+- An active-set cycle on a multiplier negative only by rounding. A coordinate freed and fixed again at once now ends the solve.
+- The alternation's 10⁻⁹ stop crawled along the flat directions a J above the cluster count leaves: 4,901 passes, 106 s under load. The stop is now 10⁻⁷ with a 300-pass cap.
+
+**Follow-ups, each with the decision it would change.**
+- *The precision rule reads the training split's ESS.* Fitted on 1,000 points and calibrated on 399, the rule chose m = 294 to 500, and 7% of the sets were the whole space, where the clusters meet. At equal sizes, as theirs are, none were. The option's documentation says to scale the target by the sizes' ratio. Decides whether the fit takes the calibration split's size and scales the target itself.
+- *The alternation's speed* along the factorization's flat directions: an accelerated or second-order γ update. Decides the cost at large n.
+- *τ through richer features,* the ratio estimator's open follow-up. Decides whether the layer offers a nonparametric τ.
+- *Slice 14's follow-ups 1 and 2 have their Lean* (the weighted distribution's PIT, `d81f293`; the cross-fitted forms under weights, `38f2e3f`). They come after this slice's verification.
+
+**Doc changes owed** (for the offline docs pass): `docs/Maths/Regression/ConformalPrediction.md`, a posterior conformal section:
+- the two weightings with their guarantees, and weights per case;
+- the mixture fit with its two departures from the paper (logistic τ on a training split, the exact simplex step);
+- the J and m rules, and the ESS target's reading on the training split;
+- the gates' numbers;
+- API rows for `PosteriorConformal`, `PosteriorWeights`, `PosteriorWeighting`, `ScoreMixture`, `ScoreMixtureOptions` and `ShiftWeights.PerCase`.
 
 ### 2026-11-13 — Slice 14's follow-up: the ratio estimator
 
