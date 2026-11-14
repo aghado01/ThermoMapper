@@ -33,6 +33,7 @@ Built at the main session's word once its Lean (`47acb3c`; `cvPlus_merged_likeli
 
 **Landed** on `main`, nothing pushed:
 - `3f68330`: weighted CV+ under likelihood ratios reports a merged bound (`CvPlusBounds.Merged`), where it reported none. `WeightedCrossFitTests` gains its checks.
+- *Verified by the main session on 2026-11-14,* from a clean archive of `1ea5d6b` with zero skips: the Commit selection, 1,213 of 1,213 ([receipts](receipts/verify-conformal-fu2e-3f68330/)).
 - *Nothing else changes.* Position weights' 2c stands: its Lean was restated validly at `47acb3c`, with the same conclusion.
 
 **What it computes,** per test point, from the bag's weights (the training units' and the test point's own, W their total):
