@@ -41,7 +41,7 @@ They are in [AGENTS.md](../../AGENTS.md#docops--conventions-for-issues) (the use
 | [KHAOS slices](claude://claude.ai/epitaxy/local_d665e4ce-cd64-427f-9c2a-8c94d96497dd), [weighted fits](claude://claude.ai/epitaxy/local_57bad71b-a245-4e83-8cb0-52c46cd48b60) | — | Idle; their work landed |
 | LinAlg consolidation: the user's Sol sessions, listed in its brief | [spectral-solver-consolidation-brief.md](../linalg/spectral-solver-consolidation-brief.md) | Complete |
 | [Shared-code defects](claude://claude.ai/epitaxy/local_0e31b37f-31de-42a6-a527-9c1daa3819bc) `local_0e31b37f` (Opus) | [shared-code-defects-brief.md](shared-code-defects-brief.md) | **Both slices landed:** the weight reader (`f50753f`) and the factor's refusal (`37eb63c`), each with its report. Slice 1 is verified from a clean archive (2,922 of 2,922 at `e39924c`); slice 2's run follows E21 slice 6's Geweke rows in the shared workspace. Four decisions wait on the user ([item 13](#waiting-on-the-user)) |
-| [Active-subspace Lean](claude://claude.ai/epitaxy/local_eaa7e8ed-844f-440c-ae5f-b72b72d6d68a) `local_eaa7e8ed` (Opus) | [active-subspace-lean-chip-brief.md](../../lean/Protolemmata/BASS/active-subspace-lean-chip-brief.md) | **Done and verified:** all four proved (`cbfd0ec` to `85d9d53`), one hypothesis corrected after review (`1682d4a`); verified from a clean archive at `42c980d` ([item 10](#waiting-on-the-user)) |
+| [Active-subspace Lean](claude://claude.ai/epitaxy/local_eaa7e8ed-844f-440c-ae5f-b72b72d6d68a) `local_eaa7e8ed` (Opus) | [active-subspace-lean-chip-brief.md](../../lean/Protolemmata/BASS/active-subspace-lean-chip-brief.md) | **Done and verified:** all four proved (`cbfd0ec` to `85d9d53`), one hypothesis corrected after review (`1682d4a`); verified from a clean archive at `42c980d` ([item 10](#waiting-on-the-user)). **Extending,** by its own account at the user's request: AS-4(iii)'s class-level converse and items 1, 2, 3 and 5 of its report's open list. Those commits need a new `verify-lean` run |
 
 Older chips are listed in the 2026-11-09 handoff. Message a chip by its `local_…` id.
 
@@ -143,6 +143,11 @@ Carried:
     - *a pivoted factor in `Maths.LinAlg`:* promote `BgpDrawnFunction`'s private factor, with a low-rank solve and sample;
     - *retiring `CholeskyDecomposition` into `DenseCholesky`:* a removal, so its own question; it follows the floor's decision;
     - *BASS's draw-weight readers* (`Draws3.Select`, `PosteriorSummary.Over`): the weight reader's full-range rule, or a stated limit and a refusal.
+14. **E8: a sign convention for the projection frame** (raised by the active-subspace Lean chip, 2026-11-13; nothing built).
+    - *The finding, checked in source:* `BassProjection.Of` copies `SubspacePosterior.MeanCVectors` as `DenseEigen` returns them (`BassProjection.cs:136`), and neither fixes a column's sign. A projected refit is invariant in law under a sign flip of a frame column, but not draw for draw. A solver change that flips a column (`75523c4` is the kind) moves the refit's draws and any pin on a projected fit.
+    - *The proposal:* make each frame column's largest-magnitude entry positive, ties to the lowest index. Then "W₁ fixes the refit" holds bit for bit across solver versions.
+    - *Placement:* `BassProjectionComparison.cs:97` compares the frame with `MeanCVectors` by exact inequality, so the convention belongs where `MeanCVectors` is formed, or the comparison moves with it.
+    - *What moves:* pins on projected fits, once, wherever the solver's sign differs from the convention.
 
 Closed since the 2026-11-11 handoff: `DenseEigen`'s relative threshold (`75523c4`), the projected fit's prior rules (7d), and regression's use of the legacy `CholeskyDecomposition` (BGP moved, `5db2e40`).
 
