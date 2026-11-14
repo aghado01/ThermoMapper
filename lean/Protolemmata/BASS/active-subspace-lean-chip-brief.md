@@ -85,6 +85,18 @@ Hand-over state between turns is an "In progress" entry here.
 
 ## Reports
 
+### 2026-11-13 — the extension verified from a clean archive (coordinating session)
+
+- **Commit:** `36bd90e`, through `scripts/verify-lean.ps1` with `-Module Enthymemata.ActiveSubspace` and this folder's checks.
+- **Checks:** 44 of 44.
+- **Build:** 2,967 jobs, with no warnings and no errors.
+- **Axioms:** every theorem of the six modules, 123 in all, prints `propext`, `Classical.choice` and `Quot.sound` only. The axioms file was generated from the modules' own declarations.
+- **meta-ci:** PASS; the six modules read as proof-closed.
+- **Statements:** the extension's headline statements were read at `779c1e0`, and the two points of the entry below were the outcome. `matrix_poincare_box`, the per-section kink set, `birth_death_flux` without `hmD` and `IsHingeSum.comp_monomial` were read again at `36bd90e`.
+- **Earlier run:** `779c1e0`, before those points, passed the same gates with 114 theorems.
+- **Not covered:** `WeightedPoincare.lean` (AS-2(e)), uncommitted and outside the barrel at this commit.
+- **Receipts:** `artifacts/verify-lean-36bd90e/`, with the axioms file and the summary tracked in [receipts](../../../issues/regression/receipts/verify-lean-36bd90e/).
+
 ### 2026-11-13 — the review's two points on the matrix check, and two follow-ups closed
 
 **The review (coordinating session, at `779c1e0`).** Both points are taken in the Lean.
