@@ -5874,6 +5874,432 @@ theorem wPit_estimated (C : Finset ι) (s p ph : ι → ℝ) (hph : ∀ j ∈ C,
 
 end WeightedPit
 
+/-! ### Slice 14's follow-up 2: the cross-fitted forms under weights
+
+Barber, Candès, Ramdas and Tibshirani 2023: the nonexchangeable jackknife+ (their Theorem 5),
+its `n`-fold cross-conformal form (their Appendix D), and Lei's lemma on weighted strange points
+(their Lemma 2). The tournament correction is the cross-fitted rule with its own pair score, so it
+follows. -/
+
+section WeightedCrossFit
+
+variable {ι : Type*} [Fintype ι] [DecidableEq ι]
+
+omit [Fintype ι] [DecidableEq ι] in
+/-- The weight of the units of `C` that `u` is stranger than. The weighted cross-fitted rule refuses
+`u` when this is at least `1 − α` of the total: their weighted strange points. -/
+def strangeWeight {β : Type*} [LinearOrder β] (C : Finset ι) (s : ι → ι → β) (q : ι → ℝ)
+    (u : ι) : ℝ :=
+  ∑ j ∈ strangerThan C s u, q j
+
+omit [Fintype ι] [DecidableEq ι] in
+/-- **Weighted strange points** (Lei's lemma, Barber et al.'s Lemma 2): whatever the comparisons,
+the units stranger than at least `1 − α` of the weight carry at most `2α` of it. Each refused unit
+is stranger than all but `α` of the weight; among the refused units each comparison goes at most one
+way, so they are stranger than at most half of their own weight's square. -/
+theorem sum_weight_strange_le {β : Type*} [LinearOrder β] (C : Finset ι) (s : ι → ι → β)
+    (q : ι → ℝ) (hq : ∀ j ∈ C, 0 ≤ q j) {α : ℝ} (hα : 0 ≤ α) :
+    ∑ u ∈ C.filter (fun u => (1 - α) * ∑ j ∈ C, q j ≤ strangeWeight C s q u), q u ≤
+      2 * α * ∑ j ∈ C, q j := by
+  classical
+  set F := C.filter (fun u => (1 - α) * ∑ j ∈ C, q j ≤ strangeWeight C s q u) with hF
+  set W := ∑ j ∈ C, q j with hW
+  set QF := ∑ u ∈ F, q u with hQF
+  have hFC : F ⊆ C := filter_subset _ _
+  have hqF : ∀ j ∈ F, 0 ≤ q j := fun j hj => hq j (hFC hj)
+  set a : ι → ℝ := fun u => ∑ j ∈ F, if s u j < s j u then q j else 0 with ha
+  have hunit : ∀ u ∈ F, (1 - α) * W ≤ a u + (W - QF) := by
+    intro u hu
+    have h1 := (mem_filter.1 hu).2
+    have h2 : strangeWeight C s q u ≤ a u + (W - QF) := by
+      have hsd := sum_sdiff hFC (f := fun j => if s u j < s j u then q j else 0)
+      have hrest : ∑ j ∈ C \ F, (if s u j < s j u then q j else 0) ≤ ∑ j ∈ C \ F, q j :=
+        sum_le_sum fun j hj => by
+          split_ifs
+          · exact le_rfl
+          · exact hq j (mem_sdiff.1 hj).1
+      have hW' : ∑ j ∈ C \ F, q j = W - QF := by
+        rw [sum_sdiff_eq_sub hFC]
+      unfold strangeWeight strangerThan
+      rw [sum_filter, ← hsd]
+      change ∑ j ∈ C \ F, (if s u j < s j u then q j else 0) + a u ≤ a u + (W - QF)
+      linarith
+    linarith
+  have hsum : (1 - α) * W * QF ≤ ∑ u ∈ F, q u * a u + (W - QF) * QF := by
+    have h := sum_le_sum fun u hu => mul_le_mul_of_nonneg_left (hunit u hu) (hqF u hu)
+    rw [← sum_mul, mul_comm, ← hQF] at h
+    simp only [mul_add, sum_add_distrib, ← sum_mul, ← hQF] at h
+    linarith
+  have hpair : 2 * ∑ u ∈ F, q u * a u ≤ QF * QF := by
+    have hX : ∑ u ∈ F, q u * a u =
+        ∑ u ∈ F, ∑ j ∈ F, if s u j < s j u then q u * q j else 0 := by
+      refine sum_congr rfl fun u _ => ?_
+      rw [ha, mul_sum]
+      exact sum_congr rfl fun j _ => by split_ifs <;> ring
+    have hY : ∑ u ∈ F, q u * a u =
+        ∑ u ∈ F, ∑ j ∈ F, if s j u < s u j then q u * q j else 0 := by
+      rw [hX, sum_comm]
+      exact sum_congr rfl fun u _ => sum_congr rfl fun j _ => by split_ifs <;> ring
+    have hsq : QF * QF = ∑ u ∈ F, ∑ j ∈ F, q u * q j := by
+      rw [hQF, sum_mul_sum]
+    rw [hsq, two_mul]
+    nth_rw 1 [hX]
+    rw [hY, ← sum_add_distrib]
+    refine sum_le_sum fun u hu => ?_
+    rw [← sum_add_distrib]
+    refine sum_le_sum fun j hj => ?_
+    have hprod : 0 ≤ q u * q j := mul_nonneg (hqF u hu) (hqF j hj)
+    by_cases h1 : s u j < s j u
+    · have h2 : ¬ s j u < s u j := fun h2 => lt_asymm h1 h2
+      rw [if_pos h1, if_neg h2, add_zero]
+    · rw [if_neg h1, zero_add]
+      split_ifs
+      · exact le_rfl
+      · exact hprod
+  have hQF0 : 0 ≤ QF := sum_nonneg hqF
+  have hkey : QF * QF ≤ 2 * α * W * QF := by nlinarith
+  rcases hQF0.eq_or_lt with h0 | hpos
+  · rw [← h0]
+    have hW0 : 0 ≤ W := sum_nonneg hq
+    nlinarith
+  · exact le_of_mul_le_mul_right (by linarith) hpos
+
+/-- **The swap step**: with the test position's weight the largest, a unit `t` stranger than a
+share of the weight, read after swapping the data at `K` and `t`, is a unit `K` stranger than at
+least that share. -/
+theorem strangeWeight_swap_ge {β : Type*} [LinearOrder β] (s : ι → ι → β) (q : ι → ℝ)
+    (K t : ι) (hqt : q K ≤ q t) :
+    strangeWeight univ s q t ≤
+      strangeWeight univ (fun i j => s (Equiv.swap K t i) (Equiv.swap K t j)) q K := by
+  unfold strangeWeight strangerThan
+  rw [sum_filter, sum_filter]
+  rw [← Equiv.sum_comp (Equiv.swap K t)
+    (fun j => if s (Equiv.swap K t K) (Equiv.swap K t j) < s (Equiv.swap K t j)
+      (Equiv.swap K t K) then q j else 0)]
+  simp only [Equiv.swap_apply_left, Equiv.swap_apply_self]
+  refine sum_le_sum fun j _ => ?_
+  split_ifs with h
+  · by_cases hjt : j = t
+    · subst hjt
+      exact absurd h (lt_irrefl _)
+    by_cases hjK : j = K
+    · subst hjK
+      rw [Equiv.swap_apply_left]
+      exact hqt
+    · rw [Equiv.swap_apply_of_ne_of_ne hjK hjt]
+  · exact le_rfl
+
+/-- **The cross-fitted rule under weights, beyond exchangeability** (Barber, Candès, Ramdas and
+Tibshirani 2023, Theorem 5 and Appendix D), on a finite law. `P` is any law of the data, the pair
+score equivariant (a symmetric fit's leave-two-out score), the weights fixed by position, summing to
+one, the test position's the largest. The rule refuses the test unit with chance at most `2α` plus
+`Σ_K q_K · TV(P, P ∘ swap(K, t))`. -/
+theorem crossFit_weighted_swap_tv {Z β : Type*} [Fintype Z] [LinearOrder β]
+    {S : (ι → Z) → ι → ι → β} (hS : PairEquivariant univ S) (P : (ι → Z) → ℝ)
+    (hP0 : ∀ z, 0 ≤ P z) (q : ι → ℝ) (hq0 : ∀ i, 0 ≤ q i) (hq1 : ∑ i, q i = 1) (t : ι)
+    (hqt : ∀ i, q i ≤ q t) {α : ℝ} (hα : 0 ≤ α) :
+    ∑ z, P z * (if 1 - α ≤ strangeWeight univ (S z) q t then 1 else 0) ≤
+      2 * α * ∑ z, P z + ∑ K, q K * ∑ z, max 0 (P (z ∘ Equiv.swap K t) - P z) := by
+  have hstep : ∀ z K, 1 - α ≤ strangeWeight univ (S z) q t →
+      1 - α ≤ strangeWeight univ (S (z ∘ Equiv.swap K t)) q K := by
+    intro z K h
+    have hfun : S (z ∘ Equiv.swap K t) =
+        fun i j => S z (Equiv.swap K t i) (Equiv.swap K t j) :=
+      funext fun i => funext fun j => hS _ (mem_permsOn_univ _) z i j
+    rw [hfun]
+    exact h.trans (strangeWeight_swap_ge (S z) q K t (hqt K))
+  have hinv : ∀ K (z : ι → Z), (z ∘ Equiv.swap K t) ∘ Equiv.swap K t = z := fun K z => by
+    funext j
+    simp [Function.comp_apply, Equiv.swap_apply_self]
+  have hK : ∀ K, ∑ z, P z * (if 1 - α ≤ strangeWeight univ (S (z ∘ Equiv.swap K t)) q K
+      then 1 else 0) ≤
+      ∑ z, P z * (if 1 - α ≤ strangeWeight univ (S z) q K then 1 else 0) +
+        ∑ z, max 0 (P (z ∘ Equiv.swap K t) - P z) := by
+    intro K
+    have hre := sum_comp_perm (fun z => P (z ∘ Equiv.swap K t) *
+      (if 1 - α ≤ strangeWeight univ (S z) q K then (1 : ℝ) else 0)) (Equiv.swap K t)
+    simp only [hinv] at hre
+    rw [hre, ← sum_add_distrib]
+    refine sum_le_sum fun z _ => ?_
+    split_ifs
+    · linarith [le_max_right 0 (P (z ∘ Equiv.swap K t) - P z)]
+    · linarith [le_max_left 0 (P (z ∘ Equiv.swap K t) - P z)]
+  have hlem : ∀ z, ∑ K, q K * (if 1 - α ≤ strangeWeight univ (S z) q K then 1 else 0) ≤
+      2 * α := by
+    intro z
+    have := sum_weight_strange_le univ (S z) q (fun j _ => hq0 j) hα
+    rw [hq1, mul_one, sum_filter] at this
+    simpa only [mul_ite, mul_one, mul_zero] using this
+  calc ∑ z, P z * (if 1 - α ≤ strangeWeight univ (S z) q t then 1 else 0)
+      = ∑ K, q K * ∑ z, P z * (if 1 - α ≤ strangeWeight univ (S z) q t then 1 else 0) := by
+        rw [← sum_mul, hq1, one_mul]
+    _ ≤ ∑ K, q K * ∑ z, P z *
+          (if 1 - α ≤ strangeWeight univ (S (z ∘ Equiv.swap K t)) q K then 1 else 0) := by
+        refine sum_le_sum fun K _ => mul_le_mul_of_nonneg_left
+          (sum_le_sum fun z _ => mul_le_mul_of_nonneg_left ?_ (hP0 z)) (hq0 K)
+        split_ifs with h1 h2 <;> first | exact absurd (hstep z K h1) h2 | norm_num
+    _ ≤ ∑ K, q K * (∑ z, P z * (if 1 - α ≤ strangeWeight univ (S z) q K then 1 else 0) +
+          ∑ z, max 0 (P (z ∘ Equiv.swap K t) - P z)) :=
+        sum_le_sum fun K _ => mul_le_mul_of_nonneg_left (hK K) (hq0 K)
+    _ = ∑ z, P z * ∑ K, q K * (if 1 - α ≤ strangeWeight univ (S z) q K then 1 else 0) +
+          ∑ K, q K * ∑ z, max 0 (P (z ∘ Equiv.swap K t) - P z) := by
+        simp only [mul_add, sum_add_distrib]
+        congr 1
+        simp only [mul_sum]
+        rw [sum_comm]
+        exact sum_congr rfl fun z _ => sum_congr rfl fun K _ => by ring
+    _ ≤ ∑ z, P z * (2 * α) + ∑ K, q K * ∑ z, max 0 (P (z ∘ Equiv.swap K t) - P z) :=
+        add_le_add (sum_le_sum fun z _ => mul_le_mul_of_nonneg_left (hlem z) (hP0 z)) le_rfl
+    _ = 2 * α * ∑ z, P z + ∑ K, q K * ∑ z, max 0 (P (z ∘ Equiv.swap K t) - P z) := by
+        rw [mul_sum]
+        congr 1
+        exact sum_congr rfl fun z _ => by ring
+
+/-- **Exchangeable data, weights fixed by position**: the swaps cost nothing, and the weighted
+cross-fitted rule refuses with chance at most `2α`, whatever the fixed weights, so long as the test
+position's is the largest. -/
+theorem crossFit_weighted_exchangeable {Z β : Type*} [Fintype Z] [LinearOrder β]
+    {S : (ι → Z) → ι → ι → β} (hS : PairEquivariant univ S) (P : (ι → Z) → ℝ)
+    (hP0 : ∀ z, 0 ≤ P z) (q : ι → ℝ) (hq0 : ∀ i, 0 ≤ q i) (hq1 : ∑ i, q i = 1) (t : ι)
+    (hqt : ∀ i, q i ≤ q t) (hPx : ∀ K z, P (z ∘ Equiv.swap K t) = P z) {α : ℝ} (hα : 0 ≤ α) :
+    ∑ z, P z * (if 1 - α ≤ strangeWeight univ (S z) q t then 1 else 0) ≤ 2 * α * ∑ z, P z := by
+  have h := crossFit_weighted_swap_tv hS P hP0 q hq0 hq1 t hqt hα
+  simp only [hPx, sub_self, max_self, sum_const_zero, mul_zero, add_zero] at h
+  exact h
+
+/-- **The weighted jackknife+ refuses** the test unit when the upper ends `μ̂₋ᵢ(Xₜ) + Rᵢ` strictly
+below `Yₜ`, or the lower ends strictly above it, carry at least `1 − α` of the total weight, the
+test unit's own included. That is `Yₜ` outside Barber et al.'s weighted interval, with the test
+unit's mass at `±∞`. -/
+def JackRefusesW {Z X : Type*} (cov : Z → X) (resp : Z → ℝ) (α : ℝ) (C : Finset ι) (q : ι → ℝ)
+    (alg : Finset ι → (ι → Z) → X → ℝ) (z : ι → Z) (t : ι) : Prop :=
+  (1 - α) * ∑ j ∈ C, q j ≤ ∑ i ∈ (C.erase t).filter (fun i => alg (univ \ {i, t}) z (cov (z t)) +
+      |resp (z i) - alg (univ \ {i, t}) z (cov (z i))| < resp (z t)), q i ∨
+    (1 - α) * ∑ j ∈ C, q j ≤ ∑ i ∈ (C.erase t).filter (fun i => resp (z t) <
+      alg (univ \ {i, t}) z (cov (z t)) - |resp (z i) - alg (univ \ {i, t}) z (cov (z i))|), q i
+
+noncomputable instance {Z X : Type*} (cov : Z → X) (resp : Z → ℝ) (α : ℝ) (C : Finset ι)
+    (q : ι → ℝ) (alg : Finset ι → (ι → Z) → X → ℝ) (z : ι → Z) (t : ι) :
+    Decidable (JackRefusesW cov resp α C q alg z t) :=
+  inferInstanceAs (Decidable (_ ∨ _))
+
+/-- **The weighted jackknife+ refuses only a strange test unit**: the units its interval counts are
+units the test unit is stranger than. -/
+theorem strangeWeight_of_jackRefusesW {Z X : Type*} {cov : Z → X} {resp : Z → ℝ} {α : ℝ}
+    {C : Finset ι} {q : ι → ℝ} (hq : ∀ j ∈ C, 0 ≤ q j) {alg : Finset ι → (ι → Z) → X → ℝ}
+    {z : ι → Z} {t : ι} (h : JackRefusesW cov resp α C q alg z t) :
+    (1 - α) * ∑ j ∈ C, q j ≤ strangeWeight C (pairScore (jackFit cov resp alg) z) q t := by
+  have hpair : ∀ i, (univ \ {t, i} : Finset ι) = univ \ {i, t} := fun i => by rw [pair_comm]
+  have hstr : ∀ j ∈ strangerThan C (pairScore (jackFit cov resp alg) z) t, 0 ≤ q j :=
+    fun j hj => hq j (mem_filter.1 hj).1
+  rcases h with h | h
+  · refine h.trans (sum_le_sum_of_subset_of_nonneg (fun i hi => ?_) fun j hj _ => hstr j hj)
+    rw [mem_filter, mem_erase] at hi
+    rw [strangerThan, mem_filter]
+    refine ⟨hi.1.2, ?_⟩
+    simp only [pairScore, jackFit, hpair]
+    rw [neg_lt_neg_iff]
+    have h3 := le_abs_self (resp (z t) - alg (univ \ {i, t}) z (cov (z t)))
+    linarith [hi.2]
+  · refine h.trans (sum_le_sum_of_subset_of_nonneg (fun i hi => ?_) fun j hj _ => hstr j hj)
+    rw [mem_filter, mem_erase] at hi
+    rw [strangerThan, mem_filter]
+    refine ⟨hi.1.2, ?_⟩
+    simp only [pairScore, jackFit, hpair]
+    rw [neg_lt_neg_iff]
+    have h3 := le_abs_self (alg (univ \ {i, t}) z (cov (z t)) - resp (z t))
+    rw [abs_sub_comm] at h3
+    linarith [hi.2]
+
+/-- **The nonexchangeable jackknife+** (Barber, Candès, Ramdas and Tibshirani 2023, Theorem 5), on
+a finite law, with a symmetric regression fit: it misses with chance at most `2α` plus the
+weighted swap distances `Σ_K q_K · TV(P, P ∘ swap(K, t))`. -/
+theorem jackknifePlus_weighted {Z X : Type*} [Fintype Z] (cov : Z → X) (resp : Z → ℝ)
+    {alg : Finset ι → (ι → Z) → X → ℝ} (halg : FitSymmetric univ alg) (P : (ι → Z) → ℝ)
+    (hP0 : ∀ z, 0 ≤ P z) (q : ι → ℝ) (hq0 : ∀ i, 0 ≤ q i) (hq1 : ∑ i, q i = 1) (t : ι)
+    (hqt : ∀ i, q i ≤ q t) {α : ℝ} (hα : 0 ≤ α) :
+    ∑ z, P z * (if JackRefusesW cov resp α univ q alg z t then 1 else 0) ≤
+      2 * α * ∑ z, P z + ∑ K, q K * ∑ z, max 0 (P (z ∘ Equiv.swap K t) - P z) := by
+  classical
+  have hsym : FitSymmetric univ (jackFit cov resp alg) := fun σ hσ T z => by
+    funext p
+    simp only [jackFit, halg σ hσ T z]
+  refine le_trans (sum_le_sum fun z _ => mul_le_mul_of_nonneg_left ?_ (hP0 z))
+    (crossFit_weighted_swap_tv (pairScore_equivariant hsym) P hP0 q hq0 hq1 t hqt hα)
+  by_cases h : JackRefusesW cov resp α univ q alg z t
+  · have := strangeWeight_of_jackRefusesW (fun j _ => hq0 j) h
+    rw [hq1, mul_one] at this
+    rw [if_pos h, if_pos this]
+  · rw [if_neg h]
+    split_ifs <;> norm_num
+
+/-- **The tournament correction under weights**: the cross-fitted rule on the tournament's pair
+score, with weights fixed by position, misses with chance at most `2α` plus the weighted swap
+distances. Seeds that travel with the units are part of each unit's data. -/
+theorem tournament_weighted {Z β α' : Type*} [Fintype Z] [LinearOrder α']
+    {fit : Finset ι → (ι → Z) → β} (hfit : FitSymmetric univ fit) (g : β → Z → Multiset Z → α')
+    (P : (ι → Z) → ℝ) (hP0 : ∀ z, 0 ≤ P z) (q : ι → ℝ) (hq0 : ∀ i, 0 ≤ q i)
+    (hq1 : ∑ i, q i = 1) (t : ι) (hqt : ∀ i, q i ≤ q t) {α : ℝ} (hα : 0 ≤ α) :
+    ∑ z, P z * (if 1 - α ≤ strangeWeight univ (pairScore (tournFit fit g) z) q t then 1 else 0) ≤
+      2 * α * ∑ z, P z + ∑ K, q K * ∑ z, max 0 (P (z ∘ Equiv.swap K t) - P z) :=
+  crossFit_weighted_swap_tv
+    (pairScore_equivariant fun σ hσ T z => tournFit_comp g (hfit σ hσ T z)) P hP0 q hq0 hq1 t
+    hqt hα
+
+/-! #### Likelihood-ratio weights (JAWS) -/
+
+/-- The weights travel with the units: reordering `C` reorders the comparisons and the weights. -/
+theorem strangeWeight_comp {β : Type*} [LinearOrder β] {C : Finset ι} {σ : Equiv.Perm ι}
+    (hσ : σ ∈ permsOn C) (s : ι → ι → β) (q : ι → ℝ) (u : ι) :
+    strangeWeight C (fun i j => s (σ i) (σ j)) (q ∘ σ) u = strangeWeight C s q (σ u) := by
+  unfold strangeWeight strangerThan
+  exact sum_equiv σ (fun j => by simp only [mem_filter, mem_iff_of_mem_permsOn hσ])
+    fun j _ => rfl
+
+/-- **The cross-fitted rule with likelihood-ratio weights** (Prinster, Liu and Saria 2022, JAW's
+Theorem 1, here for any pair-equivariant score). The weights `w(z_u)` travel with the units, the
+test unit's own included; over the orderings of a data set the test unit lands on unit `u` with
+weight `w(z_u)`, as under covariate shift (`w(x)`) or label shift (`w(y)`). Weighing each ordering
+so, the weighted rule refuses at most `2α` of the weight: given the bag, the test unit is a strange
+unit with chance their weight, at most `2α` by Lei's lemma. -/
+theorem crossFit_likelihoodRatio {Z β : Type*} [LinearOrder β] {C : Finset ι} {t : ι}
+    (ht : t ∈ C) {S : (ι → Z) → ι → ι → β} (hS : PairEquivariant C S) (z : ι → Z) (w : Z → ℝ)
+    (hw : ∀ v, 0 ≤ w v) {α : ℝ} (hα : 0 ≤ α) :
+    ∑ σ ∈ permsOn C, (if (1 - α) * ∑ j ∈ C, w (z (σ j)) ≤
+        strangeWeight C (S (z ∘ σ)) (fun j => w (z (σ j))) t then w (z (σ t)) else 0) ≤
+      2 * α * ∑ σ ∈ permsOn C, w (z (σ t)) := by
+  have hc : (0 : ℝ) < C.card := by exact_mod_cast card_pos.2 ⟨t, ht⟩
+  set f : ι → ℝ := fun u => if (1 - α) * ∑ j ∈ C, w (z j) ≤
+    strangeWeight C (S z) (fun j => w (z j)) u then w (z u) else 0 with hf
+  have hpt : ∀ σ ∈ permsOn C, (if (1 - α) * ∑ j ∈ C, w (z (σ j)) ≤
+      strangeWeight C (S (z ∘ σ)) (fun j => w (z (σ j))) t then w (z (σ t)) else 0) =
+      f (σ t) := by
+    intro σ hσ
+    have hW : ∑ j ∈ C, w (z (σ j)) = ∑ j ∈ C, w (z j) :=
+      sum_equiv σ (fun j => (mem_iff_of_mem_permsOn hσ j).symm) fun j _ => rfl
+    have hfun : S (z ∘ σ) = fun i j => S z (σ i) (σ j) :=
+      funext fun i => funext fun j => hS σ hσ z i j
+    rw [hW, hfun, show (fun j => w (z (σ j))) = (fun j => w (z j)) ∘ σ from rfl,
+      strangeWeight_comp hσ]
+  rw [sum_congr rfl hpt]
+  have hlei := sum_weight_strange_le C (S z) (fun j => w (z j)) (fun j _ => hw (z j)) hα
+  rw [sum_filter] at hlei
+  refine (mul_le_mul_iff_of_pos_left hc).1 ?_
+  rw [card_mul_sum_permsOn ht f, mul_left_comm (C.card : ℝ) (2 * α),
+    card_mul_sum_permsOn ht (fun u => w (z u))]
+  calc ((permsOn C).card : ℝ) * ∑ u ∈ C, f u ≤ (permsOn C).card * (2 * α * ∑ u ∈ C, w (z u)) :=
+        mul_le_mul_of_nonneg_left hlei (Nat.cast_nonneg _)
+    _ = 2 * α * ((permsOn C).card * ∑ u ∈ C, w (z u)) := by ring
+
+/-- **JAW, the jackknife+ weighted by likelihood ratios** (Prinster, Liu and Saria 2022, Theorem 1).
+With a symmetric fit, the interval with the units' weights `w(z_u)`, the test unit's own included
+and its mass at `±∞`, misses with at most `2α` of the weight over the orderings. -/
+theorem jackknifePlus_likelihoodRatio {Z X : Type*} {C : Finset ι} {t : ι} (ht : t ∈ C)
+    (cov : Z → X) (resp : Z → ℝ) {alg : Finset ι → (ι → Z) → X → ℝ} (halg : FitSymmetric C alg)
+    (z : ι → Z) (w : Z → ℝ) (hw : ∀ v, 0 ≤ w v) {α : ℝ} (hα : 0 ≤ α) :
+    ∑ σ ∈ permsOn C, (if JackRefusesW cov resp α C (fun j => w (z (σ j))) alg (z ∘ σ) t
+        then w (z (σ t)) else 0) ≤ 2 * α * ∑ σ ∈ permsOn C, w (z (σ t)) := by
+  have hsym : FitSymmetric C (jackFit cov resp alg) := fun σ hσ T z => by
+    funext p
+    simp only [jackFit, halg σ hσ T z]
+  refine le_trans (sum_le_sum fun σ _ => ?_)
+    (crossFit_likelihoodRatio ht (pairScore_equivariant hsym) z w hw hα)
+  by_cases h : JackRefusesW cov resp α C (fun j => w (z (σ j))) alg (z ∘ σ) t
+  · rw [if_pos h, if_pos (strangeWeight_of_jackRefusesW (fun j _ => hw _) h)]
+  · rw [if_neg h]
+    split_ifs <;> linarith [hw (z (σ t))]
+
+/-- **The tournament correction with likelihood-ratio weights**: at most `2α` of the weight over
+the orderings, with a symmetric fit. -/
+theorem tournament_likelihoodRatio {Z β α' : Type*} [LinearOrder α'] {C : Finset ι} {t : ι}
+    (ht : t ∈ C) {fit : Finset ι → (ι → Z) → β} (hfit : FitSymmetric C fit)
+    (g : β → Z → Multiset Z → α') (z : ι → Z) (w : Z → ℝ) (hw : ∀ v, 0 ≤ w v) {α : ℝ}
+    (hα : 0 ≤ α) :
+    ∑ σ ∈ permsOn C, (if (1 - α) * ∑ j ∈ C, w (z (σ j)) ≤
+        strangeWeight C (pairScore (tournFit fit g) (z ∘ σ)) (fun j => w (z (σ j))) t
+        then w (z (σ t)) else 0) ≤
+      2 * α * ∑ σ ∈ permsOn C, w (z (σ t)) :=
+  crossFit_likelihoodRatio ht
+    (pairScore_equivariant fun σ hσ T z => tournFit_comp g (hfit σ hσ T z)) z w hw hα
+
+/-! #### K-fold CV+ under weights -/
+
+omit [Fintype ι] [DecidableEq ι] in
+/-- **A weighted CV+ refusal is a refusal in each fold.** `U` holds the training units and the test
+unit `t`; a unit is `beaten` when the test unit is stranger than it under its fold's fit. In a block
+`C` of `U` scored by one fit `s` (a fold with the test unit), being unbeaten is scoring at most the
+test unit. If the beaten units carry at least `1 − α` of `U`'s weight, the block's units scoring at
+most the test unit, itself included, carry at most `α` of it. -/
+theorem fold_refused_of_refused {U C : Finset ι} (hCU : C ⊆ U) (w : ι → ℝ)
+    (hw : ∀ j ∈ U, 0 ≤ w j) (beaten : ι → Prop) [DecidablePred beaten] (s : ι → ℝ) (t : ι)
+    (hb : ∀ j ∈ C, ¬ beaten j ↔ s j ≤ s t) {α : ℝ}
+    (href : (1 - α) * ∑ j ∈ U, w j ≤ ∑ j ∈ U.filter beaten, w j) :
+    ∑ j ∈ C.filter (fun j => s j ≤ s t), w j ≤ α * ∑ j ∈ U, w j := by
+  have h1 : ∑ j ∈ C.filter (fun j => s j ≤ s t), w j ≤
+      ∑ j ∈ U.filter (fun j => ¬ beaten j), w j := by
+    refine sum_le_sum_of_subset_of_nonneg (fun j hj => ?_) fun j hj _ => hw j (mem_filter.1 hj).1
+    rw [mem_filter] at hj ⊢
+    exact ⟨hCU hj.1, (hb j hj.1).2 hj.2⟩
+  have h2 := sum_filter_add_sum_filter_not U beaten w
+  linarith
+
+/-- **K-fold CV+ with likelihood-ratio weights, by one fold.** The block `C` is a fold with the test
+unit, scored by that fold's fit `s`, which reads neither; `Wout ≥ 0` is the other folds' weight,
+fixed given them. Over the reorderings of the block, each weighed by the test unit's `w`, the
+block's refusal at level `α` of the whole weight, which every weighted CV+ refusal implies
+(`fold_refused_of_refused`), carries at most `min(1, α (Wout + W_C) / W_C)` of the weight: the
+weighted split rule in the block at that level. With the fold of largest weight this is the
+bound to report; at equal weights it is slice 9's `ℓ/(m + 1)`. -/
+theorem cvPlus_oneFold_likelihoodRatio {Z : Type*} {C : Finset ι} {t : ι} (ht : t ∈ C)
+    (s : Z → ℝ) (z : ι → Z) (w : Z → ℝ) (hw : ∀ v, 0 ≤ w v) (Wout : ℝ) (hWout : 0 ≤ Wout)
+    {α : ℝ} (hα : 0 ≤ α) :
+    ∑ σ ∈ permsOn C, (if ∑ j ∈ C.filter (fun j => s (z (σ j)) ≤ s (z (σ t))), w (z (σ j)) ≤
+        α * (Wout + ∑ j ∈ C, w (z j)) then w (z (σ t)) else 0) ≤
+      min 1 (α * (Wout + ∑ j ∈ C, w (z j)) / ∑ j ∈ C, w (z j)) *
+        ∑ σ ∈ permsOn C, w (z (σ t)) := by
+  set WC := ∑ j ∈ C, w (z j) with hWC
+  have hden : 0 ≤ ∑ σ ∈ permsOn C, w (z (σ t)) := sum_nonneg fun σ _ => hw _
+  have hle1 : ∑ σ ∈ permsOn C, (if ∑ j ∈ C.filter (fun j => s (z (σ j)) ≤ s (z (σ t))),
+      w (z (σ j)) ≤ α * (Wout + WC) then w (z (σ t)) else 0) ≤
+      ∑ σ ∈ permsOn C, w (z (σ t)) :=
+    sum_le_sum fun σ _ => by split_ifs <;> linarith [hw (z (σ t))]
+  rcases (sum_nonneg fun i (_ : i ∈ C) => hw (z i)).eq_or_lt with h0 | hpos
+  · have hz : ∀ i ∈ C, w (z i) = 0 :=
+      (sum_eq_zero_iff_of_nonneg fun i _ => hw (z i)).1 h0.symm
+    have hden0 : ∑ σ ∈ permsOn C, w (z (σ t)) = 0 :=
+      sum_eq_zero fun σ hσ => hz _ ((mem_iff_of_mem_permsOn hσ t).2 ht)
+    rw [hden0, mul_zero]
+    rw [hden0] at hle1
+    exact hle1
+  · have hα' : 0 ≤ α * (Wout + WC) / WC :=
+      div_nonneg (mul_nonneg hα (add_nonneg hWout hpos.le)) hpos.le
+    have hcov := coverage_weighted (S := fun z => fun i => s (z i)) ht (fun σ _ z i => rfl) z w
+      hw hα'
+    have hpt : ∀ σ ∈ permsOn C, (if ∑ j ∈ C.filter (fun j => s (z (σ j)) ≤ s (z (σ t))),
+        w (z (σ j)) ≤ α * (Wout + WC) then w (z (σ t)) else 0) =
+        (if α * (Wout + WC) / WC < weightLe C (fun i => s ((z ∘ σ) i))
+          (fun j => w (z (σ j)) / ∑ i ∈ C, w (z i)) t then 0 else w (z (σ t))) := by
+      intro σ _
+      have e : weightLe C (fun i => s ((z ∘ σ) i)) (fun j => w (z (σ j)) / ∑ i ∈ C, w (z i)) t =
+          (∑ j ∈ C.filter (fun j => s (z (σ j)) ≤ s (z (σ t))), w (z (σ j))) / WC := by
+        unfold weightLe
+        rw [sum_div]
+        rfl
+      rw [e]
+      by_cases h : ∑ j ∈ C.filter (fun j => s (z (σ j)) ≤ s (z (σ t))), w (z (σ j)) ≤
+          α * (Wout + WC)
+      · rw [if_pos h, if_neg (not_lt.2 ((div_le_div_iff_of_pos_right hpos).2 h))]
+      · rw [if_neg h, if_pos ((div_lt_div_iff_of_pos_right hpos).2 (not_le.1 h))]
+    rw [sum_congr rfl hpt]
+    rw [sum_congr rfl hpt] at hle1
+    rcases le_total 1 (α * (Wout + WC) / WC) with h1 | h1
+    · rw [min_eq_left h1, one_mul]
+      exact hle1
+    · rw [min_eq_right h1]
+      exact hcov
+
+end WeightedCrossFit
+
 /-! ### Slice 15: posterior conformal prediction (Zhang and Candès, arXiv 2409.19712) -/
 
 section PosteriorConformal

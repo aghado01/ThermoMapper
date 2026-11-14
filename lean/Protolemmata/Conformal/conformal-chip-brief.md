@@ -231,12 +231,25 @@ Newest first.
 ### In progress — slice 14's follow-ups
 
 Updated 2026-11-13, in place.
-- *Follow-ups 2 and 3:* their checks pass on their own. They splice in turn, each with its own gates and full checks run.
-- *Follow-up 2's additions* (the user, 2026-11-13: "lets work on the likelihood ratio weights question and then the weighted version of k-fold cv"):
-  - JAWS's likelihood-ratio form and K-fold CV+'s one-fold bound under likelihood ratios are drafted, and their checks pass.
-  - The merged K-fold bound under position weights is checked, and its Lean is next.
-- *Builds:* the active-subspace Lean chip's full build is done, and `lean/` builds are this chip's again (its message, 2026-11-13).
+- *Follow-up 3:* compiled, and its checks pass on their own. It splices next: `python splice_followup.py f3 <count>`, with the count `425 + 16`. The main session verifies follow-ups 1–3 in one clean-archive run once it lands.
+- *The merged K-fold bound under position weights* (`f5.lean`): it compiles standalone, clean (`F5Alone.lean`), its checks pass (`f5_block.py`), and its ledger section and report are drafted. It splices after follow-up 3 (anchor `end WeightedMargin`). Its own checks block goes into `conformal-checks.py` with it.
 - The working files are in `artifacts/chip-conformal-lean/`, which is untracked.
+
+### 2026-11-13 — slice 14's follow-up 2: the cross-fitted forms under weights, proved
+
+The statements are in the ledger, under "Slice 14's follow-ups". The new declarations are PROOF-CLOSED, with the standard three axioms only. The checks ran first.
+
+- *Lei's lemma* (`sum_weight_strange_le`): the weighted strange points carry at most 2α of the weight, for α ≥ 0. The lemma needs that hypothesis, which their α ∈ (0, 1) supplies.
+- *Weights fixed by position* (Barber et al.'s Theorem 5 and Appendix D; `crossFit_weighted_swap_tv`, `jackknifePlus_weighted`, `tournament_weighted`).
+  - The jackknife+, the n-fold cross-conformal set and the tournament miss at most 2α + Σ_K q_K TV(P, P ∘ swap(K, t)), with the test position's weight the largest.
+  - On exchangeable data that is 2α.
+- *Likelihood-ratio weights* (JAWS, Theorem 1; `crossFit_likelihoodRatio`, `jackknifePlus_likelihoodRatio`, `tournament_likelihoodRatio`).
+  - With w(z_u) travelling with the units, each misses at most 2α of the weight, with no TV term.
+  - *Finding:* JAWS's Step 2 argues from exchangeability of the comparison matrix, which covariate shift breaks. The theorem stands by the weighted-exchangeability argument proved here.
+- *K-fold CV+ with likelihood-ratio weights* (`cvPlus_oneFold_likelihoodRatio`, ours). The miss chance is at most min(1, α W_tot/(W_k + w_t)) for any fold k, given the other folds. The bound is tight in the checks.
+- *Merged folds with position weights:* 2c, checked. Its Lean, a weighted p-value averaging lemma, is the next item.
+- *For the C#:* the cross-fitted forms can take position weights, and likelihood-ratio weights at 2α. K-fold CV+ takes likelihood-ratio weights with the one-fold bound.
+- *For the `#print axioms` file:* `sum_weight_strange_le`, `strangeWeight_swap_ge`, `crossFit_weighted_swap_tv`, `crossFit_weighted_exchangeable`, `strangeWeight_of_jackRefusesW`, `jackknifePlus_weighted`, `tournament_weighted`, `strangeWeight_comp`, `crossFit_likelihoodRatio`, `jackknifePlus_likelihoodRatio`, `tournament_likelihoodRatio`, `fold_refused_of_refused`, `cvPlus_oneFold_likelihoodRatio`.
 
 ### 2026-11-13 — slice 14's follow-up 1: the weighted predictive distribution's PIT, proved
 

@@ -2,7 +2,7 @@
 
 Pins the contract of the engine's conformal layer, one layer over retained draws and pointwise densities for every model with a pointwise density ([E16](../../../issues/regression/bass/extensions-brief.md#conformal-bayes-the-consumer)). The layer owns coverage and the score owns width. These are the finite statements of that split. They are the sibling of [GuardedEstimator](../BASS/guarded-estimator-lemmas.md): there, means valid whatever the emulator does; here, prediction sets valid whatever the model does. Written from the [chip brief](conformal-chip-brief.md).
 
-**Status (2026-11-13).** Proved in `lean/Enthymemata/ConformalValidity.lean`, namespace `Conformal`, with no apologies (PROOF-CLOSED, 409 declarations counting E35's M-1 and M-2 and slices 9, 10, 12, 13, 14, 15, 16 and 18, and slice 14's follow-up 1 at the end of this page; `#print axioms` shows `propext`, `Classical.choice`, `Quot.sound` only):
+**Status (2026-11-13).** Proved in `lean/Enthymemata/ConformalValidity.lean`, namespace `Conformal`, with no apologies (PROOF-CLOSED, 425 declarations counting E35's M-1 and M-2 and slices 9, 10, 12, 13, 14, 15, 16 and 18, and slice 14's follow-ups 1 and 2 at the end of this page; `#print axioms` shows `propext`, `Classical.choice`, `Quot.sound` only):
 - CB-1: `card_rankLe_le`, `coverage_orderings`, `coverage_orderings_eq`, `coverage_strict_le`, `coverage_orderings_le`, `rank_uniform`, `coverage_tieBreak`, `coverage_given`, `coverage_law`, `coverage_stratum`;
 - CB-2: `split_coverage`, `exchangeable_given_training`, `cqr_ordConnected`;
 - CB-4: `sum_jointU`, `post_addOneIn`, `integratedScore_equivariant`, `latentScore_equivariant`, `latentScore_eq`, `sum_jointU_addOneIn`, `integratedScore_le_latentScore`, `accepts_latent_of_mixed`, `mixed_counterexample`;
@@ -951,3 +951,54 @@ Sources: Tibshirani, Barber, Candès and Ramdas 2019 (arXiv 1904.06019v3) and Po
 - The tiling on 3,000 random cases (scores with ties, weights with zeros), with `weightLe`'s super-uniformity.
 - The full form over every ordering, with an equivariant score, on 150 data sets.
 - The estimated ratio's bound on 3,000 cases.
+
+### Follow-up 2 — the cross-fitted forms under weights
+
+Barber, Candès, Ramdas and Tibshirani 2023 (arXiv 2202.13415v5), read in TeX: Appendix B (the nonexchangeable jackknife+, their Theorem 5 and its proof), Appendix D (cross-conformal), and their Lemma 2 (Lei's) with its proof. Proved on 2026-11-13 in `ConformalValidity.lean`, section `WeightedCrossFit`, PROOF-CLOSED, with the standard three axioms only. The checks (section "Slice 14 follow-up 2") ran first.
+
+- *The weights are fixed by position.* They are Barber et al.'s w̃, summing to one with the test position's the largest, not a likelihood ratio.
+- *Weighted strange points* (`strangeWeight`, `sum_weight_strange_le`; their Lemma 2, Lei's).
+  - Unit u is refused when the units it is stranger than carry at least 1 − α of the weight.
+  - Whatever the comparisons, the refused units carry at most 2α of it, for α ≥ 0. Among the refused units each comparison goes at most one way, so they are stranger than at most half their own weight's square.
+  - *A hypothesis the lemma needs.* With α < 0 nothing is refused, but the bound 2αW is negative, so α ≥ 0 is stated; their α lies in (0, 1).
+  - *Against the counts.* Unweighted, `card_refused_pairwise_le` gives 2k − 1, sharper by one from integrality.
+- *The swap step* (`strangeWeight_swap_ge`). A refusal at t in z is a refusal at K in z ∘ swap(K, t), because the test position's weight is the largest. This is the step w̃_{π_K(i)} ≤ w̃_i of their proof.
+- *Beyond exchangeability* (`crossFit_weighted_swap_tv`; their Theorem 5 and Appendix D). On any finite law, with any pair-equivariant score, the weighted cross-fitted rule refuses with chance at most 2α + Σ_K q_K TV(P, P ∘ swap(K, t)).
+- *Exchangeable data* (`crossFit_weighted_exchangeable`). The swaps cost nothing, giving 2α, whatever the fixed weights, so long as the test's is the largest.
+- *The jackknife+* (`JackRefusesW`, `strangeWeight_of_jackRefusesW`, `jackknifePlus_weighted`).
+  - Y outside their weighted interval, with the test unit's mass at ±∞, is a weighted cross-fitted refusal.
+  - So with a symmetric fit, the jackknife+ misses with chance at most 2α plus the swap distances: their Theorem 5 with a symmetric algorithm.
+- *The tournament correction under weights* (`tournament_weighted`). It holds: the tournament is the cross-fitted rule on its pair score, so it inherits 2α plus the swap distances. Seeds that travel with the units are part of each unit's data.
+- *Likelihood-ratio weights* (Prinster, Liu and Saria 2022, JAWS, arXiv 2207.10716v2, read in TeX: §3.1, Theorem 1 and its appendix proof).
+  - *The setting* (`strangeWeight_comp`, `crossFit_likelihoodRatio`). The weights w(z_u) travel with the units, the test unit's own included, and over the orderings of a data set the test unit lands on unit u with weight w(z_u).
+  - *The claim.* Weighing each ordering so, the weighted cross-fitted rule refuses at most 2α of the weight, with no TV term. Given the bag, the test unit is a strange unit with chance equal to their weight, at most 2α by Lei's lemma.
+  - *Which shifts.* This is covariate shift, w(x), their case, and label shift, w(y), in candidate form.
+  - *The forms.* JAW, their jackknife+ (`jackknifePlus_likelihoodRatio`), and the tournament (`tournament_likelihoodRatio`) follow.
+  - **Finding: their Step 2 argues from exchangeability, which covariate shift breaks.** It claims A^w =d ΠA^wΠᵀ for every permutation matrix Π, so that the test point is as likely strange as any training point. It then multiplies those probabilities by the random weights p_j outside the expectation. Their Theorem 1 stands by the weighted-exchangeability argument, given the bag, which is what `crossFit_likelihoodRatio` proves.
+- *K-fold CV+ under weights* (our statements; Barber et al. 2023 and JAWS give the leave-one-out forms only). Folds of training units, each with a fit leaving out it and the test unit; the weighted rule's total includes the test unit's weight.
+  - *A refusal is a refusal in each fold* (`fold_refused_of_refused`). If the units the test unit beats carry at least 1 − α of the weight W_tot, then in any fold k₀ the units scoring at most the test unit under that fold's fit, itself included, carry at most α W_tot.
+  - *Likelihood-ratio weights, by one fold* (`cvPlus_oneFold_likelihoodRatio`).
+    - Given the other folds and the bag of fold k₀ with the test unit, the miss chance is at most min(1, α W_tot/(W_{k₀} + w_t)). Report the fold of largest weight.
+    - At equal weights this is slice 9's ℓ/(m + 1); with two balanced folds it is about 2α.
+    - The checks find the bound attained.
+  - *Merged folds with position weights* (checked; the Lean is the next item).
+    - A refusal gives Σ_k λ_k π_k ≤ c. Here π_k is fold k's weighted p-value, λ_k = (W_k + w_t)/(W + K w_t) is fixed, and c = (α(W + w_t) + (K − 1) w_t)/(W + K w_t).
+    - Averaging super-uniform p-values with fixed weights costs a factor 2, so P ≤ 2c.
+    - At equal weights 2c is slice 9's merged bound.
+  - *Not covered.*
+    - A merged bound with likelihood-ratio weights: the λ_k then depend on the data, and the averaging argument needs them fixed.
+    - The tournament across folds under weights.
+- *For the C#:*
+  - the jackknife+, the n-fold cross-conformal set and the tournament can take weights fixed by position, at 2α plus the swap distances, with the test position's weight the largest;
+  - they can take likelihood-ratio weights at 2α;
+  - K-fold CV+ can take likelihood-ratio weights, reporting min(1, α W_tot/(W_k + w_t)) from the fold of largest weight.
+
+**Checks.**
+- Lei's lemma on 4,000 random comparison matrices with ties. The largest share of the bound used is 0.667.
+- The swap step on 2,925 (data, K).
+- The bound on 75 finite laws with the leave-two-out and tournament pair scores, exchangeable laws within 2α exactly.
+- The weighted jackknife+ refusing only where the cross-fitted rule does, on 2,000 data sets.
+- Likelihood-ratio weights over every ordering at most 2α, on 120 data sets with both pair scores. The largest share of the bound used is 0.476.
+- K-fold CV+:
+  - the one-fold likelihood-ratio bound on 68 (data, fold) cases over every reordering of the fold and the test unit, attained (share 1.000);
+  - the merged position-weight bound 2c on 48 cases over every ordering, using at most 0.284 of it, with equal weights giving slice 9's merged bound.

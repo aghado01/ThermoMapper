@@ -3057,4 +3057,248 @@ print(f"Follow-up 1: the weighted PIT's levels tile [0, sum q] on {n_tile} rando
       f"(largest share of TV used {float(worst_est):.3f})")
 
 print()
+print("=== Slice 14 follow-up 2: the cross-fitted forms under weights ===")
+# Barber, Candes, Ramdas and Tibshirani 2023, Theorem 5 and Appendix D, and their Lemma 2 (Lei's).
+# Weights q fixed by position, the test position's the largest. Unit u is refused when the weight of the
+# units it is stranger than (s u j < s j u, s the leave-two-out conformity) is at least (1 - alpha) W,
+# W = sum q. (a) The refused units weigh at most 2 alpha W, whatever the comparisons. (b) A refusal at the
+# test t in z is a refusal at K in z o swap(K, t). (c) On any finite law P, the test is refused with chance
+# at most 2 alpha + sum_K q_K TV(P, P o swap(K, t)); exchangeable P costs nothing.
+
+
+def strange_w(s, q, u):
+    return sum(q[j] for j in range(len(q)) if s[u][j] < s[j][u])
+
+
+def refused_w(s, q, u, alpha):
+    return strange_w(s, q, u) >= (1 - alpha) * sum(q)
+
+
+# (a) Lei's lemma
+n_lei, worst_lei = 0, Q(0)
+rr = random.Random(2000)
+for trial in range(4000):
+    m = rr.randint(1, 7)
+    s = [[rr.randint(0, 3) for _ in range(m)] for _ in range(m)]
+    q = [Q(rr.randint(0, 5)) for _ in range(m)]
+    W = sum(q)
+    alpha = Q(rr.randint(0, 10), 20)
+    ref = sum(q[u] for u in range(m) if refused_w(s, q, u, alpha))
+    assert ref <= 2 * alpha * W, (s, q, alpha)
+    if W and alpha:
+        worst_lei = max(worst_lei, ref / (2 * alpha * W))
+    n_lei += 1
+
+
+def swap(z, K, t):
+    zz = list(z)
+    zz[K], zz[t] = z[t], z[K]
+    return tuple(zz)
+
+
+def loo2_score(z, i, j):
+    """A pair-equivariant conformity: unit i read by the mean of every unit but i and j."""
+    rest = [z[k] for k in range(len(z)) if k not in (i, j)]
+    mu = sum(rest) / len(rest) if rest else Q(0)
+    return -abs(z[i] - mu)
+
+
+def tourn_score(z, i, j):
+    """The tournament's pair fit: the rest's mean, and the pair handed over as an unordered multiset."""
+    rest = [z[k] for k in range(len(z)) if k not in (i, j)]
+    mu = sum(rest) / len(rest) if rest else Q(0)
+    pair = sorted((z[i], z[j]))
+    return -abs(z[i] - (2 * mu + pair[0] + pair[1]) / 4)
+
+
+def smat(z, score):
+    m = len(z)
+    return [[score(z, i, j) if i != j else Q(0) for j in range(m)] for i in range(m)]
+
+
+# (b) the swap step, and (c) the swap-TV bound on finite laws, for both pair scores
+n_swap = n_law = 0
+worst_gap = Q(0)
+for m in range(2, 5):
+    rr = random.Random(2010 + m)
+    vals = [Q(0), Q(1), Q(3)]
+    zs = list(itertools.product(vals, repeat=m))
+    for trial in range(25):
+        score = loo2_score if trial % 2 == 0 else tourn_score
+        t = rr.randrange(m)
+        qw = [Q(rr.randint(0, 4)) for _ in range(m)]
+        qw[t] = max(qw) or Q(1)
+        q = [a / sum(qw) for a in qw]
+        alpha = Q(rr.randint(1, 8), 20)
+        S = {z: smat(z, score) for z in zs}
+        for z in zs:
+            if refused_w(S[z], q, t, alpha):
+                for K in range(m):
+                    assert refused_w(S[swap(z, K, t)], q, K, alpha)
+            n_swap += 1
+        exch = trial % 3 == 0
+        if exch:                                       # an exchangeable law: a function of the sorted data
+            base = {key: Q(rr.randint(0, 4)) for key in {tuple(sorted(z)) for z in zs}}
+            P = {z: base[tuple(sorted(z))] for z in zs}
+        else:
+            P = {z: Q(rr.randint(0, 4)) for z in zs}
+        tot = sum(P.values())
+        if tot == 0:
+            continue
+        P = {z: P[z] / tot for z in zs}
+        lhs = sum(P[z] for z in zs if refused_w(S[z], q, t, alpha))
+        tv = sum(q[K] * sum(max(Q(0), P[swap(z, K, t)] - P[z]) for z in zs) for K in range(m))
+        assert lhs <= 2 * alpha + tv
+        if exch:
+            assert tv == 0 and lhs <= 2 * alpha
+        worst_gap = max(worst_gap, lhs - 2 * alpha)
+        n_law += 1
+
+# (d) the weighted jackknife+ refuses only where the weighted cross-fitted rule does: y above Barber's
+# Q_{1 - alpha} of the upper ends (the test's mass at +inf), or below Q_alpha of the lower ends.
+n_jack = 0
+rr = random.Random(2030)
+for trial in range(2000):
+    m = rr.randint(2, 6)
+    z = [Q(rr.randint(-5, 5)) for _ in range(m)]
+    t = rr.randrange(m)
+    qw = [Q(rr.randint(0, 4)) for _ in range(m)]
+    qw[t] = max(qw) or Q(1)
+    W = sum(qw)
+    alpha = Q(rr.randint(1, 9), 20)
+    mu = {i: (sum(z[k] for k in range(m) if k not in (i, t)) / (m - 2) if m > 2 else Q(0)) for i in range(m)}
+    R = {i: abs(z[i] - mu[i]) for i in range(m) if i != t}
+    up = sum(qw[i] for i in R if mu[i] + R[i] < z[t])
+    lo = sum(qw[i] for i in R if z[t] < mu[i] - R[i])
+    if up >= (1 - alpha) * W or lo >= (1 - alpha) * W:
+        assert refused_w(smat(z, loo2_score), qw, t, alpha)
+    n_jack += 1
+
+# (e) likelihood-ratio weights (JAWS): the weights w(z_u) travel with the units, the test's own included;
+# weighing each ordering by the test unit's w, the rule refuses at most 2 alpha of the weight, for the
+# leave-two-out (JAW) and the tournament pair scores, over every ordering.
+n_lr, worst_lr = 0, Q(0)
+for N in range(2, 6):
+    rr = random.Random(2040 + N)
+    for trial in range(30):
+        score = loo2_score if trial % 2 == 0 else tourn_score
+        z = [Q(rr.randint(0, 6)) for _ in range(N)]
+        wv = {v: Q(rr.randint(0, 4)) for v in set(z)}
+        t = rr.randrange(N)
+        alpha = Q(rr.randint(1, 9), 20)
+        num = den = Q(0)
+        for sig in itertools.permutations(range(N)):
+            zs = tuple(z[sig[i]] for i in range(N))
+            q = [wv[v] for v in zs]
+            wt = wv[zs[t]]
+            den += wt
+            num += wt * refused_w(smat(zs, score), q, t, alpha)
+        assert num <= 2 * alpha * den
+        if den:
+            worst_lr = max(worst_lr, num / den / (2 * alpha))
+        n_lr += 1
+print(f"Follow-up 2: Lei's lemma (refused weight <= 2 alpha W) on {n_lei} random comparison matrices with ties "
+      f"(largest share of the bound {float(worst_lei):.3f}); the swap step on {n_swap} (data, K) and the bound "
+      f"2 alpha + sum_K q_K TV(P, P o swap) on {n_law} finite laws, leave-two-out and tournament pair scores, "
+      f"exchangeable laws at 2 alpha exactly; the weighted jackknife+ refusing only where the cross-fitted rule "
+      f"does on {n_jack} data sets; likelihood-ratio weights over every ordering at most 2 alpha on {n_lr} "
+      f"data sets (largest share of the bound {float(worst_lr):.3f})")
+
+print()
+print("=== Slice 14 follow-up 2b: K-fold CV+ under weights ===")
+# K folds of m training units and a test unit t. Fold k's fit mu_{-k} leaves out fold k and t (here the mean
+# of the other folds' responses). R_i = |y_i - mu_{-k(i)}|; the test's comparison with i uses mu_{-k(i)}.
+# Weighted CV+ refuses y when the units the test is stranger than (R_i < |y - mu_{-k(i)}|) carry at least
+# 1 - alpha of the weight, the test's own included in the total. Its fold-k p-value is
+# pi_k = (sum of w_i, i in fold k not beaten, + w_t) / (W_k + w_t), the weighted rule within fold k and t.
+# A refusal gives sum_k (W_k + w_t) pi_k <= alpha (W + w_t) + (K - 1) w_t, so
+# (a) pi_k <= alpha (W + w_t) / (W_k + w_t) in every fold: the weighted split bound in one fold;
+# (b) sum_k lambda_k pi_k <= c, lambda_k = (W_k + w_t)/(W + K w_t), c = (alpha (W + w_t) + (K - 1) w_t)/(W + K w_t),
+#     and with lambda fixed (position weights) averaging super-uniform p-values costs a factor 2: P <= 2c.
+
+
+def cv_refuses(y, mus, folds, w, wt, t_y, alpha):
+    W = sum(w)
+    beaten = sum(w[i] for k, F in enumerate(folds) for i in F if abs(y[i] - mus[k]) < abs(t_y - mus[k]))
+    return beaten >= (1 - alpha) * (W + wt)
+
+
+def fold_mus(y, folds):
+    K = len(folds)
+    mus = []
+    for k in range(K):
+        rest = [y[i] for j, F in enumerate(folds) if j != k for i in F]
+        mus.append(sum(rest) / len(rest) if rest else Q(0))
+    return mus
+
+
+# (a) likelihood-ratio weights, one fold: permutations of fold k0 and the test, the other folds fixed,
+# each weighted by the test unit's w; the refused weight is at most alpha (W_tot) / (W_k0 + w_t).
+n_a, worst_a = 0, Q(0)
+for K in (2, 3):
+    for m in (1, 2, 3):
+        rr = random.Random(2200 + 10 * K + m)
+        for trial in range(12):
+            N = K * m + 1
+            y = [Q(rr.randint(0, 6)) for _ in range(N)]          # unit N - 1 is the test position
+            wv = {v: Q(rr.randint(0, 3)) for v in set(y)}         # the ratio read from the response (w(y))
+            folds = [list(range(k * m, (k + 1) * m)) for k in range(K)]
+            alpha = Q(rr.randint(1, 9), 20)
+            k0 = rr.randrange(K)
+            block = folds[k0] + [N - 1]
+            Wtot = sum(wv[v] for v in y)
+            Wb = sum(wv[y[i]] for i in block)
+            if Wb == 0:
+                continue
+            num = den = Q(0)
+            for perm in itertools.permutations(block):
+                yy = list(y)
+                for src, dst in zip(block, perm):
+                    yy[dst] = y[src]
+                mus = fold_mus(yy, folds)
+                wt = wv[yy[N - 1]]
+                ref = cv_refuses(yy, mus, folds, [wv[yy[i]] for i in range(N - 1)], wt, yy[N - 1], alpha)
+                num += wt * ref
+                den += wt
+            bound = min(Q(1), alpha * Wtot / Wb)
+            assert num <= bound * den, (K, m, num / den, bound)
+            if den:
+                worst_a = max(worst_a, (num / den) / bound)
+            n_a += 1
+
+# (b) position weights, exchangeable data: every ordering of the n + 1 values equally likely, weights fixed by
+# position with the test's the largest; P(refused) <= 2c. At equal weights 2c is slice 9's merged bound.
+n_b, worst_b = 0, Q(0)
+for K in (2, 3):
+    for m in (1, 2):
+        rr = random.Random(2300 + 10 * K + m)
+        for trial in range(12):
+            N = K * m + 1
+            vals = [Q(rr.randint(0, 6)) for _ in range(N)]
+            folds = [list(range(k * m, (k + 1) * m)) for k in range(K)]
+            w = [Q(rr.randint(1, 4)) for _ in range(N - 1)]
+            wt = max(w + [Q(rr.randint(1, 4))])
+            alpha = Q(rr.randint(1, 9), 20)
+            W = sum(w)
+            Wk = [sum(w[i] for i in F) for F in folds]
+            c = (alpha * (W + wt) + (K - 1) * wt) / (W + K * wt)
+            ref = tot = 0
+            for perm in itertools.permutations(range(N)):
+                y = [vals[p] for p in perm]
+                mus = fold_mus(y, folds)
+                ref += cv_refuses(y, mus, folds, w, wt, y[N - 1], alpha)
+                tot += 1
+            P = Q(ref, tot)
+            assert P <= 2 * c, (K, m, P, 2 * c)
+            if all(v == w[0] for v in w) and wt == w[0]:
+                n_ = N - 1
+                assert 2 * c == 2 * (alpha * (n_ + 1) + K - 1) / (n_ + K)
+            worst_b = max(worst_b, P / (2 * c))
+            n_b += 1
+print(f"Follow-up 2b: weighted K-fold CV+, (a) likelihood-ratio weights within one fold at most "
+      f"alpha W / (W_k + w_t) on {n_a} (data, fold) cases over every reordering of the fold and the test "
+      f"(largest share {float(worst_a):.3f}); (b) position weights on exchangeable data at most 2c on {n_b} "
+      f"cases over every ordering (largest share {float(worst_b):.3f}), equal weights giving slice 9's merged bound")
+
+print()
 print("All assertions hold.")
