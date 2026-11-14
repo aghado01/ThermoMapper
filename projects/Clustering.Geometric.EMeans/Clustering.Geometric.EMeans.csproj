@@ -1,0 +1,17 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <RootNamespace>Clustering.Geometric.EMeans</RootNamespace>
+    <AssemblyName>Clustering.Geometric.EMeans</AssemblyName>
+    <EnableDefaultCompileItems>false</EnableDefaultCompileItems>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <Compile Include="../../src/clustering/geometric/emeans/**/*.cs" Link="emeans/%(RecursiveDir)%(Filename)%(Extension)" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <!-- k-means++ seeding, one of the run's initializations. -->
+    <ProjectReference Include="../Clustering.Geometric.KMeans/Clustering.Geometric.KMeans.csproj" />
+    <ProjectReference Include="../Maths.Rng/Maths.Rng.csproj" />
+  </ItemGroup>
+</Project>
