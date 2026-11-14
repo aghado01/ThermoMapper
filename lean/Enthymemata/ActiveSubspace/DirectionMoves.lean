@@ -3,6 +3,8 @@ import Mathlib.Algebra.BigOperators.Fin
 import Mathlib.Analysis.InnerProductSpace.PiL2
 import Mathlib.Analysis.SpecialFunctions.Pow.Real
 import Mathlib.Data.Fin.Tuple.Basic
+import Mathlib.MeasureTheory.Constructions.Pi
+import Mathlib.MeasureTheory.Measure.Prod
 import Mathlib.Tactic.FieldSimp
 import Mathlib.Tactic.Linarith
 import Mathlib.Tactic.Ring
@@ -27,9 +29,10 @@ projection-pursuit ridges on the BASS core (BPPR) would code. They reuse SC-1's 
   chain that writes it targets that prior and not Poisson's. `prior_draw_cancel`: a direction and
   knot drawn from their priors leave only the `(a, 𝒥)` terms. `birth_death_balance`: each birth
   and its reverse death balance, through `mh_detailed_balance`.
+* **(c) In measure.** `mh_flux_symm`: with densities against one base measure, Metropolis–Hastings'
+  flux is symmetric. `birth_death_flux`: insertion carries `ν ⊗ ν^M` to `ν^{M+1}`, the dimension
+  matching, and births and deaths at each position balance as measures.
 
-The measure-theoretic form on `S^{a−1} × ℝ` is not stated: the finite statements carry the ratio's
-algebra, and the numeric check AS-3d reads the continuous form.
 -/
 
 open Finset BASS
@@ -199,6 +202,99 @@ theorem birth_death_balance (w : ℕ → ℝ) (pr q : R → ℝ) (L : (M : ℕ) 
     (by simp only [↓reduceIte]; positivity) one_pos one_pos
   simp only [mhRatio, Bool.false_eq_true, if_false, if_true, mul_one, one_mul] at h
   exact h
+
+/-! ### (c) The moves in measure form -/
+
+/-- `a · min 1 (b / a) = min a b` for `a, b ≥ 0`. -/
+theorem mul_min_one_div {a b : ℝ} (ha : 0 ≤ a) (hb : 0 ≤ b) : a * min 1 (b / a) = min a b := by
+  rcases ha.eq_or_lt with h | h
+  · rw [← h, zero_mul, min_eq_left hb]
+  · rw [mul_min_of_nonneg _ _ h.le, mul_one, mul_div_cancel₀ _ h.ne']
+
+/-- The birth's ratio at `(c, r)`, position `i`. -/
+noncomputable def birthRatio (w : ℕ → ℝ) (pr q : R → ℝ) (L : (M : ℕ) → (Fin M → R) → ℝ)
+    (PB PD : ℕ → ℝ) {M : ℕ} (i : Fin (M + 1)) (c : Fin M → R) (r : R) : ℝ :=
+  L (M + 1) (insertAt i r c) / L M c * (w (M + 1) / w M) * (PD (M + 1) / PB M) * (pr r / q r)
+
+/-- The flux density of births at position `i`, from `c` with the ridge `r`. -/
+noncomputable def birthFlux (w : ℕ → ℝ) (pr q : R → ℝ) (L : (M : ℕ) → (Fin M → R) → ℝ)
+    (PB PD : ℕ → ℝ) {M : ℕ} (i : Fin (M + 1)) (c : Fin M → R) (r : R) : ℝ :=
+  tupleTarget w pr L M c * (PB M / (M + 1) * q r) * min 1 (birthRatio w pr q L PB PD i c r)
+
+/-- The flux density of deaths at position `i`, from `c′`. -/
+noncomputable def deathFlux (w : ℕ → ℝ) (pr q : R → ℝ) (L : (M : ℕ) → (Fin M → R) → ℝ)
+    (PB PD : ℕ → ℝ) {M : ℕ} (i : Fin (M + 1)) (c' : Fin (M + 1) → R) : ℝ :=
+  tupleTarget w pr L (M + 1) c' * (PD (M + 1) / (M + 1)) *
+    min 1 (birthRatio w pr q L PB PD i (Fin.removeNth i c') (c' i))⁻¹
+
+/-- Pointwise, a birth's flux equals the reverse death's: `birth_death_balance`. -/
+theorem birthFlux_eq_deathFlux (w : ℕ → ℝ) (pr q : R → ℝ) (L : (M : ℕ) → (Fin M → R) → ℝ)
+    (PB PD : ℕ → ℝ) {M : ℕ} (i : Fin (M + 1)) (c : Fin M → R) (r : R) (hw : ∀ k, 0 < w k)
+    (hpr : ∀ x, 0 < pr x) (hq : ∀ x, 0 < q x) (hL : ∀ k c, 0 < L k c) (hPB : 0 < PB M)
+    (hPD : 0 < PD (M + 1)) :
+    birthFlux w pr q L PB PD i c r = deathFlux w pr q L PB PD i (insertAt i r c) := by
+  have hrem : Fin.removeNth i (insertAt i r c) = c := by simp [insertAt]
+  have hat : insertAt i r c i = r := by simp [insertAt]
+  simp only [birthFlux, deathFlux, hrem, hat]
+  exact birth_death_balance w pr q L PB PD c i r (hw M) (hw (M + 1)) hpr (hL M c)
+    (hL (M + 1) _) (hq r) hPB hPD
+
+open MeasureTheory
+
+/-- **AS-3(c)(i), Metropolis–Hastings in measure.** With the target `π` and the proposal `q`
+densities against one base measure `ν`, the flux from `A` to `B` equals the flux from `B` to `A`. On
+the sphere of the active coordinates, with its surface measure as `ν`, this is the change move. -/
+theorem mh_flux_symm {S : Type*} [MeasurableSpace S] (ν : Measure S) [SFinite ν]
+    (π : S → ℝ) (q : S → S → ℝ) (hπ : ∀ x, 0 ≤ π x) (hq : ∀ x y, 0 ≤ q x y)
+    (hmeas : Measurable (fun p : S × S => π p.1 * q p.1 p.2)) (A B : Set S) :
+    ∫⁻ x in A, ∫⁻ y in B, ENNReal.ofReal (π x * (q x y * min 1 (mhRatio π q x y))) ∂ν ∂ν =
+      ∫⁻ y in B, ∫⁻ x in A, ENNReal.ofReal (π y * (q y x * min 1 (mhRatio π q y x))) ∂ν ∂ν := by
+  have key : ∀ x y, π x * (q x y * min 1 (mhRatio π q x y)) =
+      min (π x * q x y) (π y * q y x) := fun x y => by
+    rw [← mul_assoc, mhRatio]
+    exact mul_min_one_div (mul_nonneg (hπ x) (hq x y)) (mul_nonneg (hπ y) (hq y x))
+  simp only [key]
+  have hm : Measurable (Function.uncurry fun x y =>
+      ENNReal.ofReal (min (π x * q x y) (π y * q y x))) :=
+    ENNReal.measurable_ofReal.comp (hmeas.min (hmeas.comp measurable_swap))
+  rw [lintegral_lintegral_swap hm.aemeasurable]
+  refine lintegral_congr fun y => lintegral_congr fun x => ?_
+  rw [min_comm]
+
+variable [MeasurableSpace R]
+
+/-- **AS-3(c)(ii), birth and death in measure.** Insertion at position `i` carries `ν ⊗ ν^M` to
+`ν^{M+1}` (`measurePreserving_piFinSuccAbove`): that is the dimension matching, with Jacobian `1`.
+With the ridges' prior `pr` and the proposal `q` densities against `ν`, the flux from `A ⊆ R^M`
+into `B ⊆ R^{M+1}` through births at `i` equals the flux back through deaths at `i`. -/
+theorem birth_death_flux (ν : Measure R) [SigmaFinite ν] (w : ℕ → ℝ) (pr q : R → ℝ)
+    (L : (M : ℕ) → (Fin M → R) → ℝ) (PB PD : ℕ → ℝ) {M : ℕ} (i : Fin (M + 1))
+    (hw : ∀ k, 0 < w k) (hpr : ∀ x, 0 < pr x) (hq : ∀ x, 0 < q x) (hL : ∀ k c, 0 < L k c)
+    (hPB : 0 < PB M) (hPD : 0 < PD (M + 1))
+    (hmD : Measurable (deathFlux w pr q L PB PD i)) (A : Set (Fin M → R))
+    (B : Set (Fin (M + 1) → R)) (hA : MeasurableSet A) (hB : MeasurableSet B) :
+    ∫⁻ c, ∫⁻ r, A.indicator 1 c * B.indicator 1 (insertAt i r c) *
+        ENNReal.ofReal (birthFlux w pr q L PB PD i c r) ∂ν ∂(Measure.pi fun _ => ν) =
+      ∫⁻ c', B.indicator 1 c' * A.indicator 1 (Fin.removeNth i c') *
+        ENNReal.ofReal (deathFlux w pr q L PB PD i c') ∂(Measure.pi fun _ => ν) := by
+  set e := MeasurableEquiv.piFinSuccAbove (fun _ : Fin (M + 1) => R) i
+  set G : (Fin (M + 1) → R) → ENNReal := fun c' => B.indicator 1 c' *
+    A.indicator 1 (Fin.removeNth i c') * ENNReal.ofReal (deathFlux w pr q L PB PD i c')
+  have hrem : Measurable (fun c' : Fin (M + 1) → R => Fin.removeNth i c') := by
+    have := measurable_snd.comp e.measurable
+    simpa [e, Function.comp_def] using this
+  have hG : Measurable G :=
+    ((measurable_one.indicator hB).mul ((measurable_one.indicator hA).comp hrem)).mul
+      (ENNReal.measurable_ofReal.comp hmD)
+  have hsymm : ∀ r c, e.symm (r, c) = insertAt i r c := fun r c => rfl
+  have hmp := (measurePreserving_piFinSuccAbove (fun _ : Fin (M + 1) => ν) i).symm e
+  rw [hmp.lintegral_map_equiv G e.symm,
+    lintegral_prod_symm (fun z => G (e.symm z)) (hG.comp e.symm.measurable).aemeasurable]
+  refine lintegral_congr fun c => lintegral_congr fun r => ?_
+  simp only [G, hsymm]
+  have hr : Fin.removeNth i (insertAt i r c) = c := by simp [insertAt]
+  rw [hr, birthFlux_eq_deathFlux w pr q L PB PD i c r hw hpr hq hL hPB hPD]
+  ring
 
 end BirthDeath
 
