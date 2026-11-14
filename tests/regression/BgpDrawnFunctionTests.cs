@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.Linq;
+using Maths.LinAlg;
 using Maths.Regression.Bgp;
 using Maths.Regression.Conformal;
 using Maths.Rng;
@@ -218,15 +219,16 @@ public sealed class BgpDrawnFunctionTests(ITestOutputHelper output)
         double[] points = [.. Enumerable.Range(0, 30).Select(i => x[i, 0]), 0.4012, 0.9990, 1.0400];
         (_, double[,] c) = gp.JointPosteriorInFrame(gp.Fit(0.02), Column(points));
         int p = points.Length;
-        var l = new double[p * p];
-        int rank = BgpSampler.PivotedFactor(c, l);
-        Assert.All(l, v => Assert.True(double.IsFinite(v)));
+        var pivoted = new PivotedCholesky(p);
+        pivoted.Decompose(c);
+        Assert.True(pivoted.PositiveSemidefinite);
+        int rank = pivoted.Rank;
         double largest = Enumerable.Range(0, p).Max(a => c[a, a]), worst = 0.0;
         for (int a = 0; a < p; a++)
             for (int b = 0; b <= a; b++)
             {
                 double s = 0.0;
-                for (int k = 0; k < rank; k++) s += l[a * p + k] * l[b * p + k];
+                for (int k = 0; k < rank; k++) s += pivoted.Loading(a, k) * pivoted.Loading(b, k);
                 worst = Math.Max(worst, Math.Abs(s - c[a, b]));
             }
         output.WriteLine($"rank {rank} of {p}; largest gap {worst:E2} against the largest variance {largest:E3}");

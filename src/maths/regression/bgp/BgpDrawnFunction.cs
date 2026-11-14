@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using Maths.Distributions;
+using Maths.LinAlg;
 using Maths.Rng;
 
 namespace Maths.Regression.Bgp;
@@ -63,8 +64,9 @@ public sealed partial class BgpSampler
         foreach (IReadOnlyList<BgpDraw> chain in result.BandwidthDraws) total += chain.Count;
         var values = new double[total, p];
         var noise = new double[total];
-        var factor = new double[p * p];
+        var pivoted = new PivotedCholesky(p);
         var z = new double[p];
+        var shape = new double[p];
         double[] mean = [];
         int rank = 0;
         GpFit? previous = null;
@@ -77,18 +79,17 @@ public sealed partial class BgpSampler
                 if (previous is null || dr.Fit.Bandwidth != previous.Bandwidth || dr.Fit.NoiseRatio != previous.NoiseRatio)
                 {
                     (mean, double[,] covariance) = _gp.JointPosteriorInFrame(dr.Fit, mapped);
-                    rank = PivotedFactor(covariance, factor);
+                    pivoted.Decompose(covariance, PivotTolerance);
+                    if (!pivoted.PositiveSemidefinite)
+                        throw new InvalidOperationException(
+                            $"The joint posterior covariance is materially indefinite: its remainder reaches {pivoted.RelativeRemainder:E3} of its largest variance.");
+                    rank = pivoted.Rank;
                     previous = dr.Fit;
                 }
                 double scale = Math.Sqrt(dr.SignalVariance);
                 for (int k = 0; k < rank; k++) z[k] = Normal.SampleStandard(rng);
-                for (int a = 0; a < p; a++)
-                {
-                    double s = 0.0;
-                    int row = a * p;
-                    for (int k = 0; k < rank; k++) s += factor[row + k] * z[k];
-                    values[draw, a] = mean[a] + scale * s;
-                }
+                pivoted.Map(z.AsSpan(0, rank), shape);
+                for (int a = 0; a < p; a++) values[draw, a] = mean[a] + scale * shape[a];
                 noise[draw] = dr.NoiseVariance;
                 draw++;
             }
