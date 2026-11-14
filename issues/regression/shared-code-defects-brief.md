@@ -113,6 +113,33 @@ The measurement's options 2 and 4 are not built. Option 2 costs what *reference 
 
 Newest first. Each gives the commits, the gates' results, defects found, decisions for the user and "Doc changes owed".
 
+### 2026-11-14 — In progress: slice 6, the samplers' condition check as a setting
+
+- **The form, read at each sampler site.** Every one of the nine is a positive sum of fixed positive semidefinite terms. Nothing has been run yet.
+  - `Baps`: ZᵀZ + λP, ZᵀZ + Σᵢ ληᵢdᵢdᵢᵀ and ZᵀZ + Σⱼ λⱼPⱼ. The collapsed scheme's `SolveFactored` is the first of these.
+  - `HierarchicalPSpline`, five sites:
+    - ZᵀZ/σ² + I/τ_u²;
+    - (R/τ_u²)I + Σⱼ Pⱼ/τ_0j²;
+    - the collapsed precision Σⱼ Pⱼ/τ_0j² + Σₖ R/(σ² + τ_u²λₖ)·λₖvₖvₖᵀ, whose terms come from ZᵀZ's eigenvectors;
+    - ξ²ZᵀZ/σ² + I/σ_η²;
+    - R·ZᵀZ/σ² + Σⱼ Pⱼ/τ_0j².
+  - One coefficient can reach 0: ξ². The bound is then infinite, and the screen hands the step to the estimate.
+- **The bound carried to the gate's reading.** It is derived, not yet swept.
+  - The result: κ₁(E_c) ≤ m·√ν·(max ρ / min ρ)·‖E_ref⁻¹‖₁, where m is the most nonzeros in a column of A.
+  - *Jacobi scaling.* The diagonal at c is the reference's times factors in [min ρ, max ρ]. So λ_min(E_c) ≥ λ_min(E_ref)·min ρ / max ρ, and van der Sluis's factor does not enter.
+  - *The norm of E.* ‖E_c‖₁ ≤ m, because E has a unit diagonal and entries of at most 1.
+  - *The 1-norm of E_c⁻¹ against its 2-norm:* a factor of √ν.
+  - *The estimator's shortfall has no bound.* `ConditionEstimate`'s own summary says so. So the reference is read exactly instead: ‖E_ref⁻¹‖₁ from ν solves, once per run.
+  - *What this makes S.* The screen admits when 2·m·√ν·‖E_ref⁻¹‖₁·max ρ / min ρ ≤ 10¹⁴, with the 2 covering rounding. In the brief's form, S = 2·m·√ν / ‖E_ref‖₁. That depends on ν and on the sparsity pattern, so S is not one constant. It goes to the user with the sweep's slack.
+- **Plan.**
+  - *Commit A:*
+    - a `ConditionCheck` setting (`EveryFactorization`, `Screened`, `ReferenceOnly`) on the constructors of `Baps` and `HierarchicalPSpline`;
+    - a `ConditionRecord` for each system on `BapsResult` and `HierarchicalResult`, carried in the chain's state.
+    - Screened never refuses on the reference's reading. A reference that cannot clear the screen leaves every step to the estimate, so screened decides as every-factorization does by construction.
+  - *Commit B:* option 5.
+  - Then the sweep, the cost probe rerun with four arms, the gates and the report.
+- **Next step.** Building commit A.
+
 ### 2026-11-14 — The named-output readouts verified from a clean archive (coordinating session)
 
 - **Run:** `scripts/verify-csharp.ps1` on one clean archive of HEAD `79e858f`, the Commit selection over the seven files of `c543297` in each test project where they select a class.
