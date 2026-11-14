@@ -14,5 +14,6 @@ import Enthymemata.BgpUnknownVarianceTheorem
 import Enthymemata.ConformalValidity
 import Enthymemata.CumulativeField
 import Enthymemata.GuardedEstimator
+import Enthymemata.PenalizedAdmission
 import Enthymemata.PottsPK
 import Enthymemata.Stability

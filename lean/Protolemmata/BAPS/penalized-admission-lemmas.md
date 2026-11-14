@@ -2,7 +2,7 @@
 
 BAPS factors A(c) = Σₖ cₖSₖ at every sampler step, and a gate (`BapsAdmission`) admits a factor that is positive definite with an estimated κ₁ of its unit-diagonal scaling E(c) at most 10¹⁴. Slice 6 of the [defects brief](../../../issues/regression/shared-code-defects-brief.md#slice-6-the-samplers-condition-check-as-a-setting) builds a screen on a bound relative to one reference point, and the [BAPS follow-up's admission input](../../../issues/regression/bass/extensions-brief.md#input-for-the-follow-up-admission-and-singular-systems-2026-11-14) states the two failures behind the gate. These are the statements both rest on. They were commissioned on 2026-11-14, as targets 5 to 7 of the [chip brief](../BASS/active-subspace-lean-chip-brief.md#added-targets-a-penalized-systems-admission-2026-11-14). The coordinating session derived them that day and checked them against no run. The numeric checks are [`penalized-admission-checks.py`](penalized-admission-checks.py).
 
-**Status (2026-11-14).** Posed and checked, 17 of 17 pass. No Lean yet. Each target's own status line follows.
+**Status (2026-11-14).** All three are proved, with no apologies, in `lean/Enthymemata/PenalizedAdmission.lean`, namespace `PenalizedAdmission`. Each main result prints only `propext`, `Classical.choice` and `Quot.sound`. The checks pass 17 of 17. Target 7 is the restated chain (`90fa6ce`). No statement proved false. Each target's own status line follows.
 
 **What posing changed** (findings before any Lean):
 1. **PA-7: the first statement's chain held, and the same pieces gave a constant √q smaller.**
@@ -21,7 +21,7 @@ BAPS factors A(c) = Σₖ cₖSₖ at every sampler step, and a gate (`BapsAdmis
 
 ## PA-5 — identification does not read the coefficients
 
-**Status:** posed and checked (PA-5(i) to (iii) pass).
+**Status:** proved (`form_comb_eq_zero_iff`, `comb_mulVec_eq_zero_iff`, `comb_posDef_iff`, `comb_posDef_iff_of_pos`, `penalized_det_eq_zero_iff`). Checks PA-5(i) to (iii) pass.
 
 **Claims.** For c > 0 entrywise:
 - **(a)** xᵀA(c)x = 0 exactly when Sₖx = 0 for every k, so ker A(c) = ⋂ₖ ker Sₖ at every such c.
@@ -43,13 +43,17 @@ BAPS factors A(c) = Σₖ cₖSₖ at every sampler step, and a gate (`BapsAdmis
 
 **Decision.** Whether one check of the design at construction stands on a proved footing (the follow-up's direction 1). Under (b), a design that passes once passes at every c > 0. A per-step positive-definiteness check can then catch only a loss in the computed factor, never a change in the system's identification.
 
-**Lean (planned).** Statements over Mathlib's `Matrix.PosSemidef` and `Matrix.PosDef`, through `posSemidef_iff_dotProduct_mulVec` and `posDef_iff_dotProduct_mulVec`. Cauchy–Schwarz for a positive semidefinite form is proved from `discrim_le_zero`. Mathlib's `PosSemidef.dotProduct_mulVec_zero_iff` states the second step too, but its module imports the C*-algebra order.
+**Lean (proved).** The statements are over Mathlib's `Matrix.PosSemidef` and `Matrix.PosDef`, through `posSemidef_iff_dotProduct_mulVec` and `posDef_iff_dotProduct_mulVec`. `comb S c` is A(c) = Σₖ cₖ • Sₖ.
+- (a): `form_comb_eq_zero_iff` and `comb_mulVec_eq_zero_iff`.
+- (b): `comb_posDef_iff` and `comb_posDef_iff_of_pos`.
+- (c): `penalized_det_eq_zero_iff`, for a rectangular Z. It goes through a family indexed by `Option J`, whose extra term is ZᵀZ with coefficient 1.
+- Cauchy–Schwarz for a positive semidefinite form is `form_sq_le`, from `discrim_le_zero`. The proof's second step is `mulVec_eq_zero_of_form`. Mathlib's `PosSemidef.dotProduct_mulVec_zero_iff` states it too, but its module imports the C*-algebra order.
 
 **Prior art.** Textbook linear algebra; no source consulted.
 
 ## PA-6 — the bound
 
-**Status:** posed and checked (PA-6(i) to (iv) pass).
+**Status:** proved (`form_comb_bound`, `lamMin_comb_ge`, `lamMax_comb_le`, `cond2_comb_le`, `cond2_diagPair`, `bracket_one`). Checks PA-6(i) to (iv) pass.
 
 **Claims.** With ρₖ = cₖ / c′ₖ, m = minₖ ρₖ and M = maxₖ ρₖ:
 - **(a)** m·xᵀA(c′)x ≤ xᵀA(c)x ≤ M·xᵀA(c′)x for every x.
@@ -71,7 +75,16 @@ BAPS factors A(c) = Σₖ cₖSₖ at every sampler step, and a gate (`BapsAdmis
 
 **Decision.** Slice 6's screen rests on it. Sharpness says the window of c that the solve carries widens only with another form of the solve (the follow-up's direction 2), never with a better inequality.
 
-**Lean (planned).** (a) is the core. The eigenvalue lines go through Rayleigh bounds: λ_min and λ_max are defined as the infimum and supremum of xᵀAx / xᵀx over x ≠ 0. A bridge to Mathlib's `Matrix.IsHermitian.eigenvalues` is to be added if `Mathlib.Analysis.Matrix.Spectrum` serves, and the report says which landed.
+**Lean (proved), through Rayleigh bounds.**
+- *Definitions.* `lamMin A` and `lamMax A` are the infimum and supremum of xᵀAx / xᵀx over x ≠ 0, and `cond2 A` is their ratio.
+  - For a symmetric A these are the extreme eigenvalues and κ₂. The Lean does not prove that identification.
+  - No bridge to Mathlib's `Matrix.IsHermitian.eigenvalues` landed. It is a follow-up with no decision waiting.
+- *The ratios enter as a bracket:* m·c′ₖ ≤ cₖ ≤ M·c′ₖ for every k. With c′ > 0 that is m ≤ ρₖ ≤ M, and min ρ and max ρ are the tightest bracket.
+- (a): `form_comb_bound`.
+- (b): `lamMin_comb_ge` and `lamMax_comb_le`.
+- (c): `cond2_comb_le`. It uses `lamMin_pos`: a positive definite matrix has a positive least Rayleigh quotient, proved through its inverse with no spectral theorem.
+- (d): `cond2_diagPair`. `diagPair_posSemidef` and `comb_diagPair_posDef` witness that the instance meets the hypotheses: each term is singular, yet A(c) is positive definite.
+- (e): `bracket_one`.
 
 **Prior art.** Elementary. The defects brief's slice 6 states (a) to (c) as derived, with no source.
 
@@ -79,7 +92,7 @@ BAPS factors A(c) = Σₖ cₖSₖ at every sampler step, and a gate (`BapsAdmis
 
 Restated on 2026-11-14 (`90fa6ce`) from the defects chip's chain; finding 1 says how it differs from the first statement.
 
-**Status:** posed and checked (PA-7(a) to (d) pass).
+**Status:** proved (`diag_comb_bound`, `lamMin_unitScale_ge`, `norm1_le_card`, `norm1_le_sqrt_card`, `mulVec_sq_le_norm1`, `cond1_unitScale_le`). Checks PA-7(a) to (d) pass.
 
 **Claims.** With A(c′) positive definite (so A(c) is too, PA-5(b)), ρ against c′, and q bounding the nonzeros in any column of A(c):
 - **(a) The diagonal.** Every (Sₖ)ᵢᵢ ≥ 0, so m·A(c′)ᵢᵢ ≤ A(c)ᵢᵢ ≤ M·A(c′)ᵢᵢ.
@@ -122,9 +135,18 @@ Restated on 2026-11-14 (`90fa6ce`) from the defects chip's chain; finding 1 says
 
 **Decision.** Whether the screen admits only what the estimate admits, by proof in exact arithmetic, with rounding alone left to the sweep. The defects brief gets a line it can take, and the defects chip a message when the chain is settled.
 
-**Lean (planned).** Elementary: finite sums, Cauchy–Schwarz for a positive semidefinite form and for a finite sum, and Mathlib's matrix inverse.
+**Lean (proved).** Elementary: finite sums, Cauchy–Schwarz for a positive semidefinite form and for a finite sum, and Mathlib's matrix inverse.
+- *Definitions.* `unitScale A` is E = D^{-1/2}AD^{-1/2}. `norm1` is the largest column absolute sum, and `cond1 A = norm1 A · norm1 A⁻¹`.
+- (a): `diag_comb_bound`.
+- (b): `lamMin_unitScale_ge`.
+- (c1): `norm1_le_card`, through `abs_entry_le_one`.
+- (c2): `norm1_le_sqrt_card`.
+- (c3): `mulVec_sq_le_norm1`.
+- (d): `cond1_unitScale_le`.
+  - It uses `inv_norm1_le_lamMin` for λ_min(E(c′)) ≥ 1/‖E(c′)⁻¹‖₁ > 0.
+  - Its q bounds the nonzeros in every column of A(c), and E(c) has no more.
 - λ_min is the infimum of the Rayleigh quotient, as in PA-6.
-- ‖A‖₂ is the least β with ‖Ax‖ ≤ β‖x‖ for every x, so the norm lines are stated for such a β. (c2) reads: if ‖Ax‖ ≤ β‖x‖ for every x, then ‖A‖₁ ≤ √n·β. (c3) reads: for a symmetric A, ‖Ax‖ ≤ ‖A‖₁‖x‖ for every x. No operator norm is defined.
+- ‖A‖₂ is the least β with ‖Ax‖ ≤ β‖x‖ for every x, so the norm lines are stated for such a β, in squares. (c2) reads: if ‖Ax‖ ≤ β‖x‖ for every x, then ‖A‖₁ ≤ √n·β. (c3) reads: for a symmetric A, ‖Ax‖ ≤ ‖A‖₁‖x‖ for every x. No operator norm is defined.
 
 **Prior art.** The chain is the defects chip's (`76851ee`). Its pieces are textbook; the norm lines are standard comparisons. (c3) is Schur's test.
 
@@ -140,4 +162,4 @@ Restated on 2026-11-14 (`90fa6ce`) from the defects chip's chain; finding 1 says
   - Theorem 4.3: if moreover P has at most q nonzero elements in any row, the factor is q. That is this statement, with the unit diagonal as the equal diagonal.
   - His Theorem 4.2 is a √q lemma of another kind: ‖A‖₂ ≤ √q·maxᵢ ‖rowᵢ(A)‖₂ when A has at most q nonzeros in any column.
 - **Bradley and Murray, arXiv 1110.2805. Read in its LaTeX source.** It cites Theorems 4.1 and 4.3 with the same numbers and statements.
-- **Higham, *Accuracy and Stability of Numerical Algorithms* (2002), Corollary 7.6. Recalled, not read;** the book is not on the shelf. From memory, the factor n for symmetric positive definite A scaled by diag(aᵢᵢ^{-1/2}), van der Sluis's 4.1 in Higham's §7.3.
+- **Higham, *Accuracy and Stability of Numerical Algorithms* (2002), Corollary 7.6. Not on the shelf; read at second hand.** NAG's routine document for F07FFF (DPOEQU), on the shelf as `PDFs/other/LapackF07.pdf`, says this. The scaling sⱼ = 1/√aⱼⱼ gives B = SAS a unit diagonal, which puts κ₂(B) within a factor n of the smallest over all diagonal scalings, and it cites Corollary 7.6 for that. That is van der Sluis's 4.1.
