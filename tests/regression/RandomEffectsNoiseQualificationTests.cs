@@ -414,6 +414,103 @@ public sealed class RandomEffectsNoiseQualificationTests(ITestOutputHelper outpu
                          + string.Join(", ", names.Select((n, g) => $"{n} {perSecond[0][g] / perSecond[1][g]:F2}")));
     }
 
+    // Six levels of `each` cases: f = sin 2πx₀ + x₁, effects of sd 0.3 centred, and scaled t₃ noise of sd noiseOverEffects × 0.3.
+    private static BassData CasesPerLevel(int each, double noiseOverEffects, int seed)
+    {
+        const int levels = 6;
+        const double effectSd = 0.3;
+        int n = levels * each;
+        var rng = new Xoshiro256PlusPlus(seed);
+        double[] x0 = [.. Enumerable.Range(0, n).Select(_ => rng.NextDouble())], x1 = [.. Enumerable.Range(0, n).Select(_ => rng.NextDouble())];
+        int[] codes = [.. Enumerable.Range(0, n).Select(i => i % levels)];
+        double[] effects = [.. Enumerable.Range(0, levels).Select(_ => effectSd * Normal.SampleStandard(rng))];
+        double centre = effects.Average(), scale = noiseOverEffects * effectSd / Math.Sqrt(3.0);   // t₃'s variance is 3
+        var t3 = StudentT.Standard(3.0);
+        double[] y = [.. Enumerable.Range(0, n).Select(i => Math.Sin(2.0 * Math.PI * x0[i]) + x1[i] + effects[codes[i]] - centre + scale * t3.Sample(rng))];
+        var grouping = new CategoricalPredictor("g", codes, [.. Enumerable.Range(0, levels).Select(l => $"l{l}")]);
+        return new BassData([new ContinuousPredictor("x0", x0), new ContinuousPredictor("x1", x1)], new ScalarResponse(y), [grouping]);
+    }
+
+    // Four chains of a plain sweep on `model`: ln σ², ln s, u₀ and M by chain, and the seconds they took.
+    private static (double[][][] Samples, double Seconds) Chains(BassModel model, int seed, int burn, int kept)
+    {
+        const int chains = 4;
+        var samples = new double[4][][];
+        for (int g = 0; g < 4; g++) samples[g] = new double[chains][];
+        long t0 = BassCost.Tick();
+        for (int c = 0; c < chains; c++)
+        {
+            var moves = new BassStructureMoves(model, [], 0.0);
+            var chain = new ReversibleJumpChain<BassState>(moves.Moves, model.Target, moves.Start, new Xoshiro256PlusPlus(seed * 10 + c));
+            var rng = new Xoshiro256PlusPlus(seed * 100 + c);
+            List<IBlock<ReversibleJumpChain<BassState>>> blocks = BassSweepSlots.Blocks(model);
+            for (int g = 0; g < 4; g++) samples[g][c] = new double[kept];
+            for (int k = 0; k < burn + kept; k++)
+            {
+                foreach (IBlock<ReversibleJumpChain<BassState>> block in blocks) block.Update(chain, rng);
+                if (k < burn) continue;
+                WorkingResponse reading = moves.DesignAt(chain.Current).Working;
+                samples[0][c][k - burn] = Math.Log(reading.Latents!.Sigma2!.Value);
+                samples[1][c][k - burn] = Math.Log(reading.Effects!.Block.Scales.Span[0]);
+                samples[2][c][k - burn] = reading.Effects.Effects[0][0];
+                samples[3][c][k - burn] = chain.Current.Count;
+            }
+        }
+        return (samples, (BassCost.Tick() - t0) / BassCost.TicksPerSecond);
+    }
+
+    // Bulk ESS, NaN where a series never moves.
+    private static double BulkEss(double[][] chains)
+        => chains.All(chain => chain.All(x => x == chain[0])) ? double.NaN : ChainDiagnostics.Diagnose(chains).BulkEss.Value;
+
+    // Slice 7, item 2: s's interweaving against the centred step alone over a grid of cases per level, with noise small and large against
+    // the effects, under two fitted laws and three seeds (data and chains). Each cell reads ρ = m·E[s²], the per-level ratio of the data's
+    // precision to the effects' prior precision (s in σ's units), the candidate boundary for an automatic default, beside the ESS ratios.
+    [Theory]
+    [InlineData("t", "small")]
+    [InlineData("t", "large")]
+    [InlineData("nw", "small")]
+    [InlineData("nw", "large")]
+    public void Mixing_InterwovenScales_OverCasesPerLevel(string law, string noise)
+    {
+        if (!BassQualification.Enabled) return;   // heavy
+        double ratio = noise == "small" ? 0.5 : 2.0;
+        string[] names = ["ln sigma2", "ln s", "u0", "M"];
+        foreach (int each in new[] { 2, 4, 8, 16, 32 })
+            foreach (int seed in new[] { 1, 2, 3 })
+            {
+                BassData data = CasesPerLevel(each, ratio, 1000 * each + seed);
+                var ess = new double[2][];
+                var seconds = new double[2];
+                double rho = double.NaN, meanS = double.NaN;
+                foreach (bool woven in new[] { true, false })
+                {
+                    BassConfig config = BassStudentTTests.Config(law == "t" ? BassNoise.StudentT(4) : BassNoise.NormalWald()) with
+                    {
+                        Structure = new BassStructureSpec { MaxInteraction = 1, MaxBasis = 6 },
+                        Sigma2 = Sigma2Prior.InverseGamma(2.0, 0.05),
+                        RandomIntercepts = [new BassRandomIntercept("g", 1.0, ScalePrior: new BassGroupScalePrior())],
+                        Sampling = new BassSampling { Chains = 1, MasterSeed = seed, BurnIn = 0, Samples = 1, InterweaveGroupScales = woven },
+                    };
+                    (double[][][] samples, double took) = Chains(BassModel.Create(config, data), seed, 2000, 20_000);
+                    int arm = woven ? 0 : 1;
+                    ess[arm] = [.. samples.Select(BulkEss)];
+                    seconds[arm] = took;
+                    if (!woven)
+                    {
+                        double[] lnS = [.. samples[1].SelectMany(chain => chain)];
+                        meanS = lnS.Average(Math.Exp);
+                        rho = each * lnS.Average(x => Math.Exp(2.0 * x));
+                    }
+                }
+                string Ratio(int g, bool perSecond) => (ess[0][g] / ess[1][g] * (perSecond ? seconds[1] / seconds[0] : 1.0)).ToString("F2");
+                output.WriteLine($"{law}, {noise} noise, m = {each}, seed {seed}: rho {rho:F2}, E[s] {meanS:F3}; on over off per sweep: "
+                                 + string.Join(", ", names.Select((n, g) => $"{n} {Ratio(g, false)}")) + "; per second: "
+                                 + string.Join(", ", names.Select((n, g) => $"{n} {Ratio(g, true)}"))
+                                 + $"; off's ESS ln s {ess[1][1]:F0}, M {ess[1][3]:F0}");
+            }
+    }
+
     // Pearson's correlation; 0 where either series is constant.
     private static double Correlation(double[] a, double[] b)
     {
