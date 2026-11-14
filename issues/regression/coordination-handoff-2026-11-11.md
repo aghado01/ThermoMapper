@@ -146,7 +146,9 @@ Carried:
 14. **E8: a sign convention for the projection frame** (raised by the active-subspace Lean chip, 2026-11-13; nothing built).
     - *The finding, checked in source:* `BassProjection.Of` copies `SubspacePosterior.MeanCVectors` as `DenseEigen` returns them (`BassProjection.cs:136`), and neither fixes a column's sign. A projected refit is invariant in law under a sign flip of a frame column, but not draw for draw. The invariance in law rests on an informal argument: AS-4(iii)'s class-level converse is not formalized. A solver change that flips a column (`75523c4` is the kind) moves the refit's draws and any pin on a projected fit.
     - *The proposal:* make each frame column's largest-magnitude entry positive, ties to the lowest index. Then "W₁ fixes the refit" holds bit for bit across solver versions.
-    - *Placement:* `BassProjectionComparison.cs:97` compares the frame with `MeanCVectors` by exact inequality, so the convention belongs where `MeanCVectors` is formed, or the comparison moves with it.
+    - *The rule already exists* (found by the first coordinating session, checked in source): `Pca.Orient` (`src/maths/linalg/PCA.cs:52`) makes an axis's largest-magnitude entry positive, the first on ties, and its doc names it as shared with estimators that return principal axes of their own. `MoMPCA` calls it, and `BassDecomposition.cs:418` holds an inline copy.
+    - *Placement:* `BassProjectionComparison.cs:97` compares the frame with `MeanCVectors` by exact inequality. Applying `Pca.Orient` where `SubspacePosterior` forms `MeanCVectors` gives E8 the repo's convention, and the frame and that comparison agree with no further change.
+    - *Caveat:* where two entries of opposite sign nearly tie in magnitude, the sign stays sensitive to rounding under any rule of this kind.
     - *What moves:* pins on projected fits, once, wherever the solver's sign differs from the convention.
 
 Closed since the 2026-11-11 handoff: `DenseEigen`'s relative threshold (`75523c4`), the projected fit's prior rules (7d), and regression's use of the legacy `CholeskyDecomposition` (BGP moved, `5db2e40`).
