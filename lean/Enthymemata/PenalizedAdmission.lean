@@ -805,4 +805,66 @@ theorem cond1_unitScale_le [Nonempty n] [DecidableEq n] (hS : ∀ k, (S k).PosSe
 
 end Scaling
 
+/-! ### The smallest instance
+
+`S₁ = diag(1, 0)` and `S₂ = diag(0, 1)`, each singular, with `c′ = (1, 1)`, `c = (2, 3)`, `m = 2`,
+`M = 3` and `q = 1`, meet every main theorem's hypotheses. BAPS's form is met by `Z = (1 0)` and
+`P = diag(0, 1)`. -/
+
+section Instance
+
+theorem card_filter_diagonal_le_one (d : n → ℝ) [DecidableEq n] (j : n) :
+    (univ.filter fun i => diagonal d i j ≠ 0).card ≤ 1 :=
+  Finset.card_le_one.2 fun a ha b hb => by
+    simp only [mem_filter, diagonal_apply] at ha hb
+    split_ifs at ha hb with h1 h2 <;> simp_all
+
+theorem bracket_low : ∀ k, (2 : ℝ) * (1 : Fin 2 → ℝ) k ≤ ![2, 3] k := by
+  intro k; fin_cases k <;> norm_num
+
+theorem bracket_high : ∀ k, (![2, 3] : Fin 2 → ℝ) k ≤ 3 * (1 : Fin 2 → ℝ) k := by
+  intro k; fin_cases k <;> norm_num
+
+example : (comb diagPair ![2, 3]).PosDef ↔ (comb diagPair 1).PosDef :=
+  comb_posDef_iff_of_pos diagPair_posSemidef (fun k => by fin_cases k <;> norm_num)
+    fun _ => one_pos
+
+example : (comb diagPair 1).PosDef := comb_diagPair_posDef fun _ => one_pos
+
+example (x : Fin 2 → ℝ) :
+    2 * (x ⬝ᵥ comb diagPair 1 *ᵥ x) ≤ x ⬝ᵥ comb diagPair ![2, 3] *ᵥ x ∧
+      x ⬝ᵥ comb diagPair ![2, 3] *ᵥ x ≤ 3 * (x ⬝ᵥ comb diagPair 1 *ᵥ x) :=
+  form_comb_bound diagPair_posSemidef bracket_low bracket_high x
+
+example : cond2 (comb diagPair ![2, 3]) ≤ 3 / 2 * cond2 (comb diagPair 1) :=
+  cond2_comb_le diagPair_posSemidef (fun k => by fin_cases k <;> norm_num) (by norm_num)
+    (by norm_num) bracket_low bracket_high (comb_diagPair_posDef fun _ => one_pos)
+
+example :
+    2 / 3 * lamMin (unitScale (comb diagPair 1)) ≤ lamMin (unitScale (comb diagPair ![2, 3])) :=
+  lamMin_unitScale_ge diagPair_posSemidef (by norm_num) (by norm_num) bracket_low bracket_high
+    (comb_diagPair_posDef fun _ => one_pos)
+
+example : cond1 (unitScale (comb diagPair ![2, 3])) ≤
+    (1 : ℕ) * √(Fintype.card (Fin 2)) * (3 / 2) * norm1 (unitScale (comb diagPair 1))⁻¹ :=
+  cond1_unitScale_le diagPair_posSemidef (by norm_num) (by norm_num) bracket_low bracket_high
+    (comb_diagPair_posDef fun _ => one_pos) fun j => by
+      rw [comb_diagPair]; exact card_filter_diagonal_le_one _ j
+
+/-- BAPS's form on the smallest instance: `Z = (1 0)`. -/
+def rowZ : Matrix (Fin 1) (Fin 2) ℝ := !![1, 0]
+
+/-- BAPS's form on the smallest instance: one penalty, `P = diag(0, 1)`. -/
+noncomputable def penaltyP : Fin 1 → Matrix (Fin 2) (Fin 2) ℝ := ![diagonal ![0, 1]]
+
+theorem penaltyP_posSemidef : ∀ j, (penaltyP j).PosSemidef := by
+  intro j
+  fin_cases j
+  simp [penaltyP, posSemidef_diagonal_iff, Fin.forall_fin_two]
+
+example := penalized_det_eq_zero_iff rowZ penaltyP penaltyP_posSemidef (1 : Fin 1 → ℝ)
+  fun _ => one_pos
+
+end Instance
+
 end PenalizedAdmission
