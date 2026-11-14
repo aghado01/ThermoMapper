@@ -85,6 +85,14 @@ Hand-over state between turns is an "In progress" entry here.
 
 ## Reports
 
+### 2026-11-14 — Payne–Weinberger verified from a clean archive (coordinating session)
+
+- **Commit:** `e683f48`, through `scripts/verify-lean.ps1` with `-Module Enthymemata.ActiveSubspace` and this folder's checks.
+- **Result:** 44 of 44 checks; 3,120 jobs with no warnings and no errors; meta-ci PASS, the seven modules proof-closed.
+- **Axioms:** every theorem of the seven modules, 142 in all, prints `propext`, `Classical.choice` and `Quot.sound` only. The five new and five changed declarations are among them.
+- **Statements:** the new and changed ones were read. No declaration name of `dd06a48` is gone, and five are added. The four changed statements are each the stronger or more general form.
+- **Receipts:** `artifacts/verify-lean-e683f48/`, with the axioms file and the summary tracked in [receipts](../../../issues/regression/receipts/verify-lean-e683f48/).
+
 ### 2026-11-14 — Payne–Weinberger: the truncated normal's min, proved whole
 
 **Landed:** `1ea5d6b`.
