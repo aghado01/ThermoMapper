@@ -27,23 +27,71 @@ As in the archived brief: each slice is reported here, then waits for the main s
 
 Newest first.
 
-### In progress — Slice 18, the guarantee read out (started 2026-11-14)
+### 2026-11-14 — Slice 18, the guarantee read out
 
-At the user's pick (2026-11-14, "Slice 18, the guarantee read out"), under the Lean's sections `LossPosterior` and `ProperScores` (proved 2026-11-10, checked against their sources 2026-11-13) and the archived plan's row 18, with its 2026-11-13 correction: b*_β is read out as Gaffke's confidence bound, calibrated over replicated calibration sets (Vlassis and Thomas's Theorem 1), and never named a posterior. Snell and Griffiths's Theorem 4.3 fails as stated (the Lean's finding).
+Built at the user's pick (2026-11-14, "Slice 18, the guarantee read out"), under the Lean's sections `LossPosterior` and `ProperScores` (proved 2026-11-10, checked against their sources 2026-11-13). It follows the archived plan's row 18 and its 2026-11-13 correction: b*_β is Gaffke's confidence bound, calibrated over replicated calibration sets, and never named a posterior.
 
-**Plan.**
-- *Gaffke's bound* (`LossBound`). The law of L⁺ = Σ Uᵢ ℓ₍ᵢ₎ over n losses in [0, B] and ℓ₍ₙ₊₁₎ = B, with U ~ Dir(1, …, 1). P(L⁺ > x) is the divided difference of (t − x)₊ⁿ on the knots, confluent where they tie, read in exact rational arithmetic. b*_β is its β-quantile, by bisection. At 0/1 losses the law is Beta(k + 1, n − k); at one loss b*_β = ℓ + β(B − ℓ) (`gaffke_one`).
-- *Two threshold rules on a loss matrix* (`RiskControl`), with the losses nonincreasing in the threshold and at most B:
-  - conformal risk control, the first threshold with (Σℓ + B)/(n + 1) ≤ α: expected test loss at most α (`crc_orderings`);
-  - the high-probability rule, the first with b*_β ≤ α: risk above α with chance at most 1 − β (`fail_le_fixed`, through Vlassis and Thomas's calibration).
-- *Proper scores* (Gressmann et al.; Gneiting and Raftery) for the predictive distributions beside the CRPS: the log score and the quadratic score on the grid's cells (`logLoss_proper`, `gneitingLoss_gap`).
-- *Gates* (the plan's):
-  - the bound's calibration over replicated small calibration sets, P(J ≤ b*_β) ≥ β, discrete losses included;
-  - the exact law against the Beta law and against Dirichlet draws;
-  - both rules' guarantees by simulation;
-  - the scores' propriety.
+**Landed** on `main`, nothing pushed:
+- `5b55a6f`:
+  - `LossBound`, with `Cdf`, `Survival`, `Mean` and `Gaffke`;
+  - `RiskControl.Mean` and `RiskControl.HighProbability`, giving a `RiskThreshold`;
+  - `ConformalDistribution.CellMasses`, `LogScore` and `QuadraticScore`;
+  - `GuaranteeReadoutTests`.
+- *Nothing existing changes.*
 
-**State.** Being written. Nothing committed.
+**What it computes.**
+- *The law of L⁺ = Σ Uᵢ ℓ₍ᵢ₎,* over n losses in [0, B] and ℓ₍ₙ₊₁₎ = B, U ~ Dir(1, …, 1).
+  - P(L⁺ > x) is the divided difference of (t − x)₊ⁿ on the knots, confluent where they tie. It is read in exact rational arithmetic on the losses' binary values, so discrete and tied losses read exactly.
+  - Losses of two values take an exact binomial sum, O(n) a reading: there L⁺ = a + (B − a)·Beta(c_B, c_a).
+  - `Mean` is (Σ ℓ + B)/(n + 1).
+- *`Gaffke(β)`,* b*_β, the least x with P(L⁺ ≤ x) ≥ β, by bisection on the exact law. It is Gaffke's upper confidence bound on the risk J: P(J ≤ b*_β) ≥ β over replicated calibration sets of independent losses at most B (Vlassis and Thomas's Theorem 1). At one loss it is ℓ + β(B − ℓ) (`gaffke_one`).
+- *`RiskControl`,* on a loss matrix nonincreasing in the threshold:
+  - `Mean`: the first threshold with (Σ ℓ + B)/(n + 1) ≤ α. The expected test loss is at most α (`crc_orderings`), given the losses at the last threshold at most α.
+  - `HighProbability`: the first threshold with b*_β ≤ α, by bisection. Its risk exceeds α with chance at most 1 − β (`fail_le_fixed`).
+  - Each reports whether any threshold met α.
+- *Proper scores on the grid's cells.* `CellMasses` is the predictive's law on (−∞, g₀], (g₀, g₁], …, (g_{G−1}, ∞), from Q̄.
+  - `LogScore(y)` is −ln of y's cell (`logLoss_proper`, `logLoss_strict`).
+  - `QuadraticScore(y)` is Σ p² − 2p of y's cell, minus Gneiting and Raftery's quadratic score (`gneitingLoss_gap`).
+  - Both are NaN for a case with no distribution.
+
+**Gates.**
+- *The law is exact:*
+  - one loss gives ℓ + β(B − ℓ) on 50 cases;
+  - 0/1 losses give Beta(k + 1, n − k), P(Bin(n, x) ≥ k + 1), to 10⁻¹² on 60 cases;
+  - three loss sets, ties included, agree with 100,000 Dirichlet draws at five points within 4.5 se.
+- *Calibration over replicated calibration sets* (2,000 each), P(J ≤ b*_β):
+
+  | loss law | n 3 | n 8 |
+  |---|---|---|
+  | Bernoulli(0.3), β 0.75 | 1.000 | 0.941 |
+  | Bernoulli(0.3), β 0.9 | 1.000 | 0.938 |
+  | three points on {0, ½, 1}, β 0.9 | 1.000 | 0.973 |
+  | U², β 0.9 | 1.000 | 0.997 |
+
+  Every rate is at least β, conservative at these small n, discrete losses included.
+- *The rules* (miscoverage of {s ≤ λ} on a grid of 101 thresholds, scores uniform, n 30, α 0.1, 1,500 calibration sets): conformal risk control's test loss is 0.093; the high-probability rule (β 0.9) fails 0.026, against the allowed 0.1.
+- *Propriety, exactly,* on 500 pairs of laws on 2 to 8 cells: the log score's gap is KL(q ‖ p) > 0, and the quadratic score's gap is Σ (p − q)².
+- *On the split predictive distribution* (199 calibration units, 400 test cases, cells of width 1): the right fit beats one ignoring x on the quadratic score, −0.254 against −0.237.
+- *The refusals:*
+  - losses outside [0, B] or NaN, an infinite B, β outside (0, 1);
+  - losses that rise in the threshold, losses above B, no thresholds.
+  - A rule no threshold satisfies returns the last, flagged.
+- *Existing classes,* the predictive-distribution tests, pass unchanged.
+- *Per commit,* the selected classes and the pinned tier: 1,218 of 1,218.
+
+**Defects found: none in code.** One finding about the readout. The split predictive distribution is a step function in the calibration ranks, so a cell no calibration PIT rises across has no mass, and the log score is +∞ for an observation there: 2 of 400 cases for the right fit at cells of width 1. The log-loss's propriety needs the forecast positive where the truth is (`logLoss_proper`'s hypothesis), which such cells break. Over the finite cases the right fit scores 1.48 against 1.61. The quadratic score has no such gap and is the one that ranks fits on these distributions.
+
+**Follow-ups, each with the decision it would change.**
+- *A smoothed cell law for the log score:* the PIT ranks' randomized Q spread over the cell, or a floor. Decides whether the layer offers the log score on predictive distributions without +∞.
+- *The calibration for n ≥ 2 in the Lean* (Vlassis and Thomas's chain-measure induction), formalized only at one unit here. Decides whether the Lean states what `HighProbability` reports.
+- *A set's own miscoverage bound:* b*_β applies to losses of a fixed set rule, such as a validation split's misses. A set whose threshold is chosen on the same calibration units needs the training-conditional law instead. Decides whether conformal sets report a held-out bound.
+
+**Doc changes owed** (for the offline docs pass): `docs/Maths/Regression/ConformalPrediction.md`:
+- a section on the guarantee read out: Gaffke's bound as a confidence bound, never a posterior, with Snell and Griffiths's Theorem 4.3 failing as stated;
+- the two risk rules and their guarantees;
+- the cell scores beside the CRPS, and the log score's +∞ on step-function laws;
+- the gates' numbers;
+- API rows for `LossBound`, `RiskControl`, `RiskThreshold`, `CellMasses`, `LogScore` and `QuadraticScore`.
 
 ### 2026-11-14 — Slice 16, batch predictive inference
 
