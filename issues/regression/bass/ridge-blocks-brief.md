@@ -177,6 +177,44 @@ Maintain an **In progress** entry here with uncommitted work, running checks and
 
 Newest first.
 
+### Slice 7, item 2: an automatic default by cases per level (GBASS chip, 2026-11-13)
+
+**Landed** in `4133984` (the grid) and the commit that carries this report. The step and its default are unchanged, and no rule is proposed.
+
+**The grid** (`Mixing_InterwovenScales_OverCasesPerLevel`), 60 cells:
+- six levels of m = 2, 4, 8, 16 or 32 cases;
+- scaled t₃ noise at 0.5 and 2 times the effects' sd of 0.3;
+- fitted under t₄ and the unskewed Normal-Wald, with IG(2, 0.05) on σ² and the half-Cauchy on s;
+- three seeds, each drawing the data and seeding the chains;
+- the step on against off, four chains of 2,000 + 20,000 sweeps each.
+
+Each cell reads ρ = m·E[s²] from the step-off arm: the per-level ratio of the data's precision about u to its prior's, s in σ's units. The bulk ESS per second, on over off, by ρ band, as ranges with medians:
+
+| ρ | cells | ln s | u0 | ln σ² | M |
+|---|---|---|---|---|---|
+| below 3 | 8 | 1.22 to 6.86 (2.38) | 0.91 to 2.24 (1.18) | 0.42 to 1.70 (0.95) | 0.51 to 1.28 (0.73) |
+| 3 to 10 | 15 | 1.01 to 4.08 (1.56) | 0.45 to 1.49 (1.06) | 0.41 to 1.67 (0.94) | 0.43 to 1.92 (0.91) |
+| 10 to 25 | 16 | 0.50 to 1.79 (1.06) | 0.51 to 12.49 (0.92) | 0.42 to 3.39 (0.94) | 0.49 to 1.28 (0.78), 15 readable |
+| above 25 | 21 | 0.69 to 1.43 (0.92) | 0.15 to 2.94 (0.74) | 0.11 to 3.26 (0.77) | 0.13 to 4.92 (0.59), 14 readable |
+
+M's ratio is read only where the step-off arm's ESS of M is at least 100. At small noise and large m, M barely moves in either arm (ESS 6 to 113).
+
+**Found.**
+- *ln s's gain has one boundary, near ρ = 10, across both laws, both noise levels and every seed.* Every cell below it gains, at least 1.01 per second. Above about 20 the gain is gone (medians 1.06 and 0.92). Between 10 and 13 a few m = 2 cells still gain (1.4 to 1.8).
+- *The cost to M and ln σ² has no boundary.* Below ρ = 10 it is seed-dependent: M 0.43 to 1.92, ln σ² 0.41 to 1.70, medians 0.73 to 0.95. No band holds ln s's gain without that cost, the item 1 cost through σ²'s block.
+- *Cases per level alone separates nothing.* m = 2 gains at every ρ it reached (2 to 13), and m = 4 to 16 gains or not by the noise against s.
+- *ρ is a posterior quantity.* A rule on it needs a pilot fit or a prior-based ρ.
+
+**The decision it served.** The commission proposes a rule only where one regime boundary holds across laws and seeds, with ln s's gain read beside M's and ln σ²'s costs. The grid gives ln s's boundary but no cost-free regime, so no rule is proposed. The option stays an opt-in, off by default, until the user decides. Two choices are open:
+- keep it so, with ρ̂ = m·ŝ² below about 10 as the documented guide for switching it on;
+- commission a pilot-based switch on ρ̂ < 10, accepting a seed-dependent cost to M (median 0.73 to 0.91 per second).
+
+**Per commit:** 72 of 72 (the test file alone; the rows return early without `BASS_QUALIFICATION`).
+
+**Doc changes owed:** `docs/Maths/RandomEffects.md`, the interweaving step's section: the grid's table by ρ, the guide (switch the step on where ρ̂ = m·ŝ² is below about 10), and its seed-dependent cost to M and ln σ².
+
+**Follow-ups.** None new. Item 1's untested candidate, σ's own interweaving against u, is the one change that could remove the cost the grid finds below ρ = 10.
+
 ### Slice 7, item 1: why ln σ² and M mix worse with the interwoven step (GBASS chip, 2026-11-13)
 
 **Landed** in `d594d30` (the measurement) and the commit that carries this report. The step is unchanged: no fix was found to build.
