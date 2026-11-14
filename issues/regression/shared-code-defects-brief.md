@@ -113,32 +113,197 @@ The measurement's options 2 and 4 are not built. Option 2 costs what *reference 
 
 Newest first. Each gives the commits, the gates' results, defects found, decisions for the user and "Doc changes owed".
 
-### 2026-11-14 — In progress: slice 6, the samplers' condition check as a setting
+### 2026-11-14 — Slice 6: the samplers' condition check as a setting
 
-- **The form, read at each sampler site.** Every one of the nine is a positive sum of fixed positive semidefinite terms. Nothing has been run yet.
-  - `Baps`: ZᵀZ + λP, ZᵀZ + Σᵢ ληᵢdᵢdᵢᵀ and ZᵀZ + Σⱼ λⱼPⱼ. The collapsed scheme's `SolveFactored` is the first of these.
-  - `HierarchicalPSpline`, five sites:
-    - ZᵀZ/σ² + I/τ_u²;
-    - (R/τ_u²)I + Σⱼ Pⱼ/τ_0j²;
-    - the collapsed precision Σⱼ Pⱼ/τ_0j² + Σₖ R/(σ² + τ_u²λₖ)·λₖvₖvₖᵀ, whose terms come from ZᵀZ's eigenvectors;
-    - ξ²ZᵀZ/σ² + I/σ_η²;
-    - R·ZᵀZ/σ² + Σⱼ Pⱼ/τ_0j².
-  - One coefficient can reach 0: ξ². The bound is then infinite, and the screen hands the step to the estimate.
-- **The bound carried to the gate's reading.** It is derived, not yet swept.
-  - The result: κ₁(E_c) ≤ m·√ν·(max ρ / min ρ)·‖E_ref⁻¹‖₁, where m is the most nonzeros in a column of A.
-  - *Jacobi scaling.* The diagonal at c is the reference's times factors in [min ρ, max ρ]. So λ_min(E_c) ≥ λ_min(E_ref)·min ρ / max ρ, and van der Sluis's factor does not enter.
-  - *The norm of E.* ‖E_c‖₁ ≤ m, because E has a unit diagonal and entries of at most 1.
-  - *The 1-norm of E_c⁻¹ against its 2-norm:* a factor of √ν.
-  - *The estimator's shortfall has no bound.* `ConditionEstimate`'s own summary says so. So the reference is read exactly instead: ‖E_ref⁻¹‖₁ from ν solves, once per run.
-  - *What this makes S.* The screen admits when 2·m·√ν·‖E_ref⁻¹‖₁·max ρ / min ρ ≤ 10¹⁴, with the 2 covering rounding. In the brief's form, S = 2·m·√ν / ‖E_ref‖₁. That depends on ν and on the sparsity pattern, so S is not one constant. It goes to the user with the sweep's slack.
-- **Plan.**
-  - *Commit A:*
-    - a `ConditionCheck` setting (`EveryFactorization`, `Screened`, `ReferenceOnly`) on the constructors of `Baps` and `HierarchicalPSpline`;
-    - a `ConditionRecord` for each system on `BapsResult` and `HierarchicalResult`, carried in the chain's state.
-    - Screened never refuses on the reference's reading. A reference that cannot clear the screen leaves every step to the estimate, so screened decides as every-factorization does by construction.
-  - *Commit B:* option 5.
-  - Then the sweep, the cost probe rerun with four arms, the gates and the report.
-- **Next step.** Building commit A.
+**Commits.**
+- `76851ee`: the In-progress entry.
+- `5f7fac5`: the setting, the screen and the records.
+- `514dbcd`: option 5.
+- `8b0a7fb`: the doc-comment fix from the review of `514dbcd`.
+- This report.
+
+**The setting.** The name, the values' names and the records' type are proposed by [CONTRIBUTING's vocabulary](../../CONTRIBUTING.md#naming--vocabulary): functional names, with *screen* used in its numerical sense, a cheap test that rules out an expensive one.
+- *`ConditionCheck`* is a constructor parameter, `conditionCheck`, on `Baps` and `HierarchicalPSpline`. Its three values:
+  - `EveryFactorization` is the default, slice 5's rule at each step.
+  - `Screened`.
+  - `ReferenceOnly`.
+- *Where it reaches:* the three `Baps` sites, the hierarchical model's five sites, and the collapsed scheme's `PenalizedSpline.SolveFactored`, through an internal overload. Deterministic solves keep their estimate at every factorization: `SolveFactored(λ)`, `PenaltySpectrum` and `AnisotropicTensorSpline`.
+- *`ConditionRecord`*, one per system, sits on `BapsResult.ConditionRecords` and `HierarchicalResult.ConditionRecords`. It is filled in every mode with:
+  - the reference condition (NaN under `EveryFactorization`, which takes none, and +∞ for a reference that is not positive definite);
+  - the widest ratio visited;
+  - the number of factorizations;
+  - the number of estimates;
+  - the largest estimate (NaN when none ran).
+- *Where the records live.* They ride in each chain's state (`ConditionTally`), so a snapshot carries them.
+- *The fingerprint.* A non-default mode enters the run's fingerprint, so a checkpoint resumes only under the mode that started it. The default's fingerprint string is unchanged.
+- *The screened refusal* names the step's estimate, the reference point's condition and the coefficients' ratio to it. For example, for λ/λ₀ = 10¹⁴ on a 1-D fixture: "its equilibrated condition 2.39E+14 past 1e14, where the reference point's is 2.72 and the coefficients' ratio to it 1E+14".
+- *The every-factorization message* keeps its text exactly.
+
+**The form at each site.** Confirmed at all nine sites, so no site is reported outside the form.
+- *Two cases need care.*
+  - *ξ²ZᵀZ/σ² + I/σ_η².* The coefficient ξ² can be 0. The bound is then infinite, and the screen hands the step to the estimate.
+  - *The collapsed precision.* Its data term R·Zᵀ(σ²I + τ_u²ZZᵀ)⁻¹Z is Σₖ R/(σ² + τ_u²λₖ)·λₖvₖvₖᵀ: ν positive semidefinite terms from ZᵀZ's eigenvectors, which the block already builds. Each term's ratio to the reference, (λ̄ + λₖ)/(σ² + τ_u²λₖ), is monotone in λₖ. So the extremes sit at the smallest positive and the largest eigenvalue, and the ratio costs O(1) per step.
+- *What the screen assumes of a penalty.* It assumes every `IBandPenalty` term is positive semidefinite, as a prior precision is. `DifferencePenalty` and `TensorPenalty` are: DᵀD, D_xᵀD_x ⊗ I and I ⊗ D_yᵀD_y.
+
+**The reference point.** It is fixed by the configuration alone: trace balance of each term against its system's leading term. A resumed run therefore decides every step as the uninterrupted one does.
+- `Baps`:
+  - λ₀ = tr ZᵀZ / tr P;
+  - λ₀ⱼ = tr ZᵀZ / tr Pⱼ;
+  - the per-row multipliers at their prior mean, ηᵢ = 1, so every local term sits at λ₀.
+- `HierarchicalPSpline`:
+  - ZᵀZ/σ² + I/τ_u² and ξ²ZᵀZ/σ² + I/σ_η²: I at λ̄ = tr ZᵀZ / ν;
+  - (R/τ_u²)I + ΣPⱼ/τ_0j²: each Pⱼ at ν / tr Pⱼ;
+  - R·ZᵀZ/σ² + ΣPⱼ/τ_0j²: each Pⱼ at tr ZᵀZ / tr Pⱼ;
+  - the collapsed precision: the data term at σ²/τ_u² = λ̄, and each Pⱼ at trace balance against the data term there.
+
+**From the bound to the gate's reading, and S.**
+- *The bound* κ₂(A(c)) ≤ κ₂(A(c_ref))·max ρ / min ρ holds as the brief states it.
+- *Two steps carry it to the gate's κ₁(E(c)).*
+  1. *Jacobi scaling.* diag A(c) is diag A(c_ref) times factors in [min ρ, max ρ]. So λ_min(E(c)) ≥ λ_min(E(c_ref))·min ρ / max ρ, and van der Sluis's factor does not enter.
+  2. *The 1-norm.* ‖E(c)‖₁ ≤ m, the most nonzeros in a column, read from the terms' patterns. ‖E(c)⁻¹‖₁ ≤ √ν·‖E(c)⁻¹‖₂. ‖E(c_ref)⁻¹‖₂ ≤ ‖E(c_ref)⁻¹‖₁.
+- *The result:* κ₁(E(c)) ≤ m·√ν·(max ρ / min ρ)·‖E(c_ref)⁻¹‖₁.
+- *The estimator's shortfall has no bound.* `ConditionEstimate`'s summary says so, and so does Higham's account of the method. A screen built on the reference's estimate would rest on an unproven factor. So the reference is read exactly instead: ‖E(c_ref)⁻¹‖₁ from ν solves, once per run, in both modes that take a reading.
+- *This departs from the brief's "one estimate per run".* The cost is ν solves once per run, in place of 5 to 11.
+- *What S comes to.* The screen clears a step when 2·m·√ν·‖E(c_ref)⁻¹‖₁·max ρ / min ρ ≤ 10¹⁴, the 2 covering rounding. In the brief's form, S = 2·m·√ν / ‖E(c_ref)‖₁. It depends on ν and the pattern, so it is not one named constant.
+- *The screen never refuses on its own.* A reference that cannot clear the screen leaves every step to the estimate. So screened decides every step as every-factorization does by construction, the reference included.
+- *What each mode refuses on.*
+  - *Every factorization:* the estimate at every step, positive definite and κ̂(E) ≤ 10¹⁴.
+  - *Screened:* the same rule at every step. The reference reading only decides where the estimate is skipped.
+  - *Reference only:* the exact κ₁(E(c_ref)) at the reference, before the first draw, then positive definiteness at each step. The exact value is at least the estimate. So it can refuse a borderline design that every factorization would admit at that same point: one with κ̂ ≤ 10¹⁴ < κ₁. Every factorization never factors the reference itself, so no run shows that difference unless a chain visits the reference.
+- *Settled, not for the user.* The coordinating session checked the chain by hand on 2026-11-14. The derived form and the exact reference reading stand as built.
+- *Proved in Lean.* The Lean chip proved the chain in `212752f`: `cond1_unitScale_le` in `lean/Enthymemata/PenalizedAdmission.lean`. The coordinating session verified it at `cea554f`.
+  - *Its hypotheses:* A(c_ref) positive definite; m·c_ref,ₖ ≤ cₖ ≤ M·c_ref,ₖ for every k; at most q nonzeros in any column of A(c). All three are satisfiable.
+  - *Its conclusion, in exact arithmetic:* κ₁(E(c)) ≤ q·√n·(M/m)·‖E(c_ref)⁻¹‖₁.
+  - *Outside the proof:* rounding, which the factor 2 covers, and a coefficient at 0 (ξ²), where the screen hands the step to the estimate.
+
+**The sweep.** `BapsConditionCheckTests`, the four invariant tests. On no step did the screen admit what the estimate refused.
+- *What it covers:* each system's form on its own fixtures:
+  - designs from well identified to nearly unidentified: x confined to widths from 1 down to 10⁻⁶ in 1-D; y's spread shrinking from 1 to 0 in the 8 × 8 tensor;
+  - coefficient ratios from 10⁻¹² to 10²⁰, chosen and seeded at random, past the refusal.
+- *The slack against the derived S.* The largest κ̂(E(c)) / (κ_ref·max ρ / min ρ):
+
+  | System | Systems | Screen cleared | Fell through, admitted | Refused | Not PD | Slack, admitted | Slack, all PD | S |
+  |---|---|---|---|---|---|---|---|---|
+  | ZᵀZ + λP | 848 | 283 | 228 | 192 | 145 | 1.00 | 3.49 | 12.5–58 |
+  | ZᵀZ + Dᵀdiag(λᵢ)D | 816 | 176 | 203 | 193 | 244 | 1.00 | 1.10 | 19.8–41.5 |
+  | ZᵀZ + Σⱼ λⱼPⱼ | 474 | 79 | 92 | 126 | 177 | 1.00 | 15 | 135–335 |
+  | ZᵀZ/σ² + I/τ_u² | 124 | 72 | 38 | 13 | 1 | 1.30 | 1.30 | 17.7–42.5 |
+  | (R/τ_u²)I + P/τ_0² | 124 | 78 | 30 | 5 | 11 | 0.94 | 1.00 | 25.6 |
+  | the collapsed precision | 332 | 117 | 106 | 65 | 44 | 1.03 | 1.07 | 79.1–149 |
+  | ξ²ZᵀZ/σ² + I/σ_η² | 128 | 72 | 42 | 13 | 1 | 1.30 | 1.30 | 17.7–42.5 |
+  | R·ZᵀZ/σ² + P/τ_0² | 124 | 38 | 46 | 21 | 19 | 0.99 | 1.41 | 19.8–41.5 |
+
+  - On admitted systems the slack is at most 1.3. Above that it appears only near singularity: up to 15, on tensor systems the gate refuses.
+  - S stands 10 to 300 times above the slack seen. The derivation and the sweep disagree by that much. It is recorded below, not put as a decision.
+  - "Fell through, admitted" counts the cost of that gap in this sweep: steps the estimate admitted that a tighter S would have cleared. The sweep's ratios reach 10²⁰, far past what the chains visit.
+
+**The gates.**
+- *Same chain.* Over the measurement's 19 cases the three modes drew the same chain bit for bit, 20 burn-in steps and 30 draws each:
+  - every coefficient;
+  - λ, σ², τ² and η, and each component's τⱼ²;
+  - the conditional means;
+  - every hierarchical draw.
+- *The same factorizations.* The records show the three modes factor the same systems and visit the same widest ratio.
+- *Refusals.*
+  - *An unidentified design.* All three modes refuse it before the first draw: 1-D with one distinct x under Gibbs; the 8 × 8 tensor with fixed y under the anisotropic scheme; the hierarchical collapsed and parameter-expanded sweeps. Reference only refuses at its reference reading, and says so.
+  - *A coefficient far out.* At λ/λ₀ = 10¹⁴ the factor is positive definite with κ̂ = 2.4·10¹⁴. Every factorization and screened refuse it, and reference only admits it.
+  - *In chains.* The collapsed scheme with a log-step of 12 reaches such λ. Every factorization and screened refuse at the same λ on every seed that refuses. Reference only refuses there only on positive definiteness.
+- *Resume.* An interrupted and resumed run matched the uninterrupted one bit for bit in each mode, records included, for `Baps` Gibbs and the centred hierarchical sweep. A screened checkpoint resumed under the default mode is refused.
+- *Option 5.* After a factorization the estimate reads the same bits as on a fresh factor, and allocates 0 bytes per call once warm. A factorization with `condition: false` has the same factor, solves and log-determinant bit for bit, and refuses the estimate.
+- *Commit and slice scope.*
+  - `5f7fac5`: Commit scope 227/227.
+  - `514dbcd`: Commit scope from `5f7fac5` plus its files: LinAlg 129/129; Regression 3116/3116, 315 classes; Oracle 145/147, the two failures the transport oracle's R timeout; VizCore 12/12; SPC, CumulativeField, EMeans and KMeans select none. Two of the first readings failed on this chip's own tests and were fixed before the commit: an allocation count taken during the JIT's tier-up, and the far-λ probe asking a skipped pass for its estimate.
+  - The regression assembly at the end: Slice scope, the whole assembly on `514dbcd` plus `8b0a7fb`'s file: 3453/3453.
+
+**What the chains saw: R1, on the measurement's fixtures.** In every sampler and both hierarchical sizes, over 50 steps, the screen cleared every step: 0 estimates under screened.
+- The reference condition ran from 2.6 to 9.8.
+- The widest ratio ran from 6.5 to 2.4·10³.
+- The largest estimate, 3.0·10³, is eleven decades below the bound.
+- The extensions brief's R1 reading still owes the nearly polynomial truth and the long chains.
+
+**Cost.** The measurement's probe was rerun on `514dbcd` with four arms on the same seeds: the three modes, and positive definiteness alone.
+- *How it was run.*
+  - Each case first checked that the four arms draw the same chain bit for bit. All 19 did.
+  - Then 7 interleaved repetitions of 0.5 s blocks, each arm leading in turn. The blocks ran at High priority with the thread at Highest, pinned to 0xFF, after the measurement's warm-up and settle.
+  - 0.9 to 14.8 of 18 logical processors were busy, mostly under 6. The coordinating session held its runs for the duration.
+- *The positive-definite arm skips the ‖E‖₁ pass as well.* So the every-factorization column now carries that pass, and runs above `7dca8ff`'s ratios on small systems.
+- *Where the files are.* The probe, its stage patch, its run script and the CSVs are in `artifacts/chip-defects/slice6/probe/`.
+
+  | Case | PD alone, µs/step | Every factorization | Screened | Reference only | Screen fell through | Solves per estimate |
+  |---|---|---|---|---|---|---|
+  | Gibbs ν=12, n/ν=2 | 2.68 | 1.87 | 1.00 | 0.90 | 0/200 | 6.5 |
+  | Gibbs ν=12, n/ν=10 | 4.23 | 1.46 | 0.96 | 1.04 | 0/200 | 7.1 |
+  | Gibbs ν=12, n/ν=50 | 15.3 | 1.03 | 1.04 | 0.94 | 0/200 | 7.2 |
+  | Gibbs ν=48, n/ν=2 | 13.9 | 1.41 | 1.02 | 0.99 | 0/200 | 5.1 |
+  | Gibbs ν=48, n/ν=10 | 46.5 | 1.08 | 0.97 | 0.99 | 0/200 | 5.0 |
+  | Gibbs ν=48, n/ν=50 | 198 | 1.05 | 1.09 | 1.02 | 0/200 | 5.0 |
+  | Gibbs ν=192, n/ν=2 | 130 | 1.17 | 0.94 | 0.94 | 0/200 | 6.7 |
+  | Gibbs ν=192, n/ν=10 | 583 | 1.09 | 0.96 | 1.00 | 0/200 | 6.3 |
+  | Gibbs ν=192, n/ν=50 | 3,065 | 1.03 | 1.01 | 0.97 | 0/200 | 5.1 |
+  | Locally adaptive ν=48 | 44.9 | 1.09 | 0.96 | 1.01 | 0/200 | 5.1 |
+  | Collapsed ν=48 | 4.03 | 2.31 | 0.99 | 1.00 | 0/201 | 5.0 |
+  | Hierarchical centred ν=24 | 62.6 | 0.99 | 0.95 | 0.96 | 0/400 | 5.8 |
+  | Hierarchical collapsed ν=24 | 99.4 | 1.11 | 1.01 | 1.03 | 0/400 | 5.8 |
+  | Hierarchical expanded ν=24 | 127 | 1.09 | 1.00 | 1.09 | 0/400 | 6.2 |
+  | Hierarchical centred ν=96 | 641 | 1.10 | 1.11 | 1.04 | 0/400 | 6.0 |
+  | Hierarchical collapsed ν=96 | 2,634 | 1.21 | 0.98 | 1.05 | 0/400 | 6.4 |
+  | Hierarchical expanded ν=96 | 1,594 | 1.02 | 0.93 | 0.99 | 0/400 | 5.8 |
+  | Tensor 8 × 8 | 108 | 1.42 | 1.04 | 1.05 | 0/200 | 7.0 |
+  | Tensor 16 × 16 | 1,355 | 1.36 | 0.99 | 1.10 | 0/200 | 6.9 |
+
+- *What the table shows.*
+  - Screened and reference only cost what positive definiteness alone costs: 0.93 to 1.11, inside the blocks' ranges.
+  - Every factorization costs 1.03 to 1.87 on 1-D Gibbs steps, 2.31 in the collapsed scheme, 1.36 to 1.42 on the tensor, and 0.99 to 1.21 hierarchical.
+  - The screen fell through on no step, the reference condition ran from 2.7 to 9.8, and the widest ratio reached 1.0·10⁵ (locally adaptive).
+- *Allocation, in bytes per step over the positive-definite arm.*
+  - *+32 on the band sites under every factorization.* That is the probe's own counting closure, whose display class C# allocates at the method's entry. Without the patch the workspace estimate allocates 0, as `ConditionEstimateTests` checks.
+  - *+1,416 in the collapsed scheme.* `SolveFactored` builds a new factor per solve, so its workspace is built per estimate.
+  - *+816 and +2,008 for the hierarchical collapsed precision.* Its `DenseCholesky` keeps the allocating estimate.
+  - *The screened and reference arms* carry the per-run reference reading spread over a short block: +574 on the 16 × 16 tensor over 395 steps, and +128 at ν = 192, n/ν = 50, over 181 steps.
+
+**Option 5** (`514dbcd`). The factor's interface took it cleanly.
+- `BandCholesky.Decompose` and `DecomposeBanded` take `condition: true` by default. False skips the ‖E‖₁ pass, and `EquilibratedCondition` then refuses.
+- The estimate runs in a `ConditionWorkspace` the factor keeps: three work vectors and a cached E⁻¹ apply. It computes the same bits.
+- The BAPS sampler sites pass the screen's decision, so a step the screen clears skips the pass as well.
+- *Not changed here.*
+  - `DenseCholesky`, `WideBandCholesky` and `BorderedCholesky` keep their allocating estimate.
+  - `PenalizedSpline.SolveFactored` builds a new factor per solve, so the collapsed scheme's estimate still allocates.
+  - Holding one factor in the collapsed sampler would take that away. Its accepted solve keeps the factor for the conditional draw, so that change needs its own reading.
+- *Reviewed by the coordinating session.* Its one finding: `ConditionWorkspace` had been placed between `ConditionEstimate`'s summary and its declaration. That is fixed in `8b0a7fb`.
+
+**For the user. Reported, left unbuilt.**
+1. *Whether screened becomes the default.*
+   - *For it.* On the measurement's fixtures a screened step costs 0.93 to 1.11 of the positive-definite arm's, against every-factorization's 0.99 to 2.31, and the screen fell through on no step. It decides as every-factorization does: proved, swept, and checked chain by chain on the 19 cases.
+   - *Against it.*
+     - Its first call per run costs ν solves, visible only on short runs.
+     - The provable S falls through about two decades early, against a run whose ratios reach about 10¹⁴ / (S·κ_ref). The sweep shows that region. No measured chain came near it.
+     - The records under screened show fewer estimates, so the largest estimate seen covers only the steps the screen did not clear. The widest ratio is recorded in every mode.
+
+**For the record, not a decision.**
+- *S against the sweep.*
+  - The derivation gives S = 2·m·√ν / ‖E(c_ref)‖₁, 12.5 to 335 on these systems.
+  - The sweep's slack on admitted systems is at most 1.3.
+  - So the provable screen falls through one to two and a half decades before a screen tuned to the sweep would. On the measurement's fixtures that gap cost nothing, since no step came near it. `RoundingMargin` is the one named constant; m and √ν are structure.
+  - *The Lean chip's own reading agrees.* Script: `lean/Protolemmata/BAPS/penalized-admission-checks.py`, readings PA-7(d).
+    - 240 banded families of the three 1-D forms; n from 6 to 29; coefficients over e^±7.
+    - κ₁(E(c)) / ((max ρ / min ρ)·κ₁(E(c_ref))) reached at most 1.007, against q·√n up to 38.
+    - κ₁(E(c)) reached at most 0.145 of the proved bound.
+  - Whether a smaller factor holds for every family is open.
+- *Sites outside the form:* none.
+
+**Doc changes owed.**
+- `docs/` for BAPS:
+  - the `conditionCheck` setting and its three modes;
+  - the records on both results;
+  - the reference point's choices;
+  - the screen's derivation and S;
+  - that `ReferenceOnly` admits a drawn λ far out.
+- The LinAlg docs:
+  - `BandCholesky`'s `condition` flag;
+  - the estimate's workspace.
+- The extensions brief's input for the follow-up:
+  - R1 now rides on every run's records;
+  - R2 is answered by `7dca8ff` and this cost table.
 
 ### 2026-11-14 — The named-output readouts verified from a clean archive (coordinating session)
 
