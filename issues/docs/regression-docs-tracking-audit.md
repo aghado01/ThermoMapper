@@ -72,7 +72,7 @@ The share given is the section's distinctive numbers found in its best-matching 
 
 **[ConformalPrediction.md](../../docs/Maths/Regression/ConformalPrediction.md)**
 - A, about 145 lines:
-  - "Checks (slice 0)": 14/16 in [conformal-layer-brief.md](../regression/conformal-layer-brief.md);
+  - "Checks (slice 0)": 14/16 in [conformal-layer-brief.md](../regression/archive/bass-gbass-khaos-activespaces/briefs/conformal-layer-brief.md);
   - "Cost (slice 0)";
   - "Checks and cost (slice 2)": 27/48, any 39;
   - "Checks and cost (slice 3)": any 21/24.

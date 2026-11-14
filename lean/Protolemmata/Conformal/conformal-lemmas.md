@@ -255,7 +255,7 @@ Each Sₙ/S_i is the betting product from i + 1 to n, so `lintegral_capital` giv
 
 ## Slice 9 — cross-fitted forms and asymmetric CQR
 
-Posed and proved on 2026-11-09 for the [conformal layer's slice 9](../../../issues/regression/conformal-layer-brief.md#e16s-completion-the-plan-slices-7-onward), before any C#, from the [chip brief's assignment](conformal-chip-brief.md#e16-slice-9--cross-fitted-intervals-and-asymmetric-cqr-2026-11-09). The point is the contract: the exact rank rules the layer implements, and the hypotheses it must meet.
+Posed and proved on 2026-11-09 for the [conformal layer's slice 9](../../../issues/regression/archive/bass-gbass-khaos-activespaces/briefs/conformal-layer-brief.md#e16s-completion-the-plan-slices-7-onward), before any C#, from the [chip brief's assignment](conformal-chip-brief.md#e16-slice-9--cross-fitted-intervals-and-asymmetric-cqr-2026-11-09). The point is the contract: the exact rank rules the layer implements, and the hypotheses it must meet.
 
 **Status (2026-11-09).** The jackknife+, CV+ with both of its bounds, and asymmetric CQR are proved in `lean/Enthymemata/ConformalValidity.lean`, PROOF-CLOSED, and `#print axioms` shows the standard three only. CV+ was added the same day, once Barber et al. 2021 was on disk. Later the same day came the order-reading jackknife+, the one-fold CV+ bound, and the position-aware counterexample. [`conformal-checks.py`](conformal-checks.py), section "Slice 9", ran first, and every assertion holds. Not included: cross-conformal predictive distributions (below).
 
@@ -448,7 +448,7 @@ Vovk 2015, Vovk et al. 2018 and Vovk and Wang 2012, on combining p-values, are c
 
 ## Slice 10 — the full step's error, completed
 
-Posed and proved on 2026-11-10 for the [conformal layer's slice 10](../../../issues/regression/conformal-layer-brief.md#e16s-completion-the-plan-slices-7-onward), before any C#, from the [chip brief's assignment](conformal-chip-brief.md#e16-slices-10-and-12--the-full-steps-error-hoffs-score-and-the-latent-posterior-2026-11-10). It closes CB-3's open item, the margin under bounds that hold only with high probability.
+Posed and proved on 2026-11-10 for the [conformal layer's slice 10](../../../issues/regression/archive/bass-gbass-khaos-activespaces/briefs/conformal-layer-brief.md#e16s-completion-the-plan-slices-7-onward), before any C#, from the [chip brief's assignment](conformal-chip-brief.md#e16-slices-10-and-12--the-full-steps-error-hoffs-score-and-the-latent-posterior-2026-11-10). It closes CB-3's open item, the margin under bounds that hold only with high probability.
 
 **Status (2026-11-10).** Proved in `lean/Enthymemata/ConformalValidity.lean`, section `FullStepError`, PROOF-CLOSED, and `#print axioms` shows the standard three only. [`conformal-checks.py`](conformal-checks.py), section "Slice 10", ran first, exhaustive in exact arithmetic, and every assertion holds. Checked, not formalized: the PIT between grid values.
 
@@ -615,7 +615,7 @@ Formalized for slice 10's C#. It covers what the realized-ordering section check
 
 ## Slice 12 — Hoff's score and the latent posterior
 
-Posed and proved on 2026-11-10 for the [conformal layer's slice 12](../../../issues/regression/conformal-layer-brief.md#e16s-completion-the-plan-slices-7-onward), before any C#, from the [chip brief's assignment](conformal-chip-brief.md#e16-slices-10-and-12--the-full-steps-error-hoffs-score-and-the-latent-posterior-2026-11-10). It closes CB-4's Hoff finding.
+Posed and proved on 2026-11-10 for the [conformal layer's slice 12](../../../issues/regression/archive/bass-gbass-khaos-activespaces/briefs/conformal-layer-brief.md#e16s-completion-the-plan-slices-7-onward), before any C#, from the [chip brief's assignment](conformal-chip-brief.md#e16-slices-10-and-12--the-full-steps-error-hoffs-score-and-the-latent-posterior-2026-11-10). It closes CB-4's Hoff finding.
 
 **Status (2026-11-10).** Proved in `lean/Enthymemata/ConformalValidity.lean`, PROOF-CLOSED, and `#print axioms` shows the standard three only. The sections are `ShiftedBounds`, `Hoff`, `DrawnLatents`, `HoffOptimal` and `HoffLink`. [`conformal-checks.py`](conformal-checks.py), section "Slice 12", ran first, in CB-4's model and in exact arithmetic, and every assertion holds.
 

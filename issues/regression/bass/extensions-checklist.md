@@ -21,7 +21,7 @@ Companion to [extensions-brief.md](extensions-brief.md). An item is ticked when 
 - [ ] **E13** The free-energy curve over the ladder.
 - [ ] **E14** Semi-modular calibration.
 - [ ] **E15** Calibrated intervals for loss-based posteriors (BARS's Gibbs-loss route first).
-- [ ] **E16** Conformal Bayes, the consumer, with conformal predictive distributions. Building as an engine-wide layer ([brief](../conformal-layer-brief.md)). Landed: slices 0–2 on 2026-11-06; slices 3, 4, 4b (CB-3's per-unit bounds, the margin opt-in) and 5 (the other engines' seams) by 2026-11-08. Slice 6, E35, is under way. After it, the conformal chip completes E16's unbuilt items as slices 7 onward (the user, 2026-11-08).
+- [ ] **E16** Conformal Bayes, the consumer, with conformal predictive distributions. Building as an engine-wide layer ([brief](../archive/bass-gbass-khaos-activespaces/briefs/conformal-layer-brief.md)). Landed: slices 0–2 on 2026-11-06; slices 3, 4, 4b (CB-3's per-unit bounds, the margin opt-in) and 5 (the other engines' seams) by 2026-11-08. Slice 6, E35, is under way. After it, the conformal chip completes E16's unbuilt items as slices 7 onward (the user, 2026-11-08).
 - [ ] **E17** Conformal bands for whole curves.
 - [ ] **E18** Posteriors for readouts by resampling units.
 - [x] **E19** Polynomial-chaos terms. Built ([brief](khaos-brief.md)): KHAOS's six slices, in the user's order 0, 1, 2, 5, 4, 3, landed and verified by 2026-11-08, with CRAN's `khaos` 2.1.1 pinned and SMC's two flags from slice 5's trap (`42739ac`).

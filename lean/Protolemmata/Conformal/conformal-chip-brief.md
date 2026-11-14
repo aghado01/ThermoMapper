@@ -9,7 +9,7 @@ Status: commissioned 2026-11-13 by the user ("Lean first, 15 meanwhile", in the 
 - weighted K-fold CV+, by one fold under likelihood ratios and by merging under position weights;
 - under likelihood ratios, the tournament across folds (7e2b905) and the merged bound (follow-up 2e, which also corrects the averaging lemmas' hypotheses).
 
-**Why now.** Slice 14's C# (`c19ce98`; its [report](../../../issues/regression/conformal-layer-brief.md#2026-11-13--slice-14-the-weighted-rule-under-shift)) lists follow-ups that each need a guarantee before their C# (decision 7 on the layer plan). The C# chip builds the ratio estimator and slice 15 meanwhile, then these three as their Lean lands.
+**Why now.** Slice 14's C# (`c19ce98`; its [report](../../../issues/regression/archive/bass-gbass-khaos-activespaces/briefs/conformal-layer-brief.md#2026-11-13--slice-14-the-weighted-rule-under-shift)) lists follow-ups that each need a guarantee before their C# (decision 7 on the layer plan). The C# chip builds the ratio estimator and slice 15 meanwhile, then these three as their Lean lands.
 
 **How.**
 - As for the 2026-11-10 items below: checks first, exhaustive at small n, then the Lean in `ConformalValidity.lean`, in or beside section `Shift`.
@@ -29,7 +29,7 @@ Status: commissioned 2026-11-13 by the user ("Lean first, 15 meanwhile", in the 
 
 Status: commissioned 2026-11-10 by the user ("lets also send the pending lean work to conformal lean chip"), relayed by the main session. All six items were proved on 2026-11-10 and reported under Reports.
 
-**Why now.** These slices are Lean first (decision 7 on the [layer plan](../../../issues/regression/conformal-layer-brief.md#e16s-completion-the-plan-slices-7-onward)). The C# order of 13 to 18 waits for slice 10's BASS reading (decision 10). The Lean runs ahead of it, in the plan's order, so whichever slice the user picks first has its statements ready.
+**Why now.** These slices are Lean first (decision 7 on the [layer plan](../../../issues/regression/archive/bass-gbass-khaos-activespaces/briefs/conformal-layer-brief.md#e16s-completion-the-plan-slices-7-onward)). The C# order of 13 to 18 waits for slice 10's BASS reading (decision 10). The Lean runs ahead of it, in the plan's order, so whichever slice the user picks first has its statements ready.
 
 **How.**
 - The method, environment, gates and reporting are as for slices 10 and 12 below: checks first, exhaustive at small n, then the Lean.
@@ -66,11 +66,11 @@ Status: commissioned 2026-11-10 by the user ("lets also send the pending lean wo
 
 Status: commissioned 2026-11-10 by the user ("Yes, send it"), relayed by the main session. Slice 10 and slice 12 were proved on 2026-11-10 and reported under Reports.
 
-These are Lean first, by the user's decision 7 on the [layer plan](../../../issues/regression/conformal-layer-brief.md#e16s-completion-the-plan-slices-7-onward), so the C# for slices 10 and 12 waits for these statements. Do slice 10 first and report it on its own, so its C# can start while slice 12's Lean runs. The method, environment, self-review and reporting are as set out below. The numeric checks come first, exhaustive at small n with exact arithmetic. Then come the Lean, `#print axioms` on the main results, the module build, `scripts/meta-ci.ps1 -NoBuild` and D:'s free space. The files are the three named under Scope, plus `conformal-searches.py` where a search needs it.
+These are Lean first, by the user's decision 7 on the [layer plan](../../../issues/regression/archive/bass-gbass-khaos-activespaces/briefs/conformal-layer-brief.md#e16s-completion-the-plan-slices-7-onward), so the C# for slices 10 and 12 waits for these statements. Do slice 10 first and report it on its own, so its C# can start while slice 12's Lean runs. The method, environment, self-review and reporting are as set out below. The numeric checks come first, exhaustive at small n with exact arithmetic. Then come the Lean, `#print axioms` on the main results, the module build, `scripts/meta-ci.ps1 -NoBuild` and D:'s free space. The files are the three named under Scope, plus `conformal-searches.py` where a search needs it.
 
 ### Slice 10 — the full step's error, completed
 
-Read first, in the [layer brief](../../../issues/regression/conformal-layer-brief.md):
+Read first, in the [layer brief](../../../issues/regression/archive/bass-gbass-khaos-activespaces/briefs/conformal-layer-brief.md):
 - the slice 4 build report, for `ConformalDistribution` and the CDF score F̃;
 - the per-unit bounds' report, for `MarginBounds.Carried`, the orderings' bounds and why each dominates.
 
@@ -107,7 +107,7 @@ Out of scope, as under Scope below, and slices 13 to 18. Report under "Reports",
 
 Status: done 2026-11-09, report below.
 
-This is the Lean prerequisite for the [conformal layer's slice 9](../../../issues/regression/conformal-layer-brief.md#e16s-completion-the-plan-slices-7-onward). Establish the finite-sample statements the implementation may claim:
+This is the Lean prerequisite for the [conformal layer's slice 9](../../../issues/regression/archive/bass-gbass-khaos-activespaces/briefs/conformal-layer-brief.md#e16s-completion-the-plan-slices-7-onward). Establish the finite-sample statements the implementation may claim:
 
 - **Jackknife+.** Read the jackknife+ theorem of Barber, Candès, Ramdas and Tibshirani against the proposed rule. State the exchangeability and fitting-symmetry hypotheses, the exact order-statistic indices and endpoint conventions, and prove the marginal coverage lower bound of at least 1 − 2α. State which hypotheses and bound apply to CV+ if you include it. The engine brief's near-1 − α coverage is an empirical measurement.
 - **Asymmetric conformalized quantile regression (CQR).** With a fixed fit independent of the exchangeable calibration and test units, calibrate the lower and upper scores separately at α/2. State each tail's miscoverage bound, how ties and small calibration samples affect the endpoints, and the resulting two-sided coverage bound.

@@ -10,7 +10,7 @@ Commissioned by the user on 2026-11-13 through the coordinating session. Both de
 - `[1e300, 1e-300]`: the second ratio underflows and its log weight reads −∞. Subtracting logs keeps about −1381.55.
 - `[1e308, 1e308]`: the sum overflows, `CheckWeights` accepts it, and both log weights read −∞.
 
-**The record.** Conformal slice 10's report, ["Parked shared weighted-row follow-up" and "Follow-up verification criterion"](conformal-layer-brief.md#2026-11-11--slice-10-density-and-cdf-error-diagnostics). The criterion there is this slice's acceptance:
+**The record.** Conformal slice 10's report, ["Parked shared weighted-row follow-up" and "Follow-up verification criterion"](archive/bass-gbass-khaos-activespaces/briefs/conformal-layer-brief.md#2026-11-11--slice-10-density-and-cdf-error-diagnostics). The criterion there is this slice's acceptance:
 - the first input keeps its finite second log weight; the second returns two weights of 1/2; no NaN and no lost row;
 - the normalized log weights, and the weighted predictive, CDF and carried-error readings built on them, agree with an independent high-precision or log-sum-exp reference;
 - a finite log-likelihood tilt that makes the first input's tiny row material;
@@ -27,7 +27,7 @@ Commissioned by the user on 2026-11-13 through the coordinating session. Both de
 
 **The site.** `src/maths/linalg/Cholesky.cs`. A pivot at or below 10⁻¹² is set to 10⁻¹², whatever the matrix's scale.
 
-**The record.** Conformal slice 11's report, ["Defects found" and "The shared factor's floor"](conformal-layer-brief.md#2026-11-11--slice-11-bgps-drawn-f-the-retained-parameters-content-the-full-step-takes).
+**The record.** Conformal slice 11's report, ["Defects found" and "The shared factor's floor"](archive/bass-gbass-khaos-activespaces/briefs/conformal-layer-brief.md#2026-11-11--slice-11-bgps-drawn-f-the-retained-parameters-content-the-full-step-takes).
 - On a smooth kernel's covariance, whose spectrum falls below rounding, the rows under a floored pivot divide their rounding error by 10⁻⁶. Later pivots went to −3.7·10¹⁵⁷ and were floored again; 55 entries of the factor were infinite.
 - `LogDet` stayed finite (−683.6). Only `Status.Finite` reported the failure.
 - BGP left for `DenseCholesky` (`5db2e40`), and its drawn function carries its own diagonally pivoted factor (`BgpDrawnFunction`).
