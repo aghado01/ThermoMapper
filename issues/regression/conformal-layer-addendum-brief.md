@@ -29,6 +29,39 @@ As in the archived brief: each slice is reported here, then waits for the main s
 
 Newest first.
 
+### 2026-11-14 — Slice 18's follow-up: the smoothed cell law for the log score
+
+Built at the user's pick (2026-11-14, "Smoothed cell law for log score"), the first of slice 18's follow-ups.
+
+**Landed** on `main`, nothing pushed:
+- `b4b7e22`:
+  - `ConformalDistribution.Smoothed` (`SmoothedCdf`: G̃ and its complement at each grid value);
+  - `CellLaw` (`Steps`, `Smoothed`), which `CellMasses`, `LogScore` and `QuadraticScore` now take;
+  - `SplitPredictiveDistribution.SmoothedAt`;
+  - `SmoothedCellLawTests`.
+- *Nothing existing changes:* `CellLaw.Steps` is the default, so every existing call reads as before.
+
+**What it computes.**
+- *The law.* G̃(F̂(y | x)), G̃ the calibration PITs' empirical CDF interpolated linearly between its knots (0, 0), (PIT₍ᵢ₎, i/(n + 1)) and (1, 1). At a tie with the PITs it is (B + T)/(n + 1).
+- *Where it sits.* It lies inside the conformal band [Q⁻, Q⁺] at every y: it is the randomized Q(y, τ) with τ moving linearly across each gap between neighbouring PITs.
+- *What it fixes.* Wherever the fit's CDF rises, every cell has mass, so the log score is finite: `logLoss_proper`'s positivity hypothesis, which the step law breaks, is met.
+- *Precision.* Each point is read on the tail that holds its digits, as the CDF scores are, its complement kept beside it.
+- *What it gives up.* Exact uniformity: its PIT at the truth lies within 1/(n + 1) of uniform. The randomized Q keeps the exact guarantee; this law is for scoring.
+- *Where it applies.* The split form's unweighted cases. The full step's score is not monotone in y, and a weighed case reads weighted ranks, so both have none.
+
+**Gates.**
+- *Band and mass* (49 calibration units, 20 cases, cells of width 0.1): G̃ lies in [Q⁻, Q⁺] and rises at every grid value, G̃ + (1 − G̃) = 1, and every cell has mass. In every case the step law leaves cells empty.
+- *The log score* (199 calibration units, 400 cases, cells of width 1): the smoothed score is finite everywhere and ranks the right fit ahead of one ignoring x, 1.447 against 1.523. In this draw the step law happened to be finite everywhere too; its +∞, 2 of 400 in slice 18's draw, is the band-and-mass gate's empty cells.
+- *Uniformity* (99 calibration units, 4,000 replications): the smoothed PIT departs from uniform by at most 0.0068 at the deciles, within 1/(n + 1) = 0.0100.
+- *The grid-free readout:* `SmoothedAt` matches the grid's G̃ bit for bit.
+- *The full step and a weighed case* have no smoothed law, and their scores on it are NaN. An undefined `CellLaw` is refused.
+- *Existing classes,* slice 18's and the exact-ends tests, pass unchanged.
+- *Per commit,* the selected classes and the pinned tier: 1,228 of 1,228.
+
+**Defects found: none.**
+
+**Doc changes owed:** the guarantee-read-out section's cell scores gain the smoothed law, with its band property, its 1/(n + 1) uniformity, where it applies, and the API rows for `SmoothedCdf`, `CellLaw` and `SmoothedAt`.
+
 ### 2026-11-14 — Slice 17, scores beyond the model's own
 
 Built at the user's pick (2026-11-14, "Slice 17, scores beyond the model"), the archived plan's row 17, the last in the plan. Sources read in TeX:
