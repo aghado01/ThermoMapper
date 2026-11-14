@@ -43,7 +43,7 @@ Companion to [extensions-brief.md](extensions-brief.md). An item is ticked when 
 - [ ] **E35** Conformal test martingales: exchangeability checked online. Sources gathered by the user, 2026-11-08; after the conformal layer's slice 5.
 - [ ] **E36** Projection-pursuit ridges on the BASS core (BPPR), with `gcbeck/bppr`'s ideas weighed. Recorded 2026-11-08; after E8, not ordered.
 - [ ] **E37** Predictability of the truncation residual (D07's rank rule). Recorded 2026-11-08 from the Grassmann discussion, on the user's go-ahead; not ordered.
-- [ ] **E38** A replicate layer in BAPS, subsuming the hierarchical P-spline, with local multipliers on either layer. Recorded 2026-11-12 from a discussion, on the user's go-ahead; parked, after E3.
+- [ ] **E38** A replicate layer in BAPS, subsuming the hierarchical P-spline, with local multipliers on either layer. Recorded 2026-11-12 from a discussion, on the user's go-ahead; parked, after E3. Its section also holds input on admission and singular systems from defects slice 5 (2026-11-14), with five readings owed.
 
 ## Reports
 

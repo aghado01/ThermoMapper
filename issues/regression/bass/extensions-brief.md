@@ -722,6 +722,54 @@ y = g(x) + f(x) + ε, with g a GP and f a forest or BASS, and treed GPs. The sou
   - ABMRS adds a second engine under the layer, since the deviation rows do not read how β₀ is regularized. The layer is then designed against two engines.
   - In a free-knot engine a knot move changes every replicate's coefficient space at once. So a move either integrates the layer out in its marginal likelihood or proposes every replicate's new coefficients.
 
+### Input for the follow-up: admission and singular systems (2026-11-14)
+
+From the second coordinating session, at the user's request. It reads slice 5 of the [defects brief](../shared-code-defects-brief.md) (`f128e04`, `BapsAdmission`) against BAPS's code. Nothing here was run: each prediction says so, and the readings at the end are what would settle them.
+
+- **What slice 5 settled.**
+  - The gate it replaced read the units: a floored factor with no floored pivot refused a valid fit in small units, and it admitted 55 of 234 unidentified tensor systems.
+  - `BandCholesky` is strict by default, and no caller relied on the floor.
+  - Every fit the old gate admitted keeps its bits.
+- **What it left open: the bound.** `BapsAdmission` admits a system that is positive definite with κ(E) ≤ 10¹⁴, at eleven sites. One probe placed the bound:
+  - nine tensor layouts at fixed λ, with no 1-D, hierarchical or locally adaptive system;
+  - one unidentified construction, exactly singular (y fixed), so nothing nearly unidentified, where a bound decides;
+  - a small-units family that is the identified one rescaled, which a scale-free estimate reads identically;
+  - a margin of 4× over the largest admitted κ(E) (2.5·10¹³ at λ = 10¹²), on an estimate that errs low;
+  - accuracy read from the bound κ·ε, with no solve compared against a higher-precision reference.
+- **Two failures behind the one gate.**
+  - *Non-identification.* A(λ) = ZᵀZ + Σⱼ λⱼPⱼ is singular at every λ > 0 exactly when some x in the penalties' common null space has Zx = 0. λ does not enter: it is a property of the design and the penalty orders. BAPS's design is fixed, so one check at construction covers every later step.
+  - *Stiffness.* For an identified design κ(A(λ)) grows in proportion to λ. The limit is well defined, the polynomial fit on the null space, so the trouble is the form the solve takes.
+  - A condition bound refuses both alike, runs at every factorization, and throws inside a sampler's step.
+- **What the code already has.**
+  - *A λ-stable form, in 1-D, for edf only.* `PenalizedSpline.PenaltySpectrum()` takes the generalized eigenvalues μⱼ of P relative to M = ZᵀZ + P. In that basis A(λ) = diag(1 − μ + λμ), and edf and its slope read it at any λ. The solves do not use it: they refactor A(λ).
+  - *An identification check, once, in the same place:* M's factor. Its reference point is λ = 1 in the data's units. Predicted, not run: Z × 2⁻²⁴ makes M ≈ P, κ(E) of M passes 10¹⁴, and the spectrum is refused as "does not identify the penalty null space". That is the floor's defect again, in the reference point. Trace balance, λ₀ = tr ZᵀZ / tr P, is a scale-free reference, and the tensor optimizer already centres its box on it.
+  - *No joint form for several penalties.* The `PenaltySpectrum` class (Bach and Klein 2025) diagonalizes Σⱼ λⱼPⱼ for its pseudo-determinant. ZᵀZ does not share that basis, so the anisotropic A(λ) has no such diagonal form.
+  - *Samplers throw.* `Baps` checks at three sites inside its step and `HierarchicalPSpline` at five. A Gibbs draw has no rejection, so a refusal ends the chain.
+  - *The default priors keep drawn systems far from the bound, by arithmetic, not measured.*
+    - τ² ~ IG(10⁻³, 10⁻³) gives τ² | · a rate of at least 10⁻³, so λ = σ²/τ² stays near or below (a + q/2)σ²/b.
+    - η ~ Gamma(φ, φ) with φ = 1 gives η | · a shape of 3/2 and a rate of at least 1, so the multipliers' spread across rows is a few decades.
+    - Jeffreys or a caller's own prior removes the first cap.
+  - *The default prior is in β's units.* b = 10⁻³ does not scale with the data, so a sampled fit in small units is a different fit, whatever the gate admits. Not run.
+- **Directions, and what each buys.**
+  1. *Identification as a property checked at construction.* Form NᵀZᵀZN on a basis N of the common null space: r × r in 1-D, r_x·r_y in the tensor case. Its equilibrated condition is scale-free, reads a nearly unidentified design on a continuum, and names the polynomial direction the data fail to pin. It replaces the per-step estimate for this failure.
+  2. *A form stable in λ.*
+     - 1-D: solve in the μ basis the spline already builds, or split the null space from the penalized part (the mixed-model form). λ → ∞ is then the polynomial limit, computed.
+     - Several penalties: take the null-space block out by a QR on N, which leaves a system whose conditioning follows the ratios among the λⱼ. Or compute, once per design, the range of each λⱼ inside which κ(E) holds.
+     - Either way the λ = 10²⁰ points are computed or refused by a rule, where today rounding decides.
+  3. *A rule for a sampler at the edge.* If the priors keep every drawn system inside the range, state that as a condition on the priors and check it at construction. If they do not, the conditional is truncated to the range, which changes the target and has to be said.
+  4. *The bound placed by measured error.* Solve error against a double-double reference, along λ and along a path of designs approaching non-identification, site by site. The truth then comes from outside the estimate that gates.
+- **Against BARS.** There admission is part of the model: a refused design has no prior mass, a move to it scores −∞, and the rule is named with its constants (`DesignAdmission`: relative pivot 10⁻¹⁰, κ(E) ≤ 10¹⁰). That shape fits a design that moves with the knots. BAPS's design does not move, so it can say more: admit the design once, and show every λ in a stated range admissible.
+- **Readings owed, each with the decision it serves.**
+  - *R1, the largest κ(E) each sampler's drawn systems reach:* the Gibbs, locally adaptive and anisotropic schemes and the hierarchical model's five sites, on the existing fixtures and on a nearly polynomial truth, over long chains.
+    - Decades below the bound: the samplers need no per-step gate once identification is checked at construction.
+    - Within a decade or two: the sampler sites need a rule now, ahead of this follow-up.
+    - It shares a harness with R2.
+  - *R2, the estimate's cost per Gibbs step.* Commissioned by the user on 2026-11-14 to the defects chip, measurement only.
+  - *R3, κ(E) and solve error along a path to non-identification:* y's spread shrinking to 0 in the tensor design, and x confined to fewer than r distinct values in 1-D. It places a bound on the restricted Gram of direction 1.
+  - *R4, the small-units spectrum:* `EffectiveDegreesOfFreedom` on Z × 2⁻²⁴, the prediction above. It decides whether the reference point moves to trace balance.
+  - *R5, small units through the sampler under IG(10⁻³, 10⁻³).* It decides whether the default prior is documented as unit-bound or gives way to a scaled one.
+- **Sequencing with the replicate layer.** The layer adds the rows β_r − β₀, an identity term that keeps the stacked precision proper, so the population curve's null space is identified by the same design question. Admission built first is what the layer then stands on.
+
 ## Direct-functional BASS for families of SPC sweeps
 
 Fitting f(x, T) across families of SPC temperature sweeps (derivations review §7, item 9); BARS remains the engine for a single sweep. For peak and ridge readouts over (T, θ), ABMRS is the better fit (its entry above), and elastic emulation handles peaks that move with θ. An application, outside the completion contract.
