@@ -24,7 +24,7 @@ As of the commission, 2026-11-08. E8's own work is under Reports.
 - **The gradient readout** (`BassFit.Gradient` → `BassGradient`, KHAOS slice 4, `8f57487`): ∂f/∂z per draw, case and continuous input, in the input's own units, for hinge and Legendre fits, read from each draw's sampled coefficients. Averaged over any measure's points, it gives a C for any fit.
 - **Coefficient readouts** (`BassSensitivity.FromCoefficients`): exact Sobol indices and the Jacobi derivative measure for Legendre fits under the product uniform law (Lean SG-4(b), `faca090`).
 - **Draw weights** (`BassFit.DrawWeights`) from SMC and the flat histogram.
-- **Geometry and linear algebra:** `GrassmannManifold` (principal angles by thin SVD), `GeometricMedian`, `ThinSvd`, the symmetric eigensolver. **`StiefelManifold` is not to be used:** its distance and log map ignore the frame (the Grassmann discussion's report). E8's one frame, slice 7's, is read from ordered eigenvectors and needs no Stiefel code.
+- **Geometry and linear algebra:** `GrassmannManifold` (principal angles by thin SVD), `GeometricMedian`, `ThinSvd`, the symmetric eigensolver. **`StiefelManifold` is not to be used:** its distance and log map ignore the frame (the Grassmann discussion's report). *Repaired 2026-11-13 (`6a55e2f`, [report](../../geometry/stiefel-repair-brief.md)).* E8's one frame, slice 7's, is read from ordered eigenvectors and needs no Stiefel code.
 - **Lean:** SG-2 (√V_u is 1-Lipschitz in L²(μ); C has no such bound), SG-5 (`top_eigenspace_ne_subspace_mean`: E[C]'s top eigenspace is not the draws' mean subspace, 54° apart in a three-draw example), SG-4(b) (the Legendre bound total(v) ≤ ½·E[x_v(1−x_v)(∂_v f)²]).
 
 ## Decisions
@@ -308,7 +308,7 @@ No slice is commissioned. Each item below is drawn from the reports, which hold 
 - **G4's joint mixture of products** and E25's readouts (ALE, Shapley).
 - **The response envelope,** E34's option. E34 itself, several outputs on one basis, reads co-active pairs across its outputs through slice 3's `CoActivePosterior` (its slice 3, [`multi-output-brief.md`](multi-output-brief.md)).
 - **2311.18146's PBX 9501 application.** Its 14 materials' data are downloaded to `artifacts/datasets/PBX9501` (2026-11-12, pinned to the authors' commit, outside git; `PROVENANCE.md` there). The authors' script computes each concordance's numerator from saved draws 1 to 10 and its denominator from draws 100 to 1000; a replication pairs the same draws and reports corrected values. It waits for the user.
-- **`StiefelManifold`'s repair,** which waits for a consumer that optimizes over frames. Slice 7's frame needs none.
+- **`StiefelManifold`'s repair,** which waits for a consumer that optimizes over frames. Slice 7's frame needs none. *Done ahead of a consumer on 2026-11-13 at the user's request (`6a55e2f`): the canonical metric, closed-form Exp and Zimmermann's Log ([report](../../geometry/stiefel-repair-brief.md)).*
 
 ## Working rules
 
