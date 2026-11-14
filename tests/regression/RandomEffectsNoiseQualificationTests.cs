@@ -337,21 +337,31 @@ public sealed class RandomEffectsNoiseQualificationTests(ITestOutputHelper outpu
     }
 
     // s's interweaving (E21's slice 6) against the centred step alone, on data that pin u weakly and on the n = 300 fixture: both arms' means
-    // (one target) and their bulk ESS per sweep and per second, which set the option's default.
+    // (one target) and their bulk ESS per sweep and per second, which set the option's default. "weak-held" holds σ² at about its
+    // posterior mean, slice 7's test of whether ln σ²'s and M's losses run through σ²'s block; each arm also reads ln s's pooled
+    // correlation with M and with ln σ², the coupling a better-mixing s exposes.
     [Theory]
     [InlineData("weak", 11)]
     [InlineData("weak", 23)]
+    [InlineData("weak", 37)]
+    [InlineData("weak", 51)]
+    [InlineData("weak-held", 11)]
+    [InlineData("weak-held", 23)]
+    [InlineData("weak-held", 37)]
+    [InlineData("weak-held", 51)]
     [InlineData("n300", 11)]
     public void Mixing_InterwovenScales_AgainstTheCentredStep(string data, int seed)
     {
         if (!BassQualification.Enabled) return;   // heavy
-        BassData fixture = data == "weak" ? WeakGroups(41) : Grouped(300, 41).Data;
+        BassData fixture = data.StartsWith("weak", StringComparison.Ordinal) ? WeakGroups(41) : Grouped(300, 41).Data;
         string[] names = ["ln sigma2", "ln s", "u0", "M"];
         var perSecond = new double[2][];
         var perSweep = new double[2][];
         foreach (bool woven in new[] { true, false })
         {
-            BassModel model = BassModel.Create(Config(new BassSampling { Chains = 1, MasterSeed = seed, BurnIn = 0, Samples = 1, InterweaveGroupScales = woven }), fixture);
+            BassConfig config = Config(new BassSampling { Chains = 1, MasterSeed = seed, BurnIn = 0, Samples = 1, InterweaveGroupScales = woven });
+            if (data == "weak-held") config = config with { Sigma2 = Sigma2Prior.Held(0.17) };   // e^(−1.76), the weak fixture's posterior mean
+            BassModel model = BassModel.Create(config, fixture);
             const int chains = 4, burn = 2000, kept = 40_000;
             var samples = new double[names.Length][][];
             for (int g = 0; g < names.Length; g++) samples[g] = new double[chains][];
@@ -381,6 +391,12 @@ public sealed class RandomEffectsNoiseQualificationTests(ITestOutputHelper outpu
             var cells = new List<string>();
             for (int g = 0; g < names.Length; g++)
             {
+                if (samples[g].All(chain => chain.All(x => x == chain[0])))   // a held σ²: no mixing to read
+                {
+                    (perSecond[arm][g], perSweep[arm][g]) = (double.NaN, double.NaN);
+                    cells.Add($"{names[g]} held");
+                    continue;
+                }
                 ConvergenceDiagnostic d = ChainDiagnostics.Diagnose(samples[g]);
                 perSecond[arm][g] = d.BulkEss.Value / seconds;
                 perSweep[arm][g] = d.BulkEss.Value;
@@ -389,10 +405,26 @@ public sealed class RandomEffectsNoiseQualificationTests(ITestOutputHelper outpu
                 cells.Add($"{names[g]} {mean:F4} ± {se:F4} R̂ {d.RHat.Value:F3} ESS {d.BulkEss.Value:F0} ({d.BulkEss.Value / seconds:F1}/s)");
             }
             output.WriteLine($"{data}, seed {seed}, {(woven ? "interwoven" : "centred alone")}: {seconds:F1} s; {string.Join("; ", cells)}");
+            double[] lnS = [.. samples[1].SelectMany(chain => chain)];
+            output.WriteLine($"  ln s's pooled correlation with M {Correlation(lnS, [.. samples[3].SelectMany(chain => chain)]):F3}, "
+                             + $"with ln sigma2 {Correlation(lnS, [.. samples[0].SelectMany(chain => chain)]):F3}");
         }
         output.WriteLine($"{data}, seed {seed}: bulk ESS, interwoven over centred, per sweep: "
                          + string.Join(", ", names.Select((n, g) => $"{n} {perSweep[0][g] / perSweep[1][g]:F2}")) + "; per second: "
                          + string.Join(", ", names.Select((n, g) => $"{n} {perSecond[0][g] / perSecond[1][g]:F2}")));
+    }
+
+    // Pearson's correlation; 0 where either series is constant.
+    private static double Correlation(double[] a, double[] b)
+    {
+        double ma = a.Average(), mb = b.Average(), ab = 0, aa = 0, bb = 0;
+        for (int i = 0; i < a.Length; i++)
+        {
+            ab += (a[i] - ma) * (b[i] - mb);
+            aa += (a[i] - ma) * (a[i] - ma);
+            bb += (b[i] - mb) * (b[i] - mb);
+        }
+        return aa > 0 && bb > 0 ? ab / Math.Sqrt(aa * bb) : 0.0;
     }
 
     [Fact]
