@@ -347,9 +347,9 @@ for t in range(400):
     steps_bad += bmin < fmin / (f ** 2).max() * (1 - 1e-6)
     ratio = kappa2(B) / (q * kappa2(FBF))
     worst_ratio = max(worst_ratio, ratio)
-report("PA-7(i) sketch: |Bᵢⱼ| ≤ 1, λ_max(B) ≤ q, λ_max(FBF) ≥ max fᵢ², λ_min(B) ≥ λ_min(FBF)/max fᵢ², 400 draws",
+report("PA-7 off the path, Jacobi sketch: |Bᵢⱼ| ≤ 1, λ_max(B) ≤ q, λ_max(FBF) ≥ max fᵢ², λ_min(B) ≥ λ_min(FBF)/max fᵢ², 400 draws",
        f"{steps_bad} violations", steps_bad == 0)
-report("PA-7(i) κ₂(B) ≤ q·κ₂(FBF), unit-diagonal banded PD B, F log-uniform over e^±7",
+report("PA-7 off the path: κ₂(B) ≤ q·κ₂(FBF), unit-diagonal banded PD B, F log-uniform over e^±7",
        f"largest κ₂(B)/(q·κ₂(FBF)) = {worst_ratio:.4f}", worst_ratio <= 1 + 1e-6)
 
 # how much of q the unit diagonal leaves unused: κ₂(B) against the best diagonal scaling found by local search
@@ -360,7 +360,7 @@ for n, w in [(6, 1), (8, 2), (10, 3)]:
     best = optimize.minimize(lambda g: np.log(kappa2(B * np.outer(np.exp(g), np.exp(g)))), np.zeros(n),
                              method="Nelder-Mead", options={"maxiter": 4000, "xatol": 1e-8, "fatol": 1e-10})
     reads.append(f"n={n}, q={q}: κ₂(B)/min_F κ₂(FBF) ≈ {kappa2(B) / math.exp(best.fun):.3f}")
-report("PA-7(i) reading: the unit diagonal against a local search over F (≤ q by van der Sluis 4.3)",
+report("PA-7 off the path, reading: the unit diagonal against a local search over F (≤ q by van der Sluis 4.3)",
        "; ".join(reads), True)
 
 bad = [0, 0, 0]
@@ -376,11 +376,11 @@ for t in range(300):
         idx = rng.choice(n, size=q, replace=False)
         Sp[idx, j] = rng.standard_normal(q)
     bad[1] += norm1(Sp) > math.sqrt(q) * np.linalg.norm(Sp, 2) * (1 + 1e-12)
-report("PA-7(ii) ‖A‖₂ ≤ ‖A‖₁ symmetric; ‖A‖₁ ≤ √q‖A‖₂ with q nonzeros per column; ‖A‖₁ ≤ √n‖A‖₂, 300 each",
+report("PA-7(c) ‖A‖₂ ≤ ‖A‖₁ symmetric; ‖A‖₁ ≤ √n‖A‖₂; the first statement's ‖A‖₁ ≤ √q‖A‖₂, 300 each",
        f"violations {[int(b) for b in bad]}", sum(bad) == 0)
 col = np.zeros((9, 9))
 col[:, 0] = 1
-report("PA-7(ii) √n attained by a column of ones (n = 9)",
+report("PA-7(c) √n attained by a column of ones (n = 9)",
        f"‖A‖₁/‖A‖₂ = {norm1(col) / np.linalg.norm(col, 2):.6f}", abs(norm1(col) / np.linalg.norm(col, 2) - 3) < 1e-12)
 
 
@@ -441,14 +441,16 @@ for t in range(240):
     chain_bad += norm1(np.linalg.inv(E)) > math.sqrt(n) / lam(E)[0] * (1 + 1e-6)
     chain_bad += lam(E)[0] < lam(Er)[0] / Mm * (1 - 1e-6)
     chain_bad += (np.diag(A) / np.diag(Ar)).max() > rho.max() * (1 + 1e-12)
+    chain_bad += (np.diag(A) / np.diag(Ar)).min() < rho.min() * (1 - 1e-12)
     worst["posed"] = max(worst["posed"], k1 / posed)
     worst["sharp"] = max(worst["sharp"], k1 / sharp)
     worst["inv"] = max(worst["inv"], k1 / via_inv)
     worst["plain"] = max(worst["plain"], k1 / (Mm * k1r))
-report(f"PA-7(iii) κ₁(E(c)) ≤ q·√(qn)·(M/m)·κ₁(E(c_ref)) and the sharper forms, B-spline Gram + D₂ penalties {counts}",
-       f"{chain_bad} violations; largest κ₁(E)/bound: posed {worst['posed']:.2e}, q·√n {worst['sharp']:.2e}, "
-       f"q·√n·‖E_ref⁻¹‖₁ {worst['inv']:.2e}", chain_bad == 0)
-report("PA-7(iii) reading: largest κ₁(E(c)) / ((M/m)·κ₁(E(c_ref))), the share of the proved factor in use",
+report(f"PA-7(a)-(d) the diagonal in [m, M], λ_min(E(c)) ≥ (m/M)·λ_min(E(c′)), ‖E(c)‖₁ ≤ q, "
+       f"‖E(c)⁻¹‖₁ ≤ √n/λ_min(E(c)), κ₁(E(c)) ≤ q·√n·(M/m)·‖E(c′)⁻¹‖₁, B-spline Gram + D₂ penalties {counts}",
+       f"{chain_bad} violations; largest κ₁(E)/bound: (d) {worst['inv']:.2e}, q·√n·κ₁(E(c′)) {worst['sharp']:.2e}, "
+       f"the first statement's q·√(qn)·κ₁(E(c′)) {worst['posed']:.2e}", chain_bad == 0)
+report("PA-7(d) reading: largest κ₁(E(c)) / ((M/m)·κ₁(E(c_ref))), the share of the proved factor in use",
        f"{worst['plain']:.3f}", True)
 
 # ---------------------------------------------------------------- summary
