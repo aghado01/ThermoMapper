@@ -163,7 +163,7 @@ Hand-over state between turns is an "In progress" entry here.
 - *Target 7's first statement held, and the same pieces gave a constant √q smaller.*
   - Posing found that ‖E(c)‖₁ ≤ q directly, and that the diagonal's ratio bound replaces the Jacobi step. It is the protolemma's finding 1.
   - The defects chip had the same chain, and the brief restated target 7 to it (`90fa6ce`).
-  - The first statement's q·√(qn)·κ₁(E(c′)) follows from the restated one.
+  - The first statement's q·√(qn)·κ₁(E(c′)) follows from the restated one, through ‖E(c′)‖₁ ≥ 1 and q ≥ 1. It is not stated in Lean: the two steps do not come free.
 - *The eigenvalue lines are proved through Rayleigh bounds,* not Mathlib's ordered eigenvalues.
   - `lamMin` and `lamMax` are the infimum and supremum of xᵀAx / xᵀx, and `cond2` is their ratio.
   - For a symmetric A these are the extreme eigenvalues and κ₂. The Lean does not prove that identification.
@@ -173,7 +173,7 @@ Hand-over state between turns is an "In progress" entry here.
 
 **Self-review.**
 - *Pass 1, the draft against the protolemma.* The composed proof's first draft left a placeholder for ‖E(c′)⁻¹‖₁ > 0. `inv_norm1_le_lamMin` already proved that positivity on the way, so it now returns it, and no placeholder reached the repo.
-- *Pass 2, can the hypotheses be met.* `comb_diagPair_posDef` shows the positive-definite hypothesis met by a family whose every term is singular. The bracket is met by m = min c and M = max c at c′ = 1, and the column count by q = 1 on that diagonal family.
+- *Pass 2, can the hypotheses be met.* `comb_diagPair_posDef` shows the positive-definite hypothesis met by a family whose every term is singular. The bracket is met by m = min c and M = max c at c′ = 1, and the column count by q = 1 on that diagonal family. The smallest instance is kept as Lean `example`s at the module's end (`0be098f`). Each instantiates a main theorem on S₁ = diag(1, 0), S₂ = diag(0, 1), c′ = (1, 1), c = (2, 3), m = 2, M = 3 and q = 1, and BAPS's form on Z = (1 0), P = diag(0, 1) (`rowZ`, `penaltyP`).
 - *Pass 3, the build's linters.* Six statements carried a `DecidableEq` or `Fintype` hypothesis their types do not use. Each now takes it inside the proof (`classical`, `Fintype.ofFinite`). Also one line over 100 characters.
 - No hypothesis does the work. The two differences from the protolemma's wording, the Rayleigh extremes and the bracket, are stated above and in its Lean lines.
 
