@@ -27,6 +27,19 @@ As in the archived brief: each slice is reported here, then waits for the main s
 
 Newest first.
 
+### In progress — Slice 16, batch predictive inference (started 2026-11-14)
+
+At the user's pick (2026-11-14, "Slice 16, batches"), under the Lean's section `Batch` (proved 2026-11-10) and Lee, Tchetgen Tchetgen and Dobriban (arXiv 2409.13990v5, read in TeX: §2, Condition 1, Algorithm 1, Theorem 1, the quantile corollary, the selection corollary, the simultaneous bounds).
+
+**Plan.** A `BatchConformal` class on calibration scores, scalar units, the scores' bounds S_(0) = inf s and S_(n+1) = sup s given or ±∞:
+- *The quantile of a batch* (their quantile corollary; `batch_interval` with r_(ζ)): [S_(q_L − 1), S_(q_U)] from the law of r_(ζ). Its counts are exact big integers, so m = 1 is split conformal bit for bit.
+- *Simultaneous bounds* on several order statistics of the batch (their joint-bounds theorem; `batch_simultaneous`). F, the box's count, is exact by dynamic programming on L(ρ), with the product over consecutive pairs (the Lean's correction of their typo). Two readings: a given box with its coverage, and their centered search.
+- *Functions of a batch* (Algorithm 1, `batch_coverage`), by enumerating H where C(n + m, m) is small, since it is NP-hard in general. The rank order h̃ is given, h on the ranks by default.
+- *Selection with false claims controlled* (their selection corollary; `batch_exceed`, `false_claim_iff`): the threshold T̂ = S_(q_η) on the scores μ̂·1{y ≤ c}, with at most η false claims with chance at least 1 − α.
+- *Gates* (the archived plan's): each guarantee on exchangeable batches, the counts against enumeration of H, and width against Bonferroni over single sets.
+
+**State.** Being written. Nothing committed.
+
 ### 2026-11-14 — Slice 14's follow-up 2, completed: weighted CV+'s merged bound under likelihood ratios
 
 Built at the main session's word once its Lean (`47acb3c`; `cvPlus_merged_likelihoodRatio`, `cvPlus_merged_likelihoodRatio_refined`) was verified. It closes the open item in follow-up 2's report.
