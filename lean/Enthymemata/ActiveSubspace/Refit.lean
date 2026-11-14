@@ -25,8 +25,8 @@ factors (`IsHingeSum`).
   full rank, where `M` separable terms have rank at most `M`.
 * `hinge_isHingeSum`, `hinge_comp_not_hingeSum`, `hingeSum_not_closed`: a linear map `R` of `u` with
   two nonzero entries in a row carries a hinge out of the class. For orthogonal `R`, only a signed
-  permutation keeps it; `hingeFactor_neg` and `hingeFactor_scale` are the factor-level reason that
-  sign flips and positive scales do.
+  permutation keeps it. `hingeFactor_neg`, `hingeFactor_scale` and `IsHingeFactor.monomial` give the
+  factor level, and `IsHingeSum.comp_monomial` the class: every monomial map keeps it.
 
 **The scale.**
 * `outer_pullback`, `activeMatrix_pullback`: `C_z = LᵀC_xL` for `x = Lz`.
@@ -169,6 +169,45 @@ theorem hingeFactor_scale (s t x c : ℝ) (q : ℕ) (hc : 0 < c) :
     max 0 (s * (c * x - t)) ^ q = c ^ q * max 0 (s * (x - t / c)) ^ q := by
   rw [show s * (c * x - t) = c * (s * (x - t / c)) by field_simp, ← mul_pow,
     mul_max_of_nonneg _ _ hc.le, mul_zero]
+
+/-- A hinge factor read through `x ↦ ε c x`, with `ε = ±1` and `c > 0`, is a positive multiple of a
+hinge factor: the sign moves into the factor's sign and the knot, the scale into the multiple. -/
+theorem IsHingeFactor.monomial {g : ℝ → ℝ} (hg : IsHingeFactor g) {ε c : ℝ}
+    (hε : ε = 1 ∨ ε = -1) (hc : 0 < c) :
+    ∃ κ : ℝ, 0 < κ ∧ ∃ g' : ℝ → ℝ, IsHingeFactor g' ∧ ∀ x, g (ε * c * x) = κ * g' x := by
+  rcases hg with rfl | ⟨s, t, q, hs, rfl⟩
+  · exact ⟨1, one_pos, fun _ => 1, Or.inl rfl, fun x => by simp⟩
+  · rcases hε with rfl | rfl
+    · refine ⟨c ^ q, pow_pos hc q, fun x => max 0 (s * (x - t / c)) ^ q,
+        Or.inr ⟨s, t / c, q, hs, rfl⟩, fun x => ?_⟩
+      simp only [one_mul]
+      exact hingeFactor_scale s t x c q hc
+    · refine ⟨c ^ q, pow_pos hc q, fun x => max 0 (-s * (x - -t / c)) ^ q,
+        Or.inr ⟨-s, -t / c, q, by rcases hs with rfl | rfl <;> norm_num, rfl⟩, fun x => ?_⟩
+      have h := hingeFactor_scale (-s) (-t) x c q hc
+      rw [show -s * (c * x - -t) = s * (-1 * c * x - t) by ring] at h
+      exact h
+
+/-- **AS-4(iii), the converse.** The class is kept by every monomial map of the variables — a
+permutation with signs and positive scales: the factors' multiples move into the coefficients. So
+BASS's class, and with it a projected refit's model, does not see a frame's signs, order or
+scale. -/
+theorem IsHingeSum.comp_monomial {d : ℕ} {f : (Fin d → ℝ) → ℝ} (hf : IsHingeSum f)
+    (σ : Equiv.Perm (Fin d)) (ε c : Fin d → ℝ) (hε : ∀ l, ε l = 1 ∨ ε l = -1)
+    (hc : ∀ l, 0 < c l) : IsHingeSum (fun u => f (fun l => ε l * c l * u (σ l))) := by
+  obtain ⟨M, β, g, hg, hfg⟩ := hf
+  choose κ _hκ g' hg' hgg' using fun m l => (hg m l).monomial (hε l) (hc l)
+  refine ⟨M, fun m => β m * ∏ l, κ m l, fun m k => g' m (σ.symm k),
+    fun m k => hg' m (σ.symm k), fun u => ?_⟩
+  dsimp only
+  rw [hfg]
+  refine Finset.sum_congr rfl fun m _ => ?_
+  simp only [hgg', Finset.prod_mul_distrib]
+  have hre : ∏ l, g' m l (u (σ l)) = ∏ k, g' m (σ.symm k) (u k) := by
+    rw [← Equiv.prod_comp σ (fun k => g' m (σ.symm k) (u k))]
+    simp only [Equiv.symm_apply_apply]
+  rw [hre]
+  ring
 
 /-! ### The scale -/
 
