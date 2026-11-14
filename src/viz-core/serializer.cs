@@ -278,11 +278,13 @@ namespace Viz.Renderers
                 chol.Decompose(tmp);
                 if (chol.FailedAt >= 0)
                 {
-                    // A singular block is a flat ellipsoid: it takes the ε the missing dimensions take, relative to its
-                    // largest variance, and draws as a thin one. The viewer needs an invertible map for its normals.
-                    double largest = 1.0;
+                    // A singular block is a flat ellipsoid: it takes ε of its largest variance, so it draws thin at any
+                    // scale; an all-zero block takes the missing dimensions' ε as it stands. The viewer needs an
+                    // invertible map for its normals.
+                    double largest = 0.0;
                     for (int r = 0; r < outDim; r++) largest = Math.Max(largest, tmp[r, r]);
-                    for (int r = 0; r < outDim; r++) tmp[r, r] += SerializerCovEps * largest;
+                    double ridge = largest > 0.0 ? SerializerCovEps * largest : SerializerCovEps;
+                    for (int r = 0; r < outDim; r++) tmp[r, r] += ridge;
                     chol.Decompose(tmp);
                 }
                 if (chol.FailedAt >= 0)

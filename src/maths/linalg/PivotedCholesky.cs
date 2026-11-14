@@ -15,6 +15,9 @@ namespace Maths.LinAlg
     /// that is not finite. <c>[[1, 2], [2, 1]]</c> leaves −3 on the diagonal; <c>[[0, 1], [1, 0]]</c> leaves 1 off it. The
     /// default, √ε, sits above the rounding a covariance formed in double carries: BGP's posterior covariances leave
     /// remainders to 1.2·10⁻¹¹ of their largest variance, past the 10⁻¹² stop, and those are kept.</item>
+    /// <item><b>Cost.</b> The factor costs O(p·k²) at rank k; the remainder's check, every entry over the p − k rows left
+    /// out, costs O((p − k)²·k), above the factor when p is far above k. BGP's covariances cost more to form than
+    /// either.</item>
     /// <item><b>Sampling first.</b> <see cref="Map"/> takes Rank standard normals to a draw of N(0, L·Lᵀ). A solve on a
     /// singular A, which must refuse or project a right-hand side outside L's range, waits for a caller that needs one.</item>
     /// </list>

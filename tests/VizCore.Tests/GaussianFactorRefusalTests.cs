@@ -1,5 +1,6 @@
 using System;
 using System.IO;
+using System.Linq;
 using System.Text.Json;
 using Clustering.Statistical.GMM;
 using Viz;
@@ -118,6 +119,17 @@ public sealed class GaussianFactorRefusalTests
         Assert.All(l, v => Assert.True(double.IsFinite(v)));
         Assert.True(Gap(l, flat, 2e-8) <= 1e-15, $"{Gap(l, flat, 2e-8):E2}");
         Assert.Equal(Math.Sqrt(2e-8), l[8], 15);
+
+        // The same block at 1e-8 of the scale stays as thin: its ε is relative below unit scale too.
+        double[] tiny = [.. flat.Select(v => 1e-8 * v)];
+        double[] t = ExportedFactor(tiny);
+        Assert.True(Gap(t, tiny, 2e-16) <= 1e-15, $"{Gap(t, tiny, 2e-16):E2}");
+        Assert.True(Math.Abs(t[8] - Math.Sqrt(2e-16)) <= 1e-15 * Math.Sqrt(2e-16), $"{t[8]:R}");
+
+        // An all-zero block takes the missing dimensions' ε as it stands: a sphere of radius 1e-4.
+        double[] zero = ExportedFactor(new double[9]);
+        Assert.Equal(1e-4, zero[0], 15);
+        Assert.Equal(1e-4, zero[8], 15);
 
         // Rank one at 1e200 with one entry 2ε above it, which overflowed the floored factor: now a thin needle.
         double big = 1e200, off = big * (1 + 2 * Math.ScaleB(1.0, -52));
