@@ -7,12 +7,14 @@ Opened 2026-11-14 at the user's word ("that brief was getting way too long, adde
 ## Where E16 stands
 
 - Slices 0 to 15 are built and verified; slice 14's follow-ups 1 to 3 and its ratio estimator too, on their Lean (decision 12).
-- Follow-up 2 is completed by `3f68330`, the merged K-fold CV+ bound under likelihood ratios, on the Lean at `47acb3c`. Its report is the first below.
+- Follow-up 2 is completed by `3f68330`, the merged K-fold CV+ bound under likelihood ratios, on the Lean at `47acb3c`.
+- Slice 16, batch predictive inference (`60ba2cb`), and slice 18, the guarantee read out (`5b55a6f`), are built and verified. Their reports are below.
 - The defects chip owns `PredictiveChecks.cs` and `Pointwise.cs`'s weight check; a change there is agreed with it first (the archived brief's coordination note).
 
 ## Open, each with the decision it would change
 
-- **Slices 16 to 18,** by the user's need. Slice 18's plan reads Snell and Griffiths's bound as Gaffke's confidence bound, never a posterior (corrected 2026-11-13).
+- **Slice 17,** by the user's need.
+- **Slice 18's three follow-ups** (its report): a smoothed cell law for the log score, which is +∞ in a cell the step-function predictive gives no mass; the Lean's calibration at n ≥ 2; a set's own miscoverage bound.
 - **Slice 15's precision rule** reads the training split's ESS: with 1,000 training and 399 calibration points it chose m of 294 to 500, and 7% of the sets were the whole space. It decides whether the fit takes the calibration split's size and scales the target itself.
 - **Slice 15's alternation speed** along the factorization's flat directions. It decides the cost at large n.
 - **τ through richer features,** the ratio estimator's open follow-up. It decides whether the layer offers a nonparametric τ.
@@ -38,6 +40,7 @@ Built at the user's pick (2026-11-14, "Slice 18, the guarantee read out"), under
   - `ConformalDistribution.CellMasses`, `LogScore` and `QuadraticScore`;
   - `GuaranteeReadoutTests`.
 - *Nothing existing changes.*
+- *Verified by the main session on 2026-11-14,* from a clean archive of `07dc64e` with zero skips: the Commit selection, 1,218 of 1,218 ([receipts](receipts/verify-conformal-s18-5b55a6f/)).
 
 **What it computes.**
 - *The law of L⁺ = Σ Uᵢ ℓ₍ᵢ₎,* over n losses in [0, B] and ℓ₍ₙ₊₁₎ = B, U ~ Dir(1, …, 1).
