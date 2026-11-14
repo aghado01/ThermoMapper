@@ -77,7 +77,8 @@ public sealed class CoActivePosterior
     /// <summary>V's eigenvalues, ordered by magnitude, descending.</summary>
     public double[] Values { get; }
 
-    /// <summary>The co-active directions, V's eigenvectors as columns in <see cref="Values"/>' order.</summary>
+    /// <summary>The co-active directions, V's eigenvectors as columns in <see cref="Values"/>' order, each with its largest-magnitude
+    /// entry positive (<see cref="Pca.Orient(double[])"/>'s rule).</summary>
     public double[,] Directions { get; }
 
     /// <summary>E[t_f], E[t_g] and E[t_fg].</summary>
@@ -163,6 +164,7 @@ public sealed class CoActivePosterior
         var eigenvalues = new double[p];
         var vectors = new double[p, p];
         DenseEigen.DecomposeSymmetricInto(projection, eigenvalues, vectors, tol: 1e-14);
+        Pca.OrientColumns(vectors);
         var mean = new double[p, q];
         for (int i = 0; i < p; i++)
             for (int j = 0; j < q; j++) mean[i, j] = vectors[i, j];
@@ -187,13 +189,15 @@ public sealed class CoActivePosterior
         return v;
     }
 
-    // The symmetric eigensystem ordered by |λ|, descending, ties by index; eigenvectors as columns.
+    // The symmetric eigensystem ordered by |λ|, descending, ties by index; eigenvectors as columns, each signed by Pca.Orient's rule
+    // (E8, slice 7e).
     private static (double[] Values, double[,] Directions) ByMagnitude(double[,] v)
     {
         int p = v.GetLength(0);
         var signed = new double[p];
         var columns = new double[p, p];
         DenseEigen.DecomposeSymmetricInto(v, signed, columns, tol: 1e-14);
+        Pca.OrientColumns(columns);
         int[] order = [.. Enumerable.Range(0, p).OrderByDescending(i => Math.Abs(signed[i])).ThenBy(i => i)];
         var values = new double[p];
         var directions = new double[p, p];
@@ -263,7 +267,8 @@ public sealed class CoActivePosterior
 /// <param name="Dimension">q.</param>
 /// <param name="Projection">P̄.</param>
 /// <param name="Eigenvalues">P̄'s eigenvalues, descending.</param>
-/// <param name="Vectors">P̄'s eigenvectors as columns, in order: the leading q span the mean co-active subspace.</param>
+/// <param name="Vectors">P̄'s eigenvectors as columns, in order: the leading q span the mean co-active subspace. Each column's
+/// largest-magnitude entry is positive (<see cref="Pca.Orient(double[])"/>'s rule), as are the bases'.</param>
 /// <param name="Bases">Each pair's top-q co-active subspace, p × q.</param>
 /// <param name="Selected">Each pair's q selected eigenvalues of V_s, signed, by |λ| descending: pairs × q.</param>
 /// <param name="AnglesToMean">Each pair's q principal angles to the mean subspace, ascending, in radians.</param>

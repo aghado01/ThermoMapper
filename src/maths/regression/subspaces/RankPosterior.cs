@@ -144,7 +144,8 @@ public sealed class RankPosterior
     /// <summary>P̄'s eigenvalues, descending, in [0, 1].</summary>
     public double[] ProjectionEigenvalues { get; }
 
-    /// <summary>P̄'s eigenvectors as columns, in order.</summary>
+    /// <summary>P̄'s eigenvectors as columns, in order, each with its largest-magnitude entry positive
+    /// (<see cref="Pca.Orient(double[])"/>'s rule).</summary>
     public double[,] ProjectionVectors { get; }
 
     /// <summary>k*, the number of P̄'s eigenvalues above ½: the rank summary's dimension.</summary>
@@ -211,6 +212,7 @@ public sealed class RankPosterior
         var values = new double[p];
         var vectors = new double[p, p];
         DenseEigen.DecomposeSymmetricInto(projection, values, vectors, tol: 1e-14);
+        Pca.OrientColumns(vectors);   // E8, slice 7e: the solver's signs do not reach the summary
         int summaryRank = values.Count(x => x > 0.5);
         double[,] summary = Leading(vectors, summaryRank);
         var rankTerms = new double[draws.Count];

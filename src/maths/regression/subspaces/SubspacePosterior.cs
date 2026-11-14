@@ -10,7 +10,8 @@ public sealed record DrawSubspace(double[,] C, double[] Eigenvalues, double[,] B
     private readonly double[,]? _vectors;
 
     /// <summary>All the eigenvectors the draw's subspace was read from, as columns in the eigenvalues' order (p × p from C, or as many
-    /// as the factor's rank); the basis when none were kept. A per-draw rank (slice 5) reads its leading k_s.</summary>
+    /// as the factor's rank); the basis when none were kept. A per-draw rank (slice 5) reads its leading k_s. From C or a factor, each
+    /// column is signed by <see cref="Pca.Orient(double[])"/>'s rule, its largest-magnitude entry positive (E8, slice 7e).</summary>
     public double[,] Vectors { get => _vectors ?? Basis; init => _vectors = value; }
 
     /// <summary>The draw's subspace from C itself, by the symmetric eigendecomposition.</summary>
@@ -21,6 +22,7 @@ public sealed record DrawSubspace(double[,] C, double[] Eigenvalues, double[,] B
         var values = new double[p];
         var vectors = new double[p, p];
         DenseEigen.DecomposeSymmetricInto(c, values, vectors, tol: 1e-14);
+        Pca.OrientColumns(vectors);
         var basis = new double[p, dimension];
         for (int i = 0; i < p; i++)
             for (int j = 0; j < dimension; j++) basis[i, j] = vectors[i, j];
@@ -44,14 +46,13 @@ public sealed record DrawSubspace(double[,] C, double[] Eigenvalues, double[,] B
         var eigenvalues = new double[p];
         for (int i = 0; i < svd.SingularValues.Length; i++) eigenvalues[i] = svd.SingularValues[i] * svd.SingularValues[i];
         if (svd.RightVectors.Length < dimension) return FromC(c, dimension);   // fewer points than the dimension: C's own eigenspace
-        var basis = new double[p, dimension];
         var vectors = new double[p, svd.RightVectors.Length];
         for (int j = 0; j < svd.RightVectors.Length; j++)
-            for (int i = 0; i < p; i++)
-            {
-                vectors[i, j] = svd.RightVectors[j][i];
-                if (j < dimension) basis[i, j] = vectors[i, j];
-            }
+            for (int i = 0; i < p; i++) vectors[i, j] = svd.RightVectors[j][i];
+        Pca.OrientColumns(vectors);
+        var basis = new double[p, dimension];
+        for (int i = 0; i < p; i++)
+            for (int j = 0; j < dimension; j++) basis[i, j] = vectors[i, j];
         return new DrawSubspace(c, eigenvalues, basis) { Vectors = vectors };
     }
 
@@ -116,7 +117,8 @@ public sealed class SubspacePosterior
     /// <summary>E[C]'s eigenvalues, descending.</summary>
     public double[] MeanCEigenvalues { get; }
 
-    /// <summary>E[C]'s eigenvectors as columns, in the eigenvalues' order.</summary>
+    /// <summary>E[C]'s eigenvectors as columns, in the eigenvalues' order, each with its largest-magnitude entry positive
+    /// (<see cref="Pca.Orient(double[])"/>'s rule, the first on ties).</summary>
     public double[,] MeanCVectors { get; }
 
     /// <summary>P̄ = Σ w_s W_s W_sᵀ.</summary>
@@ -125,7 +127,7 @@ public sealed class SubspacePosterior
     /// <summary>P̄'s eigenvalues, descending: mean squared cosines in [0, 1], summing to k.</summary>
     public double[] ProjectionEigenvalues { get; }
 
-    /// <summary>P̄'s eigenvectors as columns, in order: the leading k span the mean subspace.</summary>
+    /// <summary>P̄'s eigenvectors as columns, in order: the leading k span the mean subspace. Signed as <see cref="MeanCVectors"/>.</summary>
     public double[,] ProjectionVectors { get; }
 
     /// <summary>Each draw's k principal angles to the mean subspace, ascending, in radians.</summary>
@@ -211,13 +213,15 @@ public sealed class SubspacePosterior
         return global::Maths.LinAlg.PrincipalAngles.Between(a, b);
     }
 
-    // The symmetric eigendecomposition, eigenvalues descending, eigenvectors as columns.
+    // The symmetric eigendecomposition, eigenvalues descending, eigenvectors as columns, each signed by Pca.Orient's rule (slice 7e): a
+    // solver that returns a column negated gives the same vectors, so a frame read from them does not move with the solver.
     private static (double[] Values, double[,] Vectors) Eigen(double[,] m)
     {
         int p = m.GetLength(0);
         var values = new double[p];
         var vectors = new double[p, p];
         DenseEigen.DecomposeSymmetricInto(m, values, vectors, tol: 1e-14);
+        Pca.OrientColumns(vectors);
         return (values, vectors);
     }
 

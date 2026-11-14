@@ -69,7 +69,8 @@ public sealed class BassProjection
     /// <summary>d.</summary>
     public int Dimension => Names.Count;
 
-    /// <summary>W₁, p × d: E[C]'s leading eigenvectors as columns, in the metric.</summary>
+    /// <summary>W₁, p × d: E[C]'s leading eigenvectors as columns, in the metric, signed as <see cref="SubspacePosterior.MeanCVectors"/>
+    /// is: each column's largest-magnitude entry positive, so a solver's choice of sign does not reach the refit (E8, slice 7e).</summary>
     public double[,] Frame { get; }
 
     /// <summary>A = L⁻ᵀW₁, p × d: u = Aᵀx_box.</summary>
@@ -101,8 +102,18 @@ public sealed class BassProjection
     /// </summary>
     public static BassProjection Of(BassInputTransform transform, ActiveSubspaceAnalysis analysis, int dimension, IReadOnlyList<string>? names = null)
     {
+        ArgumentNullException.ThrowIfNull(analysis);
+        return FromVectors(transform, analysis, analysis.Posterior.MeanCVectors, dimension, names);
+    }
+
+    // The frame from E[C]'s eigenvectors as given, columns in the eigenvalues' order: Of passes the analysis's own, signed by Pca.Orient's
+    // rule; slice 7e's gate passes a solve with a column negated, to see that the frame and the refit's draws read the vectors alone.
+    internal static BassProjection FromVectors(BassInputTransform transform, ActiveSubspaceAnalysis analysis, double[,] vectors, int dimension,
+                                               IReadOnlyList<string>? names)
+    {
         ArgumentNullException.ThrowIfNull(transform);
         ArgumentNullException.ThrowIfNull(analysis);
+        ArgumentNullException.ThrowIfNull(vectors);
         string[] continuous = [.. transform.Predictors.OfType<RangeScale>().Select(s => s.Name)];
         string[] categorical = [.. transform.Predictors.OfType<TrainingLevels>().Select(s => s.Name)];
         if (!continuous.SequenceEqual(analysis.Inputs) || !categorical.SequenceEqual(analysis.Excluded))
@@ -131,9 +142,11 @@ public sealed class BassProjection
 
         SubspacePosterior posterior = analysis.Posterior;
         double[] eigenvalues = [.. posterior.MeanCEigenvalues];
+        if (vectors.GetLength(0) != p || vectors.GetLength(1) < dimension)
+            throw new ArgumentException($"The eigenvectors are {p} rows by at least {dimension} columns.", nameof(vectors));
         var frame = new double[p, dimension];
         for (int i = 0; i < p; i++)
-            for (int j = 0; j < dimension; j++) frame[i, j] = posterior.MeanCVectors[i, j];
+            for (int j = 0; j < dimension; j++) frame[i, j] = vectors[i, j];
         double top = eigenvalues[0];
         double[] gaps = [.. Enumerable.Range(0, dimension).Select(j => top > 0.0 ? (eigenvalues[j] - (j + 1 < p ? eigenvalues[j + 1] : 0.0)) / top : 0.0)];
         double[,] a = Multiply(analysis.MapInverse, frame);
