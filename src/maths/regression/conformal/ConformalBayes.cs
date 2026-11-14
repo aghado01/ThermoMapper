@@ -373,8 +373,9 @@ public sealed record ConformalSet(int Case, int Stratum, int Units, int Level, d
     public bool WholeSpace => PValues is null;
 
     /// <summary>The finite-sample lower bound under the form's assumptions: 1 − k/m for full and split, and
-    /// max(0, 1 − (2k − 1)/m) for cross-fitted scores, with 1 at k = 0.</summary>
-    public double Coverage => WeightedAlpha is double a ? 1.0 - a
+    /// max(0, 1 − (2k − 1)/m) for cross-fitted scores, with 1 at k = 0. Under the weighted rule 1 − α, and max(0, 1 − 2α) for the
+    /// cross-fitted forms (<c>crossFit_likelihoodRatio</c>, <c>crossFit_weighted_exchangeable</c>).</summary>
+    public double Coverage => WeightedAlpha is double a ? (Form == ConformalForm.CrossFitted ? Math.Max(0.0, 1.0 - 2.0 * a) : 1.0 - a)
         : Form == ConformalForm.CrossFitted ? CrossConformal.Coverage(Units, Level) : 1.0 - (double)Level / Units;
 
     /// <summary>

@@ -27,8 +27,16 @@ public static partial class CrossConformal
     /// Each set is read as the cross-fitted form's (<see cref="ConformalForm.CrossFitted"/>): <c>Below</c> and <c>Tied</c> count the games
     /// whose zᵢ scores below and equal to the candidate's score plus δ, so the candidate's wins are the rest, and π = (Below + Tied + 1)/m.
     /// </summary>
+    /// <param name="unitScores">Game i's score of unit i, one row per game, one column per candidate.</param>
+    /// <param name="candidateScores">Game i's score of the candidate, the same layout.</param>
+    /// <param name="grids">Each test case's grid.</param>
+    /// <param name="alpha">α.</param>
+    /// <param name="inflation">δ, added to the candidate's score in every game.</param>
+    /// <param name="weights">Shift weights, one per candidate column (slice 14's follow-up 2): a case whose weights are not all one value
+    /// takes the weighted rule, π = (weight of the games it does not lose + its own)/W, accepted where π &gt; α, missing at most 2α of the
+    /// weight (<c>tournament_likelihoodRatio</c>, <c>tournament_weighted</c>).</param>
     public static ConformalPrediction Tournament(double[,] unitScores, double[,] candidateScores, IReadOnlyList<double[]> grids,
-                                                 double alpha = 0.1, double inflation = 0.0)
+                                                 double alpha = 0.1, double inflation = 0.0, ShiftWeights? weights = null)
     {
         ArgumentNullException.ThrowIfNull(unitScores);
         ArgumentNullException.ThrowIfNull(candidateScores);
@@ -45,6 +53,7 @@ public static partial class CrossConformal
         foreach (double v in candidateScores)
             if (double.IsNaN(v)) throw new ArgumentException("A candidate's score is NaN.", nameof(candidateScores));
         double[][] copies = CopyGrids(grids, unitScores.GetLength(1));
+        if (weights is not null) CheckWeights(weights, n, copies.Length, unitScores.GetLength(1), nameof(weights));
         int m = checked(n + 1), k = (int)Math.Floor(alpha * m);
         var sets = new ConformalSet[copies.Length];
         int column = 0;
@@ -53,7 +62,8 @@ public static partial class CrossConformal
             double[] grid = copies[t];
             int first = column;
             column += grid.Length;
-            if (k == 0)
+            IReadOnlyList<double>? unitWeights = weights is not null && !Equal(weights.UnitsFor(t), weights.Candidates, first, grid.Length) ? weights.UnitsFor(t) : null;
+            if (k == 0 && unitWeights is null)
             {
                 sets[t] = new(t, 0, m, k, grid, null, null, null, null, null, Inflated: inflation > 0.0, Form: ConformalForm.CrossFitted);
                 continue;
@@ -61,13 +71,25 @@ public static partial class CrossConformal
             var below = new int[grid.Length];
             var tied = new int[grid.Length];
             var p = new double[grid.Length];
+            double[]? notStranger = unitWeights is null ? null : new double[grid.Length];
+            double units = 0.0;
             for (int i = 0; i < n; i++)
+            {
+                if (unitWeights is not null) units += unitWeights[i];
                 for (int g = 0; g < grid.Length; g++)
                 {
                     double unit = unitScores[i, first + g], raised = candidateScores[i, first + g] + inflation;
                     if (unit < raised) below[g]++;
                     else if (unit == raised) tied[g]++;
+                    if (notStranger is not null && unit <= raised) notStranger[g] += unitWeights![i];
                 }
+            }
+            if (notStranger is not null)
+            {
+                sets[t] = new(t, 0, m, k, grid, WeightedPValues(notStranger, units, weights!.Candidates, first), below, tied, null, null,
+                              Inflated: inflation > 0.0, Form: ConformalForm.CrossFitted) { WeightedAlpha = alpha };
+                continue;
+            }
             for (int g = 0; g < grid.Length; g++) p[g] = (below[g] + tied[g] + 1) / (double)m;
             sets[t] = new(t, 0, m, k, grid, p, below, tied, null, null, Inflated: inflation > 0.0, Form: ConformalForm.CrossFitted);
         }
@@ -85,7 +107,7 @@ public static partial class CrossConformal
     /// seams are checked as the split form's: one exchangeable group in stratum 0.
     /// </summary>
     public static ConformalPrediction Tournament(int fits, Func<int, (CandidateLogDensity HeldOut, CandidateLogDensity Candidates)> read,
-                                                 double alpha = 0.1, double inflation = 0.0)
+                                                 double alpha = 0.1, double inflation = 0.0, ShiftWeights? weights = null)
     {
         ArgumentNullException.ThrowIfNull(read);
         ArgumentOutOfRangeException.ThrowIfLessThan(fits, 1);
@@ -109,9 +131,9 @@ public static partial class CrossConformal
             for (int t = 0; t < grids.Count; t++)
                 if (!ConformalBayes.SameSequence(grids[t], test.Grids[t]))
                     throw new ArgumentException("Every fit must score the same test grids.", nameof(read));
-            (int[] rows, double[]? weights) = PredictiveChecks.Rows(at.Weights, at.Draws);
+            (int[] rows, double[]? drawWeights) = PredictiveChecks.Rows(at.Weights, at.Draws);
             int s = rows.Length;
-            double[] logWeights = weights ?? new double[s];
+            double[] logWeights = drawWeights ?? new double[s];
             if (held.Length != s)
             {
                 held = new double[s];
@@ -125,7 +147,7 @@ public static partial class CrossConformal
                 candidates[i, c] = PairScore(logWeights, pair, held);
             }
         }
-        return Tournament(units!, candidates!, grids!, alpha, inflation);
+        return Tournament(units!, candidates!, grids!, alpha, inflation, weights);
     }
 
     /// <summary>
