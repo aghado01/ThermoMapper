@@ -113,6 +113,25 @@ The measurement's options 2 and 4 are not built. Option 2 costs what *reference 
 
 Newest first. Each gives the commits, the gates' results, defects found, decisions for the user and "Doc changes owed".
 
+### 2026-11-14 — Slice 6 verified from clean archives (coordinating session)
+
+- **Runs:** `scripts/verify-csharp.ps1`, the Commit selection over each commit's files in every test project where they select a class. All 22 test projects were swept with `test-select -ListOnly` first.
+- **`5f7fac5`, at HEAD `5f7fac5`:** regression 232 of 232, the one project that selects (26 of 322 classes).
+- **`514dbcd`, at HEAD `514dbcd`:**
+  - linear algebra 129 of 129 (12 of 21 classes);
+  - Samplers 8 of 8 (1 of 31), a project the chip's own gates did not name;
+  - VizCore 12 of 12 (2 of 85);
+  - regression 3,116 of 3,116 (315 of 322);
+  - Oracle 145 of 147 (28 of 39). The two failures are `DiagramMetricsTransportParityTests` at p = 1 and p = 2, each `transport_oracle.R` timing out at 120 s. That is the standing finding for the TDA owner, and no changed code reaches it.
+- **`8b0a7fb`, at HEAD `1f2f23e`:** its diff changes comment lines only; linear algebra 129 of 129.
+- **Read:** `SamplerAdmission.cs` whole, the reference construction and the three step sites in `Baps.cs`, and `514dbcd`'s change to `BandCholesky` and `ConditionEstimate`.
+  - The fixed ZᵀZ coefficient enters the ratios at each `Baps` site.
+  - The screen's test is the chain the Lean module proves (`cond1_unitScale_le`, verified at `94f6b37`).
+  - `condition` defaults to true, so every caller outside BAPS keeps its bits.
+  - The five hierarchical sites were not read line by line; the sweep's hierarchical test and the chain-by-chain check cover them.
+- **Not run here:** the whole regression assembly (the chip's Slice scope, 3,453 of 3,453) and the cost probe, whose table stands on the chip's run.
+- **Receipts:** `artifacts/verify-defects-s6a-5f7fac5/`, `-s6b-514dbcd/` and `-s6c-8b0a7fb/`, with the counters, snapshots, changed files and the sweep tracked in [receipts](receipts/).
+
 ### 2026-11-14 — Slice 6: the samplers' condition check as a setting
 
 **Commits.**

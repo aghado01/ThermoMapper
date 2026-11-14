@@ -1,0 +1,7 @@
+src/maths/linalg/BandCholesky.cs
+src/maths/linalg/ConditionEstimate.cs
+src/maths/regression/spline/baps/Baps.cs
+src/maths/regression/spline/baps/HierarchicalPSpline.cs
+src/maths/regression/spline/baps/PenalizedSpline.cs
+tests/linalg/ConditionEstimateTests.cs
+tests/regression/BapsConditionCheckTests.cs

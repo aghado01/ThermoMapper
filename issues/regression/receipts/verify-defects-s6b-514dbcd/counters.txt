@@ -1,0 +1,5 @@
+linalg        total 129 executed 129 passed 129 failed 0 notExecuted 0
+samplers      total 8 executed 8 passed 8 failed 0 notExecuted 0
+vizcore       total 12 executed 12 passed 12 failed 0 notExecuted 0
+regression    total 3116 executed 3116 passed 3116 failed 0 notExecuted 0
+oracle        total 147 executed 147 passed 145 failed 2 notExecuted 0
