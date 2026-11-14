@@ -292,6 +292,60 @@ Each report gives the commits, gate results, coverage and width by fit, cost, de
 
 Newest first.
 
+### 2026-11-13 — Slice 14's follow-up 1: the weighted predictive distribution
+
+Built at the user's decision 12 ("Lean first, 15 meanwhile") once its Lean (`d81f293`; `pit_weighted`, `sum_mul_wPitCdf`, `wPit_estimated`) was verified by the main session on a clean archive of `38f2e3f`.
+
+**Landed** on `main`, nothing pushed:
+- `113532b`:
+  - `ConformalDistribution.Weighted`, a `WeightedRanks` (Q⁻, Q⁺ and their fall), which every query reads.
+  - `SplitConformal.Distribution(calibration, candidates, weights)` and `SplitPitCalibration.OnGrid(candidates, weights)`.
+  - The full step's options overload reads `ConformalOptions.Weights`.
+  - `WeightedDistributionTests`.
+- `badc0d9`: the grid-free readouts. `SplitPitCalibration.AtCase(…, weights)` gives a `SplitPredictiveDistribution` whose `At`, `Quantile` and `Interval` are the weighted distribution's, with `Weighted` saying so. It serves covariate shift, where the case's weight is constant in y.
+- *A gap closed:* the full step's options overload accepted `ConformalOptions.Weights` and silently ignored them. It now reads them, and refuses the carried band, the inflated rule and the refinement under weights.
+- *Nothing else existing changes:* equal weights give the counts' distribution bit for bit, and the unweighted readouts are untouched.
+
+**What it computes.**
+- *The ranks.* At each grid value, A is the weight of the stratum's units below the candidate, and B the weight tied with it, the candidate's own included. Then:
+  - Q⁻ = A/(W + w_c) and Q⁺ = (A + B)/(W + w_c);
+  - the PIT is T = Q⁻ + V·(Q⁺ − Q⁻), V uniform; quantiles and the CRPS read (Q⁻ + Q⁺)/2;
+  - the equi-tailed set holds y where Q⁺ > α/2 and 1 − Q⁻ > α/2. Each tail refuses at most α/2 of the weight (`coverage_weighted`), so it covers at least 1 − α.
+- *The split form* sums each stratum's weights along its sorted order. So where the candidate's weight is constant along the grid (covariate shift), the shares rise exactly as the counts do. Under response shift w(y) moves along the grid, and the shares can fall where the counts rise; `WeightedRanks.Fall` reads it.
+- *The full step* sums the members' weights beside its counts, in the members' order. Its error readouts count units, so under weights none is read; they are follow-up 3's.
+- *Per-case weights* (posterior conformal's) serve both forms.
+- *The grid-free readouts* find their ends by the same share tests as the grid form, so `At` agrees to the bit at grid values.
+
+**Gates.**
+- *Exactly uniform, by enumeration:* 1,985 data sets of 2 to 9 units, scores tied on a five-value lattice, weights with zeros. |P(T ≤ x) − x| ≤ 4.4·10⁻¹⁶ at 21 levels; with ties counted for the candidate it is super-uniform, to the same rounding.
+- *Equal weights* give the counts' distribution bit for bit: split, shared and per case, and the full step.
+- *Per-case weights* give each case what it gets called alone, in both forms. Under them the split form rises (`Monotone`), and its coverage is 1 − α.
+- *Covariate shift* (slice 14's fixture, 4,000 replications), the PIT's largest deviation from uniform at the deciles:
+  - 1.28 standard errors with the true ratio, against 9.07 unweighted;
+  - with an estimated ratio, at most 0.030 off uniform, within its mean total variation of 0.125;
+  - the weighted equi-tailed set covers 0.911.
+- *Response shift:* 2.89 standard errors against 33.84.
+- *The full step under covariate shift, on exact draws* (qualification switch): 1.51 standard errors against 8.35.
+- *The grid-free readouts* on a grid of step 0.01: `At` bit for bit; the interval holds exactly the grid's accepted values, at α 0.1, 0.3 and 0.6; quantiles within the grid's step. Equal weights give the counts' readouts.
+- *The refusals:*
+  - weights for other units, cases or candidates, in both forms;
+  - the carried band and the inflated rule under weights;
+  - grid-free weights that move with y.
+- *Per commit,* the selected classes and the pinned tier: 1,198 of 1,198 (`113532b`), 1,199 of 1,199 (`badc0d9`).
+
+**Defects found:** one gap in existing code, closed. The full step's options overload ignored `ConformalOptions.Weights` without saying so.
+
+**Follow-ups, each with the decision it would change.**
+- *The error readouts under weights* (follow-up 3, next; its Lean `2928b06` was verified by the main session on a clean archive of `7e2b905`). Decides whether weighted full-step distributions carry their Monte Carlo margin.
+- *Grid-free readouts under response shift.* They need the case's weight as a function of y, and the ends' crossing search then reads a moving total. Decides whether grid-free quantiles serve label shift; the grid form serves it now.
+
+**Doc changes owed** (for the offline docs pass): `docs/Maths/Regression/ConformalPrediction.md`, the predictive distribution's section:
+- the weighted ranks and their PIT, with the Lean names;
+- the equi-tailed set at 1 − α;
+- monotonicity under covariate and response shift;
+- the gates' numbers;
+- API rows for `WeightedRanks`, `ConformalDistribution.Weighted`, `SplitConformal.Distribution`'s weights and `AtCase`'s weights.
+
 ### 2026-11-13 — Slice 15, posterior conformal prediction
 
 Built at the user's "ok 14 then 15", under the Lean's section `PosteriorConformal` (`coverage_pcp`, `coverage_pcp_marginal`, `pcp_cluster_gap`) and Zhang and Candès (arXiv 2409.19712v2, read in TeX: §2, §6 with its hyperparameter rules, Theorems 1, 3 and 4, Proposition 2).
