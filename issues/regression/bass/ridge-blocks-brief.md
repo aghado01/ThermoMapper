@@ -181,6 +181,8 @@ Newest first.
 
 **Landed** in `d594d30` (the measurement) and the commit that carries this report. The step is unchanged: no fix was found to build.
 
+**Verified by the main session on 2026-11-13,** each from a clean archive with zero skips ([receipts](../receipts/verify-e21-s7-item1-5154bc0/)): the Commit selection over the test file, 68 of 68 at `113532b`; the eight weak and weak-held mixing rows with `BASS_QUALIFICATION=1`, 8 of 8 at `b651bc6`, every reading as below.
+
 **The measurement** (`Mixing_InterwovenScales_AgainstTheCentredStep`): the weak fixture (six levels of four cases under t₃) with σ² held at about its posterior mean (`Sigma2Prior.Held(0.17)`), beside σ² drawn, four seeds each. Four chains of 2,000 + 40,000 sweeps per arm. Bulk ESS per sweep, the step on over off:
 
 | seed | M, σ² drawn | M, σ² held | ln σ², drawn | ln s, drawn / held | u0, drawn / held |
