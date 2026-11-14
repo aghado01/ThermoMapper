@@ -341,6 +341,8 @@ Built at the user's "ok 14 then 15", under the Lean's section `PosteriorConforma
   - per-case weights for other cases or other units;
   - the mixture: mismatched or non-finite scores, scores of one value, every option out of range, a fixed J above the distinct profiles, features of another width.
 - *Per commit,* the selected classes and the pinned tier: 1,184 of 1,184.
+- *The whole assembly* afterwards (`-Scope Slice` on a snapshot of `21dc9f8`): 3,337 of 3,337, in 49 m 30 s under load.
+- *Verified* by the main session: the commit selection, 1,184 of 1,184 with no skips, on a clean archive of `3980720`.
 
 **Cost.** The fit at n = 1,000 takes 5.7 s, 5.3 s of it the factorization: 1,941 passes over 11 alternations, two active-set iterations per solve. An internal `ScoreMixtureCost` records it.
 
