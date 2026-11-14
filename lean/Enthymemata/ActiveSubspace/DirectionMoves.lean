@@ -263,20 +263,47 @@ theorem mh_flux_symm {S : Type*} [MeasurableSpace S] (ν : Measure S) [SFinite �
 
 variable [MeasurableSpace R]
 
+/-- The death flux is measurable when the ridges' prior, the proposal and the likelihoods are. -/
+theorem measurable_deathFlux (w : ℕ → ℝ) {pr q : R → ℝ} {L : (M : ℕ) → (Fin M → R) → ℝ}
+    (PB PD : ℕ → ℝ) {M : ℕ} (i : Fin (M + 1)) (hmpr : Measurable pr) (hmq : Measurable q)
+    (hmL : Measurable (L M)) (hmL' : Measurable (L (M + 1))) :
+    Measurable (deathFlux w pr q L PB PD i) := by
+  have hrem : Measurable (fun c' : Fin (M + 1) → R => Fin.removeNth i c') := by
+    have := measurable_snd.comp
+      (MeasurableEquiv.piFinSuccAbove (fun _ : Fin (M + 1) => R) i).measurable
+    simpa [Function.comp_def] using this
+  have hins : ∀ c' : Fin (M + 1) → R, insertAt i (c' i) (Fin.removeNth i c') = c' := fun c' =>
+    Fin.insertNth_self_removeNth i c'
+  have hT : Measurable (tupleTarget w pr L (M + 1)) := by
+    unfold tupleTarget
+    exact (measurable_const.mul
+      (Finset.measurable_prod _ fun j _ => hmpr.comp (measurable_pi_apply j))).mul hmL'
+  have hR : Measurable fun c' : Fin (M + 1) → R =>
+      birthRatio w pr q L PB PD i (Fin.removeNth i c') (c' i) := by
+    simp only [birthRatio, hins]
+    exact (((hmL'.div (hmL.comp hrem)).mul measurable_const).mul measurable_const).mul
+      ((hmpr.comp (measurable_pi_apply i)).div (hmq.comp (measurable_pi_apply i)))
+  unfold deathFlux
+  exact (hT.mul measurable_const).mul (measurable_const.min hR.inv)
+
 /-- **AS-3(c)(ii), birth and death in measure.** Insertion at position `i` carries `ν ⊗ ν^M` to
 `ν^{M+1}` (`measurePreserving_piFinSuccAbove`): that is the dimension matching, with Jacobian `1`.
 With the ridges' prior `pr` and the proposal `q` densities against `ν`, the flux from `A ⊆ R^M`
-into `B ⊆ R^{M+1}` through births at `i` equals the flux back through deaths at `i`. -/
+into `B ⊆ R^{M+1}` through births at `i` equals the flux back through deaths at `i`. The death
+flux's measurability follows from the prior's, the proposal's and the likelihoods'
+(`measurable_deathFlux`). -/
 theorem birth_death_flux (ν : Measure R) [SigmaFinite ν] (w : ℕ → ℝ) (pr q : R → ℝ)
     (L : (M : ℕ) → (Fin M → R) → ℝ) (PB PD : ℕ → ℝ) {M : ℕ} (i : Fin (M + 1))
     (hw : ∀ k, 0 < w k) (hpr : ∀ x, 0 < pr x) (hq : ∀ x, 0 < q x) (hL : ∀ k c, 0 < L k c)
     (hPB : 0 < PB M) (hPD : 0 < PD (M + 1))
-    (hmD : Measurable (deathFlux w pr q L PB PD i)) (A : Set (Fin M → R))
+    (hmpr : Measurable pr) (hmq : Measurable q) (hmL : Measurable (L M))
+    (hmL' : Measurable (L (M + 1))) (A : Set (Fin M → R))
     (B : Set (Fin (M + 1) → R)) (hA : MeasurableSet A) (hB : MeasurableSet B) :
     ∫⁻ c, ∫⁻ r, A.indicator 1 c * B.indicator 1 (insertAt i r c) *
         ENNReal.ofReal (birthFlux w pr q L PB PD i c r) ∂ν ∂(Measure.pi fun _ => ν) =
       ∫⁻ c', B.indicator 1 c' * A.indicator 1 (Fin.removeNth i c') *
         ENNReal.ofReal (deathFlux w pr q L PB PD i c') ∂(Measure.pi fun _ => ν) := by
+  have hmD := measurable_deathFlux w PB PD i hmpr hmq hmL hmL'
   set e := MeasurableEquiv.piFinSuccAbove (fun _ : Fin (M + 1) => R) i
   set G : (Fin (M + 1) → R) → ENNReal := fun c' => B.indicator 1 c' *
     A.indicator 1 (Fin.removeNth i c') * ENNReal.ofReal (deathFlux w pr q L PB PD i c')
