@@ -144,18 +144,79 @@ The shape to find moves no pinned value and leaves no existing checkpoint withou
 
 Newest first. Each gives the commits, the gates' results, defects found, decisions for the user and "Doc changes owed".
 
-### 2026-11-14 — In progress: slice 7, "screened" as the samplers' default
+### 2026-11-14 — Slice 7: "screened" as the samplers' default
 
-- **Checkpoints and pins, read before any code.**
-  - *Checkpoints.* A BAPS checkpoint (`EnsembleCheckpoint`) is an in-memory object; nothing in `src/` writes one to disk. A checkpoint from before the change cannot reach a process running after it, so no persisted checkpoint is orphaned.
-  - *Pins.* No test in the pinned tier reaches `Baps` or `HierarchicalPSpline`. The draws a default run makes do not move, since the two modes draw the same chain.
-  - *Tests that read a default run's refusal text or records:* none outside `BapsConditionCheckTests`. Its resume test uses the default as every-factorization and moves to the explicit mode.
-  - *Callers:* none outside `spline/baps/`.
-- **The shape: today's fingerprint rule stays.** A mode enters the fingerprint unless it is `EveryFactorization`.
-  - A default run's fingerprint therefore gains the mode. A checkpoint taken under the old default still resumes, given `conditionCheck: EveryFactorization`. A checkpoint taken in slice 6 under `Screened` resumes under the new default.
-  - Each checkpoint resumes only under the mode its records came from.
-  - The alternative, keying on the new default, would let an every-factorization checkpoint resume under screened with mixed records, and would orphan slice 6's screened checkpoints.
-- **Next step.** Make the default change with the sharper constant, (1 + √ν)/2, then the gates.
+**Commits.**
+- `740e081`: the In-progress entry.
+- `1441600`: the default and the sharper constant.
+- This report.
+
+**Checkpoints and pins, read before any code.** The shape found moves no pinned value and leaves no checkpoint without a way to resume.
+- *Checkpoints.* A BAPS checkpoint (`EnsembleCheckpoint`) is an in-memory object; nothing in `src/` writes one to disk. One taken before the change cannot reach a process running after it.
+- *Today's fingerprint rule stays.* A mode enters the fingerprint unless it is `EveryFactorization`.
+  - A default run's fingerprint now carries `Screened`.
+  - A checkpoint taken under the old default is refused by the new default and resumes when `conditionCheck: EveryFactorization` is named.
+  - A checkpoint taken under `Screened` resumes under the default, slice 6's included.
+  - So each checkpoint resumes only under the mode its records came from. `BapsConditionCheckTests` checks all three cases.
+- *Pins.* No test in the pinned tier reaches `Baps` or `HierarchicalPSpline`. The draws a default run makes do not move.
+- *Callers.* None outside `spline/baps/`. The existing BAPS tests now run screened and pass as before.
+
+**What a default run now shows differently.**
+- *The refusal's text.*
+  - A step that is not positive definite reads "not positive definite".
+  - A step refused on its estimate reads "its equilibrated condition … past 1e14, where the reference point's is … and the coefficients' ratio to it …".
+  - Every factorization keeps the combined text it always gave.
+- *`ConditionRecord` on a healthy run.* Estimates 0 and no largest estimate (NaN). In their place: the reference condition, read exactly, and the widest ratio, recorded as before.
+- *Before the first draw:* one exact reading per run and system. That is one factorization and ν solves (dense for the hierarchical collapsed precision).
+- *The run's fingerprint* carries the mode, as above.
+
+**The sharper constant.**
+- *The new constant.* The screen takes (1 + √ν)/2 in place of √ν. Its basis is `cond1_unitScale_le_sharp`, whose column step ‖P‖₁ ≤ λ_max(P)·(1 + √ν)/2 for a positive definite P is attained. The Lean chip proved it in `7f535b3`; the coordinating session verified it at `dd57650` and `6fc199f`.
+- *The screen now* clears a step when 2·m·((1 + √ν)/2)·‖E(c_ref)⁻¹‖₁·max ρ / min ρ ≤ 10¹⁴. So S = m·(1 + √ν) / ‖E(c_ref)‖₁.
+- *The sweep, rerun.* On no step did the screen admit what the estimate refused.
+
+  | System | Systems | Screen cleared | Fell through, admitted | Refused | Not PD | Slack, admitted | Slack, all PD | S |
+  |---|---|---|---|---|---|---|---|---|
+  | ZᵀZ + λP | 848 | 291 | 220 | 192 | 145 | 1.00 | 3.49 | 8.46–33.2 |
+  | ZᵀZ + Dᵀdiag(λᵢ)D | 816 | 184 | 195 | 193 | 244 | 1.00 | 1.10 | 11.9–25 |
+  | ZᵀZ + Σⱼ λⱼPⱼ | 474 | 80 | 91 | 126 | 177 | 1.00 | 15 | 76.1–189 |
+  | ZᵀZ/σ² + I/τ_u² | 124 | 72 | 38 | 13 | 1 | 1.30 | 1.30 | 10.7–25.6 |
+  | (R/τ_u²)I + P/τ_0² | 124 | 78 | 30 | 5 | 11 | 0.94 | 1.00 | 15.4 |
+  | the collapsed precision | 332 | 119 | 104 | 65 | 44 | 1.03 | 1.07 | 47.6–89.5 |
+  | ξ²ZᵀZ/σ² + I/σ_η² | 128 | 72 | 42 | 13 | 1 | 1.30 | 1.30 | 10.7–25.6 |
+  | R·ZᵀZ/σ² + P/τ_0² | 124 | 41 | 43 | 21 | 19 | 0.99 | 1.41 | 11.9–25 |
+
+  - S now runs from 8.5 to 189, against 12.5 to 335 before. The slack on admitted systems is unchanged, at most 1.3.
+  - A few more systems clear: 291 against 283 for ZᵀZ + λP, 184 against 176 for the local form.
+
+**The gates.**
+- *A default run draws the chain it drew before.* The 19 cases draw the same chain under `Screened`, the default now, as under `EveryFactorization`, the default before. A new test checks a default run directly against every factorization on `Baps` and `HierarchicalPSpline`.
+- *Every pinned draw:* the pinned tier ran in each Commit-scope selection below.
+- *`BapsConditionCheckTests`:* 28/28.
+- *Resume:*
+  - in each mode, as in slice 6;
+  - across the change, the three cases above.
+- *Commit scope, every test project found on disk (27)*, from `740e081` plus the changed files:
+  - `Maths.Regression.Tests`: 25 of 323 classes and the pinned tier, 228/228.
+  - `Maths.Oracle.Tests`: 6 affected files, no class selected.
+  - No class selected, so nothing ran:
+    - `Maths.Samplers.Tests` (0 of 31), `Maths.LinAlg.Tests`, `Maths.Distributions.Tests`, `Maths.Geometry.Tests`, `Maths.Distance.Tests`, `Maths.Topology.Tests`;
+    - `VizCore.Tests`, `VizCoreSmoke`;
+    - `TDA.Ph.Tests`, `TDA.Mapper.Tests`, `TDA.DimReduction.Tests`;
+    - `Clustering.Graphical.SPC.Tests`, `Clustering.Graphical.CumulativeField.Tests`, `Clustering.Geometric.EMeans.Tests`, `Clustering.Geometric.KMeans.Tests`, `Clustering.HdbScanSmoke`;
+    - `Spc.BlattSmoke`, `Spc.BlattAnalyze`, `Spc.HyperbolicSmoke`;
+    - `Graphs.Primitives.Tests`, `Synthetic.Tests`, `Archivory.Tests`, `RepoAudit.Tests`, `StorageAudit.Tests`, `TestHarness.Runner.Tests`.
+
+- *The regression assembly at the end:* Slice scope, the whole assembly on `1441600`: 3458/3458.
+- *No cost probe.* The constant moves fall-through alone, and slice 6's probe saw none.
+
+**Doc changes owed.**
+- `docs/` for BAPS:
+  - `Screened` as the default;
+  - the sharper constant and its Lean theorem;
+  - the refusal text and records a default run now shows;
+  - the fingerprint rule and how to resume a checkpoint taken under the old default.
+- This supersedes slice 6's "the default's fingerprint string is unchanged".
 
 ### 2026-11-14 — Slice 6 verified from clean archives (coordinating session)
 
