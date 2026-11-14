@@ -50,16 +50,16 @@ revival, last-epoch mean. Metric: training distortion; a pass is one epoch or on
 
 - **From the same k-means++ seeds, `Auto` does not lose to Lloyd.** After 3 passes e-means is below Lloyd on 79 of
   80 seed-cells. After 10 epochs its median is within 0.2% of Lloyd at convergence, or below it, in all 16 cells.
-  After 25 it is at or below Lloyd at convergence in all 16 (strictly below on 64 of 80 seed-cells; most of the
-  rest are ties at the same optimum). At 3 epochs it is level with Lloyd at 25 updates: better in 7 cells, worse in
-  7, tied in 2, all by under 1% except three cells in its favour.
+  After 25 it is at or below Lloyd at convergence, to within 0.01%, in all 16 (strictly below on 64 of 80
+  seed-cells; most of the rest are ties at the same optimum). At 3 epochs it is level with Lloyd at 25 updates:
+  better in 7 cells, worse in 8, tied in 1, all by under 1% except two cells in its favour.
 - **What the laws resolve to here.** The step law sits at its cap (`α₀ = 1`) in 14 of 16 cells at `T = 10`, and the
   batch law gives `B ≈ n/8`, about 32 points per cluster per batch. Against a 60-point grid of explicit `(B, α₀)`
   at `T = 10` from random points (median of 2 to 3 seeds, so the grid's best is optimistic), `Auto` is within 0.3%
-  of the best in 10 cells, 0.6 to 2.8% behind in 4, and 10.8% and 18.4% behind in two mixture cells where smaller,
-  noisier batches reach better optima across a whole block of the grid. Those settings are 5 to 45% worse on the
-  uniform cubes, and no single `(B, α₀)` ends at or below `Auto` in more than 11 of 16 cells. Full batch is the
-  worst row in every cell but one.
+  of the best in 11 cells, 0.6 to 2.8% behind in 3, and 10.8% and 18.4% behind in two mixture cells where smaller,
+  noisier batches reach better optima across a whole block of the grid. That block costs 0.2 to 6% on the uniform
+  cube of the same shape, and no single `(B ≤ 128, α₀)` ends at or below `Auto` in more than 11 of 16 cells. Full
+  batch is the worst batch size in 14 of 16 cells.
 - **The paper's divided-by-8 batch law, run directly, shows no consistent gain** over the undivided law here: it
   wins on 0 to 5 of 5 seeds depending on the cell, in both directions.
 - **Random-point initialization is the weak part at small `k`.** From random points e-means stays 7.8% above Lloyd
@@ -68,8 +68,9 @@ revival, last-epoch mean. Metric: training distortion; a pass is one epoch or on
   these sizes the optimum the seeding lands in decides more than the optimizer does. Revival does not help; it
   fired in 3 of 16 cells.
 
-Reading: `Auto` stays as the batch and step default. The default `Init` is the open choice (see the handoff in the
-session that ran this); it is still the paper's `RandomPoints`.
+Reading: `Auto` stays as the batch and step default. The default `Init` is the open choice: it is still the
+paper's `RandomPoints`, and at these sizes k-means++ seeding costs one pass and is the start from which e-means
+never ended above Lloyd.
 
 ## Not done
 
