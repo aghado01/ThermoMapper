@@ -175,12 +175,16 @@ Each slice is verified from a clean archive before the next one starts on the sa
   - It archives HEAD into `artifacts/verify-main/snap`, leaving out `r/`, then runs `scripts/test-select.ps1 -Scope Commit` over the changed files listed in `-ChangedFile`. That list is `git diff --name-only <last verified>..HEAD -- src tests projects`.
   - It copies the TRX, its counters and the log to `artifacts/verify-<Name>/`, then removes `verify-main`.
   - It runs below normal priority on two processors.
-  - **The selection runs in one test project,** the regression project unless `-Project` names another (the second coordinating session found this on 2026-11-13). Run it once for each test project the changed sources reach: a change to `src/maths/linalg/PCA.cs`, for one, selects `MoMPCATests` and `SubspaceAnnealerTests` in `Maths.Geometry.Tests`.
-  - Gated tests behind `BASS_QUALIFICATION` are run separately, from a fresh snapshot with a `dotnet test --filter` over the named tests, since `test-select` takes no filter.
+  - **Name every test project the changed sources reach** in `-Project`, as a list or comma-separated (the second coordinating session found on 2026-11-13 that the selection had run in the regression project only). They run in turn on the one snapshot; with several, each log and TRX carries the project's short name and `counters.txt` has a line per project. `test-select.ps1 -Project <p> -Changed <files> -ListOnly` shows each project's selection first: a change to `src/maths/linalg/PCA.cs`, for one, selects `MoMPCATests` and `SubspaceAnnealerTests` in `Maths.Geometry.Tests`.
+- **Gated tests:** [verify-qualification.ps1](../../scripts/verify-qualification.ps1), since `test-select` takes no filter.
+  - It builds a snapshot of HEAD with `verify-csharp.ps1 -NoRun -Keep`, then runs `dotnet test --filter <Filter>` with `BASS_QUALIFICATION=1`. Join several tests with `|`, and narrow a theory's rows with `&DisplayName~<text>`.
+  - `outputs.txt` holds each test's outcome and written output, where measurements report; `counters.txt` the counts.
+  - `VSTEST_CONNECTION_TIMEOUT` is 600 s, which the long theories needed under load.
 - **Lean:** [verify-lean.ps1](../../scripts/verify-lean.ps1).
   - It archives `<Commit>`'s `lean/` into `artifacts/verify-lean-<Commit>/` and links `.lake/packages` to the real packages with a junction.
   - It then runs the checks script, `lake build <Module>`, `#print axioms` through `-AxiomsFile` (`import <Module>`, then one `#print axioms` line per new result) and `meta-ci -NoBuild`.
   - **It removes the junction with `cmd /c rmdir` before deleting anything**, and checks that the real packages (9 entries) survived.
+  - `-Module Enthymemata` builds the barrel. `-NoChecks` skips the checks script, to rerun a build that failed for a reason outside the commit, as a transient Mathlib read did once on 2026-11-13.
 - A slice counts as verified when every test in its selection passes with zero skips. Gated qualification classes run with `BASS_QUALIFICATION=1` where a report names them.
 
 ## Resources
