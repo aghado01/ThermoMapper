@@ -85,6 +85,25 @@ Hand-over state between turns is an "In progress" entry here.
 
 ## Reports
 
+### 2026-11-13 — the review's two points on the matrix check, and two follow-ups closed
+
+**The review (coordinating session, at `779c1e0`).** Both points are taken in the Lean.
+1. *The bounds were asked on all of ℝⁿ,* where a hinge is unbounded. `matrix_poincare_box` now asks every hypothesis only on the box `Πᵢ[aᵢ, bᵢ]`. It reads f and J through `clampBox`, and `ae_mem_box` shows the box has full measure under the product of uniforms, so the covariance and energy do not move.
+2. *The kink set did not depend on x,* so a rotated hinge was not covered. `poincare_pi`, `matrix_poincare_pi` and `matrix_poincare_box` now take `s : Fin n → (Fin n → ℝ) → Set ℝ`, countable for each i and x.
+
+**Follow-ups closed:**
+- `birth_death_flux` no longer assumes the death flux's measurability. `measurable_deathFlux` derives it from measurable pr, q, L_M and L_{M+1}.
+- AS-4(iii)'s class-level converse is proved: `IsHingeFactor.monomial` and `IsHingeSum.comp_monomial`. Every permutation with signs and positive scales keeps the hinge class. With the informal invariance of BASS's prior, this is what makes the frame's sign convention (routed to E8's owner) free in law.
+
+**Declarations to print axioms for:** `measurable_deathFlux`, `birth_death_flux`, `IsHingeFactor.monomial`, `IsHingeSum.comp_monomial`, `poincare_pi`, `matrix_poincare_pi`, `ae_mem_box`, `matrix_poincare_box`. Each prints only `propext`, `Classical.choice` and `Quot.sound`.
+
+**Gates:** `lake build Enthymemata.ActiveSubspace` clean, and `scripts/meta-ci.ps1 -NoBuild` PASS.
+
+**E8's line, corrected:**
+> The matrix Poincaré check is proved under the product of uniform inputs (`matrix_poincare_box`, `lean/Enthymemata/ActiveSubspace/ContinuousPoincare.lean`). It covers every fit whose sections along each input are continuous on the box and differentiable off a countable set (which may move with the other inputs), with bounded measurable partials on the box. That includes hinges of any degree, axis-aligned or rotated, as a projected refit reads them in x.
+
+**In progress:** AS-2(e), Bakry–Émery on an interval for the truncated normal's σ². `WeightedPoincare.lean` is drafted and uncommitted, with compile errors being worked.
+
 ### 2026-11-13 — the extension: four open items closed
 
 On 2026-11-13 the user asked for four of the report's open items. They are posed in the lemmas' "Extension" section (`1ef4846`) and taken smallest first. The frame's sign convention went to E8's owner through the coordinating session; it is a `src/` item.

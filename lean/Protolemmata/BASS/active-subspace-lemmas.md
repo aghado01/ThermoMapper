@@ -227,7 +227,7 @@ It does not mark one for the laws E8 already reports as not applicable: mixtures
 - *The frame:*
   - (i): `ridgeGrid_det`, `ridgeHinge_not_separable`;
   - (ii)–(iii): `IsHingeFactor`, `IsHingeSum`, `hinge_isHingeSum`, `hinge_comp_not_hingeSum` and `hingeSum_not_closed`;
-  - the converse at the factor level: `hingeFactor_neg`, `hingeFactor_scale`. The class-level converse (monomial maps keep the class) is stated, not formalized.
+  - the converse: `hingeFactor_neg`, `hingeFactor_scale` and `IsHingeFactor.monomial` at the factor level, and `IsHingeSum.comp_monomial` for the class. Every permutation of the variables with signs and positive scales keeps it, the factors' multiples moving into the coefficients.
 - *The scale:*
   - (v): `outer_pullback`, `activeMatrix_pullback`;
   - (vi): `pullback_eigen_of_orthogonal`, `conformal_pullback`;
@@ -268,7 +268,7 @@ Four of the report's open items, taken in order of size. The numeric checks alre
 - **(i) Metropolis–Hastings is reversible in measure.** For measurable A and B, the flux from A to B equals the flux from B to A: ∫_A∫_B π(x)q(x, y)min(1, r(x, y)) dν(y)dν(x) is symmetric. The integrand is min(π(x)q(x, y), π(y)q(y, x)) for nonnegative π and q, and Tonelli swaps the order. With the sphere of the active coordinates and its surface measure as ν, this is the change move. The hypothesis that carries the weight is that prior and proposal are densities against the same ν.
 - **(ii) Birth and death in measure.** For each position i, insertion (r, c) ↦ insertNth i r c carries ν ⊗ ν^M to ν^{M+1} (`measurePreserving_piFinSuccAbove`). That is the dimension matching, with Jacobian 1 as a measure fact. With π_M = w(M)Π pr(cⱼ) L_M(c) and q densities against ν, the flux from A ⊆ R^M to B ⊆ R^{M+1} through births at i equals the flux back through deaths at i.
 
-**Lean (proved,** `DirectionMoves`**).** `mh_flux_symm`, for any s-finite ν. `birth_death_flux` per position, for a σ-finite ν, with `birthRatio`, `birthFlux`, `deathFlux` and the pointwise `birthFlux_eq_deathFlux`. The death flux's measurability is a hypothesis (`hmD`): it holds when pr, q and the L_M are measurable.
+**Lean (proved,** `DirectionMoves`**).** `mh_flux_symm`, for any s-finite ν. `birth_death_flux` per position, for a σ-finite ν, with `birthRatio`, `birthFlux`, `deathFlux` and the pointwise `birthFlux_eq_deathFlux`. The death flux's measurability is derived (`measurable_deathFlux`) from the measurability of pr, q, L_M and L_{M+1}, which `birth_death_flux` takes as hypotheses.
 
 ### AS-2(d) — the matrix check on continuous laws
 
@@ -294,5 +294,7 @@ Four of the report's open items, taken in order of size. The numeric checks alre
   - `covM_form` and `energyM_form`;
   - `matrix_poincare_pi`: Cov(f) ≼ E[J diag(((bᵢ − aᵢ)/π)²) Jᵀ] under the product of uniforms.
 
-  The hypotheses that remain are the fit's regularity only: bounded measurable outputs and partials, with sections along each coordinate continuous and differentiable off a countable set. Hinges of any degree meet them.
+  The hypotheses that remain are the fit's regularity only: bounded measurable outputs and partials, with sections along each coordinate continuous and differentiable off a countable set.
+  - *The kink set may move with the other coordinates* (`s i x`), so a hinge in rotated coordinates (a projected refit read in x) is covered. The coordinating session's review found that the first form, with `s i` fixed, covered only axis-aligned kinks.
+  - *Every hypothesis is asked only on the box* in `matrix_poincare_box`. It reads f and J through `clampBox`, which changes nothing under the law because the box has full measure (`ae_mem_box`). So a fit unbounded off the box, as every hinge is, is covered. The same review found that `matrix_poincare_pi` asks its bounds on all of ℝⁿ, which a hinge does not meet without that step.
 - *The truncated normal's bound* stays with the checks, since Bakry–Émery is a separate project.
