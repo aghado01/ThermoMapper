@@ -181,6 +181,8 @@ Newest first.
 
 **Landed** in `4133984` (the grid) and the commit that carries this report. The step and its default are unchanged, and no rule is proposed.
 
+**Verified by the main session on 2026-11-13,** each from a clean archive with zero skips ([receipts](../receipts/verify-batch2-091b5f4/)): the Commit selection, 1,213 of 1,213 at `091b5f4`; the grid's four rows with `BASS_QUALIFICATION=1`, 4 of 4 at `5946d4a`. Below ρ ≈ 10 every cell gains in ln s per sweep (1.14 to 6.43, seeded). The per-second ratios move with the machine's load (0.98 to 5.75 in this run, one cell at ρ = 7.3 reading 0.98 per second against 1.32 per sweep), which leaves the reading and the user's opt-in decision as they stand.
+
 **The grid** (`Mixing_InterwovenScales_OverCasesPerLevel`), 60 cells:
 - six levels of m = 2, 4, 8, 16 or 32 cases;
 - scaled t₃ noise at 0.5 and 2 times the effects' sd of 0.3;

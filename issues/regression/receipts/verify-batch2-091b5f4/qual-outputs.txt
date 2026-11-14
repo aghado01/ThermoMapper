@@ -1,0 +1,70 @@
+Passed 00:04:18.9585477 Maths.Regression.Tests.RandomEffectsNoiseQualificationTests.Mixing_InterwovenScales_OverCasesPerLevel(law: "t", noise: "small")
+    t, small noise, m = 2, seed 1: rho 2.37, E[s] 0.824; on over off per sweep: ln sigma2 0.90, ln s 3.80, u0 2.03, M 0.93; per second: ln sigma2 0.80, ln s 3.34, u0 1.79, M 0.82; off's ESS ln s 1177, M 2626
+    t, small noise, m = 2, seed 2: rho 3.84, E[s] 1.010; on over off per sweep: ln sigma2 1.04, ln s 2.19, u0 0.96, M 1.20; per second: ln sigma2 1.05, ln s 2.20, u0 0.97, M 1.21; off's ESS ln s 976, M 1304
+    t, small noise, m = 2, seed 3: rho 6.65, E[s] 1.537; on over off per sweep: ln sigma2 1.55, ln s 2.88, u0 1.53, M 0.91; per second: ln sigma2 1.27, ln s 2.37, u0 1.25, M 0.75; off's ESS ln s 1436, M 3149
+    t, small noise, m = 4, seed 1: rho 29.99, E[s] 2.494; on over off per sweep: ln sigma2 0.95, ln s 1.08, u0 1.08, M 0.63; per second: ln sigma2 0.88, ln s 1.00, u0 1.00, M 0.58; off's ESS ln s 2299, M 444
+    t, small noise, m = 4, seed 2: rho 2.56, E[s] 0.600; on over off per sweep: ln sigma2 0.96, ln s 1.52, u0 0.93, M 0.86; per second: ln sigma2 0.94, ln s 1.48, u0 0.90, M 0.84; off's ESS ln s 634, M 546
+    t, small noise, m = 4, seed 3: rho 33.42, E[s] 2.636; on over off per sweep: ln sigma2 0.57, ln s 1.08, u0 0.60, M 0.51; per second: ln sigma2 0.52, ln s 0.98, u0 0.55, M 0.46; off's ESS ln s 4826, M 641
+    t, small noise, m = 8, seed 1: rho 36.24, E[s] 1.967; on over off per sweep: ln sigma2 1.32, ln s 0.96, u0 0.43, M 0.74; per second: ln sigma2 1.11, ln s 0.81, u0 0.37, M 0.62; off's ESS ln s 7467, M 495
+    t, small noise, m = 8, seed 2: rho 102.87, E[s] 3.335; on over off per sweep: ln sigma2 0.96, ln s 1.06, u0 1.30, M 0.43; per second: ln sigma2 0.89, ln s 0.98, u0 1.21, M 0.40; off's ESS ln s 10176, M 703
+    t, small noise, m = 8, seed 3: rho 43.39, E[s] 2.154; on over off per sweep: ln sigma2 0.85, ln s 1.46, u0 0.78, M 0.29; per second: ln sigma2 0.83, ln s 1.44, u0 0.77, M 0.28; off's ESS ln s 6948, M 582
+    t, small noise, m = 16, seed 1: rho 35.46, E[s] 1.385; on over off per sweep: ln sigma2 0.55, ln s 1.20, u0 0.45, M 5.04; per second: ln sigma2 0.49, ln s 1.06, u0 0.40, M 4.48; off's ESS ln s 10801, M 9
+    t, small noise, m = 16, seed 2: rho 65.04, E[s] 1.880; on over off per sweep: ln sigma2 0.88, ln s 1.02, u0 0.61, M 0.57; per second: ln sigma2 1.01, ln s 1.17, u0 0.69, M 0.66; off's ESS ln s 12796, M 29
+    t, small noise, m = 16, seed 3: rho 438.40, E[s] 4.886; on over off per sweep: ln sigma2 0.58, ln s 1.12, u0 0.91, M 0.33; per second: ln sigma2 0.50, ln s 0.97, u0 0.79, M 0.28; off's ESS ln s 12316, M 106
+    t, small noise, m = 32, seed 1: rho 219.02, E[s] 2.453; on over off per sweep: ln sigma2 3.89, ln s 1.03, u0 0.19, M 4.74; per second: ln sigma2 3.62, ln s 0.96, u0 0.18, M 4.42; off's ESS ln s 13945, M 8
+    t, small noise, m = 32, seed 2: rho 533.35, E[s] 3.831; on over off per sweep: ln sigma2 0.33, ln s 1.09, u0 0.16, M 0.56; per second: ln sigma2 0.32, ln s 1.04, u0 0.15, M 0.54; off's ESS ln s 14821, M 113
+    t, small noise, m = 32, seed 3: rho 529.65, E[s] 3.820; on over off per sweep: ln sigma2 0.60, ln s 1.00, u0 0.42, M 1.03; per second: ln sigma2 0.50, ln s 0.84, u0 0.35, M 0.86; off's ESS ln s 16078, M 74
+Passed 00:03:14.3760245 Maths.Regression.Tests.RandomEffectsNoiseQualificationTests.Mixing_InterwovenScales_OverCasesPerLevel(law: "t", noise: "large")
+    t, large noise, m = 2, seed 1: rho 10.84, E[s] 1.849; on over off per sweep: ln sigma2 1.32, ln s 1.82, u0 0.86, M 1.31; per second: ln sigma2 1.37, ln s 1.89, u0 0.89, M 1.36; off's ESS ln s 637, M 996
+    t, large noise, m = 2, seed 2: rho 9.73, E[s] 1.762; on over off per sweep: ln sigma2 1.30, ln s 1.75, u0 1.00, M 1.36; per second: ln sigma2 1.23, ln s 1.65, u0 0.95, M 1.28; off's ESS ln s 983, M 985
+    t, large noise, m = 2, seed 3: rho 12.52, E[s] 2.103; on over off per sweep: ln sigma2 1.37, ln s 1.77, u0 1.35, M 0.93; per second: ln sigma2 1.04, ln s 1.35, u0 1.03, M 0.71; off's ESS ln s 1806, M 3056
+    t, large noise, m = 4, seed 1: rho 6.66, E[s] 0.995; on over off per sweep: ln sigma2 0.94, ln s 1.14, u0 1.11, M 1.09; per second: ln sigma2 0.89, ln s 1.07, u0 1.05, M 1.02; off's ESS ln s 356, M 654
+    t, large noise, m = 4, seed 2: rho 0.96, E[s] 0.373; on over off per sweep: ln sigma2 0.57, ln s 4.95, u0 1.95, M 0.68; per second: ln sigma2 0.66, ln s 5.75, u0 2.27, M 0.79; off's ESS ln s 1688, M 2048
+    t, large noise, m = 4, seed 3: rho 3.59, E[s] 0.726; on over off per sweep: ln sigma2 1.01, ln s 3.61, u0 1.32, M 0.97; per second: ln sigma2 0.87, ln s 3.10, u0 1.13, M 0.83; off's ESS ln s 932, M 349
+    t, large noise, m = 8, seed 1: rho 3.12, E[s] 0.501; on over off per sweep: ln sigma2 0.66, ln s 2.20, u0 1.11, M 0.84; per second: ln sigma2 0.61, ln s 2.04, u0 1.03, M 0.78; off's ESS ln s 1493, M 358
+    t, large noise, m = 8, seed 2: rho 16.05, E[s] 1.276; on over off per sweep: ln sigma2 1.04, ln s 1.18, u0 1.20, M 1.21; per second: ln sigma2 0.88, ln s 1.00, u0 1.01, M 1.02; off's ESS ln s 2272, M 424
+    t, large noise, m = 8, seed 3: rho 7.31, E[s] 0.840; on over off per sweep: ln sigma2 1.74, ln s 1.32, u0 0.84, M 2.00; per second: ln sigma2 1.28, ln s 0.98, u0 0.62, M 1.48; off's ESS ln s 1810, M 176
+    t, large noise, m = 16, seed 1: rho 6.55, E[s] 0.555; on over off per sweep: ln sigma2 0.53, ln s 1.99, u0 1.07, M 0.59; per second: ln sigma2 0.46, ln s 1.72, u0 0.93, M 0.51; off's ESS ln s 2413, M 285
+    t, large noise, m = 16, seed 2: rho 8.97, E[s] 0.676; on over off per sweep: ln sigma2 1.18, ln s 1.66, u0 1.52, M 0.71; per second: ln sigma2 1.04, ln s 1.46, u0 1.34, M 0.62; off's ESS ln s 5593, M 367
+    t, large noise, m = 16, seed 3: rho 46.78, E[s] 1.587; on over off per sweep: ln sigma2 0.77, ln s 0.83, u0 0.81, M 1.70; per second: ln sigma2 0.73, ln s 0.79, u0 0.77, M 1.62; off's ESS ln s 11261, M 387
+    t, large noise, m = 32, seed 1: rho 21.03, E[s] 0.745; on over off per sweep: ln sigma2 0.94, ln s 1.15, u0 0.92, M 0.57; per second: ln sigma2 0.81, ln s 1.00, u0 0.79, M 0.50; off's ESS ln s 12667, M 527
+    t, large noise, m = 32, seed 2: rho 43.84, E[s] 1.089; on over off per sweep: ln sigma2 0.78, ln s 1.06, u0 0.43, M 1.32; per second: ln sigma2 0.72, ln s 0.98, u0 0.40, M 1.22; off's ESS ln s 14373, M 517
+    t, large noise, m = 32, seed 3: rho 24.83, E[s] 0.813; on over off per sweep: ln sigma2 0.98, ln s 1.15, u0 0.95, M 1.03; per second: ln sigma2 0.92, ln s 1.07, u0 0.88, M 0.96; off's ESS ln s 12891, M 1646
+Passed 00:03:26.6740719 Maths.Regression.Tests.RandomEffectsNoiseQualificationTests.Mixing_InterwovenScales_OverCasesPerLevel(law: "nw", noise: "small")
+    nw, small noise, m = 2, seed 1: rho 2.02, E[s] 0.779; on over off per sweep: ln sigma2 1.04, ln s 3.33, u0 1.75, M 1.03; per second: ln sigma2 0.71, ln s 2.28, u0 1.20, M 0.71; off's ESS ln s 1145, M 1792
+    nw, small noise, m = 2, seed 2: rho 3.30, E[s] 0.930; on over off per sweep: ln sigma2 1.48, ln s 2.19, u0 1.34, M 1.48; per second: ln sigma2 1.05, ln s 1.55, u0 0.95, M 1.04; off's ESS ln s 668, M 577
+    nw, small noise, m = 2, seed 3: rho 7.14, E[s] 1.637; on over off per sweep: ln sigma2 1.16, ln s 1.51, u0 0.93, M 0.92; per second: ln sigma2 1.06, ln s 1.39, u0 0.86, M 0.84; off's ESS ln s 2625, M 2083
+    nw, small noise, m = 4, seed 1: rho 23.33, E[s] 2.208; on over off per sweep: ln sigma2 1.00, ln s 1.80, u0 0.84, M 1.27; per second: ln sigma2 0.93, ln s 1.68, u0 0.78, M 1.19; off's ESS ln s 2384, M 110
+    nw, small noise, m = 4, seed 2: rho 2.27, E[s] 0.574; on over off per sweep: ln sigma2 0.90, ln s 1.26, u0 0.95, M 0.61; per second: ln sigma2 0.77, ln s 1.08, u0 0.81, M 0.52; off's ESS ln s 382, M 414
+    nw, small noise, m = 4, seed 3: rho 24.55, E[s] 2.257; on over off per sweep: ln sigma2 0.86, ln s 0.82, u0 1.16, M 0.83; per second: ln sigma2 0.76, ln s 0.73, u0 1.03, M 0.74; off's ESS ln s 5493, M 423
+    nw, small noise, m = 8, seed 1: rho 23.96, E[s] 1.599; on over off per sweep: ln sigma2 1.50, ln s 1.15, u0 0.89, M 0.52; per second: ln sigma2 1.18, ln s 0.91, u0 0.70, M 0.41; off's ESS ln s 6007, M 289
+    nw, small noise, m = 8, seed 2: rho 67.12, E[s] 2.670; on over off per sweep: ln sigma2 0.81, ln s 1.34, u0 2.03, M 1.01; per second: ln sigma2 0.75, ln s 1.24, u0 1.87, M 0.93; off's ESS ln s 5988, M 304
+    nw, small noise, m = 8, seed 3: rho 28.37, E[s] 1.748; on over off per sweep: ln sigma2 3.12, ln s 0.93, u0 1.28, M 0.59; per second: ln sigma2 2.92, ln s 0.87, u0 1.20, M 0.55; off's ESS ln s 11326, M 1314
+    nw, small noise, m = 16, seed 1: rho 20.47, E[s] 1.045; on over off per sweep: ln sigma2 3.39, ln s 0.97, u0 12.49, M 1.23; per second: ln sigma2 2.97, ln s 0.85, u0 10.94, M 1.08; off's ESS ln s 11562, M 8
+    nw, small noise, m = 16, seed 2: rho 40.09, E[s] 1.477; on over off per sweep: ln sigma2 1.18, ln s 1.00, u0 0.48, M 0.68; per second: ln sigma2 1.24, ln s 1.05, u0 0.50, M 0.72; off's ESS ln s 13459, M 27
+    nw, small noise, m = 16, seed 3: rho 238.09, E[s] 3.598; on over off per sweep: ln sigma2 2.04, ln s 1.60, u0 1.88, M 1.64; per second: ln sigma2 2.01, ln s 1.57, u0 1.85, M 1.62; off's ESS ln s 8827, M 64
+    nw, small noise, m = 32, seed 1: rho 121.98, E[s] 1.827; on over off per sweep: ln sigma2 0.91, ln s 1.02, u0 3.23, M 0.92; per second: ln sigma2 0.91, ln s 1.02, u0 3.23, M 0.92; off's ESS ln s 15652, M 6
+    nw, small noise, m = 32, seed 2: rho 307.81, E[s] 2.905; on over off per sweep: ln sigma2 1.80, ln s 0.97, u0 0.92, M 6.09; per second: ln sigma2 1.57, ln s 0.85, u0 0.80, M 5.30; off's ESS ln s 16166, M 109
+    nw, small noise, m = 32, seed 3: rho 299.98, E[s] 2.875; on over off per sweep: ln sigma2 0.10, ln s 1.00, u0 1.89, M 0.13; per second: ln sigma2 0.08, ln s 0.77, u0 1.45, M 0.10; off's ESS ln s 15292, M 315
+Passed 00:04:18.0838656 Maths.Regression.Tests.RandomEffectsNoiseQualificationTests.Mixing_InterwovenScales_OverCasesPerLevel(law: "nw", noise: "large")
+    nw, large noise, m = 2, seed 1: rho 11.67, E[s] 1.988; on over off per sweep: ln sigma2 1.30, ln s 1.67, u0 1.07, M 1.07; per second: ln sigma2 1.20, ln s 1.55, u0 0.99, M 0.99; off's ESS ln s 519, M 849
+    nw, large noise, m = 2, seed 2: rho 10.95, E[s] 1.894; on over off per sweep: ln sigma2 1.49, ln s 1.79, u0 1.71, M 1.33; per second: ln sigma2 1.43, ln s 1.72, u0 1.65, M 1.28; off's ESS ln s 814, M 608
+    nw, large noise, m = 2, seed 3: rho 13.30, E[s] 2.204; on over off per sweep: ln sigma2 1.11, ln s 1.34, u0 0.93, M 0.69; per second: ln sigma2 0.90, ln s 1.09, u0 0.75, M 0.56; off's ESS ln s 1558, M 2380
+    nw, large noise, m = 4, seed 1: rho 4.78, E[s] 0.874; on over off per sweep: ln sigma2 0.62, ln s 1.60, u0 1.45, M 1.10; per second: ln sigma2 0.58, ln s 1.49, u0 1.35, M 1.03; off's ESS ln s 348, M 593
+    nw, large noise, m = 4, seed 2: rho 0.62, E[s] 0.295; on over off per sweep: ln sigma2 0.97, ln s 6.43, u0 2.10, M 1.07; per second: ln sigma2 0.83, ln s 5.54, u0 1.81, M 0.92; off's ESS ln s 1208, M 1526
+    nw, large noise, m = 4, seed 3: rho 2.07, E[s] 0.572; on over off per sweep: ln sigma2 1.40, ln s 2.37, u0 1.28, M 1.28; per second: ln sigma2 1.20, ln s 2.03, u0 1.10, M 1.10; off's ESS ln s 1281, M 318
+    nw, large noise, m = 8, seed 1: rho 2.18, E[s] 0.424; on over off per sweep: ln sigma2 1.94, ln s 2.74, u0 1.21, M 0.75; per second: ln sigma2 2.15, ln s 3.05, u0 1.35, M 0.83; off's ESS ln s 1135, M 277
+    nw, large noise, m = 8, seed 2: rho 10.15, E[s] 1.015; on over off per sweep: ln sigma2 0.54, ln s 0.65, u0 1.14, M 0.77; per second: ln sigma2 0.46, ln s 0.54, u0 0.96, M 0.65; off's ESS ln s 2995, M 507
+    nw, large noise, m = 8, seed 3: rho 4.41, E[s] 0.648; on over off per sweep: ln sigma2 0.81, ln s 2.41, u0 1.17, M 1.55; per second: ln sigma2 0.85, ln s 2.52, u0 1.22, M 1.62; off's ESS ln s 1093, M 228
+    nw, large noise, m = 16, seed 1: rho 3.22, E[s] 0.383; on over off per sweep: ln sigma2 0.62, ln s 2.29, u0 1.52, M 0.52; per second: ln sigma2 0.70, ln s 2.61, u0 1.73, M 0.59; off's ESS ln s 2297, M 272
+    nw, large noise, m = 16, seed 2: rho 5.43, E[s] 0.521; on over off per sweep: ln sigma2 0.67, ln s 1.44, u0 0.49, M 0.82; per second: ln sigma2 0.51, ln s 1.08, u0 0.36, M 0.61; off's ESS ln s 7334, M 324
+    nw, large noise, m = 16, seed 3: rho 24.08, E[s] 1.138; on over off per sweep: ln sigma2 1.41, ln s 1.16, u0 3.22, M 0.95; per second: ln sigma2 1.07, ln s 0.88, u0 2.45, M 0.72; off's ESS ln s 10488, M 730
+    nw, large noise, m = 32, seed 1: rho 11.53, E[s] 0.548; on over off per sweep: ln sigma2 0.95, ln s 1.23, u0 0.94, M 0.84; per second: ln sigma2 1.29, ln s 1.66, u0 1.27, M 1.13; off's ESS ln s 11858, M 1123
+    nw, large noise, m = 32, seed 2: rho 26.72, E[s] 0.848; on over off per sweep: ln sigma2 0.90, ln s 1.04, u0 1.40, M 0.98; per second: ln sigma2 1.02, ln s 1.19, u0 1.60, M 1.11; off's ESS ln s 13719, M 597
+    nw, large noise, m = 32, seed 3: rho 14.29, E[s] 0.614; on over off per sweep: ln sigma2 0.82, ln s 1.29, u0 1.07, M 0.64; per second: ln sigma2 0.68, ln s 1.07, u0 0.88, M 0.53; off's ESS ln s 11626, M 1710
+Passed 00:00:01.5043895 Maths.Regression.Tests.WeightedMarginTests.Measurement_CoverageUnderShift_FromFewDraws
+    from 40 draws under covariate shift: the plain weighted set covers 0.9380 (mean M̂ 0.0539, ν 0.010), the inflated 0.9450; se 0.0067
+Passed 00:00:13.6884789 Maths.Regression.Tests.WeightedDistributionTests.Measurement_TheFullStepsPitUnderCovariateShift_OnExactDraws
+    the full step's PIT under covariate shift, largest deviation at the deciles in se: unweighted 8.35, the true ratio 1.51
+Passed 00:00:04.9165899 Maths.Regression.Tests.WeightedConformalTests.Measurement_TheFullStepUnderCovariateShift_OnExactDraws
+    the full step under covariate shift: unweighted 0.8290, the true ratio 0.9385 (se 0.0067; nominal 0.9000)
