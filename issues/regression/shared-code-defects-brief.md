@@ -72,6 +72,17 @@ Newest first. Each gives the commits, the gates' results, defects found, decisio
 - **Slice 2 is not yet verified.** The archive holds its source (`37eb63c`), so the regression assembly passed with the refusal in place. The linear algebra, Mapper and VizCore selections are still to run.
 - **Receipts:** `artifacts/verify-defects-s1-e39924c/`, with the changed-file list, counters and snapshot line tracked in [receipts](receipts/verify-defects-s1-e39924c/).
 
+### In progress (2026-11-13)
+
+- *Slice 3, BASS's draw weights over their whole range:* added by the user to this chip on 2026-11-13, after the review in `discussion/astra-shared-code-cleanup.md`.
+- *Uncommitted:*
+  - the shared routine `src/maths/regression/WeightScale.cs` and its eleven readers, plus `PredictiveChecks.Rows`' fallback;
+  - the tests, in `tests/regression/DrawWeightRangeTests.cs`.
+  - On HEAD's code, 9 of the 14 new tests fail; on the build, all 14 pass.
+- *Shared files.* `SubspacePosterior.cs` and `CoActivePosterior.cs` also hold another session's uncommitted eigenvector orientation (E8, slice 7e). This slice commits only its own hunks, staged from the tested snapshot.
+- *Running:* the regression assembly whole, from the snapshot at `artifacts/chip-defects/tree`.
+- *Next:* commit, then the report.
+
 ### 2026-11-13 — Slice 2: `CholeskyDecomposition` on a near-singular covariance
 
 **Commit.** `37eb63c` fix(linalg): CholeskyDecomposition refuses a factor that is not finite, and its callers read it.

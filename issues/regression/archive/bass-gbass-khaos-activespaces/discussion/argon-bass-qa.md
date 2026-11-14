@@ -1,27 +1,3 @@
-Analyzed bass-questions.md:L1-122
-Analyzed stage8-fitting-smc-brief.md:L1-150
-Analyzed stage8-cut-smc-brief.md:L1-138
-Analyzed Readouts.cs:L1-283
-Analyzing SmcSampler.cs
-Analyzing SmcStage.cs
-Analyzing SmcSampler.cs:L1-300
-Ran list SMC and calibration files
-Analyzed SmcContracts.cs:L1-53
-Analyzed SmcRun.cs:L1-463
-Analyzed SmcWeights.cs:L1-120
-Analyzing SamplingTarget.cs
-Analyzed CalibrationModel.cs:L1-357
-Analyzed CalibrationSampler.cs:L1-406
-Analyzed CalibrationBlocks.cs:L1-348
-Analyzed NestedCalibration.cs:L1-262
-Ran list files in src/maths/samplers
-Ran list all files in src/maths/samplers
-Analyzed SamplingTarget.cs:L1-180
-Analyzed ConvergenceVerdict.cs:L1-126
-Canceled check for Akinshin paper locally
-Killed task Check for Akinshin paper locally
-Ran list gauntlet paper directory
-Used tool: manage_task
 
 ## 1. Readouts on N14 (`2d1ba7d`) and Stage 7 (`2232dc3`)
 
