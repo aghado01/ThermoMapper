@@ -2,8 +2,14 @@ import Mathlib.Algebra.BigOperators.Field
 import Mathlib.Algebra.BigOperators.Ring.Finset
 import Mathlib.Algebra.Order.BigOperators.Group.Finset
 import Mathlib.Algebra.Order.BigOperators.Ring.Finset
+import Mathlib.Analysis.Calculus.Deriv.MeanValue
+import Mathlib.Analysis.Calculus.ParametricIntegral
+import Mathlib.Analysis.SpecialFunctions.Exponential
 import Mathlib.Analysis.SpecialFunctions.ImproperIntegrals
+import Mathlib.Analysis.SpecialFunctions.Integrals.Basic
 import Mathlib.Analysis.SpecialFunctions.Log.Basic
+import Mathlib.Analysis.SpecialFunctions.Log.Deriv
+import Mathlib.Analysis.SpecialFunctions.Sqrt
 import Mathlib.Data.Finset.Card
 import Mathlib.Data.Finset.Max
 import Mathlib.Data.Fintype.BigOperators
@@ -14,6 +20,7 @@ import Mathlib.GroupTheory.Perm.Fin
 import Mathlib.MeasureTheory.Constructions.Pi
 import Mathlib.MeasureTheory.Group.Convolution
 import Mathlib.MeasureTheory.Group.LIntegral
+import Mathlib.MeasureTheory.Integral.DominatedConvergence
 import Mathlib.MeasureTheory.Integral.Lebesgue.Markov
 import Mathlib.MeasureTheory.Measure.Lebesgue.Basic
 import Mathlib.Order.Interval.Set.OrdConnected
@@ -22,6 +29,7 @@ import Mathlib.Tactic.Linarith
 import Mathlib.Tactic.NormNum
 import Mathlib.Tactic.Positivity
 import Mathlib.Tactic.Ring
+import Mathlib.Topology.Order.IntermediateValue
 
 /-!
 # Conformal validity (CB-1 to CB-4, E35's M-1 and M-2, and slice 9's cross-fitted forms)
@@ -10175,5 +10183,908 @@ theorem proper_conditional {χ : Type*} [Fintype χ] (L : (κ → ℝ) → κ �
   sum_le_sum fun x _ => mul_le_mul_of_nonneg_left (hL _ _ (hP x) (hR x)) (hw x)
 
 end ProperScores
+
+/-! ### RoBAS-Full's conformal sets are intervals for `n ≥ 4`
+
+Commissioned 2026-11-14: RoBAS-Full's sets are intervals from `n = 4`, so that
+`ResidualShrinkage.Intervals` can serve it as it serves RoBAS-EB. Sources: RoBAS
+(arXiv 2607.04236v2), its appendix's RoBAS-Full derivation and Bersson and Hoff's Lemmas 1–2.
+Unit `j` is accepted where `(r_j − z) β_j(z) ≥ 0`. `β_j` rises through each of its zeros, which
+reduces to an inequality in Dawson's function; its four bounds (`RobasDawsonBounds`) are certified
+by interval arithmetic in `conformal-checks.py`, which reads the constants from this file. Below
+`n = 4` the inequality fails, and the sets need not be intervals. -/
+
+section RobasFull
+
+open Real Set Filter MeasureTheory Topology
+
+/-- `K_j(x) = ∫₀¹ v^{2j} e^{x v²} dv`. -/
+noncomputable def kummerMoment (j : ℕ) (x : ℝ) : ℝ :=
+  ∫ v in (0 : ℝ)..1, v ^ (2 * j) * exp (x * v ^ 2)
+
+theorem kummerMoment_continuous_integrand (j : ℕ) (x : ℝ) :
+    Continuous fun v : ℝ => v ^ (2 * j) * exp (x * v ^ 2) := by fun_prop
+
+theorem kummerMoment_pos (j : ℕ) (x : ℝ) : 0 < kummerMoment j x :=
+  intervalIntegral.intervalIntegral_pos_of_pos_on
+    ((kummerMoment_continuous_integrand j x).intervalIntegrable _ _)
+    (fun _ hv => mul_pos (pow_pos hv.1 _) (exp_pos _)) zero_lt_one
+
+theorem kummerMoment_succ_le (j : ℕ) (x : ℝ) : kummerMoment (j + 1) x ≤ kummerMoment j x := by
+  refine intervalIntegral.integral_mono_on zero_le_one
+    ((kummerMoment_continuous_integrand _ x).intervalIntegrable _ _)
+    ((kummerMoment_continuous_integrand j x).intervalIntegrable _ _) fun v hv => ?_
+  have h1 : v ^ (2 * (j + 1)) ≤ v ^ (2 * j) := by
+    rw [show 2 * (j + 1) = 2 * j + 2 by ring, pow_add]
+    exact mul_le_of_le_one_right (pow_nonneg hv.1 _) (pow_le_one₀ hv.1 hv.2)
+  exact mul_le_mul_of_nonneg_right h1 (exp_pos _).le
+
+theorem hasDerivAt_kummerMoment (j : ℕ) (x : ℝ) :
+    HasDerivAt (kummerMoment j) (kummerMoment (j + 1) x) x := by
+  have hc : ∀ y : ℝ, IntegrableOn (fun v : ℝ => v ^ (2 * j) * exp (y * v ^ 2)) (Ioc 0 1) := fun y =>
+    ((kummerMoment_continuous_integrand j y).integrableOn_Icc).mono_set Ioc_subset_Icc_self
+  have key := hasDerivAt_integral_of_dominated_loc_of_deriv_le
+    (μ := volume.restrict (Ioc (0 : ℝ) 1))
+    (F := fun y v => v ^ (2 * j) * exp (y * v ^ 2))
+    (F' := fun y v => v ^ (2 * (j + 1)) * exp (y * v ^ 2)) (x₀ := x)
+    (bound := fun _ => exp (|x| + 1)) (s := Metric.ball x 1) (Metric.ball_mem_nhds x one_pos)
+    (Eventually.of_forall fun y => (kummerMoment_continuous_integrand j y).aestronglyMeasurable)
+    (hc x) (kummerMoment_continuous_integrand (j + 1) x).aestronglyMeasurable
+    ((ae_restrict_iff' measurableSet_Ioc).2 (Eventually.of_forall fun v hv y hy => by
+      have hy' : |y| < |x| + 1 := by
+        have := Metric.mem_ball.1 hy
+        rw [Real.dist_eq] at this
+        linarith [abs_sub_abs_le_abs_sub y x]
+      have hv2 : v ^ 2 ≤ 1 := pow_le_one₀ hv.1.le hv.2
+      rw [Real.norm_eq_abs, abs_mul, abs_of_nonneg (exp_pos _).le,
+        abs_of_nonneg (pow_nonneg hv.1.le _)]
+      calc v ^ (2 * (j + 1)) * exp (y * v ^ 2) ≤ 1 * exp (|x| + 1) := by
+            refine mul_le_mul (pow_le_one₀ hv.1.le hv.2) (exp_le_exp.2 ?_) (exp_pos _).le
+              zero_le_one
+            calc y * v ^ 2 ≤ |y| * v ^ 2 := mul_le_mul_of_nonneg_right (le_abs_self y) (sq_nonneg v)
+              _ ≤ |y| * 1 := mul_le_mul_of_nonneg_left hv2 (abs_nonneg y)
+              _ ≤ |x| + 1 := by linarith
+        _ = exp (|x| + 1) := one_mul _))
+    (integrable_const _)
+    (Eventually.of_forall fun v y _ => by
+      have h : HasDerivAt (fun y : ℝ => exp (y * v ^ 2)) (exp (y * v ^ 2) * v ^ 2) y := by
+        simpa using ((hasDerivAt_id y).mul_const (v ^ 2)).exp
+      exact (h.const_mul (v ^ (2 * j))).congr_deriv (by ring))
+  have hK : ∀ i : ℕ,
+      kummerMoment i = fun y => ∫ v in Ioc (0 : ℝ) 1, v ^ (2 * i) * exp (y * v ^ 2) := by
+    intro i; funext y; exact intervalIntegral.integral_of_le zero_le_one
+  rw [hK j, hK (j + 1)]
+  exact key.2
+
+theorem kummerMoment_ode (j : ℕ) (x : ℝ) :
+    2 * x * kummerMoment (j + 1) x + (2 * j + 1) * kummerMoment j x = exp x := by
+  have hd : ∀ v ∈ uIcc (0 : ℝ) 1, HasDerivAt (fun v => v ^ (2 * j + 1) * exp (x * v ^ 2))
+      ((2 * j + 1) * (v ^ (2 * j) * exp (x * v ^ 2)) +
+        2 * x * (v ^ (2 * (j + 1)) * exp (x * v ^ 2))) v := by
+    intro v _
+    have h1 : HasDerivAt (fun v : ℝ => v ^ (2 * j + 1)) ((2 * j + 1 : ℝ) * v ^ (2 * j)) v := by
+      simpa using hasDerivAt_pow (2 * j + 1) v
+    have h2 : HasDerivAt (fun v : ℝ => exp (x * v ^ 2)) (exp (x * v ^ 2) * (x * (2 * v))) v := by
+      simpa using ((hasDerivAt_pow 2 v).const_mul x).exp
+    exact (h1.mul h2).congr_deriv (by ring)
+  have hi : ∀ i : ℕ, IntervalIntegrable (fun v : ℝ => v ^ (2 * i) * exp (x * v ^ 2)) volume 0 1 :=
+    fun i => (kummerMoment_continuous_integrand i x).intervalIntegrable _ _
+  have := intervalIntegral.integral_eq_sub_of_hasDerivAt hd
+    (((hi j).const_mul _).add ((hi (j + 1)).const_mul _))
+  rw [intervalIntegral.integral_add ((hi j).const_mul _) ((hi (j + 1)).const_mul _),
+    intervalIntegral.integral_const_mul, intervalIntegral.integral_const_mul] at this
+  simp only [one_pow, mul_one, one_mul, ne_eq, add_eq_zero, one_ne_zero, and_false,
+    not_false_eq_true, zero_pow, zero_mul, sub_zero] at this
+  unfold kummerMoment
+  linarith
+
+/-- `₁F₁(1; 3/2; −x) = D(√x)/√x = e^{−x} K₀(x)`: Dawson's function in Kummer's form. -/
+noncomputable def kummerHalf (x : ℝ) : ℝ := exp (-x) * kummerMoment 0 x
+
+theorem kummerHalf_pos (x : ℝ) : 0 < kummerHalf x := mul_pos (exp_pos _) (kummerMoment_pos 0 x)
+
+/-- `K_j(x) = Σ xᵏ/(k! (2k + 2j + 1))`, the series `ResidualShrinkage.LogKummer` and the checks
+sum. -/
+theorem kummerMoment_hasSum (j : ℕ) (x : ℝ) :
+    HasSum (fun k : ℕ => x ^ k / (k.factorial * (2 * k + 2 * j + 1))) (kummerMoment j x) := by
+  have hF : ∀ k : ℕ, (∫ v in (0 : ℝ)..1, v ^ (2 * j) * ((x * v ^ 2) ^ k / k.factorial)) =
+      x ^ k / (k.factorial * (2 * k + 2 * j + 1)) := by
+    intro k
+    have he : (fun v : ℝ => v ^ (2 * j) * ((x * v ^ 2) ^ k / k.factorial)) =
+        fun v => (x ^ k / k.factorial) * v ^ (2 * k + 2 * j) := by
+      funext v; rw [mul_pow, ← pow_mul]; ring
+    rw [he, intervalIntegral.integral_const_mul, integral_pow]
+    have : (0 : ℝ) < k.factorial := by exact_mod_cast k.factorial_pos
+    push_cast
+    field_simp
+    ring
+  have hs := intervalIntegral.hasSum_integral_of_dominated_convergence (μ := volume)
+    (a := 0) (b := 1)
+    (F := fun k v => v ^ (2 * j) * ((x * v ^ 2) ^ k / k.factorial))
+    (f := fun v => v ^ (2 * j) * exp (x * v ^ 2))
+    (fun (k : ℕ) (_ : ℝ) => |x| ^ k / (k.factorial : ℝ))
+    (fun k => (by fun_prop : Continuous fun v : ℝ =>
+      v ^ (2 * j) * ((x * v ^ 2) ^ k / k.factorial)).aestronglyMeasurable)
+    (fun k => Eventually.of_forall fun v hv => by
+      rw [Set.uIoc_of_le zero_le_one] at hv
+      have h1 : |v| ≤ 1 := by rw [abs_of_pos hv.1]; exact hv.2
+      rw [Real.norm_eq_abs, abs_mul, abs_div, abs_pow, abs_pow, abs_mul, abs_pow,
+        abs_of_pos (by exact_mod_cast k.factorial_pos : (0 : ℝ) < k.factorial)]
+      have h2 : |v| ^ 2 ≤ 1 := pow_le_one₀ (abs_nonneg v) h1
+      have h3 : (|x| * |v| ^ 2) ^ k ≤ |x| ^ k := by
+        rw [mul_pow]
+        exact mul_le_of_le_one_right (pow_nonneg (abs_nonneg x) _)
+          (pow_le_one₀ (pow_nonneg (abs_nonneg v) _) h2)
+      have hf : (0 : ℝ) < k.factorial := by exact_mod_cast k.factorial_pos
+      calc |v| ^ (2 * j) * ((|x| * |v| ^ 2) ^ k / k.factorial) ≤ 1 * (|x| ^ k / k.factorial) :=
+            mul_le_mul (pow_le_one₀ (abs_nonneg v) h1)
+              (div_le_div_of_nonneg_right h3 hf.le) (by positivity) zero_le_one
+        _ = |x| ^ k / k.factorial := one_mul _)
+    (Eventually.of_forall fun _ _ => by simpa using Real.summable_pow_div_factorial |x|)
+    intervalIntegrable_const
+    (Eventually.of_forall fun v _ => by
+      have := NormedSpace.expSeries_div_hasSum_exp (𝔸 := ℝ) (x * v ^ 2)
+      rw [← Real.exp_eq_exp_ℝ] at this
+      exact this.mul_left (v ^ (2 * j)))
+  simp only [hF] at hs
+  exact hs
+
+/-- `g(x) = K₁(x)/K₀(x)`, the tilted mean of `V²`. -/
+noncomputable def robasG (x : ℝ) : ℝ := kummerMoment 1 x / kummerMoment 0 x
+
+theorem robasG_pos (x : ℝ) : 0 < robasG x := div_pos (kummerMoment_pos 1 x) (kummerMoment_pos 0 x)
+
+theorem robasG_le_one (x : ℝ) : robasG x ≤ 1 :=
+  (div_le_one (kummerMoment_pos 0 x)).2 (kummerMoment_succ_le 0 x)
+
+theorem hasDerivAt_robasG (x : ℝ) :
+    HasDerivAt robasG (kummerMoment 2 x / kummerMoment 0 x - robasG x ^ 2) x := by
+  have h0 := (kummerMoment_pos 0 x).ne'
+  exact ((hasDerivAt_kummerMoment 1 x).div (hasDerivAt_kummerMoment 0 x) h0).congr_deriv (by
+    unfold robasG; field_simp)
+
+/-- Cauchy–Schwarz for the moments: `K₁² ≤ K₀ K₂`. -/
+theorem kummerMoment_sq_le (x : ℝ) :
+    kummerMoment 1 x ^ 2 ≤ kummerMoment 0 x * kummerMoment 2 x := by
+  have hi : ∀ i : ℕ, IntervalIntegrable (fun v : ℝ => v ^ (2 * i) * exp (x * v ^ 2)) volume 0 1 :=
+    fun i => (kummerMoment_continuous_integrand i x).intervalIntegrable _ _
+  have hq : ∀ l : ℝ,
+      0 ≤ l ^ 2 * kummerMoment 0 x + 2 * l * kummerMoment 1 x + kummerMoment 2 x := by
+    intro l
+    have h0 : 0 ≤ ∫ v in (0 : ℝ)..1, (l + v ^ 2) ^ 2 * exp (x * v ^ 2) :=
+      intervalIntegral.integral_nonneg zero_le_one fun v _ =>
+        mul_nonneg (sq_nonneg _) (exp_pos _).le
+    have he : (fun v : ℝ => (l + v ^ 2) ^ 2 * exp (x * v ^ 2)) = fun v =>
+        l ^ 2 * (v ^ (2 * 0) * exp (x * v ^ 2)) + 2 * l * (v ^ (2 * 1) * exp (x * v ^ 2)) +
+          v ^ (2 * 2) * exp (x * v ^ 2) := by funext v; ring
+    rw [he, intervalIntegral.integral_add (((hi 0).const_mul _).add ((hi 1).const_mul _)) (hi 2),
+      intervalIntegral.integral_add ((hi 0).const_mul _) ((hi 1).const_mul _),
+      intervalIntegral.integral_const_mul, intervalIntegral.integral_const_mul] at h0
+    unfold kummerMoment
+    linarith
+  have hK := kummerMoment_pos 0 x
+  have := hq (-(kummerMoment 1 x / kummerMoment 0 x))
+  field_simp at this
+  nlinarith [this]
+
+theorem robasG_monotone : Monotone robasG := by
+  refine monotone_of_deriv_nonneg (fun x => (hasDerivAt_robasG x).differentiableAt) fun x => ?_
+  rw [(hasDerivAt_robasG x).deriv]
+  have hK := kummerMoment_pos 0 x
+  have hs := kummerMoment_sq_le x
+  unfold robasG
+  rw [div_pow, sub_nonneg, div_le_div_iff₀ (pow_pos hK 2) hK]
+  nlinarith
+
+/-- `Ω(y) = −2 ln ₁F₁(1; 3/2; −y²/2)`. -/
+noncomputable def robasBigOmega (y : ℝ) : ℝ := -2 * log (kummerHalf (y ^ 2 / 2))
+
+/-- `ω = Ω′ = 2y(1 − g(y²/2))`. -/
+noncomputable def robasOmega (y : ℝ) : ℝ := 2 * y * (1 - robasG (y ^ 2 / 2))
+
+/-- `ω′ = 4g(1 − x(1 − g))` at `x = y²/2`. -/
+noncomputable def robasOmegaDeriv (y : ℝ) : ℝ :=
+  4 * robasG (y ^ 2 / 2) * (1 - y ^ 2 / 2 * (1 - robasG (y ^ 2 / 2)))
+
+/-- `c = ω − y ω′`. -/
+noncomputable def robasC (y : ℝ) : ℝ := robasOmega y - y * robasOmegaDeriv y
+
+/-- `κ = 2Ω − y ω`, with `κ′ = c`. -/
+noncomputable def robasKappa (y : ℝ) : ℝ := 2 * robasBigOmega y - y * robasOmega y
+
+theorem robasBigOmega_eq (y : ℝ) :
+    robasBigOmega y = y ^ 2 - 2 * log (kummerMoment 0 (y ^ 2 / 2)) := by
+  unfold robasBigOmega kummerHalf
+  rw [log_mul (exp_pos _).ne' (kummerMoment_pos 0 _).ne', log_exp]
+  ring
+
+theorem hasDerivAt_half_sq (y : ℝ) : HasDerivAt (fun y : ℝ => y ^ 2 / 2) y y := by
+  simpa using (hasDerivAt_pow 2 y).div_const 2
+
+theorem hasDerivAt_robasBigOmega (y : ℝ) : HasDerivAt robasBigOmega (robasOmega y) y := by
+  have hK := (hasDerivAt_kummerMoment 0 (y ^ 2 / 2)).comp y (hasDerivAt_half_sq y)
+  have hL := hK.log (kummerMoment_pos 0 _).ne'
+  rw [show robasBigOmega = fun y => y ^ 2 - 2 * log (kummerMoment 0 (y ^ 2 / 2)) from
+    funext robasBigOmega_eq]
+  refine ((hasDerivAt_pow 2 y).sub (hL.const_mul 2)).congr_deriv ?_
+  have h0 := (kummerMoment_pos 0 (y ^ 2 / 2)).ne'
+  unfold robasOmega robasG
+  simp only [Function.comp, zero_add, Nat.cast_ofNat]
+  field_simp
+  ring
+
+theorem hasDerivAt_robasOmega (y : ℝ) : HasDerivAt robasOmega (robasOmegaDeriv y) y := by
+  have hg := (hasDerivAt_robasG (y ^ 2 / 2)).comp y (hasDerivAt_half_sq y)
+  refine (((hasDerivAt_id y).const_mul 2).mul ((hasDerivAt_const y (1 : ℝ)).sub hg)).congr_deriv ?_
+  have o0 := kummerMoment_ode 0 (y ^ 2 / 2)
+  have o1 := kummerMoment_ode 1 (y ^ 2 / 2)
+  have h0 := (kummerMoment_pos 0 (y ^ 2 / 2)).ne'
+  simp only [zero_add, Nat.reduceAdd] at o0 o1
+  simp only [Pi.sub_apply, Function.comp_apply, id]
+  unfold robasOmegaDeriv robasG
+  field_simp
+  linear_combination (4 * kummerMoment 0 (y ^ 2 / 2)) * o0 - (4 * kummerMoment 0 (y ^ 2 / 2)) * o1
+
+theorem hasDerivAt_robasKappa (y : ℝ) : HasDerivAt robasKappa (robasC y) y :=
+  (((hasDerivAt_robasBigOmega y).const_mul 2).sub
+    ((hasDerivAt_id y).mul (hasDerivAt_robasOmega y))).congr_deriv (by unfold robasC; simp; ring)
+
+theorem robasOmegaDeriv_le (y : ℝ) : robasOmegaDeriv y ≤ 4 := by
+  unfold robasOmegaDeriv
+  have hg := robasG_pos (y ^ 2 / 2)
+  have hg1 := robasG_le_one (y ^ 2 / 2)
+  have hx : 0 ≤ y ^ 2 / 2 * (1 - robasG (y ^ 2 / 2)) := mul_nonneg (by positivity) (by linarith)
+  nlinarith
+
+/-! #### The certified constants and the four bounds
+
+`conformal-checks.py` reads these constants from this file and certifies `RobasDawsonBounds` with
+them. -/
+
+/-- An upper bound on `|ω|`. -/
+noncomputable def robasOmegaMax : ℝ := 18841 / 10000
+
+/-- A lower bound on `ω′`. -/
+noncomputable def robasOmegaDerivMin : ℝ := -5511 / 10000
+
+/-- An upper bound on `|c|`. -/
+noncomputable def robasCMax : ℝ := 32365 / 10000
+
+/-- The long window: at least `√2`. -/
+noncomputable def robasWindowLong : ℝ := 1415 / 1000
+
+/-- An upper bound on `κ`'s increment over the long window. -/
+noncomputable def robasWindowLongBound : ℝ := 42766 / 10000
+
+/-- The short window. -/
+noncomputable def robasWindowShort : ℝ := 1351 / 1000
+
+/-- An upper bound on `κ`'s increment over the short window. -/
+noncomputable def robasWindowShortBound : ℝ := 41060 / 10000
+
+/-- The four bounds on the module's Dawson function that RoBAS-Full's interval theorem takes,
+certified by interval arithmetic in `conformal-checks.py`: `|ω| ≤ 1.8841`, `ω′ ≥ −0.5511`,
+`|c| ≤ 3.2365`, and `κ`'s increments over windows of 1.415 and 1.351 at most 4.2766 and 4.1060. -/
+structure RobasDawsonBounds : Prop where
+  omega : ∀ y, |robasOmega y| ≤ robasOmegaMax
+  omegaDeriv : ∀ y, robasOmegaDerivMin ≤ robasOmegaDeriv y
+  c : ∀ y, |robasC y| ≤ robasCMax
+  windowLong : ∀ a b, |b - a| ≤ robasWindowLong →
+    |robasKappa b - robasKappa a| ≤ robasWindowLongBound
+  windowShort : ∀ a b, |b - a| ≤ robasWindowShort →
+    |robasKappa b - robasKappa a| ≤ robasWindowShortBound
+
+/-- The mean value bound: a derivative at most `M` in size moves `f` by at most `M |b − a|`. -/
+theorem abs_sub_le_of_hasDerivAt {f f' : ℝ → ℝ} {M : ℝ} (hf : ∀ y, HasDerivAt f (f' y) y)
+    (hM : ∀ y, |f' y| ≤ M) (a b : ℝ) : |f b - f a| ≤ M * |b - a| := by
+  have key : ∀ a b : ℝ, a < b → |f b - f a| ≤ M * |b - a| := by
+    intro a b h
+    obtain ⟨ξ, -, hξ⟩ := exists_hasDerivAt_eq_slope f f' h
+      (fun y _ => (hf y).continuousAt.continuousWithinAt) fun y _ => hf y
+    rw [eq_div_iff (sub_ne_zero.2 h.ne')] at hξ
+    rw [← hξ, abs_mul]
+    exact mul_le_mul_of_nonneg_right (hM ξ) (abs_nonneg _)
+  rcases lt_trichotomy a b with h | h | h
+  · exact key a b h
+  · subst h; simp
+  · rw [abs_sub_comm, abs_sub_comm b a]; exact key b a h
+
+/-- Taylor's lower bound from `ω′ ≥ k`: `Ω q ≥ Ω p + ω p (q − p) + k (q − p)²/2`. -/
+theorem robasBigOmega_taylor {k : ℝ} (hk : ∀ y, k ≤ robasOmegaDeriv y) (p q : ℝ) :
+    robasBigOmega p + robasOmega p * (q - p) + k / 2 * (q - p) ^ 2 ≤ robasBigOmega q := by
+  set φ : ℝ → ℝ := fun y => robasBigOmega y - k / 2 * y ^ 2
+  have hφ : ∀ y, HasDerivAt φ (robasOmega y - k * y) y := fun y =>
+    ((hasDerivAt_robasBigOmega y).sub ((hasDerivAt_pow 2 y).const_mul (k / 2))).congr_deriv
+      (by push_cast; ring)
+  have hψ : ∀ y, HasDerivAt (fun y => robasOmega y - k * y) (robasOmegaDeriv y - k) y := fun y =>
+    ((hasDerivAt_robasOmega y).sub ((hasDerivAt_id y).const_mul k)).congr_deriv (by simp)
+  have hmono : Monotone fun y => robasOmega y - k * y :=
+    monotone_of_deriv_nonneg (fun y => (hψ y).differentiableAt) fun y => by
+      rw [(hψ y).deriv]; linarith [hk y]
+  have key : ∀ a b : ℝ, a < b → ∃ ξ ∈ Set.Ioo a b,
+      φ b - φ a = (robasOmega ξ - k * ξ) * (b - a) := by
+    intro a b h
+    obtain ⟨ξ, hξ, hs⟩ := exists_hasDerivAt_eq_slope φ (fun y => robasOmega y - k * y) h
+      (fun y _ => (hφ y).continuousAt.continuousWithinAt) fun y _ => hφ y
+    refine ⟨ξ, hξ, ?_⟩
+    rw [hs]; field_simp [sub_ne_zero.2 h.ne']
+  rcases lt_trichotomy p q with h | h | h
+  · obtain ⟨ξ, hξ, hs⟩ := key p q h
+    have hm := hmono hξ.1.le
+    simp only [φ] at hs hm
+    nlinarith
+  · subst h; simp
+  · obtain ⟨ξ, hξ, hs⟩ := key q p h
+    have hm := hmono hξ.2.le
+    simp only [φ] at hs hm
+    nlinarith
+
+theorem abs_le_of_sq_le_sq'' {a b : ℝ} (h : a ^ 2 ≤ b ^ 2) (hb : 0 ≤ b) : |a| ≤ b := by
+  by_contra hc
+  push Not at hc
+  have : b ^ 2 < |a| ^ 2 := pow_lt_pow_left₀ hc hb (by norm_num)
+  rw [sq_abs] at this
+  linarith
+
+/-- The slope at a zero, from the four bounds: with `d = p − q`, `t − u = d`,
+`(n + 1)(t + u) d = −(Ω p − Ω q)` and the other units' deviations admissible,
+`(n − 1) d² + (d ω p − (Ω p − Ω q)) + t d (κ p − κ q) > 0` for `n ≥ 4`. -/
+theorem robas_core (hb : RobasDawsonBounds) {n : ℕ} (hn : 4 ≤ n) {p q t u : ℝ} (hpq : p ≠ q)
+    (htu : t - u = p - q)
+    (hsum : ((n : ℝ) + 1) * (t + u) * (p - q) = -(robasBigOmega p - robasBigOmega q))
+    (hadm : (t + u) ^ 2 ≤ ((n : ℝ) - 1) * (1 - t ^ 2 - u ^ 2)) :
+    0 < ((n : ℝ) - 1) * (p - q) ^ 2 +
+      ((p - q) * robasOmega p - (robasBigOmega p - robasBigOmega q)) +
+        t * (p - q) * (robasKappa p - robasKappa q) := by
+  have hn' : (4 : ℝ) ≤ n := by exact_mod_cast hn
+  set d := p - q with hd_def
+  set E := robasBigOmega p - robasBigOmega q with hE_def
+  set K := robasKappa p - robasKappa q with hK_def
+  set s := t + u with hs_def
+  have hd0 : d ≠ 0 := sub_ne_zero.2 hpq
+  have hdpos : 0 < |d| := abs_pos.2 hd0
+  have hd2 : 0 < d ^ 2 := by positivity
+  have hm : (0 : ℝ) < n + 1 := by linarith
+  -- Ω̄ = E/d = −(n + 1) s
+  have hE : E = -((n + 1) * s) * d := by linarith [hsum]
+  have htd : t * d = (d ^ 2 + s * d) / 2 := by
+    have : t = (d + s) / 2 := by linarith [htu]
+    rw [this]; ring
+  -- the three pointwise bounds
+  have h1 : robasOmegaDerivMin / 2 * d ^ 2 ≤ d * robasOmega p - E := by
+    have hT := robasBigOmega_taylor hb.omegaDeriv p q
+    have : q - p = -d := by rw [hd_def]; ring
+    rw [this] at hT
+    simp only [hE_def]
+    nlinarith [hT]
+  have hEb : |E| ≤ robasOmegaMax * |d| := by
+    have := abs_sub_le_of_hasDerivAt hasDerivAt_robasBigOmega hb.omega q p
+    rwa [← hE_def, ← hd_def] at this
+  have hKc : |K| ≤ robasCMax * |d| := by
+    have := abs_sub_le_of_hasDerivAt hasDerivAt_robasKappa hb.c q p
+    rwa [← hK_def, ← hd_def] at this
+  have hOb : (n + 1) * |s| ≤ robasOmegaMax := by
+    have h' : |E| = (n + 1) * |s| * |d| := by
+      rw [hE, abs_mul, abs_neg, abs_mul, abs_of_pos hm]
+    rw [h'] at hEb
+    exact le_of_mul_le_mul_right hEb hdpos
+  -- admissibility: (n − 1)(s² + d²)/2 ≤ (n − 1) − s²
+  have hadm' : s ^ 2 ≤ ((n : ℝ) - 1) * (1 - (s ^ 2 + d ^ 2) / 2) := by
+    have : t ^ 2 + u ^ 2 = (s ^ 2 + d ^ 2) / 2 := by
+      have ht : t = (d + s) / 2 := by linarith [htu]
+      have hu : u = (s - d) / 2 := by linarith [htu]
+      rw [ht, hu]; ring
+    nlinarith [hadm, this]
+  have hd2le : d ^ 2 ≤ 2 := by nlinarith [sq_nonneg s]
+  have hdL : |d| ≤ robasWindowLong := by
+    refine abs_le_of_sq_le_sq'' ?_ (by norm_num [robasWindowLong])
+    norm_num [robasWindowLong]; linarith
+  -- Ξ ≥ d² ((n − 1) + ω̲/2 − |K|/2 − (n + 1)|s| c̄/2)
+  have hlow : d ^ 2 * (((n : ℝ) - 1) + robasOmegaDerivMin / 2 - |K| / 2 -
+      |s| * robasCMax / 2) ≤
+      ((n : ℝ) - 1) * d ^ 2 + (d * robasOmega p - E) + t * d * K := by
+    rw [htd]
+    have hA : -(|K|) ≤ K := neg_abs_le K
+    have hB : |s * d * K| ≤ |s| * (robasCMax * |d| * |d|) := by
+      rw [abs_mul, abs_mul]
+      calc |s| * |d| * |K| = |s| * (|K| * |d|) := by ring
+        _ ≤ |s| * (robasCMax * |d| * |d|) :=
+          mul_le_mul_of_nonneg_left (mul_le_mul_of_nonneg_right hKc (abs_nonneg _)) (abs_nonneg _)
+    have hB' : -(|s| * (robasCMax * |d| * |d|)) ≤ s * d * K :=
+      le_trans (neg_le_neg hB) (neg_abs_le _)
+    have hdd : |d| * |d| = d ^ 2 := by rw [← abs_mul, ← sq, abs_of_nonneg (sq_nonneg d)]
+    have hk2 : d ^ 2 / 2 * (-(|K|)) ≤ d ^ 2 / 2 * K := mul_le_mul_of_nonneg_left hA (by positivity)
+    have hB'' : -(|s| * robasCMax * d ^ 2) ≤ s * d * K := by
+      rw [← hdd]; linarith [hB']
+    linarith [h1, hk2, hB'']
+  refine lt_of_lt_of_le (mul_pos hd2 ?_) hlow
+  simp only [robasOmegaDerivMin, robasCMax]
+  by_cases h5 : 5 ≤ n
+  · have hn5 : (5 : ℝ) ≤ n := by exact_mod_cast h5
+    have hKW := hb.windowLong q p hdL
+    have hs6 : 6 * |s| ≤ robasOmegaMax := by nlinarith only [hOb, hn5, abs_nonneg s]
+    simp only [robasWindowLongBound, robasOmegaMax] at hKW hs6
+    linarith only [hKW, hs6, hn5]
+  · have hn4 : (n : ℝ) = 4 := by
+      have : n = 4 := by omega
+      rw [this]; norm_num
+    rw [hn4] at hOb hadm'
+    rw [hn4]
+    by_cases hc : (5 * s) ^ 2 ≤ 15 * (2 - robasWindowShort ^ 2)
+    · have hKW := hb.windowLong q p hdL
+      have hs5 : 5 * |s| ≤ 16193 / 10000 := by
+        have : |5 * s| ≤ 16193 / 10000 := abs_le_of_sq_le_sq'' (by
+          simp only [robasWindowShort] at hc; norm_num at hc ⊢; linarith only [hc]) (by norm_num)
+        rwa [abs_mul, abs_of_pos (by norm_num : (0 : ℝ) < 5)] at this
+      simp only [robasWindowLongBound] at hKW
+      linarith only [hKW, hs5]
+    · push Not at hc
+      have hdS : |d| ≤ robasWindowShort := by
+        refine abs_le_of_sq_le_sq'' ?_ (by norm_num [robasWindowShort])
+        simp only [robasWindowShort] at hc ⊢
+        have h25 : (5 * s) ^ 2 = 25 * s ^ 2 := by ring
+        linarith only [hadm', hc, h25]
+      have hKW := hb.windowShort q p hdS
+      have hs5 : 5 * |s| ≤ robasOmegaMax := by linarith only [hOb]
+      simp only [robasWindowShortBound, robasOmegaMax] at hKW hs5
+      linarith only [hKW, hs5]
+
+/-! #### RoBAS-Full's score, its p-value, and the score difference -/
+
+/-- RoBAS-Full's score of a unit whose `n` others have sum `so` and sum of squares `qo`, at the
+plug-in `σ̂² = s2`: the log marginal likelihood `−n s²/(2σ̂²) + ln ₁F₁(1; 3/2; −n r̄²/(2σ̂²))` of
+the others under the horseshoe residual model, up to the constant every unit shares (RoBAS's
+RoBAS-Full derivation; `ResidualShrinkage.Score`'s Horseshoe branch). Here `r̄ = so/n` and
+`s² = qo/n − r̄²`. -/
+noncomputable def robasFullScore (n : ℕ) (s2 so qo : ℝ) : ℝ :=
+  -(n : ℝ) * (qo / n - (so / n) ^ 2) / (2 * s2) +
+    log (kummerHalf ((n : ℝ) * (so / n) ^ 2 / (2 * s2)))
+
+theorem two_mul_robasFullScore {n : ℕ} (hn : (n : ℝ) ≠ 0) {T : ℝ} (hT : 0 < T) (so qo : ℝ) :
+    2 * T * robasFullScore n (T / n) so qo =
+      -(n : ℝ) * qo + so ^ 2 - T * robasBigOmega (so / sqrt T) := by
+  unfold robasFullScore robasBigOmega
+  have hs : sqrt T ^ 2 = T := sq_sqrt hT.le
+  have hx : (n : ℝ) * (so / n) ^ 2 / (2 * (T / n)) = (so / sqrt T) ^ 2 / 2 := by
+    rw [div_pow so (sqrt T), hs]; field_simp
+  rw [hx]
+  field_simp
+  ring
+
+variable {n : ℕ}
+
+/-- All `n + 1` residuals' sum of squared deviations, `n σ̂²`. -/
+noncomputable def robasSpread (r : Fin n → ℝ) (z : ℝ) : ℝ :=
+  (∑ i, r i ^ 2 + z ^ 2) - (∑ i, r i + z) ^ 2 / (n + 1)
+
+/-- Calibration unit `j`'s RoBAS-Full score with candidate residual `z`: its others are the other
+calibration residuals and `z`. -/
+noncomputable def robasUnitScore (r : Fin n → ℝ) (z : ℝ) (j : Fin n) : ℝ :=
+  robasFullScore n (robasSpread r z / n) (∑ i, r i + z - r j) (∑ i, r i ^ 2 + z ^ 2 - r j ^ 2)
+
+/-- The candidate's RoBAS-Full score: its others are the calibration residuals. -/
+noncomputable def robasCandidateScore (r : Fin n → ℝ) (z : ℝ) : ℝ :=
+  robasFullScore n (robasSpread r z / n) (∑ i, r i) (∑ i, r i ^ 2)
+
+/-- The conformal p-value of candidate residual `z`: the share of the `n + 1` units whose score is
+at least the candidate's, its own tie counted (`ResidualShrinkage`'s `atOrAbove + 1`). -/
+noncomputable def robasPValue (r : Fin n → ℝ) (z : ℝ) : ℝ :=
+  (((Finset.univ.filter fun j => robasCandidateScore r z ≤ robasUnitScore r z j).card : ℝ) + 1) /
+    (n + 1)
+
+/-- `Δ_j(z) = (r_j − z) L_j(z) − T(z) (Ω(p) − Ω(q))`, with `L_j(z) = (n − 1)z + (n + 1)r_j − 2S` and
+`p`, `q` the two leave-one-out sums over `√T`. -/
+noncomputable def robasDelta (r : Fin n → ℝ) (j : Fin n) (z : ℝ) : ℝ :=
+  (r j - z) * ((n - 1) * z + (n + 1) * r j - 2 * ∑ i, r i) -
+    robasSpread r z * (robasBigOmega ((∑ i, r i + z - r j) / sqrt (robasSpread r z)) -
+      robasBigOmega ((∑ i, r i) / sqrt (robasSpread r z)))
+
+theorem robas_score_diff (hn : (n : ℝ) ≠ 0) (r : Fin n → ℝ) (z : ℝ) (hT : 0 < robasSpread r z)
+    (j : Fin n) :
+    2 * robasSpread r z * (robasUnitScore r z j - robasCandidateScore r z) = robasDelta r j z := by
+  unfold robasUnitScore robasCandidateScore robasDelta
+  rw [mul_sub, two_mul_robasFullScore hn hT, two_mul_robasFullScore hn hT]
+  ring
+
+theorem robasSpread_eq (r : Fin n → ℝ) (z : ℝ) : robasSpread r z =
+    ∑ i, (r i - (∑ k, r k + z) / (n + 1)) ^ 2 + (z - (∑ k, r k + z) / (n + 1)) ^ 2 := by
+  unfold robasSpread
+  set μ := (∑ k, r k + z) / (n + 1) with hμ
+  have hm : ((n : ℝ) + 1) ≠ 0 := by positivity
+  have hsum : ∑ i, (r i - μ) ^ 2 = ∑ i, r i ^ 2 - 2 * μ * ∑ i, r i + n * μ ^ 2 := by
+    simp only [sub_sq, Finset.sum_add_distrib, Finset.sum_sub_distrib, Finset.sum_const,
+      Finset.card_univ, Fintype.card_fin, nsmul_eq_mul, ← Finset.mul_sum, ← Finset.sum_mul]
+    ring
+  rw [hsum, hμ]
+  field_simp
+  ring
+
+theorem robasSpread_pos (r : Fin n → ℝ) (hr : ∃ i k, r i ≠ r k) (z : ℝ) : 0 < robasSpread r z := by
+  obtain ⟨i, k, hik⟩ := hr
+  have hne : i ≠ k := fun h => hik (h ▸ rfl)
+  rw [robasSpread_eq]
+  set μ := (∑ k, r k + z) / (n + 1)
+  have h2 : (r i - μ) ^ 2 + (r k - μ) ^ 2 ≤ ∑ l, (r l - μ) ^ 2 := by
+    have := Finset.sum_le_sum_of_subset_of_nonneg (Finset.subset_univ {i, k})
+      (fun l _ _ => sq_nonneg (r l - μ))
+    rwa [Finset.sum_pair hne] at this
+  have h3 : 0 < (r i - μ) ^ 2 + (r k - μ) ^ 2 := by
+    by_contra h
+    push Not at h
+    have a1 : (r i - μ) ^ 2 = 0 := le_antisymm (by nlinarith [sq_nonneg (r k - μ)]) (sq_nonneg _)
+    have a2 : (r k - μ) ^ 2 = 0 := le_antisymm (by nlinarith [sq_nonneg (r i - μ)]) (sq_nonneg _)
+    have := pow_eq_zero_iff (two_ne_zero) |>.1 a1
+    have := pow_eq_zero_iff (two_ne_zero) |>.1 a2
+    exact hik (by linarith)
+  linarith [sq_nonneg (z - μ)]
+
+/-- The slope at a zero, as algebra: with `σ² = T`, `p`, `q` the leave-one-out sums over `σ`,
+`t` the candidate's deviation over `σ`, and `Δ = 0`, the derivative times `a − z` is `T` times
+the core quantity. -/
+theorem robas_slope_algebra {m S a z σ T E ωp ωq : ℝ} (hσ : 0 < σ) (hT : σ ^ 2 = T)
+    (hm : 0 < m)
+    (hz : (a - z) * ((m - 2) * z + m * a - 2 * S) - T * E = 0) :
+    (-((m - 2) * z + m * a - 2 * S) + (a - z) * (m - 2) -
+        ((2 * z - 2 * (S + z) / m) * E +
+          T * (ωp * ((1 * σ - (S + z - a) * ((2 * z - 2 * (S + z) / m) / (2 * σ))) / σ ^ 2) -
+            ωq * ((0 * σ - S * ((2 * z - 2 * (S + z) / m) / (2 * σ))) / σ ^ 2)))) * (a - z) =
+      T * ((m - 2) * ((S + z - a) / σ - S / σ) ^ 2 +
+        (((S + z - a) / σ - S / σ) * ωp - E) +
+          (z - (S + z) / m) / σ * ((S + z - a) / σ - S / σ) *
+            (2 * E - ((S + z - a) / σ * ωp - S / σ * ωq))) := by
+  subst hT
+  field_simp
+  linear_combination (-(m * σ)) * hz
+
+theorem hasDerivAt_robasSpread (r : Fin n → ℝ) (z : ℝ) :
+    HasDerivAt (robasSpread r) (2 * z - 2 * (∑ i, r i + z) / (n + 1)) z := by
+  have h := ((hasDerivAt_pow 2 z).const_add (∑ i, r i ^ 2)).sub
+    ((((hasDerivAt_id z).const_add (∑ i, r i)).pow 2).div_const ((n : ℝ) + 1))
+  refine h.congr_deriv ?_
+  simp only [id, Nat.cast_ofNat]
+  ring
+
+/-- `Δ_j`'s derivative. -/
+theorem hasDerivAt_robasDelta (r : Fin n → ℝ) (hr : ∃ i k, r i ≠ r k) (j : Fin n) (z : ℝ) :
+    HasDerivAt (robasDelta r j)
+      ((0 - 1) * (((n : ℝ) - 1) * z + (n + 1) * r j - 2 * ∑ i, r i) + (r j - z) * ((n - 1) * 1) -
+        ((2 * z - 2 * (∑ i, r i + z) / (n + 1)) *
+            (robasBigOmega ((∑ i, r i + z - r j) / sqrt (robasSpread r z)) -
+              robasBigOmega ((∑ i, r i) / sqrt (robasSpread r z))) +
+          robasSpread r z *
+            (robasOmega ((∑ i, r i + z - r j) / sqrt (robasSpread r z)) *
+                ((1 * sqrt (robasSpread r z) - (∑ i, r i + z - r j) *
+                    ((2 * z - 2 * (∑ i, r i + z) / (n + 1)) / (2 * sqrt (robasSpread r z)))) /
+                  sqrt (robasSpread r z) ^ 2) -
+              robasOmega ((∑ i, r i) / sqrt (robasSpread r z)) *
+                ((0 * sqrt (robasSpread r z) - (∑ i, r i) *
+                    ((2 * z - 2 * (∑ i, r i + z) / (n + 1)) / (2 * sqrt (robasSpread r z)))) /
+                  sqrt (robasSpread r z) ^ 2)))) z := by
+  have hT := robasSpread_pos r hr z
+  have hσd := (hasDerivAt_robasSpread r z).sqrt hT.ne'
+  have hσ0 : sqrt (robasSpread r z) ≠ 0 := (sqrt_pos.2 hT).ne'
+  have hPd := ((((hasDerivAt_id z).const_add (∑ i, r i)).sub_const (r j)).div hσd hσ0)
+  have hQd := ((hasDerivAt_const z (∑ i, r i)).div hσd hσ0)
+  have hΩP := (hasDerivAt_robasBigOmega _).comp z hPd
+  have hΩQ := (hasDerivAt_robasBigOmega _).comp z hQd
+  have hL := (((hasDerivAt_id z).const_mul ((n : ℝ) - 1)).add_const ((n + 1) * r j)).sub_const
+    (2 * ∑ i, r i)
+  exact (((hasDerivAt_const z (r j)).sub (hasDerivAt_id z)).mul hL).sub
+    ((hasDerivAt_robasSpread r z).mul (hΩP.sub hΩQ))
+
+theorem robasDelta_self (r : Fin n → ℝ) (j : Fin n) : robasDelta r j (r j) = 0 := by
+  unfold robasDelta
+  simp
+
+/-- Unit `j`'s `Δ_j` rises through each of its zeros left of `r_j` and falls through each right
+of it. -/
+theorem robasDelta_rises (hb : RobasDawsonBounds) (hn : 4 ≤ n) (r : Fin n → ℝ)
+    (hr : ∃ i k, r i ≠ r k) (j : Fin n) (z : ℝ) (hz : robasDelta r j z = 0) (hzj : z ≠ r j) :
+    ∃ D, HasDerivAt (robasDelta r j) D z ∧ 0 < D * (r j - z) := by
+  refine ⟨_, hasDerivAt_robasDelta r hr j z, ?_⟩
+  set S := ∑ i, r i with hS
+  set a := r j with ha
+  set T := robasSpread r z with hT_def
+  have hT := robasSpread_pos r hr z
+  set σ := sqrt T with hσ_def
+  have hσ : 0 < σ := sqrt_pos.2 hT
+  have hσ2 : σ ^ 2 = T := sq_sqrt hT.le
+  have hm : (0 : ℝ) < n + 1 := by positivity
+  have hn1 : (1 : ℝ) ≤ n := by exact_mod_cast (by omega : 1 ≤ n)
+  set p := (S + z - a) / σ with hp
+  set q := S / σ with hq
+  set μ := (S + z) / (n + 1) with hμ
+  set t := (z - μ) / σ with ht
+  set u := (a - μ) / σ with hu
+  have hz' : (a - z) * (((n : ℝ) + 1 - 2) * z + (n + 1) * a - 2 * S) -
+      T * (robasBigOmega p - robasBigOmega q) = 0 := by
+    rw [← hz]; unfold robasDelta; rw [← hS, ← ha, ← hT_def, ← hσ_def]; ring
+  have halg := robas_slope_algebra (m := (n : ℝ) + 1) (S := S) (a := a) (z := z)
+    (E := robasBigOmega p - robasBigOmega q) (ωp := robasOmega p) (ωq := robasOmega q) hσ hσ2 hm hz'
+  -- the core's hypotheses
+  have hpq : p ≠ q := by
+    intro h
+    apply hzj
+    have : (S + z - a) / σ = S / σ := h
+    field_simp at this
+    linarith
+  have htu : t - u = p - q := by simp only [ht, hu, hp, hq]; field_simp; ring
+  have hsum : ((n : ℝ) + 1) * (t + u) * (p - q) = -(robasBigOmega p - robasBigOmega q) := by
+    have hE : robasBigOmega p - robasBigOmega q =
+        (a - z) * (((n : ℝ) + 1 - 2) * z + (n + 1) * a - 2 * S) / T := by
+      have hT0 : T ≠ 0 := hT.ne'
+      rw [eq_div_iff hT0]; linarith [hz']
+    rw [hE, ← hσ2]
+    simp only [ht, hu, hp, hq, hμ]
+    field_simp
+    ring
+  have hadm : (t + u) ^ 2 ≤ ((n : ℝ) - 1) * (1 - t ^ 2 - u ^ 2) := by
+    set e := Finset.univ.erase j
+    have hcard : (e.card : ℝ) = n - 1 := by
+      rw [Finset.card_erase_of_mem (Finset.mem_univ j), Finset.card_univ, Fintype.card_fin,
+        Nat.cast_sub (by omega)]
+      simp
+    have hdev : ∑ i ∈ e, (r i - μ) = -((z - μ) + (a - μ)) := by
+      have h1 := Finset.add_sum_erase Finset.univ (fun i => r i - μ) (Finset.mem_univ j)
+      have h2 : ∑ i, (r i - μ) + (z - μ) = 0 := by
+        rw [Finset.sum_sub_distrib, Finset.sum_const, Finset.card_univ, Fintype.card_fin,
+          nsmul_eq_mul, hμ, ← hS]
+        field_simp
+        ring
+      linarith
+    have hsq : ∑ i ∈ e, (r i - μ) ^ 2 = T - (z - μ) ^ 2 - (a - μ) ^ 2 := by
+      have h1 := Finset.add_sum_erase Finset.univ (fun i => (r i - μ) ^ 2) (Finset.mem_univ j)
+      have h2 := robasSpread_eq r z
+      rw [← hT_def, ← hS, ← hμ] at h2
+      linarith
+    have hcs := Finset.sum_mul_sq_le_sq_mul_sq e (fun i => r i - μ) (fun _ => (1 : ℝ))
+    simp only [mul_one, one_pow, Finset.sum_const, nsmul_eq_mul] at hcs
+    rw [hdev, hsq, hcard] at hcs
+    simp only [ht, hu]
+    rw [← add_div, div_pow, div_pow, div_pow, hσ2]
+    have hT0 : T ≠ 0 := hT.ne'
+    rw [div_le_iff₀ hT]
+    have : ((n : ℝ) - 1) * (1 - (z - μ) ^ 2 / T - (a - μ) ^ 2 / T) * T =
+        ((n : ℝ) - 1) * (T - (z - μ) ^ 2 - (a - μ) ^ 2) := by field_simp
+    rw [this]
+    calc (z - μ + (a - μ)) ^ 2 = (-(z - μ + (a - μ))) ^ 2 := by ring
+      _ ≤ (T - (z - μ) ^ 2 - (a - μ) ^ 2) * ((n : ℝ) - 1) := hcs
+      _ = ((n : ℝ) - 1) * (T - (z - μ) ^ 2 - (a - μ) ^ 2) := by ring
+  have hcore := robas_core hb hn hpq htu hsum hadm
+  have hκ : robasKappa p - robasKappa q =
+      2 * (robasBigOmega p - robasBigOmega q) - (p * robasOmega p - q * robasOmega q) := by
+    unfold robasKappa; ring
+  have hfinal : 0 < T * (((n : ℝ) + 1 - 2) * (p - q) ^ 2 +
+      ((p - q) * robasOmega p - (robasBigOmega p - robasBigOmega q)) +
+        t * (p - q) * (2 * (robasBigOmega p - robasBigOmega q) -
+          (p * robasOmega p - q * robasOmega q))) := by
+    refine mul_pos hT ?_
+    rw [← hκ]
+    have : ((n : ℝ) + 1 - 2) = (n : ℝ) - 1 := by ring
+    rw [this]
+    exact hcore
+  have hD : ((0 - 1) * (((n : ℝ) - 1) * z + (n + 1) * a - 2 * S) + (a - z) * ((n - 1) * 1) -
+      ((2 * z - 2 * (S + z) / (n + 1)) * (robasBigOmega p - robasBigOmega q) +
+        T * (robasOmega p * ((1 * σ - (S + z - a) * ((2 * z - 2 * (S + z) / (n + 1)) / (2 * σ))) /
+            σ ^ 2) -
+          robasOmega q * ((0 * σ - S * ((2 * z - 2 * (S + z) / (n + 1)) / (2 * σ))) / σ ^ 2)))) *
+        (a - z) = T * (((n : ℝ) + 1 - 2) * (p - q) ^ 2 +
+      ((p - q) * robasOmega p - (robasBigOmega p - robasBigOmega q)) +
+        t * (p - q) * (2 * (robasBigOmega p - robasBigOmega q) -
+          (p * robasOmega p - q * robasOmega q))) := by
+    rw [← halg]
+    ring
+  rw [hD]
+  exact hfinal
+
+/-- A continuous function that rises through each of its zeros in `[a, b]` stays nonnegative from
+`a`. -/
+theorem nonneg_of_rising {f : ℝ → ℝ} {a b : ℝ} (hab : a ≤ b) (hf : ContinuousOn f (Set.Icc a b))
+    (hz : ∀ x ∈ Set.Icc a b, f x = 0 → ∃ D, HasDerivAt f D x ∧ 0 < D) (ha : 0 ≤ f a) :
+    0 ≤ f b := by
+  by_contra hb
+  push Not at hb
+  set A := Set.Icc a b ∩ f ⁻¹' Set.Ici 0 with hA
+  have hAc : IsClosed A := hf.preimage_isClosed_of_isClosed isClosed_Icc isClosed_Ici
+  have hAne : A.Nonempty := ⟨a, Set.left_mem_Icc.2 hab, ha⟩
+  have hAbdd : BddAbove A := ⟨b, fun x hx => hx.1.2⟩
+  set s := sSup A
+  have hsA : s ∈ A := hAc.csSup_mem hAne hAbdd
+  have hsA2 : 0 ≤ f s := hsA.2
+  have hsb : s < b := lt_of_le_of_ne hsA.1.2 fun h => by rw [h] at hsA2; linarith
+  have hneg : ∀ x ∈ Set.Ioc s b, f x < 0 := fun x hx => by
+    by_contra h
+    push Not at h
+    have : x ≤ s := le_csSup hAbdd ⟨⟨hsA.1.1.trans hx.1.le, hx.2⟩, h⟩
+    linarith [hx.1]
+  have hev : ∀ᶠ x in 𝓝[>] s, 0 < f x := by
+    rcases eq_or_lt_of_le hsA2 with h0 | hpos
+    · obtain ⟨D, hD, hDpos⟩ := hz s hsA.1 h0.symm
+      have h2 : Tendsto (slope f s) (𝓝[>] s) (𝓝 D) :=
+        (hasDerivAt_iff_tendsto_slope.1 hD).mono_left (nhdsWithin_mono _ fun x hx => ne_of_gt hx)
+      filter_upwards [h2.eventually (lt_mem_nhds hDpos), self_mem_nhdsWithin] with x hx hxs
+      rw [slope_def_field, ← h0, sub_zero] at hx
+      exact (div_pos_iff_of_pos_right (sub_pos.2 hxs)).1 hx
+    · have h3 : ∀ᶠ x in 𝓝[Set.Icc a b] s, 0 < f x := (hf s hsA.1).eventually (lt_mem_nhds hpos)
+      have h4 : 𝓝[>] s ≤ 𝓝[Set.Icc a b] s := by
+        rw [← nhdsWithin_Ioo_eq_nhdsGT hsb]
+        exact nhdsWithin_mono _ fun x hx => ⟨hsA.1.1.trans hx.1.le, hx.2.le⟩
+      exact h4 h3
+  obtain ⟨x, hx1, hx2⟩ := (hev.and (Ioo_mem_nhdsGT hsb)).exists
+  linarith [hneg x ⟨hx2.1, hx2.2.le⟩]
+
+/-- A continuous function that falls through each of its zeros in `[a, b]` is nonnegative at `a`
+when it is at `b`. -/
+theorem nonneg_of_falling {f : ℝ → ℝ} {a b : ℝ} (hab : a ≤ b) (hf : ContinuousOn f (Set.Icc a b))
+    (hz : ∀ x ∈ Set.Icc a b, f x = 0 → ∃ D, HasDerivAt f D x ∧ D < 0) (hb : 0 ≤ f b) :
+    0 ≤ f a := by
+  have key := nonneg_of_rising (f := fun x => f (-x)) (a := -b) (b := -a) (by linarith)
+    (hf.comp continuousOn_neg fun x hx => ⟨by linarith [hx.2], by linarith [hx.1]⟩)
+    (fun x hx h0 => by
+      obtain ⟨D, hD, hDneg⟩ := hz (-x) ⟨by linarith [hx.2], by linarith [hx.1]⟩ h0
+      exact ⟨D * -1, hD.comp x (hasDerivAt_neg x), by linarith⟩)
+    (by simpa using hb)
+  simpa using key
+
+/-- Each unit's acceptance set `{z : Δ_j(z) ≥ 0}` is an interval. -/
+theorem robas_acceptance_ordConnected (hb : RobasDawsonBounds) (hn : 4 ≤ n) (r : Fin n → ℝ)
+    (hr : ∃ i k, r i ≠ r k) (j : Fin n) : Set.OrdConnected {z | 0 ≤ robasDelta r j z} := by
+  have hcont : Continuous (robasDelta r j) :=
+    continuous_iff_continuousAt.2 fun z => (hasDerivAt_robasDelta r hr j z).continuousAt
+  refine ⟨fun x hx y hy w hw => ?_⟩
+  simp only [Set.mem_setOf_eq] at hx hy ⊢
+  rcases lt_trichotomy w (r j) with h | h | h
+  · refine nonneg_of_rising hw.1 hcont.continuousOn (fun v hv h0 => ?_) hx
+    have hv' : v < r j := lt_of_le_of_lt hv.2 h
+    obtain ⟨D, hD, hpos⟩ := robasDelta_rises hb hn r hr j v h0 hv'.ne
+    exact ⟨D, hD, pos_of_mul_pos_left hpos (sub_pos.2 hv').le⟩
+  · rw [h, robasDelta_self]
+  · refine nonneg_of_falling hw.2 hcont.continuousOn (fun v hv h0 => ?_) hy
+    have hv' : r j < v := lt_of_lt_of_le h hv.1
+    obtain ⟨D, hD, hpos⟩ := robasDelta_rises hb hn r hr j v h0 hv'.ne'
+    exact ⟨D, hD, neg_of_mul_pos_left hpos (sub_neg.2 hv').le⟩
+
+/-- A critical point of a function whose derivative is monotone is its minimum. -/
+theorem le_of_monotone_deriv {F F' : ℝ → ℝ} (hF : ∀ x, HasDerivAt F (F' x) x) (hmono : Monotone F')
+    {x₀ : ℝ} (h0 : F' x₀ = 0) (y : ℝ) : F x₀ ≤ F y := by
+  rcases lt_trichotomy x₀ y with h | h | h
+  · obtain ⟨ξ, hξ, hs⟩ := exists_hasDerivAt_eq_slope F F' h
+      (fun x _ => (hF x).continuousAt.continuousWithinAt) fun x _ => hF x
+    have := hmono hξ.1.le
+    rw [h0, hs, le_div_iff₀ (sub_pos.2 h)] at this
+    linarith
+  · rw [h]
+  · obtain ⟨ξ, hξ, hs⟩ := exists_hasDerivAt_eq_slope F F' h
+      (fun x _ => (hF x).continuousAt.continuousWithinAt) fun x _ => hF x
+    have := hmono hξ.2.le
+    rw [h0, hs, div_le_iff₀ (sub_pos.2 h)] at this
+    linarith
+
+/-- A candidate residual at which every calibration unit's score is at least the candidate's: where
+the candidate sits at the minimum of the scores' common convex profile. -/
+theorem robas_common_point (r : Fin n → ℝ) (hr : ∃ i k, r i ≠ r k) :
+    ∃ z₀, ∀ j, 0 ≤ robasDelta r j z₀ := by
+  have hn : 1 ≤ n := by
+    obtain ⟨i, -, -⟩ := hr
+    exact Fin.pos_iff_nonempty.2 ⟨i⟩
+  have hnR : (1 : ℝ) ≤ n := by exact_mod_cast hn
+  set S := ∑ i, r i with hS
+  have hT := robasSpread_pos r hr
+  set h : ℝ → ℝ := fun z => n * z - S * robasG (S ^ 2 / (2 * robasSpread r z)) with hh
+  have hTc : Continuous (robasSpread r) :=
+    continuous_iff_continuousAt.2 fun z => (hasDerivAt_robasSpread r z).continuousAt
+  have hgc : Continuous robasG :=
+    continuous_iff_continuousAt.2 fun x => (hasDerivAt_robasG x).continuousAt
+  have hc : Continuous h := by
+    refine (continuous_const.mul continuous_id).sub (continuous_const.mul (hgc.comp ?_))
+    exact continuous_const.div (continuous_const.mul hTc) fun z => by linarith [hT z]
+  have hbound : ∀ z, |S * robasG (S ^ 2 / (2 * robasSpread r z))| ≤ |S| := fun z => by
+    rw [abs_mul, abs_of_pos (robasG_pos _)]
+    exact mul_le_of_le_one_right (abs_nonneg S) (robasG_le_one _)
+  set M := |S| / n + 1
+  have hM : 0 ≤ M := by positivity
+  have hpos : 0 ≤ h M := by
+    have := hbound M
+    simp only [hh]
+    have e : (n : ℝ) * M = |S| + n := by simp only [M]; field_simp
+    rw [e]; linarith [abs_le.1 this]
+  have hneg : h (-M) ≤ 0 := by
+    have := hbound (-M)
+    simp only [hh]
+    have e : (n : ℝ) * -M = -(|S| + n) := by simp only [M]; field_simp
+    rw [e]; linarith [abs_le.1 this]
+  obtain ⟨z₀, -, hz₀⟩ := intermediate_value_Icc (by linarith) hc.continuousOn ⟨hneg, hpos⟩
+  refine ⟨z₀, fun j => ?_⟩
+  set T := robasSpread r z₀ with hT_def
+  set σ := sqrt T with hσ_def
+  have hσ : 0 < σ := sqrt_pos.2 (hT z₀)
+  have hσ2 : σ ^ 2 = T := sq_sqrt (hT z₀).le
+  set F : ℝ → ℝ := fun ρ => n * ρ ^ 2 + (S + z₀ - ρ) ^ 2 - T * robasBigOmega ((S + z₀ - ρ) / σ)
+  set F' : ℝ → ℝ := fun ρ => 2 * n * ρ - 2 * (S + z₀ - ρ) + σ * robasOmega ((S + z₀ - ρ) / σ)
+  have hin : ∀ ρ, HasDerivAt (fun ρ => (S + z₀ - ρ) / σ) ((0 - 1) / σ) ρ := fun ρ =>
+    ((hasDerivAt_const ρ (S + z₀)).sub (hasDerivAt_id ρ)).div_const σ
+  have hF : ∀ ρ, HasDerivAt F (F' ρ) ρ := fun ρ => by
+    have h1 := ((hasDerivAt_pow 2 ρ).const_mul (n : ℝ)).add
+      (((hasDerivAt_const ρ (S + z₀)).sub (hasDerivAt_id ρ)).pow 2)
+    have h2 := ((hasDerivAt_robasBigOmega _).comp ρ (hin ρ)).const_mul T
+    refine (h1.sub h2).congr_deriv ?_
+    simp only [F', Pi.sub_apply, id, Nat.cast_ofNat, Nat.reduceSub, pow_one]
+    rw [← hσ2]
+    field_simp
+    ring
+  have hF' : ∀ ρ, HasDerivAt F' (2 * n + 2 - robasOmegaDeriv ((S + z₀ - ρ) / σ)) ρ := fun ρ => by
+    have h1 := ((hasDerivAt_id ρ).const_mul (2 * (n : ℝ))).sub
+      (((hasDerivAt_const ρ (S + z₀)).sub (hasDerivAt_id ρ)).const_mul 2)
+    have h2 := ((hasDerivAt_robasOmega _).comp ρ (hin ρ)).const_mul σ
+    refine (h1.add h2).congr_deriv ?_
+    field_simp
+    ring_nf
+  have hmono : Monotone F' :=
+    monotone_of_deriv_nonneg (fun ρ => (hF' ρ).differentiableAt) fun ρ => by
+      rw [(hF' ρ).deriv]
+      linarith [robasOmegaDeriv_le ((S + z₀ - ρ) / σ)]
+  have hcrit : F' z₀ = 0 := by
+    simp only [F', robasOmega]
+    have e1 : (S + z₀ - z₀) / σ = S / σ := by ring
+    have e2 : (S / σ) ^ 2 / 2 = S ^ 2 / (2 * T) := by rw [div_pow, hσ2]; field_simp
+    rw [e1, e2]
+    have : n * z₀ - S * robasG (S ^ 2 / (2 * T)) = 0 := hz₀
+    field_simp
+    linarith
+  have key := le_of_monotone_deriv hF hmono hcrit (r j)
+  have hΔ : robasDelta r j z₀ = F (r j) - F z₀ := by
+    simp only [F, robasDelta]
+    rw [← hT_def, ← hσ_def, ← hS]
+    have e : (S + z₀ - z₀) / σ = S / σ := by ring
+    rw [e]
+    ring
+  rw [hΔ]
+  linarith
+
+/-- **RoBAS-Full's conformal sets are intervals for `n ≥ 4`.** For calibration residuals not all
+equal and every `α`, the set of candidate residuals `{z : p(z) > α}` is an interval, granted the
+four certified bounds on the module's Dawson function (`RobasDawsonBounds`). Each unit's acceptance
+set is an interval (`robas_acceptance_ordConnected`), they share a point (`robas_common_point`),
+and Bersson and Hoff's Lemmas 1–2 finish. -/
+theorem robasFull_interval (hb : RobasDawsonBounds) (hn : 4 ≤ n) (r : Fin n → ℝ)
+    (hr : ∃ i k, r i ≠ r k) (α : ℝ) : Set.OrdConnected {z | α < robasPValue r z} := by
+  obtain ⟨z₀, hz₀⟩ := robas_common_point r hr
+  have hI := fun j => robas_acceptance_ordConnected hb hn r hr j
+  have hnR : (n : ℝ) ≠ 0 := by
+    have : (4 : ℝ) ≤ n := by exact_mod_cast hn
+    positivity
+  have hiff : ∀ z j, robasCandidateScore r z ≤ robasUnitScore r z j ↔ 0 ≤ robasDelta r j z := by
+    intro z j
+    have hT := robasSpread_pos r hr z
+    rw [← robas_score_diff hnR r z hT j]
+    constructor
+    · intro h; exact mul_nonneg (by linarith) (sub_nonneg.2 h)
+    · intro h
+      have h2 : 0 < 2 * robasSpread r z := by linarith
+      exact sub_nonneg.1 (le_of_mul_le_mul_left (by rw [mul_zero]; exact h) h2)
+  have hm : (0 : ℝ) < n + 1 := by positivity
+  have hcount : ∀ x w, (∀ j, 0 ≤ robasDelta r j x → 0 ≤ robasDelta r j w) →
+      robasPValue r x ≤ robasPValue r w := by
+    intro x w hxw
+    unfold robasPValue
+    refine div_le_div_of_nonneg_right ?_ hm.le
+    have hsub : (Finset.univ.filter fun j => robasCandidateScore r x ≤ robasUnitScore r x j) ⊆
+        (Finset.univ.filter fun j => robasCandidateScore r w ≤ robasUnitScore r w j) := by
+      intro j hj
+      simp only [Finset.mem_filter, Finset.mem_univ, true_and] at hj ⊢
+      rw [hiff] at hj ⊢
+      exact hxw j hj
+    have := Finset.card_le_card hsub
+    have : ((Finset.univ.filter fun j => robasCandidateScore r x ≤ robasUnitScore r x j).card : ℝ) ≤
+        (Finset.univ.filter fun j => robasCandidateScore r w ≤ robasUnitScore r w j).card := by
+      exact_mod_cast this
+    linarith
+  refine ⟨fun x hx y hy w hw => ?_⟩
+  simp only [Set.mem_setOf_eq] at hx hy ⊢
+  rcases le_total w z₀ with h | h
+  · exact lt_of_lt_of_le hx (hcount x w fun j hj => (hI j).out hj (hz₀ j) ⟨hw.1, h⟩)
+  · exact lt_of_lt_of_le hy (hcount y w fun j hj => (hI j).out (hz₀ j) hj ⟨h, hw.2⟩)
+
+end RobasFull
 
 end Conformal

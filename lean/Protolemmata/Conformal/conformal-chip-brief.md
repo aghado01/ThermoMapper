@@ -8,7 +8,8 @@ Status: commissioned 2026-11-13 by the user ("Lean first, 15 meanwhile", in the 
 - JAWS's likelihood-ratio weights for the cross-fitted forms;
 - weighted K-fold CV+, by one fold under likelihood ratios and by merging under position weights;
 - under likelihood ratios, the tournament across folds (7e2b905) and the merged bound (follow-up 2e, which also corrects the averaging lemmas' hypotheses);
-- the β-bound's calibration at n units, by Vlassis and Thomas's chain-measure induction, and what `HighProbability` reports (slice 18's follow-up).
+- the β-bound's calibration at n units, by Vlassis and Thomas's chain-measure induction, and what `HighProbability` reports (slice 18's follow-up);
+- RoBAS-Full's conformal sets as intervals from n = 4, granted four bounds on Dawson's function that the checks certify (scope A, the C# chip's commission of 2026-11-14).
 
 **Why now.** Slice 14's C# (`c19ce98`; its [report](../../../issues/regression/archive/bass-gbass-khaos-activespaces/briefs/conformal-layer-brief.md#2026-11-13--slice-14-the-weighted-rule-under-shift)) lists follow-ups that each need a guarantee before their C# (decision 7 on the layer plan). The C# chip builds the ratio estimator and slice 15 meanwhile, then these three as their Lean lands.
 
@@ -231,6 +232,50 @@ The user asked for this on 2026-11-08 ("Yes, start it"), relayed by the BASS ext
 ## Reports
 
 Newest first.
+
+### 2026-11-14 — RoBAS-Full's intervals at n ≥ 4, proved (scope A)
+
+Asked 2026-11-14 by the C# chip at the user's word: prove RoBAS-Full's conformal sets are intervals for n ≥ 4, or find a counterexample. Scope A, the user's choice: all in Lean except four bounds on Dawson's function, stated as hypotheses on the module's own function and certified by the checks. The statements are in the ledger, under "RoBAS-Full's intervals at n ≥ 4". The new declarations are PROOF-CLOSED, with the standard three axioms only. The checks ran first.
+
+- *Proved.* `robasFull_interval`: for n ≥ 4, calibration residuals not all equal, and every α, the set {z : p(z) > α} is an interval.
+  - It is granted `RobasDawsonBounds`: |ω| ≤ 1.8841, ω′ ≥ −0.5511, |c| ≤ 3.2365, and κ's increments ≤ 4.2766 over windows of 1.415 and ≤ 4.1060 over windows of 1.351.
+  - The score and the p-value are the paper's and the C#'s, including the plug-in σ̂² and the candidate's own tie.
+- *Dawson's function in the module.*
+  - `kummerHalf` = ₁F₁(1; 3/2; −x) = e^{−x}∫₀¹ e^{xv²} dv.
+  - Its series is the one `LogKummer` sums (`kummerMoment_hasSum`).
+  - Its ODE, its derivatives through ω′, and g's monotonicity are all proved, with no hypotheses.
+- *The route.*
+  - 2T(S_j − S_cand) = (r_j − z)L_j − T(Ω(p) − Ω(q)) exactly.
+  - At every zero, the slope times (r_j − z) is T times a core quantity, which the four bounds make positive from n = 4.
+  - So each unit's set is an interval.
+  - The sets share a point, the minimum of the scores' common convex profile.
+  - Bersson and Hoff's step finishes.
+- *Below n = 4.* The core quantity's minimum is −2.14 at n = 2 and −0.93 at n = 3, as the C#'s pinned counterexamples show.
+- *For the C#.*
+  - `Intervals` can serve RoBAS-Full from n = 4 when the calibration residuals are not all equal.
+  - The all-equal case, where every unit ties, is outside the theorem.
+  - A start that is always accepted: z₀ with n z₀ = S·g(S²/(2T(z₀))), where p = 1 (`robas_common_point`).
+- *Changed.*
+  - `ConformalValidity.lean`: section `RobasFull`, 59 declarations, plus eight Mathlib imports, already built.
+  - The checks: a new section, which reads the constants from the Lean file.
+  - The ledger.
+- *Gates.* All pass:
+  - the module build and the barrel build (3,203 jobs);
+  - the axioms probe: 26 results, standard three only;
+  - meta-ci;
+  - the full checks run (779 s).
+  - D: has 32.8 GB free.
+- *Next.* The user then asked for the bounds in Lean as well (scope B). That is under way: `RobasDawsonBounds` itself, through rational sub- and supersolutions of Φ's ODE and polynomial certificates.
+- *Hypotheses read.*
+  - `RobasDawsonBounds` is true: the checks certify it with exactly the Lean's constants.
+  - n ≥ 4 and "not all equal" are met by any ordinary calibration set.
+  - `robas_core`'s hypotheses are the ones a zero of Δ_j produces.
+- *For the `#print axioms` file:*
+  - `kummerMoment_hasSum`, `kummerMoment_ode`, `hasDerivAt_kummerMoment`, `kummerMoment_sq_le`, `robasG_monotone`;
+  - `hasDerivAt_robasBigOmega`, `hasDerivAt_robasOmega`, `hasDerivAt_robasKappa`;
+  - `robas_core`, `robas_score_diff`, `robas_slope_algebra`;
+  - `robasDelta_rises`, `nonneg_of_rising`, `nonneg_of_falling`;
+  - `robas_acceptance_ordConnected`, `robas_common_point`, `robasFull_interval`.
 
 ### 2026-11-14 — slice 18's follow-up: the calibration at n units, proved
 

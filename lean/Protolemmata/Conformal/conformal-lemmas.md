@@ -2,7 +2,7 @@
 
 Pins the contract of the engine's conformal layer, one layer over retained draws and pointwise densities for every model with a pointwise density ([E16](../../../issues/regression/bass/extensions-brief.md#conformal-bayes-the-consumer)). The layer owns coverage and the score owns width. These are the finite statements of that split. They are the sibling of [GuardedEstimator](../BASS/guarded-estimator-lemmas.md): there, means valid whatever the emulator does; here, prediction sets valid whatever the model does. Written from the [chip brief](conformal-chip-brief.md).
 
-**Status (2026-11-14).** Proved in `lean/Enthymemata/ConformalValidity.lean`, namespace `Conformal`, with no apologies (PROOF-CLOSED, 573 declarations counting E35's M-1 and M-2 and slices 9, 10, 12, 13, 14, 15, 16 and 18, slice 14's follow-ups 1, 2 and 3, and slice 18's follow-up at the end of this page; `#print axioms` shows `propext`, `Classical.choice`, `Quot.sound` only):
+**Status (2026-11-14).** Proved in `lean/Enthymemata/ConformalValidity.lean`, namespace `Conformal`, with no apologies (PROOF-CLOSED, 632 declarations counting E35's M-1 and M-2 and slices 9, 10, 12, 13, 14, 15, 16 and 18, slice 14's follow-ups 1, 2 and 3, slice 18's follow-up, and RoBAS-Full's intervals at the end of this page; `#print axioms` shows `propext`, `Classical.choice`, `Quot.sound` only):
 - CB-1: `card_rankLe_le`, `coverage_orderings`, `coverage_orderings_eq`, `coverage_strict_le`, `coverage_orderings_le`, `rank_uniform`, `coverage_tieBreak`, `coverage_given`, `coverage_law`, `coverage_stratum`;
 - CB-2: `split_coverage`, `exchangeable_given_training`, `cqr_ordConnected`;
 - CB-4: `sum_jointU`, `post_addOneIn`, `integratedScore_equivariant`, `latentScore_equivariant`, `latentScore_eq`, `sum_jointU_addOneIn`, `integratedScore_le_latentScore`, `accepts_latent_of_mixed`, `mixed_counterexample`;
@@ -1209,3 +1209,93 @@ Asked on 2026-11-14: extend `gaffke_one` to n units by Vlassis and Thomas's chai
 - The high-probability rule's event as the Lean states it.
   - On 480 random cases, all within 1 − β.
   - On 72 targeted cases where the rule meets α at a risk above it, within 1 − β; the worst failure chance is 0.343.
+
+## RoBAS-Full's intervals at n ≥ 4
+
+Asked on 2026-11-14 (the C# chip's commission, at the user's word): prove that RoBAS-Full's conformal sets are intervals for n ≥ 4, or find a counterexample there. The user chose scope A: everything in Lean except four bounds on Dawson's function, which are hypotheses stated on the module's own function and certified in the checks. Sources: RoBAS (arXiv 2607.04236v2), in TeX:
+- the RoBAS-Full derivation (appendix, "Additional Details on BWM");
+- Bersson and Hoff's Lemmas 1–2, as their `lem:prediction_region_interval`;
+- RoBAS-EB's interval theorem (main text §3.4) for the route.
+
+Proved on 2026-11-14 in `ConformalValidity.lean`, section `RobasFull` (59 declarations), PROOF-CLOSED, with the standard three axioms only. The checks (section "RoBAS-Full's intervals at n >= 4") ran first.
+
+**The statement** (`robasFull_interval`).
+- *Hypotheses.* n ≥ 4, calibration residuals not all equal, and `RobasDawsonBounds`.
+- *Conclusion.* For every α, the set {z : p(z) > α} is an interval (`Set.OrdConnected`).
+- *The p-value.* `robasPValue` is (#{j : S_cand ≤ S_j} + 1)/(n + 1), the candidate's own tie counted. This is `ResidualShrinkage`'s `atOrAbove + 1 > level` with level ⌊α(n + 1)⌋.
+- *The score.* `robasFullScore` is the paper's −n s²/(2σ̂²) + ln ₁F₁(1; 3/2; −n r̄²/(2σ̂²)), of the n others, at the shared plug-in σ̂² = T/n, where T = Σ_all (r − r̄)² (`robasSpread`).
+- *Not covered.* Calibration residuals all equal: there T vanishes at z = r̄, and the C# ties every unit.
+
+**Dawson's function in the module** (no hypotheses).
+- *Definitions.*
+  - `kummerMoment j x` = ∫₀¹ v^{2j} e^{xv²} dv.
+  - `kummerHalf x` = e^{−x} K₀(x) = ₁F₁(1; 3/2; −x) = D(√x)/√x.
+  - `robasG` = K₁/K₀.
+- *Its series* (`kummerMoment_hasSum`). K_j(x) = Σ xᵏ/(k!(2k + 2j + 1)), the series `LogKummer` sums.
+- *Its derivatives.*
+  - K_j′ = K_{j+1}, by differentiating under the integral.
+  - The ODE 2x K_{j+1} + (2j + 1) K_j = eˣ, by the fundamental theorem.
+- *Its convexity.* K₁² ≤ K₀K₂ (Cauchy–Schwarz), so g is nondecreasing (`robasG_monotone`).
+- *Ω and its derivatives.* With Ω(y) = −2 ln ₁F₁(1; 3/2; −y²/2):
+  - Ω′ = ω = 2y(1 − g);
+  - ω′ = 4g(1 − x(1 − g)) at x = y²/2, through the ODE;
+  - κ = 2Ω − yω has κ′ = c = ω − yω′;
+  - ω′ ≤ 4 (`robasOmegaDeriv_le`).
+
+**The reduction** (exact).
+- *The score identity* (`robas_score_diff`). 2T(S_j − S_cand) = Δ_j(z) = (r_j − z)L_j(z) − T(Ω(p) − Ω(q)), where:
+  - L_j(z) = (n − 1)z + (n + 1)r_j − 2S;
+  - p and q are the leave-one-out sums over √T.
+- *Single crossing* (`robasDelta_rises`). At each zero z ≠ r_j, Δ_j′(z)(r_j − z) = T·Ξ. Here d = p − q, and the slope at the zero is (`robas_slope_algebra`):
+  - Ξ = (n − 1)d² + (d ω(p) − (Ω(p) − Ω(q))) + t d (κ(p) − κ(q));
+  - t is the candidate's standardized deviation, (d − Ω̄/(n + 1))/2 at a zero.
+- *Admissibility.* The other n − 1 standardized deviations bound (t + u)² ≤ (n − 1)(1 − t² − u²), by Cauchy–Schwarz.
+- *Each unit's set is an interval* (`robas_acceptance_ordConnected`).
+  - Δ_j(r_j) = 0.
+  - Left of r_j, Δ_j rises through its zeros; right of r_j, it falls (`nonneg_of_rising`, `nonneg_of_falling`).
+  - So {Δ_j ≥ 0} is an interval. This needs no limits at ±∞.
+- *A common point* (`robas_common_point`).
+  - Every unit's score is F_z(r_i)/(2T) less a shared term, with F_z(ρ) = nρ² + (Σ − ρ)² − TΩ((Σ − ρ)/√T).
+  - F_z″ = 2n + 2 − ω′ > 0.
+  - At z₀ with n z₀ = S g(S²/(2T(z₀))), which exists by the IVT, the candidate sits at F_{z₀}'s minimum.
+- *Bersson and Hoff's step.* Intervals through z₀ make every superlevel set of the count an interval.
+
+**The core and the four bounds** (`robas_core`, `RobasDawsonBounds`).
+- *Lower bound on Ξ.*
+  - Ξ ≥ d²[(n − 1) + ω′_min/2 − |κ(p) − κ(q)|/2 − |Ω̄| c_max/(2(n + 1))].
+  - This uses Taylor's bound from ω′ ≥ ω′_min, and the mean value bounds |Ω̄| ≤ ω_max and |κ(p) − κ(q)| ≤ c_max|d|.
+- *The two lengths.* Admissibility gives d² ≤ 2 − Ω̄²/((n + 1)(n − 1)).
+- *n ≥ 5.* The long window suffices, and the bracket is at least 1.078.
+- *n = 4.* Split on (5s)² ≤ 15(2 − 1.351²):
+  - with the long window and |Ω̄| ≤ 1.6193, the bracket is at least 0.062;
+  - otherwise |d| ≤ 1.351 and the short window applies, again at least 0.062.
+- *The constants,* defined once in the module and read by the checks:
+
+  | Bound | Value |
+  |---|---|
+  | \|ω\| | ≤ 1.8841 |
+  | ω′ | ≥ −0.5511 |
+  | \|c\| | ≤ 3.2365 |
+  | κ's increment over \|b − a\| ≤ 1.415 | ≤ 4.2766 |
+  | κ's increment over \|b − a\| ≤ 1.351 | ≤ 4.1060 |
+
+**Against the source.**
+- *Their RoBAS-EB route carries over.* Bersson and Hoff's two conditions hold.
+  - Each I_j is an interval, though only from n = 4 here.
+  - The common point comes from the scores' common convex profile.
+- *Below n = 4.* The slope at a zero can be negative: the exact minimum is −2.14 at n = 2 and −0.93 at n = 3. This matches the C#'s pinned counterexamples, where one unit's β_j has three zeros.
+
+**For the C#.**
+- *What the theorem gives.* `ResidualShrinkage.Intervals` can serve RoBAS-Full from n = 4, as it serves RoBAS-EB, when the calibration residuals are not all equal.
+- *The all-equal case* is outside the theorem. There every unit ties.
+- *A point always in the set.* Take z₀ with n z₀ = S·g(S²/(2T(z₀))). There every unit's score is at least the candidate's, so p(z₀) = 1. It is a safe start for the bracketed search, in place of RoBAS-EB's â·r̄.
+
+**Checks** (section "RoBAS-Full's intervals at n >= 4").
+- *The four bounds certified.*
+  - The constants are parsed from the Lean file and certified in decimal interval arithmetic with directed rounding, on 5,325 cells of [0, 12].
+  - On each cell, g lies between its ends' series values, by monotonicity.
+  - Results: ω ≤ 1.884025, ω′ ≥ −0.551087, |c| ≤ 3.236498. The window increments are 4.2765 at 1.415 and 4.1060 at 1.351, in exact rationals.
+- *Past y = 12.* Analytic bounds through E W and E W² for W = 1 − V², with V's density ∝ e^{xv²}: ω ≤ 0.343, ω′ ≥ −0.111, 0 ≤ c ≤ 1.389.
+- *The score identity.* Against the C#'s score form, on 1,689 units, worst 4.8e-15.
+- *The pinned n = 3 residuals.* They split unit 1's set.
+- *Direct grids at n = 4 to 7.* One piece on 218 sets, over every k.

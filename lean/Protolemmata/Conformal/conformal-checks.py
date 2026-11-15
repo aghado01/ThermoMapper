@@ -4014,4 +4014,273 @@ print(f"Follow-up (Vlassis and Thomas): the race identity against the divided di
       f"(worst {float(worst_hpt):.4f})")
 
 print()
+print("=== RoBAS-Full's intervals at n >= 4: the four bounds on Dawson's function, certified ===")
+# The Lean (section RobasFull of ConformalValidity.lean) proves robasFull_interval granted RobasDawsonBounds,
+# four bounds on the module's own Dawson function:
+#   K_j(x) = int_0^1 v^(2j) e^(x v^2) dv = sum_k x^k / (k! (2k + 2j + 1))   (kummerMoment_hasSum),
+#   g = K_1/K_0 (robasG, nondecreasing: robasG_monotone), x = y^2/2,
+#   omega(y) = 2y(1 - g),  omega'(y) = 4g(1 - x(1 - g)),  c = omega - y omega' = 2y(1 - 3g + 2xg(1 - g)),
+#   kappa = 2 Omega - y omega, with kappa' = c (hasDerivAt_robasKappa).
+# The bounds: |omega| <= OM, omega' >= OMP, |c| <= CM, and |kappa(b) - kappa(a)| <= W whenever |b - a| <= L,
+# at two (L, W). The constants are read from the Lean file, the one source. Each is certified here in decimal
+# interval arithmetic with directed rounding: g at the cell ends from the two positive series with their
+# tails bounded, g on a cell between its ends' values, each function on the cell from its (y, g) box. omega and
+# c are odd and omega' even in y, so y >= 0 suffices; the cells cover [0, 12], and past 12 the bounds come from
+# 1 - g = E W and g' = Var W <= E W^2 for W = 1 - V^2, V with density proportional to e^(x v^2) on [0, 1].
+import decimal
+import pathlib
+import re
+from decimal import Decimal as D
+
+_lean = (pathlib.Path(__file__).resolve().parents[2] / 'Enthymemata' / 'ConformalValidity.lean').read_text(
+    encoding='utf-8')
+_consts = {m.group(1): Q(int(m.group(2)), int(m.group(3)))
+           for m in re.finditer(r'noncomputable def (robas\w+) : ℝ := (-?\d+) / (\d+)', _lean)}
+RF = {k: _consts[k] for k in ('robasOmegaMax', 'robasOmegaDerivMin', 'robasCMax', 'robasWindowLong',
+                              'robasWindowLongBound', 'robasWindowShort', 'robasWindowShortBound')}
+assert len(_consts) == 7, sorted(_consts)
+_ctx = decimal.Context(prec=40)
+
+
+def _dn(f):
+    with decimal.localcontext(_ctx) as c:
+        c.rounding = decimal.ROUND_FLOOR
+        return f()
+
+
+def _up(f):
+    with decimal.localcontext(_ctx) as c:
+        c.rounding = decimal.ROUND_CEILING
+        return f()
+
+
+class _Iv:
+    """A closed interval of decimals, operations rounded outward."""
+    __slots__ = ('lo', 'hi')
+
+    def __init__(self, lo, hi=None):
+        self.lo, self.hi = D(lo), D(lo if hi is None else hi)
+        assert self.lo <= self.hi
+
+    def _c(self, o):
+        return o if isinstance(o, _Iv) else _Iv(o)
+
+    def __add__(self, o):
+        o = self._c(o)
+        return _Iv(_dn(lambda: self.lo + o.lo), _up(lambda: self.hi + o.hi))
+    __radd__ = __add__
+
+    def __neg__(self):
+        return _Iv(-self.hi, -self.lo)
+
+    def __sub__(self, o):
+        return self + (-self._c(o))
+
+    def __rsub__(self, o):
+        return self._c(o) - self
+
+    def __mul__(self, o):
+        o = self._c(o)
+        ps = [(a, b) for a in (self.lo, self.hi) for b in (o.lo, o.hi)]
+        return _Iv(min(_dn(lambda a=a, b=b: a * b) for a, b in ps), max(_up(lambda a=a, b=b: a * b) for a, b in ps))
+    __rmul__ = __mul__
+
+    def __truediv__(self, o):
+        o = self._c(o)
+        assert o.lo > 0
+        return self * _Iv(_dn(lambda: D(1) / o.hi), _up(lambda: D(1) / o.lo))
+
+
+def _kseries(x, j):
+    """K_j(x) = sum_k x^k/(k!(2k + 2j + 1)) for an exact decimal x >= 0, as an interval (tail bounded)."""
+    lo = hi = D(0)
+    t_lo = t_hi = D(1)
+    k = 0
+    while True:
+        lo = _dn(lambda: lo + t_lo / (2 * k + 2 * j + 1))
+        hi = _up(lambda: hi + t_hi / (2 * k + 2 * j + 1))
+        k += 1
+        t_lo = _dn(lambda: t_lo * x / k)
+        t_hi = _up(lambda: t_hi * x / k)
+        if k > x + 5 and t_hi < D('1e-30') * lo:
+            ratio = _up(lambda: x / (k + 1))                 # terms after k fall by at least this ratio
+            hi = _up(lambda: hi + t_hi / (2 * k + 2 * j + 1) / (1 - ratio))
+            return _Iv(lo, hi)
+
+
+def _g_at(y):
+    x = y * y / 2                                            # exact: y has at most 3 decimals
+    return _kseries(x, 1) / _kseries(x, 0)
+
+
+# cells on [0, 12]: width 0.001 on [1.5, 4.6] where the bounds are tight, 0.004 elsewhere
+_ys = []
+_y = D(0)
+while _y < 12:
+    _ys.append(_y)
+    _y += D('0.001') if D('1.5') <= _y < D('4.6') else D('0.004')
+_ys.append(D(12))
+_gs = [_g_at(y) for y in _ys]
+assert all(a.lo <= b.hi for a, b in zip(_gs, _gs[1:]))      # consistent with robasG_monotone
+_om_hi, _omp_lo, _c_abs = D(-1), D(1), []
+for i in range(len(_ys) - 1):
+    Y, G = _Iv(_ys[i], _ys[i + 1]), _Iv(_gs[i].lo, _gs[i + 1].hi)
+    X = Y * Y * D('0.5')
+    om = 2 * Y * (1 - G)
+    omp = 4 * G * (1 - X * (1 - G))
+    cc = 2 * Y * (1 - 3 * G + 2 * X * G * (1 - G))
+    assert om.lo >= 0                                       # omega >= 0 for y >= 0, so |omega| = omega
+    _om_hi, _omp_lo = max(_om_hi, om.hi), min(_omp_lo, omp.lo)
+    _c_abs.append(max(abs(cc.lo), abs(cc.hi)))
+_c_hi = max(_c_abs)
+
+# past y = 12 (x >= 72): E W^k <= (int_0^{1/2} w^k e^{-xw}(1 + w) dw + sqrt2 e^{-x/2}) / ((1 - e^{-x})/x),
+# since (1 - w)^{-1/2} lies in [1, 1 + w] on [0, 1/2] and integrates to sqrt2 on [1/2, 1]; each bound below
+# falls with x, so its value at x = 72 holds past it
+_x = Q(72)
+_e = Q(D(-36).exp(_ctx)) * (1 + Q(1, 10 ** 30))             # e^{-x/2}, rounded up
+_e2 = Q(D(-72).exp(_ctx)) * (1 + Q(1, 10 ** 30))            # e^{-x}
+_sqrt2 = Q(141422, 100000)
+_xEW = (1 + 2 / _x + _sqrt2 * _x ** 2 * _e) / (1 - _e2)    # x E W
+_EW2x2 = (2 + 6 / _x + _sqrt2 * _x ** 3 * _e) / (1 - _e2)  # x^2 E W^2
+assert _xEW <= Q(103, 100) and _EW2x2 <= Q(21, 10)
+_tail_om = 4 * _xEW / 12                                    # omega = 2y E W = (4/y) x E W
+_tail_omp = -4 * (_xEW - 1)                                 # omega' = 4g(1 - x E W) >= 4 min(0, 1 - x E W)
+_tail_c = 2 * 12 ** 3 * _EW2x2 / _x ** 2                    # c = 2y^3 g' with 0 <= g' <= E W^2
+assert _tail_c <= Q(14, 10)
+
+assert Q(_om_hi) <= RF['robasOmegaMax'] and _tail_om <= RF['robasOmegaMax']
+assert Q(_omp_lo) >= RF['robasOmegaDerivMin'] and _tail_omp >= RF['robasOmegaDerivMin']
+assert Q(_c_hi) <= RF['robasCMax'] and _tail_c <= RF['robasCMax']
+
+# the windows: kappa is even, so |kappa(b) - kappa(a)| = |kappa(|b|) - kappa(|a|)| with ||b| - |a|| <= |b - a|;
+# for 0 <= a <= b, |kappa(b) - kappa(a)| <= int_a^b |c|, at most the covering cells' |c| times their widths,
+# and 1.4 per unit past 12 (exact rationals, prefix sums)
+_cell_mass = [Q(_c_abs[i]) * Q(_ys[i + 1] - _ys[i]) for i in range(len(_c_abs))]
+_prefix = [Q(0)]
+for _w in _cell_mass:
+    _prefix.append(_prefix[-1] + _w)
+_lo_ends = [Q(y) for y in _ys[:-1]]
+_hi_ends = [Q(y) for y in _ys[1:]]
+
+
+def _window(L):
+    best, jend = Q(0), 0
+    for i in range(len(_cell_mass)):
+        end = _hi_ends[i] + L                               # a in cell i puts b at most here
+        while jend < len(_cell_mass) and _lo_ends[jend] < end:
+            jend += 1
+        mass = _prefix[jend] - _prefix[i]
+        if end > 12:
+            mass += Q(14, 10) * (end - 12)
+        best = max(best, mass)
+    return best
+
+
+_wl, _ws = _window(RF['robasWindowLong']), _window(RF['robasWindowShort'])
+assert _wl <= RF['robasWindowLongBound'] and _ws <= RF['robasWindowShortBound']
+assert RF['robasWindowLong'] ** 2 >= 2                     # the long window covers every |d| <= sqrt 2
+
+# the reduction behind the Lean, in floats: the score identity 2T(S_j - S_cand) = Delta_j (robas_score_diff)
+# against the score as ResidualShrinkage.Score computes it, and the slope at a zero against the core quantity
+
+
+def _log_kummer(x):
+    if x == 0.0:
+        return 0.0
+    if x <= 36.0:
+        term = s = 1.0
+        for k in range(1, 2000):
+            term *= x / k
+            add = term / (2 * k + 1)
+            s += add
+            if add <= s * 1e-17:
+                break
+        return -x + math.log(s)
+    z, a, ser = 2 * x, 1.0, 1.0
+    for k in range(1, 2000):
+        nxt = a * (2 * k - 1) / z
+        if nxt >= a:
+            break
+        a = nxt
+        ser += a
+        if a <= ser * 1e-17:
+            break
+    return math.log(ser) - math.log(z)
+
+
+def _rf_scores(r):
+    """ResidualShrinkage.Score's Horseshoe branch: each unit's score against the other n."""
+    m = len(r)
+    n = m - 1
+    mu = sum(r) / m
+    cen = sum((v - mu) ** 2 for v in r)
+    out = []
+    for j in range(m):
+        c = r[j] - mu
+        mean = mu - c / n
+        s2 = max(0.0, (cen - c * c) / n - (c / n) ** 2)
+        plug = cen / n
+        out.append(-n * s2 / (2 * plug) + _log_kummer(n * mean * mean / (2 * plug)))
+    return out
+
+
+def _Om(y):
+    return -2 * _log_kummer(y * y / 2)
+
+
+def _rf_delta(cal, j, z):
+    n = len(cal)
+    S = sum(cal)
+    Qs = sum(v * v for v in cal)
+    T = Qs + z * z - (S + z) ** 2 / (n + 1)
+    sT = math.sqrt(T)
+    return (cal[j] - z) * ((n - 1) * z + (n + 1) * cal[j] - 2 * S) - T * (_Om((S + z - cal[j]) / sT) - _Om(S / sT))
+
+
+n_rf_id, worst_rf_id = 0, 0.0
+for _ in range(300):
+    n = rng.randint(2, 9)
+    cal = [rng.gauss(rng.choice([0, 3, -20]), rng.choice([0.1, 1, 5])) for _ in range(n)]
+    z = rng.gauss(0, 6)
+    sc = _rf_scores(cal + [z])
+    mu = (sum(cal) + z) / (n + 1)
+    T = sum((v - mu) ** 2 for v in cal + [z])
+    for j in range(n):
+        worst_rf_id = max(worst_rf_id, abs(2 * T * (sc[j] - sc[n]) - _rf_delta(cal, j, z)) / (1 + T))
+        n_rf_id += 1
+assert worst_rf_id < 1e-9
+
+# below n = 4 single crossing fails: the C#'s pinned n = 3 residuals give unit 1 a split acceptance set
+_cal3 = [0.510312, 0.652786, 0.545799]
+_zs = [-1 + 2.5 * i / 4000 for i in range(4001)]
+_acc = [_rf_delta(_cal3, 1, z) >= 0 for z in _zs]
+_pieces = sum(1 for a, b in zip([False] + _acc, _acc) if b and not a)
+assert _pieces == 2, _pieces
+
+# at n >= 4, accepted sets from the scores directly: one piece on a grid, random configurations and every k
+n_rf_sets = 0
+for _ in range(40):
+    n = rng.randint(4, 7)
+    shift, spread = rng.choice([0.5, 3, 20]), rng.choice([0.05, 0.5, 2])
+    cal = [rng.gauss(shift, spread) for _ in range(n)]
+    lo, hi = min(cal + [0.0]) - 6 * spread - 2, max(cal + [0.0]) + 6 * spread + 2
+    grid = [lo + (hi - lo) * i / 600 for i in range(601)]
+    counts = []
+    for z in grid:
+        sc = _rf_scores(cal + [z])
+        counts.append(sum(1 for j in range(n) if sc[j] >= sc[n]))
+    for k in range(1, n + 1):
+        acc = [c + 1 > k for c in counts]
+        assert sum(1 for a, b in zip([False] + acc, acc) if b and not a) <= 1, (cal, k)
+        n_rf_sets += 1
+
+print(f"RoBAS-Full: the four bounds certified with the Lean's constants on {len(_c_abs)} cells of [0, 12] and past "
+      f"12: |omega| <= {float(_om_hi):.6f} (tail {float(_tail_om):.3f}), omega' >= {float(_omp_lo):.6f} (tail "
+      f"{float(_tail_omp):.3f}), |c| <= {float(_c_hi):.6f} (tail {float(_tail_c):.3f}); kappa's window increments "
+      f"{float(_wl):.4f} at {float(RF['robasWindowLong'])} and {float(_ws):.4f} at {float(RF['robasWindowShort'])}; "
+      f"the score identity on {n_rf_id} units (worst {worst_rf_id:.1e}); the pinned n = 3 residuals split unit "
+      f"1's set; one piece at n >= 4 on {n_rf_sets} sets")
+
+print()
 print("All assertions hold.")
