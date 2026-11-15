@@ -168,11 +168,13 @@ public sealed class ScoresBeyondTheModelTests(ITestOutputHelper output)
                     int n = others.Length;
                     double mean = others.Average(), sigma2 = others.Sum(v => (v - mean) * (v - mean)) / n;
                     double upsilon2 = Math.Max(mean * mean - sigma2 / n, 0.0), shrink = upsilon2 + sigma2 / n > 0 ? upsilon2 / (upsilon2 + sigma2 / n) : 0.0;
+                    double all = r.Average(), plug = r.Sum(v => (v - all) * (v - all)) / n;
                     double expected = score switch
                     {
                         ResidualScore.DistanceToOrigin => Math.Abs(r[j]),
                         ResidualScore.DistanceToAverage => Math.Abs(r[j] - mean),
-                        _ => Math.Abs(r[j] - shrink * mean),
+                        ResidualScore.Shrinkage => Math.Abs(r[j] - shrink * mean),
+                        _ => plug > 0.0 ? -n * sigma2 / (2.0 * plug) + HorseshoeScoreTests.LogKummerByQuadrature(n * mean * mean / (2.0 * plug)) : 0.0,
                     };
                     Assert.True(Math.Abs(got[j] - expected) <= 1e-9 * (1.0 + Math.Abs(expected) + Math.Abs(shift)), $"{score}, case {c}, unit {j}: {got[j]} against {expected}");
                 }

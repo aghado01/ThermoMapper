@@ -16,6 +16,16 @@ public enum ResidualScore
     /// <summary>RoBAS-EB, |r − â·r̄| with â = υ̂²/(υ̂² + σ̂²/n), σ̂² the others' mean squared deviation and υ̂² = max(r̄² − σ̂²/n, 0) (their
     /// empirical Bayes estimates): shrinks to the origin when the residuals sit near zero and to their average under a mean shift.</summary>
     Shrinkage,
+
+    /// <summary>
+    /// RoBAS-Full, the horseshoe working model's Bayes-assisted score (their (8) and Appendix's derivation): R | θ ~ N(θ, σ²),
+    /// θ | τ² ~ N(0, σ²τ²/n), τ ~ C⁺(0, 1). By their marginal-likelihood lemma a unit's score is the marginal likelihood of the other n,
+    /// ln p(r₋ⱼ) = −n s²₋ⱼ/(2σ̂²) + ln ₁F₁(1; 3/2; −n r̄²₋ⱼ/(2σ̂²)) up to a constant every unit shares, s²₋ⱼ and r̄₋ⱼ the others' spread
+    /// and mean and σ̂² = Σ(r − r̄)²/n over all n + 1 residuals (their plug-in). Near zero it shrinks as the horseshoe does; under a large
+    /// mean shift it ranks as distance to average (their asymptotic robustness theorem). No interval theorem is proved for it, so the grid
+    /// form serves it (<see cref="ResidualShrinkage.Prediction"/>).
+    /// </summary>
+    Horseshoe,
 }
 
 /// <summary>A residual score's grid-free set at one test case (<see cref="ResidualShrinkage.Intervals"/>): [<paramref name="Lower"/>,
@@ -131,6 +141,8 @@ public static class ResidualShrinkage
         SplitConformal.CheckAlpha(alpha);
         ConformalBisection.CheckTolerance(tolerance);
         if (!Enum.IsDefined(score)) throw new ArgumentOutOfRangeException(nameof(score));
+        if (score == ResidualScore.Horseshoe)
+            throw new ArgumentException("RoBAS-Full has no interval theorem, so its set need not be one interval: read the grid form (Prediction).", nameof(score));
         int n = residuals.Count, m = n + 1, level = (int)Math.Floor(alpha * m);
         var r = new double[m];
         for (int i = 0; i < n; i++)
@@ -214,9 +226,50 @@ public static class ResidualShrinkage
             double c = r[j] - mu, mean = mu - c / n;
             if (score == ResidualScore.DistanceToAverage) { into[j] = Math.Abs(r[j] - mean); continue; }
             double sigma2 = Math.Max(0.0, (centred - c * c) / n - (c / n) * (c / n));
+            if (score == ResidualScore.Horseshoe)
+            {
+                // The marginal likelihood of the others at the plug-in σ̂², shared by every unit; all residuals equal, every unit ties.
+                double plug = centred / n;
+                into[j] = plug > 0.0 ? -n * sigma2 / (2.0 * plug) + LogKummer(n * mean * mean / (2.0 * plug)) : 0.0;
+                continue;
+            }
             double upsilon2 = Math.Max(mean * mean - sigma2 / n, 0.0), denominator = upsilon2 + sigma2 / n;
             double shrink = denominator > 0.0 ? upsilon2 / denominator : 0.0;
             into[j] = Math.Abs(r[j] - shrink * mean);
         }
+    }
+
+    /// <summary>
+    /// ln ₁F₁(1; 3/2; −x) for x ≥ 0, which is D(√x)/√x, D Dawson's integral (Kummer's transformation). Up to √x = 6 it sums
+    /// e⁻ˣ Σ xᵏ/(k!(2k + 1)), every term positive; past it, the asymptotic (1/z) Σ (2k − 1)!!/zᵏ with z = 2x, cut at its least term, which
+    /// at the seam is about e⁻³⁶. Both keep about 14 digits.
+    /// </summary>
+    internal static double LogKummer(double x)
+    {
+        if (!(x >= 0.0)) throw new ArgumentOutOfRangeException(nameof(x), "x is nonnegative.");
+        if (x == 0.0) return 0.0;
+        if (double.IsPositiveInfinity(x)) return double.NegativeInfinity;
+        if (x <= 36.0)
+        {
+            double term = 1.0, sum = 1.0;
+            for (int k = 1; k < 1000; k++)
+            {
+                term *= x / k;
+                double add = term / (2 * k + 1);
+                sum += add;
+                if (add <= sum * 1e-17) break;
+            }
+            return -x + Math.Log(sum);
+        }
+        double z = 2.0 * x, a = 1.0, series = 1.0;
+        for (int k = 1; k < 1000; k++)
+        {
+            double next = a * (2 * k - 1) / z;
+            if (next >= a) break;
+            a = next;
+            series += a;
+            if (a <= series * 1e-17) break;
+        }
+        return Math.Log(series) - Math.Log(z);
     }
 }
