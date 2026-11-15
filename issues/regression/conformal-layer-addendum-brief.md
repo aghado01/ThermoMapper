@@ -60,6 +60,108 @@ As in the archived brief: each slice is reported here, then waits for the main s
 
 Newest first.
 
+### 2026-11-15 — Conformal test martingales: the full form
+
+Built at the user's pick (2026-11-15, "The full form"), the first of the Vovk items.
+
+**Landed** on `main`, nothing pushed:
+- `b07fb8d`:
+  - `FullFormPValues` and `FullFormScore`, either `Density` or `Centrality`;
+  - `ConformalTestMartingale.Full`, with `Add(logDensity, logCdf)`, `AddRange(CandidateLogDensity)`, `IsFullForm` and `EffectiveSampleSize`;
+  - a pointer in `SmoothedPValues`' docstring.
+- `FullFormPValueTests` is a new class with 11 cases.
+- *What changes for existing calls: nothing.* The monitor's constructor still builds the inductive form, and `Add(double)` reads as before. The two forms refuse each other's input.
+
+**What it computes.**
+- *The posterior given the stream.*
+  - The fit's draws come from a training set proper outside the stream.
+  - Each arrival adds its terms ln p(yₙ | xₙ, θ_s) to every draw's log weight, so w⁽ⁿ⁾ ∝ W̄ Π_{i≤n} p(yᵢ | xᵢ, θ_s): the add-one-in weights over the whole stream.
+  - Every unit is then rescored in sample under w⁽ⁿ⁾, and the newest score is ranked among all n with the randomized tie.
+- *The scores.*
+  - `Density`: ln Σ_s w_s p(yᵢ | θ_s), the full step's own score.
+  - `Centrality`: min(F̂ₙ, 1 − F̂ₙ) from each draw's log CDF, with both tails kept.
+- *The arithmetic.*
+  - Each unit keeps its terms scaled by their largest, so a rescore is a dot product.
+  - Where that sum falls below 10⁻²⁵⁰, the unit is rescored by log-sum-exp.
+- *The seam.*
+  - `AddRange` reads a `CandidateLogDensity` whose cases are the units, each at its one observed response.
+  - The seam's draws and weights must be the stream's.
+  - It must serve the full form, since reweighing by a term reads the term as that unit's likelihood.
+
+**The guarantee, and why it needs no margin.**
+- M-1 needs the scores at each time to be a symmetric function of the units so far: `Equivariant` at every n, which the Lean record already says covers the full form. So no new guarantee was posed.
+- Given the draws, each score reads the units only through the product of their terms, whatever their order. So the p-values are i.i.d. uniform on exchangeable streams, exactly, whatever the number of draws.
+- That differs from the full step's sets: their draws come from the calibration units' own posterior, so they need CB-3's margin. Here the draws must instead be fixed before the stream; refitting them to it would break the guarantee.
+- The weights still degenerate as the stream grows, which costs sharpness only.
+
+**Gates.**
+- *M-1 by enumeration*, six continuous units over all 720 orderings: each rank sequence occurs exactly once, under either score.
+  - Feeding the same scores, each kept from its own time, to the inductive ranker breaks it: 442 distinct sequences under `Density` (one occurring 7 times) and 473 under `Centrality`. This is the drift M-1's record names.
+- *Uniform and independent on exchangeable streams.*
+  - The fixture: 1,000 streams of 100 units from N(0.5, 1); each stream's fit is 100 draws from five training units of N(0, 1), so the fit is off.
+  - KS pooled 0.0026 against a 1% critical value of 0.0052.
+  - At n 2, 50 and 100: 0.025, 0.035 and 0.026 against 0.0515.
+  - Lag-one correlation −0.0002.
+  - Ville's false alarms at c = 20 under the Simple Jumper: 0.015, against 1/c = 0.05.
+  - Mean ESS of the 100 draws: 85.0, 45.9 and 15.9 at n 1, 10 and 100.
+  - Both scores read alike here, since on this symmetric location fixture they order the units the same.
+  - The positional check runs from n 2, since p₁ is θ₁ by construction. At n 1 it read 0.0502 against 0.0515, which tests only the tie draws across seeds 0–999.
+- *A function of the units so far, computed exactly.*
+  - The fixture: 200 wide draws, 300 units near 0 and one at 60. The 300 hold the weights near μ = 0, so the far unit's scaled sum is 0, and its density, −1,780.99, comes from log-sum-exp.
+  - In four orders of arrival, every unit's final density matches the definition to 10⁻⁸ and its centrality to 10⁻⁹ relative.
+- *The seam and the refusals.*
+  - The seam reads as the spans do, bit for bit, and the monitor's p-values and capital are the source's under the same bet.
+  - Each bad input is refused, and a refused arrival leaves the stream as it was:
+    - bad draw weights;
+    - a NaN or +∞ term;
+    - a unit with zero density under every weighted draw;
+    - a log CDF above 0, or missing for the centrality;
+    - a split-only seam, its reason quoted;
+    - another seam's draws or weights;
+    - a grid of two values.
+- *The delay to an alarm, against the inductive form on the same draws.*
+  - The fixture: 200 streams, 100 units of N(0, 1), then 200 of N(1.5, 1) (mean) or N(0, 2.5²) (noise); 50 draws from 3 or 200 training units; the Simple Jumper with Ville at c = 20.
+  - Each cell gives the share of streams alarmed after the change, then the median delay:
+
+    | change, training units | inductive | full | false alarms before, inductive and full |
+    |---|---|---|---|
+    | mean, 3 | 0.865, 33 | 0.590, 41 | 0.015, 0.030 |
+    | mean, 200 | 1.000, 35 | 0.995, 39 | 0.025, 0.035 |
+    | noise, 3 | 0.990, 42 | 1.000, 33 | 0.025, 0.010 |
+    | noise, 200 | 1.000, 36 | 1.000, 36 | 0.005, 0.005 |
+- *The cost per arrival* (wall clock, indicative, with the qualification switch; 1,000 draws):
+
+  | score | n 0–250 | n 250–500 | n 500–1,000 | n 1,000–2,000 |
+  |---|---|---|---|---|
+  | `Density` | 128 µs | 322 µs | 728 µs | 1,763 µs |
+  | `Centrality` | 401 µs | 754 µs | 1,454 µs | 2,996 µs |
+
+  That is linear in n·S, about 0.9 ns per unit and draw for the density. The ESS at n 2,000 was 35 of 1,000. The inductive form's arrival is O(log n).
+- *Per commit,* the selected classes and the pinned tier across every test project: 131 of 131 in the 5 classes selected in Maths.Regression.Tests; Maths.Oracle.Tests compiles three of the four files and selects no class; no other project's compile closure holds them.
+
+**Defects found: none.**
+
+**The finding.** The full form tests a different hypothesis's sharpness, not a sharper one.
+- *Where the fit is vague and the model can absorb the change,* as a location model absorbs a shift in the mean, the posterior given the stream follows the change. The units after it then score as conforming, so the full form alarms less often: 0.59 against 0.865.
+- *Where the model cannot absorb the change,* as with a noise change under a location model, the stream sharpens the fit, and the full form alarms sooner: a median of 33 against 42.
+- *Under a tight fit* the two read alike.
+
+So it serves a caller whose fit is weak and whose feared change is one the model cannot follow. It costs O(n·S) per arrival.
+
+**Follow-ups, the user's to decide:**
+- *Pruning the draws by weight.*
+  - At each arrival, rescore only under the draws whose weight is above a fixed share of the largest.
+  - The kept set is read from the current weights alone, a function of the units so far, so M-1 still holds.
+  - The cost falls with the ESS, to O(S + n·S_kept): the ESS was 35 of 1,000 at n 2,000.
+  - Pruning for good, so that a draw once dropped never returns, would read the history's order and break M-1.
+  - This decides whether the full form serves long streams.
+- *Both forms at once.*
+  - The idea: the inductive and full forms' capitals averaged, to hedge between the two regimes above.
+  - The open question: each is a martingale in its own p-values' filtration, so whether their average keeps Ville's guarantee needs its own reading first.
+  - This decides whether the monitor offers the combination.
+
+**Doc changes owed:** the conformal test martingales section: the full form, its scores, why its guarantee needs no margin, the seam's premise, the delay table and the finding, and the cost.
+
 ### 2026-11-15 — τ through richer features: a spline density ratio
 
 Built at the user's pick (2026-11-15, "slice 15's alternation speed then τ through richer features, then we'll return to the vovk items").
