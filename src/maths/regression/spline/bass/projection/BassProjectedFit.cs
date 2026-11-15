@@ -128,9 +128,10 @@ public sealed class BassProjectedFit
 
     /// <summary>
     /// This refit beside <paramref name="native"/>, the fit <paramref name="analysis"/> read the frame from, on its
-    /// <paramref name="data"/> (slice 7c, <see cref="BassProjectionComparison"/>): each fit's size, PSIS-LOO, evidence and held-out
-    /// error, the refit's subspace against the frame, the native draws' spread about it, and cross-fitting when the spec asks. Every
-    /// report carries the data-reuse caveat.
+    /// <paramref name="data"/> (slice 7c, <see cref="BassProjectionComparison"/>): each fit's size, PSIS-LOO, evidence, held-out error
+    /// and, for a scalar response, held-out log predictive density (slice 8b), the refit's subspace against the frame, the native draws'
+    /// spread about it, and cross-fitting when the spec asks, by cases or by a grouping's levels, on data with groupings and case weights
+    /// (slice 8b). Every report carries the data-reuse caveat.
     /// </summary>
     public BassProjectionComparison Compare(BassFit native, BassData data, ActiveSubspaceAnalysis analysis, ProjectionComparisonSpec? spec = null)
         => BassProjectionComparisons.Of(this, native, data, analysis, spec ?? new ProjectionComparisonSpec());
