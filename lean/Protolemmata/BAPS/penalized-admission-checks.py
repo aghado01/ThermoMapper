@@ -638,6 +638,40 @@ mm = [max(tri_T(256, math.exp(lw), Mm)[0] for lw in np.linspace(0, math.log(1024
 report("PA-7 banded too: path Laplacian L with heavy edges at one node, S₂ = 2·diag(L) − L, q = 3, M/m = 10¹²",
        "; ".join(reads) + f"; at n = 256, M/m = 10², 10⁴, 10⁶: {mm[0]:.2f}, {mm[1]:.2f}, {mm[2]:.2f}", ok)
 
+
+# the Lean instance of the banded case (`norm1_inv_pathFamily`): a path on N + 2 nodes, unit edges but the last, (N, N + 1),
+# of weight N; S1 = L, S2 = |L|, c' = (1, 1), c = (rho, 1), rho = 2(N + 1)^2 + 1. The certificate w is exact.
+def tri_lean(N):
+    from fractions import Fraction as Fr
+    n = N + 2
+    e = [Fr(1) if j < N else Fr(N) for j in range(n - 1)]
+    d = [Fr(1) if i == 0 else Fr(2) if i < N else Fr(N + 1) if i == N else Fr(N) for i in range(n)]
+    assert d == [(e[i - 1] if i else 0) + (e[i] if i + 1 < n else 0) for i in range(n)]  # L's degrees
+    rho = Fr(2 * (N + 1) ** 2 + 1)
+    c1 = 2 + 4 * rho * N / (rho + 1)
+    s_ = c1 / (c1 * Fr(N * (N + 1), 2) + (rho - 1) * N)
+    w = [1 - s_ * Fr(j * (j + 1), 2) for j in range(N + 1)]
+    w.append((rho - 1) / (rho + 1) * w[N])
+    Aw = [(rho + 1) * d[i] * w[i] + (sum((1 - rho) * e[i] * w[i + 1] for _ in [0] if i + 1 < n))
+          + (sum((1 - rho) * e[i - 1] * w[i - 1] for _ in [0] if i >= 1)) for i in range(n)]
+    exact = (Aw[0] == 2 + (rho - 1) * s_ and all(Aw[i] == 4 * w[i] + (rho - 1) * s_ for i in range(1, N))
+             and Aw[N] == 0 and Aw[N + 1] == 0 and max(map(abs, Aw)) <= 10 and w[N] >= Fr(1, 2))
+    A = np.diag([float((rho + 1) * x) for x in d]) + np.diag([float((1 - rho) * x) for x in e], 1) \
+        + np.diag([float((1 - rho) * x) for x in e], -1)
+    Ap = np.diag([float(2 * x) for x in d])
+    val = norm1(np.linalg.inv(unit_scale(A)))
+    return exact, val, float(rho + 1) * math.sqrt(N + 1) / 20, norm1(np.linalg.inv(unit_scale(Ap)))
+
+
+reads = []
+ok = True
+for N in [1, 4, 16, 64]:
+    exact, val, bound, ref = tri_lean(N)
+    ok &= exact and val >= bound and abs(ref - 1) < 1e-12
+    reads.append(f"N={N}: ‖E(c)⁻¹‖₁ {val:.1f} ≥ (ρ+1)√(N+1)/20 = {bound:.1f}")
+report("PA-7 banded too, the Lean instance (`norm1_inv_pathFamily`): path on N + 2 nodes, last edge weight N, c = (2(N+1)² + 1, 1); "
+       "the certificate's Aw exact, |Aw| ≤ 10, w_N ≥ 1/2, E(c′) = I", "; ".join(reads), ok)
+
 bad = 0
 for t in range(200):
     n = int(rng.integers(1, 12))

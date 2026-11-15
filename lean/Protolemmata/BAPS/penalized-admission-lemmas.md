@@ -38,6 +38,11 @@ BAPS factors A(c) = Σₖ cₖSₖ at every sampler step, and a gate (`BapsAdmis
      - With M/m = 10¹², T reads 0.99, 1.70, 3.12 and 5.95 at n = 16, 64, 256 and 1024, about 0.19·√n.
      - At n = 256 it reads 0.90, 2.07 and 3.09 at M/m = 10², 10⁴ and 10⁶. The growth needs M/m large against the path's spectral gap, about n².
      - So √n cannot leave S on a pattern argument alone, even at q = 3. In practice M/m against the pattern's spectral gap limits it.
+     - *Lean, the target* (the user asked for it). `inverse_part_unbounded_tridiagonal`: for every C, some family whose every Sₖ is zero beyond the first off-diagonals meets every hypothesis of (d′), with m = 1, and has T > C.
+       - The instance is a path on N + 2 nodes. Its edges have unit weight except the last, (N, N + 1), which has weight N. S₁ = L and S₂ = |L|, the signless Laplacian, with c′ = (1, 1) and c = (ρ, 1), where ρ = 2(N + 1)² + 1. So A(c′) = 2·diag(L) and E(c′) = I.
+       - The certificate is w_j = 1 − s·j(j + 1)/2 for j ≤ N and w_{N+1} = ((ρ − 1)/(ρ + 1))·w_N, where s makes (Aw)_N = 0. Then (Aw)_{N+1} = 0, |Aw| ≤ 10 and w_N ≥ 1/2.
+       - The dual bound at node N gives ‖E(c)⁻¹‖₁ ≥ (ρ + 1)·√(N + 1)/20 (`norm1_inv_pathFamily`). So T > C once √(N + 1) > 20C, and the instance takes N = r².
+       - The checks verify the certificate in exact arithmetic at N = 1, 4, 16 and 64.
 
 
 **Symbols.** n the order. Sₖ are n × n real symmetric positive semidefinite, for k in a nonempty finite index set. c and c′ are coefficient vectors with every entry positive, c′ the reference point (c_ref in the defects brief), and A(c) = Σₖ cₖSₖ. ρₖ = cₖ / c′ₖ, m = minₖ ρₖ and M = maxₖ ρₖ. λ_min and λ_max are the extreme eigenvalues of a symmetric matrix, and κ₂ = λ_max / λ_min where it is positive definite. ‖A‖₁ is the largest column absolute sum, and κ₁(A) = ‖A‖₁‖A⁻¹‖₁. E(c) = D^{-1/2}A(c)D^{-1/2} with D = diag A(c), the unit-diagonal scaling. q bounds the nonzeros in any row (equally, any column) of every A(c).
