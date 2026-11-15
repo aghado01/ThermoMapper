@@ -26,7 +26,7 @@ Opened 2026-11-14 at the user's word ("that brief was getting way too long, adde
 ## Open, each with the decision it would change
 
 - **Slice 17's remaining follow-up** (its report): CBMA's evidence from the engines' own fits.
-- **RoBAS-Full's sets as intervals for n ≥ 4,** a conjecture (the probe's report). At n 2 and 3 they can fall in two pieces, one about the prior's centre and one about the data. From n 4 to 50 none was found. A proof would go by Bersson and Hoff's lemma, as Lean work for the conformal Lean chip if the user wants it. It decides whether `Intervals` serves RoBAS-Full from n 4.
+- **RoBAS-Full's sets as intervals for n ≥ 4,** a conjecture (the probe's report). At n 2 and 3 they can fall in two pieces, one about the prior's centre and one about the data. From n 4 to 50 none was found. A proof would go by Bersson and Hoff's lemma. Commissioned to the conformal Lean chip at the user's word (2026-11-14, "Yes, send it"). It decides whether `Intervals` serves RoBAS-Full from n 4.
 - **Slice 15's alternation speed** along the factorization's flat directions. It decides the cost at large n.
 - **τ through richer features,** the ratio estimator's open follow-up. It decides whether the layer offers a nonparametric τ.
 
