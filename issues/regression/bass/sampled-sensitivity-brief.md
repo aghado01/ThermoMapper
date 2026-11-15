@@ -83,6 +83,17 @@ Under "Reports" below, newest first, per slice: what landed by commit; the gates
 
 ## Reports
 
+### Slice 2 verified from a clean archive (coordinating session, 2026-11-15)
+
+- **Commit:** `9d96c34`, on a snapshot of `84fa2e6`, through `scripts/verify-csharp.ps1` over its five changed files, in the two projects that select.
+- **Result:** Regression 2,760 of 2,760 and Oracle 57 of 57 at commit scope, `SampledEffectsTests` 11 and `SampledSensitivityTests` 18 among them, and E8's `SampledPoincareCheckTests`, which calls this route.
+- **The gates' cuts, checked and let stand; the user is told they loosen.**
+  - *The bias cut by Bonferroni at a family-wise 10⁻³.* At 5,910 cells a flat 4.5 fails by chance about 3.5% of the time per fit, 5,910 × 2Φ(−4.53), so the 4.53 that tripped it is the size that cut should have expected. The cell reads −0.53 over 200 fresh seeds, with spread 1.011: no bias.
+  - *Its cost:* at 24 seeds the smallest bias a fit-level cell can show moves from about 0.92 of a standard error to 1.07. The primitives' gates at 300 replicates read 0.23.
+  - *The pooled spread's band, [0.85, 1.15],* is pre-emptive: none of the eight tables was outside [0.9, 1.1]. It rests on those tables' own range, 0.909 to 1.082, which makes ±0.1 about a two-sigma band.
+- **Its truths are outside the estimator:** the exact route on separable fits; tensor quadrature on the hand-built directional fit; and quadrature of a chain-built K = 4 ridge fit's own predicted surface, read at this session's request.
+- **Receipts:** `artifacts/verify-sens-s2-2b951c1/`, with the changed list, the counters and the snapshot tracked in [receipts](../receipts/verify-sens-s2-2b951c1/).
+
 ### Slice 2: effects on the sampled route (2026-11-15)
 
 **Landed** in `9d96c34`, which carries its tests. It does not depend on decision 3's form: an effect has no main-variance form.

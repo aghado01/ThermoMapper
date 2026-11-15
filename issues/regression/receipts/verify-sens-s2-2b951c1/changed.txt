@@ -1,0 +1,5 @@
+src/maths/regression/spline/bass/sensitivity/BassSampledSensitivity.cs
+src/maths/regression/spline/bass/sensitivity/BassSensitivity.cs
+src/maths/regression/spline/bass/sensitivity/EffectFunctions.cs
+tests/regression/SampledEffectsTests.cs
+tests/regression/SampledSensitivityTests.cs
