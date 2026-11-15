@@ -127,7 +127,10 @@ Under "Reports" below, newest first, per slice: what landed by commit; the gates
   - At 24 seeds and N = 2048, the two-difference form read a pooled sd of 1.134 with 1.09% beyond 3. A probe over the same views per piece kind found the location pair pieces at spread / RMS stated error 1.197.
   - Over 120 fresh seeds the same cells read 1.024, sd of z 1.026 and 0% beyond 3 (probe `artifacts/chip-sensitivity/probes/BasisCalibrationProbe.cs`).
   - The views are bilinear in two components, so their cells move together and the pooled statistics have about the seeds' few degrees of freedom. The gate reads 80 seeds on the same master.
-  - The basis effects' pooled sd of 0.882, on the band's low side, has the same structure.
+  - *The basis effects' pooled sd of 0.882,* on the band's low side, read over 120 fresh seeds at the gate's views, grid and N (probe `artifacts/chip-sensitivity/probes/BasisEffectsCalibrationProbe.cs`, at the coordinating session's request). Each piece kind returns to about 1, so the stated error is calibrated, not conservative; the 0.882 was the same shared fluctuation as the Sobol cells'. Spread over RMS stated error, median (10% to 90%), with z's sd:
+    - per component: mains 0.995 (0.872 to 1.021), z sd 0.973; pairs 0.970 (0.926 to 1.018), 0.974; means 1.008, 0.973;
+    - per location: mains 0.986 (0.872 to 1.007), 0.958; pairs 0.970, 0.976; means 0.994, 0.979;
+    - integrated: input mains 0.988, 0.964; pairs 0.970, 0.974; the location's main effect 1.001, 0.991; each input with the location 0.995 (0.882 to 1.008), 0.974; means 0.997, 0.994.
 - *The quadrature's own error:* halving the panels moves the directional basis fit's integrated variance by 2.0·10⁻⁵ of itself.
 - *The routes:* `Auto` on a separable basis fit is the exact route, bit for bit, for Sobol and effects, with null errors; a directional basis fit resolves sampled; `Exact` refuses its term, naming it.
 - *The cost row* (the machine at 5 to 18% load, so indicative; probe `artifacts/chip-sensitivity/probes/OutputsCostProbe.cs`, not committed):
