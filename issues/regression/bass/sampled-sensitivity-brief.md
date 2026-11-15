@@ -83,6 +83,102 @@ Under "Reports" below, newest first, per slice: what landed by commit; the gates
 
 ## Reports
 
+### Slice 2: effects on the sampled route (2026-11-15)
+
+**Landed** in `9d96c34`, which carries its tests. It does not depend on decision 3's form: an effect has no main-variance form.
+- *Decision 5, effects by pinning.* `BassSensitivity.Effects` resolves the route as `Of` does (decision 1), and the sampled route reads a scalar fit.
+  - *The cell:* each cell is the effect's ANOVA component, the mean over the 2N shared base rows of the per-row alternating sum Σ_{v⊆u} (−1)^{|u|−|v|} f(g_v, x_{−v}). The base rows are A and B, the points the Sobol route draws from the same seed.
+  - *The estimator:* unbiased under the product law, its error the sum's sample deviation over √2N, `PinnedEffects`' estimator from slice 0. The signs add to zero, so the intercept drops from the sums, and each draw's mean takes it back.
+  - *The order of evaluation:* the base block and each input's blocks at its grid values are kept per draw. A pair's cells are evaluated in chunks and reduced against them at once.
+  - *The memory:*
+    - draws go in batches whose kept blocks stay under 8M values;
+    - chunks go under the column budget slice 1 set;
+    - each chunk's term columns are read through prediction's `BassSurface`.
+- *What changed in the records:*
+  - `Effect` gains `Errors` (draws × cells); `EffectFunctions` gains `MeanError`; `EffectAnalysis` gains `Route` and `Points`. Each is null or 0 on the exact route.
+  - `Points` is N, the rows in each base set, as on `SobolAnalysis`; the effects average over both sets.
+- *`EffectSpec.EvaluationBudget`,* 2·10⁹ term values by default, refuses up front a request whose pinned blocks would evaluate more, naming the knobs.
+- *The request, shared by both routes:* `EffectRequest` (the effects asked for, or the default list of mains and the pairs some term holds; the grids; the cell budget) moved out of `Effects` and is called by both. It finds a term's variables through slice 1's `TermVariables`, so the default pairs come from a directional term's or a ridge column's active coordinates too. The exact route's code is otherwise as it was.
+- *The gates' cuts, in both slices' fit-level tallies:*
+  - The bias cut is Bonferroni's at a family-wise level of 10⁻³ (`BiasCut`), so it grows with the cells read: 4.2 at 42 cells, 5.2 at 6,000.
+  - The pooled spread of z is held within [0.85, 1.15]. The cells of one seed share its points, so that spread has about the seeds' few degrees of freedom and moves by some 10% between seed sets. The primitives' gates (slice 0, 300 replicates) read calibration sharply.
+  - The trigger: under the old flat cut of 4.5, one cell of the 5,910 in "hinges, the boxes" read 4.53. Over 200 fresh seeds the same cell reads √R·mean z −0.53 and sd of z 1.011 (probe `artifacts/chip-sensitivity/probes/EffectCellProbe.cs`): chance, the extreme of many correlated cells.
+  - Slice 1's thresholds move with them, and slice 1's numbers stand under both.
+
+**Gates.** From a snapshot of `HEAD` (`f62b4ab`) with the five files, unless a row says otherwise.
+- *Separable fits, sampled against exact.* Every draw's mean and every cell of every default effect (mains, and the pairs the terms hold, categorical levels among them), on 7-point grids, over 24 seeds at N = 1024 (2,048 base rows). The fits are slice 1's four.
+
+  | Fit | Cells | Exact zeros | Worst √R·\|mean z\| (cut) | Pooled sd of z | Per-cell sd | Beyond 3 | Worst z |
+  | --- | --- | --- | --- | --- | --- | --- | --- |
+  | hinges, mixed laws | 5,910 | 630 | 1.57 (5.23) | 0.909 | 0.61 to 1.31 | 0.02% | −3.35 |
+  | hinges, the boxes | 5,910 | 630 | 4.53 (5.23) | 0.963 | 0.67 to 1.27 | 0.27% | 4.34 |
+  | degree 2, empirical and Student | 6,540 | 0 | 2.89 (5.25) | 0.952 | 0.65 to 1.28 | 0.18% | 3.31 |
+  | Legendre | 10,776 | 2,744 | 2.58 (5.34) | 1.002 | 0.51 to 1.37 | 0.39% | 4.03 |
+
+  The exact zeros are inputs a draw's terms do not read, zero on both routes. The two routes list the same effects on the same grids.
+- *Two fits without factors, against quadrature,* a method apart from the estimator.
+  - *Slice 1's hand-built directional fit:* tensor quadrature of its surface, 48 panels. Its six default effects are three mains on 6-point grids and the three pairs its hinges hold. Over 40 seeds at N = 2048:
+
+    | Degree | Cells | Worst √R·\|mean z\| | Pooled sd of z | Per-cell sd | Beyond 3 | Worst z |
+    | --- | --- | --- | --- | --- | --- | --- |
+    | 1 | 254 | 2.58 | 1.015 | 0.74 to 1.24 | 0.30% | 3.70 |
+    | 2 | 254 | 1.79 | 1.032 | 0.73 to 1.22 | 0.37% | 4.10 |
+
+  - *A ridge-block fit from the chain,* E36's slice 3, at the coordinating session's request.
+    - `Structure.Directional = new DirectionalBasis { Columns = 4 }` on 120 cases of exp(0.6x₀ + 0.8x₁) + sin 3x₀ with noise sd 0.05, on [0, 1]².
+    - Six draws, every term a ridge column, up to 8 columns (two blocks).
+    - The truth is quadrature of the fit's own predicted surface, 3-node Gauss–Legendre on 64 panels per input; halving the panels moves it by 1.1·10⁻⁵ against effects up to 1.28.
+    - Over 40 seeds at N = 2048: 384 cells (mains on 7 points and the pair), worst √R·|mean z| 2.26, pooled sd 0.920, per-cell sd 0.70 to 1.15, none beyond 3, worst z 2.82.
+- *The grid's mean against the surface's mean.* On 25-point grids, under the uniform law on the boxes, a main effect's mean over its grid is 0 up to the grid's trapezoid error; under the level probabilities it is 0 exactly.
+  - The sampled grid mean equals the truth's within its weighted error, a bound on its own error: at worst 1.60 of it on the separable fit, 0.63 on the directional fit (degree 2, quadrature truth).
+  - The categorical input's exact grid mean is 0 to 10⁻¹².
+  - Each draw's sampled mean sits within four of its errors of the exact mean.
+- *The route:* `Auto` on a separable fit is the exact route bit for bit (values and mean), with null errors, `Route = Exact` and `Points = 0`.
+- *The shared points:* the seed reproduces the analysis bit for bit, and another seed moves it. A draw read alone is its row, cells, errors and mean, bit for bit. The effects are named in that test, since the default pairs follow the selected draws' terms.
+- *The refusals:* `Exact` names the term without factors; `Points` below 2; the evaluation budget, with its count; a functional fit, naming slice 3.
+- *The exact route's own tests:* `BassSensitivityEffectTests` (12 of 12) after the request moved into `EffectRequest`.
+- *The cost row* (wall clock and allocation per draw, the machine at 1 to 28% load, so indicative; probe `artifacts/chip-sensitivity/probes/EffectsCostProbe.cs`, not committed):
+
+  | Per draw | Exact | Sampled, N = 1024 | Sampled, N = 4096 |
+  | --- | --- | --- | --- |
+  | Separable fit (60 draws, 16 distinct terms), mains on 100 points | 0.020 ms | 15 ms, 6.3 MB | 70 ms, 54 MB |
+  | The same, mains and pairs on 25 points | 0.029 ms | 46 ms, 6.3 MB | 191 ms, 64 MB |
+  | Directional fit (2 draws), mains on 100 points | — | | 128 ms, 188 MB |
+  | The same, mains and pairs on 25 points | — | | 808 ms, 1.08 GB |
+
+  - *What drives it:* pinning costs cells × rows × terms, against the exact route's cells × terms, so effects run 3 to 4 orders of magnitude above the exact route. The evaluation budget bounds a request.
+  - *The allocation column* is churn, not peak: each chunk rebuilds its stacked cases. Peak memory stays within the store and column budgets.
+  - *A posterior with many distinct terms* (a chain over continuous directions) shares few columns across a batch. Its cost per draw approaches that of evaluating every pinned block for every draw alone.
+- *Fitting untouched:*
+  - *Selected at commit scope:* test-select over the five files, per test project from disk, selects Regression 252 of 347 classes and Oracle 13 of 40. No other project holds the files in its closure.
+  - *Regression at commit scope (with the pinned tier):* 2,756 of 2,756.
+  - *Oracle at commit scope:* 57 of 57.
+  - *The whole assembly:* Regression 3,672 of 3,672, in 19 minutes at below-normal priority.
+  - *After `HEAD` moved:* E8's `7cca408` (decision 7, calling this route) landed during the runs, so the commit went onto `8236e0f`. On a snapshot of it, the classes this slice touched passed 77 of 77, with E8's `SampledPoincareCheckTests`, `DirectionalHingeTests`, `RidgeColumnTests`, `BassSensitivityEffectTests` and `PickFreezeTests` among them.
+
+**Decisions taken beyond the brief.**
+- *The base rows are A and B,* the Sobol route's 2N points from the same seed, so a fit's indices and effects at one seed read the same points.
+- *The evaluation budget.* The exact route's cell budget bounds the values held; the sampled route's cost is set by the rows and terms behind each cell, so a second budget bounds it.
+- *The request shared by both routes,* rather than copied.
+- *The gates' cuts* by Bonferroni and by the pooled spread's degrees of freedom, as above.
+
+**Unbuilt.**
+- *Basis fits, functional forms and several outputs:* slice 3.
+- *Reusing a separable posterior's term columns across all its draws* within the store budget. Today a batch of draws shares them, and the batch is sized by the stored blocks. Worth building only if separable fits are read on the sampled route for more than a check: `Auto` reads them exactly.
+
+**Follow-ups.**
+- *A smaller default grid on the sampled route.* The default (100 points, all pairs the terms hold) evaluates about 10⁹ term values per batch on a three-input fit, a minute or more. Decision: whether `EffectSpec` takes a route-dependent default (say 25 points), or the budget's refusal suffices. Either keeps the exact route's default.
+- *Reusing the stacked cases across batches* would remove most of the allocation churn without moving a bit. Decide against the cost row if effects of long posteriors are read often.
+
+**Doc changes owed.**
+- `docs/Maths/Regression/Sensitivity.md`:
+  - decision 5's estimator and its derivation;
+  - the base rows shared with the Sobol route;
+  - the evaluation budget, and the order of evaluation (kept blocks, chunked pairs);
+  - the error rows on effects;
+  - the cost against the exact route.
+- The sensitivity page's testing notes: the gates' Bonferroni cut and the pooled spread's degrees of freedom, as a convention for stochastic gates over many correlated cells.
+
 ### Slice 1 verified from a clean archive (coordinating session, 2026-11-15)
 
 - **Commits:** `5f9cdef` and `c5cea88`, on a snapshot of `07f3c2a`, through `scripts/verify-csharp.ps1` over their ten changed files, in the two projects that select.
