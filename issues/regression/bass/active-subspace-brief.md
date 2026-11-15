@@ -356,6 +356,11 @@ Under "Reports" below, newest first, per slice: what landed by commit; the gates
 - `39fbc4d`: A, the locations.
 - `1a6b3f0`: E34's file, one line, committed by itself.
 - `978c960`: A's tests.
+- *Verified by the main session on 2026-11-15,* from a clean archive of `cf61bf7` with zero skips, over the five commits' files ([receipts](../receipts/verify-e8-s8a-978c960/)):
+  - Maths.Distributions.Tests' Commit selection, 5 of 5;
+  - Maths.Regression.Tests', 2,735 of 2,735;
+  - Maths.Oracle.Tests', 57 of 57.
+  - The two re-pinned slice 6 tests were read: mixtures now carry a constant (B1a), and the empirical marginal, which has none, is the case they pin.
 
 **What was built:**
 - *`IntervalPoincare`* (Distributions) computes 1/λ₁ of the weighted Neumann problem −(ρu′)′ = λρu on [a, b] for any log density.

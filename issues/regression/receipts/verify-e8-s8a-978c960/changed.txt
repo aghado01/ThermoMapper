@@ -1,0 +1,10 @@
+src/maths/distributions/IntervalPoincare.cs
+src/maths/regression/spline/bass/BassFit.cs
+src/maths/regression/spline/bass/sensitivity/ActiveSubspaces.cs
+src/maths/regression/spline/bass/sensitivity/BassActiveSubspace.cs
+src/maths/regression/spline/bass/sensitivity/BassMultiOutputSubspaces.cs
+tests/distributions/IntervalPoincareTests.cs
+tests/regression/ActiveSubspaceFollowUpTests.cs
+tests/regression/CoActiveOutputLocationsTests.cs
+tests/regression/PoincareConstantsTests.cs
+tests/regression/RankAndOutputSideTests.cs

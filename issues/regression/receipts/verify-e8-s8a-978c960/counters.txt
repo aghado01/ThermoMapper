@@ -1,0 +1,3 @@
+distributions total 5 executed 5 passed 5 failed 0 notExecuted 0
+regression    total 2735 executed 2735 passed 2735 failed 0 notExecuted 0
+oracle        total 57 executed 57 passed 57 failed 0 notExecuted 0
