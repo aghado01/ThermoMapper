@@ -208,6 +208,13 @@ Commissioned by the user on 2026-11-13 ("Yes, commission it"), from the active-s
 
 Drafted at the user's request on 2026-11-13 ("Draft slice 8"), from the five items slices 6 and 7c left unbuilt. Nothing is built until the user commissions it and decides the items marked **Decision**; each decision has a recommendation. The items fall into three slices: two readout items, two comparison items, and one model change.
 
+**Coordination note (2026-11-14).** The BPPR chip's slice 1 (E36, `e70447c`, Regression expansion's) edited three of this brief's files:
+- `sensitivity/ActiveSubspaces.cs`, `BassActiveSubspace.cs` and `BassMultiOutputSubspaces.cs`;
+- `Auto` now takes the exact route only when every term has one-variable factors;
+- the Poincaré checks are null for a fit holding a directional hinge.
+
+Every fit built before it is separable, so its route and values are unchanged. Before slice 8 starts, read `e70447c`'s diff in those files. A change to them that BPPR's later slices need is agreed with Regression expansion first, and so is one of slice 8's in `DesignKernels` or `BassBasis`.
+
 **A. Co-active output functionals at new locations** (slice 6 left them at the training locations).
 - *What exists.* `CoActiveSpec.Output` and `OtherOutput` weight the training output locations. Slice 6 gave `OutputMetric` its `Locations` for a direct fit, whose output-side factors are hinges defined across the output variables' box.
 - *What to build.* Each side's functional over declared locations, for direct functional fits, read as `OutputMetric.Locations` reads them: matched by name, in the variables' units, inside their boxes. A basis fit refuses them, as `OutputMetric` does: its basis exists only at its training locations.
