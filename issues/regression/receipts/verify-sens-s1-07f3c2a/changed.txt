@@ -1,0 +1,10 @@
+src/maths/regression/sensitivity/PickFreeze.cs
+src/maths/regression/spline/bass/presentation/SobolSummary.cs
+src/maths/regression/spline/bass/sensitivity/BassSampledSensitivity.cs
+src/maths/regression/spline/bass/sensitivity/BassSensitivity.cs
+src/maths/regression/spline/bass/sensitivity/SobolDecomposition.cs
+tests/regression/ComparativeSweep.cs
+tests/regression/DirectionalHingeTests.cs
+tests/regression/PickFreezeTests.cs
+tests/regression/RidgeColumnTests.cs
+tests/regression/SampledSensitivityTests.cs

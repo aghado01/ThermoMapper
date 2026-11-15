@@ -83,6 +83,20 @@ Under "Reports" below, newest first, per slice: what landed by commit; the gates
 
 ## Reports
 
+### Slice 1 verified from a clean archive (coordinating session, 2026-11-15)
+
+- **Commits:** `5f9cdef` and `c5cea88`, on a snapshot of `07f3c2a`, through `scripts/verify-csharp.ps1` over their ten changed files, in the two projects that select.
+- **Result:** Regression 2,771 of 2,771 and Oracle 57 of 57 at commit scope. The slice's classes are among them: `SampledSensitivityTests` 18, `PickFreezeTests` 23, and the BPPR chip's `DirectionalHingeTests` 12 and `RidgeColumnTests` 6 with their changed assertions.
+- **Read.**
+  - *The dispatch:* `OfCore` resolves the route and hands a sampled one on; `FromCoefficients` is as the BPPR chip left it.
+  - *`Auto`'s rule* asks the kernels (`DesignKernels.Separable`) over the terms the selected draws hold, and `Exact`'s refusal names the term it meets and no kind of term.
+  - *The two-difference form for a subset:* E[D^B_u D^A_u] = 2^|u|·(−1)^|u|·V_u, each d ⊆ u arising as v Δ w in 2^|u| ways.
+  - *The stated errors' calibration:* the z-scores' pooled spread (0.95 to 1.08) and their share beyond 3 (at most 0.57%) are what about 1,200 cells over 24 seeds give under calibrated errors; the per-cell spreads' range is the noise of a deviation read from 24 replicates.
+- **Its truths are outside the estimator:** the exact route on separable fits, and tensor quadrature on the directional fit, with the quadrature's own error read beside it.
+- **Open with the user:** decision 3's default form. Saltelli's stands until they rule, and both forms are gated.
+- **Passed on:** decision 7's change is in E8's readout. The first coordinating session has recorded it in E8's brief; E8 takes it after its slice 8a, starting from this note.
+- **Receipts:** `artifacts/verify-sens-s1-07f3c2a/`, with the changed list, the counters and the snapshot tracked in [receipts](../receipts/verify-sens-s1-07f3c2a/).
+
 ### Slice 1: Sobol on the sampled route, a scalar fit (2026-11-15)
 
 The coordinating session's note on starting slice 1: build what decision 3's form does not touch. The form of a main variance is with the user, so it stays a choice made in one place, `PickFreezeDesign`, and slice 1's gates read both forms. Until the user rules, the default is Saltelli's centred form, the brief's approved decision 3.
