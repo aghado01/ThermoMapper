@@ -2,6 +2,7 @@ import Mathlib.Algebra.BigOperators.Field
 import Mathlib.Algebra.BigOperators.Ring.Finset
 import Mathlib.Algebra.Order.BigOperators.Group.Finset
 import Mathlib.Algebra.Order.BigOperators.Ring.Finset
+import Mathlib.Analysis.SpecialFunctions.ImproperIntegrals
 import Mathlib.Analysis.SpecialFunctions.Log.Basic
 import Mathlib.Data.Finset.Card
 import Mathlib.Data.Finset.Max
@@ -11,7 +12,10 @@ import Mathlib.Data.Prod.Lex
 import Mathlib.Data.Real.Basic
 import Mathlib.GroupTheory.Perm.Fin
 import Mathlib.MeasureTheory.Constructions.Pi
+import Mathlib.MeasureTheory.Group.Convolution
+import Mathlib.MeasureTheory.Group.LIntegral
 import Mathlib.MeasureTheory.Integral.Lebesgue.Markov
+import Mathlib.MeasureTheory.Measure.Lebesgue.Basic
 import Mathlib.Order.Interval.Set.OrdConnected
 import Mathlib.Tactic.FieldSimp
 import Mathlib.Tactic.Linarith
@@ -8102,8 +8106,9 @@ omit [Fintype ι] [DecidableEq ι] in
 /-- **The `β`-bound's calibration at one calibration unit** (Gaffke's bound, which is Snell and
 Griffiths's `b*_β`). With one loss `ℓ` their posterior is `L⁺ = ℓ + U (B − ℓ)`, `U` uniform, so
 `b*_β = ℓ + β (B − ℓ)`. For a loss law on finitely many values at most `B`, the bound is at least
-the mean loss `J` with chance at least `β`. Every number of units is Vlassis and Thomas's Theorem 1
-(arXiv 2607.08415) with `X_i = (B − ℓ_i)/(B − J)`: `P(L⁺ ≤ J) = 1 − K(X)` for their `K`. -/
+the mean loss `J` with chance at least `β`. Every number of units is `gaffke_calibration`
+(Vlassis and Thomas's Theorem 1, arXiv 2607.08415), through `P(L⁺ ≤ J) = 1 − K(X)` with
+`X_i = (B − ℓ_i)/(B − J)`. -/
 theorem gaffke_one {κ : Type*} [Fintype κ] (p v : κ → ℝ) (hp : ∀ k, 0 ≤ p k)
     (hp1 : ∑ k, p k = 1) {B β : ℝ} (hv : ∀ k, v k ≤ B) (hβ : β ≤ 1) :
     β ≤ ∑ k, p k * if (∑ k', p k' * v k') ≤ v k + β * (B - v k) then 1 else 0 := by
@@ -8157,13 +8162,1919 @@ theorem gaffke_one {κ : Type*} [Fintype κ] (p v : κ → ℝ) (hp : ∀ k, 0 �
 Griffiths's `λ^β_hpd` controlling the risk). With the bound `b` nonincreasing in the threshold,
 `l` chosen with `b l ≤ α`, and `l₀` the last threshold whose risk `J` exceeds `α`: risk above `α`
 at `l` puts the bound below the risk at `l₀`, an event of chance at most `1 − β` by the fixed
-threshold's calibration. -/
+threshold's calibration (`gaffke_miss_le`); `highProbability_risk` puts the two together. -/
 theorem fail_le_fixed {Λ : Type*} [Preorder Λ] {J b : Λ → ℝ} (hb : Antitone b) {α : ℝ}
     {l l₀ : Λ} (hl : b l ≤ α) (hJ₀ : α < J l₀) (hl₀ : ∀ l', α < J l' → l' ≤ l₀)
     (hfail : α < J l) : b l₀ < J l₀ :=
   lt_of_le_of_lt ((hb (hl₀ l hfail)).trans hl) hJ₀
 
 end LossPosterior
+
+/-! ### Slice 18's follow-up: the calibration at `n` units
+
+Vlassis and Thomas, arXiv 2607.08415, prove Gaffke's conjecture: independent nonnegative `X_i`
+with means at most `1` have `P(K(X) ≤ α) ≤ α`, `K(x) = P(∑ x_i D_i ≤ 1)` with `D ~ Dir(1, …, 1)`
+over the `x_i` and an added zero. With `X_i = (B − ℓ_i)/(B − J)` it is the `β`-bound's calibration
+at every number of units, and with `fail_le_fixed` it is what `RiskControl.HighProbability`
+reports.
+
+Laws on the line built by convolution carry the exponentials: `sumLaw m` is the law of
+`∑_{r ∈ m} r E_r`, and `stat m = P(∑ r E_r ≥ 0)`. The race identity (`stat_race`) is the one
+analytic computation. The same-sign and flux identities follow from it by algebra. The
+likelihood-ratio inequality of their exponential transfer lemma (`lrAbove_edge`) follows by adding
+one exponential at a time, memorylessness splitting each integral (`smooth_ordered`), so no
+log-concavity theorem is needed. The chain-measure induction is `local_insertion`,
+`chain_dominates` and `twoPoint_valid`. The reduction to finite laws is `twoPoint_mixture`,
+`sum_prod_twoPoint` and `gaffkeK_valid`. The calibration is `gaffke_miss_le`, `gaffke_calibration`
+and `highProbability_risk`. -/
+
+section VlassisThomas
+
+open MeasureTheory Set Real Filter
+open scoped ENNReal
+
+/-- The unit exponential's density. -/
+noncomputable def unitExpDensity (s : ℝ) : ℝ≥0∞ := ENNReal.ofReal (if 0 ≤ s then exp (-s) else 0)
+
+theorem measurable_unitExpDensity : Measurable unitExpDensity :=
+  ENNReal.measurable_ofReal.comp
+    (Measurable.ite (measurableSet_Ici : MeasurableSet (Set.Ici (0 : ℝ))) (by fun_prop)
+      measurable_const)
+
+/-- The unit exponential law, written by its density. -/
+noncomputable def unitExp : Measure ℝ := volume.withDensity unitExpDensity
+
+theorem lintegral_unitExp {f : ℝ → ℝ≥0∞} (hf : Measurable f) :
+    ∫⁻ s, f s ∂unitExp = ∫⁻ s, unitExpDensity s * f s := by
+  rw [unitExp, lintegral_withDensity_eq_lintegral_mul _ measurable_unitExpDensity hf]
+  rfl
+
+theorem ae_unitExp_nonneg : ∀ᵐ s ∂unitExp, 0 ≤ s := by
+  rw [unitExp, ae_withDensity_iff measurable_unitExpDensity]
+  refine Eventually.of_forall fun s hs => ?_
+  by_contra h
+  simp [unitExpDensity, h] at hs
+
+/-- The unit exponential's Laplace transform. -/
+theorem lintegral_unitExp_exp {l : ℝ} (hl : 0 ≤ l) :
+    ∫⁻ s, ENNReal.ofReal (exp (-(l * s))) ∂unitExp = ENNReal.ofReal (1 / (1 + l)) := by
+  have hm : Measurable fun s : ℝ => ENNReal.ofReal (exp (-(l * s))) := by fun_prop
+  rw [lintegral_unitExp hm]
+  have h1 : ∀ s, unitExpDensity s * ENNReal.ofReal (exp (-(l * s))) =
+      (Set.Ioi 0).indicator (fun s => ENNReal.ofReal (exp ((-(1 + l)) * s))) s +
+        ({0} : Set ℝ).indicator (fun _ => 1) s := by
+    intro s
+    rcases lt_trichotomy s 0 with hs | rfl | hs
+    · simp [unitExpDensity, hs.not_ge, hs.ne,
+        Set.indicator_of_notMem (show s ∉ Set.Ioi (0 : ℝ) from fun h => by simp at h; linarith)]
+    · simp [unitExpDensity]
+    · rw [Set.indicator_of_mem (show s ∈ Set.Ioi (0 : ℝ) from hs),
+        Set.indicator_of_notMem (show s ∉ ({0} : Set ℝ) from fun h => by simp at h; linarith)]
+      simp only [unitExpDensity, if_pos hs.le, add_zero]
+      rw [← ENNReal.ofReal_mul (exp_pos _).le, ← exp_add]
+      congr 2
+      ring
+  simp_rw [h1]
+  have hmeas :
+      Measurable ((Set.Ioi (0 : ℝ)).indicator fun s => ENNReal.ofReal (exp ((-(1 + l)) * s))) :=
+    (by fun_prop : Measurable fun s : ℝ => ENNReal.ofReal (exp ((-(1 + l)) * s))).indicator
+      measurableSet_Ioi
+  rw [lintegral_add_left hmeas,
+    lintegral_indicator measurableSet_Ioi, lintegral_indicator_const (measurableSet_singleton 0),
+    Real.volume_singleton, mul_zero, add_zero,
+    ← ofReal_integral_eq_lintegral_ofReal (integrableOn_exp_mul_Ioi (by linarith) 0)
+      (Eventually.of_forall fun s => (exp_pos _).le),
+    integral_exp_mul_Ioi (by linarith) 0]
+  congr 1
+  simp only [mul_zero, exp_zero]
+  field_simp
+
+instance : IsProbabilityMeasure unitExp := by
+  refine ⟨?_⟩
+  have h := lintegral_unitExp_exp (l := 0) le_rfl
+  simp only [zero_mul, neg_zero, exp_zero, ENNReal.ofReal_one, add_zero, div_one] at h
+  rw [← lintegral_one]
+  exact h
+
+/-- **Memorylessness.** Past `δ ≥ 0`, the unit exponential is `δ` plus a fresh one, with chance
+`e^{−δ}`. -/
+theorem lintegral_unitExp_Ici {f : ℝ → ℝ≥0∞} (hf : Measurable f) {δ : ℝ} (hδ : 0 ≤ δ) :
+    ∫⁻ s, (Set.Ici δ).indicator f s ∂unitExp =
+      ENNReal.ofReal (exp (-δ)) * ∫⁻ s, f (s + δ) ∂unitExp := by
+  have hfδ : Measurable fun s => f (s + δ) := hf.comp (measurable_add_const δ)
+  rw [lintegral_unitExp (hf.indicator measurableSet_Ici), lintegral_unitExp hfδ,
+    ← lintegral_const_mul' _ _ ENNReal.ofReal_ne_top,
+    ← lintegral_add_right_eq_self (fun s => unitExpDensity s * (Set.Ici δ).indicator f s) δ]
+  refine lintegral_congr fun s => ?_
+  by_cases hs : 0 ≤ s
+  · have h1 : s + δ ∈ Set.Ici δ := by simp [hs]
+    rw [Set.indicator_of_mem h1]
+    simp only [unitExpDensity, if_pos hs, if_pos (add_nonneg hs hδ)]
+    rw [← mul_assoc, ← ENNReal.ofReal_mul (exp_pos _).le, ← exp_add]
+    congr 3
+    ring
+  · have h1 : s + δ ∉ Set.Ici δ := by simp only [Set.mem_Ici]; linarith
+    rw [Set.indicator_of_notMem h1]
+    simp [unitExpDensity, hs]
+
+theorem unitExp_Ici {δ : ℝ} (hδ : 0 ≤ δ) : unitExp (Set.Ici δ) = ENNReal.ofReal (exp (-δ)) := by
+  have h := lintegral_unitExp_Ici (f := fun _ => (1 : ℝ≥0∞)) measurable_const hδ
+  rw [lintegral_indicator_const measurableSet_Ici, one_mul] at h
+  simpa using h
+
+theorem unitExp_Ici_of_nonpos {δ : ℝ} (hδ : δ ≤ 0) : unitExp (Set.Ici δ) = 1 := by
+  refine le_antisymm prob_le_one ?_
+  calc (1 : ℝ≥0∞) = unitExp (Set.Ici 0) := by rw [unitExp_Ici le_rfl]; simp
+    _ ≤ unitExp (Set.Ici δ) := measure_mono (Set.Ici_subset_Ici.2 hδ)
+
+theorem unitExp_Iio_add {δ : ℝ} (hδ : 0 ≤ δ) :
+    unitExp (Set.Iio δ) + ENNReal.ofReal (exp (-δ)) = 1 := by
+  rw [← unitExp_Ici hδ, ← Set.compl_Ici, measure_compl measurableSet_Ici (measure_ne_top _ _),
+    measure_univ]
+  exact tsub_add_cancel_of_le prob_le_one
+
+theorem unitExp_Iio_of_nonpos {δ : ℝ} (hδ : δ ≤ 0) : unitExp (Set.Iio δ) = 0 := by
+  rw [← Set.compl_Ici, prob_compl_eq_one_sub measurableSet_Ici, unitExp_Ici_of_nonpos hδ, tsub_self]
+
+theorem unitExp_singleton (x : ℝ) : unitExp {x} = 0 := by
+  rw [unitExp]
+  exact measure_singleton x
+
+/-- The law of `r E`, `E` a unit exponential. -/
+noncomputable def expLaw (r : ℝ) : Measure ℝ := unitExp.map (fun s => r * s)
+
+instance (r : ℝ) : IsProbabilityMeasure (expLaw r) :=
+  Measure.isProbabilityMeasure_map (measurable_const_mul r).aemeasurable
+
+theorem lintegral_expLaw (r : ℝ) {f : ℝ → ℝ≥0∞} (hf : Measurable f) :
+    ∫⁻ x, f x ∂(expLaw r) = ∫⁻ s, f (r * s) ∂unitExp :=
+  lintegral_map hf (measurable_const_mul r)
+
+theorem expLaw_apply (r : ℝ) {S : Set ℝ} (hS : MeasurableSet S) :
+    expLaw r S = unitExp ((fun s => r * s) ⁻¹' S) :=
+  Measure.map_apply (measurable_const_mul r) hS
+
+theorem conv_Ici (μ ν : Measure ℝ) [SFinite ν] (y : ℝ) :
+    (μ ∗ ν) (Set.Ici y) = ∫⁻ x, ν (Set.Ici (y - x)) ∂μ := by
+  rw [← lintegral_indicator_one measurableSet_Ici,
+    Measure.lintegral_conv (measurable_one.indicator measurableSet_Ici)]
+  refine lintegral_congr fun x => ?_
+  rw [← lintegral_indicator_one measurableSet_Ici]
+  refine lintegral_congr fun z => ?_
+  simp only [Set.indicator_apply, Set.mem_Ici, Pi.one_apply]
+  by_cases h : y ≤ x + z
+  · rw [if_pos h, if_pos (by linarith)]
+  · rw [if_neg h, if_neg (by intro h'; exact h (by linarith))]
+
+/-- The tail of `a E`, `a > 0`. -/
+theorem expLaw_Ici_of_pos {a : ℝ} (ha : 0 < a) {z : ℝ} (hz : 0 ≤ z) :
+    expLaw a (Set.Ici z) = ENNReal.ofReal (exp (-(z / a))) := by
+  rw [expLaw_apply a measurableSet_Ici,
+    show (fun s => a * s) ⁻¹' Set.Ici z = Set.Ici (z / a) by
+      ext s; simp [div_le_iff₀ ha, mul_comm]]
+  exact unitExp_Ici (div_nonneg hz ha.le)
+
+theorem expLaw_Ici_of_pos_of_nonpos {a : ℝ} (ha : 0 < a) {z : ℝ} (hz : z ≤ 0) :
+    expLaw a (Set.Ici z) = 1 := by
+  rw [expLaw_apply a measurableSet_Ici,
+    show (fun s => a * s) ⁻¹' Set.Ici z = Set.Ici (z / a) by
+      ext s; simp [div_le_iff₀ ha, mul_comm]]
+  exact unitExp_Ici_of_nonpos (div_nonpos_of_nonpos_of_nonneg hz ha.le)
+
+/-- The tail of `−b E`, `b > 0`. -/
+theorem expLaw_neg_Ici_add {b : ℝ} (hb : 0 < b) {z : ℝ} (hz : z ≤ 0) :
+    expLaw (-b) (Set.Ici z) + ENNReal.ofReal (exp (z / b)) = 1 := by
+  have hpre : (fun s => -b * s) ⁻¹' Set.Ici z = Set.Iic (-z / b) := by
+    ext s
+    simp only [Set.mem_preimage, Set.mem_Ici, Set.mem_Iic, le_div_iff₀ hb]
+    constructor <;> intro h <;> linarith
+  rw [expLaw_apply _ measurableSet_Ici, hpre, ← Set.Iio_union_right,
+    measure_union (by simp) (measurableSet_singleton _), unitExp_singleton, add_zero,
+    show z / b = -(-z / b) by ring]
+  exact unitExp_Iio_add (div_nonneg (neg_nonneg.2 hz) hb.le)
+
+theorem expLaw_neg_Ici_of_nonneg {b : ℝ} (hb : 0 < b) {z : ℝ} (hz : 0 ≤ z) :
+    expLaw (-b) (Set.Ici z) = 0 := by
+  have hpre : (fun s => -b * s) ⁻¹' Set.Ici z ⊆ Set.Iio 0 ∪ {0} := by
+    intro s hs
+    simp only [Set.mem_preimage, Set.mem_Ici] at hs
+    rcases lt_or_ge s 0 with h | h
+    · exact Or.inl h
+    · exact Or.inr (by simp only [Set.mem_singleton_iff]; nlinarith)
+  rw [expLaw_apply _ measurableSet_Ici]
+  exact measure_mono_null hpre (measure_union_null (unitExp_Iio_of_nonpos le_rfl)
+    (unitExp_singleton 0))
+
+theorem expLaw_zero : expLaw 0 = Measure.dirac 0 := by
+  rw [expLaw, show (fun s : ℝ => 0 * s) = fun _ => 0 from funext fun s => zero_mul s,
+    Measure.map_const, measure_univ, one_smul]
+
+theorem expLaw_Ici_mono {r r' : ℝ} (h : r ≤ r') (z : ℝ) :
+    expLaw r (Set.Ici z) ≤ expLaw r' (Set.Ici z) := by
+  rw [expLaw_apply r measurableSet_Ici, expLaw_apply r' measurableSet_Ici]
+  refine measure_mono_ae (ae_unitExp_nonneg.mono fun s hs hz => ?_)
+  change z ≤ r * s at hz
+  change z ≤ r' * s
+  have := mul_le_mul_of_nonneg_right h hs
+  linarith
+
+theorem expLaw_singleton {r : ℝ} (hr : r ≠ 0) (z : ℝ) : expLaw r {z} = 0 := by
+  rw [expLaw_apply r (measurableSet_singleton z)]
+  refine measure_mono_null (fun s hs => ?_) (unitExp_singleton (z / r))
+  simp only [Set.mem_preimage, Set.mem_singleton_iff] at hs ⊢
+  rw [← hs]
+  field_simp
+
+/-- **The race of `a E` and `b E'`.** `aE − bE'` is `aE''` with chance `a/(a + b)` and `−bE''`
+otherwise; on the half-lines `[y, ∞)`, scaled by `a + b`. -/
+theorem race_Ici {a b : ℝ} (ha : 0 < a) (hb : 0 < b) (y : ℝ) :
+    ENNReal.ofReal (a + b) * (expLaw (-b) ∗ expLaw a) (Set.Ici y) =
+      ENNReal.ofReal a * expLaw a (Set.Ici y) + ENNReal.ofReal b * expLaw (-b) (Set.Ici y) := by
+  have hmono : Monotone fun u => expLaw a (Set.Ici (y - u)) :=
+    fun u v huv => measure_mono (Set.Ici_subset_Ici.2 (by linarith))
+  rw [conv_Ici, lintegral_expLaw _ hmono.measurable]
+  have hlap := lintegral_unitExp_exp (div_nonneg hb.le ha.le)
+  have hfrac : ENNReal.ofReal (a + b) * ENNReal.ofReal (1 / (1 + b / a)) = ENNReal.ofReal a := by
+    rw [← ENNReal.ofReal_mul (by positivity)]
+    congr 1
+    field_simp
+  rcases le_or_gt 0 y with hy | hy
+  · have hpt : ∀ᵐ t ∂unitExp, expLaw a (Set.Ici (y - -b * t)) =
+        ENNReal.ofReal (exp (-(y / a))) * ENNReal.ofReal (exp (-(b / a * t))) :=
+      ae_unitExp_nonneg.mono fun t ht => by
+        rw [expLaw_Ici_of_pos ha (by nlinarith), ← ENNReal.ofReal_mul (exp_pos _).le, ← exp_add]
+        congr 2
+        field_simp
+        ring
+    rw [lintegral_congr_ae hpt, lintegral_const_mul' _ _ ENNReal.ofReal_ne_top, hlap,
+      expLaw_neg_Ici_of_nonneg hb hy, mul_zero, add_zero, expLaw_Ici_of_pos ha hy, mul_comm,
+      mul_assoc, mul_comm (ENNReal.ofReal (1 / (1 + b / a))), hfrac, mul_comm]
+  · set δ := -y / b with hδ
+    have hδ0 : 0 < δ := div_pos (neg_pos.2 hy) hb
+    have hsplit : (fun t => expLaw a (Set.Ici (y - -b * t))) = fun t =>
+        (Set.Iio δ).indicator (fun _ => (1 : ℝ≥0∞)) t +
+          (Set.Ici δ).indicator (fun t => ENNReal.ofReal (exp (-((y + b * t) / a)))) t := by
+      funext t
+      rcases lt_or_ge t δ with ht | ht
+      · rw [Set.indicator_of_mem (show t ∈ Set.Iio δ from ht),
+          Set.indicator_of_notMem (show t ∉ Set.Ici δ from fun h => (not_le.2 ht) h), add_zero]
+        refine expLaw_Ici_of_pos_of_nonpos ha ?_
+        have : b * t < -y := by rw [hδ, lt_div_iff₀ hb] at ht; linarith
+        linarith
+      · rw [Set.indicator_of_notMem (show t ∉ Set.Iio δ from not_lt.2 ht), Set.indicator_of_mem
+          (show t ∈ Set.Ici δ from ht), zero_add, expLaw_Ici_of_pos ha]
+        · congr 3; ring
+        · have : -y ≤ b * t := by rw [hδ, div_le_iff₀ hb] at ht; linarith
+          linarith
+    have hm2 : Measurable fun t : ℝ => ENNReal.ofReal (exp (-((y + b * t) / a))) := by fun_prop
+    rw [hsplit, lintegral_add_left (measurable_const.indicator measurableSet_Iio),
+      lintegral_indicator_const measurableSet_Iio, one_mul,
+      lintegral_unitExp_Ici hm2 hδ0.le]
+    have hshift : (fun t => ENNReal.ofReal (exp (-((y + b * (t + δ)) / a)))) =
+        fun t => ENNReal.ofReal (exp (-(b / a * t))) := by
+      funext t
+      congr 3
+      rw [hδ]
+      field_simp
+      ring
+    rw [hshift, hlap]
+    have hE : ENNReal.ofReal (exp (-δ)) = ENNReal.ofReal (exp (y / b)) := by
+      rw [hδ]; congr 2; ring
+    have hP := unitExp_Iio_add hδ0.le
+    have hQ := expLaw_neg_Ici_add hb hy.le
+    rw [← hE] at hQ
+    have hPQ : unitExp (Set.Iio δ) = expLaw (-b) (Set.Ici y) :=
+      (ENNReal.add_left_inj ENNReal.ofReal_ne_top).1 (hP.trans hQ.symm)
+    rw [expLaw_Ici_of_pos_of_nonpos ha hy.le, ← hPQ]
+    calc ENNReal.ofReal (a + b) *
+          (unitExp (Set.Iio δ) + ENNReal.ofReal (exp (-δ)) * ENNReal.ofReal (1 / (1 + b / a)))
+        = (ENNReal.ofReal a + ENNReal.ofReal b) * unitExp (Set.Iio δ) + ENNReal.ofReal (exp (-δ)) *
+            (ENNReal.ofReal (a + b) * ENNReal.ofReal (1 / (1 + b / a))) := by
+          rw [ENNReal.ofReal_add ha.le hb.le]; ring
+      _ = ENNReal.ofReal a * (unitExp (Set.Iio δ) + ENNReal.ofReal (exp (-δ))) +
+            ENNReal.ofReal b * unitExp (Set.Iio δ) := by rw [hfrac]; ring
+      _ = _ := by rw [hP, mul_one]
+
+/-- The adding of an independent `r E`. -/
+noncomputable def addExp (r : ℝ) (μ : Measure ℝ) : Measure ℝ := μ ∗ expLaw r
+
+instance : LeftCommutative addExp :=
+  ⟨fun a b μ => by
+    simp only [addExp]
+    rw [Measure.conv_assoc, Measure.conv_assoc, Measure.conv_comm (expLaw b)]⟩
+
+/-- The law of `∑_{r ∈ m} r E_r`, the `E_r` independent unit exponentials. -/
+noncomputable def sumLaw (m : Multiset ℝ) : Measure ℝ := Multiset.foldr addExp (Measure.dirac 0) m
+
+theorem sumLaw_zero : sumLaw 0 = Measure.dirac 0 := Multiset.foldr_zero _ _
+
+theorem sumLaw_cons (r : ℝ) (m : Multiset ℝ) : sumLaw (r ::ₘ m) = sumLaw m ∗ expLaw r :=
+  Multiset.foldr_cons _ _ _ _
+
+instance (m : Multiset ℝ) : IsProbabilityMeasure (sumLaw m) := by
+  induction m using Multiset.induction_on with
+  | empty => rw [sumLaw_zero]; infer_instance
+  | cons r m ih => rw [sumLaw_cons]; infer_instance
+
+/-- `P(∑_{r ∈ m} r E_r ≥ 0)`. -/
+noncomputable def stat (m : Multiset ℝ) : ℝ := (sumLaw m).real (Set.Ici 0)
+
+theorem stat_le_one (m : Multiset ℝ) : stat m ≤ 1 := measureReal_le_one
+
+theorem stat_nonneg (m : Multiset ℝ) : 0 ≤ stat m := measureReal_nonneg
+
+theorem sumLaw_cons_Ici (r : ℝ) (m : Multiset ℝ) :
+    sumLaw (r ::ₘ m) (Set.Ici 0) = ∫⁻ x, expLaw r (Set.Ici (-x)) ∂(sumLaw m) := by
+  rw [sumLaw_cons, conv_Ici]
+  simp
+
+theorem sumLaw_cons_cons_Ici (r r' : ℝ) (m : Multiset ℝ) :
+    sumLaw (r ::ₘ r' ::ₘ m) (Set.Ici 0) =
+      ∫⁻ x, (expLaw r' ∗ expLaw r) (Set.Ici (-x)) ∂(sumLaw m) := by
+  rw [sumLaw_cons, sumLaw_cons, Measure.conv_assoc, conv_Ici]
+  simp
+
+theorem measurable_expLaw_Ici_neg (r : ℝ) : Measurable fun x => expLaw r (Set.Ici (-x)) :=
+  (show Monotone fun x => expLaw r (Set.Ici (-x)) from
+    fun _ _ huv => measure_mono (Set.Ici_subset_Ici.2 (neg_le_neg huv))).measurable
+
+/-- **The race identity** (`(a + b) P(aE − bE' + Y ≥ 0) = a P(aE + Y ≥ 0) + b P(Y − bE ≥ 0)`),
+the one analytic computation the induction needs. -/
+theorem stat_race {a b : ℝ} (ha : 0 < a) (hb : 0 < b) (Y : Multiset ℝ) :
+    (a + b) * stat (a ::ₘ (-b) ::ₘ Y) = a * stat (a ::ₘ Y) + b * stat ((-b) ::ₘ Y) := by
+  have h : ENNReal.ofReal (a + b) * sumLaw (a ::ₘ (-b) ::ₘ Y) (Set.Ici 0) =
+      ENNReal.ofReal a * sumLaw (a ::ₘ Y) (Set.Ici 0) +
+        ENNReal.ofReal b * sumLaw ((-b) ::ₘ Y) (Set.Ici 0) := by
+    rw [sumLaw_cons_cons_Ici, sumLaw_cons_Ici, sumLaw_cons_Ici,
+      ← lintegral_const_mul' _ _ ENNReal.ofReal_ne_top,
+      ← lintegral_const_mul' _ _ ENNReal.ofReal_ne_top,
+      ← lintegral_const_mul' _ _ ENNReal.ofReal_ne_top,
+      ← lintegral_add_left ((measurable_expLaw_Ici_neg a).const_mul _)]
+    exact lintegral_congr fun x => race_Ici ha hb (-x)
+  have h2 := congrArg ENNReal.toReal h
+  rw [ENNReal.toReal_mul, ENNReal.toReal_add (ENNReal.mul_ne_top ENNReal.ofReal_ne_top
+      (measure_ne_top _ _)) (ENNReal.mul_ne_top ENNReal.ofReal_ne_top (measure_ne_top _ _)),
+    ENNReal.toReal_mul, ENNReal.toReal_mul, ENNReal.toReal_ofReal (by positivity),
+    ENNReal.toReal_ofReal ha.le, ENNReal.toReal_ofReal hb.le] at h2
+  exact h2
+
+/-- Two positive coefficients (from the race identity, with an auxiliary `−E`). -/
+theorem stat_same_pos {a b : ℝ} (ha : 0 < a) (hb : 0 < b) (Y : Multiset ℝ) :
+    (a - b) * stat (a ::ₘ b ::ₘ Y) = a * stat (a ::ₘ Y) - b * stat (b ::ₘ Y) := by
+  have e1 := stat_race ha one_pos (b ::ₘ Y)
+  have e2 := stat_race hb one_pos (a ::ₘ Y)
+  have e3 := stat_race ha one_pos Y
+  have e4 := stat_race hb one_pos Y
+  rw [Multiset.cons_swap (-1 : ℝ) b] at e1
+  rw [Multiset.cons_swap (-1 : ℝ) a, Multiset.cons_swap b a, Multiset.cons_swap b a Y] at e2
+  linear_combination (-(b + 1)) * e1 + (a + 1) * e2 + e3 - e4
+
+/-- Two negative coefficients (from the race identity, with an auxiliary `E`). -/
+theorem stat_same_neg {a b : ℝ} (ha : 0 < a) (hb : 0 < b) (Y : Multiset ℝ) :
+    (a - b) * stat ((-a) ::ₘ (-b) ::ₘ Y) = a * stat ((-a) ::ₘ Y) - b * stat ((-b) ::ₘ Y) := by
+  have e1 := stat_race one_pos ha ((-b) ::ₘ Y)
+  have e2 := stat_race one_pos hb ((-a) ::ₘ Y)
+  have e3 := stat_race one_pos ha Y
+  have e4 := stat_race one_pos hb Y
+  rw [Multiset.cons_swap (-b) (-a)] at e2
+  linear_combination (-(1 + b)) * e1 + (1 + a) * e2 + e3 - e4
+
+theorem stat_cons_le {r r' : ℝ} (h : r ≤ r') (m : Multiset ℝ) :
+    stat (r ::ₘ m) ≤ stat (r' ::ₘ m) := by
+  unfold stat
+  rw [measureReal_def, measureReal_def]
+  refine ENNReal.toReal_mono (measure_ne_top _ _) ?_
+  rw [sumLaw_cons_Ici, sumLaw_cons_Ici]
+  exact lintegral_mono fun x => expLaw_Ici_mono h (-x)
+
+/-- `stat` rises with every coefficient. -/
+theorem stat_map_mono {α : Type*} (base : Multiset ℝ) (m : Multiset α) {f g : α → ℝ}
+    (hfg : ∀ x ∈ m, f x ≤ g x) : stat (base + m.map f) ≤ stat (base + m.map g) := by
+  induction m using Multiset.induction_on generalizing base with
+  | empty => simp
+  | cons x m ih =>
+    simp only [Multiset.map_cons, Multiset.add_cons]
+    calc stat (f x ::ₘ (base + m.map f)) ≤ stat (g x ::ₘ (base + m.map f)) :=
+          stat_cons_le (hfg x (Multiset.mem_cons_self _ _)) _
+      _ = stat ((g x ::ₘ base) + m.map f) := by rw [Multiset.cons_add]
+      _ ≤ stat ((g x ::ₘ base) + m.map g) := ih _ fun y hy => hfg y (Multiset.mem_cons_of_mem hy)
+      _ = stat (g x ::ₘ (base + m.map g)) := by rw [Multiset.cons_add]
+
+theorem stat_cons_zero (m : Multiset ℝ) : stat (0 ::ₘ m) = stat m := by
+  unfold stat
+  rw [sumLaw_cons, expLaw_zero, Measure.conv_dirac_zero]
+
+theorem stat_add_zeros {α : Type*} (base : Multiset ℝ) (m : Multiset α) :
+    stat (base + m.map fun _ => (0 : ℝ)) = stat base := by
+  induction m using Multiset.induction_on with
+  | empty => simp
+  | cons x m ih => rw [Multiset.map_cons, Multiset.add_cons, stat_cons_zero, ih]
+
+theorem stat_zero : stat 0 = 1 := by
+  rw [stat, sumLaw_zero, measureReal_def, Measure.dirac_apply_of_mem (Set.mem_Ici.2 le_rfl),
+    ENNReal.toReal_one]
+
+/-- Nonnegative coefficients: the sum is nonnegative surely. -/
+theorem stat_eq_one_of_nonneg {m : Multiset ℝ} (hm : ∀ r ∈ m, 0 ≤ r) : stat m = 1 := by
+  refine le_antisymm (stat_le_one m) ?_
+  have h := stat_map_mono 0 m (f := fun _ => (0 : ℝ)) (g := id) hm
+  rwa [stat_add_zeros, stat_zero, zero_add, Multiset.map_id] at h
+
+/-- A negative coefficient and no positive one: the sum is negative surely. -/
+theorem stat_eq_zero_of_nonpos {r : ℝ} (hr : r < 0) {m : Multiset ℝ} (hm : ∀ x ∈ m, x ≤ 0) :
+    stat (r ::ₘ m) = 0 := by
+  refine le_antisymm ?_ (stat_nonneg _)
+  have h := stat_map_mono {r} m (f := id) (g := fun _ => (0 : ℝ)) hm
+  rw [Multiset.map_id, stat_add_zeros, Multiset.singleton_add] at h
+  refine h.trans (le_of_eq ?_)
+  have hb : 0 < -r := neg_pos.2 hr
+  unfold stat
+  rw [← Multiset.cons_zero, sumLaw_cons, sumLaw_zero, Measure.dirac_zero_conv, measureReal_def,
+    show r = -(-r) by ring, expLaw_neg_Ici_of_nonneg hb le_rfl, ENNReal.toReal_zero]
+
+/-- The window above zero: `e^{−x/d}` on `x ≥ 0`. -/
+noncomputable def winHi (d x : ℝ) : ℝ≥0∞ :=
+  (Set.Ici 0).indicator (fun x => ENNReal.ofReal (exp (-x / d))) x
+
+/-- The window below zero: `e^{x/c}` on `x < 0`. -/
+noncomputable def winLo (c x : ℝ) : ℝ≥0∞ :=
+  (Set.Iio 0).indicator (fun x => ENNReal.ofReal (exp (x / c))) x
+
+theorem measurable_winHi (d : ℝ) : Measurable (winHi d) :=
+  (by fun_prop : Measurable fun x : ℝ => ENNReal.ofReal (exp (-x / d))).indicator measurableSet_Ici
+
+theorem measurable_winLo (c : ℝ) : Measurable (winLo c) :=
+  (by fun_prop : Measurable fun x : ℝ => ENNReal.ofReal (exp (x / c))).indicator measurableSet_Iio
+
+/-- `A = F − u`: with `X_k` high, the statistic loses the window above zero. -/
+theorem sumLaw_hi_add_winHi {d : ℝ} (hd : 0 < d) (m : Multiset ℝ) :
+    sumLaw ((-d) ::ₘ m) (Set.Ici 0) + ∫⁻ x, winHi d x ∂(sumLaw m) = sumLaw m (Set.Ici 0) := by
+  rw [sumLaw_cons_Ici, ← lintegral_add_left (measurable_expLaw_Ici_neg _),
+    ← lintegral_indicator_one measurableSet_Ici]
+  refine lintegral_congr fun x => ?_
+  rcases le_or_gt 0 x with hx | hx
+  · rw [winHi, Set.indicator_of_mem (show x ∈ Set.Ici 0 from hx),
+      Set.indicator_of_mem (show x ∈ Set.Ici 0 from hx), Pi.one_apply,
+      ← expLaw_neg_Ici_add hd (neg_nonpos.2 hx)]
+  · rw [winHi, Set.indicator_of_notMem (show x ∉ Set.Ici (0 : ℝ) from fun h => (not_le.2 hx) h),
+      Set.indicator_of_notMem (show x ∉ Set.Ici (0 : ℝ) from fun h => (not_le.2 hx) h),
+      expLaw_neg_Ici_of_nonneg hd (by linarith), add_zero]
+
+/-- `B = F + v`: with `X_k` low, the statistic gains the window below zero. -/
+theorem sumLaw_lo_eq {c : ℝ} (hc : 0 < c) (m : Multiset ℝ) :
+    sumLaw (c ::ₘ m) (Set.Ici 0) = sumLaw m (Set.Ici 0) + ∫⁻ x, winLo c x ∂(sumLaw m) := by
+  rw [sumLaw_cons_Ici, ← lintegral_indicator_one measurableSet_Ici,
+    ← lintegral_add_left (measurable_one.indicator measurableSet_Ici)]
+  refine lintegral_congr fun x => ?_
+  rcases le_or_gt 0 x with hx | hx
+  · rw [winLo, Set.indicator_of_mem (show x ∈ Set.Ici 0 from hx), Set.indicator_of_notMem
+      (show x ∉ Set.Iio (0 : ℝ) from not_lt.2 hx), add_zero, Pi.one_apply,
+      expLaw_Ici_of_pos_of_nonpos hc (neg_nonpos.2 hx)]
+  · rw [winLo, Set.indicator_of_notMem (show x ∉ Set.Ici (0 : ℝ) from fun h => (not_le.2 hx) h),
+      Set.indicator_of_mem (show x ∈ Set.Iio (0 : ℝ) from hx), zero_add,
+      expLaw_Ici_of_pos hc (by linarith)]
+    congr 2
+    ring
+
+/-- `μ` above `ν` in the likelihood-ratio order, tested on ordered pairs of nonnegative functions:
+pairs with `ψ₁(t) ψ₂(s) ≤ ψ₁(s) ψ₂(t)` whenever `t ≤ s`. -/
+def LRAbove (μ ν : Measure ℝ) : Prop :=
+  ∀ ψ₁ ψ₂ : ℝ → ℝ≥0∞, Measurable ψ₁ → Measurable ψ₂ →
+    (∀ s t, t ≤ s → ψ₁ t * ψ₂ s ≤ ψ₁ s * ψ₂ t) →
+      (∫⁻ x, ψ₁ x ∂ν) * (∫⁻ x, ψ₂ x ∂μ) ≤ (∫⁻ x, ψ₁ x ∂μ) * (∫⁻ x, ψ₂ x ∂ν)
+
+theorem lintegral_mul_lintegral {μ ν : Measure ℝ} [SFinite ν] {f g : ℝ → ℝ≥0∞} (hf : Measurable f)
+    (hg : Measurable g) : (∫⁻ x, f x ∂μ) * (∫⁻ y, g y ∂ν) = ∫⁻ x, ∫⁻ y, f x * g y ∂ν ∂μ := by
+  rw [← lintegral_mul_const _ hf]
+  exact lintegral_congr fun x => (lintegral_const_mul _ hg).symm
+
+/-- Unit exponential integrals compared through their integrands, for `σ, σ' ≥ 0`. -/
+theorem lintegral_mul_le_unitExp {f g h k : ℝ → ℝ≥0∞} (hf : Measurable f) (hg : Measurable g)
+    (hh : Measurable h) (hk : Measurable k)
+    (hpt : ∀ σ σ', 0 ≤ σ → 0 ≤ σ' → f σ * g σ' ≤ h σ' * k σ) :
+    (∫⁻ σ, f σ ∂unitExp) * (∫⁻ σ', g σ' ∂unitExp) ≤
+      (∫⁻ σ', h σ' ∂unitExp) * (∫⁻ σ, k σ ∂unitExp) := by
+  rw [lintegral_mul_lintegral hf hg, mul_comm, lintegral_mul_lintegral hk hh]
+  refine lintegral_mono_ae (ae_unitExp_nonneg.mono fun σ hσ => ?_)
+  refine lintegral_mono_ae (ae_unitExp_nonneg.mono fun σ' hσ' => ?_)
+  rw [mul_comm (k σ)]
+  exact hpt σ σ' hσ hσ'
+
+/-- **The base.** `a E` lies above `−b E` in the likelihood-ratio order: their supports are
+ordered. -/
+theorem lrAbove_expLaw {a b : ℝ} (ha : 0 ≤ a) (hb : 0 ≤ b) : LRAbove (expLaw a) (expLaw (-b)) := by
+  intro ψ₁ ψ₂ h₁ h₂ htp
+  rw [lintegral_expLaw _ h₁, lintegral_expLaw _ h₂, lintegral_expLaw _ h₁, lintegral_expLaw _ h₂]
+  refine lintegral_mul_le_unitExp (h₁.comp (measurable_const_mul _))
+    (h₂.comp (measurable_const_mul _)) (h₁.comp (measurable_const_mul _))
+    (h₂.comp (measurable_const_mul _)) fun σ σ' hσ hσ' => ?_
+  exact htp _ _ (by nlinarith)
+
+/-- Splitting a unit exponential integral at `δ ≥ 0`, by memorylessness. -/
+theorem lintegral_unitExp_split {ψ : ℝ → ℝ≥0∞} (hψ : Measurable ψ) (x r : ℝ) {δ : ℝ} (hδ : 0 ≤ δ) :
+    ∫⁻ σ, ψ (x + r * σ) ∂unitExp =
+      ∫⁻ σ, (Set.Iio δ).indicator (fun σ => ψ (x + r * σ)) σ ∂unitExp +
+        ENNReal.ofReal (exp (-δ)) * ∫⁻ σ, ψ ((x + r * δ) + r * σ) ∂unitExp := by
+  have hm : Measurable fun σ => ψ (x + r * σ) := hψ.comp (by fun_prop)
+  have hre : (fun σ => ψ ((x + r * δ) + r * σ)) = fun σ => ψ (x + r * (σ + δ)) :=
+    funext fun σ => congrArg ψ (by ring)
+  rw [hre, ← lintegral_unitExp_Ici hm hδ, ← lintegral_add_left (hm.indicator measurableSet_Iio)]
+  refine lintegral_congr fun σ => ?_
+  rcases lt_or_ge σ δ with h | h
+  · rw [Set.indicator_of_mem (show σ ∈ Set.Iio δ from h), Set.indicator_of_notMem
+      (show σ ∉ Set.Ici δ from fun h' => (not_le.2 h) h'), add_zero]
+  · rw [Set.indicator_of_notMem (show σ ∉ Set.Iio δ from not_lt.2 h), Set.indicator_of_mem
+      (show σ ∈ Set.Ici δ from h), zero_add]
+
+/-- **Adding an exponential keeps a pair ordered.** Smoothing an ordered pair `(ψ₁, ψ₂)` by an
+independent `r E` gives an ordered pair: split each integral where the two arguments meet
+(memorylessness), and the cross terms compare pointwise. -/
+theorem smooth_ordered {ψ₁ ψ₂ : ℝ → ℝ≥0∞} (h₁ : Measurable ψ₁) (h₂ : Measurable ψ₂)
+    (htp : ∀ s t, t ≤ s → ψ₁ t * ψ₂ s ≤ ψ₁ s * ψ₂ t) (r : ℝ) (s t : ℝ) (hts : t ≤ s) :
+    (∫⁻ σ, ψ₁ (t + r * σ) ∂unitExp) * (∫⁻ σ, ψ₂ (s + r * σ) ∂unitExp) ≤
+      (∫⁻ σ, ψ₁ (s + r * σ) ∂unitExp) * (∫⁻ σ, ψ₂ (t + r * σ) ∂unitExp) := by
+  have hm₁t : Measurable fun σ => ψ₁ (t + r * σ) := h₁.comp (by fun_prop)
+  have hm₂t : Measurable fun σ => ψ₂ (t + r * σ) := h₂.comp (by fun_prop)
+  have hm₁s : Measurable fun σ => ψ₁ (s + r * σ) := h₁.comp (by fun_prop)
+  have hm₂s : Measurable fun σ => ψ₂ (s + r * σ) := h₂.comp (by fun_prop)
+  rcases lt_trichotomy r 0 with hr | rfl | hr
+  · -- `r < 0`: split the integrals at `s`, which reach `t` after `δ`
+    set δ := (s - t) / (-r) with hδ
+    have hδ0 : 0 ≤ δ := div_nonneg (by linarith) (by linarith)
+    have hsδ : s + r * δ = t := by rw [hδ]; field_simp [hr.ne]; ring
+    have e₁ := lintegral_unitExp_split h₁ s r hδ0
+    have e₂ := lintegral_unitExp_split h₂ s r hδ0
+    rw [hsδ] at e₁ e₂
+    have hcross : (∫⁻ σ, (Set.Iio δ).indicator (fun σ => ψ₂ (s + r * σ)) σ ∂unitExp) *
+        (∫⁻ σ, ψ₁ (t + r * σ) ∂unitExp) ≤
+        (∫⁻ σ, ψ₂ (t + r * σ) ∂unitExp) *
+          (∫⁻ σ, (Set.Iio δ).indicator (fun σ => ψ₁ (s + r * σ)) σ ∂unitExp) := by
+      refine lintegral_mul_le_unitExp (hm₂s.indicator measurableSet_Iio) hm₁t hm₂t
+        (hm₁s.indicator measurableSet_Iio) fun σ σ' hσ hσ' => ?_
+      by_cases hσδ : σ < δ
+      · rw [Set.indicator_of_mem (show σ ∈ Set.Iio δ from hσδ), Set.indicator_of_mem
+          (show σ ∈ Set.Iio δ from hσδ)]
+        have : r * δ < r * σ := mul_lt_mul_of_neg_left hσδ hr
+        calc ψ₂ (s + r * σ) * ψ₁ (t + r * σ') = ψ₁ (t + r * σ') * ψ₂ (s + r * σ) := mul_comm _ _
+          _ ≤ ψ₁ (s + r * σ) * ψ₂ (t + r * σ') := htp _ _ (by nlinarith)
+          _ = ψ₂ (t + r * σ') * ψ₁ (s + r * σ) := mul_comm _ _
+      · rw [Set.indicator_of_notMem (show σ ∉ Set.Iio δ from hσδ), zero_mul]
+        exact zero_le
+    rw [e₁, e₂]
+    calc (∫⁻ σ, ψ₁ (t + r * σ) ∂unitExp) *
+          ((∫⁻ σ, (Set.Iio δ).indicator (fun σ => ψ₂ (s + r * σ)) σ ∂unitExp) +
+            ENNReal.ofReal (exp (-δ)) * ∫⁻ σ, ψ₂ (t + r * σ) ∂unitExp)
+        = (∫⁻ σ, (Set.Iio δ).indicator (fun σ => ψ₂ (s + r * σ)) σ ∂unitExp) *
+            (∫⁻ σ, ψ₁ (t + r * σ) ∂unitExp) + ENNReal.ofReal (exp (-δ)) *
+              ((∫⁻ σ, ψ₁ (t + r * σ) ∂unitExp) * ∫⁻ σ, ψ₂ (t + r * σ) ∂unitExp) := by ring
+      _ ≤ (∫⁻ σ, ψ₂ (t + r * σ) ∂unitExp) *
+            (∫⁻ σ, (Set.Iio δ).indicator (fun σ => ψ₁ (s + r * σ)) σ ∂unitExp) +
+            ENNReal.ofReal (exp (-δ)) *
+              ((∫⁻ σ, ψ₁ (t + r * σ) ∂unitExp) * ∫⁻ σ, ψ₂ (t + r * σ) ∂unitExp) :=
+          add_le_add hcross le_rfl
+      _ = _ := by ring
+  · simp only [zero_mul, add_zero, lintegral_const, measure_univ, mul_one]
+    exact htp s t hts
+  · -- `r > 0`: split the integrals at `t`, which reach `s` after `δ`
+    set δ := (s - t) / r with hδ
+    have hδ0 : 0 ≤ δ := div_nonneg (by linarith) hr.le
+    have htδ : t + r * δ = s := by rw [hδ]; field_simp [hr.ne']; ring
+    have e₁ := lintegral_unitExp_split h₁ t r hδ0
+    have e₂ := lintegral_unitExp_split h₂ t r hδ0
+    rw [htδ] at e₁ e₂
+    have hcross : (∫⁻ σ, (Set.Iio δ).indicator (fun σ => ψ₁ (t + r * σ)) σ ∂unitExp) *
+        (∫⁻ σ, ψ₂ (s + r * σ) ∂unitExp) ≤
+        (∫⁻ σ, ψ₁ (s + r * σ) ∂unitExp) *
+          (∫⁻ σ, (Set.Iio δ).indicator (fun σ => ψ₂ (t + r * σ)) σ ∂unitExp) := by
+      refine lintegral_mul_le_unitExp (hm₁t.indicator measurableSet_Iio) hm₂s hm₁s
+        (hm₂t.indicator measurableSet_Iio) fun σ σ' hσ hσ' => ?_
+      by_cases hσδ : σ < δ
+      · rw [Set.indicator_of_mem (show σ ∈ Set.Iio δ from hσδ), Set.indicator_of_mem
+          (show σ ∈ Set.Iio δ from hσδ)]
+        have : r * σ < r * δ := mul_lt_mul_of_pos_left hσδ hr
+        exact htp _ _ (by nlinarith)
+      · rw [Set.indicator_of_notMem (show σ ∉ Set.Iio δ from hσδ), zero_mul]
+        exact zero_le
+    rw [e₁, e₂]
+    calc ((∫⁻ σ, (Set.Iio δ).indicator (fun σ => ψ₁ (t + r * σ)) σ ∂unitExp) +
+            ENNReal.ofReal (exp (-δ)) * ∫⁻ σ, ψ₁ (s + r * σ) ∂unitExp) *
+          (∫⁻ σ, ψ₂ (s + r * σ) ∂unitExp)
+        = (∫⁻ σ, (Set.Iio δ).indicator (fun σ => ψ₁ (t + r * σ)) σ ∂unitExp) *
+            (∫⁻ σ, ψ₂ (s + r * σ) ∂unitExp) + ENNReal.ofReal (exp (-δ)) *
+              ((∫⁻ σ, ψ₁ (s + r * σ) ∂unitExp) * ∫⁻ σ, ψ₂ (s + r * σ) ∂unitExp) := by ring
+      _ ≤ (∫⁻ σ, ψ₁ (s + r * σ) ∂unitExp) *
+            (∫⁻ σ, (Set.Iio δ).indicator (fun σ => ψ₂ (t + r * σ)) σ ∂unitExp) +
+            ENNReal.ofReal (exp (-δ)) *
+              ((∫⁻ σ, ψ₁ (s + r * σ) ∂unitExp) * ∫⁻ σ, ψ₂ (s + r * σ) ∂unitExp) :=
+          add_le_add hcross le_rfl
+      _ = _ := by ring
+
+/-- **The step.** Adding an independent `r E` to both keeps the likelihood-ratio order. -/
+theorem LRAbove.conv {μ ν : Measure ℝ} [SFinite μ] [SFinite ν] (h : LRAbove μ ν) (r : ℝ) :
+    LRAbove (μ ∗ expLaw r) (ν ∗ expLaw r) := by
+  intro ψ₁ ψ₂ h₁ h₂ htp
+  have hsm : ∀ {ψ : ℝ → ℝ≥0∞}, Measurable ψ → Measurable fun x => ∫⁻ σ, ψ (x + r * σ) ∂unitExp :=
+    fun hψ =>
+      (hψ.comp (by fun_prop : Measurable fun p : ℝ × ℝ => p.1 + r * p.2)).lintegral_prod_right'
+  have hconv : ∀ {κ : Measure ℝ} {ψ : ℝ → ℝ≥0∞}, Measurable ψ →
+      ∫⁻ x, ψ x ∂(κ ∗ expLaw r) = ∫⁻ x, ∫⁻ σ, ψ (x + r * σ) ∂unitExp ∂κ := by
+    intro κ ψ hψ
+    rw [Measure.lintegral_conv hψ]
+    exact lintegral_congr fun x => lintegral_expLaw r (hψ.comp (measurable_const_add x))
+  rw [hconv h₁, hconv h₂, hconv h₁, hconv h₂]
+  exact h _ _ (hsm h₁) (hsm h₂) fun s t hts => smooth_ordered h₁ h₂ htp r s t hts
+
+/-- **The likelihood-ratio order along an edge** (Vlassis and Thomas's (22), without densities):
+`Y + aE` lies above `Y − bE` for every sum `Y` of independent scaled exponentials, each of
+log-concave law. -/
+theorem lrAbove_edge {a b : ℝ} (ha : 0 ≤ a) (hb : 0 ≤ b) (Y : Multiset ℝ) :
+    LRAbove (sumLaw (a ::ₘ Y)) (sumLaw ((-b) ::ₘ Y)) := by
+  induction Y using Multiset.induction_on with
+  | empty =>
+    rw [sumLaw_cons, sumLaw_cons, sumLaw_zero, Measure.dirac_zero_conv, Measure.dirac_zero_conv]
+    exact lrAbove_expLaw ha hb
+  | cons r Y ih =>
+    rw [Multiset.cons_swap, Multiset.cons_swap (-b), sumLaw_cons r, sumLaw_cons r]
+    exact ih.conv r
+
+theorem lintegral_winHi_ne_top {d : ℝ} (hd : 0 < d) (m : Multiset ℝ) :
+    ∫⁻ x, winHi d x ∂(sumLaw m) ≠ ⊤ := by
+  intro h
+  have := sumLaw_hi_add_winHi hd m
+  rw [h, add_top] at this
+  exact measure_ne_top _ _ this.symm
+
+theorem lintegral_winLo_ne_top {c : ℝ} (hc : 0 < c) (m : Multiset ℝ) :
+    ∫⁻ x, winLo c x ∂(sumLaw m) ≠ ⊤ := by
+  intro h
+  have := sumLaw_lo_eq hc m
+  rw [h, add_top] at this
+  exact measure_ne_top _ _ this
+
+/-- `F − A`, the mass of the window above zero. -/
+theorem stat_sub_hi {d : ℝ} (hd : 0 < d) (m : Multiset ℝ) :
+    stat m - stat ((-d) ::ₘ m) = (∫⁻ x, winHi d x ∂(sumLaw m)).toReal := by
+  have h := congrArg ENNReal.toReal (sumLaw_hi_add_winHi hd m)
+  rw [ENNReal.toReal_add (measure_ne_top _ _) (lintegral_winHi_ne_top hd m)] at h
+  simp only [stat, measureReal_def]
+  linarith
+
+/-- `B − F`, the mass of the window below zero. -/
+theorem stat_lo_sub {c : ℝ} (hc : 0 < c) (m : Multiset ℝ) :
+    stat (c ::ₘ m) - stat m = (∫⁻ x, winLo c x ∂(sumLaw m)).toReal := by
+  have h := congrArg ENNReal.toReal (sumLaw_lo_eq hc m)
+  rw [ENNReal.toReal_add (measure_ne_top _ _) (lintegral_winLo_ne_top hc m)] at h
+  simp only [stat, measureReal_def]
+  linarith
+
+/-- `w = B − A > 0`: the two windows together are positive everywhere. -/
+theorem stat_window_pos {c d : ℝ} (hc : 0 < c) (hd : 0 < d) (m : Multiset ℝ) :
+    0 < stat (c ::ₘ m) - stat ((-d) ::ₘ m) := by
+  have e : stat (c ::ₘ m) - stat ((-d) ::ₘ m) =
+      (∫⁻ x, winHi d x + winLo c x ∂(sumLaw m)).toReal := by
+    rw [lintegral_add_left (measurable_winHi d), ENNReal.toReal_add (lintegral_winHi_ne_top hd m)
+      (lintegral_winLo_ne_top hc m), ← stat_sub_hi hd, ← stat_lo_sub hc]
+    ring
+  rw [e]
+  refine ENNReal.toReal_pos ?_ (by
+    rw [lintegral_add_left (measurable_winHi d)]
+    exact ENNReal.add_ne_top.2 ⟨lintegral_winHi_ne_top hd m, lintegral_winLo_ne_top hc m⟩)
+  rw [Ne, lintegral_eq_zero_iff (f := fun x => winHi d x + winLo c x)
+    ((measurable_winHi d).add (measurable_winLo c))]
+  intro h0
+  obtain ⟨x, hx⟩ := h0.exists
+  have hpos : 0 < winHi d x + winLo c x := by
+    rcases le_or_gt 0 x with h | h
+    · rw [winHi, Set.indicator_of_mem (show x ∈ Set.Ici 0 from h)]
+      exact lt_of_lt_of_le (ENNReal.ofReal_pos.2 (exp_pos _)) le_self_add
+    · rw [winLo, Set.indicator_of_mem (show x ∈ Set.Iio 0 from h)]
+      exact lt_of_lt_of_le (ENNReal.ofReal_pos.2 (exp_pos _)) le_add_self
+  have hx' : winHi d x + winLo c x = 0 := hx
+  rw [hx'] at hpos
+  exact lt_irrefl _ hpos
+
+/-- **The likelihood-ratio inequality along an edge**, `u₋ v₊ ≤ u₊ v₋`. -/
+theorem window_cross {a b c d : ℝ} (ha : 0 ≤ a) (hb : 0 ≤ b) (hc : 0 < c) (hd : 0 < d)
+    (Y : Multiset ℝ) :
+    (stat ((-b) ::ₘ Y) - stat ((-d) ::ₘ (-b) ::ₘ Y)) * (stat (c ::ₘ a ::ₘ Y) - stat (a ::ₘ Y)) ≤
+      (stat (a ::ₘ Y) - stat ((-d) ::ₘ a ::ₘ Y)) *
+        (stat (c ::ₘ (-b) ::ₘ Y) - stat ((-b) ::ₘ Y)) := by
+  rw [stat_sub_hi hd, stat_sub_hi hd, stat_lo_sub hc, stat_lo_sub hc, ← ENNReal.toReal_mul,
+    ← ENNReal.toReal_mul]
+  refine ENNReal.toReal_mono (ENNReal.mul_ne_top (lintegral_winHi_ne_top hd _)
+    (lintegral_winLo_ne_top hc _)) ?_
+  refine lrAbove_edge ha hb Y _ _ (measurable_winHi d) (measurable_winLo c) fun s t hts => ?_
+  rcases lt_or_ge t 0 with ht | ht
+  · rw [winHi, Set.indicator_of_notMem (show t ∉ Set.Ici (0 : ℝ) from fun h => (not_le.2 ht) h),
+      zero_mul]
+    exact zero_le
+  · rw [winLo, Set.indicator_of_notMem (show s ∉ Set.Iio (0 : ℝ) from not_lt.2 (ht.trans hts)),
+      mul_zero]
+    exact zero_le
+
+/-- The share of the window above zero in both windows: `θ = (F − A)/(B − A)`. -/
+noncomputable def windowShare (c d : ℝ) (m : Multiset ℝ) : ℝ :=
+  (stat m - stat ((-d) ::ₘ m)) / (stat (c ::ₘ m) - stat ((-d) ::ₘ m))
+
+/-- **`θ` falls along an edge** (Vlassis and Thomas's (15)): moving one coefficient from `a > 0`
+to `−b < 0` lowers the share of the window above zero. -/
+theorem windowShare_edge {a b c d : ℝ} (ha : 0 ≤ a) (hb : 0 ≤ b) (hc : 0 < c) (hd : 0 < d)
+    (Y : Multiset ℝ) : windowShare c d ((-b) ::ₘ Y) ≤ windowShare c d (a ::ₘ Y) := by
+  unfold windowShare
+  rw [div_le_div_iff₀ (stat_window_pos hc hd _) (stat_window_pos hc hd _)]
+  have h := window_cross ha hb hc hd Y
+  nlinarith
+
+/-- **The transfer coefficient's sign** (Vlassis and Thomas's (14) and (31)): along an edge
+`Y + aE`, `Y − bE`, with `c ≤ a`, `η = (1 − θ₋)(A₊ − A₋) − p (F₊ − F₋) ≥ 0`, `p = c/(c + d)`.
+The race and same-sign identities give the flux identities, and with them
+`(c + d) η = (a − c) w₊ (θ₊ − θ₋)`. -/
+theorem transfer_nonneg {a b c d : ℝ} (ha : 0 < a) (hb : 0 < b) (hc : 0 < c) (hd : 0 < d)
+    (hca : c ≤ a) (Y : Multiset ℝ) :
+    0 ≤ (1 - windowShare c d ((-b) ::ₘ Y)) *
+        (stat ((-d) ::ₘ a ::ₘ Y) - stat ((-d) ::ₘ (-b) ::ₘ Y)) -
+      c / (c + d) * (stat (a ::ₘ Y) - stat ((-b) ::ₘ Y)) := by
+  have hR1 := stat_race ha hd Y
+  have hS1 := stat_same_neg hb hd Y
+  have hR2 := stat_race hc hb Y
+  have hS2 := stat_same_pos ha hc Y
+  rw [Multiset.cons_swap] at hR1
+  rw [Multiset.cons_swap] at hS1
+  rw [Multiset.cons_swap] at hS2
+  have hθp := windowShare_edge ha.le hb.le hc hd Y
+  have hwp := stat_window_pos hc hd (a ::ₘ Y)
+  have hwm := stat_window_pos hc hd ((-b) ::ₘ Y)
+  set Fp := stat (a ::ₘ Y)
+  set Fm := stat ((-b) ::ₘ Y)
+  set Ap := stat ((-d) ::ₘ a ::ₘ Y)
+  set Am := stat ((-d) ::ₘ (-b) ::ₘ Y)
+  set Bp := stat (c ::ₘ a ::ₘ Y)
+  set Bm := stat (c ::ₘ (-b) ::ₘ Y)
+  set θp := windowShare c d (a ::ₘ Y) with hθpdef
+  set θm := windowShare c d ((-b) ::ₘ Y) with hθmdef
+  have hp : θp * (Bp - Ap) = Fp - Ap := by
+    rw [hθpdef, windowShare]; exact div_mul_cancel₀ _ hwp.ne'
+  have hm : θm * (Bm - Am) = Fm - Am := by
+    rw [hθmdef, windowShare]; exact div_mul_cancel₀ _ hwm.ne'
+  have Φ1 : d * (Ap - Am) = a * (Fp - Ap) + b * (Fm - Am) := by linear_combination hR1 + hS1
+  have Φ2 : c * (Bp - Bm) = a * (Bp - Fp) + b * (Bm - Fm) := by linear_combination -hR2 - hS2
+  have hkey : ((1 - θm) * (Ap - Am) - c / (c + d) * (Fp - Fm)) * (c + d) =
+      (a - c) * (Bp - Ap) * (θp - θm) := by
+    have hcd : c / (c + d) * (c + d) = c := div_mul_cancel₀ _ (by linarith)
+    linear_combination (1 - θm) * Φ1 + (1 - θm) * Φ2 - (Fp - Fm) * hcd - Φ2 - (a - c) * hp -
+      (b + c) * hm
+  have hcd0 : 0 < c + d := by linarith
+  have := mul_nonneg (mul_nonneg (sub_nonneg.2 hca) hwp.le) (sub_nonneg.2 hθp)
+  rw [← hkey] at this
+  exact nonneg_of_mul_nonneg_left this hcd0
+
+/-! #### The chain induction (Vlassis and Thomas's §2 and Lemma 6) -/
+
+theorem sum_range_ite_lt_sub (θ : ℕ → ℝ) {j m : ℕ} (hj : j ≤ m) :
+    ∑ J ∈ Finset.range (m + 1), (if j < J then θ J - θ (J + 1) else 0) = θ (j + 1) - θ (m + 1) := by
+  induction m, hj using Nat.le_induction with
+  | base =>
+    rw [Finset.sum_eq_zero fun J hJ => if_neg (by simp only [Finset.mem_range] at hJ; omega)]
+    ring
+  | succ m _ ih =>
+    rw [Finset.sum_range_succ, ih, if_pos (by omega)]
+    ring
+
+theorem sum_range_ite_le_sub (θ : ℕ → ℝ) {j m : ℕ} (hj : j ≤ m) :
+    ∑ J ∈ Finset.range (m + 1), (if J ≤ j then θ J - θ (J + 1) else 0) = θ 0 - θ (j + 1) := by
+  induction m, hj using Nat.le_induction with
+  | base =>
+    rw [Finset.sum_congr rfl fun J hJ => if_pos (by simp only [Finset.mem_range] at hJ; omega),
+      Finset.sum_range_sub']
+  | succ m _ ih =>
+    rw [Finset.sum_range_succ, ih, if_neg (by omega), add_zero]
+
+/-- **The insertion's algebra** (Vlassis and Thomas's (27)–(29)). With
+`θ_j (B_j − A_j) = F_j − A_j`, `θ` falling from `1` to `0`, and every transfer `η_j` nonnegative,
+the `λ`-average of the inserted chains' means beats the independent reveal's, so one inserted chain
+does. -/
+theorem insertion_algebra (m : ℕ) (F A B θ gC gH : ℕ → ℝ) (p : ℝ)
+    (hw : ∀ j ≤ m + 1, θ j * (B j - A j) = F j - A j)
+    (hθ0 : θ 0 = 1) (hθm : θ (m + 1) = 0) (hθ : ∀ j ≤ m, θ (j + 1) ≤ θ j)
+    (hη : ∀ j ≤ m, 0 ≤ (1 - θ (j + 1)) * (A j - A (j + 1)) - p * (F j - F (j + 1)))
+    (hg : ∀ j ≤ m, gC j ≤ gH j) :
+    ∃ J ≤ m, ∑ j ∈ Finset.range (m + 1), (F j - F (j + 1)) * ((1 - p) * gC j + p * gH j) ≤
+      ∑ j ∈ Finset.range (m + 1),
+        ((if j < J then B j - B (j + 1) else if j = J then B J - A J else 0) * gC j +
+          (if J ≤ j then A j - A (j + 1) else 0) * gH j) := by
+  set E : ℕ → ℝ := fun J => ∑ j ∈ Finset.range (m + 1),
+    ((if j < J then B j - B (j + 1) else if j = J then B J - A J else 0) * gC j +
+      (if J ≤ j then A j - A (j + 1) else 0) * gH j) with hE
+  obtain ⟨J, hJ, hmax⟩ := Finset.exists_max_image (Finset.range (m + 1)) E ⟨0, by simp⟩
+  refine ⟨J, by simp only [Finset.mem_range] at hJ; omega, ?_⟩
+  have hlam : ∀ J ∈ Finset.range (m + 1), 0 ≤ θ J - θ (J + 1) := fun J hJ =>
+    sub_nonneg.2 (hθ J (by simp only [Finset.mem_range] at hJ; omega))
+  have hsumlam : ∑ J ∈ Finset.range (m + 1), (θ J - θ (J + 1)) = 1 := by
+    rw [Finset.sum_range_sub', hθ0, hθm, sub_zero]
+  -- the λ-average, coefficient by coefficient
+  have havg : ∑ J ∈ Finset.range (m + 1), (θ J - θ (J + 1)) * E J =
+      ∑ j ∈ Finset.range (m + 1),
+        ((θ (j + 1) * (B j - B (j + 1)) + (θ j - θ (j + 1)) * (B j - A j)) * gC j +
+          ((1 - θ (j + 1)) * (A j - A (j + 1))) * gH j) := by
+    simp only [hE, Finset.mul_sum]
+    rw [Finset.sum_comm]
+    refine Finset.sum_congr rfl fun j hj => ?_
+    have hjm : j ≤ m := by simp only [Finset.mem_range] at hj; omega
+    have hpt : ∀ J, (θ J - θ (J + 1)) *
+        ((if j < J then B j - B (j + 1) else if j = J then B J - A J else 0) * gC j +
+          (if J ≤ j then A j - A (j + 1) else 0) * gH j) =
+        ((if j < J then θ J - θ (J + 1) else 0) * (B j - B (j + 1)) +
+          (if J = j then θ J - θ (J + 1) else 0) * (B j - A j)) * gC j +
+        ((if J ≤ j then θ J - θ (J + 1) else 0) * (A j - A (j + 1))) * gH j := by
+      intro J
+      split_ifs <;> (try subst_vars) <;> first | omega | ring
+    rw [Finset.sum_congr rfl fun J _ => hpt J]
+    simp only [Finset.sum_add_distrib, ← Finset.sum_mul]
+    rw [sum_range_ite_lt_sub θ hjm, sum_range_ite_le_sub θ hjm, Finset.sum_ite_eq', if_pos hj,
+      hθm, hθ0]
+    ring
+  calc ∑ j ∈ Finset.range (m + 1), (F j - F (j + 1)) * ((1 - p) * gC j + p * gH j)
+      ≤ ∑ J ∈ Finset.range (m + 1), (θ J - θ (J + 1)) * E J := by
+        rw [havg]
+        refine Finset.sum_le_sum fun j hj => ?_
+        have hjm : j ≤ m := by simp only [Finset.mem_range] at hj; omega
+        have key : ((θ (j + 1) * (B j - B (j + 1)) + (θ j - θ (j + 1)) * (B j - A j)) * gC j +
+            ((1 - θ (j + 1)) * (A j - A (j + 1))) * gH j) -
+            (F j - F (j + 1)) * ((1 - p) * gC j + p * gH j) =
+            ((1 - θ (j + 1)) * (A j - A (j + 1)) - p * (F j - F (j + 1))) * (gH j - gC j) := by
+          linear_combination (gC j) * (hw j (by omega)) - (gC j) * (hw (j + 1) (by omega))
+        have := mul_nonneg (hη j hjm) (sub_nonneg.2 (hg j hjm))
+        linarith
+    _ ≤ ∑ J' ∈ Finset.range (m + 1), (θ J' - θ (J' + 1)) * E J :=
+        Finset.sum_le_sum fun J' hJ' => mul_le_mul_of_nonneg_left (hmax J' hJ') (hlam J' hJ')
+    _ = E J := by rw [← Finset.sum_mul, hsumlam, one_mul]
+
+/-- An inserted chain's mean, read by the states before and after the insertion point. -/
+theorem chain_insert_sum (A B gC gH : ℕ → ℝ) {J m : ℕ} (hJ : J ≤ m) :
+    ∑ k ∈ Finset.range (m + 2),
+        ((if k ≤ J then B k else A (k - 1)) - (if k + 1 ≤ J then B (k + 1) else A k)) *
+          (if k ≤ J then gC k else gH (k - 1)) =
+      ∑ j ∈ Finset.range (m + 1),
+        ((if j < J then B j - B (j + 1) else if j = J then B J - A J else 0) * gC j +
+          (if J ≤ j then A j - A (j + 1) else 0) * gH j) := by
+  induction m, hJ using Nat.le_induction with
+  | base =>
+    rw [Finset.sum_range_succ, Finset.sum_range_succ, Finset.sum_range_succ (n := J)]
+    rw [Finset.sum_congr rfl (g := fun j => (if j < J then B j - B (j + 1) else
+        if j = J then B J - A J else 0) * gC j + (if J ≤ j then A j - A (j + 1) else 0) * gH j)
+      fun k hk => by
+        simp only [Finset.mem_range] at hk
+        split_ifs <;> first | omega | ring]
+    rw [if_pos le_rfl, if_neg (by omega), if_pos le_rfl, if_neg (lt_irrefl _), if_pos rfl,
+      if_pos le_rfl, if_neg (by omega), if_neg (by omega), if_neg (by omega),
+      show J + 1 - 1 = J by omega]
+    ring
+  | succ m hJm ih =>
+    rw [Finset.sum_range_succ, ih, Finset.sum_range_succ (n := m + 1), if_neg (by omega),
+      if_neg (by omega), if_neg (by omega), if_neg (by omega), if_neg (by omega),
+      if_pos (by omega), show m + 2 - 1 = m + 1 by omega]
+    ring
+
+variable {ι : Type*} [DecidableEq ι]
+
+/-- A unit's coefficient in the two-point statistic: `−β` when high, `γ` when low. -/
+def coef (γ β : ι → ℝ) (S : Finset ι) (i : ι) : ℝ := if i ∈ S then -β i else γ i
+
+/-- The two-point statistic of the units in `P` with high set `S` (Vlassis and Thomas's
+`K_m(S)`): `P(E₀ + ∑_{i ∈ P \ S} γ_i E_i − ∑_{i ∈ S} β_i E_i ≥ 0)`. -/
+noncomputable def cubeK (γ β : ι → ℝ) (P S : Finset ι) : ℝ :=
+  stat (1 ::ₘ P.val.map (coef γ β S))
+
+/-- A maximal chain through `P`: `S 0 = ∅`, `S |P| = P`, one unit of `P` added at each step. -/
+def IsChain (P : Finset ι) (S : ℕ → Finset ι) : Prop :=
+  S 0 = ∅ ∧ S P.card = P ∧ ∀ j < P.card, ∃ e ∈ P, e ∉ S j ∧ S (j + 1) = insert e (S j)
+
+/-- The mean of `g` under a chain's measure (Vlassis and Thomas's `ν_C`): mass
+`K(S_j) − K(S_{j+1})` on `S_j`, and `K(S_m)` on the last state. -/
+noncomputable def chainMean (γ β : ι → ℝ) (P : Finset ι) (S : ℕ → Finset ι)
+    (g : Finset ι → ℝ) : ℝ :=
+  ∑ j ∈ Finset.range (P.card + 1),
+    (cubeK γ β P (S j) - if j < P.card then cubeK γ β P (S (j + 1)) else 0) * g (S j)
+
+theorem IsChain.subset {P : Finset ι} {S : ℕ → Finset ι} (hS : IsChain P S) :
+    ∀ j ≤ P.card, S j ⊆ P := by
+  intro j
+  induction j with
+  | zero => intro _; rw [hS.1]; exact Finset.empty_subset _
+  | succ j ih =>
+    intro hj
+    obtain ⟨e, he, -, hSe⟩ := hS.2.2 j (by omega)
+    rw [hSe]
+    exact Finset.insert_subset he (ih (by omega))
+
+/-- `K` falls as the high set grows. -/
+theorem cubeK_anti {γ β : ι → ℝ} (P : Finset ι) (hγβ : ∀ i ∈ P, -β i ≤ γ i) {S S' : Finset ι}
+    (h : S ⊆ S') : cubeK γ β P S' ≤ cubeK γ β P S := by
+  unfold cubeK
+  rw [← Multiset.singleton_add, ← Multiset.singleton_add]
+  refine stat_map_mono {1} P.val fun i hi => ?_
+  unfold coef
+  by_cases hS : i ∈ S
+  · rw [if_pos (h hS), if_pos hS]
+  · by_cases hS' : i ∈ S'
+    · rw [if_pos hS', if_neg hS]; exact hγβ i hi
+    · rw [if_neg hS', if_neg hS]
+
+theorem coef_insert_of_ne {γ β : ι → ℝ} {S : Finset ι} {e x : ι} (hx : x ≠ e) :
+    coef γ β (insert e S) x = coef γ β S x := by
+  unfold coef
+  simp only [Finset.mem_insert, hx, false_or]
+
+theorem map_coef_insert {γ β : ι → ℝ} {P : Finset ι} {i : ι} (hi : i ∉ P) (T : Finset ι) :
+    (insert i P).val.map (coef γ β T) = coef γ β T i ::ₘ P.val.map (coef γ β T) := by
+  rw [Finset.insert_val_of_notMem hi, Multiset.map_cons]
+
+theorem map_coef_erase {γ β : ι → ℝ} {P : Finset ι} {e : ι} (he : e ∈ P) (T : Finset ι) :
+    P.val.map (coef γ β T) = coef γ β T e ::ₘ (P.erase e).val.map (coef γ β T) := by
+  rw [Finset.erase_val, ← Multiset.map_cons, Multiset.cons_erase he]
+
+/-- The independent two-point law on the subsets of `s`: unit `i` high with chance `p i`. -/
+def bern (p : ι → ℝ) (s T : Finset ι) : ℝ := (∏ i ∈ T, p i) * ∏ i ∈ s \ T, (1 - p i)
+
+theorem bern_nonneg {p : ι → ℝ} (hp : ∀ i, 0 ≤ p i ∧ p i ≤ 1) (s T : Finset ι) : 0 ≤ bern p s T :=
+  mul_nonneg (Finset.prod_nonneg fun i _ => (hp i).1)
+    (Finset.prod_nonneg fun i _ => sub_nonneg.2 (hp i).2)
+
+/-- Revealing one more independent unit. -/
+theorem sum_bern_insert (p : ι → ℝ) {s : Finset ι} {i : ι} (hi : i ∉ s) (f : Finset ι → ℝ) :
+    ∑ T ∈ (insert i s).powerset, bern p (insert i s) T * f T =
+      (1 - p i) * ∑ T ∈ s.powerset, bern p s T * f T +
+        p i * ∑ T ∈ s.powerset, bern p s T * f (insert i T) := by
+  rw [Finset.sum_powerset_insert hi, Finset.mul_sum, Finset.mul_sum]
+  congr 1
+  · refine Finset.sum_congr rfl fun T hT => ?_
+    have hiT : i ∉ T := fun h => hi (Finset.mem_powerset.1 hT h)
+    rw [bern, bern, Finset.insert_sdiff_of_notMem _ hiT, Finset.prod_insert
+      (fun h => hi (Finset.mem_sdiff.1 h).1)]
+    ring
+  · refine Finset.sum_congr rfl fun T hT => ?_
+    have hiT : i ∉ T := fun h => hi (Finset.mem_powerset.1 hT h)
+    rw [bern, bern, Finset.prod_insert hiT, Finset.insert_sdiff_insert,
+      Finset.sdiff_insert_of_notMem hi]
+    ring
+
+/-- The chance a two-point unit is high: `γ/(γ + β)`, the mean-one weight on `1 + β`. -/
+noncomputable def highChance (γ β : ι → ℝ) (i : ι) : ℝ := γ i / (γ i + β i)
+
+omit [DecidableEq ι] in
+theorem highChance_mem {γ β : ι → ℝ} (hγ : ∀ e, 0 ≤ γ e) (hβ : ∀ e, 0 < β e) (i : ι) :
+    0 ≤ highChance γ β i ∧ highChance γ β i ≤ 1 :=
+  ⟨div_nonneg (hγ i) (by linarith [hγ i, hβ i]),
+    (div_le_one (by linarith [hγ i, hβ i])).2 (by linarith [hβ i])⟩
+
+/-- **The local insertion** (Vlassis and Thomas's Lemma 6). A chain through `P`, a new unit `i` of
+least `γ`, and an increasing `g`: some insertion of `i` into the chain has a mean of `g` at least
+that of the chain with `i` revealed independently. With `γ_i = 0` the unit is never high, and it
+goes last. -/
+theorem local_insertion {γ β : ι → ℝ} {P : Finset ι} {S : ℕ → Finset ι} (hS : IsChain P S)
+    {i : ι} (hi : i ∉ P) (hγ : ∀ e, 0 ≤ γ e) (hγ1 : γ i ≤ 1) (hβ : ∀ e, 0 < β e)
+    (hmin : ∀ e ∈ P, γ i ≤ γ e) {g : Finset ι → ℝ} (hg : ∀ U V, U ⊆ V → g U ≤ g V) :
+    ∃ S', IsChain (insert i P) S' ∧
+      ∑ j ∈ Finset.range (P.card + 1),
+          (cubeK γ β P (S j) - if j < P.card then cubeK γ β P (S (j + 1)) else 0) *
+            ((1 - highChance γ β i) * g (S j) + highChance γ β i * g (insert i (S j))) ≤
+        chainMean γ β (insert i P) S' g := by
+  classical
+  set m := P.card with hm
+  set c := γ i with hcdef
+  set d := β i with hddef
+  have hd : 0 < d := hβ i
+  set mult : ℕ → Multiset ℝ := fun j => if j ≤ m then 1 ::ₘ P.val.map (coef γ β (S j))
+    else (-1) ::ₘ P.val.map (fun e => -β e) with hmult
+  set F : ℕ → ℝ := fun j => stat (mult j) with hFdef
+  set A : ℕ → ℝ := fun j => stat ((-d) ::ₘ mult j) with hAdef
+  set B : ℕ → ℝ := fun j => stat (c ::ₘ mult j) with hBdef
+  have hiS : ∀ j ≤ m, i ∉ S j := fun j hj h => hi (hS.subset j hj h)
+  have hmultj : ∀ j ≤ m, mult j = 1 ::ₘ P.val.map (coef γ β (S j)) := fun j hj => by
+    simp only [hmult, if_pos hj]
+  have hF : ∀ j ≤ m, cubeK γ β P (S j) = F j := fun j hj => by
+    simp only [hFdef, hmultj j hj, cubeK]
+  have hB : ∀ j ≤ m, cubeK γ β (insert i P) (S j) = B j := fun j hj => by
+    simp only [hBdef, hmultj j hj, cubeK, map_coef_insert hi]
+    rw [show coef γ β (S j) i = c by simp [coef, hiS j hj, hcdef], Multiset.cons_swap]
+  have hA : ∀ j ≤ m, cubeK γ β (insert i P) (insert i (S j)) = A j := fun j hj => by
+    simp only [hAdef, hmultj j hj, cubeK, map_coef_insert hi]
+    have hmap : P.val.map (coef γ β (insert i (S j))) = P.val.map (coef γ β (S j)) :=
+      Multiset.map_congr rfl fun x hx => coef_insert_of_ne (fun h => hi (by rw [← h]; exact hx))
+    rw [show coef γ β (insert i (S j)) i = -d by simp [coef, hddef], hmap, Multiset.cons_swap]
+  have hmultm : mult (m + 1) = (-1) ::ₘ P.val.map (fun e => -β e) := by
+    simp only [hmult, if_neg (show ¬ m + 1 ≤ m by omega)]
+  have hnonpos : ∀ x ∈ P.val.map (fun e => -β e), x ≤ 0 := fun x hx => by
+    obtain ⟨e, -, rfl⟩ := Multiset.mem_map.1 hx
+    linarith [hβ e]
+  have hFm : F (m + 1) = 0 := by
+    simp only [hFdef, hmultm]
+    exact stat_eq_zero_of_nonpos (by norm_num) hnonpos
+  have hAm : A (m + 1) = 0 := by
+    simp only [hAdef, hmultm]
+    refine stat_eq_zero_of_nonpos (neg_lt_zero.2 hd) fun x hx => ?_
+    rcases Multiset.mem_cons.1 hx with rfl | hx
+    · norm_num
+    · exact hnonpos x hx
+  -- the inserted chains
+  set S' : ℕ → ℕ → Finset ι := fun J k => if k ≤ J then S k else insert i (S (k - 1)) with hS'
+  have hcard : (insert i P).card = m + 1 := Finset.card_insert_of_notMem hi
+  have hchain : ∀ J ≤ m, IsChain (insert i P) (S' J) := by
+    intro J hJ
+    refine ⟨by simp [hS', hS.1], ?_, fun k hk => ?_⟩
+    · rw [hcard]
+      simp only [hS', if_neg (show ¬ m + 1 ≤ J by omega), show m + 1 - 1 = m by omega]
+      rw [hS.2.1]
+    · rw [hcard] at hk
+      rcases lt_trichotomy k J with h | rfl | h
+      · obtain ⟨e, he, heS, hSe⟩ := hS.2.2 k (by omega)
+        refine ⟨e, Finset.mem_insert_of_mem he, ?_, ?_⟩
+        · simp only [hS', if_pos h.le]; exact heS
+        · simp only [hS', if_pos h.le, if_pos (show k + 1 ≤ J by omega)]
+          exact hSe
+      · refine ⟨i, Finset.mem_insert_self _ _, ?_, ?_⟩
+        · simp only [hS', if_pos le_rfl]; exact hiS k (by omega)
+        · simp only [hS', if_pos le_rfl, if_neg (show ¬ k + 1 ≤ k by omega),
+            show k + 1 - 1 = k by omega]
+      · obtain ⟨e, he, heS, hSe⟩ := hS.2.2 (k - 1) (by omega)
+        refine ⟨e, Finset.mem_insert_of_mem he, ?_, ?_⟩
+        · simp only [hS', if_neg (show ¬ k ≤ J by omega)]
+          rw [Finset.mem_insert, not_or]
+          exact ⟨fun h' => hi (h' ▸ he), heS⟩
+        · simp only [hS', if_neg (show ¬ k ≤ J by omega), if_neg (show ¬ k + 1 ≤ J by omega),
+            show k + 1 - 1 = k - 1 + 1 by omega, hSe, Finset.insert_comm]
+  set gC : ℕ → ℝ := fun j => g (S j) with hgC
+  set gH : ℕ → ℝ := fun j => g (insert i (S j)) with hgH
+  have hmean : ∀ J ≤ m, chainMean γ β (insert i P) (S' J) g =
+      ∑ j ∈ Finset.range (m + 1),
+        ((if j < J then B j - B (j + 1) else if j = J then B J - A J else 0) * gC j +
+          (if J ≤ j then A j - A (j + 1) else 0) * gH j) := by
+    intro J hJ
+    rw [← chain_insert_sum A B gC gH hJ, chainMean, hcard]
+    refine Finset.sum_congr rfl fun k hk => ?_
+    simp only [Finset.mem_range] at hk
+    have hK : cubeK γ β (insert i P) (S' J k) = if k ≤ J then B k else A (k - 1) := by
+      by_cases hkJ : k ≤ J
+      · simp only [hS', if_pos hkJ]; exact hB k (by omega)
+      · simp only [hS', if_neg hkJ]; exact hA (k - 1) (by omega)
+    have hK' : (if k < m + 1 then cubeK γ β (insert i P) (S' J (k + 1)) else 0) =
+        if k + 1 ≤ J then B (k + 1) else A k := by
+      by_cases hkm : k < m + 1
+      · rw [if_pos hkm]
+        by_cases hkJ : k + 1 ≤ J
+        · simp only [hS', if_pos hkJ]; exact hB (k + 1) (by omega)
+        · simp only [hS', if_neg hkJ, show k + 1 - 1 = k by omega]; exact hA k (by omega)
+      · rw [if_neg hkm, if_neg (by omega), show k = m + 1 by omega, hAm]
+    have hgk : g (S' J k) = if k ≤ J then gC k else gH (k - 1) := by
+      by_cases hkJ : k ≤ J
+      · simp only [hS', hgC, if_pos hkJ]
+      · simp only [hS', hgH, if_neg hkJ]
+    rw [hK, hK', hgk]
+  have hhat : ∑ j ∈ Finset.range (m + 1),
+      (cubeK γ β P (S j) - if j < m then cubeK γ β P (S (j + 1)) else 0) *
+        ((1 - highChance γ β i) * g (S j) + highChance γ β i * g (insert i (S j))) =
+      ∑ j ∈ Finset.range (m + 1), (F j - F (j + 1)) *
+        ((1 - highChance γ β i) * gC j + highChance γ β i * gH j) := by
+    refine Finset.sum_congr rfl fun j hj => ?_
+    simp only [Finset.mem_range] at hj
+    rw [hF j (by omega)]
+    by_cases hjm : j < m
+    · rw [if_pos hjm, hF (j + 1) (by omega)]
+    · rw [if_neg hjm, show j + 1 = m + 1 by omega, hFm]
+  have hgCH : ∀ j ≤ m, gC j ≤ gH j := fun j _ => hg _ _ (Finset.subset_insert _ _)
+  rw [hhat]
+  by_cases hc0 : c = 0
+  · -- `γ_i = 0`: never high; insert it last
+    refine ⟨S' m, hchain m le_rfl, ?_⟩
+    have hp0 : highChance γ β i = 0 := by simp [highChance, ← hcdef, hc0]
+    have hBF : ∀ j, B j = F j := fun j => by simp only [hBdef, hFdef, hc0, stat_cons_zero]
+    rw [hmean m le_rfl, hp0, Finset.sum_range_succ, Finset.sum_range_succ]
+    refine add_le_add (le_of_eq (Finset.sum_congr rfl fun j hj => ?_)) ?_
+    · simp only [Finset.mem_range] at hj
+      rw [if_pos hj, if_neg (show ¬ m ≤ j by omega), hBF, hBF]
+      ring
+    · rw [if_neg (lt_irrefl _), if_pos rfl, if_pos le_rfl, hAm, hFm, hBF]
+      have h1 : 0 ≤ A m * (gH m - gC m) := mul_nonneg (stat_nonneg _) (sub_nonneg.2 (hgCH m le_rfl))
+      nlinarith [h1]
+  · have hc : 0 < c := lt_of_le_of_ne (hγ i) (Ne.symm hc0)
+    set θ : ℕ → ℝ := fun j => windowShare c d (mult j) with hθdef
+    have hw : ∀ j ≤ m + 1, θ j * (B j - A j) = F j - A j := fun j _ => by
+      simp only [hθdef, windowShare, hFdef, hAdef, hBdef]
+      exact div_mul_cancel₀ _ (stat_window_pos hc hd _).ne'
+    have hθ0 : θ 0 = 1 := by
+      have hm0 : mult 0 = 1 ::ₘ P.val.map γ := by
+        rw [hmultj 0 (Nat.zero_le _), hS.1]
+        exact congrArg _ (Multiset.map_congr rfl fun x _ => by simp [coef])
+      have hnn : ∀ r ∈ mult 0, 0 ≤ r := by
+        rw [hm0]
+        intro r hr
+        rcases Multiset.mem_cons.1 hr with rfl | hr
+        · norm_num
+        · obtain ⟨e, -, rfl⟩ := Multiset.mem_map.1 hr
+          exact hγ e
+      have hF0 : stat (mult 0) = 1 := stat_eq_one_of_nonneg hnn
+      have hB0 : stat (c ::ₘ mult 0) = 1 := stat_eq_one_of_nonneg fun r hr => by
+        rcases Multiset.mem_cons.1 hr with rfl | hr
+        · exact hc.le
+        · exact hnn r hr
+      have hw0 := stat_window_pos hc hd (mult 0)
+      simp only [hθdef, windowShare]
+      rw [hF0, hB0]
+      rw [hB0] at hw0
+      exact div_self hw0.ne'
+    have hθm : θ (m + 1) = 0 := by
+      have h1 : stat (mult (m + 1)) = 0 := hFm
+      have h2 : stat ((-d) ::ₘ mult (m + 1)) = 0 := hAm
+      simp only [hθdef, windowShare, h1, h2, sub_zero, zero_div]
+    -- every edge of the chain, and the sentinel's
+    have hedge : ∀ j ≤ m, ∃ a b : ℝ, ∃ Y : Multiset ℝ, 0 < a ∧ 0 < b ∧ c ≤ a ∧
+        mult j = a ::ₘ Y ∧ mult (j + 1) = (-b) ::ₘ Y := by
+      intro j hj
+      rcases lt_or_eq_of_le hj with hjm | rfl
+      · obtain ⟨e, he, heS, hSe⟩ := hS.2.2 j hjm
+        refine ⟨γ e, β e, 1 ::ₘ (P.erase e).val.map (coef γ β (S j)),
+          lt_of_lt_of_le hc (hmin e he), hβ e, hmin e he, ?_, ?_⟩
+        · rw [hmultj j hj, map_coef_erase he, show coef γ β (S j) e = γ e by simp [coef, heS],
+            Multiset.cons_swap]
+        · rw [hmultj (j + 1) (by omega), hSe, map_coef_erase he,
+            show coef γ β (insert e (S j)) e = -β e by simp [coef],
+            Multiset.map_congr rfl fun x hx => coef_insert_of_ne
+              (fun h => Finset.notMem_erase e P (by subst h; exact hx)),
+            Multiset.cons_swap]
+      · refine ⟨1, 1, P.val.map (fun e => -β e), one_pos, one_pos, hγ1, ?_, hmultm⟩
+        rw [hmultj _ le_rfl, hS.2.1]
+        congr 1
+        exact Multiset.map_congr rfl fun x hx => by simp [coef, Finset.mem_val.mp hx]
+    have hθ : ∀ j ≤ m, θ (j + 1) ≤ θ j := fun j hj => by
+      obtain ⟨a, b, Y, ha, hb, -, h1, h2⟩ := hedge j hj
+      simp only [hθdef, h1, h2]
+      exact windowShare_edge ha.le hb.le hc hd Y
+    have hη : ∀ j ≤ m, 0 ≤ (1 - θ (j + 1)) * (A j - A (j + 1)) -
+        highChance γ β i * (F j - F (j + 1)) := fun j hj => by
+      obtain ⟨a, b, Y, ha, hb, hca, h1, h2⟩ := hedge j hj
+      simp only [hθdef, hAdef, hFdef, h1, h2, highChance, ← hcdef, ← hddef]
+      exact transfer_nonneg ha hb hc hd hca Y
+    obtain ⟨J, hJ, hle⟩ := insertion_algebra m F A B θ gC gH (highChance γ β i) hw hθ0 hθm hθ hη
+      hgCH
+    exact ⟨S' J, hchain J hJ, by rw [hmean J hJ]; exact hle⟩
+
+/-- The terminal telescoping: the chain's masses sum to `K(S₀)`. -/
+theorem sum_range_chain_mass (K : ℕ → ℝ) (m : ℕ) :
+    ∑ j ∈ Finset.range (m + 1), (K j - if j < m then K (j + 1) else 0) = K 0 := by
+  induction m generalizing K with
+  | zero => simp
+  | succ m ih =>
+    rw [Finset.sum_range_succ', if_pos (Nat.succ_pos m)]
+    have := ih (fun j => K (j + 1))
+    simp only [show ∀ j, (j + 1 < m + 1) = (j < m) from fun j => propext Nat.succ_lt_succ_iff]
+      at this ⊢
+    rw [this]
+    ring
+
+/-- **A chain measure puts at most `α` on `{K ≤ α}`** (the end of Vlassis and Thomas's
+Proposition 3): the rejected states are a terminal segment, whose masses telescope to `K` at its
+first state. -/
+theorem chain_terminal {α : ℝ} (m : ℕ) {K : ℕ → ℝ} (hK : ∀ j < m, K (j + 1) ≤ K j) :
+    ∑ j ∈ Finset.range (m + 1),
+      (K j - if j < m then K (j + 1) else 0) * (if K j ≤ α then 1 else 0) ≤ max α 0 := by
+  induction m generalizing K with
+  | zero => simp only [zero_add, Finset.range_one, Finset.sum_singleton, lt_irrefl, if_false,
+      sub_zero]; split_ifs with h <;> simp [h]
+  | succ m ih =>
+    by_cases h0 : K 0 ≤ α
+    · have hle : ∀ j ≤ m + 1, K j ≤ K 0 := by
+        intro j
+        induction j with
+        | zero => intro _; exact le_rfl
+        | succ j ihj => intro hj; exact (hK j (by omega)).trans (ihj (by omega))
+      rw [Finset.sum_congr rfl fun j hj => by
+        rw [if_pos ((hle j (by simp only [Finset.mem_range] at hj; omega)).trans h0), mul_one],
+        sum_range_chain_mass]
+      exact h0.trans (le_max_left _ _)
+    · rw [Finset.sum_range_succ', if_neg h0, mul_zero, add_zero]
+      have := ih (K := fun j => K (j + 1)) fun j hj => hK (j + 1) (by omega)
+      simp only [show ∀ j, (j + 1 < m + 1) = (j < m) from fun j => propext Nat.succ_lt_succ_iff]
+        at this ⊢
+      exact this
+
+/-- **The chain induction** (Vlassis and Thomas's §2): placing the units of `P` one at a time,
+least `γ` last, some chain through `P`, with the units of `A` outside `P` still independent, has
+an increasing payoff's mean at least its mean under the independent law. -/
+theorem chain_dominates {γ β : ι → ℝ} (hγ : ∀ e, 0 ≤ γ e) (hγ1 : ∀ e, γ e ≤ 1)
+    (hβ : ∀ e, 0 < β e) (A : Finset ι) {h : Finset ι → ℝ} (hh : ∀ U V, U ⊆ V → h U ≤ h V) :
+    ∀ P ⊆ A, ∃ S, IsChain P S ∧
+      ∑ T ∈ A.powerset, bern (highChance γ β) A T * h T ≤
+        chainMean γ β P S
+          (fun U => ∑ T ∈ (A \ P).powerset, bern (highChance γ β) (A \ P) T * h (U ∪ T)) := by
+  classical
+  have hp := highChance_mem hγ hβ
+  intro P
+  induction P using Finset.strongInduction with
+  | H P ih =>
+    intro hPA
+    rcases P.eq_empty_or_nonempty with rfl | hne
+    · refine ⟨fun _ => ∅, ⟨rfl, rfl, fun j hj => by simp at hj⟩, le_of_eq ?_⟩
+      simp only [chainMean, Finset.card_empty, zero_add, Finset.range_one, Finset.sum_singleton,
+        lt_irrefl, if_false, sub_zero, Finset.sdiff_empty, Finset.empty_union]
+      rw [show cubeK γ β ∅ ∅ = 1 from stat_eq_one_of_nonneg (by simp), one_mul]
+    · obtain ⟨i, hiP, hmin⟩ := Finset.exists_min_image P γ hne
+      have hiA : i ∈ A := hPA hiP
+      obtain ⟨S, hS, hdom⟩ := ih (P.erase i) (Finset.erase_ssubset hiP)
+        ((Finset.erase_subset i P).trans hPA)
+      set g : Finset ι → ℝ := fun U =>
+        ∑ T ∈ (A \ P).powerset, bern (highChance γ β) (A \ P) T * h (U ∪ T) with hgdef
+      have hg : ∀ U V, U ⊆ V → g U ≤ g V := fun U V hUV =>
+        Finset.sum_le_sum fun T _ => mul_le_mul_of_nonneg_left
+          (hh _ _ (Finset.union_subset_union hUV le_rfl)) (bern_nonneg hp _ _)
+      have hsd : A \ P.erase i = insert i (A \ P) := Finset.sdiff_erase hiA
+      have hiAP : i ∉ A \ P := fun h => (Finset.mem_sdiff.1 h).2 hiP
+      have hsplit : ∀ U, ∑ T ∈ (A \ P.erase i).powerset,
+          bern (highChance γ β) (A \ P.erase i) T * h (U ∪ T) =
+          (1 - highChance γ β i) * g U + highChance γ β i * g (insert i U) := fun U => by
+        rw [hsd, sum_bern_insert _ hiAP]
+        congr 2
+        refine Finset.sum_congr rfl fun T _ => ?_
+        rw [Finset.union_insert, Finset.insert_union]
+      obtain ⟨S', hS', hle⟩ := local_insertion hS (Finset.notMem_erase i P) hγ (hγ1 i) hβ
+        (fun e he => hmin e (Finset.mem_of_mem_erase he)) hg
+      rw [Finset.insert_erase hiP] at hS' hle
+      refine ⟨S', hS', hdom.trans (le_of_eq_of_le ?_ hle)⟩
+      simp only [chainMean]
+      exact Finset.sum_congr rfl fun j _ => by rw [hsplit]
+
+/-- **Two-point validity** (Vlassis and Thomas's Proposition 3). Independent mean-one two-point
+units, low `1 − γ_i` with `0 ≤ γ_i ≤ 1` and high `1 + β_i` with `β_i > 0`: their statistic is at
+most `α` with chance at most `α`. -/
+theorem twoPoint_valid [Fintype ι] {γ β : ι → ℝ} (hγ : ∀ e, 0 ≤ γ e) (hγ1 : ∀ e, γ e ≤ 1)
+    (hβ : ∀ e, 0 < β e) (α : ℝ) :
+    ∑ T ∈ (Finset.univ : Finset ι).powerset, bern (highChance γ β) Finset.univ T *
+      (if cubeK γ β Finset.univ T ≤ α then 1 else 0) ≤ max α 0 := by
+  classical
+  have hγβ : ∀ e ∈ (Finset.univ : Finset ι), -β e ≤ γ e := fun e _ => by linarith [hγ e, hβ e]
+  have hh : ∀ U V : Finset ι, U ⊆ V → (if cubeK γ β Finset.univ U ≤ α then (1 : ℝ) else 0) ≤
+      (if cubeK γ β Finset.univ V ≤ α then 1 else 0) := fun U V hUV => by
+    split_ifs with h1 h2
+    · exact le_rfl
+    · exact absurd ((cubeK_anti _ hγβ hUV).trans h1) h2
+    · norm_num
+    · exact le_rfl
+  obtain ⟨S, hS, hdom⟩ := chain_dominates hγ hγ1 hβ Finset.univ hh Finset.univ le_rfl
+  refine hdom.trans (le_of_eq_of_le ?_ (chain_terminal (K := fun j =>
+    cubeK γ β Finset.univ (S j)) (Finset.univ : Finset ι).card fun j hj => ?_))
+  · simp only [chainMean, Finset.sdiff_self, Finset.powerset_empty, Finset.sum_singleton, bern,
+      Finset.prod_empty, Finset.empty_sdiff, one_mul, Finset.union_empty]
+  · obtain ⟨e, -, -, hSe⟩ := hS.2.2 j hj
+    exact cubeK_anti _ hγβ (hSe ▸ Finset.subset_insert e (S j))
+
+/-! #### Every finite law, and Gaffke's bound -/
+
+omit [DecidableEq ι] in
+theorem sumLaw_map_clm (L : ℝ →L[ℝ] ℝ) (m : Multiset ℝ) :
+    sumLaw (m.map L) = (sumLaw m).map L := by
+  induction m using Multiset.induction_on with
+  | empty => rw [Multiset.map_zero, sumLaw_zero, Measure.map_dirac' L.measurable, map_zero]
+  | cons r m ih =>
+    rw [Multiset.map_cons, sumLaw_cons, sumLaw_cons, ih, Measure.map_conv_continuousLinearMap]
+    congr 1
+    rw [expLaw, expLaw, Measure.map_map L.measurable (measurable_const_mul r)]
+    congr 1
+    funext s
+    change L r * s = L (r * s)
+    rw [show r * s = s • r by rw [smul_eq_mul, mul_comm], L.map_smul, smul_eq_mul, mul_comm]
+
+omit [DecidableEq ι] in
+/-- `stat` is blind to a positive scale. -/
+theorem stat_map_mul {c : ℝ} (hc : 0 < c) (m : Multiset ℝ) :
+    stat (m.map fun r => c * r) = stat m := by
+  have h := sumLaw_map_clm (c • ContinuousLinearMap.id ℝ ℝ) m
+  have hL : ((c • ContinuousLinearMap.id ℝ ℝ : ℝ →L[ℝ] ℝ) : ℝ → ℝ) = fun r => c * r := by
+    funext r; simp
+  rw [hL] at h
+  unfold stat
+  rw [h, measureReal_def, measureReal_def,
+    Measure.map_apply (measurable_const_mul c) measurableSet_Ici]
+  congr 2
+  ext r
+  simp [mul_nonneg_iff_of_pos_left hc]
+
+omit [DecidableEq ι] in
+theorem sumLaw_singleton_zero {m : Multiset ℝ} {r : ℝ} (hr : r ∈ m) (hr0 : r ≠ 0) :
+    sumLaw m {0} = 0 := by
+  obtain ⟨m', rfl⟩ := Multiset.exists_cons_of_mem hr
+  rw [sumLaw_cons, ← lintegral_indicator_one (measurableSet_singleton 0),
+    Measure.lintegral_conv (measurable_one.indicator (measurableSet_singleton 0))]
+  have h : ∀ x : ℝ, ∫⁻ y, ({0} : Set ℝ).indicator 1 (x + y) ∂(expLaw r) = 0 := fun x => by
+    rw [show (fun y => ({0} : Set ℝ).indicator 1 (x + y)) = ({-x} : Set ℝ).indicator 1 by
+      funext y
+      simp only [Set.indicator, Set.mem_singleton_iff, Pi.one_apply]
+      congr 1
+      exact propext ⟨fun h => by linarith, fun h => by linarith⟩,
+      lintegral_indicator_one (measurableSet_singleton _), expLaw_singleton hr0]
+  exact (lintegral_congr fun x => h x).trans lintegral_zero
+
+omit [DecidableEq ι] in
+/-- `P(Z ≥ 0) + P(Z ≤ 0) = 1` when some coefficient is nonzero: no atom at zero. -/
+theorem stat_add_stat_neg {m : Multiset ℝ} {r : ℝ} (hr : r ∈ m) (hr0 : r ≠ 0) :
+    stat m + stat (m.map Neg.neg) = 1 := by
+  have h := sumLaw_map_clm (-ContinuousLinearMap.id ℝ ℝ) m
+  have hL : ((-ContinuousLinearMap.id ℝ ℝ : ℝ →L[ℝ] ℝ) : ℝ → ℝ) = Neg.neg := by
+    funext r; simp
+  rw [hL] at h
+  unfold stat
+  rw [h, measureReal_def, measureReal_def, Measure.map_apply measurable_neg measurableSet_Ici,
+    show Neg.neg ⁻¹' Set.Ici (0 : ℝ) = Set.Iic 0 by ext x; simp,
+    ← ENNReal.toReal_add (measure_ne_top _ _) (measure_ne_top _ _)]
+  have hu := measure_union_add_inter (μ := sumLaw m) (Set.Ici (0 : ℝ))
+    (measurableSet_Iic (a := (0 : ℝ)))
+  rw [Set.Ici_inter_Iic, Set.Icc_self, sumLaw_singleton_zero hr hr0, add_zero,
+    show Set.Ici (0 : ℝ) ∪ Set.Iic 0 = Set.univ by ext x; simp, measure_univ] at hu
+  rw [← hu, ENNReal.toReal_one]
+
+/-- **Vlassis and Thomas's statistic**, `K(x) = P(∑ x_i D_i ≤ 1)` with `D ~ Dir(1, …, 1)` over
+the `x_i` and an added zero; as exponentials, `P(E₀ + ∑ (1 − x_i) E_i ≥ 0)`. -/
+noncomputable def gaffkeK {ι : Type*} [Fintype ι] (x : ι → ℝ) : ℝ :=
+  stat (1 ::ₘ Finset.univ.val.map fun i => 1 - x i)
+
+theorem gaffkeK_anti {ι : Type*} [Fintype ι] {x y : ι → ℝ} (h : ∀ i, x i ≤ y i) :
+    gaffkeK y ≤ gaffkeK x := by
+  unfold gaffkeK
+  rw [← Multiset.singleton_add, ← Multiset.singleton_add]
+  exact stat_map_mono {1} _ fun i _ => by linarith [h i]
+
+/-- **The cube meets `K`**: the two-point outcome with high set `T` has statistic
+`cubeK γ β univ T`. -/
+theorem gaffkeK_twoPoint [Fintype ι] (γ β : ι → ℝ) (T : Finset ι) :
+    gaffkeK (fun i => if i ∈ T then 1 + β i else 1 - γ i) = cubeK γ β Finset.univ T := by
+  unfold gaffkeK cubeK
+  congr 2
+  refine Multiset.map_congr rfl fun i _ => ?_
+  simp only [coef]
+  split_ifs <;> ring
+
+/-- The posterior's distribution function, `P(L⁺ ≤ x)` for `L⁺ = ∑ U_i ℓ_i + U₀ B`,
+`U ~ Dir(1, …, 1)` (Snell and Griffiths), the Dirichlet weights normalized independent unit
+exponentials: `P((x − B) E₀ + ∑ (x − ℓ_i) E_i ≥ 0)`. -/
+noncomputable def lplusCdf {ι : Type*} [Fintype ι] (B : ℝ) (ℓ : ι → ℝ) (x : ℝ) : ℝ :=
+  stat ((x - B) ::ₘ Finset.univ.val.map fun i => x - ℓ i)
+
+/-- **Gaffke's bound** `b*_β`, the least `x` with `P(L⁺ ≤ x) ≥ β` (`LossBound.Gaffke`). -/
+noncomputable def gaffkeBound {ι : Type*} [Fintype ι] (B β : ℝ) (ℓ : ι → ℝ) : ℝ :=
+  sInf {x | β ≤ lplusCdf B ℓ x}
+
+theorem lplusCdf_mono {ι : Type*} [Fintype ι] (B : ℝ) (ℓ : ι → ℝ) {x y : ℝ} (h : x ≤ y) :
+    lplusCdf B ℓ x ≤ lplusCdf B ℓ y := by
+  unfold lplusCdf
+  calc stat ((x - B) ::ₘ Finset.univ.val.map fun i => x - ℓ i)
+      ≤ stat ((y - B) ::ₘ Finset.univ.val.map fun i => x - ℓ i) := stat_cons_le (by linarith) _
+    _ ≤ stat ((y - B) ::ₘ Finset.univ.val.map fun i => y - ℓ i) := by
+        rw [← Multiset.singleton_add, ← Multiset.singleton_add]
+        exact stat_map_mono _ _ fun i _ => by linarith
+
+theorem lplusCdf_nonempty {ι : Type*} [Fintype ι] {B β : ℝ} {ℓ : ι → ℝ} (hℓ : ∀ i, ℓ i ≤ B)
+    (hβ1 : β ≤ 1) : ({x | β ≤ lplusCdf B ℓ x} : Set ℝ).Nonempty := by
+  refine ⟨B, ?_⟩
+  change β ≤ lplusCdf B ℓ B
+  rw [lplusCdf, stat_eq_one_of_nonneg]
+  · exact hβ1
+  · intro r hr
+    rcases Multiset.mem_cons.1 hr with rfl | hr
+    · simp
+    · obtain ⟨i, -, rfl⟩ := Multiset.mem_map.1 hr
+      linarith [hℓ i]
+
+/-- **A miss puts `K` low.** If Gaffke's bound falls below `J < B`, then with
+`X_i = (B − ℓ_i)/(B − J)`, `K(X) = 1 − P(L⁺ ≤ J) ≤ 1 − β`. -/
+theorem gaffkeK_le_of_miss {ι : Type*} [Fintype ι] {B J β : ℝ} {ℓ : ι → ℝ}
+    (hℓ : ∀ i, ℓ i ≤ B) (hJB : J < B) (hβ1 : β ≤ 1) (hmiss : gaffkeBound B β ℓ < J) :
+    gaffkeK (fun i => (B - ℓ i) / (B - J)) ≤ 1 - β := by
+  obtain ⟨x, hx, hxJ⟩ := exists_lt_of_csInf_lt (lplusCdf_nonempty hℓ hβ1) hmiss
+  have hcdf : β ≤ lplusCdf B ℓ J := le_trans hx (lplusCdf_mono B ℓ hxJ.le)
+  have hBJ : 0 < B - J := sub_pos.2 hJB
+  set m : Multiset ℝ := (B - J) ::ₘ Finset.univ.val.map fun i => ℓ i - J with hmdef
+  have hK : gaffkeK (fun i => (B - ℓ i) / (B - J)) = stat m := by
+    unfold gaffkeK
+    rw [← stat_map_mul hBJ, Multiset.map_cons, Multiset.map_map, hmdef]
+    congr 2
+    · ring
+    · exact Multiset.map_congr rfl fun i _ => by
+        simp only [Function.comp]
+        field_simp
+        ring
+  have hL : lplusCdf B ℓ J = stat (m.map Neg.neg) := by
+    unfold lplusCdf
+    rw [hmdef, Multiset.map_cons, Multiset.map_map]
+    congr 2
+    · ring
+    · exact Multiset.map_congr rfl fun i _ => by simp only [Function.comp]; ring
+  have hsum := stat_add_stat_neg (m := m) (Multiset.mem_cons_self _ _) hBJ.ne'
+  linarith
+
+/-- With every loss at `B`, `L⁺ = B`, and Gaffke's bound is `B`. -/
+theorem le_gaffkeBound_of_eq {ι : Type*} [Fintype ι] {B β : ℝ} {ℓ : ι → ℝ} (hℓ : ∀ i, ℓ i = B)
+    (hβ0 : 0 < β) (hβ1 : β ≤ 1) : B ≤ gaffkeBound B β ℓ := by
+  refine le_csInf (lplusCdf_nonempty (fun i => (hℓ i).le) hβ1) fun x hx => ?_
+  by_contra hxB
+  have h0 : lplusCdf B ℓ x = 0 := by
+    rw [lplusCdf]
+    refine stat_eq_zero_of_nonpos (by linarith [not_le.1 hxB]) fun r hr => ?_
+    obtain ⟨i, -, rfl⟩ := Multiset.mem_map.1 hr
+    linarith [hℓ i, not_le.1 hxB]
+  have : β ≤ lplusCdf B ℓ x := hx
+  linarith
+
+/-- **The bridge to the cube.** Independent units, each on two values `1 − γ_i` and `1 + β_i`
+of a finite index set, are the two-point system `bern` on the high sets. -/
+theorem sum_prod_twoPoint {κ : Type*} [Fintype ι] [Fintype κ] (q x : ι → κ → ℝ)
+    (γ β : ι → ℝ) (hq1 : ∀ i, ∑ k, q i k = 1)
+    (hsupp : ∀ i k, q i k ≠ 0 → x i k = 1 - γ i ∨ x i k = 1 + β i)
+    (hhi : ∀ i, ∑ k ∈ Finset.univ.filter (fun k => x i k = 1 + β i), q i k = highChance γ β i)
+    (f : (ι → ℝ) → ℝ) :
+    ∑ k : ι → κ, (∏ i, q i (k i)) * f (fun i => x i (k i)) =
+      ∑ T ∈ (Finset.univ : Finset ι).powerset, bern (highChance γ β) Finset.univ T *
+        f (fun i => if i ∈ T then 1 + β i else 1 - γ i) := by
+  classical
+  set Tk : (ι → κ) → Finset ι := fun k => Finset.univ.filter fun i => x i (k i) = 1 + β i
+    with hTk
+  rw [← Finset.sum_fiberwise_of_maps_to (s := Finset.univ) (t := Finset.univ.powerset) (g := Tk)
+    (fun k _ => Finset.mem_powerset.2 (Finset.subset_univ _))]
+  refine Finset.sum_congr rfl fun T _ => ?_
+  have hmemT : ∀ k i, (i ∈ Tk k ↔ x i (k i) = 1 + β i) := fun k i => by simp [hTk]
+  have hpt : ∀ k ∈ Finset.univ.filter (fun k => Tk k = T),
+      (∏ i, q i (k i)) * f (fun i => x i (k i)) =
+        (∏ i, q i (k i)) * f (fun i => if i ∈ T then 1 + β i else 1 - γ i) := by
+    intro k hk
+    have hkT : Tk k = T := (Finset.mem_filter.1 hk).2
+    by_cases h0 : ∏ i, q i (k i) = 0
+    · rw [h0, zero_mul, zero_mul]
+    · congr 2
+      funext i
+      have hqi : q i (k i) ≠ 0 := fun h => h0 (Finset.prod_eq_zero (Finset.mem_univ i) h)
+      have hmem : i ∈ T ↔ x i (k i) = 1 + β i := by rw [← hkT]; exact hmemT k i
+      by_cases hiT : i ∈ T
+      · rw [if_pos hiT]; exact hmem.1 hiT
+      · rw [if_neg hiT]
+        rcases hsupp i (k i) hqi with h | h
+        · exact h
+        · exact absurd (hmem.2 h) hiT
+  rw [Finset.sum_congr rfl hpt, ← Finset.sum_mul]
+  congr 1
+  rw [Finset.sum_filter]
+  have hind : ∀ k : ι → κ, (if Tk k = T then ∏ i, q i (k i) else 0) =
+      ∏ i, (q i (k i) * if (x i (k i) = 1 + β i ↔ i ∈ T) then 1 else 0) := by
+    intro k
+    rw [Finset.prod_mul_distrib]
+    by_cases hkT : Tk k = T
+    · rw [if_pos hkT, Finset.prod_eq_one fun i _ => if_pos (by rw [← hkT]; exact (hmemT k i).symm),
+        mul_one]
+    · rw [if_neg hkT]
+      obtain ⟨i, hi⟩ : ∃ i, ¬ (x i (k i) = 1 + β i ↔ i ∈ T) := by
+        by_contra hall
+        push Not at hall
+        exact hkT (Finset.ext fun i => (hmemT k i).trans (hall i))
+      rw [Finset.prod_eq_zero (s := Finset.univ)
+        (f := fun i => if (x i (k i) = 1 + β i ↔ i ∈ T) then (1 : ℝ) else 0) (Finset.mem_univ i)
+        (if_neg hi), mul_zero]
+  rw [Finset.sum_congr rfl fun k _ => hind k,
+    ← Fintype.prod_sum (fun i j => q i j * if (x i j = 1 + β i ↔ i ∈ T) then (1 : ℝ) else 0)]
+  have hb : bern (highChance γ β) Finset.univ T =
+      ∏ i, (if i ∈ T then highChance γ β i else 1 - highChance γ β i) := by
+    rw [Finset.prod_ite, bern]
+    congr 1
+    · congr 1; ext i; simp
+    · congr 1; ext i; simp
+  rw [hb]
+  refine Finset.prod_congr rfl fun i _ => ?_
+  by_cases hiT : i ∈ T
+  · simp only [hiT, iff_true, if_true]
+    rw [← hhi i, Finset.sum_filter]
+    exact Finset.sum_congr rfl fun k _ => by split_ifs <;> simp
+  · simp only [hiT, iff_false, if_false]
+    have hsplit := Finset.sum_filter_add_sum_filter_not Finset.univ
+      (fun k => x i k = 1 + β i) (q i)
+    rw [hhi i, hq1 i] at hsplit
+    rw [show ∑ k, q i k * (if ¬ x i k = 1 + β i then (1 : ℝ) else 0) =
+        ∑ k ∈ Finset.univ.filter (fun k => ¬ x i k = 1 + β i), q i k by
+      rw [Finset.sum_filter]
+      exact Finset.sum_congr rfl fun k _ => by split_ifs <;> simp]
+    linarith
+
+omit [DecidableEq ι] in
+/-- **The two-point mixture** (Vlassis and Thomas's Lemma 7, for a finite law): a mean-one law on
+nonnegative values is a mixture of mean-one laws on two values, one below `1` and one above, and
+of the point `1`. The pair `x_a < 1 < x_b` has weight `(x_b − x_a) p_a p_b / M`,
+`M = ∑ p (1 − x)⁺`. -/
+theorem twoPoint_mixture {κ : Type*} [Fintype κ] (p x : κ → ℝ)
+    (hp : ∀ k, 0 ≤ p k) (hx : ∀ k, 0 ≤ x k) (hm : ∑ k, p k * x k = ∑ k, p k) :
+    ∃ (w : Option (κ × κ) → ℝ) (q : Option (κ × κ) → κ → ℝ) (γ β : Option (κ × κ) → ℝ),
+      (∀ ξ, 0 ≤ w ξ) ∧ (∀ k, p k = ∑ ξ, w ξ * q ξ k) ∧
+      ∀ ξ, w ξ ≠ 0 → (∑ k, q ξ k = 1) ∧ 0 ≤ γ ξ ∧ γ ξ ≤ 1 ∧ 0 < β ξ ∧
+        (∀ k, q ξ k ≠ 0 → x k = 1 - γ ξ ∨ x k = 1 + β ξ) ∧
+        ∑ k ∈ Finset.univ.filter (fun k => x k = 1 + β ξ), q ξ k = γ ξ / (γ ξ + β ξ) := by
+  classical
+  set M := ∑ k, p k * max 0 (1 - x k) with hM
+  have hM' : ∑ k, p k * max 0 (x k - 1) = M := by
+    have h : ∀ k, p k * max 0 (x k - 1) - p k * max 0 (1 - x k) = p k * x k - p k := fun k => by
+      rcases le_total (x k) 1 with h | h
+      · rw [max_eq_left (by linarith), max_eq_right (by linarith)]; ring
+      · rw [max_eq_right (by linarith), max_eq_left (by linarith)]; ring
+    have := Finset.sum_congr rfl fun k (_ : k ∈ Finset.univ) => h k
+    rw [Finset.sum_sub_distrib, Finset.sum_sub_distrib, hm, sub_self] at this
+    linarith
+  set W := ∑ k, if x k = 1 then p k else 0 with hW
+  let w : Option (κ × κ) → ℝ := fun ξ => match ξ with
+    | none => W
+    | some (a, b) => if x a < 1 ∧ 1 < x b then (x b - x a) * p a * p b / M else 0
+  let q : Option (κ × κ) → κ → ℝ := fun ξ k => match ξ with
+    | none => if x k = 1 then p k / W else 0
+    | some (a, b) => (if k = a then (x b - 1) / (x b - x a) else 0) +
+        (if k = b then (1 - x a) / (x b - x a) else 0)
+  let γ : Option (κ × κ) → ℝ := fun ξ => match ξ with
+    | none => 0
+    | some (a, _) => 1 - x a
+  let β : Option (κ × κ) → ℝ := fun ξ => match ξ with
+    | none => 1
+    | some (_, b) => x b - 1
+  have hMnn : 0 ≤ M := Finset.sum_nonneg fun k _ => mul_nonneg (hp k) (le_max_left _ _)
+  refine ⟨w, q, γ, β, fun ξ => ?_, fun k => ?_, fun ξ hξ => ?_⟩
+  · rcases ξ with _ | ⟨a, b⟩
+    · exact Finset.sum_nonneg fun k _ => by split_ifs <;> simp [hp k]
+    · change 0 ≤ if x a < 1 ∧ 1 < x b then (x b - x a) * p a * p b / M else 0
+      split_ifs with h
+      · exact div_nonneg (mul_nonneg (mul_nonneg (by linarith [h.1, h.2]) (hp a)) (hp b)) hMnn
+      · exact le_rfl
+  · -- the decomposition
+    rw [Fintype.sum_option, Fintype.sum_prod_type]
+    change p k = W * (if x k = 1 then p k / W else 0) + ∑ a, ∑ b,
+      (if x a < 1 ∧ 1 < x b then (x b - x a) * p a * p b / M else 0) *
+        ((if k = a then (x b - 1) / (x b - x a) else 0) +
+          (if k = b then (1 - x a) / (x b - x a) else 0))
+    have hsplit : ∀ (u : κ → κ → ℝ) (c₁ c₂ : κ → κ → ℝ),
+        ∑ a, ∑ b, u a b * ((if k = a then c₁ a b else 0) + (if k = b then c₂ a b else 0)) =
+          ∑ b, u k b * c₁ k b + ∑ a, u a k * c₂ a k := fun u c₁ c₂ => by
+      simp only [mul_add, Finset.sum_add_distrib, mul_ite, mul_zero]
+      congr 1
+      · rw [Finset.sum_comm]
+        exact Finset.sum_congr rfl fun b _ => by rw [Finset.sum_ite_eq]; simp
+      · exact Finset.sum_congr rfl fun a _ => by rw [Finset.sum_ite_eq]; simp
+    rw [hsplit (fun a b => if x a < 1 ∧ 1 < x b then (x b - x a) * p a * p b / M else 0)
+      (fun a b => (x b - 1) / (x b - x a)) (fun a b => (1 - x a) / (x b - x a))]
+    rcases lt_trichotomy (x k) 1 with hk | hk | hk
+    · -- below one: the pairs `(k, b)`
+      rw [if_neg hk.ne, mul_zero, zero_add]
+      have h2 : ∀ a, (if x a < 1 ∧ 1 < x k then (x k - x a) * p a * p k / M else 0) *
+          ((1 - x a) / (x k - x a)) = 0 := fun a => by
+        rw [if_neg (by intro h; linarith [h.2])]; simp
+      simp only [h2, Finset.sum_const_zero, add_zero]
+      have h1 : ∀ b, (if x k < 1 ∧ 1 < x b then (x b - x k) * p k * p b / M else 0) *
+          ((x b - 1) / (x b - x k)) = p k / M * (p b * max 0 (x b - 1)) := fun b => by
+        by_cases hb : 1 < x b
+        · rw [if_pos ⟨hk, hb⟩, max_eq_right (by linarith)]
+          field_simp [show x b - x k ≠ 0 by linarith]
+        · rw [if_neg (fun h => hb h.2), max_eq_left (by linarith [not_lt.1 hb])]; ring
+      simp only [h1, ← Finset.mul_sum, hM']
+      by_cases hM0 : M = 0
+      · have : p k * max 0 (1 - x k) ≤ M := by
+          rw [hM]
+          exact Finset.single_le_sum (f := fun j => p j * max 0 (1 - x j))
+            (fun j _ => mul_nonneg (hp j) (le_max_left _ _)) (Finset.mem_univ k)
+        rw [hM0, max_eq_right (by linarith)] at this
+        have hpk : p k = 0 := le_antisymm (by nlinarith [hp k]) (hp k)
+        rw [hpk, zero_div, zero_mul]
+      · field_simp
+    · -- at one: the point `1`
+      rw [if_pos hk]
+      have h1 : ∀ b, (if x k < 1 ∧ 1 < x b then (x b - x k) * p k * p b / M else 0) *
+          ((x b - 1) / (x b - x k)) = 0 := fun b => by
+        rw [if_neg (by intro h; linarith [h.1])]; simp
+      have h2 : ∀ a, (if x a < 1 ∧ 1 < x k then (x k - x a) * p a * p k / M else 0) *
+          ((1 - x a) / (x k - x a)) = 0 := fun a => by
+        rw [if_neg (by intro h; linarith [h.2])]; simp
+      simp only [h1, h2, Finset.sum_const_zero, add_zero]
+      by_cases hW0 : W = 0
+      · have : p k ≤ W := by
+          rw [hW]
+          calc p k = if x k = 1 then p k else 0 := by rw [if_pos hk]
+            _ ≤ ∑ j, if x j = 1 then p j else 0 :=
+              Finset.single_le_sum (f := fun j => if x j = 1 then p j else 0)
+                (fun j _ => by split_ifs <;> simp [hp j]) (Finset.mem_univ k)
+        rw [hW0] at this
+        rw [hW0, zero_mul]
+        exact le_antisymm this (hp k)
+      · field_simp
+    · -- above one: the pairs `(a, k)`
+      rw [if_neg hk.ne', mul_zero, zero_add]
+      have h1 : ∀ b, (if x k < 1 ∧ 1 < x b then (x b - x k) * p k * p b / M else 0) *
+          ((x b - 1) / (x b - x k)) = 0 := fun b => by
+        rw [if_neg (by intro h; linarith [h.1])]; simp
+      simp only [h1, Finset.sum_const_zero, zero_add]
+      have h2 : ∀ a, (if x a < 1 ∧ 1 < x k then (x k - x a) * p a * p k / M else 0) *
+          ((1 - x a) / (x k - x a)) = p k / M * (p a * max 0 (1 - x a)) := fun a => by
+        by_cases ha : x a < 1
+        · rw [if_pos ⟨ha, hk⟩, max_eq_right (by linarith)]
+          field_simp [show x k - x a ≠ 0 by linarith]
+        · rw [if_neg (fun h => ha h.1), max_eq_left (by linarith [not_lt.1 ha])]; ring
+      simp only [h2, ← Finset.mul_sum, ← hM]
+      by_cases hM0 : M = 0
+      · have : p k * max 0 (x k - 1) ≤ M := by
+          rw [← hM']
+          exact Finset.single_le_sum (f := fun j => p j * max 0 (x j - 1))
+            (fun j _ => mul_nonneg (hp j) (le_max_left _ _)) (Finset.mem_univ k)
+        rw [hM0, max_eq_right (by linarith)] at this
+        have hpk : p k = 0 := le_antisymm (by nlinarith [hp k]) (hp k)
+        rw [hpk, zero_div, zero_mul]
+      · field_simp
+  · -- each component with weight is a mean-one two-point law
+    rcases ξ with _ | ⟨a, b⟩
+    · have hW0 : W ≠ 0 := hξ
+      refine ⟨?_, le_rfl, zero_le_one, one_pos, fun k hk => ?_, ?_⟩
+      · change ∑ k, (if x k = 1 then p k / W else 0) = 1
+        rw [show (fun k => if x k = 1 then p k / W else 0) = fun k =>
+          (if x k = 1 then p k else 0) / W from funext fun k => by split_ifs <;> simp,
+          ← Finset.sum_div, ← hW, div_self hW0]
+      · left
+        change x k = 1 - 0
+        by_contra h
+        exact hk (show (if x k = 1 then p k / W else 0) = 0 from if_neg (by simpa using h))
+      · change ∑ k ∈ Finset.univ.filter (fun k => x k = 1 + 1), (if x k = 1 then p k / W else 0) =
+          0 / (0 + 1)
+        rw [zero_div]
+        exact Finset.sum_eq_zero fun k hk => if_neg (by
+          have := (Finset.mem_filter.1 hk).2; linarith)
+    · have hab : x a < 1 ∧ 1 < x b := by
+        by_contra h
+        exact hξ (show (if x a < 1 ∧ 1 < x b then (x b - x a) * p a * p b / M else 0) = 0 from
+          if_neg h)
+      have hD : x b - x a ≠ 0 := by linarith [hab.1, hab.2]
+      have hne : a ≠ b := fun h => by rw [h] at hab; linarith [hab.1, hab.2]
+      refine ⟨?_, by change 0 ≤ 1 - x a; linarith [hab.1], by change 1 - x a ≤ 1; linarith [hx a],
+        by change 0 < x b - 1; linarith [hab.2], fun k hk => ?_, ?_⟩
+      · change ∑ k, ((if k = a then (x b - 1) / (x b - x a) else 0) +
+          (if k = b then (1 - x a) / (x b - x a) else 0)) = 1
+        rw [Finset.sum_add_distrib, Finset.sum_ite_eq', Finset.sum_ite_eq',
+          if_pos (Finset.mem_univ _), if_pos (Finset.mem_univ _)]
+        field_simp
+        ring
+      · have hk' : (if k = a then (x b - 1) / (x b - x a) else 0) +
+            (if k = b then (1 - x a) / (x b - x a) else 0) ≠ 0 := hk
+        by_cases hka : k = a
+        · left; change x k = 1 - (1 - x a); rw [hka]; ring
+        · right; change x k = 1 + (x b - 1)
+          by_cases hkb : k = b
+          · rw [hkb]; ring
+          · exact absurd (by rw [if_neg hka, if_neg hkb, add_zero]) hk'
+      · change ∑ k ∈ Finset.univ.filter (fun k => x k = 1 + (x b - 1)),
+          ((if k = a then (x b - 1) / (x b - x a) else 0) +
+            (if k = b then (1 - x a) / (x b - x a) else 0)) = (1 - x a) / (1 - x a + (x b - 1))
+        rw [Finset.sum_add_distrib, Finset.sum_ite_eq', Finset.sum_ite_eq',
+          if_neg (by simp only [Finset.mem_filter, Finset.mem_univ, true_and]; intro h; linarith),
+          if_pos (by simp only [Finset.mem_filter, Finset.mem_univ, true_and]; ring), zero_add]
+        congr 1
+        ring
+
+/-- **Vlassis and Thomas's Theorem 1, for finite laws.** Independent units with nonnegative
+values and means at most `1`: `K(X) ≤ α` with chance at most `α` (`max α 0` for any real `α`).
+Rescale to mean one (`K` falls as the values rise), split each law into two-point laws
+(`twoPoint_mixture`), and each product of two-point laws is `twoPoint_valid`. -/
+theorem gaffkeK_valid {κ : Type*} [Fintype ι] [Fintype κ]
+    (p x : ι → κ → ℝ) (hp : ∀ i k, 0 ≤ p i k) (hp1 : ∀ i, ∑ k, p i k = 1)
+    (hx : ∀ i k, 0 ≤ x i k) (hmean : ∀ i, ∑ k, p i k * x i k ≤ 1) (α : ℝ) :
+    ∑ k : ι → κ, (∏ i, p i (k i)) * (if gaffkeK (fun i => x i (k i)) ≤ α then 1 else 0) ≤
+      max α 0 := by
+  classical
+  -- rescale to mean one
+  set mu : ι → ℝ := fun i => ∑ k, p i k * x i k with hmu
+  set x' : ι → κ → ℝ := fun i k => if mu i = 0 then 1 + x i k else x i k / mu i with hx'
+  have hmu0 : ∀ i, 0 ≤ mu i := fun i => Finset.sum_nonneg fun k _ => mul_nonneg (hp i k) (hx i k)
+  have hxx' : ∀ i k, x i k ≤ x' i k := fun i k => by
+    simp only [hx']
+    split_ifs with h
+    · linarith
+    · rw [le_div_iff₀ (lt_of_le_of_ne (hmu0 i) (Ne.symm h))]
+      nlinarith [hx i k, hmean i]
+  have hx'0 : ∀ i k, 0 ≤ x' i k := fun i k => (hx i k).trans (hxx' i k)
+  have hm' : ∀ i, ∑ k, p i k * x' i k = ∑ k, p i k := fun i => by
+    rw [hp1 i]
+    simp only [hx']
+    split_ifs with h
+    · simp only [mul_add, mul_one, Finset.sum_add_distrib, hp1 i]
+      have : mu i = 0 := h
+      rw [hmu] at this
+      linarith
+    · simp only [mul_div_assoc', ← Finset.sum_div]
+      exact div_self h
+  calc ∑ k : ι → κ, (∏ i, p i (k i)) * (if gaffkeK (fun i => x i (k i)) ≤ α then 1 else 0)
+      ≤ ∑ k : ι → κ, (∏ i, p i (k i)) * (if gaffkeK (fun i => x' i (k i)) ≤ α then 1 else 0) :=
+        Finset.sum_le_sum fun k _ => mul_le_mul_of_nonneg_left (by
+          split_ifs with h1 h2
+          · exact le_rfl
+          · exact absurd ((gaffkeK_anti fun i => hxx' i (k i)).trans h1) h2
+          · norm_num
+          · exact le_rfl) (Finset.prod_nonneg fun i _ => hp i (k i))
+    _ ≤ max α 0 := by
+      -- split every unit's law into two-point laws
+      choose w q γ β hw hdec hcomp using fun i => twoPoint_mixture (p i) (x' i) (hp i) (hx'0 i)
+        (hm' i)
+      have hwsum : ∀ i, ∑ ξ, w i ξ = 1 := fun i => by
+        rw [← hp1 i]
+        calc ∑ ξ, w i ξ = ∑ ξ, w i ξ * ∑ k, q i ξ k := Finset.sum_congr rfl fun ξ _ => by
+              by_cases h : w i ξ = 0
+              · rw [h, zero_mul]
+              · rw [(hcomp i ξ h).1, mul_one]
+          _ = ∑ k, p i k := by
+              simp only [Finset.mul_sum]
+              rw [Finset.sum_comm]
+              exact Finset.sum_congr rfl fun k _ => (hdec i k).symm
+      set F : (ι → κ) → ℝ := fun k => if gaffkeK (fun i => x' i (k i)) ≤ α then 1 else 0 with hF
+      have hmix : ∑ k : ι → κ, (∏ i, p i (k i)) * F k =
+          ∑ ξ : ι → Option (κ × κ), (∏ i, w i (ξ i)) *
+            ∑ k : ι → κ, (∏ i, q i (ξ i) (k i)) * F k := by
+        calc ∑ k : ι → κ, (∏ i, p i (k i)) * F k
+            = ∑ k : ι → κ, (∑ ξ : ι → Option (κ × κ), ∏ i, (w i (ξ i) * q i (ξ i) (k i))) * F k :=
+              Finset.sum_congr rfl fun k _ => by
+                rw [← Fintype.prod_sum (fun i ξ => w i ξ * q i ξ (k i))]
+                exact congrArg (· * F k) (Finset.prod_congr rfl fun i _ => hdec i (k i))
+          _ = _ := by
+              simp only [Finset.sum_mul, Finset.mul_sum, Finset.prod_mul_distrib]
+              rw [Finset.sum_comm]
+              exact Finset.sum_congr rfl fun ξ _ => Finset.sum_congr rfl fun k _ => by ring
+      rw [hmix]
+      calc ∑ ξ : ι → Option (κ × κ), (∏ i, w i (ξ i)) *
+            ∑ k : ι → κ, (∏ i, q i (ξ i) (k i)) * F k
+          ≤ ∑ ξ : ι → Option (κ × κ), (∏ i, w i (ξ i)) * max α 0 := by
+            refine Finset.sum_le_sum fun ξ _ => ?_
+            by_cases h0 : ∏ i, w i (ξ i) = 0
+            · rw [h0, zero_mul, zero_mul]
+            · have hwi : ∀ i, w i (ξ i) ≠ 0 := fun i h =>
+                h0 (Finset.prod_eq_zero (Finset.mem_univ i) h)
+              refine mul_le_mul_of_nonneg_left ?_ (Finset.prod_nonneg fun i _ => hw i (ξ i))
+              have hbr := sum_prod_twoPoint (fun i => q i (ξ i)) x' (fun i => γ i (ξ i))
+                (fun i => β i (ξ i)) (fun i => (hcomp i (ξ i) (hwi i)).1)
+                (fun i => (hcomp i (ξ i) (hwi i)).2.2.2.2.1)
+                (fun i => (hcomp i (ξ i) (hwi i)).2.2.2.2.2)
+                (fun y => if gaffkeK y ≤ α then (1 : ℝ) else 0)
+              refine le_of_eq_of_le hbr ?_
+              simp only [gaffkeK_twoPoint]
+              exact twoPoint_valid (fun i => (hcomp i (ξ i) (hwi i)).2.1)
+                (fun i => (hcomp i (ξ i) (hwi i)).2.2.1)
+                (fun i => (hcomp i (ξ i) (hwi i)).2.2.2.1) α
+        _ = max α 0 := by
+            rw [← Finset.sum_mul, ← Fintype.prod_sum]
+            simp [hwsum]
+
+/-- **Gaffke's bound misses with chance at most `1 − β`** (Vlassis and Thomas's Theorem 1, through
+`P(L⁺ ≤ J) = 1 − K(X)` with `X_i = (B − ℓ_i)/(B − J)`): independent units, each with its own loss
+law on finitely many values at most `B` and mean at least `J ≤ B`; `J ≤ B` matters only with no
+units. -/
+theorem gaffke_miss_le {κ : Type*} [Fintype ι] [Fintype κ]
+    (p v : ι → κ → ℝ) (hp : ∀ i k, 0 ≤ p i k) (hp1 : ∀ i, ∑ k, p i k = 1) {B J β : ℝ}
+    (hv : ∀ i k, v i k ≤ B) (hJ : ∀ i, J ≤ ∑ k, p i k * v i k) (hJB0 : J ≤ B) (hβ1 : β ≤ 1) :
+    ∑ k : ι → κ, (∏ i, p i (k i)) *
+      (if gaffkeBound B β (fun i => v i (k i)) < J then 1 else 0) ≤ 1 - β := by
+  classical
+  have hprod : ∀ k : ι → κ, 0 ≤ ∏ i, p i (k i) := fun k => Finset.prod_nonneg fun i _ => hp i (k i)
+  have htot : ∑ k : ι → κ, ∏ i, p i (k i) = 1 := by
+    rw [← Fintype.prod_sum]; simp [hp1]
+  rcases le_or_gt β 0 with hβ0 | hβ0
+  · calc ∑ k : ι → κ, (∏ i, p i (k i)) *
+          (if gaffkeBound B β (fun i => v i (k i)) < J then 1 else 0)
+        ≤ ∑ k : ι → κ, ∏ i, p i (k i) := Finset.sum_le_sum fun k _ => by
+          split_ifs <;> simp [hprod k]
+      _ ≤ 1 - β := by rw [htot]; linarith
+  have hmeanB : ∀ i, ∑ k, p i k * v i k ≤ B := fun i => by
+    calc ∑ k, p i k * v i k ≤ ∑ k, p i k * B :=
+          Finset.sum_le_sum fun k _ => mul_le_mul_of_nonneg_left (hv i k) (hp i k)
+      _ = B := by rw [← Finset.sum_mul, hp1 i, one_mul]
+  rcases lt_or_ge J B with hJB | hJB
+  · -- `X_i = (B − ℓ_i)/(B − J)`, mean at most one, and Theorem 1 at `α = 1 − β`
+    have hBJ : 0 < B - J := sub_pos.2 hJB
+    have hval := gaffkeK_valid p (fun i k => (B - v i k) / (B - J)) hp hp1
+      (fun i k => div_nonneg (sub_nonneg.2 (hv i k)) hBJ.le) (fun i => by
+        simp only [mul_div_assoc', ← Finset.sum_div]
+        rw [div_le_one hBJ]
+        simp only [mul_sub, Finset.sum_sub_distrib, ← Finset.sum_mul, hp1 i, one_mul]
+        linarith [hJ i]) (1 - β)
+    rw [max_eq_left (by linarith)] at hval
+    refine le_trans (Finset.sum_le_sum fun k _ => mul_le_mul_of_nonneg_left ?_ (hprod k)) hval
+    split_ifs with h1 h2
+    · exact le_rfl
+    · exact absurd (gaffkeK_le_of_miss (fun i => hv i (k i)) hJB hβ1 h1) h2
+    · norm_num
+    · exact le_rfl
+  · -- `J = B`: every loss with chance is `B`, and the bound is `B`
+    refine le_trans (le_of_eq (Finset.sum_eq_zero fun k _ => ?_)) (by linarith)
+    by_cases h0 : ∏ i, p i (k i) = 0
+    · rw [h0, zero_mul]
+    · have hall : ∀ i, v i (k i) = B := fun i => by
+        have hpi : p i (k i) ≠ 0 := fun h => h0 (Finset.prod_eq_zero (Finset.mem_univ i) h)
+        have hsum : ∑ k', p i k' * (B - v i k') = 0 := by
+          have := hJ i
+          have := hmeanB i
+          simp only [mul_sub, Finset.sum_sub_distrib, ← Finset.sum_mul, hp1 i, one_mul]
+          linarith
+        have := (Finset.sum_eq_zero_iff_of_nonneg fun k' _ =>
+          mul_nonneg (hp i k') (sub_nonneg.2 (hv i k'))).1 hsum (k i) (Finset.mem_univ _)
+        rcases mul_eq_zero.1 this with h | h
+        · exact absurd h hpi
+        · linarith
+      rw [if_neg (not_lt.2 ((le_of_eq (le_antisymm hJB0 hJB)).trans
+        (le_gaffkeBound_of_eq hall hβ0 hβ1))), mul_zero]
+
+/-- **The `β`-bound's calibration at `n` units**: `P(J ≤ b*_β) ≥ β` (Gaffke's conjecture, Vlassis
+and Thomas's Theorem 1), for independent units with their own finite loss laws at most `B`, each
+mean at least `J ≤ B`. `gaffke_one` is the case of one unit. -/
+theorem gaffke_calibration {κ : Type*} [Fintype ι] [Fintype κ]
+    (p v : ι → κ → ℝ) (hp : ∀ i k, 0 ≤ p i k) (hp1 : ∀ i, ∑ k, p i k = 1) {B J β : ℝ}
+    (hv : ∀ i k, v i k ≤ B) (hJ : ∀ i, J ≤ ∑ k, p i k * v i k) (hJB0 : J ≤ B) (hβ1 : β ≤ 1) :
+    β ≤ ∑ k : ι → κ, (∏ i, p i (k i)) *
+      (if J ≤ gaffkeBound B β (fun i => v i (k i)) then 1 else 0) := by
+  classical
+  have htot : ∑ k : ι → κ, ∏ i, p i (k i) = 1 := by
+    rw [← Fintype.prod_sum]; simp [hp1]
+  have hpt : ∀ k : ι → κ, (∏ i, p i (k i)) *
+      (if J ≤ gaffkeBound B β (fun i => v i (k i)) then 1 else 0) + (∏ i, p i (k i)) *
+        (if gaffkeBound B β (fun i => v i (k i)) < J then 1 else 0) = ∏ i, p i (k i) := fun k => by
+    split_ifs with h1 h2 <;> first | (exfalso; linarith) | ring
+  have hcompl := Finset.sum_congr rfl fun k (_ : k ∈ (Finset.univ : Finset (ι → κ))) => hpt k
+  rw [Finset.sum_add_distrib, htot] at hcompl
+  have := gaffke_miss_le p v hp hp1 hv hJ hJB0 hβ1
+  linarith
+
+/-- Gaffke's bound rises with the losses. -/
+theorem gaffkeBound_mono {ι : Type*} [Fintype ι] {B β : ℝ} (hβ0 : 0 < β) (hβ1 : β ≤ 1)
+    {ℓ ℓ' : ι → ℝ} (hℓ' : ∀ i, ℓ' i ≤ B) (h : ∀ i, ℓ i ≤ ℓ' i) :
+    gaffkeBound B β ℓ ≤ gaffkeBound B β ℓ' := by
+  have hℓ : ∀ i, ℓ i ≤ B := fun i => (h i).trans (hℓ' i)
+  refine csInf_le_csInf ⟨B - ∑ i, (B - ℓ i) - 1, fun x hx => ?_⟩
+    (lplusCdf_nonempty hℓ' hβ1) fun x hx => ?_
+  · by_contra hlt
+    rw [not_le] at hlt
+    have hsingle : ∀ i, B - ℓ i ≤ ∑ j, (B - ℓ j) := fun i =>
+      Finset.single_le_sum (f := fun j => B - ℓ j) (fun j _ => sub_nonneg.2 (hℓ j))
+        (Finset.mem_univ i)
+    have hsum0 : 0 ≤ ∑ j, (B - ℓ j) := Finset.sum_nonneg fun j _ => sub_nonneg.2 (hℓ j)
+    have h0 : lplusCdf B ℓ x = 0 := by
+      rw [lplusCdf]
+      refine stat_eq_zero_of_nonpos (by linarith) fun r hr => ?_
+      obtain ⟨i, -, rfl⟩ := Multiset.mem_map.1 hr
+      linarith [hsingle i]
+    have : β ≤ lplusCdf B ℓ x := hx
+    linarith
+  · change β ≤ lplusCdf B ℓ x
+    refine le_trans hx ?_
+    unfold lplusCdf
+    rw [← Multiset.singleton_add, ← Multiset.singleton_add]
+    exact stat_map_mono _ _ fun i _ => by linarith [h i]
+
+/-- **The high-probability rule** (Snell and Griffiths's `λ^β_hpd`, `RiskControl.HighProbability`):
+the first threshold on the grid whose Gaffke bound is at most `α`, the last when none is. -/
+noncomputable def hpdRule {K : ℕ} {ι : Type*} [Fintype ι] (B α β : ℝ)
+    (ℓ : ι → Fin (K + 1) → ℝ) : Fin (K + 1) :=
+  open Classical in firstFeasible fun l => gaffkeBound B β (fun i => ℓ i l) ≤ α
+
+/-- **What `RiskControl.HighProbability` reports.** Independent calibration units, each with its
+own loss law on finitely many loss curves, nonincreasing in the threshold and at most `B`; `J l` at
+most `B` and at most every unit's mean loss at threshold `l` (the risk, for exchangeable units).
+The rule meets `α` at a threshold whose risk exceeds `α` with chance at most `1 − β`: such a miss
+puts the fixed threshold `l₀`, the last with risk above `α`, below its risk (`fail_le_fixed`), and
+that has chance at most `1 − β` (`gaffke_miss_le`). -/
+theorem highProbability_risk {κ : Type*} [Fintype ι] [Fintype κ] {K : ℕ}
+    (p : ι → κ → ℝ) (hp : ∀ i k, 0 ≤ p i k) (hp1 : ∀ i, ∑ k, p i k = 1)
+    (v : ι → κ → Fin (K + 1) → ℝ) {B α β : ℝ} (hv : ∀ i k l, v i k l ≤ B)
+    (hanti : ∀ i k, Antitone (v i k)) (J : Fin (K + 1) → ℝ)
+    (hJ : ∀ i l, J l ≤ ∑ k, p i k * v i k l) (hJB : ∀ l, J l ≤ B) (hβ1 : β ≤ 1) :
+    ∑ k : ι → κ, (∏ i, p i (k i)) *
+      (if gaffkeBound B β (fun i => v i (k i) (hpdRule B α β fun i => v i (k i))) ≤ α ∧
+          α < J (hpdRule B α β fun i => v i (k i)) then 1 else 0) ≤ 1 - β := by
+  classical
+  have hprod : ∀ k : ι → κ, 0 ≤ ∏ i, p i (k i) := fun k => Finset.prod_nonneg fun i _ => hp i (k i)
+  have htot : ∑ k : ι → κ, ∏ i, p i (k i) = 1 := by
+    rw [← Fintype.prod_sum]; simp [hp1]
+  rcases le_or_gt β 0 with hβ0 | hβ0
+  · calc _ ≤ ∑ k : ι → κ, ∏ i, p i (k i) := Finset.sum_le_sum fun k _ => by
+          split_ifs <;> simp [hprod k]
+      _ ≤ 1 - β := by rw [htot]; linarith
+  by_cases hex : ∃ l, α < J l
+  · set S := Finset.univ.filter fun l => α < J l with hS
+    have hSne : S.Nonempty := let ⟨l, hl⟩ := hex; ⟨l, Finset.mem_filter.2 ⟨Finset.mem_univ _, hl⟩⟩
+    set l₀ := S.max' hSne with hl₀def
+    have hJ₀ : α < J l₀ := (Finset.mem_filter.1 (S.max'_mem hSne)).2
+    have hl₀ : ∀ l', α < J l' → l' ≤ l₀ := fun l' h =>
+      S.le_max' l' (Finset.mem_filter.2 ⟨Finset.mem_univ _, h⟩)
+    refine le_trans (Finset.sum_le_sum fun k _ => mul_le_mul_of_nonneg_left ?_ (hprod k))
+      (gaffke_miss_le p (fun i k => v i k l₀) hp hp1 (fun i k => hv i k l₀) (fun i => hJ i l₀)
+        (hJB l₀) hβ1)
+    have hb : Antitone fun l => gaffkeBound B β (fun i => v i (k i) l) := fun l l' hll' =>
+      gaffkeBound_mono hβ0 hβ1 (fun i => hv i (k i) l) fun i => hanti i (k i) hll'
+    split_ifs with h1 h2
+    · exact le_rfl
+    · exact absurd (fail_le_fixed hb h1.1 hJ₀ hl₀ h1.2) h2
+    · norm_num
+    · exact le_rfl
+  · push Not at hex
+    refine le_trans (le_of_eq (Finset.sum_eq_zero fun k _ => ?_)) (by linarith)
+    rw [if_neg (fun h => absurd h.2 (not_lt.2 (hex _))), mul_zero]
+
+end VlassisThomas
 
 section ProperScores
 

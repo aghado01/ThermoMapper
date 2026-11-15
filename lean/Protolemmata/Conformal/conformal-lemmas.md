@@ -2,7 +2,7 @@
 
 Pins the contract of the engine's conformal layer, one layer over retained draws and pointwise densities for every model with a pointwise density ([E16](../../../issues/regression/bass/extensions-brief.md#conformal-bayes-the-consumer)). The layer owns coverage and the score owns width. These are the finite statements of that split. They are the sibling of [GuardedEstimator](../BASS/guarded-estimator-lemmas.md): there, means valid whatever the emulator does; here, prediction sets valid whatever the model does. Written from the [chip brief](conformal-chip-brief.md).
 
-**Status (2026-11-13).** Proved in `lean/Enthymemata/ConformalValidity.lean`, namespace `Conformal`, with no apologies (PROOF-CLOSED, 458 declarations counting E35's M-1 and M-2 and slices 9, 10, 12, 13, 14, 15, 16 and 18, and slice 14's follow-ups 1, 2 and 3 at the end of this page; `#print axioms` shows `propext`, `Classical.choice`, `Quot.sound` only):
+**Status (2026-11-14).** Proved in `lean/Enthymemata/ConformalValidity.lean`, namespace `Conformal`, with no apologies (PROOF-CLOSED, 573 declarations counting E35's M-1 and M-2 and slices 9, 10, 12, 13, 14, 15, 16 and 18, slice 14's follow-ups 1, 2 and 3, and slice 18's follow-up at the end of this page; `#print axioms` shows `propext`, `Classical.choice`, `Quot.sound` only):
 - CB-1: `card_rankLe_le`, `coverage_orderings`, `coverage_orderings_eq`, `coverage_strict_le`, `coverage_orderings_le`, `rank_uniform`, `coverage_tieBreak`, `coverage_given`, `coverage_law`, `coverage_stratum`;
 - CB-2: `split_coverage`, `exchangeable_given_training`, `cqr_ordConnected`;
 - CB-4: `sum_jointU`, `post_addOneIn`, `integratedScore_equivariant`, `latentScore_equivariant`, `latentScore_eq`, `sum_jointU_addOneIn`, `integratedScore_le_latentScore`, `accepts_latent_of_mixed`, `mixed_counterexample`;
@@ -885,7 +885,7 @@ Snell and Griffiths (arXiv 2502.13228v2), read in TeX: §3–§4, Propositions 3
   - Vlassis and Thomas's statistic is K(x) = P{Σ x_i D_i ≤ 1}, with D ~ Dir(1, …, 1) over the n values and an added zero.
   - With X_i = (B − ℓ_i)/(B − J), P(L⁺ ≤ J) = 1 − K(X). The checks confirm this identity exactly on 300 cases.
   - Learned-Miller and Thomas rediscovered the bound as a confidence bound on [0, 1].
-- *Status: proved.* The calibration over replicated calibration sets, P(J ≤ b*_β) ≥ β, is Vlassis and Thomas's Theorem 1.
+- *Status: proved.* The calibration over replicated calibration sets, P(J ≤ b*_β) ≥ β, is Vlassis and Thomas's Theorem 1. Formalized at every n since 2026-11-14 (`gaffke_calibration`, under "Slice 18's follow-up").
   - b*_β misses J exactly when K(X) < 1 − β, which has chance at most 1 − β.
   - Gaffke conjectured it, reduced it to mean-one two-point laws, proved n = 2, and checked it numerically to n = 15. Learned-Miller and Thomas proved Bernoulli and half-Bernoulli laws.
 - *Wider than their footnote.* The theorem needs the losses independent and at most B, and needs neither identical laws nor continuity. Snell and Griffiths's Lemma 4.2 needs continuity; the calibration does not, and the checks' laws are discrete.
@@ -898,6 +898,7 @@ Snell and Griffiths (arXiv 2502.13228v2), read in TeX: §3–§4, Propositions 3
 - λ^β_hpd takes the first threshold with b*_β(λ) ≤ α.
 - Its risk exceeds α only when the fixed threshold λ₀, the last with risk above α, has b*_β(λ₀) < J(λ₀). So its failure chance is at most 1 − β, by the calibration at λ₀.
 - Their §5.1 shows this in simulation and does not state the step from a fixed λ to a chosen one.
+- End to end, with the calibration at every n: `highProbability_risk` (2026-11-14), under "Slice 18's follow-up".
 
 **Proper scores** (Gressmann et al.).
 - *The log-loss* (`logLoss_proper`, `logLoss_strict`; their Proposition 2.5 (i)).
@@ -909,7 +910,7 @@ Snell and Griffiths (arXiv 2502.13228v2), read in TeX: §3–§4, Propositions 3
 - *Finding: two sign slips in their proof of Proposition 2.5 (i).* Jensen is written log E Z ≤ E log Z, and Gibbs as E[log p_Y(Y)] ≤ E[log p(Y)]. Both hold for the loss −log, which is the reverse of what is written. The statement itself stands.
 
 **Not formalized.**
-- The calibration for n ≥ 2: Vlassis and Thomas's Theorem 1, whose proof is a chain-measure induction.
+- The calibration for n ≥ 2: Vlassis and Thomas's Theorem 1, whose proof is a chain-measure induction. *Formalized since (2026-11-14):* `gaffke_calibration` and `highProbability_risk`, under "Slice 18's follow-up".
 - Angelopoulos et al.'s Theorem 2, the lower bound α − 2B/(n + 1) for i.i.d. losses without jumps.
 - Their Theorem 4.1 on [0, 1], and Lemma 4.2 (Dirichlet spacings).
 - The density case of the proper scores, and their Proposition 2.6 (the log-loss is the only strictly local, strictly proper loss).
@@ -1139,3 +1140,72 @@ At the user's ask on 2026-11-13 ("im asking for more work on it"). Proved on 202
 - The adversarial search (`conformal-searches.py --weights`), rerun against the proven bound.
   - The bound holds in all 24 configurations, and the worst case found uses at most 0.322 of it.
   - It is below E[2c] in 17 of them, above it in one, and both are trivial in 6. The refined γ makes the difference where a unit is too heavy to be refused. Neither bound dominates the other.
+
+## Slice 18's follow-up — the calibration at n units
+
+Asked on 2026-11-14: extend `gaffke_one` to n units by Vlassis and Thomas's chain-measure induction, so the Lean states what `HighProbability` reports. Source: Vlassis and Thomas (arXiv 2607.08415v1), read in TeX in full (§1–§3: Theorem 1, Lemmas 2 and 5–7, Proposition 3, Remark 4). Proved on 2026-11-14 in `ConformalValidity.lean`, section `VlassisThomas` after `LossPosterior`, PROOF-CLOSED, with the standard three axioms only. The checks (section "Slice 18 follow-up: the calibration at n units") ran first.
+
+**The model.**
+- *Exponentials as laws on the line.* `unitExp` is the unit exponential by its density, `expLaw r` the law of rE, and `sumLaw m` the law of Σ_{r∈m} r E_r, built by convolution. Independence is the convolution, so there is no product space. `stat m` is P(Σ r E_r ≥ 0).
+- *Their statistic* (`gaffkeK`). K(x) = P(E₀ + Σ (1 − x_i) E_i ≥ 0), their (1): the Dirichlet weights are normalized exponentials.
+- *The posterior's distribution function* (`lplusCdf`). Snell and Griffiths's P(L⁺ ≤ x) is P((x − B)E₀ + Σ (x − ℓ_i)E_i ≥ 0).
+- *Gaffke's bound* (`gaffkeBound`). b*_β = inf{x : P(L⁺ ≤ x) ≥ β}, the least such x, which `LossBound.Gaffke` bisects for.
+
+**The analytic core** (their Lemma 5, by another route).
+- *The race identity* (`stat_race`, through `race_Ici`).
+  - (a + b) P(Y + aE − bE′ ≥ 0) = a P(Y + aE ≥ 0) + b P(Y − bE ≥ 0), for any independent Y.
+  - It is the one computation, from the unit exponential's memorylessness (`lintegral_unitExp_Ici`) and its Laplace transform (`lintegral_unitExp_exp`).
+- *The same-sign identities* (`stat_same_pos`, `stat_same_neg`). (a − b) P(Y + aE + bE′ ≥ 0) = a P(Y + aE ≥ 0) − b P(Y + bE ≥ 0), and the same for −a and −b. They follow from the race identity with an auxiliary exponential, by algebra.
+- *The windows* (`sumLaw_hi_add_winHi`, `sumLaw_lo_eq`). With X_k high, the statistic loses u = E[e^{−Z/d}; Z ≥ 0]. With X_k low, it gains v = E[e^{Z/c}; Z < 0]. These are their u and v.
+- *The flux identities* (their (19)). They follow from the race and same-sign identities, with no Stein identity and no derivative.
+- *The likelihood-ratio inequality* (their (22) and (15); `lrAbove_edge`, `window_cross`).
+  - Y + aE lies above Y − bE in the likelihood-ratio order, tested on ordered pairs of nonnegative functions.
+  - The proof adds Y's exponentials one at a time (`LRAbove.conv`). Memorylessness splits each smoothed integral where its two arguments meet (`smooth_ordered`).
+  - So it needs no densities and no theorem that convolution keeps log-concavity: each step adds one exponential.
+- *θ and η* (their (15), (14) and (31); `windowShare_edge`, `transfer_nonneg`). θ = u/(u + v) falls along an edge. When c ≤ a, η = (1 − θ₋)(A₊ − A₋) − p(F₊ − F₋) ≥ 0, through (c + d)η = (a − c) w₊ (θ₊ − θ₋).
+
+**The chain-measure induction** (their §2 and Lemma 6).
+- *The objects.* Chains are sequences of finite sets (`IsChain`), with their measures' means (`chainMean`). `cubeK` is their K_m(S), the two-point statistic, and `bern` the independent law on the high sets.
+- *The insertion's algebra* (their (27)–(29); `insertion_algebra`, `chain_insert_sum`).
+  - λ_J = θ_J − θ_{J+1} is a law.
+  - Σ_J λ_J E_{C^J} g − E_ν̂ g = Σ_j η_j (g(H_j) − g(C_j)) ≥ 0, so the best insertion beats the independent reveal.
+- *The local insertion* (`local_insertion`).
+  - F, A and B run along the chain, closed by their sentinel G_k.
+  - The new unit has the least γ.
+  - A unit with γ = 0 is never high and goes last, so their deletion step is not needed.
+- *The induction* (`chain_dominates`). Strong induction over the placed units, inserting the least γ last; the unplaced units stay independent.
+- *Two-point validity* (`twoPoint_valid`, their Proposition 3). The rejected states are a terminal segment of the final chain, and their masses telescope (`chain_terminal`).
+
+**From two-point systems to b*_β.**
+- *The two-point mixture* (`twoPoint_mixture`; their Lemma 7, for a finite law). The pair x_a < 1 < x_b has weight (x_b − x_a) p_a p_b / M, and p(x = 1) goes on the point 1.
+- *Theorem 1 for finite laws* (`gaffkeK_valid`, through `sum_prod_twoPoint`, the bridge to the cube). Rescaling to mean one is as theirs (`gaffkeK_anti`). For any real α, P(K(X) ≤ α) ≤ max(α, 0).
+- *A miss puts K low* (`gaffkeK_le_of_miss`).
+  - If b*_β < J < B, then K(X) = 1 − P(L⁺ ≤ J) ≤ 1 − β, with X_i = (B − ℓ_i)/(B − J).
+  - P(L⁺ ≤ J) + K(X) = 1 because a sum with a nonzero coefficient has no atom at 0 (`stat_add_stat_neg`), and `stat` is blind to a positive scale (`stat_map_mul`).
+- *The calibration* (`gaffke_miss_le`, `gaffke_calibration`).
+  - P(J ≤ b*_β) ≥ β, for independent units with their own finite loss laws at most B, each with mean at least J ≤ B.
+  - J = B is covered: every loss with chance is B, and b*_β = B (`le_gaffkeBound_of_eq`).
+  - J ≤ B matters only with no units.
+  - `gaffke_one` is the case n = 1.
+- *What HighProbability reports* (`highProbability_risk`, with `hpdRule` and `gaffkeBound_mono`).
+  - The losses lie on a grid, nonincreasing in the threshold.
+  - The rule meets α at a threshold whose risk exceeds α with chance at most 1 − β.
+  - A rule that meets no threshold returns the last threshold, unmet (`RiskThreshold.Met` false). The guarantee is about the met case, as the C# reads it.
+
+**Against the source.**
+- *Their scope.* Their Theorem 1 is for any nonnegative laws. The Lean's is for finitely many values per unit, which is what a calibration set's losses can show. Their Lemma 7 for general laws is not needed.
+- *Their Lemma 5's monotone θ.* They derive it from Y's log-concave density, citing that convolution keeps log-concavity (Karlin). The Lean needs neither: it carries the pair's likelihood-ratio order, not Y's density, through each added exponential.
+- *Their Remark 4,* one random ordering serving every α at once, is not formalized.
+
+**For the C#:** `RiskControl.HighProbability`'s guarantee is now proved as it reads: for independent units, it meets α at a threshold whose risk exceeds α with chance at most 1 − β. The docstrings that cite Vlassis and Thomas's Theorem 1 can name `highProbability_risk` and `gaffke_calibration`. No code changes.
+
+**Checks.**
+- The race identity against the Dirichlet law's divided differences, and the same-sign identities, exactly, on 600 cases.
+- The flux identities, the likelihood-ratio inequality and η's sign on 1,500 edges. η is negative on 647 unsorted edges, so the sorting is used.
+- The local insertion's identity on 6,079 insertions.
+- The chain induction on 140 two-point systems at 2,201 levels: the hybrid means never fall, and the final chain stays within α.
+- The two-point mixture on 373 finite laws.
+- b*_β's calibration at n ≤ 4 units with their own laws, on 336 cases. The least slack is 0.100.
+- The high-probability rule's event as the Lean states it.
+  - On 480 random cases, all within 1 − β.
+  - On 72 targeted cases where the rule meets α at a risk above it, within 1 − β; the worst failure chance is 0.343.

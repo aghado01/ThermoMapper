@@ -7,7 +7,8 @@ CB-1 to CB-4 were proved on 2026-11-06, E35's M-1 and M-2 on 2026-11-08, and E16
 Status: commissioned 2026-11-13 by the user ("Lean first, 15 meanwhile", in the conformal C# chip's thread), relayed by that chip and the main session. All three items were proved on 2026-11-13 and reported under Reports (d81f293, 38f2e3f, 2928b06). The user added further items, all proved:
 - JAWS's likelihood-ratio weights for the cross-fitted forms;
 - weighted K-fold CV+, by one fold under likelihood ratios and by merging under position weights;
-- under likelihood ratios, the tournament across folds (7e2b905) and the merged bound (follow-up 2e, which also corrects the averaging lemmas' hypotheses).
+- under likelihood ratios, the tournament across folds (7e2b905) and the merged bound (follow-up 2e, which also corrects the averaging lemmas' hypotheses);
+- the β-bound's calibration at n units, by Vlassis and Thomas's chain-measure induction, and what `HighProbability` reports (slice 18's follow-up).
 
 **Why now.** Slice 14's C# (`c19ce98`; its [report](../../../issues/regression/archive/bass-gbass-khaos-activespaces/briefs/conformal-layer-brief.md#2026-11-13--slice-14-the-weighted-rule-under-shift)) lists follow-ups that each need a guarantee before their C# (decision 7 on the layer plan). The C# chip builds the ratio estimator and slice 15 meanwhile, then these three as their Lean lands.
 
@@ -230,6 +231,32 @@ The user asked for this on 2026-11-08 ("Yes, start it"), relayed by the BASS ext
 ## Reports
 
 Newest first.
+
+### 2026-11-14 — slice 18's follow-up: the calibration at n units, proved
+
+Asked 2026-11-14: extend `gaffke_one` to n units by Vlassis and Thomas's chain-measure induction, so the Lean states what `HighProbability` reports. The statements are in the ledger, under "Slice 18's follow-up". The new declarations are PROOF-CLOSED, with the standard three axioms only. The checks ran first.
+
+- *Proved.*
+  - `gaffke_calibration`: P(J ≤ b*_β) ≥ β, for independent units with their own finite loss laws at most B, each mean at least J ≤ B.
+  - `highProbability_risk`: the rule meets α at a threshold whose risk exceeds α with chance at most 1 − β. This is the guarantee `RiskControl.HighProbability` reports.
+  - On the way, Vlassis and Thomas's Theorem 1 for finite laws (`gaffkeK_valid`) and their Proposition 3 (`twoPoint_valid`).
+- *The route.*
+  - The exponentials are laws on the line, built by convolution.
+  - The one analytic computation is the race identity. The flux identities follow from it by algebra.
+  - The likelihood-ratio step adds one exponential at a time, by memorylessness. It needs no log-concavity theorem.
+  - The chain induction is finite.
+- *For the C#:* no code change. The docstrings citing Vlassis and Thomas can name `highProbability_risk` and `gaffke_calibration`.
+- *Changed.*
+  - `ConformalValidity.lean`: section `VlassisThomas` (115 declarations) and four Mathlib imports, already built. `gaffke_one`'s and `fail_le_fixed`'s docstrings now point to the new results; no proof there changed.
+  - The checks (a new section) and the ledger.
+- *Gates.* All pass:
+  - the module and barrel build (3,203 jobs);
+  - the axioms probe: 41 results, standard three only;
+  - meta-ci;
+  - the full checks run (386 s).
+  - D: has 33.4 GB free.
+- *Hypotheses read.* Each theorem's hypotheses are met by the checks' cases, so none is vacuous. `gaffke_calibration` needs J ≤ B only with no units.
+- *For the `#print axioms` file:* `stat_race`, `stat_same_pos`, `stat_same_neg`, `lrAbove_edge`, `window_cross`, `windowShare_edge`, `transfer_nonneg`, `insertion_algebra`, `local_insertion`, `chain_dominates`, `twoPoint_valid`, `twoPoint_mixture`, `sum_prod_twoPoint`, `gaffkeK_valid`, `gaffkeK_le_of_miss`, `gaffke_miss_le`, `gaffke_calibration`, `gaffkeBound_mono`, `highProbability_risk`.
 
 ### 2026-11-13 — slice 14's follow-ups: the merged K-fold bound under likelihood-ratio weights proved, and the averaging lemmas' hypotheses corrected
 

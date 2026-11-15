@@ -3689,4 +3689,329 @@ print(f"Follow-up 2e: the weighted layer cake on {n_cake2} random cases (largest
       f"every theta in 0.1 steps, and equal weights giving slice 9's merged bound")
 
 print()
+print("=== Slice 18 follow-up: the calibration at n units (Vlassis and Thomas's Theorem 1) ===")
+# Vlassis and Thomas (arXiv 2607.08415), Theorem 1: X_i independent, nonnegative, E X_i <= 1, and
+# K(x) = P(E_0 + sum_i (1 - x_i) E_i >= 0), E's independent unit exponentials; then P(K(X) <= alpha) <= alpha.
+# The Lean works with laws on the line built by convolution: sumLaw(m) is the law of sum_{r in m} r E_r and
+# stat(m) = P(sum r E_r >= 0). Its pieces, each checked exactly here:
+# (a) the race identity (a + b) stat(a, -b, Y) = a stat(a, Y) + b stat(-b, Y), the only analytic computation;
+#     the same-sign identity (a - b) stat(a, b, Y) = a stat(a, Y) - b stat(b, Y) follows from it by algebra;
+# (b) the flux identities d(A+ - A-) = a u+ + b u-, c(B+ - B-) = a v+ + b v-, and the likelihood-ratio
+#     inequality u+ v- >= u- v+ for Z+ = Y + aE, Z- = Y - bE (u = F - A, v = B - F, A = stat with -d added,
+#     B = stat with c added); so theta = u / (u + v) falls along an edge and eta >= 0 when a >= c;
+# (c) the local insertion: lambda_J = theta_J - theta_{J+1} is a law, and
+#     sum_J lambda_J E_{C^J} g - E_hat g = sum_j eta_j (g(H_j) - g(C_j));
+# (d) the chain induction, inserting the units by decreasing gamma: the hybrid means never fall, and the final
+#     chain measure puts at most alpha on {K <= alpha};
+# (e) the two-point mixture of a finite mean-one law; (f) end to end, b*_beta's calibration at n units, the
+#     laws not identical, every unit's mean at least J; (g) the high-probability rule as the Lean states it
+#     (highProbability_risk): meeting alpha at a threshold whose risk exceeds alpha has chance at most 1 - beta.
+# Lean: stat_race, stat_same_pos, stat_same_neg; transfer_nonneg (the flux identities), window_cross and
+# windowShare_edge (theta falls); insertion_algebra and local_insertion; chain_dominates and twoPoint_valid;
+# twoPoint_mixture, sum_prod_twoPoint and gaffkeK_valid; gaffke_miss_le, gaffke_calibration, highProbability_risk.
+
+
+def stat_dd(m):
+    """P(sum_{r in m} r E_r >= 0), by the Dirichlet law's divided differences (zeros allowed)."""
+    ks = sorted(-r for r in m)
+    if not ks:
+        return Q(1)
+    if ks[0] == ks[-1]:
+        return Q(int(ks[0] <= 0))
+    return 1 - plus_pow_dd(ks, Q(0), len(ks) - 1)
+
+
+_race_memo = {}
+
+
+def stat_race(m):
+    """The same probability by the race recursion, exact: pair a positive with a negative coefficient."""
+    pos = tuple(sorted(r for r in m if r > 0))
+    neg = tuple(sorted(-r for r in m if r < 0))
+    key = (pos, neg)
+    if key not in _race_memo:
+        if not neg:
+            v = Q(1)
+        elif not pos:
+            v = Q(0)
+        else:
+            a, b = pos[-1], neg[-1]
+            v = (a * stat_race(list(pos) + [-x for x in neg[:-1]])
+                 + b * stat_race(list(pos[:-1]) + [-x for x in neg])) / (a + b)
+        _race_memo[key] = v
+    return _race_memo[key]
+
+
+stat = stat_race
+rr = random.Random(2701)
+# (a) the race identity, against the divided differences (independent of the recursion), and the derived
+# same-sign identities
+n_race = 0
+for trial in range(600):
+    Y = [Q(rr.randint(-6, 6), rr.randint(1, 3)) for _ in range(rr.randint(0, 4))]
+    a, b = Q(rr.randint(1, 9), rr.randint(1, 4)), Q(rr.randint(1, 9), rr.randint(1, 4))
+    assert stat_race(Y + [a, -b]) == stat_dd(Y + [a, -b]) and stat_race(Y) == stat_dd(Y)
+    assert (a + b) * stat_dd(Y + [a, -b]) == a * stat_dd(Y + [a]) + b * stat_dd(Y + [-b])
+    assert (a - b) * stat_dd(Y + [a, b]) == a * stat_dd(Y + [a]) - b * stat_dd(Y + [b])
+    assert (a - b) * stat_dd(Y + [-a, -b]) == a * stat_dd(Y + [-a]) - b * stat_dd(Y + [-b])
+    assert stat_dd(Y + [0]) == stat_dd(Y)
+    n_race += 1
+
+
+def edge(Y, a, b, c, d):
+    """F, A, B, u, v, w, theta at Z+ = Y + aE and Z- = Y - bE."""
+    out = []
+    for m in (Y + [a], Y + [-b]):
+        F, A, B = stat(m), stat(m + [-d]), stat(m + [c])
+        u, v = F - A, B - F
+        assert u >= 0 and v >= 0 and u + v > 0
+        out.append((F, A, B, u, v, u + v, u / (u + v)))
+    return out
+
+
+# (b) flux identities, the likelihood-ratio inequality, eta's sign: exact, Y of either sign with zeros
+n_edge, n_unsorted_neg = 0, 0
+for trial in range(1500):
+    Y = [Q(rr.randint(-5, 5), rr.randint(1, 3)) for _ in range(rr.randint(0, 4))]
+    a, b, c, d = (Q(rr.randint(1, 8), rr.randint(1, 4)) for _ in range(4))
+    (Fp, Ap, Bp, up, vp, wp, tp), (Fm, Am, Bm, um, vm, wm, tm) = edge(Y, a, b, c, d)
+    assert d * (Ap - Am) == a * up + b * um and c * (Bp - Bm) == a * vp + b * vm
+    assert up * vm >= um * vp and tp >= tm
+    p = c / (c + d)
+    eta = (1 - tm) * (Ap - Am) - p * (Fp - Fm)
+    assert eta == (a - c) / (c + d) * wp * (tp - tm)
+    if a >= c:
+        assert eta >= 0
+    elif eta < 0:
+        n_unsorted_neg += 1
+    n_edge += 1
+assert n_unsorted_neg > 0                        # the sorting is used: a < c can make eta negative
+
+
+def subsets(s):
+    s = sorted(s)
+    for r in range(len(s) + 1):
+        for comb in itertools.combinations(s, r):
+            yield frozenset(comb)
+
+
+def cube_k(gam, bet, P, S):
+    return stat([Q(1)] + [(-bet[e] if e in S else gam[e]) for e in P])
+
+
+def bern(p, s, T):
+    return math.prod((p[i] if i in T else 1 - p[i]) for i in s)
+
+
+def chain_mean(gam, bet, P, states, g):
+    Ks = [cube_k(gam, bet, P, S) for S in states] + [Q(0)]
+    return sum((Ks[j] - Ks[j + 1]) * g(S) for j, S in enumerate(states))
+
+
+def hybrid(gam, bet, p, A, P, states, h):
+    tail = A - P
+    return chain_mean(gam, bet, P, states,
+                      lambda U: sum(bern(p, tail, T) * h(U | T) for T in subsets(tail)))
+
+
+# (c) and (d): two-point systems, gamma in [0, 1] (zeros and ones included), beta > 0
+n_sys, n_ins, n_levels = 0, 0, 0
+for trial in range(140):
+    n = rr.randint(1, 5)
+    gam = {i: rr.choice([Q(0), Q(1), Q(rr.randint(1, 9), 10)]) for i in range(n)}
+    bet = {i: Q(rr.randint(1, 12), rr.randint(1, 4)) for i in range(n)}
+    p = {i: gam[i] / (gam[i] + bet[i]) for i in range(n)}
+    A = frozenset(range(n))
+    Kfull = {S: cube_k(gam, bet, A, S) for S in subsets(A)}
+    for S in Kfull:
+        for T in Kfull:
+            if S <= T:
+                assert Kfull[T] <= Kfull[S]
+    levels = sorted(set(Kfull.values()) | {Q(0), Q(1, 2), Q(1)})
+    for alpha in levels:
+        h = lambda U, alpha=alpha: Q(int(Kfull[U] <= alpha))
+        pi_mass = sum(bern(p, A, T) * h(T) for T in subsets(A))
+        assert pi_mass <= alpha
+        # the induction: insert units by decreasing gamma; each stage picks the J maximizing the next hybrid
+        order = sorted(range(n), key=lambda i: -gam[i])
+        P, states = frozenset(), [frozenset()]
+        cur = hybrid(gam, bet, p, A, P, states, h)
+        assert cur == pi_mass
+        for i in order:
+            m = len(P)
+            tail = A - P - {i}
+            g = lambda U: sum(bern(p, tail, T) * h(U | T) for T in subsets(tail))
+            Fs = [cube_k(gam, bet, P, S) for S in states]
+            # the hybrid before the insertion is E_hat g, X_i revealed independently
+            Ehat = sum((Fs[j] - (Fs[j + 1] if j < m else 0)) * ((1 - p[i]) * g(S) + p[i] * g(S | {i}))
+                       for j, S in enumerate(states))
+            assert Ehat == cur
+            cands = [states[:J + 1] + [S | {i} for S in states[J:]] for J in range(m + 1)]
+            EJ = [chain_mean(gam, bet, P | {i}, ch, g) for ch in cands]
+            if gam[i] > 0:
+                c, d = gam[i], bet[i]
+                ms = [[Q(1)] + [(-bet[e] if e in S else gam[e]) for e in P] for S in states]
+                ms.append([Q(-1)] + [-bet[e] for e in P])                  # the sentinel
+                F = [stat(x) for x in ms]
+                Aa = [stat(x + [-d]) for x in ms]
+                Bb = [stat(x + [c]) for x in ms]
+                assert F[m + 1] == 0 and Aa[m + 1] == 0 and F[0] == 1 and Bb[0] == 1
+                th = [(F[j] - Aa[j]) / (Bb[j] - Aa[j]) for j in range(m + 2)]
+                assert th[0] == 1 and th[m + 1] == 0
+                lam = [th[J] - th[J + 1] for J in range(m + 1)]
+                assert all(x >= 0 for x in lam) and sum(lam) == 1
+                eta = [(1 - th[j + 1]) * (Aa[j] - Aa[j + 1]) - p[i] * (F[j] - F[j + 1]) for j in range(m + 1)]
+                assert all(x >= 0 for x in eta)
+                gap = sum(lam[J] * EJ[J] for J in range(m + 1)) - Ehat
+                assert gap == sum(eta[j] * (g(states[j] | {i}) - g(states[j])) for j in range(m + 1))
+                n_ins += 1
+            else:
+                assert EJ[m] >= Ehat                     # gamma = 0: never high, insert it last
+            J = max(range(m + 1), key=lambda J: EJ[J])
+            assert EJ[J] >= cur
+            P, states = P | {i}, cands[J]
+            cur = hybrid(gam, bet, p, A, P, states, h)
+            assert cur == EJ[J]
+        assert cur <= alpha                               # the final chain measure
+        n_levels += 1
+    n_sys += 1
+
+# (e) the two-point mixture of a finite law with mean one: (y - x) p(x) p(y) / M on the pair x < 1 < y,
+# the law Q_{x,y} = (y - 1)/(y - x) at x and (1 - x)/(y - x) at y, and p(1) on the point 1
+n_mix = 0
+for trial in range(400):
+    k = rr.randint(1, 5)
+    xs = [Q(rr.randint(0, 30), 10) for _ in range(k)]
+    ws = [Q(rr.randint(0, 5)) for _ in range(k)]
+    if sum(ws) == 0:
+        continue
+    ps = [x / sum(ws) for x in ws]
+    mean = sum(p * x for p, x in zip(ps, xs))
+    if mean == 0:
+        continue
+    xs = [x / mean for x in xs]                         # mean one
+    M = sum(p * max(Q(0), 1 - x) for p, x in zip(ps, xs))
+    assert M == sum(p * max(Q(0), x - 1) for p, x in zip(ps, xs))
+    rec = [Q(0)] * k
+    tot = Q(0)
+    for i in range(k):
+        for j in range(k):
+            if xs[i] < 1 < xs[j]:
+                wgt = (xs[j] - xs[i]) * ps[i] * ps[j] / M if M else Q(0)   # x / 0 = 0, as in Lean
+                qlo, qhi = (xs[j] - 1) / (xs[j] - xs[i]), (1 - xs[i]) / (xs[j] - xs[i])
+                assert qlo * xs[i] + qhi * xs[j] == 1 and qlo + qhi == 1
+                rec[i] += wgt * qlo
+                rec[j] += wgt * qhi
+                tot += wgt
+    one = sum(p for p, x in zip(ps, xs) if x == 1)
+    for i in range(k):
+        if xs[i] == 1:
+            rec[i] += ps[i]
+    assert rec == ps and tot + one == 1
+    n_mix += 1
+
+
+def stat_K(x):
+    return stat([Q(1)] + [1 - v for v in x])
+
+
+# (f) end to end: units with their own finite loss laws on [0, B], each unit's mean at least J. b*_beta misses
+# J exactly when P(L+ <= J) > beta (L+'s cdf is continuous and rises on its knots' range); a miss puts
+# K(X) = 1 - P(L+ <= J) below 1 - beta, X_i = (B - l_i)/(B - J), and P(K(X) <= 1 - beta) <= 1 - beta.
+n_e2e, slack_e2e = 0, None
+for trial in range(120):
+    n = rr.randint(1, 4)
+    B = Q(1)
+    laws = []
+    for i in range(n):
+        vals = sorted(set(Q(rr.randint(0, 10), 10) for _ in range(rr.randint(1, 3))))
+        w = [rr.randint(1, 5) for _ in vals]
+        laws.append((vals, [Q(x, sum(w)) for x in w]))
+    J = min(sum(p * v for v, p in zip(*law)) for law in laws) - Q(rr.randint(0, 2), 20)
+    if J < 0:
+        continue
+    for beta in (Q(1, 2), Q(3, 4), Q(9, 10)):
+        cov = kmass = Q(0)
+        for combo in itertools.product(*[range(len(law[0])) for law in laws]):
+            pr = math.prod(laws[i][1][k] for i, k in enumerate(combo))
+            ls = [laws[i][0][k] for i, k in enumerate(combo)]
+            if all(l == B for l in ls):
+                cov += pr
+                continue
+            F = lplus_cdf(ls, B, J)
+            if F <= beta:
+                cov += pr
+            if J < B:
+                KX = stat_K([(B - l) / (B - J) for l in ls])
+                assert KX == 1 - F
+                if KX <= 1 - beta:
+                    kmass += pr
+                if F > beta:
+                    assert KX <= 1 - beta
+        assert cov >= beta
+        if J < B:
+            assert kmass <= 1 - beta
+        slack_e2e = cov - beta if slack_e2e is None else min(slack_e2e, cov - beta)
+        n_e2e += 1
+# (g) the high-probability rule: units with their own laws over loss curves nonincreasing in the threshold, not
+# reaching zero (so the rule can fail to meet alpha); J(l) at most every unit's mean at threshold l. The rule
+# takes the first threshold with b*_beta <= alpha, i.e. P(L+ <= alpha) >= beta, else the last, unmet.
+n_hpr, worst_hpr, n_unmet = 0, Q(0), 0
+for trial in range(160):
+    n = rr.randint(1, 4)
+    K = rr.randint(1, 3)
+    B = Q(1)
+    laws = []
+    ind = trial % 2 == 0                   # miscoverage indicators: the rule can meet alpha and still fail
+    for i in range(n):
+        curves = [sorted(((Q(rr.randint(0, 1)) if ind else Q(rr.randint(0, 10), 10)) for _ in range(K + 1)),
+                         reverse=True) for _ in range(rr.randint(1, 3))]
+        w = [rr.randint(1, 5) for _ in curves]
+        laws.append((curves, [Q(x, sum(w)) for x in w]))
+    Jl = [min(sum(p * c[l] for c, p in zip(*law)) for law in laws) for l in range(K + 1)]
+    alpha = Q(rr.randint(1, 6), 20) if ind else Q(rr.randint(1, 6), 10)
+    for beta in (Q(1, 2), Q(3, 4), Q(9, 10)):
+        bad = Q(0)
+        for combo in itertools.product(*[range(len(law[0])) for law in laws]):
+            pr = math.prod(laws[i][1][k] for i, k in enumerate(combo))
+            met = [lplus_cdf([laws[i][0][k][l] for i, k in enumerate(combo)], B, alpha) >= beta
+                   for l in range(K + 1)]
+            lam = next((l for l in range(K + 1) if met[l]), K)
+            if not met[lam]:
+                n_unmet += 1
+            if met[lam] and Jl[lam] > alpha:
+                bad += pr
+        assert bad <= 1 - beta, (bad, beta)
+        worst_hpr = max(worst_hpr, bad)
+        n_hpr += 1
+# targeted: n identical units whose indicator loss at the first threshold is 1 with chance q > alpha, 0 at the
+# second; the rule meets alpha at the first threshold exactly when every unit's loss there is 0, a failure
+n_hpt, worst_hpt = 0, Q(0)
+for n in (3, 4, 5):
+    for q in (Q(1, 2), Q(2, 5), Q(3, 10)):
+        for alpha in (Q(1, 5), Q(1, 4), Q(3, 10)):
+            if not q > alpha:
+                continue
+            for beta in (Q(1, 2), Q(3, 4), Q(9, 10)):
+                bad = Q(0)
+                for combo in itertools.product((0, 1), repeat=n):          # 1: the curve [1, 0]
+                    pr = math.prod(q if c else 1 - q for c in combo)
+                    met0 = lplus_cdf([Q(c) for c in combo], Q(1), alpha) >= beta
+                    if met0:                                               # J(0) = q > alpha: a failure
+                        bad += pr
+                assert bad <= 1 - beta, (n, q, alpha, beta, bad)
+                worst_hpt = max(worst_hpt, bad)
+                n_hpt += 1
+assert worst_hpt > 0
+print(f"Follow-up (Vlassis and Thomas): the race identity against the divided differences, and the same-sign "
+      f"identities, on {n_race} cases; the flux identities, the likelihood-ratio inequality and eta's sign on "
+      f"{n_edge} edges (eta negative on {n_unsorted_neg} unsorted ones); the local insertion's identity on "
+      f"{n_ins} insertions; the chain induction on {n_sys} two-point systems at {n_levels} levels, the hybrid "
+      f"means never falling and the final chain within alpha; the two-point mixture on {n_mix} laws; b*_beta "
+      f"calibrated at n <= 4 units with their own laws on {n_e2e} cases (least slack {float(slack_e2e):.4f}); the "
+      f"high-probability rule meeting alpha at a risk above it within 1 - beta on {n_hpr} cases (worst "
+      f"{float(worst_hpr):.4f}, {n_unmet} unmet outcomes) and on {n_hpt} targeted cases where it fails "
+      f"(worst {float(worst_hpt):.4f})")
+
+print()
 print("All assertions hold.")
