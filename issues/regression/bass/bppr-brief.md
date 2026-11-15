@@ -1,6 +1,6 @@
-# Projection-pursuit ridges on the BASS core: E36's build (draft brief)
+# Projection-pursuit ridges on the BASS core: E36's build
 
-Date: 2026-11-10. Status: draft for the user's review. Nothing is built until the user approves it, with the decisions marked **open** below. Drafted by the active-subspace chip from [E36's entry](extensions-brief.md#projection-pursuit-ridges-on-the-bass-core-bppr-e36), the [Grassmann discussion](../discussion/grassmann-stiefel-subspaces-brief.md)'s settlement of the direction prior, the paper (read for this draft) and the read-only `gcbeck/bppr` clone (ideas only, under its GPL-3.0). Reports go under "Reports" below, newest first.
+Date: 2026-11-10; approved 2026-11-14. Status: **approved by the user on 2026-11-14,** who asked for a chip to build it and gave the go-ahead to install `BayesPPR` (decision 8). The decisions still marked **open** go at their recommendations. That is the coordinating session's reading of the approval, told to the user the same day; the user can turn any of them before the slice where it first binds (listed under Decisions). Drafted by the active-subspace chip from [E36's entry](extensions-brief.md#projection-pursuit-ridges-on-the-bass-core-bppr-e36), the [Grassmann discussion](../discussion/grassmann-stiefel-subspaces-brief.md)'s settlement of the direction prior, the paper (read for this draft) and the read-only `gcbeck/bppr` clone (ideas only, under its GPL-3.0). Reports go under "Reports" below, newest first.
 
 ## Why
 
@@ -22,7 +22,7 @@ BASS's terms are axis-aligned. A response that bends along a diagonal, such as o
     - It found Bayesian back-fitting slower to mix.
   - *Friedman's function,* the example to meet: n = 300, noise sd 1, 20,000 iterations with the last 2,000 kept. Out-of-sample RMSE 1.05 for the noisy response and 0.38 for f; 95% intervals cover 94.9% and 91.1%.
   - *A slip in the text:* Algorithm 4 writes the change step's bounds with Q and q where eq. (UL) uses q and p₀ (a symbol crossing; the formulas agree).
-- **R's `BayesPPR` 0.2.0.** Its manual is in `PDFs/Bayesian/BayesPPR.pdf`. It is not installed here (checked 2026-11-10); pinning it is decision 8.
+- **R's `BayesPPR` 0.2.0.** Its manual is in `PDFs/Bayesian/BayesPPR.pdf`. It is not installed here (checked 2026-11-10); pinning it is decision 8, settled on 2026-11-14.
 - **`gcbeck/bppr`** (C++20, GPL-3.0), read-only at `D:\aghado01\packages\bayesian-related\bppr-gcbeck` (`1b0d47a`). E36's entry records its reading: a repulsive direction prior det(ΘᵀΘ) whose normalizer c_M is missing as written; reshaped quantile knots; online updates. Ideas only; its claims count as a paper's, with no code to run as an oracle.
 - **The power spherical law** (De Cao and Aziz 2020, arXiv 2006.04437, the paper's reference for it) is on disk since 2026-11-11: `D:\aghado01\codex-scientiae\supellex-private\gauntlet\bayesian\2006.04437v2\` (PDF and TeX). Its sampler and density are cited from memory until slice 0 reads it.
 
@@ -35,7 +35,7 @@ BASS's terms are axis-aligned. A response that bends along a diagonal, such as o
 
 ## Decisions
 
-Those marked **settled** are the user's already; the rest are **open**, each with a recommendation. Each lands on a page with its alternatives and trade-offs when built.
+Those marked **settled** are the user's; the rest are **open**, each with a recommendation that stands unless the user turns it. Where each first binds: 8 at slice 0; 1, 3 and 7 at slice 1; 4, 5 and 6 at slice 2. Each lands on a page with its alternatives and trade-offs when built.
 
 1. **The term type, open.**
    - *Recommended, staged:* first the directional hinge (θᵀx − t)₊^q as BASS's fourth term type behind `IDesignKernel`, one column per term, so every carry-over above holds unchanged. Then the paper's ridge as a block of K columns over one direction, each column a fixed combination of directional hinges: degree one at t₀, cubic at the quantile knots.
@@ -50,15 +50,21 @@ Those marked **settled** are the user's already; the rest are **open**, each wit
 5. **The moves, open in one respect.** Birth, death and change as the paper's, with the change's power spherical proposal on the active coordinates (κ = 1000) and t₀ from its prior.
    - *Recommended:* J from BASS's own variable proposal, already validated. *Alternative:* the paper's Wallenius form.
    - A prior adapted from the chain's history is not taken (E36's entry); κ adapts only under D10's diminishing adaptation, if at all.
+   - *The ratios, from Lean* (`lean/Enthymemata/ActiveSubspace/DirectionMoves.lean`, verified from clean archives at `42c980d` and `36bd90e`; the [Lean chip's brief](../../../lean/Protolemmata/BASS/active-subspace-lean-chip-brief.md) holds the reports):
+     - *The change move* accepts on the collapsed likelihood ratio alone (`change_ratio_powerSpherical`), with t₀ drawn from its prior given the proposed direction. At a = 1 it keeps the direction's sign (`powerSpherical_antipode`), so the sampler treats a = 1 apart.
+     - *A birth* accepts on L′/L · λ/(M + 1) · P_D(M + 1)/P_B(M) · π(a)π(𝒥|a)/(q(a)q(𝒥|a)) (`birth_green_ratio`, `poisson_count_ratio`, `prior_draw_cancel`); a death on its reciprocal.
+     - *No further 1/(M + 1):* with it the chain targets λ^M/(M!)² (`double_count_ratio`).
+     - *The paper's slip:* its eq. (mhb) divides by W_{a\*} at a\* = 1, where its Algorithm 2 draws 𝒥 uniformly. The engine codes the corrected ratio, and a parity read against `BayesPPR` is made against the corrected ratio too.
+     - *The moves balance as measures* (`mh_flux_symm`, `birth_death_flux`), and inserting a ridge preserves measure (`measurePreserving_piFinSuccAbove`). The code takes prior and proposal densities against one base measure, which slice 2's Geweke gate exercises.
+     - *Not on disk:* the paper's supplement, which holds its own change ratio. The derived ratio stands either way.
 6. **A basis mixing ridges with BASS's hinge terms, open.**
    - *Recommended:* ridges only first. The contract allows mixing; the moment service has no exact route for a ridge, so a mixed fit's Sobol reads by sampling.
    - *Alternative:* mixed from the start.
 7. **Categorical inputs, open.**
    - *Recommended:* refused in the first slices, then BASS's subset factors multiplying a ridge, separable in the category.
    - *Alternative:* the paper's dummy coding with its "in at least one category" indicator ridges.
-8. **The oracle, open.**
-   - *Recommended:* pin `BayesPPR` 0.2.0 from CRAN, the user's go-ahead for the install, as `coactivity` and BASS's R were pinned. Read its parity on fixed draws: the basis matrix, the collapsed likelihood ratio, the birth's acceptance. Correct its flaws rather than port them.
-   - *Alternative:* the paper's numbers and the engine's internal checks alone.
+8. **The oracle, settled** (the user, 2026-11-14): pin `BayesPPR` 0.2.0 from CRAN in `r/renv.lock`, as `coactivity` and BASS's R were pinned. Read its parity on fixed draws: the basis matrix, the collapsed likelihood ratio, the birth's acceptance. Correct its flaws rather than port them.
+   - *Not taken:* the paper's numbers and the engine's internal checks alone.
 9. **The coefficients, settled by the engine:** Zellner–Siow by default, as the paper's; the g-form as an option; GBASS's noises carried over.
 10. **The readouts, settled by the contract:** prediction, the pointwise density, the gradient readout through the derivative, the conformal layer, and E8 on its sampled route. The moment service refuses a ridge with the reason, so Sobol and effects read by sampling (E25).
 
@@ -95,10 +101,11 @@ One commit per concern; tests with the code they test; each slice ends with its 
 - On `main`, committing by pathspec with nothing left staged and nothing pushed. Commit messages describe the work, with no attribution lines ([CLAUDE.md](../../../CLAUDE.md)). Leave `basin-hold-validation.csv` and `path-profile-validation.csv` out of every commit.
 - Other sessions may be writing in the checkout. Before editing a file, check `git diff -- <file>` for changes you did not make; on a shared file, message its other writer first and commit only your own hunk. Build from a snapshot (`git archive HEAD` plus your files) and commit only compiling states.
 - Builds set `ArtifactsRoot` inline into `artifacts\chip-bppr\`, deleted at the end. Heavy runs at below-normal priority with capped threads, MSBuild node reuse off; the machine is shared. Tests run by [targeted runs](../../../CONTRIBUTING.md#testing-standards).
-- **Sources:** read a paper before stating what it says, and mark anything cited from memory. When a source is not on disk, ask the main session; fetch nothing yourself. `gcbeck/bppr` is read for ideas only.
+- **Sources:** read a paper before stating what it says, and mark anything cited from memory. When a source is not on disk, ask the main session; fetch nothing yourself. The one fetch allowed is decision 8's: `BayesPPR` 0.2.0 and what it depends on, from CRAN through `r/`'s renv. `gcbeck/bppr` is read for ideas only.
 - New beside old; a removal is its own question to the user, with what is lost.
 - No notes outside the repository: hand-over state goes in this brief's report as an "In progress" entry, probes and their data go in `artifacts/` (AGENTS.md, 2026-11-10).
-- After each slice, report to the main session and wait for its verification note before starting the next.
+- A commit that touches shared code names in its report every test project that `scripts/test-select.ps1` selects for it, read from disk, with each one's count.
+- After each slice, report to the main session and wait for its verification note before starting the next. For this chip "the main session" is the second coordinating session (the [handoff](../coordination-handoff-2026-11-11.md#sessions)'s Sessions table), which verifies each slice from a clean archive. `artifacts/verify-main` is the coordinators' workspace; leave it alone.
 
 ## Report
 
