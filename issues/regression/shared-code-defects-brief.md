@@ -193,6 +193,34 @@ Decided by the user on 2026-11-14, as a distributions change of its own. It come
 
 **Files.** `src/maths/distributions/SpecialFunctions.cs` (`LogBeta`), its tests, and the pinned expectations that step 4 allows.
 
+## Slice 10: a guard in the weight reader and a trap for its compiled code
+
+Decided by the user on 2026-11-15 ("Guard and trap"), on the [report of the one-off wrong values](#2026-11-15--the-weight-readers-one-off-wrong-values-a-fault-in-compiled-code-not-reproduced): 13 tests read non-finite weights once, in one whole-assembly run on six threads, and the reading left is a fault in tier-1 compiled code for `PredictiveChecks.Rows`' scaled branch, not reproduced in 66 million calls and 1,836 fresh processes. A hunt and a rewrite of the loop were the alternatives; neither is taken.
+
+**The aim.** A recurrence is an error that names itself, never a wrong value, and it leaves the evidence an upstream report needs. The loop stays as it is, so the fault stays observable.
+
+**The guard.**
+- `Rows` checks each pass over the weights against the list's own `Count`: a pass that reads fewer or more rows than `Count` throws, naming the method, the pass, the two counts and the weights' runtime type, and saying which files of the run to keep.
+- The scaled branch's second pass is the one the failures fit; check the first pass by the same rule, and say in the report whether the ordinary branch's passes are worth the same check and what each costs.
+- Every result of every existing test is as it was, bit for bit.
+- *Tested by* a list whose enumerator yields fewer rows than its `Count`, and one that yields more: the fault itself cannot be called up.
+
+**The trap.**
+- A test run keeps `Rows`' compiled code at each tier: `DOTNET_JitDisasm=Rows` with `DOTNET_JitStdOutFile` pointing beside the run's trx, as read on release 10.0.5 in the report.
+- *Where:* in the runsettings `scripts/test-select.ps1` writes, so that the test host alone takes the variables and `scripts/verify-csharp.ps1` inherits the trap. Say if the runsettings route does not reach the test host and what does.
+- *Read first:* what several .NET processes sharing one `DOTNET_JitStdOutFile` do to it, and what a run whose test host never compiles `Rows` leaves behind.
+- *Its cost:* a run's wall clock before and after on one project, and the file's size.
+
+**If the guard ever throws,** in any session's run: keep the run's folder (the trx, the trap's file, the log), record the command, the environment and what else was running, and tell the second coordinating session. Put that sentence where a chip will meet it: in the exception's text and in the script's help.
+
+**Gates.**
+- The guard's two tests; `WeightReaderTests`, `PredictiveChecksTests` and `ConformalCdfMarginTests` as they were.
+- Every test project the changed files select, named with its count; the pinned tier at the commit; the whole Regression assembly once.
+- The trap's file present after a Regression run through test-select and through verify-csharp, holding `Rows` at instrumented tier 0 and tier 1; absent or empty, and harmless, for a project that never compiles it.
+- Builds from a fresh folder per base, or with the snapshot's files touched.
+
+**Files.** `src/maths/regression/PredictiveChecks.cs`, its tests, and `scripts/test-select.ps1`. Message the second coordinating session before the commit that changes the script, so that no verification is mid-run.
+
 ## Working rules
 
 - **Order.** Slice 1, then slice 2. They touch different code, so slice 2's reading starts when slice 1 lands. The coordinating session verifies each landed slice from a clean archive ([scripts/verify-csharp.ps1](../../scripts/verify-csharp.ps1)).
