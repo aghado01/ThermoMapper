@@ -211,6 +211,22 @@ Decided by the user on 2026-11-14, as a distributions change of its own. It come
 
 Newest first. Each gives the commits, the gates' results, defects found, decisions for the user and "Doc changes owed".
 
+### 2026-11-14 — Slice 8: in progress
+
+**8a, the reading before any change.** Every process under the run, read from `Win32_Process` every 0.5 s, from `2ded631` staged.
+- *Where the chain leaves below normal: MSBuild's worker node.*
+  - test-select starts `dotnet test` below normal, and its start holds.
+  - MSBuild, inside that process, starts its worker node with `/nodemode:1 /nodeReuse:false /low:false`. The build was not asked for low priority, so the node sets itself to Normal.
+  - Everything the node starts inherits Normal: csc for the projects it builds, `vstest.console`, and testhost.
+- *Through test-select,* LinAlg (two project references), Slice scope: dotnet test BelowNormal; node Normal; csc Normal under the node (BelowNormal in the main node); vstest.console Normal; testhost Normal. 193/193.
+- *Through verify-csharp,* LinAlg, Commit scope over `BandCholesky.cs`: the same chain. 116/116.
+- *With no worker node,* in `TestHarness.Runner.Tests` (one reference), MSBuild started no node and the whole tree stayed BelowNormal, 19/19. So the defect shows wherever MSBuild starts a node, as it does for the regression project.
+- *The fact harness is not in the chain.* test-select starts `dotnet test` itself; `src/test-harness` is the runner behind `scripts/fact-harness.ps1`, a separate entry point.
+- *MSBuild's switch, read:* `dotnet msbuild -h` lists `-lowPriority[:True|False]`, short `-low`.
+- *Trial in a staged copy,* with `-lowPriority` on test-select's `dotnet test`: the node gets `/low:true`, and the whole tree stays BelowNormal. 193/193.
+
+**Next.** 8a's edit waits for the coordinating session to confirm that no verification is mid-run. 8b's timings are running.
+
 ### 2026-11-14 — Slice 7 verified from a clean archive (coordinating session)
 
 - **Run:** `scripts/verify-csharp.ps1` at HEAD `1441600`, the Commit selection over `1441600`'s four files.
