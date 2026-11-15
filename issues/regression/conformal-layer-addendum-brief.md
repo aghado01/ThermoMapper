@@ -57,6 +57,82 @@ As in the archived brief: each slice is reported here, then waits for the main s
 
 Newest first.
 
+### 2026-11-15 — τ through richer features: a spline density ratio
+
+Built at the user's pick (2026-11-15, "slice 15's alternation speed then τ through richer features, then we'll return to the vovk items").
+
+**Landed** on `main`, nothing pushed:
+- `274f69d`:
+  - `DensityRatio.Spline`, the nonparametric ratio, with the readouts `Ridge` and `Inputs`;
+  - `ScoreMixtureOptions.Knots`, which routes each level's τ fit through it.
+- `DensityRatioTests` gains three tests and `ScoreMixtureTests` one.
+- *What changes for existing calls: nothing.*
+  - `Logistic` now runs through a shared core and still refuses a constant feature.
+  - `Knots` is null by default, so `ScoreMixture` fits τ on the features as given, as before.
+
+**What it computes.**
+- *The expansion.*
+  - Each input becomes cubic B-splines over the pooled samples' range, with `knots` interior knots (6 by default) at the pooled quantiles. Repeated knots are dropped.
+  - Each input's first column is dropped, since its B-splines sum to one and the intercept spans that. A column constant over the pooled samples is dropped too; a few-valued input leaves some.
+  - An input beyond the range holds its edge value.
+  - So ln w = Σⱼ sⱼ(xⱼ) plus the size correction: additive in the inputs, with no interactions.
+- *The ridge.*
+  - It is chosen from 10⁻⁴ to 10 by decades, by the classifier's 5-fold cross-validated log loss. Row i of each sample goes in fold i mod 5, so sorted inputs spread over every fold.
+  - A ridge whose fit is refused in some fold is passed over. A column constant within a fold's training rows sits idle there, its slope held at zero.
+  - Every row is then refitted at the chosen ridge.
+- *τ through it.* `Knots` set to a count fits each level's ratio with `Spline`, and `Ridge` then goes unused.
+
+**Gates.**
+- *Variance shift.* N(0, 1) against N(0, 1.6²), 4,000 points each. ln w is even in x, so a linear fit reads it as flat.
+  - The spline's ln w is within 0.15 of the truth at x = −2 to 2: +0.150 and −0.140 at ±2, −0.038 at 0.
+  - The linear fit's lies between −0.034 and 0.034, up to 0.78 off.
+  - Cross-validation chose 10⁻⁴; the fit took 9 Newton steps.
+- *Nonlinear covariate shift.*
+  - The fixture:
+    - training inputs uniform, the test's triangular, with density 4 min(x, 1 − x);
+    - noise growing toward the middle;
+    - 4,000 replications at n 199 and α 0.1, each ratio fitted once from 2,000 unlabeled inputs of each law.
+  - Coverage, se 0.0047:
+
+    | weights | coverage | mean TV |
+    |---|---|---|
+    | none | 0.8385 | |
+    | the linear fit's | 0.8423 | 0.250 |
+    | the spline's | 0.9077 | 0.034 |
+
+    The spline's coverage is within the TV bound (`sum_weight_refused_estimated_le`).
+- *Units, edges and refusals.*
+  - Two inputs, one in units of 10³ and one of 10⁻³, each with an offset, read alike to 8 digits and take the same ridge.
+  - Beyond the range, an input holds its edge value to 12 digits.
+  - A binary input beside a continuous one fits; its step reads 1.0996 against ln 3 = 1.0986.
+  - Each bad argument is refused.
+- *The score mixture, a middle cluster.* The narrow cluster holds |x − ½| below about 0.2, so its membership is not monotone in x. On 1,000 points of raw x:
+
+  | τ | J | mean membership error | R² at J 2 |
+  |---|---|---|---|
+  | `Knots` 6 | 2 | 0.0695 | 0.979 |
+  | linear in x | 2 | 0.40 | 0.9996 |
+
+  The spline fit took 2.7 s.
+- *Existing classes.* `DensityRatioTests` and `ScoreMixtureTests` pass.
+- *Per commit,* the selected classes and the pinned tier across every test project: 59 of 59 selected tests in Maths.Regression.Tests (DensityRatioTests and ScoreMixtureTests); Maths.Oracle.Tests compiles the two source files and selects no class; no other project's compile closure holds them.
+
+**Defects found:** none in existing code.
+
+My own build had one, fixed before the commit and found in self-review. A binary input left all-zero spline columns, which `Logistic` refuses, so `Spline` threw on it. Pooled-constant columns are now dropped, and fold-constant ones sit idle. The binary-input test pins the fix.
+
+**The finding.** On the middle cluster, the linear τ scores the higher R², 0.9996 against the spline's 0.979, while getting the memberships wrong.
+- The linear τ is nearly flat in x, so two factors fit it closely while holding nothing of the clusters.
+- So the factorization's R² cannot flag a τ that misses the shift. The ratio fits' held-out log loss, which the ridge's choice already computes, can.
+
+**Follow-ups, the user's to decide:**
+- *Interactions between inputs.* The spline ratio is additive, so it misses a shift in a joint feature. A tensor-product basis, or a kernel ratio such as KLIEP or uLSIF, would serve such a shift. That decides whether the layer serves shifts that live in interactions.
+- *`Knots` as the score mixture's default.* That would be a change of default. The cost is 31 logistic fits per level instead of one.
+
+**Doc changes owed:**
+- The density-ratio section: the spline form (knots, edges, constant columns, the cross-validated ridge) and its additive limit.
+- The posterior-conformal section: `Knots`, and the finding that R² cannot flag a flat τ.
+
 ### 2026-11-15 — Slice 15's alternation speed: safeguarded extrapolation of γ
 
 Built at the user's pick (2026-11-15, "slice 15's alternation speed then τ through richer features, then we'll return to the vovk items").
