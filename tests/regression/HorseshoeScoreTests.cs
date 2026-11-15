@@ -136,9 +136,31 @@ public sealed class HorseshoeScoreTests(ITestOutputHelper output)
         output.WriteLine($"shift 40: identical sets in {same} of 200; largest width difference {gap:F3}");
         Assert.True(gap <= 0.05, $"width difference {gap}");
 
-        // The grid-free form refuses it: no interval theorem is proved for RoBAS-Full.
-        Assert.Contains("interval theorem", Assert.Throws<ArgumentException>(
-            () => ResidualShrinkage.Intervals([.. Enumerable.Range(0, 20).Select(i => 0.1 * i)], [0.0], ResidualScore.Horseshoe)).Message);
+        // The grid-free form serves it from n 4 (robasFull_interval), and refuses it below, where its sets are not always intervals, and
+        // on residuals all equal, outside the theorem.
+        Assert.False(ResidualShrinkage.Intervals([.. Enumerable.Range(0, 20).Select(i => 0.1 * i)], [0.0], ResidualScore.Horseshoe).Intervals[0].WholeSpace);
+        Assert.Contains("below n 4", Assert.Throws<ArgumentException>(
+            () => ResidualShrinkage.Intervals([0.510312, 0.652786, 0.545799], [0.0], ResidualScore.Horseshoe, 0.3)).Message);
+        Assert.Contains("not all equal", Assert.Throws<ArgumentException>(
+            () => ResidualShrinkage.Intervals([.. Enumerable.Repeat(0.4, 12)], [0.0], ResidualScore.Horseshoe)).Message);
+    }
+
+    [Fact]
+    public void TheCommonPoint_HasPValueOne()
+    {
+        // robas_common_point: at z₀ every unit's score reaches the candidate's, so the grid form's p-value is 1 there, on random residuals,
+        // shifted, spread and tight, at n 4 to 40.
+        var rng = new Xoshiro256PlusPlus(2026_1159);
+        foreach (int n in new[] { 4, 5, 8, 15, 40 })
+            foreach (double shift in new[] { 0.0, 0.7, -3.0, 25.0 })
+            {
+                double[] residuals = [.. Enumerable.Range(0, n).Select(_ => shift + (0.05 + rng.NextDouble()) * Gaussian(rng))];
+                double z0 = ResidualShrinkage.CommonPoint(residuals);
+                double s = residuals.Sum();
+                Assert.InRange(z0, Math.Min(s / (3 * n), s / n) - 1e-12, Math.Max(s / (3 * n), s / n) + 1e-12);
+                ConformalSet set = ResidualShrinkage.Prediction(residuals, [0.0], [[z0]], ResidualScore.Horseshoe, 0.5).Sets[0];
+                Assert.Equal(1.0, set.PValues![0]);
+            }
     }
 
     [Fact]

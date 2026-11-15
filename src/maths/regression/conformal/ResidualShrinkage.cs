@@ -22,11 +22,11 @@ public enum ResidualScore
     /// θ | τ² ~ N(0, σ²τ²/n), τ ~ C⁺(0, 1). By their marginal-likelihood lemma a unit's score is the marginal likelihood of the other n,
     /// ln p(r₋ⱼ) = −n s²₋ⱼ/(2σ̂²) + ln ₁F₁(1; 3/2; −n r̄²₋ⱼ/(2σ̂²)) up to a constant every unit shares, s²₋ⱼ and r̄₋ⱼ the others' spread
     /// and mean and σ̂² = Σ(r − r̄)²/n over all n + 1 residuals (their plug-in). Near zero it shrinks as the horseshoe does; under a large
-    /// mean shift it ranks as distance to average (their asymptotic robustness theorem). No interval theorem is proved for it, and its sets
-    /// are not always intervals: a seeded search found sets in two pieces at n 2 and 3, one about the prior's centre 0 and one about the
-    /// data (residuals 0.510, 0.653, 0.546 at k 1: [−0.198, 0.062] and [0.333, 0.668]), and none from n 4 to 10 among about 9,900 tight,
-    /// shifted and outlying configurations at every level, as RoBAS-EB's theorem starts at n 4. So the grid form serves it
-    /// (<see cref="ResidualShrinkage.Prediction"/>).
+    /// mean shift it ranks as distance to average (their asymptotic robustness theorem). Its sets are intervals from n 4 when the
+    /// calibration residuals are not all equal (the Lean's <c>robasFull_interval</c>, granted four bounds on Dawson's function that the
+    /// checks certify), so the grid-free form serves it there (<see cref="ResidualShrinkage.Intervals"/>). Below n 4 they are not always:
+    /// a seeded search found sets in two pieces at n 2 and 3, one about the prior's centre 0 and one about the data (residuals 0.510,
+    /// 0.653, 0.546 at k 1: [−0.198, 0.062] and [0.333, 0.668]), and there the grid form serves it (<see cref="ResidualShrinkage.Prediction"/>).
     /// </summary>
     Horseshoe,
 }
@@ -130,11 +130,13 @@ public static class ResidualShrinkage
     /// The sets' exact ends, grid-free (their bracketed search, Algorithm 1, §3.4), for test cases at <paramref name="centres"/> f(x) from the
     /// calibration residuals <paramref name="residuals"/>, each end within <paramref name="tolerance"/> in the response's units and rounded
     /// outward, so each interval holds the exact set. Each score's set is an interval: distance to origin's and distance to average's at every
-    /// n, each unit's acceptance an interval about one shared point; RoBAS-EB's for n ≥ 4 (their interval theorem), below which a level
-    /// above 0 is refused. Their search starts from an approximate maximiser of the p-value; here it starts from the candidate residual
-    /// whose own score is 0, â·r̄ over the calibration residuals (0 for distance to origin, r̄ for distance to average), accepted since
-    /// the candidate's ties count for it. From there each side doubles a step until a candidate is refused, which happens since the
-    /// candidate's score grows as |z| and the others' as |z|/n, then bisects.
+    /// n, each unit's acceptance an interval about one shared point; RoBAS-EB's for n ≥ 4 (their interval theorem); RoBAS-Full's for n ≥ 4
+    /// with the calibration residuals not all equal (the Lean's <c>robasFull_interval</c>, granted four bounds on Dawson's function that the
+    /// checks certify). Below those, a level above 0 is refused. Their search starts from an approximate maximiser of the p-value; here it
+    /// starts from a candidate every unit's score reaches, so the p-value is 1: the residual whose own score is 0, â·r̄ over the calibration
+    /// residuals (0 for distance to origin, r̄ for distance to average), the candidate's ties counting for it; for RoBAS-Full the common
+    /// point (<c>robas_common_point</c>). From there each side doubles a step until a candidate is refused, which happens since the
+    /// candidate's score outgrows the others', then bisects.
     /// </summary>
     public static ResidualIntervals Intervals(IReadOnlyList<double> residuals, IReadOnlyList<double> centres, ResidualScore score = ResidualScore.Shrinkage,
                                               double alpha = 0.1, double tolerance = 1e-8)
@@ -144,8 +146,6 @@ public static class ResidualShrinkage
         SplitConformal.CheckAlpha(alpha);
         ConformalBisection.CheckTolerance(tolerance);
         if (!Enum.IsDefined(score)) throw new ArgumentOutOfRangeException(nameof(score));
-        if (score == ResidualScore.Horseshoe)
-            throw new ArgumentException("RoBAS-Full has no interval theorem, so its set need not be one interval: read the grid form (Prediction).", nameof(score));
         int n = residuals.Count, m = n + 1, level = (int)Math.Floor(alpha * m);
         var r = new double[m];
         for (int i = 0; i < n; i++)
@@ -157,6 +157,13 @@ public static class ResidualShrinkage
             if (!double.IsFinite(centres[t])) throw new ArgumentException($"Centre {t} is {centres[t]}.", nameof(centres));
         if (score == ResidualScore.Shrinkage && n < 4 && level > 0)
             throw new ArgumentException($"RoBAS-EB's sets are intervals for n ≥ 4 (their interval theorem); at n = {n} read the grid form (Prediction).", nameof(residuals));
+        if (score == ResidualScore.Horseshoe && level > 0)
+        {
+            if (n < 4)
+                throw new ArgumentException($"RoBAS-Full's sets are not always intervals below n 4 (two pieces at n 2 and 3); at n = {n} read the grid form (Prediction).", nameof(residuals));
+            if (Array.TrueForAll(r[..n], v => v == r[0]))
+                throw new ArgumentException("RoBAS-Full's interval theorem takes calibration residuals not all equal; read the grid form (Prediction).", nameof(residuals));
+        }
         var intervals = new ResidualInterval[centres.Count];
         if (level == 0)
         {
@@ -175,6 +182,7 @@ public static class ResidualShrinkage
         {
             ResidualScore.DistanceToOrigin => 0.0,
             ResidualScore.DistanceToAverage => mean,
+            ResidualScore.Horseshoe => CommonPoint(r[..n]),
             _ => (denominator > 0.0 ? upsilon2 / denominator : 0.0) * mean,
         };
         for (int i = 0; i < n; i++) reach = Math.Max(reach, Math.Abs(r[i] - centre));
@@ -240,6 +248,52 @@ public static class ResidualShrinkage
             double shrink = denominator > 0.0 ? upsilon2 / denominator : 0.0;
             into[j] = Math.Abs(r[j] - shrink * mean);
         }
+    }
+
+    /// <summary>
+    /// RoBAS-Full's common point (the Lean's <c>robas_common_point</c>): z₀ with n·z₀ = S·g(S²/(2T(z₀))), S the calibration residuals' sum,
+    /// T(z) = Σ(r − r̄)² over them and z, and g = K₁/K₀ with K_j(x) = ∫₀¹ v^{2j}e^{xv²} dv. Every unit's score reaches the candidate's
+    /// there, so its p-value is 1. Up to x = 1 g is the ratio of the series K_j(x) = Σ xᵏ/(k!(2k + 2j + 1)); past it, by the ODE
+    /// 2xK₁ + K₀ = eˣ, g(x) = (1/₁F₁(1; 3/2; −x) − 1)/(2x), where the difference is above 0.9. g is nondecreasing from 1/3 to 1, so z₀ lies
+    /// between S/(3n) and S/n, where n·z − S·g changes sign; bisection finds it. The residuals are not all equal.
+    /// </summary>
+    internal static double CommonPoint(double[] calibration)
+    {
+        int n = calibration.Length;
+        double s = 0.0;
+        foreach (double v in calibration) s += v;
+        if (s == 0.0) return 0.0;
+        var all = new double[n + 1];
+        Array.Copy(calibration, all, n);
+        double H(double z)
+        {
+            all[n] = z;
+            double mean = 0.0, spread = 0.0;
+            foreach (double v in all) mean += v;
+            mean /= n + 1;
+            foreach (double v in all) spread += (v - mean) * (v - mean);
+            return n * z - s * G(s * s / (2.0 * spread));
+        }
+        static double G(double x)
+        {
+            if (x > 1.0) return (Math.Exp(-LogKummer(x)) - 1.0) / (2.0 * x);
+            double term = 1.0, k0 = 1.0, k1 = 1.0 / 3.0;
+            for (int k = 1; k < 100 && term > 1e-18; k++)
+            {
+                term *= x / k;
+                k0 += term / (2 * k + 1);
+                k1 += term / (2 * k + 3);
+            }
+            return k1 / k0;
+        }
+        double lo = s / (3.0 * n), hi = s / n, low = H(lo);
+        for (int step = 0; step < 200 && hi != lo; step++)
+        {
+            double mid = 0.5 * (lo + hi);
+            if (mid == lo || mid == hi) break;
+            if (Math.Sign(H(mid)) == Math.Sign(low)) lo = mid; else hi = mid;
+        }
+        return 0.5 * (lo + hi);
     }
 
     /// <summary>

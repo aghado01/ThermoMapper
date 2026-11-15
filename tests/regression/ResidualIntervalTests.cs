@@ -27,7 +27,7 @@ public sealed class ResidualIntervalTests(ITestOutputHelper output)
             foreach (double shift in new[] { 0.0, 1.5 })
             {
                 double[] residuals = [.. Enumerable.Range(0, n).Select(_ => shift + Gaussian(rng))];
-                foreach (ResidualScore score in Enum.GetValues<ResidualScore>().Where(s => s != ResidualScore.Horseshoe))
+                foreach (ResidualScore score in Enum.GetValues<ResidualScore>())
                 {
                     ResidualInterval interval = ResidualShrinkage.Intervals(residuals, [centre], score, 0.1, tolerance).Intervals[0];
                     ConformalSet set = ResidualShrinkage.Prediction(residuals, [centre], [grid], score, 0.1).Sets[0];
@@ -66,7 +66,7 @@ public sealed class ResidualIntervalTests(ITestOutputHelper output)
         // Residuals N(1.5, 1), the predictor biased: 49 calibration residuals and a test residual, 2,000 replications, α 0.1.
         const int replications = 2000;
         var rng = new Xoshiro256PlusPlus(2026_1148);
-        ResidualScore[] scores = [.. Enum.GetValues<ResidualScore>().Where(s => s != ResidualScore.Horseshoe)];
+        ResidualScore[] scores = Enum.GetValues<ResidualScore>();
         var covered = new int[scores.Length];
         var width = new double[scores.Length];
         for (int r = 0; r < replications; r++)
