@@ -19,12 +19,14 @@ Opened 2026-11-14 at the user's word ("that brief was getting way too long, adde
 - `BassFit.GroupConformal` takes the optional confidence (`14fd05d`), built and verified.
 - Slice 17's grid-free intervals for the residual scores (`28993bb`, `ResidualShrinkage.Intervals`) are built and verified.
 - The asymmetric interval's exact law is closed (`b8cd947`, docstrings only). Where the band's width varies, the union of the two tails is Makarov's worst case given their Beta laws. Beta(k_lo + k_hi, m − k_lo − k_hi) holds only at constant width, the residual interval.
+- Slice 17's RoBAS-Full (`942df9c`, `ResidualScore.Horseshoe`) is built and verified. It is served by `Prediction`, the grid form.
 - Slice 12a's k̂ diagnostic stays opt-in, as the user settled on 2026-11-14. That is the code's default (`ConformalOptions.LeaveOneOutParetoK`, false).
 - The defects chip owns `PredictiveChecks.cs` and `Pointwise.cs`'s weight check; a change there is agreed with it first (the archived brief's coordination note).
 
 ## Open, each with the decision it would change
 
-- **Slice 17's two remaining follow-ups** (its report): RoBAS-Full, the horseshoe score; CBMA's evidence from the engines' own fits.
+- **Slice 17's remaining follow-up** (its report): CBMA's evidence from the engines' own fits.
+- **RoBAS-Full's intervals:** `Intervals` refuses the horseshoe score, since no interval theorem is proved for it. It decides whether the grid-free ends extend to it.
 - **Slice 15's alternation speed** along the factorization's flat directions. It decides the cost at large n.
 - **τ through richer features,** the ratio estimator's open follow-up. It decides whether the layer offers a nonparametric τ.
 
@@ -47,6 +49,7 @@ Built at the user's pick (2026-11-14, "RoBAS-Full"), the first of slice 17's fol
   - `HorseshoeScoreTests`.
 - *Two existing tests now handle the new value.* `ScoresBeyondTheModelTests.TheResidualScores_AreTheirDefinitions` gains RoBAS-Full's two-pass definition, where its default branch would otherwise have read the new score as RoBAS-EB's. `ResidualIntervalTests` leave RoBAS-Full out, since the grid-free form refuses it.
 - *Existing scores read unchanged.*
+- *Verified by the main session on 2026-11-14,* from a clean archive of `e08d77b` with zero skips: the Commit selection over `942df9c`'s files, 56 of 56 ([receipts](receipts/verify-conformal-robasfull-942df9c/)). The ₁F₁ was read against D(√x)/√x: the positive series up to x 36, the asymptotic one past it, cut at its least term. `4773f8b`, the confidence parameter's wording, is doc comments only.
 
 **What it computes.**
 - *The working model:* R | θ ~ N(θ, σ²), θ | τ² ~ N(0, σ²τ²/n), τ ~ C⁺(0, 1), the horseshoe.

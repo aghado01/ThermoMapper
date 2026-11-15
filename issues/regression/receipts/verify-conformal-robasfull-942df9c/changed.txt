@@ -1,0 +1,4 @@
+src/maths/regression/conformal/ResidualShrinkage.cs
+tests/regression/HorseshoeScoreTests.cs
+tests/regression/ResidualIntervalTests.cs
+tests/regression/ScoresBeyondTheModelTests.cs
