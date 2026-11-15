@@ -1,0 +1,3 @@
+src/maths/regression/spline/bass/projection/BassProjectedFit.cs
+src/maths/regression/spline/bass/projection/BassProjectionComparison.cs
+tests/regression/ProjectionComparisonHeldOutTests.cs

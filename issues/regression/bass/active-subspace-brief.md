@@ -354,6 +354,8 @@ Under "Reports" below, newest first, per slice: what landed by commit; the gates
 - D2(a): scores by the weights' meaning.
 
 **Landed:** `db82c2d`, one commit. C and D share `BassProjectionComparison`'s side and fold loops, so they land together.
+- *Verified by the main session on 2026-11-15,* from a clean archive of `22b598a` with zero skips, over the commit's files ([receipts](../receipts/verify-e8-s8b-db82c2d/)): Maths.Regression.Tests' Commit selection, 84 of 84. Maths.Oracle.Tests selects no class for these files.
+  - Two behaviours are recorded as built. A group fold needs a random-effects fit, since BASS reads data groupings only there. Inside cross-fitting, a held-out level predicts outside every subset; the predictions' own default, refusing an unseen level, is unchanged.
 
 **What was built:**
 - *C, the held-out log predictive density.*
