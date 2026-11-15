@@ -1,6 +1,6 @@
 # Active subspaces on the BASS core: E8's build (chip brief)
 
-Date: 2026-11-08. Status: slices 0–7e complete and verified; no slice is commissioned; slice 8's plan, the five unbuilt items, is drafted for the user's call (2026-11-13), and what stays open is under [Open items](#open-items-2026-11-13); slice 7's plan approved by the user (2026-11-10); slice 7a (`7b2ca7a`) verified 2026-11-11; slice 7b (`70a2aa2`) verified 2026-11-11; slice 7c (`015d977`) verified 2026-11-11; slice 7d, the training-range hinge rule the user chose for projected fits (2026-11-11), landed (`566c1f1` to `6aff134`) and was verified 2026-11-13 (2,502 of 2,502 from a clean archive of `788d249`); slice 7e, the frame's column signs, commissioned by the user on 2026-11-13 (below), landed (`9b9e4e1` to `199abd7`) and was verified the same day in seven test projects (below). Commissioned by the user on 2026-11-08 ("kick off e8"), after KHAOS's last slice; slice 5, the Grassmann discussion's items the user settled, commissioned 2026-11-08 ("ill take as recommended"). Every slice landed and was verified by the coordinating session on 2026-11-08: slice 0 (`15fb495`, `9e3028d`, `aa62879`), slice 1 (`95294f8`, `9dfcc6d`, `1385b86`), slice 2 (`8c7db77`, `3cdc2e8`), slice 3 (`84fe230`, `1049055`), slice 4 (`20aeb06`, `bc72014`) and slice 5 (`def59f3`, `9d2ff23`, `95d2900`, `a54a537`). The follow-ups, commissioned 2026-11-10: slice 6 (`276af70`, `e9d8827`, `30df59e`, `9a669b6`, report `3c26660`) verified by the coordinating session on 2026-11-10; slice 7's plan, approved 2026-11-10, was built as 7a to 7c; E36's brief ([`bppr-brief.md`](bppr-brief.md)) is drafted and waits for the user's approval. Written by the main session from [E8's entry](extensions-brief.md#active-subspace-analysis), [gap G3](lineage-gaps-register.md#g3-sobol-indices-and-active-subspaces-have-different-standing), [the lineage review's separability question](lineage-review.md#separability-is-what-the-closed-forms-rest-on), the [Astra notes](../archive/bass-gbass-khaos-activespaces/discussion/astra-grassman-stiefel-pca-extensions.md), and the [Grassmann discussion](../archive/bass-gbass-khaos-activespaces/briefs/grassmann-stiefel-subspaces-brief.md)'s report so far. Reports go under "Reports" below, newest first.
+Date: 2026-11-08. Status: slices 0–7e complete and verified; slice 8, the five unbuilt items, commissioned by the user on 2026-11-14 at the plan's recommended options; slice 8a (`01035ce` to `978c960`, report below) landed on 2026-11-15 and waits for verification, with 8b, 8c and the queued request 8a′ after it; what stays open is under [Open items](#open-items-2026-11-13); slice 7's plan approved by the user (2026-11-10); slice 7a (`7b2ca7a`) verified 2026-11-11; slice 7b (`70a2aa2`) verified 2026-11-11; slice 7c (`015d977`) verified 2026-11-11; slice 7d, the training-range hinge rule the user chose for projected fits (2026-11-11), landed (`566c1f1` to `6aff134`) and was verified 2026-11-13 (2,502 of 2,502 from a clean archive of `788d249`); slice 7e, the frame's column signs, commissioned by the user on 2026-11-13 (below), landed (`9b9e4e1` to `199abd7`) and was verified the same day in seven test projects (below). Commissioned by the user on 2026-11-08 ("kick off e8"), after KHAOS's last slice; slice 5, the Grassmann discussion's items the user settled, commissioned 2026-11-08 ("ill take as recommended"). Every slice landed and was verified by the coordinating session on 2026-11-08: slice 0 (`15fb495`, `9e3028d`, `aa62879`), slice 1 (`95294f8`, `9dfcc6d`, `1385b86`), slice 2 (`8c7db77`, `3cdc2e8`), slice 3 (`84fe230`, `1049055`), slice 4 (`20aeb06`, `bc72014`) and slice 5 (`def59f3`, `9d2ff23`, `95d2900`, `a54a537`). The follow-ups, commissioned 2026-11-10: slice 6 (`276af70`, `e9d8827`, `30df59e`, `9a669b6`, report `3c26660`) verified by the coordinating session on 2026-11-10; slice 7's plan, approved 2026-11-10, was built as 7a to 7c; E36's brief ([`bppr-brief.md`](bppr-brief.md)) is drafted and waits for the user's approval. Written by the main session from [E8's entry](extensions-brief.md#active-subspace-analysis), [gap G3](lineage-gaps-register.md#g3-sobol-indices-and-active-subspaces-have-different-standing), [the lineage review's separability question](lineage-review.md#separability-is-what-the-closed-forms-rest-on), the [Astra notes](../archive/bass-gbass-khaos-activespaces/discussion/astra-grassman-stiefel-pca-extensions.md), and the [Grassmann discussion](../archive/bass-gbass-khaos-activespaces/briefs/grassmann-stiefel-subspaces-brief.md)'s report so far. Reports go under "Reports" below, newest first.
 
 ## Why
 
@@ -206,6 +206,8 @@ Commissioned by the user on 2026-11-13 ("Yes, commission it"), from the active-s
 
 ### Slice 8's plan: the unbuilt readout and comparison items (2026-11-13), for the user's call
 
+*Commissioned by the user on 2026-11-14 ("ok lets do slice 8"), taking every recommended option: A1(a), B1(a), B2(a), C1(a), D1(a) with group folds opt-in, D2(a), E1(a), E2(a), E3(a). Slice 8a, items A and B, landed on 2026-11-15 (report below).*
+
 Drafted at the user's request on 2026-11-13 ("Draft slice 8"), from the five items slices 6 and 7c left unbuilt. Nothing is built until the user commissions it and decides the items marked **Decision**; each decision has a recommendation. The items fall into three slices: two readout items, two comparison items, and one model change.
 
 **Coordination note (2026-11-14).** The BPPR chip's slice 1 (E36, `e70447c`, Regression expansion's) edited three of this brief's files:
@@ -296,7 +298,7 @@ Every fit built before it is separable, so its route and values are unchanged. B
 
 ## Open items (2026-11-13)
 
-No slice is commissioned. Each item below is drawn from the reports, which hold its numbers and what each outcome would change.
+Slice 8 is commissioned (2026-11-14); 8a has landed and waits for verification. Each item below is drawn from the reports, which hold its numbers and what each outcome would change.
 
 **Waiting on the user:**
 - *E36's brief* ([`bppr-brief.md`](bppr-brief.md)), which carries BPPR and the directional hinge, for approval.
@@ -307,8 +309,8 @@ No slice is commissioned. Each item below is drawn from the reports, which hold 
 - *The PBX 9501 replication* (below). The user has deferred it (2026-11-13) to a broader pass over the applications in the papers behind the regression engine.
 
 **Unbuilt** (slices 6 and 7c). The user intends to commission these (2026-11-13), after other loose ends and before BPPR. [Slice 8's plan](#slice-8s-plan-the-unbuilt-readout-and-comparison-items-2026-11-13-for-the-users-call) drafts them, with the decisions they need:
-- Co-active output functionals at locations beyond the training ones.
-- Poincaré constants for Student t, empirical and mixture laws. Uniform and truncated normal laws have them.
+- Co-active output functionals at locations beyond the training ones. *Built in slice 8a (`39fbc4d`).*
+- Poincaré constants for Student t, empirical and mixture laws. Uniform and truncated normal laws have them. *Built in slice 8a (`fdeab86`): mixtures and Student t laws take the finite-element constant; the empirical law has none, a finding.*
 - Cross-fitting with groupings or case weights.
 - A held-out log predictive density in the comparison.
 - Basis fits through a projection.
@@ -343,6 +345,90 @@ No slice is commissioned. Each item below is drawn from the reports, which hold 
 Under "Reports" below, newest first, per slice: what landed by commit; the gates' numbers; decisions taken beyond this brief; what was left unbuilt and why; follow-ups with the decision each would change.
 
 ## Reports
+
+### Slice 8a: co-active output locations and Poincaré constants for the remaining laws (2026-11-15)
+
+**Asked for:** slice 8's items A and B. The user commissioned slice 8 on 2026-11-14 ("ok lets do slice 8"), taking the brief's recommended options, all nine (a)s. For 8a those are: A1(a), two location properties beside the weights; B1(a), the numerical constant for mixtures and Student t laws; B2(a), slice 6's bound kept for a single truncated normal. The empirical law closes as a finding.
+
+**Landed:**
+- `01035ce`: `IntervalPoincare`, the finite-element constant, in Distributions.
+- `fdeab86`: B, the constants read by both checks.
+- `39fbc4d`: A, the locations.
+- `1a6b3f0`: E34's file, one line, committed by itself.
+- `978c960`: A's tests.
+
+**What was built:**
+- *`IntervalPoincare`* (Distributions) computes 1/λ₁ of the weighted Neumann problem −(ρu′)′ = λρu on [a, b] for any log density.
+  - Method: piecewise-linear elements with the consistent mass matrix. Each element's integrals use four-point Gauss–Legendre on the density, scaled to one largest value.
+  - λ₁ʰ is found by bisection on the inertia of K − λM. Each LDLᵀ pivot is carried as its departure from the stiffness, so the constants' zero eigenvalue does not cancel a small λ₁'s digits.
+  - Rayleigh–Ritz on nested grids, so the constant read lies under the law's (the min–max principle, cited from memory).
+  - The grid doubles from 1,024 elements until Richardson's estimate of the relative error is within 10⁻⁷. It is capped at 2²⁰, and the readout reports both the grid and the error.
+  - +∞ where the density underflows across a whole element.
+- *`InputPoincareConstant.Of(measure, variable, width)`* reads an input's constant from the product measure alone:
+  - a uniform law: (b − a)²/π², `Exact`;
+  - a single truncated normal: min(σ², (b − a)²/π²), `Bound`, as in slice 6;
+  - other mixtures and Student t components: the finite-element constant, `Numerical`;
+  - an empirical marginal: NaN, `None`.
+
+  `PoincareCheck.Constants` states each input's value, kind, grid and error. Both checks read one array per readout.
+- *Tolerances:*
+  - The per-input check's slack gains the numerical constant's relative error times the bound.
+  - The matrix check's tolerance is 1 + 10⁻⁹ plus the largest such error.
+  - An infinite constant reads ratio 0 and leaves the matrix check not applicable.
+  - A fit holding a directional hinge keeps no check, as E36's slice 1 set; constants are read only where the moment route's forms exist.
+- *`CoActiveSpec.OutputLocations` and `OtherOutputLocations`* place each side's functional at declared locations on a direct functional fit, read as `OutputMetric.Locations` reads them: by name, in the output variables' units, inside their boxes.
+  - Two outputs of one fit may sit at different locations, each with its own surface and gradient. At the training locations they share one surface and one gradient, as before.
+  - The functional's length is checked against its locations.
+  - Refused by a basis fit (its basis exists only at its training locations), by a scalar side, and by a fit of several named outputs. E34's `BassMultiOutput.CoActive` refuses them too (`1a6b3f0`).
+
+**Gates:**
+
+| Gate | Reading |
+| --- | --- |
+| `IntervalPoincare` on the uniform law: the consistent-mass spectrum (6/h²)·2sin²(θ/2)/(2 + cos θ), n from 2 to 4,096 | within 5.0·10⁻¹⁴ |
+| Its rate | the error to π²/L² falls by 4.0002 and 4.0001 per halving; under L²/π² by 4.90·10⁻⁸ at 4,096 elements, stated 4.90·10⁻⁸ |
+| N(0.5, 0.04²) truncated to [0, 1], 12.5σ each side | σ² to 4.7·10⁻¹⁵ at 2,048 elements |
+| Two normals N(0.25, 0.06²), N(0.75, 0.06²) on [0, 1] | 10.91 against 1/π² = 0.101, at 65,536 elements, stated error 3.8·10⁻⁸ |
+| 120 seeded truncated mixtures of normal and Student t components (ν 1 to 30, scales 0.03 to 1.5) | within the comparison with the uniform law, L²/π²·(sup ρ/inf ρ)^±1 (derived from the two Rayleigh quotients), by at least 4.1%; above random functions' Rayleigh quotients by 0.63%, and above Var(x) by 0.37%; under min(σ², L²/π²) for one normal by 1.3%; λ₁ʰ nested from 1,024 to 2,048 elements |
+| The sweep's grids | 4,096 elements for 82 laws; up to 131,072 for 2; median 0.017 s, slowest 0.45 s |
+| Constants the checks read: a scalar fit under a bimodal law, a t₃ and a normal-plus-t, on both routes | each constant the finite-element one of the law in box units, bit for bit; Bound/C_vv the constant to 2.1·10⁻¹⁶; no violation of either check, the largest per-input ratio 0.93, the largest matrix ratio 0.025, the matrix check computed |
+| Through the moment service, independent of the elements' quadrature: a hinge span dense across the bimodal law's gap | reaches each constant from below: bimodal 1 − 1.2·10⁻², t₃ 1 − 1.3·10⁻³, normal-plus-t 1 − 1.5·10⁻²; with 0.95C the check fires: 1.041, 1.051, 1.037 |
+| Each kind as stated | uniform `Exact` at 1/π²; one normal `Bound` at min(σ², 1/π²), slice 6's readings unchanged; empirical `None`, its ratios NaN, the matrix check not applicable |
+| The training output locations declared | 36 pairs the same bits on both routes: two outputs of one fit, one side or both declared, and two fits |
+| New locations, a over five and b over seven, none a training location | C_f, C_g and C_fg against tensor quadrature of the gradient readout read there to 4.1·10⁻¹⁵; the fit paired with itself as two fits gives the same C_fg |
+| The routes at new locations | within 2.01 standard errors |
+| f = g at one set of new locations | C_fg = C_f = C_g, and C_f is the readout's C under aaᵀ at those locations, to 7.2·10⁻¹⁶; concordance 1 |
+| Refusals | outside the box, an unknown name, a functional's length, a scalar side, a basis fit three ways, named outputs three ways |
+| The edit selection, 13 classes | 125 of 125; B's staged tree alone, five classes, 59 of 59 |
+| The whole assemblies from a clean archive of `60459fc` | Distributions 491 of 491 (1 min 33 s); Regression 3,651 of 3,651 (19 min 40 s) |
+
+**Cost (indicative, shared machine):** a readout under mixture laws pays for the constant once per mixture input. On CoActiveFixture's scalar fit, with the matrix check, the exact readout takes 0.002 s under uniform laws and 0.35 s under two bimodal ones, each of which takes the 65,536-element grid. The sweep's median law takes 0.017 s.
+
+**Decisions beyond the brief:**
+1. *The constant is a Distributions primitive* (`IntervalPoincare`), read from any log density on an interval. The readout calls it through `InputPoincareConstant.Of`.
+2. *The constants are read from the measure alone,* so a route without the moment service's totals can use them. Regression expansion asked for this for the sampled-sensitivity chip's decision 7.
+3. *A numerical constant's estimated error widens both checks' tolerances,* since the constant lies under the law's. The default tolerance is 10⁻⁷, far below anything a real violation shows.
+4. *Two outputs of one fit may take different locations.*
+5. *The output metric's location path shares `GradientAt` with the co-active sides,* with the same bits.
+6. *Two slice 6 tests pinned mixtures as having no constant* (`LawsWithoutAConstant_AreNotApplicable`, `MatrixPoincare_HoldsOnFittedDraws`). They now pin the empirical marginal.
+
+**Findings:**
+- *The empirical marginal has no Poincaré constant:* its atoms let a function change between training values with zero derivative on the support. The readout states `None`, and the item closes.
+- *A strongly bimodal law's first eigenfunction turns in the gap:* its derivative goes as 1/ρ, about sech(69(x − ½)) for the gate's law. A uniform hinge grid at 0.02 reaches only 0.935 of the constant. The finite-element grid doubles until it resolves the turn (65,536 elements there).
+
+**Left unbuilt:** none of A or B.
+
+**Follow-ups:**
+- *A cache of constants across readouts,* keyed by the resolved law. It would remove the repeated finite-element cost of readouts under one mixture law. Decision it changes: whether repeated readouts under mixture laws are a cost that matters. If they are, a pure cache, filled by law and never evicted by hit history; if not, it stays per readout.
+- *The queued request (8a′),* the Poincaré check for a non-separable scalar fit from sampled totals, waits for 8a's verification, as the coordination note says.
+
+**Doc changes owed:**
+- `docs/Maths/Regression/ActiveSubspaces.md`:
+  - the co-active functionals at declared locations: who refuses them and why;
+  - the Poincaré constants by kind, the finite-element constant's direction (under the law's) and error, the widened tolerances, the empirical marginal's lack of a constant, and the infinite constant's reading.
+- A Distributions page for `IntervalPoincare`:
+  - the weighted Neumann problem, consistent-mass elements, the pivot recurrence, Richardson's stop and the cap;
+  - the two-sided comparison with the uniform law that its sweep reads.
 
 ### Slice 7e: the frame's column signs (2026-11-13)
 
