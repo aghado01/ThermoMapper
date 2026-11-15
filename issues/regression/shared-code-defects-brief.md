@@ -211,6 +211,35 @@ Decided by the user on 2026-11-14, as a distributions change of its own. It come
 
 Newest first. Each gives the commits, the gates' results, defects found, decisions for the user and "Doc changes owed".
 
+### 2026-11-15 — Slice 9: BARS under the new `LogBeta`, read directly
+
+At the coordinating session's word, answering the user's question that slice 9's report left open: in BARS, does the change move a density value or an accept/reject decision? No code changed.
+
+**Why BARS.** Its locality kernel, `LocalBetaKernel(τ)`, proposes a knot about a center c from Beta(cτ, (1 − c)τ). Its Hastings correction reads that law's log density, whose normalizer is ln B(cτ, (1 − c)τ).
+
+**The runs.**
+- *The fit:* `BarsResumeTests`' data, 80 points of a sine with noise and an outlier every 13th, from seed 19. Cubic splines, `WeightedNormalModel`, `PoissonPrior(5)`, two chains, burn 0, so every one of the 800 sweeps per chain is a draw.
+- *The settings:* `LocalBetaKernel` at τ = 50 and τ = 8, each at master seeds 6 and 11.
+  - At τ = 50 both shapes reach 10 for c in [0.2, 0.8], where `LogBeta` takes R's arrangement; elsewhere it takes the ratio form. The runs put 1066 (seed 6) and 728 (seed 11) of their knots there.
+  - At τ = 8 no shape reaches 10, so the ratio form alone.
+- *Two builds:*
+  - old: HEAD with `de7d0eb`'s `SpecialFunctions.cs`;
+  - new: HEAD at `b5fac86`.
+  - They differ in that one file alone, so the other sessions' commits since `de7d0eb` are in both.
+
+**What moved: nothing, in all four runs.** Every knot set and position, every σ² and every coefficient, in all 1600 draws of each run, is the same double before and after. So are the move accounts and the acceptance rates (0.4506, 0.4248, 0.4021, 0.3306). No accept/reject decision flipped in the 6400 sweeps, and no draw value moved.
+
+**The density differences that did not reach a decision.**
+- ln B(cτ, (1 − c)τ), read under both builds over 100,001 centers c from 10⁻⁶ to 1 − 10⁻⁶:
+  - *τ = 50:* it moved at 87,394 centers, by at most 8.0·10⁻¹⁴, at c = 0.0144 (shapes 0.72 and 49.3). That is the far-apart regime where the old form lost digits.
+  - *τ = 8:* it moved at 96,915 centers, by at most 8.9·10⁻¹⁵.
+- The kernel's log density moves by the same amounts, the other way.
+- *Why the draws do not move at all:*
+  - A knot is drawn from the Beta law's sampler, which does not read ln B. The coefficients and σ² do not read the kernel.
+  - So the change reaches a run only through the Hastings ratio. There a shift of 10⁻¹⁴ to 10⁻¹³ in a log density would flip a decision only when ln U falls within that distance of the ratio, and none did.
+
+**Receipts:** `artifacts/chip-defects/slice9/bars-probe/` (the probe), and `bars-old/` and `bars-new/` (the draws, the accounts and the ln B grid).
+
 ### 2026-11-15 — Slice 9: `LogBeta` through `LogGammaRatio`, with R's arrangement for large shapes
 
 **Commits.**
