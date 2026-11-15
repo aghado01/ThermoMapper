@@ -27,8 +27,15 @@ internal static class ROracle
 
     public static bool IsAvailable => Toolchain is not null && File.Exists(Toolchain.Rscript);
 
-    /// <summary>The time an oracle is given unless it states its own.</summary>
-    public static readonly TimeSpan DefaultLimit = TimeSpan.FromSeconds(120);
+    /// <summary>
+    /// The time an oracle is given unless it states its own. Since test-select runs below normal (0dad092), R runs at BelowNormal with
+    /// the test host; the 120 s before was read when R ran at normal priority. Read on 2026-11-15 over two whole Oracle runs, each call
+    /// timed (153 calls each), the slowest outside the transport oracle: khaos_readouts 202 s and 92 s, gbass_readouts 153 s and 110 s,
+    /// khaos_defects 149 s and 102 s, khaos_primitives 146 s and 43 s, bass_enumeration 126 s and 103 s, with 15 of 18 cores busy in the
+    /// first and 3 rising to 15 in the second. 500 s is about 2.5 times the slowest, 202 s; a limit catches a hang and costs nothing
+    /// when R finishes.
+    /// </summary>
+    public static readonly TimeSpan DefaultLimit = TimeSpan.FromSeconds(500);
 
     /// <summary>
     /// Runs <paramref name="oracleRelPath"/> (relative to r/) as <c>Rscript &lt;oracle&gt; &lt;fixture&gt;
