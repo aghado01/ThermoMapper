@@ -1,0 +1,8 @@
+src/maths/regression/spline/bass/BassPriorSampler.cs
+src/maths/regression/spline/bass/BassResolved.cs
+src/maths/regression/spline/bass/BassStructurePrior.cs
+src/maths/regression/spline/bass/BassSweep.cs
+src/maths/regression/spline/bass/DirectionalTermSpace.cs
+src/maths/regression/spline/bass/DirectionDeterminant.cs
+tests/regression/DirectionalChainTests.cs
+tests/regression/DirectionDeterminantTests.cs

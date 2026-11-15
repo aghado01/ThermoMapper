@@ -114,6 +114,20 @@ Under "Reports" below, newest first, per slice: what landed by commit; the gates
 
 ## Reports
 
+### Slice 4 verified from a clean archive; the brief's slices are all landed (coordinating session, 2026-11-15)
+
+- **Commit:** `3ef7dc4`, on a snapshot of `e120042`, through `scripts/verify-csharp.ps1` over its eight changed files, in the two projects that select.
+- **Result:** Regression 2,745 of 2,745 and Oracle 106 of 106 at commit scope, with `DirectionDeterminantTests` 10 and `DirectionalChainTests` 13 among them.
+- **The change of plan, accepted:** c_M in closed form for sparse directions, with Monte Carlo as its gate where the settlement had a Monte Carlo table.
+  - *The derivation, read:* by Cauchy–Binet det(ΘᵀΘ) = Σ_S det(Θ_S)², and for independent columns E[det(Θ_S)²] = M!·p^(−M) once E[θθᵀ] = I/p. The paper's sparse law has that: a coordinate is in 𝒥 with chance a/p and carries 1/a of the norm, and the signs are symmetric.
+  - *Checked from outside the engine* ([script and output](../receipts/verify-bppr-s4-f62b4ab/)), in numpy from the law's definition, 60,000 collections each: (p, A, M) = (6, 3, 2), (6, 3, 3), (6, 3, 6), (10, 3, 5), (4, 2, 4) and (6, 1, 3) agree with p!/((p − M)!p^M) within |z| 1.43; E[θθᵀ] is I/p to 0.0024; past M = p the determinant is rounding.
+- **Read in the report:** the coupling enters through the target's term prior, so no move changes; the prior sampler's rejection by det ≤ 1 is exact for the stated target; M's cap is cut at p with the count law's mass past it reported.
+- **Where E36 stands.** Slices 0 to 4 are landed and verified, which is the brief's "done". What follows is the user's:
+  - the reading of M's mixing under ridge blocks (slice 3's follow-up);
+  - categorical inputs and mixed bases (decisions 6 and 7's later steps), not yet briefed;
+  - the cost follow-ups: rank-K updates for block proposals, one projection per proposed direction, rank-one updates of the directions' Gram.
+- **Receipts:** `artifacts/verify-bppr-s4-f62b4ab/`, with the changed list, the counters, the snapshot and the outside check tracked in [receipts](../receipts/verify-bppr-s4-f62b4ab/).
+
 ### Slice 4: the determinant direction prior (2026-11-15)
 
 The coordinating session verified slice 3 and started slice 4: the determinant as a labelled option, with c_M stated and its tilt on M reported. gcbeck's quantile knots are not taken, since decision 4 stands at the paper's t₀.
