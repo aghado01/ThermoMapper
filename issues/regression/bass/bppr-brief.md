@@ -114,6 +114,89 @@ Under "Reports" below, newest first, per slice: what landed by commit; the gates
 
 ## Reports
 
+### Slice 2: directions in the structure chain (2026-11-15)
+
+The coordinating session read slice 1's code with no defect and asked for slice 2's reading and design while its clean-archive run went on, with nothing of slice 2 committed before the verification note. Its note came at the end of the build: slice 1 verified from a clean archive at `e70447c` (above), with this list of eight files to close.
+
+**Landed** (`1e7bbea`).
+- `DirectionalTermSpace` (new) holds a directional basis's term measure (decisions 2 and 4).
+  - *The direction:* a uniform on {1, …, A}, 𝒥 uniform among the C(p, a) subsets, θ_𝒥 uniform on S^(a−1), density Γ(a/2)/(2π^(a/2)) against surface measure, ½ per sign on S⁰. Draws normalize a standard normal vector, a fair sign at a = 1.
+  - *The knot:* uniform on [L, U], the paper's eq. (UL). U is R's type-7 quantile of the projected training cases at q = 1 − n_active/n, n_active = min(20, n/10) by default (`BayesPPR`'s `n_dat_min`); L = U − (U − Q₀)/p₀ with p₀ = 2/3. Draws take U − (U − L)·r, `BayesPPR`'s form.
+  - *The range* comes from the column's own projection (`DirectionalHingeKernel.Project`, now shared), with the top order statistics kept in a small ascending buffer, a sort past 64 of them. Each direction's range is kept beside it in a `ConditionalWeakTable`, a pure cache.
+  - *A range with no width* (ties at the least projection up to U) leaves its direction no knot: such a term lies outside the support, as a structure outside F does, and the measure is not renormalized for it. A birth that draws one is a failed birth, a change a null move.
+- `DirectionalBasis` (`Structure.Directional`): p₀ (`LocalProbability`), n_active (`ActiveCases`) and κ (`Concentration`, 1000). A is `Structure.MaxInteraction` (3, resolved to min(3, p), the paper's A); ω₀ and υ₀ are `OrderWeight` and `VariableWeight`. Left out of the JSON when null, so every hinge config's form and fingerprint stand.
+- `BassStructurePrior` gains the directional part (`BassPart.Directional`, `PartCount` 5): its order is a, its variables 𝒥, its factors the direction's and the knot's log densities. A hinge or Legendre fit's prior refuses a directional term by name rather than scoring it as an empty one.
+- `DirectionalTermProposal` (new), E36's kernel beside D01's and KHAOS's (F-X4):
+  - *the birth* draws a and 𝒥 by D01's order and variable law, now shared internal statics in `BassTermProposal`, bit for bit; it is the paper's law corrected at a = 1 (decision 5's recommendation, which slice 0 found `BayesPPR`'s). θ and the knot are drawn from their priors;
+  - *the death* reverses it under the reduced counts;
+  - *the change* keeps a and 𝒥, draws θ_𝒥 from PS(θ_𝒥, κ), or at a = 1 the sign by a fair coin (the user's decision), then the knot from its prior given the new direction. Its within-move ratio ln π(t|θ) − ln π(t*|θ*) cancels the prior's, so it accepts on the collapsed likelihood ratio alone. A new move kind, `DirectionChange`, tallies it.
+- `BassResolved` refuses categorical predictors (decision 7) and a direct functional response, resolves q and logs it as an auto-pick (`KnotLevel`). `BassModel` takes E36's kernel for a directional config; `Proposal` refuses with E36's name.
+- `BassSensitivity.FromCoefficients` refuses a directional term with its reason (sampling, E25) rather than pointing to the moment route, which refuses it too.
+
+**The files that read a term's parts by kind** (the coordinating session's list), each handled or refused with its reason; none reads a directional term as an empty one:
+- `BassStructurePrior.cs`: handled. The directional part scores and draws the term; `Validate` refuses a directional term in a fit without the part, and the term counts read a and 𝒥 (`Order`, `Variables`).
+- `BassResidualBirth.cs`: refused at the config. `Sampling.Births.Residual` grows continuous hinge factors onto parent terms, which a directional basis has neither of.
+- `BassConfig.cs`: handled. It declares the basis and refuses what a directional basis does not read: `Structure.Legendre` beside it, `Sampling.LocalSteps`, `Sampling.FactorMoves`, `Sampling.Births.History` and `.Residual`, and settings out of range.
+- `BassResolved.cs`: handled, with refusals: categorical predictors (decision 7), a direct functional response (its terms carry an output hinge product, not built for this basis), `ActiveCases` ≥ n; KHAOS's modified g-prior refuses as before, since it reads Legendre terms.
+- `BassModel.cs`: handled. It builds E36's kernel; `Proposal`, D01's kernel, refuses with its reason, so the fixed-M family could not reach a directional term even if the config check were bypassed.
+- `BassPriorPrecision.cs`: refused at resolution. Only `ModifiedGForm.Factor` reads a term's parts, and the modified g-prior is refused for any basis but Legendre's; the other forms read the columns alone.
+- `sensitivity/BassSensitivity.cs`: refused with its reason. `Of` and `Effects` reach the moment service, which refuses through the kernel's `Factors` (slice 1); `FromCoefficients` now refuses up front, naming the directional hinge and E25.
+- `calibration/BassEmulators.cs`: handled. A directional term holds no categorical factor, so its split on θ's categorical parameters is the term itself, whose column the basis evaluates at θ's continuous values. The rebuild that drops θ's subsets is reached only by a term with categorical factors, which a directional term cannot hold.
+- *Also read, outside the list:* `BassTermProposal` and `LegendreTermProposal` are never handed a directional term (each serves its own basis); `BassDesign.TableBorder` falls back to the column for any term but a single continuous hinge; `BassActiveSubspace`'s output side reads `Functional` only; `BassDiagnostics`' support tally reads `Order`, which knows a; the structural monitors read M and τ; the presentation, posterior and projection folders read terms through the basis; no fit persists its terms (only configs serialize).
+
+**Gates** (`DirectionalChainTests`, `DirectionalRecoveryTests`, 20 cases):
+- *The knot range against R's type-7 quantile by hand* (projections from the raw inputs and a compensated standardization): on the insertion buffer (q = 0.9), the sort (81 order statistics) and an index with no fraction (n = 11): worst 3.5·10⁻¹⁶ relative. An equal direction computed afresh gives the same range. A range with no width: +e₃ on an input tied at its least value has none and log prior −∞; from −e₃ the fair coin proposes it 999 times in 2,000, each a null move.
+- *The term measure:* log densities against the closed form −ln A − ln C(p, a) − ln|S^(a−1)| − ln(U − L), to 12 digits, −∞ just outside the range; refusals of a hinge term, a = 4 > A, a variable past p, and a directional term in a hinge fit. 60,000 draws: P(a), each variable's inclusion given a, E[θ₁² | a] (exactly 1 at a = 1), P(θ₁ > 0): worst |z| 2.47; the knot's position on its range √n·D 1.28.
+- *The birth's law:* over every (a, 𝒥) under a three-term structure, the engine's order and variable mass against the hand law, with Wallenius' term by quadrature apart from the engine's: worst 6.5·10⁻¹⁴ in ln q; the masses sum to 1 to 2·10⁻¹⁶; 50,000 births' (a, 𝒥) against it: χ² 12.6 on 13.
+- *Each move's ratio against a direct evaluation:* five births of a = 1, 2 and 3, their deaths, and eight changes (four at a = 1, four at a = 2), the engine's target ratio plus its within-move ratio against the dense marginal's ratio, the count law's (M + h₁)/((M + 1)(h₂ + 1)) and π(a)π(𝒥|a)/(q(a)q(𝒥|a)) by hand: worst 1.9·10⁻¹³. The fair coin flipped a sign among the changes.
+- *The collapsed law given frozen directions against the dense marginal* (y | σ² ~ N(0, σ²(I + B(τBᵀB)⁻¹Bᵀ)), σ² ~ IG(3, 2) integrated, B from the hand columns), M = 0 to 3 at degrees 1 and 2: worst 1.3·10⁻¹⁵ relative.
+- *Geweke's test with the prior alone* (b = 0, two seeds; 300,000 sweeps against 60,000 prior-sampler draws, 15 statistics: M, the active counts, each variable's use and θ mass, the sign, the knot's position and its square): worst |z| 2.03 and 2.83; M at z 1.99 and −0.62. Moves at b = 0: births 35% accepted, deaths all, changes all but the 0.14% outside F.
+- *Recovery through E8* (sampled route, E[C]'s leading k eigenvectors against the true span; n = 300, noise sd 0.1, 10,000 burn-in sweeps): largest principal angle
+
+  | | chain | tempering (4 rungs) | SMC (200 particles × 2, 12 mutation steps) |
+  | --- | --- | --- | --- |
+  | single index exp(0.6x₁ + 0.8x₂) | 0.0095 | 0.0035 | 0.0026 |
+  | two ridges, cosine 0.36 | 0.059 | 0.087 | 0.018 |
+
+  The gate is 0.1 rad. BASS's axis hinges on the two ridges' chain data reach 0.18 (and 0.13 at n = 1000, where the directional basis reaches 0.036). Two settings were read before they were set: 2,000 burn-in sweeps left the second ridge at 0.30 rad (M 7.1 against 4.0 settled), and four SMC mutation steps at 0.21 (12 give 0.018, 30 give 0.006).
+- *Several outputs* (E34) share a directional structure as they share BASS's: two outputs' posterior mean surfaces against their functions, root mean square error 2.0% and 5.4% of each function's spread.
+- *The refusals* above, and the config's JSON round trip with and without the basis.
+- *Fitting untouched:* every test project test-select selects for `1e7bbea`, read from disk: Regression 244 of 336 classes and Oracle 21 of 39; the other 25 projects hold none of its files and select nothing. They ran on a snapshot of `ca2767c` plus the slice's files.
+  - *Regression, the whole assembly:* 3,544 of 3,544.
+  - *Oracle at commit scope:* 104 of 105. The failure is `khaos_readouts_oracle.R` at ROracle's 120 s, in `KhaosEngineFitParityTests.Readouts_MeetTheCorrectedGPrior_OnIshigami(declared: False)`. That is the limit, not the code: R runs below normal now, and the defects chip is resetting the limits from readings. Rerun alone at below normal, on a snapshot of `5923ebc` plus the slice's files, both of its cases pass: 45 s (`declared: False`) and 37 s (`declared: True`).
+  - *Rebased:* E8's slice 8a and E34's resolution row landed before the commit; on a snapshot of `5923ebc` plus the slice's files the 32 directional cases pass again.
+- *The cost row* (indicative: wall clock, CostProfile's meter after a discarded warm-up pass, single index on [0, 1]⁴, each chain burnt in 3,000 sweeps, high priority, the machine at about 50% load; probe `artifacts/chip-bppr/probes/BpprChainCostProbe.cs`):
+
+  | Median µs | birth | death | change | sweep | prediction per draw |
+  | --- | --- | --- | --- | --- | --- |
+  | n = 300, axis hinges (M 5) | 4.8 | 1.3 | 5.0 | 6.6 | 22 |
+  | n = 300, directional (M 3) | 11.8 | 1.0 | 11.2 | 11.0 | 22 |
+  | n = 1000, axis hinges (M 7) | 9.9 | 1.6 | 10.8 | 15.1 | 80 |
+  | n = 1000, directional (M 5) | 32.0 | 1.5 | 36.1 | 26.7 | 80 |
+
+  A birth or change costs 2.2 to 3.3 times BASS's: a proposed direction projects every case twice, once for its knot range (from a pooled buffer) and once for its column (allocated).
+
+**Decisions taken beyond the brief.**
+- A directional basis is its own proposal kernel, as KHAOS's is, and reuses D01's order and variable laws rather than restating them; a and 𝒥's caps and pseudo-counts are BASS's settings (A = `MaxInteraction`, ω₀ = `OrderWeight`, υ₀ = `VariableWeight`), so the paper's ω₀ = υ₀ = 1 is a config away.
+- The count prior is BASS's (λ integrated, Gamma(10, 10) by default), not the paper's Poisson(10), and M's cap is BASS's min(1000, N − 1), not `BayesPPR`'s min(150, ⌊n/K⌋ − 2). Slice 3's Friedman comparison should state its count prior.
+- A direction without a knot range lies outside the support, not renormalized, as F is; the prior sampler counts such a draw among its intercept draws.
+- Several outputs are served; a direct functional response is refused. The flat histogram is allowed, since it runs the same moves and target, but no gate reads it with a directional basis.
+
+**The paper, one more slip.** §2.3 calls p₀ "the prior probability that t_{m0} < Q₀"; under eq. (UL) that probability is 1 − p₀, and p₀ is P(t_{m0} > Q₀), as the sentence's "i.e." clause, the hinge zero for at least one case, says. `BayesPPR` follows eq. (UL), as the engine does.
+
+**Unbuilt.**
+- The ridge block and the oracle's fixed-draw parity, slice 3.
+- Mixed bases (decision 6), categorical inputs (decision 7), a direct functional response, and E4's history and residual births, local steps and the fixed-M family for a directional basis: each refused with its reason.
+
+**Follow-ups.**
+- *One projection per proposed direction:* the knot range and the column each project every case; handing the range's projection to the column would save one of a birth's and a change's two passes over the cases (not measured apart). Decide at slice 3, where the ridge block reads one projection for K columns.
+- *The projection buffer* (slice 1's): the column's 8 KB a call at n = 1000; same decision.
+
+**Doc changes owed.**
+- `docs/Maths/Regression/BASS.md`: the directional basis (the term measure, the knot's range and its type-7 quantile, the support without a range, the kernel's three moves and their ratios, the fair coin at a = 1, the config and its refusals, the cost row).
+- `docs/Maths/Regression/Sources&Changes.md`: the paper's p₀ sentence; the count prior and M's cap against the paper's and `BayesPPR`'s.
+- `docs/Maths/Regression/ActiveSubspaces.md`: E36's recovery readings through the sampled route.
+
 ### Slice 1 verified from a clean archive (coordinating session, 2026-11-15)
 
 - **Commits:** `2eab479` and `9e249dc`, with `117230e` (`LogGammaRatio`'s small steps) and the defects chip's `ca56277` (the transport oracle's limit) in the same run: a snapshot of `e70447c`, through `scripts/verify-csharp.ps1` over sixteen changed files, in each of the eleven projects that select.
