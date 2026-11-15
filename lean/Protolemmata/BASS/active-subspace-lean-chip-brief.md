@@ -123,6 +123,46 @@ Hand-over state between turns is an "In progress" entry here.
 
 ## Reports
 
+### 2026-11-14 — the penalized admission's banded disproof formalized
+
+At the user's request ("Formalize it"), after the disproof was verified (`9c4a20c`). Until now finding 6's tridiagonal family was a numerical reading only.
+
+**Landed:** `82f98b3`, the statement and its instance check, committed before the proof. `23a898b` is the Lean, and this write-up follows it. The checks pass 28 of 28.
+
+**What is proved.** `inverse_part_unbounded_tridiagonal`: for every C, some family meets every hypothesis of `cond1_unitScale_le_sharp`, with q = 3 and m = 1, and has T > C. Every Sₖ of the family is zero beyond the first off-diagonals.
+- *The instance.* A path on N + 2 nodes, with unit edges except the last, (N, N + 1), which has weight N. S₁ = L and S₂ = |L|, with c′ = (1, 1), c = (ρ, 1), ρ = 2(N + 1)² + 1 and N = r².
+- *The bound.* ‖E(c)⁻¹‖₁ ≥ (ρ + 1)·√(N + 1)/20 (`norm1_inv_pathFamily`). It uses the spike family's dual bound.
+  - The certificate is w_j = 1 − s·j(j + 1)/2 for j ≤ N and w_{N+1} = ((ρ − 1)/(ρ + 1))·w_N, where s makes (Aw)_N = 0.
+  - Then (Aw)_{N+1} = 0, |Aw| ≤ 10 and w_N ≥ 1/2.
+- *The constants.* κ, c₁ and s enter only through their defining equations, so the identities at nodes N and N + 1 are `linear_combination`s. Their coefficients were checked symbolically before the proof.
+- *New infrastructure.*
+  - `posSemidef_of_rowSum_le`: weak diagonal dominance gives positive semidefinite.
+  - A tridiagonal layer, `triMat`, with lemmas for its transpose, its product with a vector, its pattern and its positive semidefiniteness. `card_filter_banded_le_three` gives q = 3.
+  - `unitScale_one` and `norm1_one` now hold for any index type; before, they were stated on Fin (r² + 1). `unitScale_diagonal` sits beside them.
+
+**What it means.** √n stays in the screen's factor for banded patterns. That is now proved, at M/m ≈ 2n², where before it was only read. The proved constant 1/20 sits about 3.5 times below the readings, about 0.19·√n.
+
+**Self-review.**
+- *Pass 1, the statement.* The first draft left out two of (d′)'s hypotheses, 0 < M and the column count q. Without 0 < M the existential claimed less than its docstring said. Both are now stated, with q = 3 from `card_filter_banded_le_three`. The pattern is stated per Sₖ, which gives the count for every A(c).
+- *Pass 2, the proof's repairs.*
+  - A case split that used `rfl` on k = N substituted N away; `subst k` keeps it.
+  - `positivity` cannot see through 2(N + 1)² + 1 − 1, so `nlinarith` replaced it.
+  - One comment line was over 100 characters.
+  - Operational: the checks' BLAS threads starved a compile on the shared machine. At two threads, below normal, the checks took 43 s.
+
+**Declarations to print axioms for** (22 theorems, 5 definitions, and `inverse_part_unbounded` again, since `unitScale_one` and `norm1_one` were generalized under it):
+- Theorems: `posSemidef_of_rowSum_le`, `card_filter_banded_le_three`, `triMat_banded`, `triMat_diag`, `triMat_transpose`, `abs_triMat`, `sum_fin_ite_val`, `triMat_mulVec`, `triMat_posSemidef`, `triMat_zero`, `smul_triMat_add`, `pathLap_posSemidef`, `hubEdge_nonneg`, `pathFamily_posSemidef`, `pathFamily_banded`, `comb_pathFamily`, `pathDeg_ge_one`, `comb_pathFamily_one`, `pathDeg_hub`, `norm1_inv_pathFamily`, `inverse_part_unbounded_tridiagonal` and `unitScale_diagonal`.
+- Definitions: `triMat`, `pathDeg`, `hubEdge`, `pathFamily` and `hubRho`.
+- Each prints only `propext`, `Classical.choice` and `Quot.sound`. So do `unitScale_one`, `norm1_one` and `inverse_part_unbounded`.
+
+**Gates:**
+- The checks pass 28 of 28.
+- `lake build Enthymemata.PenalizedAdmission`: 2,634 jobs, with no warnings.
+- `scripts/meta-ci.ps1 -NoBuild`: PASS, with `PenalizedAdmission.lean` `PROOF-CLOSED` at 129 declarations.
+- No cache fetch.
+
+**Follow-ups,** unchanged: a bound in M/m and the pattern's spectral gap; the supremum's constant; the promotion review of `PenalizedAdmission`.
+
 ### 2026-11-14 — the penalized admission's conjecture tried: false
 
 At the user's request ("Try the conjecture"), after the follow-ups were verified (`6fc199f`). The conjecture was the protolemma's finding 5: the chain's inverse part, T = ‖E(c)⁻¹‖₁ / ((M/m)·‖E(c′)⁻¹‖₁), is bounded by a constant, so κ₁(E(c)) ≤ C·q·(M/m)·‖E(c′)⁻¹‖₁ for every family.
