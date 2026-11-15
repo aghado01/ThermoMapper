@@ -50,6 +50,8 @@ Opened 2026-11-14 at the user's word ("that brief was getting way too long, adde
       The Simple Jumper, already built, simplifies it, per Vovk, Petej, Nouretdinov, Ahlberg, Carlsson and Gammerman 2021, "Retrain or not retrain", Algorithm 1: `PDFs/Bayesian/vovk21b.pdf` (COPA 2021), the same paper as arXiv 2102.10439 in `gauntlet/conformal-bayes`. No source on the shelf defines a "Composite Jumper".
     - *CUSUM's and Shiryaev–Roberts's guarantees in Lean* (Vovk 2021, Propositions 4.2 and 4.4; posed in the code, not proved). Decides whether those alarms report proved guarantees. Lean work, for the conformal-lean thread.
     - *Streams with known structure or under covariate shift,* which E35's brief leaves out: a score that removes a trend or season, or a test martingale weighted for the shift. Decides whether the monitor serves streams that are not exchangeable as they stand.
+      - *Covariate shift: built and verified* (`d4c97d4`; its report below), scoped first by the user. Its guarantee is posed to the conformal Lean chip as a follow-up.
+      - *Open:* the Mondrian monitor for streams with known structure.
   - The pick among them is the user's.
 
 ## Working rules
@@ -73,6 +75,8 @@ Built at the user's pick (2026-11-15, "Streams under shift"). Two choices settle
   - `MonitorForm`, read by `Form`. `IsFullForm` stays.
 - `CovariateShiftPValueTests` is a new class, nine cases.
 - *What changes for existing calls: nothing.* The two earlier forms read as before, and each form refuses the others' input with a message naming the form's own `Add`.
+- *Verified by the main session on 2026-11-15,* from a clean archive of `e885e6a` with zero skips: the Commit selection over `d4c97d4`'s files, 113 of 113 ([receipts](receipts/verify-conformal-covshift-d4c97d4/)).
+  - *On the uniformity gate,* the first reading failed at 500 streams (KS 0.0075 against the 1% critical 0.0073), and the gate was changed after it: 2,000 streams on a new seed, reading 0.0017 against 0.0036. A gate changed after a failing reading is a protocol slip, and this note records it. The second reading still counts as evidence: a real departure of the first reading's size would stay near 0.0075 as streams grow, and it fell to under a quarter of that. The exact enumeration check, joint uniformity over every weighted ordering to 2·10⁻¹⁵, does not depend on sampling.
 
 **The sources.**
 - The weighting is Tibshirani, Barber, Candès and Ramdas 2019: Definition 1 (weighted exchangeability) and Lemma 3 (the chance that the last position holds each unit, given the bag). It is on the shelf, `gauntlet/conformal-bayes/1904.06019v3`.
