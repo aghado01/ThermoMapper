@@ -83,6 +83,19 @@ Under "Reports" below, newest first, per slice: what landed by commit; the gates
 
 ## Reports
 
+### Slice 0 verified from a clean archive (coordinating session, 2026-11-15)
+
+- **Commits:** `e013006`, `9578185` and `9940ab9`, on a snapshot of `1380f42`, through `scripts/verify-csharp.ps1` over the six files.
+- **Result:** Regression 93 of 93 at commit scope, the slice's three classes and the pinned tier. Oracle holds two of the files in its closure and selects no class; no other project selects.
+- **Read.** The main variance as Cov(f(B), D_u), by Möbius inversion of the closed variances; Jansen's total; and the two-difference form, whose expectation is 2τ_u on expanding its four products.
+- **Checked from outside the engine** ([script and output](../receipts/verify-sens-s0-1380f42/)): the g-function at N = 4096 over 300 replicates, in numpy from the closed forms.
+  - No estimator is biased: the largest |z| of a mean against its truth is 2.1.
+  - *Relative errors* as S falls from 0.72 to 7.2·10⁻⁵: Saltelli's centred form 2.8%, 6.2%, 18%, 31% and 320% to 344%; the two-difference form 2.1% to 3.3% throughout.
+  - *Gains at equal cost:* 1.1, 2.6, 21, 50 and 6,400 to 8,000. They agree with the report's table within the replicates' noise.
+  - *Jansen's total* reads the two small inputs to 3.3% at the base cost. So under Saltelli's form an inactive input is still told from its total. What the two-difference form adds is the main variances themselves and the interaction pieces built from them.
+- **For the user:** decision 3's form for a main variance, the report's first follow-up.
+- **Receipts:** `artifacts/verify-sens-s0-1380f42/`, with the changed list, the counters, the snapshot and the outside check tracked in [receipts](../receipts/verify-sens-s0-1380f42/).
+
 ### Slice 0: sources, references and the estimators (2026-11-15)
 
 **Landed** (each commit carries its own tests):

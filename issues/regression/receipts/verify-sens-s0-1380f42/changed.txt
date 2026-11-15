@@ -1,0 +1,6 @@
+src/maths/regression/sensitivity/PickFreeze.cs
+src/maths/regression/sensitivity/PinnedEffects.cs
+tests/regression/PickFreezeTests.cs
+tests/regression/PinnedEffectsTests.cs
+tests/regression/SobolReferences.cs
+tests/regression/SobolReferenceTests.cs
