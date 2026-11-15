@@ -16,8 +16,8 @@ namespace Maths.Regression.Tests;
 /// <list type="bullet">
 /// <item>Each statistic is its definition read from the capital's path, restarts included.</item>
 /// <item>Ville's false alarms are at most 1/c on exchangeable streams, its guarantee proved.</item>
-/// <item>CUSUM's and Shiryaev–Roberts's mean time to a false alarm is at least c, and their long-run frequency of false alarms at most
-/// 1/c, measured and marked as posed.</item>
+/// <item>CUSUM's and Shiryaev–Roberts's mean time to a false alarm is at least c, and their false alarms over a long stream at most one
+/// in c arrivals, measured, their guarantees proved (the expected count among the first N at most N/c).</item>
 /// </list>
 /// With the qualification switch: the delay to an alarm after a change in the mean or the noise, per bet and procedure; false alarms and
 /// detection on a fixed BARS fit's and a fixed BASS fit's scores; and the cost per arrival.
@@ -123,10 +123,11 @@ public sealed class MartingaleAlarmTests(ITestOutputHelper output)
     [InlineData(AlarmProcedure.Cusum, "power 0.5", 20.0)]
     [InlineData(AlarmProcedure.ShiryaevRoberts, "power 0.5", 20.0)]
     [InlineData(AlarmProcedure.ShiryaevRoberts, "mixture", 50.0)]
-    public void CusumAndShiryaevRoberts_AlarmFalselyNoSoonerThanC_Posed(AlarmProcedure procedure, string name, double c)
+    public void CusumAndShiryaevRoberts_AlarmFalselyNoSoonerThanC(AlarmProcedure procedure, string name, double c)
     {
-        // Posed, not proved: the mean time to the first false alarm is at least c, and over one long stream the alarms, repeated, come at
-        // most once in c arrivals. Runs capped at 100c count as the cap, which only lowers the mean.
+        // Proved (cusum_meanRunLength, sr_meanRunLength, alarms_stream_le): the mean time to the first false alarm is at least c, and the
+        // expected number of false alarms among the first N arrivals at most N/c; one long stream reads the second. Runs capped at 100c
+        // count as the cap, which only lowers the mean.
         var rng = new Xoshiro256PlusPlus(seed: 77);
         const int runs = 1000;
         int cap = (int)(100 * c);
@@ -147,7 +148,7 @@ public sealed class MartingaleAlarmTests(ITestOutputHelper output)
         output.WriteLine($"{procedure}, {name}, c {c}: mean time to the first false alarm {mean:F1}; alarms per arrival over {length:N0}: {frequency:F5} against 1/c = {1 / c:F5}");
         Assert.True(mean >= c, $"mean {mean:F1}");
         Assert.True(frequency <= 1.0 / c, $"frequency {frequency:F5}");
-        Assert.False(longAlarm.Guarantee.Proved);
+        Assert.True(longAlarm.Guarantee.Proved);
     }
 
     [Fact]
@@ -163,7 +164,9 @@ public sealed class MartingaleAlarmTests(ITestOutputHelper output)
         Assert.Contains(fired, f => f.Item2 == AlarmProcedure.Ville && f.Item1 > 300);
         Assert.True(martingale.Alarms[0].Guarantee.Proved);
         Assert.Contains("1/c = 0.05", martingale.Alarms[0].Guarantee.Statement);
-        Assert.Contains("posed", martingale.Alarms[1].Guarantee.Statement);
+        Assert.True(martingale.Alarms[1].Guarantee.Proved);
+        Assert.Contains("N/c = 0.05·N", martingale.Alarms[1].Guarantee.Statement);
+        Assert.Contains("no more often", martingale.Alarms[1].Guarantee.Statement);
         output.WriteLine($"Ville at {string.Join(", ", martingale.Alarms[0].AlarmTimes)}; CUSUM at {string.Join(", ", martingale.Alarms[1].AlarmTimes)}");
         Assert.Throws<ArgumentOutOfRangeException>(() => new MartingaleAlarm(AlarmProcedure.Ville, 1.0));
         Assert.Throws<ArgumentOutOfRangeException>(() => new MartingaleAlarm((AlarmProcedure)7, 10.0));

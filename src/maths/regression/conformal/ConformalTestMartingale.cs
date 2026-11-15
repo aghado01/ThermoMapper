@@ -425,13 +425,16 @@ public enum AlarmProcedure
     /// false alarm in a run is at most 1/c, proved (<c>ville</c>).</summary>
     Ville,
 
-    /// <summary>CUSUM: max over τ ≤ i &lt; n of Sₙ/Sᵢ ≥ c, by Page's recursion γₙ = fₙ·max(γₙ₋₁, 1). It reads past a capital lost before a
-    /// change. The mean time to a false alarm is at least c, and, repeated, the long-run frequency of false alarms at most 1/c: posed
-    /// (Vovk 2021, Propositions 4.2 and 4.4), not proved.</summary>
+    /// <summary>CUSUM: max over τ ≤ i &lt; n of Sₙ/Sᵢ ≥ c, by Page's recursion γₙ = fₙ·max(γₙ₋₁, 1), restarted at 0 after each alarm. It
+    /// reads past a capital lost before a change. Under exchangeability the mean time to a false alarm is at least c, and the expected
+    /// number of false alarms among the first N arrivals at most N/c, for any bets that integrate to at most 1. Both are proved for these
+    /// restarted runs (<c>cusum_meanRunLength</c>, <c>alarms_stream_le</c>; Vovk 2021, Propositions 4.2 and 4.4, Corollaries 4.3 and 4.6),
+    /// the second in expectation at every N. Vovk's almost-sure form, a long-run frequency at most 1/c, is not proved.</summary>
     Cusum,
 
-    /// <summary>Shiryaev–Roberts: the sum over τ ≤ i &lt; n of Sₙ/Sᵢ ≥ c, by Rₙ = fₙ·(Rₙ₋₁ + 1). Its guarantees are CUSUM's, posed, not
-    /// proved; CUSUM alarms no more often.</summary>
+    /// <summary>Shiryaev–Roberts: the sum over τ ≤ i &lt; n of Sₙ/Sᵢ ≥ c, by Rₙ = fₙ·(Rₙ₋₁ + 1), restarted at 0 after each alarm. Its
+    /// guarantees are CUSUM's, proved (<c>sr_meanRunLength</c>, <c>sr_alarms_le</c>); CUSUM alarms no more often, path by path
+    /// (<c>cusum_count_le</c>).</summary>
     ShiryaevRoberts,
 }
 
@@ -477,8 +480,9 @@ public sealed class MartingaleAlarm
     /// <summary>Its guarantee under exchangeability, in its procedure's terms.</summary>
     public AlarmGuarantee Guarantee => Procedure == AlarmProcedure.Ville
         ? new AlarmGuarantee($"The probability of any false alarm in a run since the last alarm is at most 1/c = {1.0 / Threshold:G4} (Ville's inequality).", true)
-        : new AlarmGuarantee($"The mean time to a false alarm is at least c = {Threshold:G4}, and repeated, the long-run frequency of false alarms is at most 1/c "
-                             + $"= {1.0 / Threshold:G4} (Vovk 2021, Propositions 4.2 and 4.4): posed, not proved.", false);
+        : new AlarmGuarantee($"The mean time to a false alarm is at least c = {Threshold:G4}, and the expected number of false alarms among the first N arrivals "
+                             + $"is at most N/c = {1.0 / Threshold:G4}·N, for bets that integrate to at most 1 (Vovk 2021, Propositions 4.2 and 4.4, in expectation at every N)"
+                             + (Procedure == AlarmProcedure.Cusum ? "; CUSUM alarms no more often than Shiryaev–Roberts." : "."), true);
 
     // Ville's run starts at S/S = 1; CUSUM's and Shiryaev–Roberts's at γ₀ = R₀ = 0.
     private double Start => Procedure == AlarmProcedure.Ville ? 0.0 : double.NegativeInfinity;
@@ -532,8 +536,8 @@ public enum MonitorForm
 /// into its smoothed p-value (<see cref="SmoothedPValues"/>, M-1), and a betting function turns the p-values into capital
 /// (<see cref="BettingCapital"/>, M-2). Under exchangeability of the scored units the capital is a (super)martingale with expectation
 /// at most 1, so its value at any stopping time that reads only the past is an e-value (<see cref="EValue"/>), and growth is evidence
-/// against exchangeability. Alarms read the capital (<see cref="MartingaleAlarm"/>): Ville's, proved, and CUSUM and Shiryaev–Roberts, whose
-/// guarantees are posed.
+/// against exchangeability. Alarms read the capital (<see cref="MartingaleAlarm"/>): Ville's, CUSUM and Shiryaev–Roberts, each with its
+/// guarantee proved.
 /// <para>Three forms, fixed at construction (<see cref="Form"/>).
 /// <list type="bullet">
 /// <item>The inductive form, by the constructor, takes each unit's score from a fixed fit (<see cref="Add(double)"/>), and with a stratum
