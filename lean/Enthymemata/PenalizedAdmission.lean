@@ -27,6 +27,9 @@ scaling `E(c)` at most `10¹⁴`. The statements, checks and prior art are in
   `κ₁(E(c)) ≤ q·((1 + √n)/2)·(M/m)·‖E(c′)⁻¹‖₁` (`cond1_unitScale_le_sharp`), whose column step
   `‖P‖₁ ≤ λ_max(P)·(1 + √n)/2` (`norm1_le_half_one_add_sqrt`) is attained (`norm1_columnWitness`);
   the first chain's `q·√n` (`cond1_unitScale_le`) follows.
+* **The order is the true order.** No constant bounds the chain's inverse part
+  `‖E(c)⁻¹‖₁ / ((M/m)·‖E(c′)⁻¹‖₁)` over every family (`inverse_part_unbounded`), nor over the
+  tridiagonal ones (`inverse_part_unbounded_tridiagonal`).
 
 `λ_min` and `λ_max` are the infimum and supremum of the Rayleigh quotient (`lamMin`, `lamMax`), and
 the results above use no spectral theorem. For a symmetric matrix they are its least and greatest
@@ -1041,6 +1044,28 @@ theorem unitScale_mulVec {A : Matrix n n ℝ} (hd : ∀ i, 0 < A i i) (w : n →
   have := (Real.sqrt_pos.2 (hd j)).ne'
   field_simp
 
+omit [Fintype n] in
+theorem unitScale_one [DecidableEq n] : unitScale (1 : Matrix n n ℝ) = 1 := by
+  ext i j
+  by_cases h : i = j
+  · subst h; simp [unitScale]
+  · simp [unitScale, one_apply_ne h]
+
+theorem norm1_one [DecidableEq n] [Nonempty n] : norm1 (1 : Matrix n n ℝ) = 1 := by
+  have h : ∀ j : n, ∑ i, |(1 : Matrix n n ℝ) i j| = 1 := fun j => by
+    rw [Finset.sum_eq_single j (fun b _ hb => by simp [one_apply_ne hb]) (by simp)]
+    simp
+  simp only [norm1, h, ciSup_const]
+
+omit [Fintype n] in
+/-- The unit-diagonal scaling of a positive diagonal matrix is the identity. -/
+theorem unitScale_diagonal [DecidableEq n] {a : n → ℝ} (ha : ∀ i, 0 < a i) :
+    unitScale (diagonal a) = 1 := by
+  ext i j
+  by_cases h : i = j
+  · subst h; rw [one_apply_eq]; exact unitScale_diag (by simpa using ha i)
+  · simp [unitScale, h, one_apply_ne h]
+
 /-! ### The inverse part is unbounded
 
 On `r² + 1` coordinates, `v = (3/5, 4/(5r), …, 4/(5r))` is a unit vector. The family
@@ -1102,20 +1127,6 @@ theorem comb_spike_two :
     Matrix.cons_val_fin_one, one_smul, smul_sub]
   rw [two_smul, two_smul]
   abel
-
-theorem unitScale_one : unitScale (1 : Matrix (Fin (r ^ 2 + 1)) (Fin (r ^ 2 + 1)) ℝ) = 1 := by
-  ext i j
-  by_cases h : i = j
-  · subst h; simp [unitScale]
-  · simp [unitScale, one_apply_ne h]
-
-theorem norm1_one : norm1 (1 : Matrix (Fin (r ^ 2 + 1)) (Fin (r ^ 2 + 1)) ℝ) = 1 := by
-  have h : ∀ j : Fin (r ^ 2 + 1),
-      ∑ i, |(1 : Matrix (Fin (r ^ 2 + 1)) (Fin (r ^ 2 + 1)) ℝ) i j| = 1 :=
-    fun j => by
-      rw [Finset.sum_eq_single j (fun b _ hb => by simp [one_apply_ne hb]) (by simp)]
-      simp
-  simp only [norm1, h, ciSup_const]
 
 /-- **The spike family's inverse part.** `‖E(c)⁻¹‖₁ ≥ 6r/25` at `c = (2, 1)`. The certificate is
 `y = D^{1/2} w` with `Aw = (0, 5θ/(4r), …, 5θ/(4r))`, so `|(Ey)ₖ| ≤ 1` and `y₀ ≥ 6r/25`. -/
@@ -1228,6 +1239,431 @@ theorem inverse_part_unbounded (C : ℝ) :
     linarith
 
 end Unbounded
+
+/-! ### Tridiagonal matrices -/
+
+/-- **Weak diagonal dominance.** A symmetric `A` with `Σⱼ |Aᵢⱼ| ≤ 2·Aᵢᵢ` in every row is positive
+semidefinite. -/
+theorem posSemidef_of_rowSum_le {A : Matrix n n ℝ} (hs : Aᵀ = A)
+    (h : ∀ i, ∑ j, |A i j| ≤ 2 * A i i) : A.PosSemidef := by
+  classical
+  refine posSemidef_iff_dotProduct_mulVec.2 ⟨?_, fun x => ?_⟩
+  · rw [IsHermitian, conjTranspose_eq_transpose_of_trivial, hs]
+  · rw [star_trivial]
+    have hd : ∀ i, |A i i| = A i i := fun i => by
+      have h1 := (single_le_sum (fun j _ => abs_nonneg (A i j)) (mem_univ i)).trans (h i)
+      exact abs_of_nonneg (by linarith [abs_nonneg (A i i)])
+    have hterm : ∀ i j, -(|A i j| * x j ^ 2 / 2) - |A i j| * x i ^ 2 / 2 +
+        (if i = j then 2 * A i i * x i ^ 2 else 0) ≤ x i * (A i j * x j) := fun i j => by
+      split_ifs with hij
+      · subst hij; rw [hd]; nlinarith
+      · rcases abs_cases (A i j) with ⟨h1, h2⟩ | ⟨h1, h2⟩ <;> rw [h1]
+        · nlinarith [mul_nonneg h2 (sq_nonneg (x i + x j))]
+        · nlinarith [mul_nonneg (neg_nonneg.2 h2.le) (sq_nonneg (x i - x j))]
+    have hsum : ∑ i, ∑ j, |A i j| * x j ^ 2 = ∑ i, (∑ j, |A i j|) * x i ^ 2 := by
+      rw [sum_comm]
+      refine sum_congr rfl fun i _ => ?_
+      rw [sum_mul]
+      exact sum_congr rfl fun j _ => by rw [entry_symm hs j i]
+    calc 0 ≤ ∑ i, (2 * A i i - ∑ j, |A i j|) * x i ^ 2 :=
+          sum_nonneg fun i _ => mul_nonneg (by linarith [h i]) (sq_nonneg _)
+      _ = ∑ i, ∑ j, (-(|A i j| * x j ^ 2 / 2) - |A i j| * x i ^ 2 / 2 +
+            (if i = j then 2 * A i i * x i ^ 2 else 0)) := by
+          simp only [sum_add_distrib, sum_sub_distrib, sum_neg_distrib, ← sum_div, ← sum_mul,
+            sum_ite_eq, mem_univ, if_true, sub_mul]
+          rw [hsum]
+          ring
+      _ ≤ ∑ i, ∑ j, x i * (A i j * x j) :=
+          sum_le_sum fun i _ => sum_le_sum fun j _ => hterm i j
+      _ = x ⬝ᵥ A *ᵥ x := by simp only [dotProduct, mulVec, mul_sum]
+
+section Tridiagonal
+
+/-- The symmetric tridiagonal matrix on `Fin p` with diagonal `a` and first off-diagonals `b`, both
+indexed through `ℕ`: `Tᵢᵢ = aᵢ` and `Tᵢ,ᵢ₊₁ = Tᵢ₊₁,ᵢ = bᵢ`. -/
+def triMat (p : ℕ) (a b : ℕ → ℝ) : Matrix (Fin p) (Fin p) ℝ :=
+  of fun i j => (if (j : ℕ) = i then a i else 0) + (if (j : ℕ) = i + 1 then b i else 0) +
+    (if (j : ℕ) + 1 = i then b j else 0)
+
+variable {p : ℕ}
+
+theorem triMat_banded (a b : ℕ → ℝ) {i j : Fin p} (h : (i : ℕ) + 1 < j ∨ (j : ℕ) + 1 < i) :
+    triMat p a b i j = 0 := by
+  simp only [triMat, of_apply]
+  split_ifs <;> first | omega | simp
+
+/-- A matrix that is zero beyond the first off-diagonals has at most three nonzeros in a column. -/
+theorem card_filter_banded_le_three {B : Matrix (Fin p) (Fin p) ℝ}
+    (hB : ∀ i j : Fin p, (i : ℕ) + 1 < j ∨ (j : ℕ) + 1 < i → B i j = 0) (j : Fin p) :
+    (univ.filter fun i => B i j ≠ 0).card ≤ 3 := by
+  classical
+  refine (card_le_card_of_injOn (fun i : Fin p => (i : ℕ))
+    (t := {(j : ℕ) - 1, (j : ℕ), (j : ℕ) + 1}) ?_ Fin.val_injective.injOn).trans card_le_three
+  intro i hi
+  have hi' : B i j ≠ 0 := (mem_filter.1 (mem_coe.1 hi)).2
+  have : ¬ ((i : ℕ) + 1 < j ∨ (j : ℕ) + 1 < i) := fun h => hi' (hB i j h)
+  simp only [mem_coe, mem_insert, mem_singleton]
+  omega
+
+theorem triMat_diag (a b : ℕ → ℝ) (i : Fin p) : triMat p a b i i = a i := by
+  simp [triMat]
+
+theorem triMat_transpose (a b : ℕ → ℝ) : (triMat p a b)ᵀ = triMat p a b := by
+  ext i j
+  simp only [transpose_apply, triMat, of_apply]
+  split_ifs <;> first | omega | (simp only [add_zero, zero_add] <;> first | rfl | congr 1)
+
+theorem abs_triMat (a b : ℕ → ℝ) (i j : Fin p) :
+    |triMat p a b i j| = triMat p (fun k => |a k|) (fun k => |b k|) i j := by
+  simp only [triMat, of_apply]
+  split_ifs <;> first | omega | simp
+
+theorem sum_fin_ite_val (k : ℕ) (g : Fin p → ℝ) :
+    ∑ j : Fin p, (if (j : ℕ) = k then g j else 0) = if h : k < p then g ⟨k, h⟩ else 0 := by
+  split_ifs with hk
+  · rw [sum_eq_single ⟨k, hk⟩ (fun j _ hj => if_neg fun h => hj (Fin.ext h)) (by simp)]
+    simp
+  · exact sum_eq_zero fun j _ => if_neg fun h : (j : ℕ) = k => hk (h ▸ j.isLt)
+
+theorem triMat_mulVec (a b ω : ℕ → ℝ) (i : Fin p) :
+    (triMat p a b *ᵥ fun j => ω j) i =
+      a i * ω i + (if (i : ℕ) + 1 < p then b i * ω (i + 1) else 0) +
+        (if 1 ≤ (i : ℕ) then b (i - 1) * ω (i - 1) else 0) := by
+  have h3 : ∑ j : Fin p, (if (j : ℕ) + 1 = i then b j else 0) * ω j =
+      if 1 ≤ (i : ℕ) then b (i - 1) * ω (i - 1) else 0 := by
+    split_ifs with hi
+    · rw [sum_eq_single ⟨(i : ℕ) - 1, by omega⟩
+        (fun j _ hj => by rw [if_neg fun h => hj (Fin.ext (by simp; omega)), zero_mul])
+        (by simp)]
+      rw [if_pos (by simp; omega)]
+    · exact sum_eq_zero fun j _ => by rw [if_neg (by omega), zero_mul]
+  simp only [mulVec, dotProduct, triMat, of_apply, add_mul, sum_add_distrib, h3]
+  simp only [ite_mul, zero_mul, sum_fin_ite_val, i.isLt, dif_pos, dite_eq_ite]
+
+theorem triMat_posSemidef {a b : ℕ → ℝ}
+    (h : ∀ i : Fin p, |a i| + (if (i : ℕ) + 1 < p then |b i| else 0) +
+      (if 1 ≤ (i : ℕ) then |b (i - 1)| else 0) ≤ 2 * a i) :
+    (triMat p a b).PosSemidef := by
+  refine posSemidef_of_rowSum_le (triMat_transpose a b) fun i => ?_
+  have h1 := triMat_mulVec (fun k => |a k|) (fun k => |b k|) (fun _ => 1) i
+  simp only [mul_one] at h1
+  have hr : ∑ j, |triMat p a b i j| =
+      (triMat p (fun k => |a k|) (fun k => |b k|) *ᵥ fun _ => (1 : ℝ)) i := by
+    simp only [abs_triMat, mulVec, dotProduct, mul_one]
+  rw [hr, h1, triMat_diag]
+  exact h i
+
+theorem triMat_zero (a : ℕ → ℝ) : triMat p a (fun _ => 0) = diagonal fun i : Fin p => a i := by
+  ext i j
+  by_cases h : i = j
+  · subst h; simp [triMat]
+  · rw [diagonal_apply_ne _ h]
+    simp only [triMat, of_apply]
+    have : (j : ℕ) ≠ i := fun h' => h (Fin.ext h'.symm)
+    simp [this]
+
+theorem smul_triMat_add (x y : ℝ) (a b a' b' : ℕ → ℝ) :
+    x • triMat p a b + y • triMat p a' b' =
+      triMat p (fun i => x * a i + y * a' i) (fun j => x * b j + y * b' j) := by
+  ext i j
+  simp only [Matrix.add_apply, Matrix.smul_apply, triMat, of_apply, smul_eq_mul]
+  split_ifs <;> ring
+
+/-- The degrees of the weighted path on `p` nodes whose edge `(j, j + 1)` has weight `e j`. -/
+def pathDeg (p : ℕ) (e : ℕ → ℝ) (i : ℕ) : ℝ :=
+  (if 1 ≤ i then e (i - 1) else 0) + (if i + 1 < p then e i else 0)
+
+/-- A weighted path's Laplacian (`σ = -1`) and signless Laplacian (`σ = 1`) are positive
+semidefinite. -/
+theorem pathLap_posSemidef {e : ℕ → ℝ} (he : ∀ j, 0 ≤ e j) {σ : ℝ} (hσ : |σ| = 1) :
+    (triMat p (pathDeg p e) fun j => σ * e j).PosSemidef := by
+  refine triMat_posSemidef fun i => ?_
+  have hae : ∀ j, |e j| = e j := fun j => abs_of_nonneg (he j)
+  have hd : 0 ≤ pathDeg p e i := by
+    unfold pathDeg; split_ifs <;> linarith [he (i - 1), he i]
+  simp only [abs_mul, hσ, one_mul, hae, abs_of_nonneg hd]
+  unfold pathDeg; split_ifs <;> linarith
+
+end Tridiagonal
+
+/-! ### Banded patterns too
+
+On `N + 2` nodes, take the path whose edges have unit weight except the last, `(N, N + 1)`, which
+has weight `N`. Its Laplacian `L` and signless Laplacian `|L|` are tridiagonal, and both are
+positive semidefinite by weak diagonal dominance. With `S₁ = L`, `S₂ = |L|`, `c′ = (1, 1)` and
+`c = (ρ, 1)`:
+`A(c′) = 2·diag(L)`, so `E(c′) = I`, while `‖E(c)⁻¹‖₁ ≥ (ρ + 1)·√(N + 1)/20` at
+`ρ = 2(N + 1)² + 1`. -/
+
+section Banded
+
+/-- The edge weights: `1` on the path's first `N` edges and `N` on the last, `(N, N + 1)`. -/
+noncomputable def hubEdge (N : ℕ) (j : ℕ) : ℝ := if j < N then 1 else N
+
+/-- `S₁ = L` and `S₂ = |L|`, the Laplacian and signless Laplacian of that path on `N + 2` nodes:
+both tridiagonal, and `S₁ + S₂ = 2·diag(L)`. -/
+noncomputable def pathFamily (N : ℕ) : Fin 2 → Matrix (Fin (N + 2)) (Fin (N + 2)) ℝ :=
+  ![triMat (N + 2) (pathDeg (N + 2) (hubEdge N)) fun j => -1 * hubEdge N j,
+    triMat (N + 2) (pathDeg (N + 2) (hubEdge N)) fun j => 1 * hubEdge N j]
+
+/-- `ρ = 2(N + 1)² + 1`, the instance's `M/m`. -/
+noncomputable def hubRho (N : ℕ) : ℝ := 2 * ((N : ℝ) + 1) ^ 2 + 1
+
+variable {N : ℕ}
+
+theorem hubEdge_nonneg (j : ℕ) : 0 ≤ hubEdge N j := by
+  unfold hubEdge; split_ifs <;> positivity
+
+theorem pathFamily_posSemidef : ∀ k, (pathFamily N k).PosSemidef := by
+  rw [Fin.forall_fin_two]
+  exact ⟨pathLap_posSemidef hubEdge_nonneg (by norm_num),
+    pathLap_posSemidef hubEdge_nonneg (by norm_num)⟩
+
+theorem pathFamily_banded :
+    ∀ k (i j : Fin (N + 2)), (i : ℕ) + 1 < j ∨ (j : ℕ) + 1 < i → pathFamily N k i j = 0 := by
+  rw [Fin.forall_fin_two]
+  constructor <;> intro i j h <;>
+    simp only [pathFamily, Matrix.cons_val_zero, Matrix.cons_val_one] <;> exact triMat_banded _ _ h
+
+theorem comb_pathFamily (c : Fin 2 → ℝ) :
+    comb (pathFamily N) c =
+      triMat (N + 2) (fun i => (c 0 + c 1) * pathDeg (N + 2) (hubEdge N) i)
+        (fun j => (c 1 - c 0) * hubEdge N j) := by
+  rw [comb, Fin.sum_univ_two]
+  simp only [pathFamily, Matrix.cons_val_zero, Matrix.cons_val_one]
+  rw [smul_triMat_add]
+  congr 1 <;> funext k <;> ring
+
+theorem pathDeg_ge_one (hN : 1 ≤ N) (i : Fin (N + 2)) : 1 ≤ pathDeg (N + 2) (hubEdge N) i := by
+  have he : ∀ j, 1 ≤ hubEdge N j := fun j => by
+    unfold hubEdge; split_ifs
+    · rfl
+    · exact_mod_cast hN
+  have := i.isLt
+  unfold pathDeg
+  split_ifs <;> first | omega | linarith [he (i - 1), he i]
+
+theorem comb_pathFamily_one :
+    comb (pathFamily N) ![1, 1] =
+      diagonal fun i : Fin (N + 2) => 2 * pathDeg (N + 2) (hubEdge N) i := by
+  rw [comb_pathFamily]
+  have hb : (fun j => ((![1, 1] : Fin 2 → ℝ) 1 - (![1, 1] : Fin 2 → ℝ) 0) * hubEdge N j) =
+      fun _ => 0 := by funext j; simp
+  rw [hb, triMat_zero]
+  congr 1
+  funext i
+  norm_num
+
+theorem pathDeg_hub (hN : 1 ≤ N) : pathDeg (N + 2) (hubEdge N) N = N + 1 := by
+  simp only [pathDeg, hubEdge, if_pos hN, if_pos (by omega : N - 1 < N),
+    if_pos (by omega : N + 1 < N + 2), lt_irrefl, if_false]
+  ring
+
+/-- **The tridiagonal family's inverse part.** At `c = (ρ, 1)` with `ρ = 2(N + 1)² + 1`:
+`‖E(c)⁻¹‖₁ ≥ (ρ + 1)·√(N + 1)/20`. The certificate `w` has `wⱼ = 1 − s·j(j + 1)/2` for `j ≤ N` and
+`w_{N+1} = κ·w_N`, `κ = (ρ − 1)/(ρ + 1)`, with `s` making `(Aw)_N = 0`; then `(Aw)_{N+1} = 0`,
+`|Aw| ≤ 10` and `w_N ≥ 1/2`, and the dual bound reads at node `N`. -/
+theorem norm1_inv_pathFamily (hN : 1 ≤ N) :
+    (hubRho N + 1) * √((N : ℝ) + 1) / 20 ≤
+      norm1 (unitScale (comb (pathFamily N) ![hubRho N, 1]))⁻¹ := by
+  classical
+  set ρ := hubRho N with hρdef
+  have hν : (1 : ℝ) ≤ N := by exact_mod_cast hN
+  have hρν : ρ = 2 * ((N : ℝ) + 1) ^ 2 + 1 := by rw [hρdef, hubRho]
+  have hρ1 : 0 < ρ - 1 := by rw [hρν]; nlinarith [sq_nonneg ((N : ℝ) + 1)]
+  have hρp : 0 < ρ + 1 := by linarith
+  -- the matrices
+  set A := comb (pathFamily N) ![ρ, 1] with hAdef
+  have hA : A = triMat (N + 2) (fun i => (ρ + 1) * pathDeg (N + 2) (hubEdge N) i)
+      (fun j => (1 - ρ) * hubEdge N j) := by
+    rw [hAdef, comb_pathFamily]
+    simp
+  have hdeg : ∀ i : Fin (N + 2), 1 ≤ pathDeg (N + 2) (hubEdge N) i := pathDeg_ge_one hN
+  have hAii : ∀ i, A i i = (ρ + 1) * pathDeg (N + 2) (hubEdge N) i := fun i => by
+    rw [hA, triMat_diag]
+  have hd : ∀ i, ρ + 1 ≤ A i i := fun i => by rw [hAii]; nlinarith [hdeg i]
+  have hd0 : ∀ i, 0 < A i i := fun i => by linarith [hd i]
+  have hsA : Aᵀ = A := by rw [hA]; exact triMat_transpose _ _
+  have hm : ∀ k, 1 * (![1, 1] : Fin 2 → ℝ) k ≤ (![ρ, 1] : Fin 2 → ℝ) k := by
+    rw [Fin.forall_fin_two]; exact ⟨by simp; linarith, by simp⟩
+  have hM : ∀ k, (![ρ, 1] : Fin 2 → ℝ) k ≤ ρ * (![1, 1] : Fin 2 → ℝ) k := by
+    rw [Fin.forall_fin_two]; exact ⟨by simp, by simp; linarith⟩
+  have hpd' : (comb (pathFamily N) ![1, 1]).PosDef := by
+    rw [comb_pathFamily_one, posDef_diagonal_iff]
+    intro i; linarith [hdeg i]
+  have hApd : A.PosDef := by
+    refine posDef_iff_dotProduct_mulVec.2 ⟨?_, fun x hx => ?_⟩
+    · rw [IsHermitian, conjTranspose_eq_transpose_of_trivial, hsA]
+    · have h1 := (form_comb_bound pathFamily_posSemidef hm hM x).1
+      rw [← hAdef] at h1
+      have h2 := hpd'.dotProduct_mulVec_pos hx
+      rw [star_trivial] at h2 ⊢
+      linarith
+  set E := unitScale A with hEdef
+  have hsE : Eᵀ = E := unitScale_transpose hsA
+  have hpdE : E.PosDef := posDef_iff_dotProduct_mulVec.2
+    ⟨by rw [IsHermitian, conjTranspose_eq_transpose_of_trivial, hsE],
+     fun x hx => by simpa using unitScale_form_pos hApd hx⟩
+  have huE : IsUnit E.det := (isUnit_iff_isUnit_det E).1 hpdE.isUnit
+  -- the certificate's constants, through their defining equations
+  obtain ⟨κ, hκ⟩ : ∃ κ : ℝ, κ * (ρ + 1) = ρ - 1 := ⟨(ρ - 1) / (ρ + 1), by field_simp⟩
+  obtain ⟨c₁, hc₁⟩ : ∃ c₁ : ℝ, c₁ * (ρ + 1) = 2 * (ρ + 1) + 4 * ρ * N :=
+    ⟨(2 * (ρ + 1) + 4 * ρ * N) / (ρ + 1), by field_simp⟩
+  have hc₁0 : 0 < c₁ := by
+    nlinarith [mul_pos (by linarith : (0 : ℝ) < ρ) (by linarith : (0 : ℝ) < N)]
+  have hc₁le : c₁ ≤ 4 * N + 2 := by nlinarith
+  have hT0 : (0 : ℝ) ≤ (N : ℝ) * (N + 1) / 2 := by positivity
+  have hD : 0 < c₁ * ((N : ℝ) * (N + 1) / 2) + (ρ - 1) * N := by
+    have h1 : 0 ≤ c₁ * ((N : ℝ) * (N + 1) / 2) := mul_nonneg hc₁0.le hT0
+    have h2 : 0 < (ρ - 1) * N := mul_pos hρ1 (by linarith)
+    linarith
+  obtain ⟨s, hs⟩ : ∃ s : ℝ, s * (c₁ * ((N : ℝ) * (N + 1) / 2) + (ρ - 1) * N) = c₁ :=
+    ⟨c₁ / (c₁ * ((N : ℝ) * (N + 1) / 2) + (ρ - 1) * N), by field_simp⟩
+  have hs0 : 0 ≤ s := by nlinarith
+  have hs6 : (ρ - 1) * s ≤ 6 := by
+    have h1 : (ρ - 1) * s * N ≤ 6 * N := by
+      nlinarith [mul_nonneg hs0 (mul_nonneg hc₁0.le hT0)]
+    exact le_of_mul_le_mul_right h1 (by linarith)
+  have hsT : s * ((N : ℝ) * (N + 1) / 2) ≤ 1 / 2 := by
+    have hcT : c₁ * ((N : ℝ) * (N + 1) / 2) ≤ (ρ - 1) * N := by
+      have h1 := mul_le_mul_of_nonneg_right hc₁le hT0
+      rw [hρν]
+      nlinarith [mul_nonneg (by linarith : (0 : ℝ) ≤ N) (by linarith : (0 : ℝ) ≤ N + 1)]
+    nlinarith [mul_le_mul_of_nonneg_left hcT hs0]
+  obtain ⟨ω, hω⟩ : ∃ ω : ℕ → ℝ, ∀ j, ω j = if j ≤ N then 1 - s * ((j : ℝ) * ((j : ℝ) + 1) / 2)
+      else κ * (1 - s * ((N : ℝ) * (N + 1) / 2)) := ⟨_, fun _ => rfl⟩
+  have hωle : ∀ j ≤ N, 1 / 2 ≤ ω j ∧ ω j ≤ 1 := fun j hj => by
+    have hjN : (j : ℝ) ≤ N := by exact_mod_cast hj
+    have hj0 : (0 : ℝ) ≤ j := Nat.cast_nonneg j
+    have hjT : (j : ℝ) * ((j : ℝ) + 1) / 2 ≤ (N : ℝ) * (N + 1) / 2 := by nlinarith
+    have h1 := mul_le_mul_of_nonneg_left hjT hs0
+    have h2 : 0 ≤ s * ((j : ℝ) * ((j : ℝ) + 1) / 2) := mul_nonneg hs0 (by positivity)
+    rw [hω, if_pos hj]
+    constructor <;> linarith
+  -- `|Aw| ≤ 10`, node by node
+  have hAw : ∀ i : Fin (N + 2), |(A *ᵥ fun j => ω j) i| ≤ 10 := by
+    intro i
+    obtain ⟨k, hk⟩ := i
+    rw [hA, triMat_mulVec]
+    rcases Nat.lt_trichotomy k N with hkN | hkN | hkN
+    · rcases Nat.eq_zero_or_pos k with rfl | hk0
+      · -- node 0: `2 + (ρ − 1)s`
+        have e0 : hubEdge N 0 = 1 := if_pos (by omega)
+        have d0 : pathDeg (N + 2) (hubEdge N) 0 = 1 := by simp [pathDeg, e0]
+        simp only [d0, e0, hω, show (0 : ℕ) + 1 < N + 2 by omega, show ¬ (1 ≤ (0 : ℕ)) by omega,
+          show (0 : ℕ) ≤ N by omega, show 0 + 1 ≤ N by omega, ↓reduceIte]
+        push_cast
+        rw [abs_le]
+        constructor <;> nlinarith [mul_nonneg hρ1.le hs0]
+      · -- the bulk: `4wₖ + (ρ − 1)s`
+        obtain ⟨m, rfl⟩ : ∃ m, k = m + 1 := ⟨k - 1, by omega⟩
+        have em : hubEdge N m = 1 := if_pos (by omega)
+        have em1 : hubEdge N (m + 1) = 1 := if_pos (by omega)
+        have dm : pathDeg (N + 2) (hubEdge N) (m + 1) = 2 := by
+          simp only [pathDeg, show 1 ≤ m + 1 by omega, show m + 1 + 1 < N + 2 by omega,
+            ↓reduceIte, Nat.add_sub_cancel, em, em1]
+          norm_num
+        simp only [dm, em, em1, show m + 1 + 1 < N + 2 by omega, show 1 ≤ m + 1 by omega,
+          ↓reduceIte, Nat.add_sub_cancel]
+        have hval : ω (m + 1 + 1) + ω m = 2 * ω (m + 1) - s := by
+          rw [hω, hω, hω, if_pos (by omega), if_pos (by omega), if_pos (by omega)]
+          push_cast
+          ring
+        have h3 : (1 - ρ) * (ω (m + 1 + 1) + ω m) = (1 - ρ) * (2 * ω (m + 1) - s) := by rw [hval]
+        have hw := hωle (m + 1) (by omega)
+        rw [abs_le]
+        constructor <;> nlinarith [mul_nonneg hρ1.le hs0]
+    · -- node `N`: zero, by the choice of `s`
+      subst k
+      have eN : hubEdge N N = N := if_neg (lt_irrefl N)
+      have eN1 : hubEdge N (N - 1) = 1 := if_pos (by omega)
+      have hcast : ((N - 1 : ℕ) : ℝ) = N - 1 := by rw [Nat.cast_sub hN, Nat.cast_one]
+      simp only [pathDeg_hub hN, eN, eN1, hω, show N + 1 < N + 2 by omega, hN,
+        show ¬ (N + 1 ≤ N) by omega, show N - 1 ≤ N by omega, le_refl, ↓reduceIte, hcast]
+      have key : ∀ x : ℝ, (ρ + 1) * x = 0 → |x| ≤ 10 := fun x hx => by
+        rw [(mul_eq_zero.1 hx).resolve_left hρp.ne', abs_zero]; norm_num
+      apply key
+      linear_combination (-(ρ + 1)) * hs - (1 - s * ((N : ℝ) * (N + 1) / 2)) * hc₁ +
+        (1 - ρ) * (N : ℝ) * (1 - s * ((N : ℝ) * (N + 1) / 2)) * hκ
+    · -- node `N + 1`: zero, by the choice of `κ`
+      obtain rfl : k = N + 1 := by omega
+      have eN : hubEdge N N = N := if_neg (lt_irrefl N)
+      have dN1 : pathDeg (N + 2) (hubEdge N) (N + 1) = N := by
+        simp only [pathDeg, show 1 ≤ N + 1 by omega, show ¬ (N + 1 + 1 < N + 2) by omega,
+          ↓reduceIte, Nat.add_sub_cancel, eN, add_zero]
+      simp only [dN1, eN, hω, show ¬ (N + 1 + 1 < N + 2) by omega, show 1 ≤ N + 1 by omega,
+        show ¬ (N + 1 ≤ N) by omega, le_refl, ↓reduceIte, Nat.add_sub_cancel]
+      have key : ∀ x : ℝ, x = 0 → |x| ≤ 10 := fun x hx => by rw [hx, abs_zero]; norm_num
+      apply key
+      linear_combination (N : ℝ) * (1 - s * ((N : ℝ) * (N + 1) / 2)) * hκ
+  -- the dual bound at node `N`
+  have hEy : ∀ k, |(E *ᵥ fun i => √(A i i) * ω i) k| ≤ 10 * (√(ρ + 1))⁻¹ := fun k => by
+    rw [unitScale_mulVec hd0]
+    change |(√(A k k))⁻¹ * (A *ᵥ fun j => ω j) k| ≤ 10 * (√(ρ + 1))⁻¹
+    rw [abs_mul, abs_of_pos (inv_pos.2 (Real.sqrt_pos.2 (hd0 k)))]
+    have h1 : (√(A k k))⁻¹ ≤ (√(ρ + 1))⁻¹ :=
+      inv_anti₀ (Real.sqrt_pos.2 hρp) (Real.sqrt_le_sqrt (hd k))
+    calc (√(A k k))⁻¹ * |(A *ᵥ fun j => ω j) k| ≤ (√(ρ + 1))⁻¹ * 10 :=
+          mul_le_mul h1 (hAw k) (abs_nonneg _) (by positivity)
+      _ = 10 * (√(ρ + 1))⁻¹ := mul_comm _ _
+  set jN : Fin (N + 2) := ⟨N, by omega⟩ with hjN
+  have hy := abs_le_norm1_inv_mul hsE huE hEy jN
+  have hANN : A jN jN = (ρ + 1) * ((N : ℝ) + 1) := by
+    rw [hAii, hjN, Fin.val_mk, pathDeg_hub hN]
+  have hωN := hωle N le_rfl
+  have hsρ0 := Real.sqrt_pos.2 hρp
+  have hsρ : √(ρ + 1) * √(ρ + 1) = ρ + 1 := Real.mul_self_sqrt hρp.le
+  have hsN : 0 ≤ √((N : ℝ) + 1) := Real.sqrt_nonneg _
+  have hyN : √(ρ + 1) * √((N : ℝ) + 1) / 2 ≤ |√(A jN jN) * ω jN| := by
+    rw [hANN, Real.sqrt_mul hρp.le, hjN, Fin.val_mk]
+    rw [abs_of_nonneg (mul_nonneg (by positivity) (by linarith [hωN.1]))]
+    have := mul_le_mul_of_nonneg_left hωN.1 (mul_nonneg hsρ0.le hsN)
+    linarith
+  calc (ρ + 1) * √((N : ℝ) + 1) / 20
+      = √(ρ + 1) * (√(ρ + 1) * √((N : ℝ) + 1) / 2) / 10 := by
+        linear_combination (-(√((N : ℝ) + 1)) / 20) * hsρ
+    _ ≤ √(ρ + 1) * (norm1 E⁻¹ * (10 * (√(ρ + 1))⁻¹)) / 10 := by
+        gcongr
+        exact hyN.trans hy
+    _ = norm1 E⁻¹ := by field_simp
+
+/-- **Banded patterns do not bound it either.** For every `C`, a family whose terms are zero beyond
+the first off-diagonals (so `q = 3`) meets every hypothesis of `cond1_unitScale_le_sharp`, with
+`m = 1`, and has `‖E(c)⁻¹‖₁ > C·(M/m)·‖E(c′)⁻¹‖₁`: the path family on `r² + 2` nodes, `r > 20C`. -/
+theorem inverse_part_unbounded_tridiagonal (C : ℝ) :
+    ∃ (N : ℕ) (S : Fin 2 → Matrix (Fin (N + 2)) (Fin (N + 2)) ℝ) (c c' : Fin 2 → ℝ) (M : ℝ),
+      (∀ k (i j : Fin (N + 2)), (i : ℕ) + 1 < j ∨ (j : ℕ) + 1 < i → S k i j = 0) ∧
+      (∀ j, (univ.filter fun i => comb S c i j ≠ 0).card ≤ 3) ∧
+      (∀ k, (S k).PosSemidef) ∧ 0 < M ∧ (∀ k, 1 * c' k ≤ c k) ∧ (∀ k, c k ≤ M * c' k) ∧
+      (comb S c').PosDef ∧
+      C * (M / 1) * norm1 (unitScale (comb S c'))⁻¹ < norm1 (unitScale (comb S c))⁻¹ := by
+  set r := ⌈20 * C⌉₊ + 1 with hrdef
+  have hr : 1 ≤ r := Nat.le_add_left 1 _
+  have hN : 1 ≤ r ^ 2 := Nat.one_le_pow _ _ hr
+  have hρ : 1 ≤ hubRho (r ^ 2) := by
+    unfold hubRho; nlinarith [sq_nonneg (((r ^ 2 : ℕ) : ℝ) + 1)]
+  have hdeg : ∀ i : Fin (r ^ 2 + 2), 0 < 2 * pathDeg (r ^ 2 + 2) (hubEdge (r ^ 2)) i :=
+    fun i => by linarith [pathDeg_ge_one hN i]
+  refine ⟨r ^ 2, pathFamily (r ^ 2), ![hubRho (r ^ 2), 1], ![1, 1], hubRho (r ^ 2),
+    pathFamily_banded, fun j => card_filter_banded_le_three (fun i j h => by
+      rw [comb_pathFamily]; exact triMat_banded _ _ h) j, pathFamily_posSemidef, by linarith,
+    ?_, ?_, ?_, ?_⟩
+  · rw [Fin.forall_fin_two]; exact ⟨by simpa using hρ, by simp⟩
+  · rw [Fin.forall_fin_two]; exact ⟨by simp, by simpa using hρ⟩
+  · rw [comb_pathFamily_one, posDef_diagonal_iff]; exact hdeg
+  · rw [comb_pathFamily_one, unitScale_diagonal hdeg, inv_one, norm1_one, mul_one, div_one]
+    have h1 := norm1_inv_pathFamily hN
+    have h2 : 20 * C < r := by
+      rw [hrdef]; push_cast
+      exact lt_of_le_of_lt (Nat.le_ceil _) (lt_add_one _)
+    have h3 : (r : ℝ) ≤ √(((r ^ 2 : ℕ) : ℝ) + 1) := by
+      calc (r : ℝ) = √((r : ℝ) ^ 2) := (Real.sqrt_sq (by positivity)).symm
+        _ ≤ √(((r ^ 2 : ℕ) : ℝ) + 1) := Real.sqrt_le_sqrt (by push_cast; linarith)
+    have hρ0 : 0 < hubRho (r ^ 2) := by linarith
+    have hr1 : (1 : ℝ) ≤ r := by exact_mod_cast hr
+    nlinarith [mul_pos hρ0 (by linarith : (0 : ℝ) < √(((r ^ 2 : ℕ) : ℝ) + 1) - 20 * C)]
+
+end Banded
 
 end Dual
 
