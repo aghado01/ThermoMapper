@@ -972,6 +972,132 @@ for c in (2, 10):
 
 
 print()
+print("=== E35 follow-up: CUSUM's and Shiryaev-Roberts's guarantees ===")
+# Vovk, Statistical Science 2021, Propositions 4.2 and 4.4 and Corollaries 4.3 and 4.6, as MartingaleAlarm
+# runs them: the step ratio f_n = S_n/S_(n-1) of the betting product; Shiryaev-Roberts R_n = f_n (R_(n-1) + 1)
+# and CUSUM g_n = f_n max(g_(n-1), 1), both from 0, an alarm at c <= statistic, and a restart at 0 after it.
+# The Lean's route, checked exactly on the K-point grid (bets averaging 1 over it, every path enumerated):
+# (a) Shiryaev-Roberts with restarts: with Q the statistic after a step (0 after an alarm) and Sig the sum
+#     of the statistic at the alarms, E[Q_N + Sig_N] = N exactly (each step adds f (Q + 1), averaging Q + 1),
+#     and c A_N <= Sig_N on every path, so E[A_N] <= N/c;
+# (b) CUSUM alarms no more often, on every path: A^CUSUM_N <= A^SR_N;
+# (c) the first alarm: frozen there, E[Q_(tau ^ N) or R_tau] = E[tau ^ N] exactly, so
+#     E[tau ^ N] >= c P(tau <= N), and CUSUM's first alarm comes no sooner;
+# (d) a bet averaging 2 breaks (a).
+
+
+def _e35_alarm_checks():
+    def ratios(caps):
+        out, prev = [], Q(1)
+        for s in caps:
+            out.append(s / prev)
+            prev = s
+        return out
+
+
+    def sr_run(fs, c):
+        q = sig = Q(0)
+        a, taus = 0, []
+        for n, fv in enumerate(fs, 1):
+            r = fv * (q + 1)
+            if r >= c:
+                q, sig, a = Q(0), sig + r, a + 1
+                taus.append(n)
+            else:
+                q = r
+        return q, sig, a, taus
+
+
+    def cusum_run(fs, c):
+        g = Q(0)
+        a, taus = 0, []
+        for n, fv in enumerate(fs, 1):
+            s = fv * max(g, Q(1))
+            if s >= c:
+                g, a = Q(0), a + 1
+                taus.append(n)
+            else:
+                g = s
+        return g, a, taus
+
+
+    def sr_first(fs, c):
+        """Frozen at the first alarm: (Y = Q before it, R_tau after; tau ^ N; alarmed)."""
+        q = Q(0)
+        for n, fv in enumerate(fs, 1):
+            r = fv * (q + 1)
+            if r >= c:
+                return r, n, True
+            q = r
+        return q, len(fs), False
+
+
+    N_al = 6
+    paths_al = list(itertools.product(G, repeat=N_al))
+    n_al = 0
+    for name, strat in strategies.items():
+        fs_all = {pth: ratios(strat(list(pth))) for pth in paths_al}
+        for c in (Q(3, 2), Q(2), Q(3), Q(5)):
+            tot_qs = tot_a = tot_ac = Q(0)
+            tot_y = tot_t = Q(0)
+            hit_s = hit_c = 0
+            for pth in paths_al:
+                fs = fs_all[pth]
+                q, sig, a, taus = sr_run(fs, c)
+                g, ac, tausc = cusum_run(fs, c)
+                assert c * a <= sig and ac <= a
+                tot_qs += q + sig
+                tot_a += a
+                tot_ac += ac
+                y, t, hit = sr_first(fs, c)
+                tot_y += y
+                tot_t += t
+                hit_s += hit
+                hit_c += bool(tausc)
+                assert not tausc or (taus and tausc[0] >= taus[0])
+                n_al += 1
+            P = Q(len(paths_al))
+            assert tot_qs / P == N_al                       # (a), exactly
+            assert tot_a / P <= N_al / c and tot_ac <= tot_a
+            assert tot_y / P == tot_t / P                   # (c), exactly: R - n stopped is a martingale
+            assert tot_t / P >= c * hit_s / P >= c * hit_c / P
+    broken = [Q(2)] * N_al
+    assert sr_run(broken, Q(2))[2] > N_al / Q(2) and cusum_run(broken, Q(2))[1] > N_al / Q(2)
+
+    # A seeded run over uniform p's: Simple Jumper's alarms per arrival under 1/c, CUSUM's under Shiryaev-Roberts's
+    mcs = random.Random(20261115)
+    c_mc, n_mc = 20.0, 60_000
+    Cw = {e: 1 / 3 for e in (-1, 0, 1)}
+    q_mc, g_mc, a_sr, a_cu = 0.0, 0.0, 0, 0
+    for _ in range(n_mc):
+        p = mcs.random()
+        tot = sum(Cw.values())
+        Cw = {e: 0.99 * Cw[e] + 0.01 / 3 * tot for e in Cw}
+        new = {e: Cw[e] * (1 + e * (p - 0.5)) for e in Cw}
+        fv = sum(new.values()) / sum(Cw.values())
+        Cw = {e: v / sum(new.values()) for e, v in new.items()}
+        r = fv * (q_mc + 1)
+        if r >= c_mc:
+            a_sr, q_mc = a_sr + 1, 0.0
+        else:
+            q_mc = r
+        s = fv * max(g_mc, 1.0)
+        if s >= c_mc:
+            a_cu, g_mc = a_cu + 1, 0.0
+        else:
+            g_mc = s
+    assert a_sr / n_mc <= 1 / c_mc + 4 * math.sqrt(1 / c_mc / n_mc) and a_cu <= a_sr
+    print(f"E35 follow-up (CUSUM, Shiryaev-Roberts): on the grid, {n_al} paths over 3 strategies and 4 thresholds "
+          f"at N = {N_al}: E[Q_N + Sig_N] = N exactly, c A_N <= Sig_N and A^CUSUM <= A^SR on every path, "
+          f"E[A_N] <= N/c; frozen at the first alarm E[R] = E[tau ^ N] exactly and E[tau ^ N] >= c P(tau <= N), "
+          f"CUSUM's first alarm no sooner; a bet averaging 2 breaks the count; Simple Jumper over {n_mc} uniform p's at "
+          f"c = {c_mc:g}: {a_sr / n_mc:.4f} Shiryaev-Roberts and {a_cu / n_mc:.4f} CUSUM alarms per arrival")
+
+
+_e35_alarm_checks()
+
+
+print()
 print("=== Slice 9: the jackknife+ and the cross-fitted rule ===")
 
 # Conventions. m = n + 1 units: n training units and the test. pair[i][j] is unit i's conformity

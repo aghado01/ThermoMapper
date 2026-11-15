@@ -2,7 +2,7 @@
 
 Pins the contract of the engine's conformal layer, one layer over retained draws and pointwise densities for every model with a pointwise density ([E16](../../../issues/regression/bass/extensions-brief.md#conformal-bayes-the-consumer)). The layer owns coverage and the score owns width. These are the finite statements of that split. They are the sibling of [GuardedEstimator](../BASS/guarded-estimator-lemmas.md): there, means valid whatever the emulator does; here, prediction sets valid whatever the model does. Written from the [chip brief](conformal-chip-brief.md).
 
-**Status (2026-11-14).** Proved in `lean/Enthymemata/ConformalValidity.lean`, namespace `Conformal`, with no apologies (PROOF-CLOSED, 632 declarations counting E35's M-1 and M-2 and slices 9, 10, 12, 13, 14, 15, 16 and 18, slice 14's follow-ups 1, 2 and 3, slice 18's follow-up, and RoBAS-Full's intervals at the end of this page; `#print axioms` shows `propext`, `Classical.choice`, `Quot.sound` only):
+**Status (2026-11-15).** Proved in `lean/Enthymemata/ConformalValidity.lean`, namespace `Conformal`, with no apologies (PROOF-CLOSED, 668 declarations counting E35's M-1 and M-2 and slices 9, 10, 12, 13, 14, 15, 16 and 18, slice 14's follow-ups 1, 2 and 3, slice 18's follow-up, RoBAS-Full's intervals, and E35's CUSUM and Shiryaev–Roberts guarantees at the end of this page; `#print axioms` shows `propext`, `Classical.choice`, `Quot.sound` only):
 - CB-1: `card_rankLe_le`, `coverage_orderings`, `coverage_orderings_eq`, `coverage_strict_le`, `coverage_orderings_le`, `rank_uniform`, `coverage_tieBreak`, `coverage_given`, `coverage_law`, `coverage_stratum`;
 - CB-2: `split_coverage`, `exchangeable_given_training`, `cqr_ordConnected`;
 - CB-4: `sum_jointU`, `post_addOneIn`, `integratedScore_equivariant`, `latentScore_equivariant`, `latentScore_eq`, `sum_jointU_addOneIn`, `integratedScore_le_latentScore`, `accepts_latent_of_mixed`, `mixed_counterexample`;
@@ -242,6 +242,8 @@ Posed and proved on 2026-11-08 for [E35](../../../issues/regression/bass/extensi
 - both hold for CUSUM, which alarms no more often.
 
 Each Sₙ/S_i is the betting product from i + 1 to n, so `lintegral_capital` gives E Rₙ = n. The rest needs optional stopping at unbounded times and a strong law. That is a measure-theoretic step that changes no premise, so it is left posed.
+
+*Proved since (2026-11-15), with no optional stopping at unbounded times:* the mean times to a false alarm and, in expectation at every horizon, the alarm counts, under `ville`'s premises ("E35's follow-up" at the end of this page). The almost sure lim sup stays posed.
 
 **Prior art, read.**
 - Vovk, Nouretdinov and Gammerman 2003 (power martingales, the e-value reading).
@@ -1299,3 +1301,68 @@ Proved on 2026-11-14 in `ConformalValidity.lean`, section `RobasFull` (59 declar
 - *The score identity.* Against the C#'s score form, on 1,689 units, worst 4.8e-15.
 - *The pinned n = 3 residuals.* They split unit 1's set.
 - *Direct grids at n = 4 to 7.* One piece on 218 sets, over every k.
+
+## E35's follow-up — CUSUM's and Shiryaev–Roberts's guarantees
+
+Asked on 2026-11-15 by the user: "The CUSUM and Shiryaev–Roberts guarantees". It is the item the addendum lists for the conformal Lean thread, and it decides whether `MartingaleAlarm`'s CUSUM and Shiryaev–Roberts alarms report proved guarantees.
+
+- *Source.* Vovk, *Statistical Science* 2021, Propositions 4.2 and 4.4 and Corollaries 4.3 and 4.6, as M-2's "Posed, not proved" records them. The paper's text was read for M-2 on 2026-11-08, but is not in the local library and was not re-read.
+- *Status.* Proved on 2026-11-15 in `ConformalValidity.lean`, section `ChangeAlarms`, right after M-2's `Betting` (36 declarations). PROOF-CLOSED, with the standard three axioms only. The checks (section "E35 follow-up: CUSUM's and Shiryaev-Roberts's guarantees") ran first.
+
+**The model**, as `MartingaleAlarm` runs it. Each step's bet `fₙ` is chosen from the earlier p-values and read at the newest.
+- *Shiryaev–Roberts* (`srRun`): `Rₙ = fₙ (Rₙ₋₁ + 1)` from 0. An alarm fires at `c ≤ Rₙ`, then the statistic restarts at 0.
+- *CUSUM* (`cusumRun`): Page's `γₙ = fₙ max(γₙ₋₁, 1)` from 0, with the same alarm and restart.
+- *Up to the first alarm* (`srFirst`, `cusumFirst`): the same runs, frozen at the first alarm. They count `τ ∧ n`.
+- *The premises* are `ville`'s: the p-values are independent with law `μ` (uniform under exchangeability, by M-1), and each bet is measurable, reads only the past, and integrates to at most 1.
+
+**The statements.**
+- *The false alarms at every horizon.*
+  - `sr_alarms_le`, `cusum_alarms_le`, and `alarms_stream_le` on a stream: `c E[A_N] ≤ N`. The expected number of false alarms among the first `N` arrivals is at most `N/c`, for both procedures.
+- *CUSUM alarms no more often*, on every path (`cusum_count_le`, through `cusum_sr_invariant`). Between two CUSUM alarms, Shiryaev–Roberts alarms at least once: either CUSUM has had fewer alarms, or as many with its statistic no larger.
+- *The first alarm at a horizon* (`sr_firstAlarm_le`, `cusum_firstAlarm_le`): `c P(τ ≤ N) ≤ E[τ ∧ N]`. CUSUM's first alarm comes no sooner (`cusumFirst_sr_invariant`).
+- *The mean time to a false alarm* (`sr_meanRunLength`, `cusum_meanRunLength`): on a stream, `E τ ≥ c`. Here `τ = ∑ₙ 1{no alarm by n}`, which is infinite if no alarm ever fires.
+
+**The route.** It needs no optional stopping at unbounded times.
+- *The alarm count.* Let `Q` be the statistic after a step (0 after an alarm) and `Σ` the sum of the statistic at the alarms.
+  - Each step adds `fₙ (Q + 1)` to `Q + Σ` (`srStep_sum`), which integrates to at most `Q + 1`.
+  - So `E[Qₙ + Σₙ] ≤ n` (`lintegral_srRun_le`), through Tonelli at the newest p-value (`lintegral_pi_succ`).
+  - Each alarm adds at least `c` to `Σ` (`srRun_count`).
+- *The first alarm.* Frozen there, a step adds at most the step it counts (`lintegral_srFirst_le`). At the alarm, the statistic is at least `c`.
+- *The mean.* `le_tsum_of_alarm_bound` turns `c P(τ ≤ N) ≤ ∑_{n<N} P(τ > n)` at every horizon into `c ≤ ∑ₙ P(τ > n) = E τ`.
+  - If the alarm fires almost surely, the left side tends to `c`.
+  - Otherwise every term is at least `P(τ = ∞) > 0`, and the sum is infinite.
+
+**Against the source.**
+- *The premise is wider.* Bets need only integrate to at most 1, which makes the capital a supermartingale; Vovk states a martingale. `Rₙ − n` is then a supermartingale, and every inequality runs the right way.
+- *The frequency is stated in expectation.* Vovk's Corollaries 4.3 and 4.6 state an almost sure long-run frequency, lim sup `Aₙ/n ≤ 1/c`. Proved here is `E A_N ≤ N/c` at every horizon `N`, a finite-sample bound. The almost sure form, which needs a strong law, is not formalized.
+- *CUSUM's comparison holds with restarts.* "CUSUM alarms no more often" is proved for the restarted runs `MartingaleAlarm` uses, path by path. Each procedure restarts at its own alarms.
+
+**For the C#.**
+- *Both guarantees are proved.* `AlarmGuarantee` can read `Proved` for CUSUM and Shiryaev–Roberts.
+- *The wording.* It should be the proved form: "The mean time to a false alarm is at least c, and the expected number of false alarms among the first N arrivals is at most N/c." This replaces "repeated, the long-run frequency of false alarms at most 1/c", which is the almost sure form that is not proved.
+
+**Checks.**
+- *Exact enumeration on M-2's 4-point grid.* N = 6, so 4,096 paths, under 3 strategies and 4 thresholds.
+  - `E[Q_N + Σ_N] = N` exactly.
+  - `c A_N ≤ Σ_N` and `A^CUSUM ≤ A^SR` on every path, so `E[A_N] ≤ N/c`.
+  - Frozen at the first alarm, `E[R] = E[τ ∧ N]` exactly, so `E[τ ∧ N] ≥ c P(τ ≤ N)`. CUSUM's first alarm never comes sooner.
+- *A broken premise.* A bet averaging 2 breaks the count.
+- *A seeded run.* Simple Jumper over 60,000 uniform p's at c = 20 gives 0.0471 Shiryaev–Roberts alarms per arrival (bound 0.05) and 0.0001 CUSUM alarms.
+
+## Posed: M-1 under covariate shift (2026-11-15)
+
+Posed by the conformal C# chip at the user's choice ("Build, checks now", 2026-11-15). The C# is d4c97d4 (`CovariateShiftPValues`) and its report e885e6a, in the addendum. Not yet proved.
+
+- *The setting.* The joint density is Π_{t>m} w(z_t) · g(z₁, …, z_N) with g symmetric: Tibshirani, Barber, Candès and Ramdas 2019, Definition 1.
+  - Positions 1..m (the reference sample) have weight 1, and the stream positions m+1..N have weight w.
+  - The main case: independent Z_t ~ P for t ≤ m and Q for t > m, with dQ/dP = w.
+  - The score α is a fixed function.
+- *The p-values.* For n > m, let k = n − m and Pⱼ⁽ⁿ⁾ = πⱼ/k, where πⱼ = wⱼ e_{k−1}(w₋ⱼ)/e_k(w). Equivalently, Pⱼ is the share of arrangements putting unit j at n, each arrangement weighed by Π_{t=m+1..n} w(z_σ(t)).
+  - pₙ = Σⱼ Pⱼ[αⱼ < αₙ] + θₙ Σⱼ Pⱼ[αⱼ = αₙ], with θₙ i.i.d. uniform on (0, 1] and independent of the data.
+- *The claim.* p_{m+1}, …, p_N are i.i.d. uniform.
+- *The route.* This is `seqRank_uniform`'s reverse-filtration step, with each ordering weighed by Π w over the stream positions.
+  - Given the bag at n and every later unit, the arrangement has chance ∝ Π_{m<t≤n} w(z_σ(t)) (their Lemma 3), so pₙ is uniform given them.
+  - Later p-values read only that bag and the later units.
+  - Finite core: over every ordering of a fixed bag, weighed and normalized, the stream's tie-randomized weighted ranks are jointly uniform.
+  - Equal weights give back M-1.
+- *Checks so far (the C#'s).* Enumeration over six units: P(every pₜ ≤ uₜ) = Π uₜ to within 2e-15 over a grid. Ties are included, and so is a zero weight at a reference position. A stream unit with w = 0 has probability zero under the null, and the C# refuses it.

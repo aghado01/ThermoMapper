@@ -1575,6 +1575,543 @@ theorem ville [IsProbabilityMeasure μ] (hf : ∀ n, Measurable (Function.uncurr
 
 end Betting
 
+/-! ### E35's follow-up: CUSUM's and Shiryaev–Roberts's guarantees -/
+
+section ChangeAlarms
+
+open MeasureTheory
+open scoped ENNReal
+
+variable (μ : Measure ℝ) (f : (n : ℕ) → (Fin n → ℝ) → ℝ → ℝ≥0∞) (c : ℝ≥0∞)
+
+/-- One Shiryaev–Roberts step on the bet's value `b` from `(Q, Σ, A)`: the statistic
+`R = b (Q + 1)`; at `c ≤ R` an alarm, which adds `R` to `Σ`, counts in `A`, and restarts `Q` at
+0. -/
+noncomputable def srStep (b : ℝ≥0∞) (s : ℝ≥0∞ × ℝ≥0∞ × ℕ) : ℝ≥0∞ × ℝ≥0∞ × ℕ :=
+  if c ≤ b * (s.1 + 1) then (0, s.2.1 + b * (s.1 + 1), s.2.2 + 1) else (b * (s.1 + 1), s.2.1, s.2.2)
+
+/-- Shiryaev–Roberts with restarts (`MartingaleAlarm`'s): `Rₙ = fₙ (Rₙ₋₁ + 1)` from `R₀ = 0`, the
+`n`th bet chosen from the earlier p-values and read at the newest. -/
+noncomputable def srRun : (n : ℕ) → (Fin n → ℝ) → ℝ≥0∞ × ℝ≥0∞ × ℕ
+  | 0, _ => (0, 0, 0)
+  | n + 1, h => srStep c (f n (Fin.init h) (h (Fin.last n))) (srRun n (Fin.init h))
+
+/-- One CUSUM step from `(γ, A)`: Page's `γ = b max(γ, 1)`; at `c ≤ γ` an alarm and a restart. -/
+noncomputable def cusumStep (b : ℝ≥0∞) (s : ℝ≥0∞ × ℕ) : ℝ≥0∞ × ℕ :=
+  if c ≤ b * max s.1 1 then (0, s.2 + 1) else (b * max s.1 1, s.2)
+
+/-- CUSUM with restarts (`MartingaleAlarm`'s): `γₙ = fₙ max(γₙ₋₁, 1)` from `γ₀ = 0`. -/
+noncomputable def cusumRun : (n : ℕ) → (Fin n → ℝ) → ℝ≥0∞ × ℕ
+  | 0, _ => (0, 0)
+  | n + 1, h => cusumStep c (f n (Fin.init h) (h (Fin.last n))) (cusumRun n (Fin.init h))
+
+theorem srStep_sum (b : ℝ≥0∞) (s : ℝ≥0∞ × ℝ≥0∞ × ℕ) :
+    (srStep c b s).1 + (srStep c b s).2.1 = b * (s.1 + 1) + s.2.1 := by
+  unfold srStep
+  split_ifs <;> simp [add_comm]
+
+theorem srStep_count (b : ℝ≥0∞) (s : ℝ≥0∞ × ℝ≥0∞ × ℕ) (hs : c * s.2.2 ≤ s.2.1) :
+    c * (srStep c b s).2.2 ≤ (srStep c b s).2.1 := by
+  unfold srStep
+  split_ifs with h
+  · dsimp only
+    have e : c * (((s.2.2 + 1 : ℕ)) : ℝ≥0∞) = c * s.2.2 + c := by push_cast; rw [mul_add, mul_one]
+    rw [e]
+    exact add_le_add hs h
+  · exact hs
+
+theorem srRun_count : ∀ (n : ℕ) (h : Fin n → ℝ), c * (srRun f c n h).2.2 ≤ (srRun f c n h).2.1
+  | 0, _ => by simp [srRun]
+  | n + 1, h => srStep_count c _ _ (srRun_count n (Fin.init h))
+
+theorem measurable_srStep {α : Type*} [MeasurableSpace α] {b : α → ℝ≥0∞}
+    {s : α → ℝ≥0∞ × ℝ≥0∞ × ℕ} (hb : Measurable b) (hs : Measurable s) :
+    Measurable fun a => srStep c (b a) (s a) := by
+  unfold srStep
+  have hR : Measurable fun a => b a * ((s a).1 + 1) := hb.mul (hs.fst.add measurable_const)
+  refine Measurable.ite (measurableSet_le measurable_const hR) ?_ ?_
+  · exact measurable_const.prodMk ((hs.snd.fst.add hR).prodMk
+      ((measurable_from_top (f := fun k : ℕ => k + 1)).comp hs.snd.snd))
+  · exact hR.prodMk (hs.snd.fst.prodMk hs.snd.snd)
+
+variable {f} in
+theorem measurable_srRun (hf : ∀ n, Measurable (Function.uncurry (f n))) :
+    ∀ n, Measurable (srRun f c n)
+  | 0 => measurable_const
+  | n + 1 => by
+    have hb := (hf n).comp ((measurable_init n).prodMk (measurable_pi_apply (Fin.last n)))
+    exact measurable_srStep c hb ((measurable_srRun hf n).comp (measurable_init n))
+
+/-- Tonelli at the newest p-value, for any measurable function of the history. -/
+theorem lintegral_pi_succ [IsProbabilityMeasure μ] (n : ℕ) {g : (Fin (n + 1) → ℝ) → ℝ≥0∞}
+    (hg : Measurable g) :
+    ∫⁻ h, g h ∂(Measure.pi fun _ : Fin (n + 1) => μ) =
+      ∫⁻ h, ∫⁻ x, g (Fin.snoc h x) ∂μ ∂(Measure.pi fun _ : Fin n => μ) := by
+  set e := MeasurableEquiv.piFinSuccAbove (fun _ : Fin (n + 1) => ℝ) (Fin.last n)
+  have hmp : MeasurePreserving e (Measure.pi fun _ : Fin (n + 1) => μ)
+      (μ.prod (Measure.pi fun _ : Fin n => μ)) :=
+    measurePreserving_piFinSuccAbove (fun _ : Fin (n + 1) => μ) (Fin.last n)
+  have hG : Measurable fun z : ℝ × (Fin n → ℝ) => g (e.symm z) := hg.comp e.symm.measurable
+  have hsnoc : ∀ (h : Fin n → ℝ) (x : ℝ), e.symm (x, h) = Fin.snoc h x := fun h x => by
+    ext i
+    simp [e, MeasurableEquiv.piFinSuccAbove_symm_apply]
+  calc ∫⁻ h, g h ∂(Measure.pi fun _ : Fin (n + 1) => μ)
+      = ∫⁻ h, g (e.symm (e h)) ∂(Measure.pi fun _ : Fin (n + 1) => μ) := by
+        simp only [MeasurableEquiv.symm_apply_apply]
+    _ = ∫⁻ z, g (e.symm z) ∂(μ.prod (Measure.pi fun _ : Fin n => μ)) :=
+        hmp.lintegral_comp_emb e.measurableEmbedding fun z => g (e.symm z)
+    _ = ∫⁻ h, ∫⁻ x, g (e.symm (x, h)) ∂μ ∂(Measure.pi fun _ : Fin n => μ) :=
+        lintegral_prod_symm _ hG.aemeasurable
+    _ = ∫⁻ h, ∫⁻ x, g (Fin.snoc h x) ∂μ ∂(Measure.pi fun _ : Fin n => μ) := by
+        simp only [hsnoc]
+
+variable {f} in
+/-- **Shiryaev–Roberts's statistic and its alarms grow by at most 1 a step.** With the p-values
+independent with law `μ` and each bet chosen from the past and integrating to at most 1,
+`E[Qₙ + Σₙ] ≤ n`: each step adds `fₙ (Q + 1)`, which integrates to at most `Q + 1`. -/
+theorem lintegral_srRun_le [IsProbabilityMeasure μ] (hf : ∀ n, Measurable (Function.uncurry (f n)))
+    (h1 : ∀ n h, ∫⁻ x, f n h x ∂μ ≤ 1) :
+    ∀ n, ∫⁻ h, (srRun f c n h).1 + (srRun f c n h).2.1 ∂(Measure.pi fun _ : Fin n => μ) ≤ n
+  | 0 => by simp [srRun]
+  | n + 1 => by
+    have hm := measurable_srRun c hf
+    rw [lintegral_pi_succ μ n (g := fun h => (srRun f c (n + 1) h).1 + (srRun f c (n + 1) h).2.1)
+      ((hm (n + 1)).fst.add (hm (n + 1)).snd.fst)]
+    have step : ∀ h : Fin n → ℝ, ∫⁻ x, (srRun f c (n + 1) (Fin.snoc h x)).1 +
+        (srRun f c (n + 1) (Fin.snoc h x)).2.1 ∂μ ≤
+        (srRun f c n h).1 + (srRun f c n h).2.1 + 1 := by
+      intro h
+      have hfx : Measurable fun x => f n h x := (hf n).comp (measurable_const.prodMk measurable_id)
+      simp only [srRun, Fin.init_snoc, Fin.snoc_last, srStep_sum]
+      rw [lintegral_add_right _ measurable_const, lintegral_mul_const _ hfx, lintegral_const,
+        measure_univ, mul_one]
+      calc (∫⁻ x, f n h x ∂μ) * ((srRun f c n h).1 + 1) + (srRun f c n h).2.1
+          ≤ 1 * ((srRun f c n h).1 + 1) + (srRun f c n h).2.1 := by gcongr; exact h1 n h
+        _ = (srRun f c n h).1 + (srRun f c n h).2.1 + 1 := by rw [one_mul]; ring
+    calc ∫⁻ h, ∫⁻ x, (srRun f c (n + 1) (Fin.snoc h x)).1 +
+          (srRun f c (n + 1) (Fin.snoc h x)).2.1 ∂μ ∂(Measure.pi fun _ : Fin n => μ)
+        ≤ ∫⁻ h, (srRun f c n h).1 + (srRun f c n h).2.1 + 1 ∂(Measure.pi fun _ : Fin n => μ) :=
+          lintegral_mono step
+      _ = ∫⁻ h, (srRun f c n h).1 + (srRun f c n h).2.1 ∂(Measure.pi fun _ : Fin n => μ) + 1 := by
+          rw [lintegral_add_right _ measurable_const, lintegral_const, measure_univ, mul_one]
+      _ ≤ n + 1 := by gcongr; exact lintegral_srRun_le hf h1 n
+      _ = ((n + 1 : ℕ) : ℝ≥0∞) := by push_cast; ring
+
+variable {f} in
+/-- **Shiryaev–Roberts's false alarms** (Vovk 2021, Corollary 4.6, in expectation at every
+horizon): under the
+null,
+the expected number of alarms among the first `N` arrivals is at most `N/c`. -/
+theorem sr_alarms_le [IsProbabilityMeasure μ] (hf : ∀ n, Measurable (Function.uncurry (f n)))
+    (h1 : ∀ n h, ∫⁻ x, f n h x ∂μ ≤ 1) (N : ℕ) :
+    c * ∫⁻ h, ((srRun f c N h).2.2 : ℝ≥0∞) ∂(Measure.pi fun _ : Fin N => μ) ≤ N := by
+  have hA : Measurable fun h => ((srRun f c N h).2.2 : ℝ≥0∞) :=
+    (measurable_from_top (f := fun k : ℕ => (k : ℝ≥0∞))).comp (measurable_srRun c hf N).snd.snd
+  rw [← lintegral_const_mul _ hA]
+  calc ∫⁻ h, c * ((srRun f c N h).2.2 : ℝ≥0∞) ∂(Measure.pi fun _ : Fin N => μ)
+      ≤ ∫⁻ h, (srRun f c N h).1 + (srRun f c N h).2.1 ∂(Measure.pi fun _ : Fin N => μ) :=
+        lintegral_mono fun h => (srRun_count f c N h).trans le_add_self
+    _ ≤ N := lintegral_srRun_le μ c hf h1 N
+
+/-- CUSUM against Shiryaev–Roberts, step by step: CUSUM has had fewer alarms, or as many with its
+statistic no larger. -/
+theorem cusum_sr_invariant : ∀ (n : ℕ) (h : Fin n → ℝ),
+    (cusumRun f c n h).2 < (srRun f c n h).2.2 ∨
+      ((cusumRun f c n h).2 = (srRun f c n h).2.2 ∧ (cusumRun f c n h).1 ≤ (srRun f c n h).1)
+  | 0, _ => Or.inr ⟨rfl, le_rfl⟩
+  | n + 1, h => by
+    set b := f n (Fin.init h) (h (Fin.last n))
+    have ih := cusum_sr_invariant n (Fin.init h)
+    simp only [cusumRun, srRun]
+    set s := srRun f c n (Fin.init h)
+    set g := cusumRun f c n (Fin.init h)
+    unfold cusumStep srStep
+    rcases ih with hlt | ⟨heq, hle⟩
+    · split_ifs with h₁ h₂ h₂
+      · exact Or.inl (by dsimp only; omega)
+      · rcases Nat.lt_or_ge (g.2 + 1) s.2.2 with h₃ | h₃
+        · exact Or.inl (by dsimp only; omega)
+        · exact Or.inr ⟨by dsimp only; omega, zero_le⟩
+      · exact Or.inl (by dsimp only; omega)
+      · exact Or.inl (by dsimp only; omega)
+    · have hmax : b * max g.1 1 ≤ b * (s.1 + 1) := by
+        gcongr
+        exact max_le (hle.trans le_self_add) le_add_self
+      split_ifs with h₁ h₂ h₂
+      · exact Or.inr ⟨by simp only; omega, le_rfl⟩
+      · exact absurd (h₁.trans hmax) h₂
+      · exact Or.inl (by simp only; omega)
+      · exact Or.inr ⟨heq, hmax⟩
+
+/-- CUSUM alarms no more often than Shiryaev–Roberts, on every path. -/
+theorem cusum_count_le (n : ℕ) (h : Fin n → ℝ) : (cusumRun f c n h).2 ≤ (srRun f c n h).2.2 := by
+  rcases cusum_sr_invariant f c n h with hlt | ⟨heq, -⟩
+  · exact hlt.le
+  · exact heq.le
+
+/-- One Shiryaev–Roberts step frozen at the first alarm, from `(Y, alarmed, T)`: while running,
+`Y = b (Y + 1)`, the first alarm at `c ≤ Y`, and `T` counts the step; once alarmed, nothing moves.
+So `T` is `τ ∧ n`, the steps before the first alarm. -/
+noncomputable def srFirstStep (b : ℝ≥0∞) (s : ℝ≥0∞ × Bool × ℕ) : ℝ≥0∞ × Bool × ℕ :=
+  if s.2.1 then s
+  else if c ≤ b * (s.1 + 1) then (b * (s.1 + 1), true, s.2.2 + 1) else (b * (s.1 + 1), false,
+      s.2.2 + 1)
+
+/-- Shiryaev–Roberts up to its first alarm. -/
+noncomputable def srFirst : (n : ℕ) → (Fin n → ℝ) → ℝ≥0∞ × Bool × ℕ
+  | 0, _ => (0, false, 0)
+  | n + 1, h => srFirstStep c (f n (Fin.init h) (h (Fin.last n))) (srFirst n (Fin.init h))
+
+/-- One CUSUM step frozen at the first alarm. -/
+noncomputable def cusumFirstStep (b : ℝ≥0∞) (s : ℝ≥0∞ × Bool × ℕ) : ℝ≥0∞ × Bool × ℕ :=
+  if s.2.1 then s
+  else if c ≤ b * max s.1 1 then (b * max s.1 1, true, s.2.2 + 1) else (b * max s.1 1, false,
+      s.2.2 + 1)
+
+/-- CUSUM up to its first alarm. -/
+noncomputable def cusumFirst : (n : ℕ) → (Fin n → ℝ) → ℝ≥0∞ × Bool × ℕ
+  | 0, _ => (0, false, 0)
+  | n + 1, h => cusumFirstStep c (f n (Fin.init h) (h (Fin.last n))) (cusumFirst n (Fin.init h))
+
+theorem srFirst_alarm : ∀ (n : ℕ) (h : Fin n → ℝ), (srFirst f c n h).2.1 = true →
+    c ≤ (srFirst f c n h).1
+  | 0, _, hh => by simp [srFirst] at hh
+  | n + 1, h, hh => by
+    have ih := srFirst_alarm n (Fin.init h)
+    simp only [srFirst] at hh ⊢
+    unfold srFirstStep at hh ⊢
+    split_ifs at hh ⊢ with h₁ h₂ <;> first | exact ih h₁ | exact h₂
+
+theorem measurable_srFirstStep {α : Type*} [MeasurableSpace α] {b : α → ℝ≥0∞}
+    {s : α → ℝ≥0∞ × Bool × ℕ} (hb : Measurable b) (hs : Measurable s) :
+    Measurable fun a => srFirstStep c (b a) (s a) := by
+  unfold srFirstStep
+  have hR : Measurable fun a => b a * ((s a).1 + 1) := hb.mul (hs.fst.add measurable_const)
+  have hT : Measurable fun a => (s a).2.2 + 1 :=
+    (measurable_from_top (f := fun k : ℕ => k + 1)).comp hs.snd.snd
+  refine Measurable.ite ?_ hs (Measurable.ite (measurableSet_le measurable_const hR)
+    (hR.prodMk (measurable_const.prodMk hT)) (hR.prodMk (measurable_const.prodMk hT)))
+  exact hs.snd.fst (measurableSet_singleton true)
+
+variable {f} in
+theorem measurable_srFirst (hf : ∀ n, Measurable (Function.uncurry (f n))) :
+    ∀ n, Measurable (srFirst f c n)
+  | 0 => measurable_const
+  | n + 1 => by
+    have hb := (hf n).comp ((measurable_init n).prodMk (measurable_pi_apply (Fin.last n)))
+    exact measurable_srFirstStep c hb ((measurable_srFirst hf n).comp (measurable_init n))
+
+/-- One step frozen at the first alarm adds, in expectation, at most the step it counts. -/
+theorem srFirst_step_le [IsProbabilityMeasure μ] (hfx : Measurable fun x => f n h x)
+    (h1 : ∫⁻ x, f n h x ∂μ ≤ 1) (s : ℝ≥0∞ × Bool × ℕ) :
+    ∫⁻ x, (srFirstStep c (f n h x) s).1 ∂μ ≤ s.1 + (if s.2.1 then 0 else 1) := by
+  unfold srFirstStep
+  by_cases hs : s.2.1 = true
+  · simp [hs]
+  · have hs' : s.2.1 = false := by simpa using hs
+    simp only [hs', Bool.false_eq_true, if_false]
+    have : ∀ x, (if c ≤ f n h x * (s.1 + 1) then (f n h x * (s.1 + 1), true, s.2.2 + 1)
+        else (f n h x * (s.1 + 1), false, s.2.2 + 1)).1 = f n h x * (s.1 + 1) := fun x => by
+      split_ifs <;> rfl
+    simp only [this]
+    rw [lintegral_mul_const _ hfx]
+    calc (∫⁻ x, f n h x ∂μ) * (s.1 + 1) ≤ 1 * (s.1 + 1) := by gcongr
+      _ = s.1 + 1 := one_mul _
+
+theorem srFirst_count (b : ℝ≥0∞) (s : ℝ≥0∞ × Bool × ℕ) :
+    (((srFirstStep c b s).2.2 : ℕ) : ℝ≥0∞) = s.2.2 + (if s.2.1 then 0 else 1) := by
+  unfold srFirstStep
+  by_cases hs : s.2.1 = true
+  · simp [hs]
+  · have hs' : s.2.1 = false := by simpa using hs
+    simp only [hs', Bool.false_eq_true, if_false]
+    split_ifs <;> push_cast <;> rfl
+
+variable {f} in
+/-- **Frozen at its first alarm, Shiryaev–Roberts's statistic is worth at most the steps taken:**
+`E[R_(τ∧n)] ≤ E[τ ∧ n]`, `Rₙ − n` being a supermartingale. -/
+theorem lintegral_srFirst_le [IsProbabilityMeasure μ] (hf : ∀ n, Measurable (Function.uncurry (f
+    n)))
+    (h1 : ∀ n h, ∫⁻ x, f n h x ∂μ ≤ 1) :
+    ∀ n, ∫⁻ h, (srFirst f c n h).1 ∂(Measure.pi fun _ : Fin n => μ) ≤
+      ∫⁻ h, ((srFirst f c n h).2.2 : ℝ≥0∞) ∂(Measure.pi fun _ : Fin n => μ)
+  | 0 => by simp [srFirst]
+  | n + 1 => by
+    have hm := measurable_srFirst c hf
+    have hT : ∀ k, Measurable fun h => ((srFirst f c k h).2.2 : ℝ≥0∞) := fun k =>
+      (measurable_from_top (f := fun j : ℕ => (j : ℝ≥0∞))).comp (hm k).snd.snd
+    set D : (Fin n → ℝ) → ℝ≥0∞ := fun h => if (srFirst f c n h).2.1 then 0 else 1
+    have hD : Measurable D := by
+      refine Measurable.ite ?_ measurable_const measurable_const
+      exact (hm n).snd.fst (measurableSet_singleton true)
+    rw [lintegral_pi_succ μ n (g := fun h => (srFirst f c (n + 1) h).1) (hm (n + 1)).fst,
+      lintegral_pi_succ μ n (g := fun h => ((srFirst f c (n + 1) h).2.2 : ℝ≥0∞)) (hT (n + 1))]
+    have hY : ∀ h : Fin n → ℝ, ∫⁻ x, (srFirst f c (n + 1) (Fin.snoc h x)).1 ∂μ ≤
+        (srFirst f c n h).1 + D h := fun h => by
+      simp only [srFirst, Fin.init_snoc, Fin.snoc_last]
+      exact srFirst_step_le μ f c ((hf n).comp (measurable_const.prodMk measurable_id)) (h1 n h) _
+    have hTe : ∀ h : Fin n → ℝ, ∫⁻ x, ((srFirst f c (n + 1) (Fin.snoc h x)).2.2 : ℝ≥0∞) ∂μ =
+        (srFirst f c n h).2.2 + D h := fun h => by
+      simp only [srFirst, Fin.init_snoc, Fin.snoc_last, srFirst_count]
+      rw [lintegral_const, measure_univ, mul_one]
+    calc ∫⁻ h, ∫⁻ x, (srFirst f c (n + 1) (Fin.snoc h x)).1 ∂μ ∂(Measure.pi fun _ : Fin n => μ)
+        ≤ ∫⁻ h, (srFirst f c n h).1 + D h ∂(Measure.pi fun _ : Fin n => μ) := lintegral_mono hY
+      _ = ∫⁻ h, (srFirst f c n h).1 ∂(Measure.pi fun _ : Fin n => μ) +
+            ∫⁻ h, D h ∂(Measure.pi fun _ : Fin n => μ) := lintegral_add_right _ hD
+      _ ≤ ∫⁻ h, ((srFirst f c n h).2.2 : ℝ≥0∞) ∂(Measure.pi fun _ : Fin n => μ) +
+            ∫⁻ h, D h ∂(Measure.pi fun _ : Fin n => μ) := by
+          exact add_le_add (lintegral_srFirst_le hf h1 n) le_rfl
+      _ = ∫⁻ h, ((srFirst f c n h).2.2 : ℝ≥0∞) + D h ∂(Measure.pi fun _ : Fin n => μ) :=
+          (lintegral_add_right _ hD).symm
+      _ = ∫⁻ h, ∫⁻ x, ((srFirst f c (n + 1) (Fin.snoc h x)).2.2 : ℝ≥0∞) ∂μ
+            ∂(Measure.pi fun _ : Fin n => μ) := by simp only [hTe]
+
+variable {f} in
+/-- **Shiryaev–Roberts's mean run length, at a horizon** (Vovk 2021, Proposition 4.4): under the
+null,
+`c P(τ ≤ N) ≤ E[τ ∧ N]` for its first alarm `τ`. -/
+theorem sr_firstAlarm_le [IsProbabilityMeasure μ] (hf : ∀ n, Measurable (Function.uncurry (f n)))
+    (h1 : ∀ n h, ∫⁻ x, f n h x ∂μ ≤ 1) (N : ℕ) :
+    c * (Measure.pi fun _ : Fin N => μ) {h | (srFirst f c N h).2.1 = true} ≤
+      ∫⁻ h, ((srFirst f c N h).2.2 : ℝ≥0∞) ∂(Measure.pi fun _ : Fin N => μ) := by
+  have hm := measurable_srFirst c hf N
+  have hS : MeasurableSet {h : Fin N → ℝ | (srFirst f c N h).2.1 = true} :=
+    hm.snd.fst (measurableSet_singleton true)
+  calc c * (Measure.pi fun _ : Fin N => μ) {h | (srFirst f c N h).2.1 = true}
+      = ∫⁻ h, Set.indicator {h | (srFirst f c N h).2.1 = true} (fun _ => c) h
+          ∂(Measure.pi fun _ : Fin N => μ) := by
+        rw [lintegral_indicator_const hS]
+    _ ≤ ∫⁻ h, (srFirst f c N h).1 ∂(Measure.pi fun _ : Fin N => μ) := by
+        refine lintegral_mono fun h => ?_
+        by_cases hh : (srFirst f c N h).2.1 = true
+        · rw [Set.indicator_of_mem (show h ∈ {h : Fin N → ℝ | (srFirst f c N h).2.1 = true} from
+            hh)]
+          exact srFirst_alarm f c N h hh
+        · rw [Set.indicator_of_notMem
+            (show h ∉ {h : Fin N → ℝ | (srFirst f c N h).2.1 = true} from hh)]
+          exact zero_le
+    _ ≤ _ := lintegral_srFirst_le μ c hf h1 N
+
+/-- Up to their first alarms, CUSUM's statistic stays under Shiryaev–Roberts's, so CUSUM's first
+alarm
+comes no sooner. -/
+theorem cusumFirst_sr_invariant : ∀ (n : ℕ) (h : Fin n → ℝ),
+    (srFirst f c n h).2.2 ≤ (cusumFirst f c n h).2.2 ∧ ((srFirst f c n h).2.1 = true ∨
+      ((cusumFirst f c n h).2.1 = false ∧ (cusumFirst f c n h).1 ≤ (srFirst f c n h).1))
+  | 0, _ => ⟨le_rfl, Or.inr ⟨rfl, le_rfl⟩⟩
+  | n + 1, h => by
+    set b := f n (Fin.init h) (h (Fin.last n))
+    obtain ⟨hT, hI⟩ := cusumFirst_sr_invariant n (Fin.init h)
+    simp only [srFirst, cusumFirst]
+    set s := srFirst f c n (Fin.init h)
+    set g := cusumFirst f c n (Fin.init h)
+    unfold srFirstStep cusumFirstStep
+    rcases hI with hA | ⟨hC, hle⟩
+    · simp only [hA, if_true]
+      refine ⟨?_, Or.inl trivial⟩
+      split_ifs <;> (try dsimp only) <;> omega
+    · have hmax : b * max g.1 1 ≤ b * (s.1 + 1) := by
+        gcongr
+        exact max_le (hle.trans le_self_add) le_add_self
+      by_cases hsA : s.2.1 = true
+      · simp only [hsA, if_true, hC, Bool.false_eq_true, if_false]
+        refine ⟨?_, Or.inl trivial⟩
+        split_ifs <;> (try dsimp only) <;> omega
+      · have hsA' : s.2.1 = false := by simpa using hsA
+        simp only [hsA', hC, Bool.false_eq_true, if_false]
+        split_ifs with h₁ h₂ h₂
+        · exact ⟨by (try dsimp only); omega, Or.inl rfl⟩
+        · exact ⟨by (try dsimp only); omega, Or.inl rfl⟩
+        · exact absurd (h₂.trans hmax) h₁
+        · exact ⟨by (try dsimp only); omega, Or.inr ⟨rfl, hmax⟩⟩
+
+theorem measurable_cusumFirstStep {α : Type*} [MeasurableSpace α] {b : α → ℝ≥0∞}
+    {s : α → ℝ≥0∞ × Bool × ℕ} (hb : Measurable b) (hs : Measurable s) :
+    Measurable fun a => cusumFirstStep c (b a) (s a) := by
+  unfold cusumFirstStep
+  have hR : Measurable fun a => b a * max (s a).1 1 := hb.mul (hs.fst.max measurable_const)
+  have hT : Measurable fun a => (s a).2.2 + 1 :=
+    (measurable_from_top (f := fun k : ℕ => k + 1)).comp hs.snd.snd
+  refine Measurable.ite ?_ hs (Measurable.ite (measurableSet_le measurable_const hR)
+    (hR.prodMk (measurable_const.prodMk hT)) (hR.prodMk (measurable_const.prodMk hT)))
+  exact hs.snd.fst (measurableSet_singleton true)
+
+variable {f} in
+theorem measurable_cusumFirst (hf : ∀ n, Measurable (Function.uncurry (f n))) :
+    ∀ n, Measurable (cusumFirst f c n)
+  | 0 => measurable_const
+  | n + 1 => by
+    have hb := (hf n).comp ((measurable_init n).prodMk (measurable_pi_apply (Fin.last n)))
+    exact measurable_cusumFirstStep c hb ((measurable_cusumFirst hf n).comp (measurable_init n))
+
+variable {f} in
+/-- **CUSUM's mean run length, at a horizon** (Vovk 2021, Proposition 4.2): `c P(τ ≤ N) ≤ E[τ ∧ N]`
+for its first alarm, which comes no sooner than Shiryaev–Roberts's. -/
+theorem cusum_firstAlarm_le [IsProbabilityMeasure μ] (hf : ∀ n, Measurable (Function.uncurry (f n)))
+    (h1 : ∀ n h, ∫⁻ x, f n h x ∂μ ≤ 1) (N : ℕ) :
+    c * (Measure.pi fun _ : Fin N => μ) {h | (cusumFirst f c N h).2.1 = true} ≤
+      ∫⁻ h, ((cusumFirst f c N h).2.2 : ℝ≥0∞) ∂(Measure.pi fun _ : Fin N => μ) := by
+  have hsub : {h : Fin N → ℝ | (cusumFirst f c N h).2.1 = true} ⊆
+      {h | (srFirst f c N h).2.1 = true} := fun h hh => by
+    rcases (cusumFirst_sr_invariant f c N h).2 with hA | ⟨hC, -⟩
+    · exact hA
+    · simp only [Set.mem_setOf_eq] at hh
+      rw [hh] at hC
+      exact absurd hC (by decide)
+  calc c * (Measure.pi fun _ : Fin N => μ) {h | (cusumFirst f c N h).2.1 = true}
+      ≤ c * (Measure.pi fun _ : Fin N => μ) {h | (srFirst f c N h).2.1 = true} := by
+        gcongr
+    _ ≤ ∫⁻ h, ((srFirst f c N h).2.2 : ℝ≥0∞) ∂(Measure.pi fun _ : Fin N => μ) :=
+        sr_firstAlarm_le μ c hf h1 N
+    _ ≤ _ := lintegral_mono fun h => Nat.mono_cast (cusumFirst_sr_invariant f c N h).1
+
+variable {f} in
+/-- **CUSUM's false alarms** (Vovk 2021, Corollary 4.3, in expectation at every horizon): under
+the null, the
+expected
+number of alarms among the first `N` arrivals is at most `N/c`. -/
+theorem cusum_alarms_le [IsProbabilityMeasure μ] (hf : ∀ n, Measurable (Function.uncurry (f n)))
+    (h1 : ∀ n h, ∫⁻ x, f n h x ∂μ ≤ 1) (N : ℕ) :
+    c * ∫⁻ h, ((cusumRun f c N h).2 : ℝ≥0∞) ∂(Measure.pi fun _ : Fin N => μ) ≤ N :=
+  calc c * ∫⁻ h, ((cusumRun f c N h).2 : ℝ≥0∞) ∂(Measure.pi fun _ : Fin N => μ)
+      ≤ c * ∫⁻ h, ((srRun f c N h).2.2 : ℝ≥0∞) ∂(Measure.pi fun _ : Fin N => μ) := by
+        gcongr with h
+        exact_mod_cast cusum_count_le f c N h
+    _ ≤ N := sr_alarms_le μ c hf h1 N
+
+/-- Once alarmed, the frozen run stays alarmed. -/
+theorem srFirst_alarm_succ (n : ℕ) (h : Fin (n + 1) → ℝ) (hh : (srFirst f c n (Fin.init h)).2.1
+    = true) :
+    (srFirst f c (n + 1) h).2.1 = true := by
+  simp only [srFirst]
+  unfold srFirstStep
+  simp [hh]
+
+/-- Along a path, the frozen run's step count is the number of horizons before its first alarm. -/
+theorem srFirst_count_path (x : ℕ → ℝ) : ∀ N, ((srFirst f c N (fun i : Fin N => x i)).2.2 : ℝ≥0∞) =
+    ∑ n ∈ Finset.range N, if (srFirst f c n (fun i : Fin n => x i)).2.1 then 0 else 1
+  | 0 => by simp [srFirst]
+  | N + 1 => by
+    have hinit : Fin.init (fun i : Fin (N + 1) => x i) = fun i : Fin N => x i := rfl
+    rw [Finset.sum_range_succ, ← srFirst_count_path x N]
+    simp only [srFirst, hinit]
+    exact srFirst_count c _ _
+
+/-- The measure fact behind a mean run length: alarm events `E n`, increasing, with
+`c P(E N) ≤ ∑_{n < N} P(not yet)` at every horizon, give `c ≤ ∑ₙ P(not yet at n)`, the expected
+time to the alarm. -/
+theorem le_tsum_of_alarm_bound {Ω : Type*} [MeasurableSpace Ω] (P : Measure Ω)
+    [IsProbabilityMeasure P]
+    (E : ℕ → Set Ω) (hE : Monotone E) (hm : ∀ n, MeasurableSet (E n))
+    (hb : ∀ N, c * P (E N) ≤ ∑ n ∈ Finset.range N, P (E n)ᶜ) : c ≤ ∑' n, P (E n)ᶜ := by
+  by_cases h0 : P (⋃ n, E n)ᶜ = 0
+  · have hU : P (⋃ n, E n) = 1 := by
+      rw [prob_compl_eq_zero_iff (MeasurableSet.iUnion hm)] at h0
+      exact h0
+    have ht := ENNReal.Tendsto.const_mul (tendsto_measure_iUnion_atTop hE) (a := c)
+      (Or.inl (by rw [hU]; exact one_ne_zero))
+    rw [hU, mul_one] at ht
+    exact le_of_tendsto' ht fun N => (hb N).trans (ENNReal.sum_le_tsum _)
+  · have hle : ∀ n, P (⋃ n, E n)ᶜ ≤ P (E n)ᶜ := fun n =>
+      measure_mono (Set.compl_subset_compl.2 (Set.subset_iUnion E n))
+    calc c ≤ ∞ := le_top
+      _ = ∑' _ : ℕ, P (⋃ n, E n)ᶜ := (ENNReal.tsum_const_eq_top_of_ne_zero h0).symm
+      _ ≤ ∑' n, P (E n)ᶜ := ENNReal.tsum_le_tsum hle
+
+variable {f} in
+open Filter Topology in
+/-- **Shiryaev–Roberts's mean time to a false alarm is at least `c`** (Vovk 2021, Proposition 4.4).
+Let the p-values `p i` on `Ω` be independent with law `μ` at every horizon, and each bet be
+measurable, integrate to at most 1 and read only the earlier p-values. Then the expected time to the
+first alarm, `∑ₙ 1{no alarm by n}` (infinite if it never alarms), is at least `c`. -/
+theorem sr_meanRunLength [IsProbabilityMeasure μ] (hf : ∀ n, Measurable (Function.uncurry (f n)))
+    (h1 : ∀ n h, ∫⁻ x, f n h x ∂μ ≤ 1) {Ω : Type*} [MeasurableSpace Ω] (P : Measure Ω)
+    [IsProbabilityMeasure P] (p : ℕ → Ω → ℝ) (hp : ∀ i, Measurable (p i))
+    (hlaw : ∀ n, P.map (fun ω (i : Fin n) => p i ω) = Measure.pi fun _ => μ) :
+    c ≤ ∫⁻ ω, ∑' n, (if (srFirst f c n (fun i : Fin n => p i ω)).2.1 then 0 else 1) ∂P := by
+  have hφ : ∀ n, Measurable fun ω (i : Fin n) => p i ω := fun n =>
+    measurable_pi_lambda _ fun i => hp i
+  set E : ℕ → Set Ω := fun n => {ω | (srFirst f c n (fun i : Fin n => p i ω)).2.1 = true}
+  have hmE : ∀ n, MeasurableSet (E n) := fun n =>
+    ((measurable_srFirst c hf n).comp (hφ n)).snd.fst (measurableSet_singleton true)
+  have hind : ∀ n ω, (if (srFirst f c n (fun i : Fin n => p i ω)).2.1 then (0 : ℝ≥0∞) else 1) =
+      Set.indicator (E n)ᶜ (fun _ => 1) ω := fun n ω => by
+    by_cases hω : (srFirst f c n (fun i : Fin n => p i ω)).2.1 = true
+    · rw [if_pos hω, Set.indicator_of_notMem (by simpa [E] using hω)]
+    · rw [if_neg hω, Set.indicator_of_mem (by simpa [E] using hω)]
+  have hint : ∀ n, ∫⁻ ω, Set.indicator (E n)ᶜ (fun _ => (1 : ℝ≥0∞)) ω ∂P = P (E n)ᶜ := fun n => by
+    rw [lintegral_indicator_const (hmE n).compl, one_mul]
+  simp only [hind]
+  rw [lintegral_tsum fun n => (measurable_const.indicator (hmE n).compl).aemeasurable]
+  simp only [hint]
+  refine le_tsum_of_alarm_bound c P E ?_ hmE fun N => ?_
+  · refine monotone_nat_of_le_succ fun n ω hω => ?_
+    exact srFirst_alarm_succ f c n (fun i : Fin (n + 1) => p i ω) hω
+  · have hmap : ∀ {g : (Fin N → ℝ) → ℝ≥0∞}, Measurable g →
+        ∫⁻ ω, g (fun i : Fin N => p i ω) ∂P = ∫⁻ h, g h ∂(Measure.pi fun _ : Fin N => μ) :=
+      fun hg => by rw [← hlaw N, lintegral_map hg (hφ N)]
+    have hPE : P (E N) = (Measure.pi fun _ : Fin N => μ) {h | (srFirst f c N h).2.1 = true} := by
+      rw [← hlaw N, Measure.map_apply (hφ N)]
+      · rfl
+      · exact (measurable_srFirst c hf N).snd.fst (measurableSet_singleton true)
+    have hT : ∫⁻ h, ((srFirst f c N h).2.2 : ℝ≥0∞) ∂(Measure.pi fun _ : Fin N => μ) =
+        ∑ n ∈ Finset.range N, P (E n)ᶜ := by
+      rw [← hmap (g := fun h => ((srFirst f c N h).2.2 : ℝ≥0∞))
+        ((measurable_from_top (f := fun j : ℕ => (j : ℝ≥0∞))).comp (measurable_srFirst c hf
+            N).snd.snd)]
+      have hpt : ∀ ω, ((srFirst f c N (fun i : Fin N => p i ω)).2.2 : ℝ≥0∞) =
+          ∑ n ∈ Finset.range N, if (srFirst f c n (fun i : Fin n => p i ω)).2.1 then 0 else 1 :=
+        fun ω => srFirst_count_path f c (fun i => p i ω) N
+      simp only [hpt]
+      simp only [hind]
+      rw [lintegral_finsetSum _ fun n _ => measurable_const.indicator (hmE n).compl]
+      simp only [hint]
+    rw [hPE, ← hT]
+    exact sr_firstAlarm_le μ c hf h1 N
+
+variable {f} in
+/-- **CUSUM's mean time to a false alarm is at least `c`** (Vovk 2021, Proposition 4.2): its first
+alarm comes no sooner than Shiryaev–Roberts's. -/
+theorem cusum_meanRunLength [IsProbabilityMeasure μ] (hf : ∀ n, Measurable (Function.uncurry (f n)))
+    (h1 : ∀ n h, ∫⁻ x, f n h x ∂μ ≤ 1) {Ω : Type*} [MeasurableSpace Ω] (P : Measure Ω)
+    [IsProbabilityMeasure P] (p : ℕ → Ω → ℝ) (hp : ∀ i, Measurable (p i))
+    (hlaw : ∀ n, P.map (fun ω (i : Fin n) => p i ω) = Measure.pi fun _ => μ) :
+    c ≤ ∫⁻ ω, ∑' n, (if (cusumFirst f c n (fun i : Fin n => p i ω)).2.1 then 0 else 1) ∂P := by
+  refine (sr_meanRunLength μ c hf h1 P p hp hlaw).trans (lintegral_mono fun ω =>
+    ENNReal.tsum_le_tsum fun n => ?_)
+  by_cases hs : (srFirst f c n (fun i : Fin n => p i ω)).2.1 = true
+  · simp [hs]
+  · rcases (cusumFirst_sr_invariant f c n (fun i : Fin n => p i ω)).2 with hA | ⟨hC, -⟩
+    · exact absurd hA hs
+    · simp [hs, hC]
+
+variable {f} in
+/-- **The false alarms on a stream** (Vovk 2021, Corollaries 4.3 and 4.6, in expectation at
+every horizon):
+with the
+p-values independent with law `μ`, the expected numbers of Shiryaev–Roberts's and CUSUM's alarms
+among the first `N` arrivals are at most `N/c`. -/
+theorem alarms_stream_le [IsProbabilityMeasure μ] (hf : ∀ n, Measurable (Function.uncurry (f n)))
+    (h1 : ∀ n h, ∫⁻ x, f n h x ∂μ ≤ 1) {Ω : Type*} [MeasurableSpace Ω] (P : Measure Ω)
+    (p : ℕ → Ω → ℝ) (hp : ∀ i, Measurable (p i))
+    (hlaw : ∀ n, P.map (fun ω (i : Fin n) => p i ω) = Measure.pi fun _ => μ) (N : ℕ) :
+    c * ∫⁻ ω, ((cusumRun f c N (fun i : Fin N => p i ω)).2 : ℝ≥0∞) ∂P ≤
+        c * ∫⁻ ω, ((srRun f c N (fun i : Fin N => p i ω)).2.2 : ℝ≥0∞) ∂P ∧
+      c * ∫⁻ ω, ((srRun f c N (fun i : Fin N => p i ω)).2.2 : ℝ≥0∞) ∂P ≤ N := by
+  have hφ : Measurable fun ω (i : Fin N) => p i ω := measurable_pi_lambda _ fun i => hp i
+  have hA : Measurable fun h => ((srRun f c N h).2.2 : ℝ≥0∞) :=
+    (measurable_from_top (f := fun k : ℕ => (k : ℝ≥0∞))).comp (measurable_srRun c hf N).snd.snd
+  refine ⟨?_, ?_⟩
+  · gcongr with ω
+    exact Nat.mono_cast (cusum_count_le f c N _)
+  · have : ∫⁻ ω, ((srRun f c N (fun i : Fin N => p i ω)).2.2 : ℝ≥0∞) ∂P =
+        ∫⁻ h, ((srRun f c N h).2.2 : ℝ≥0∞) ∂(Measure.pi fun _ : Fin N => μ) := by
+      rw [← hlaw N, lintegral_map hA hφ]
+    rw [this]
+    exact sr_alarms_le μ c hf h1 N
+
+end ChangeAlarms
+
 /-! ### Slice 9: the jackknife+ and the cross-fitted rule -/
 
 section CrossFitted

@@ -233,6 +233,33 @@ The user asked for this on 2026-11-08 ("Yes, start it"), relayed by the BASS ext
 
 Newest first.
 
+### 2026-11-15 — E35's follow-up: CUSUM's and Shiryaev–Roberts's guarantees, proved
+
+Asked 2026-11-15 by the user: "The CUSUM and Shiryaev–Roberts guarantees". This is the addendum's item for the conformal Lean thread, and it decides whether `MartingaleAlarm`'s CUSUM and Shiryaev–Roberts alarms report proved guarantees. The statements are in the ledger, under "E35's follow-up". The new declarations are PROOF-CLOSED, with the standard three axioms only. The checks ran first.
+
+- *Proved*, under `ville`'s premises (independent p-values, predictable measurable bets integrating to at most 1), for both procedures as `MartingaleAlarm` runs them, with restarts:
+  - the mean time to a false alarm is at least `c` (`sr_meanRunLength`, `cusum_meanRunLength`), and at every horizon `c P(τ ≤ N) ≤ E[τ ∧ N]`;
+  - the expected number of false alarms among the first `N` arrivals is at most `N/c` (`sr_alarms_le`, `cusum_alarms_le`, `alarms_stream_le`);
+  - CUSUM alarms no more often, path by path (`cusum_count_le`), and its first alarm comes no sooner.
+- *The route.* `E[Qₙ + Σₙ] ≤ n`, because each step adds `fₙ (Q + 1)`, and each alarm adds at least `c` to `Σ`. Frozen at the first alarm, a step adds at most the step it counts. The mean follows by a monotone limit. No optional stopping at unbounded times is needed.
+- *Not formalized.* Vovk's almost sure lim sup `Aₙ/n ≤ 1/c`. The expectation form at every horizon is proved instead.
+- *For the C#.* `AlarmGuarantee` can mark CUSUM and Shiryaev–Roberts `Proved`. The statement should read: "The mean time to a false alarm is at least c, and the expected number of false alarms among the first N arrivals is at most N/c."
+- *Changed.*
+  - `ConformalValidity.lean`: section `ChangeAlarms` (36 declarations), after `Betting`, with no new imports.
+  - The checks: a new section after E35's.
+  - The ledger.
+- *Gates.* All pass:
+  - the module build and the barrel build (3,203 jobs);
+  - the axioms probe: 17 results, standard three only;
+  - meta-ci;
+  - the full checks run (519 s).
+  - D: has 30.4 GB free.
+- *Hypotheses read.* They are `ville`'s, met by M-1's uniform independent p-values and by any normalized bet. `c` is any extended real.
+- *For the `#print axioms` file:*
+  - `lintegral_srRun_le`, `sr_alarms_le`, `cusum_count_le`, `cusum_alarms_le`;
+  - `lintegral_srFirst_le`, `sr_firstAlarm_le`, `cusumFirst_sr_invariant`, `cusum_firstAlarm_le`;
+  - `le_tsum_of_alarm_bound`, `sr_meanRunLength`, `cusum_meanRunLength`, `alarms_stream_le`.
+
 ### 2026-11-14 — RoBAS-Full's intervals at n ≥ 4, proved (scope A)
 
 Asked 2026-11-14 by the C# chip at the user's word: prove RoBAS-Full's conformal sets are intervals for n ≥ 4, or find a counterexample. Scope A, the user's choice: all in Lean except four bounds on Dawson's function, stated as hypotheses on the module's own function and certified by the checks. The statements are in the ledger, under "RoBAS-Full's intervals at n ≥ 4". The new declarations are PROOF-CLOSED, with the standard three axioms only. The checks ran first.
