@@ -40,7 +40,8 @@ Thereafter `rnr` (`renv::restore`) reproduces the exact library from `renv.lock`
 
 A reference package comes from CRAN through the lock, as `GBASS` 2.0.1 does for
 [E1's oracle modes](../issues/regression/bass/gbass-noise-brief.md) and `khaos` 2.1.1
-for [E19's](../issues/regression/bass/khaos-brief.md). `coactivity` comes from GitHub through
+for [E19's](../issues/regression/bass/khaos-brief.md), and `BayesPPR` 0.2.0 for
+[E36's](../issues/regression/bass/bppr-brief.md); it imports only base R's `methods` and `parallel`. `coactivity` comes from GitHub through
 the lock, pinned at `knrumsey/coactivity@35e4573`, for [E8's](../issues/regression/bass/active-subspace-brief.md).
 It is Rumsey's active-subspace package for BASS (`C_bass`, `Cfg_bass`, `C_bass_mc`, `E_bass`) and
 the successor to `concordance`, which announces itself deprecated. CRAN's `concordance` is an unrelated
