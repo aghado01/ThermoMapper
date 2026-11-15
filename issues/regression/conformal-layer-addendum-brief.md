@@ -31,6 +31,51 @@ As in the archived brief: each slice is reported here, then waits for the main s
 
 Newest first.
 
+### 2026-11-14 — Slice 18's follow-up: a set's own miscoverage bound
+
+Built at the user's pick (2026-11-14, "miscoverage it is"). Slice 18's other follow-up, the Lean's calibration at n ≥ 2, is being handled in the conformal-lean thread.
+
+**Landed** on `main`, nothing pushed:
+- `0f4d48e`:
+  - `TrainingConditional.Miscoverage(m, k, β)`;
+  - `TrainingConditionalMiscoverage(β)` on `ConformalSet`, `ConformalInterval` and `AsymmetricConformalInterval`, and per stratum on `SplitCalibration`;
+  - `TrainingConditionalMiscoverage(α, β)` on `ConformalDistribution` and `SplitPredictiveDistribution`;
+  - `TrainingConditionalTests`.
+- *Nothing existing changes:* these are new readouts.
+
+**What it computes.**
+- *The law* (Vovk 2012, Proposition 2a; Bian and Barber 2023). A split set accepts a test unit whose conformity reaches S₍ₖ₎, the k-th smallest of the stratum's n calibration scores, k = ⌊αm⌋, m = n + 1. Given the calibration, its miscoverage over new units is F(S₍ₖ₎−). The probability integral transform puts that at or below U₍ₖ₎, the k-th of n uniforms, Beta(k, m − k): exactly that law with continuous scores, and conservative where scores tie.
+- *The readout* is Beta(k, m − k)'s β-quantile. With chance at least β over the calibration units, the set's miscoverage is at most that. β is the confidence, as in `LossBound.Gaffke`. The bound is 0 at k = 0, the whole space. Its mean is k/m, CB-1's marginal reading.
+- *Against slice 18's b*_β.* Gaffke bounds a rule fixed before its losses are read, such as a validation split's misses at a chosen set. A threshold that is the calibration's own k-th score needs this law.
+- *Where it reads.*
+  - The split density form's sets, at their stratum's m and k.
+  - The group-level form's sets, whose units are groups.
+  - The CQR and residual intervals, and `SplitCalibration` per stratum.
+  - The split predictive distribution's equi-tailed set at α. Both tails read one score, the PIT, so a miss is the mass of 2k of the m spacings: Beta(2k, m − 2k), exactly.
+  - The asymmetric CQR interval. Its two tails read two scores, so it takes the union bound: each tail at confidence (1 + β)/2, summed. That is valid whatever ties the tails' scores, and loose.
+- *Null.* The full step, the cross-fitted forms and CBMA, which are full-conformal forms, read null. So does RoBAS-EB, a full step on residuals. None carries a law of this kind (Bian and Barber). So do the weighted rule and an inflated set.
+
+**Gates.**
+- *The exact law* (99 calibration residuals of N(0, 1), α 0.1, m 100, k 10, 4,000 replications; each interval's miscoverage given its calibration is 2Φ(−c)):
+  - the mean is 0.09991 against k/m 0.1;
+  - the miscoverage passed the β-quantile 0.4920, 0.1000 and 0.0105 of the time, against 1 − β of 0.5, 0.1 and 0.01 (β 0.5, 0.9, 0.99).
+- *Tied scores and strata* (responses rounded to integers; strata of 49 and 199 units, m 50 and 200, k 5 and 20; β 0.9): passed 0.0003 and 0.0000, conservative as the law says. Each stratum reads its own m and k, and `SplitCalibration` agrees.
+- *The equi-tailed set* (the right fit's predictive distribution, 99 units, α 0.2, k 10 per tail, 2,000 replications, read from the grid-free ends at x 0.4): bound 0.2523, Beta(20, 80)'s 0.9-quantile, passed 0.0995 against 0.10, exactly as the law says. The grid form reads the same. The full step and a weighed case read null.
+- *The asymmetric interval* (CQR tails at α/2 on 99 responses, k 5 each, 4,000 replications, β 0.9): bound 0.1801, two tails of 0.0901, passed 0.0085 against 0.10. Valid, and about twelve times looser than its level: the price of the union.
+- *The quantile.* It is the root of the binomial tail P(Bin(m − 1, q) ≥ k) = β, summed term by term, to 9 decimals at m and k of 100 and 10, 1,000 and 1, 50 and 49, and 31 and 3, at β 0.5, 0.9 and 0.999. Out-of-range m, k and β are refused.
+- *Which records read it:* a split density set at m 31, k 3; a small stratum 0; the group form at m 16, k 1. The weighted rule and the full step read null.
+- *Per commit,* the selected classes and the pinned tier: Maths.Regression.Tests 236 of 327 classes, 2,633 of 2,633; Maths.Oracle.Tests 13 of 39 classes, 57 of 57; Maths.Samplers.Tests compiles none of these files.
+
+**Defects found: none.**
+
+**Follow-ups, each with the decision it would change.**
+- *The (α, β) level as a set rule:* the split forms choosing the largest k whose β-quantile is at most α. Their sets then hold P(miscoverage ≤ α) ≥ β, and are wider. It decides whether the layer builds sets to a training-conditional guarantee, not only reports one.
+- *A tighter law for the asymmetric interval:* where each unit's two tail scores order alike (the tails' scores in the fixture above are one score's two signs), the miss is the mass of k_lo + k_hi spacings, Beta(k_lo + k_hi, m − k_lo − k_hi), as the equi-tailed set's is. It decides whether that interval reads the union or the exact law where the condition holds.
+
+**Doc changes owed:**
+- the guarantee-read-out section: the training-conditional law, where it reads and where it doesn't, the equi-tailed set's 2k law, the asymmetric union bound, and the gates' numbers;
+- the API rows for `TrainingConditional` and the `TrainingConditionalMiscoverage` readouts.
+
 ### 2026-11-14 — Slice 15's precision rule at the calibration split's size; slice 12a's k̂ stays opt-in
 
 Built at the user's pick (2026-11-14, "Slice 15 precision rule"). With it, the user settled slice 12a's k̂ diagnostic as opt-in. That is already the code's default (`ConformalOptions.LeaveOneOutParetoK`, false), so no code changes for it, and the open list can drop it.
