@@ -9,7 +9,7 @@ namespace Maths.Regression.Conformal;
 /// ℓ₍ₙ₊₁₎ = B, the random variable L⁺ = Σ Uᵢ ℓ₍ᵢ₎ with U ~ Dir(1, …, 1) (Snell and Griffiths, arXiv 2502.13228).
 /// <list type="bullet">
 /// <item><see cref="Gaffke(double)"/>, b*_β, its β-quantile, is Gaffke's (2005) upper confidence bound on the risk J = E ℓ: over replicated
-/// calibration sets of independent losses at most B, P(J ≤ b*_β) ≥ β (Vlassis and Thomas, arXiv 2607.08415, Theorem 1), with neither
+/// calibration sets of independent losses at most B, P(J ≤ b*_β) ≥ β (Vlassis and Thomas, arXiv 2607.08415, Theorem 1; <c>gaffke_calibration</c>), with neither
 /// identical laws nor continuity needed. At one loss it is ℓ + β(B − ℓ) (<c>gaffke_one</c>). It is a confidence bound, not a posterior:
 /// Snell and Griffiths's claim that it bounds the posterior under every prior (their Theorem 4.3) fails as stated (the Lean's finding).</item>
 /// <item><see cref="Mean"/>, E L⁺ = (Σ ℓ + B)/(n + 1), is conformal risk control's reading (<c>crc_orderings</c>).</item>
@@ -219,7 +219,8 @@ public sealed record RiskThreshold(int Index, double Reading, bool Met);
 /// the last threshold at most α.</item>
 /// <item><see cref="HighProbability"/>: the first threshold with b*_β ≤ α (<see cref="LossBound.Gaffke(double)"/>). Its risk exceeds α only
 /// where the last threshold with risk above α has b*_β below its risk (<c>fail_le_fixed</c>), with chance at most 1 − β by Gaffke's
-/// calibration (Vlassis and Thomas's Theorem 1), for independent units.</item>
+/// calibration (Vlassis and Thomas's Theorem 1; <c>gaffke_calibration</c>), for independent units: the met rule's guarantee, as
+/// <see cref="RiskThreshold.Met"/> reports it (<c>highProbability_risk</c>).</item>
 /// </list>
 /// </summary>
 public static class RiskControl
