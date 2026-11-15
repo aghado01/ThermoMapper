@@ -564,6 +564,15 @@ public sealed record BassResolved
                         $"below N/K = {SmallCasesPerOutput} this prior's correlation intervals undercover: its correlations put nearly all their mass near ±1, " +
                         "and at N/K = 3 and 5 they covered 87 to 93.5% where OutputCovariancePrior.HuangWand(2)'s covered 93 to 96%, joint prediction " +
                         "moving by 1.25 pp or less (E34's slice 3); HuangWand(2) is the opt-in when the correlations are read"));
+        // SMC's start and the reference rung draw Σ from its prior where the skew is drawn or U is a latent (E34's slice 4), and an IW whose
+        // ν₀ sits within 1 of K − 1 draws Σ singular to working precision often enough to stop the run (the slice's follow-up, measured).
+        if (config.Noise is { } noise && (noise.SkewDrawn || config.HasRandomEffects)
+            && (config.Sampling?.Smc is not null || config.Sampling?.Tempering is { ReferenceRung: true }) && prior.DegreesOfFreedom < k)
+            log.Add(new("OutputCovariance", $"{chosen}: ν₀ = {Text(prior.DegreesOfFreedom)} below K = {Text(k)}, prior draws of Σ",
+                        (config.Sampling?.Smc is not null ? "SMC's start" : "the reference rung") + " draws Σ from its prior for the skew's γ | Σ and the effects' U | Σ, " +
+                        "and IW(ν₀, Ψ₀) within 1 of K − 1 draws Σ singular to working precision, a draw that stops the run: 94 to 97% of draws at " +
+                        "ν₀ = K − 1 + 0.002 (the default c = 10⁻³), 1 in 10⁴ at K − 0.5, none in 200,000 at K, for K = 2, 3 and 5 (E34's slice 4); " +
+                        "declare an OutputCovariance with ν₀ ≥ K, an informative InverseWishart or HuangWand(2), whose ν₀ is K + 1"));
         return new BassResolvedOutputs(response.Names, [.. means], levels, squares, prior, chosen.ResolveRates(squares));
     }
 

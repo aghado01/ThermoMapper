@@ -276,6 +276,36 @@ public sealed class MultiOutputNoiseEffectsTests(ITestOutputHelper output)
         }
     }
 
+    // Slice 4's follow-up: where SMC or the reference rung draws γ or U from Σ's prior, an IW within 1 of K − 1 is named in the resolution
+    // log with the measured rate of singular draws; chains, a prior with ν₀ ≥ K and a noise with neither latent take no row.
+    [Fact]
+    public void Resolution_NamesASigmaPriorBelowK_WhenAnEnsembleDrawsTheLatents()
+    {
+        (BassPredictor[] p, CategoricalPredictor g, double[,] y) = MultiOutputRandomEffectsTests.Data(60, 2, 6, Seed + 70);
+        BassData grouped = Several(p, g, y), plain = new(p, new MultiOutputResponse(y, Names(2)));
+        BassConfig skewed = Config(BassNoise.SkewedT(6.0, new BassNoisePrior(0.0, 1.0)), 0.8, true);
+        BassSampling smc = skewed.Sampling with { Chains = 1, Smc = new SmcSpec { Particles = 20 } };
+        BassSampling rung = skewed.Sampling with { Chains = 1, Tempering = new TemperingSpec { Levels = 3, HotEnd = 0.1, ReferenceRung = true } };
+        static BassAutoPick? Hint(BassConfig config, BassData data)
+            => BassModel.Create(config, data).Resolved.AutoPicks.SingleOrDefault(a => a.Setting == "OutputCovariance" && a.Reason.Contains("singular"));
+
+        BassAutoPick hint = Hint(skewed with { Sampling = smc }, grouped)!;
+        Assert.Contains($"ν₀ = {(1 + 2.0 * 1e-3).ToString("R", System.Globalization.CultureInfo.InvariantCulture)} below K = 2", hint.Value);
+        Assert.StartsWith("SMC's start", hint.Reason);
+        Assert.Contains("HuangWand(2)", hint.Reason);
+        Assert.StartsWith("the reference rung", Hint(skewed with { Sampling = rung }, grouped)!.Reason);
+        // Either latent alone: the skew without effects, the effects under a symmetric t.
+        Assert.NotNull(Hint(skewed with { Sampling = smc, RandomIntercepts = null }, plain));
+        Assert.NotNull(Hint(skewed with { Sampling = smc, Noise = BassNoise.StudentT(6.0) }, grouped));
+        // None: chains; ν₀ at K; Huang and Wand's K + 1; an informative IW; a symmetric noise without effects; Gaussian noise with effects.
+        Assert.Null(Hint(skewed, grouped));
+        Assert.Null(Hint(skewed with { Sampling = smc, OutputCovariance = OutputCovariancePrior.ScaledToResponse(0.5) }, grouped));
+        Assert.Null(Hint(skewed with { Sampling = smc, OutputCovariance = OutputCovariancePrior.HuangWand(2) }, grouped));
+        Assert.Null(Hint(skewed with { Sampling = smc, OutputCovariance = OutputCovariancePrior.InverseWishart(6.0, new double[,] { { 0.2, 0.05 }, { 0.05, 0.2 } }) }, grouped));
+        Assert.Null(Hint(skewed with { Sampling = smc, Noise = BassNoise.StudentT(6.0), RandomIntercepts = null }, plain));
+        Assert.Null(Hint(skewed with { Sampling = smc, Noise = null }, grouped));
+    }
+
     [Fact]
     public void ARestoredChain_ContinuesBitForBit()
     {
