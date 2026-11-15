@@ -83,6 +83,18 @@ Under "Reports" below, newest first, per slice: what landed by commit; the gates
 
 ## Reports
 
+### Slice 3 verified from a clean archive; slices 0 to 3 are all landed (coordinating session, 2026-11-15)
+
+- **Commit:** `986814d`, on a snapshot of `e8446eb`, through `scripts/verify-csharp.ps1` over its nine changed files, in the two projects that select.
+- **Result:** Regression 2,779 of 2,779 and Oracle 57 of 57 at commit scope, `SampledOutputsTests` 13, `SampledEffectsTests` 11 and `SampledSensitivityTests` 18 among them.
+- **The two points the chip raised, checked.**
+  - *The basis Sobol gate at 80 seeds.* At 24 seeds the two-difference form read 1.09% beyond 3 against the 1% cut; over 120 fresh seeds the same cells read 0%, with spread 1.026. More seeds under the same cut is the conservative answer, and it stands.
+  - *The component accessors refuse on the sampled route,* with their reason: they are the exact route's quantities.
+- **One reading asked for here and added** (`57d3cfa`): the basis effects' pooled spread of 0.882 passed only under slice 2's widened band. Over 120 fresh seeds every piece kind returns to about 1, spread over stated error 0.970 to 1.008 by median and the z-scores' spread 0.958 to 0.994. The stated errors are calibrated there, and the 0.882 was a shared fluctuation of correlated cells.
+- **Where this brief stands.** Slices 0 to 3 are landed and verified, which is its "done". Slice 4, the split for mixed bases, waits on mixed bases being built.
+  - With the user: decision 3's default form for a main variance; the gates' Bonferroni cut and wider spread band, let stand here.
+- **Receipts:** `artifacts/verify-sens-s3-e8446eb/`, with the changed list, the counters and the snapshot tracked in [receipts](../receipts/verify-sens-s3-e8446eb/).
+
 ### Slice 3: basis fits, functional forms and several outputs (2026-11-15)
 
 **Landed** in `986814d`, which carries its tests. Decision 8 carries the route and the error rows through each readout. The main-variance form stays the one choice in `PickFreezeDesign`, Saltelli's by default, and the gates read both.

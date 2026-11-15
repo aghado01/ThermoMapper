@@ -1,0 +1,9 @@
+src/maths/regression/spline/bass/presentation/SobolSummary.cs
+src/maths/regression/spline/bass/sensitivity/BassBasisEffects.cs
+src/maths/regression/spline/bass/sensitivity/BassBasisSampledSensitivity.cs
+src/maths/regression/spline/bass/sensitivity/BassBasisSensitivity.cs
+src/maths/regression/spline/bass/sensitivity/BassSampledSensitivity.cs
+src/maths/regression/spline/bass/sensitivity/BassSensitivity.cs
+tests/regression/SampledEffectsTests.cs
+tests/regression/SampledOutputsTests.cs
+tests/regression/SampledSensitivityTests.cs
