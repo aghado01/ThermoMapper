@@ -1,0 +1,3 @@
+src/maths/regression/spline/bass/BassCandidates.cs
+src/maths/regression/spline/bass/BassFit.cs
+tests/regression/BassGroupConformalTests.cs

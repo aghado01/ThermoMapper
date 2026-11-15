@@ -1,0 +1,4 @@
+src/maths/regression/conformal/AsymmetricConformalInterval.cs
+src/maths/regression/conformal/ResidualShrinkage.cs
+src/maths/regression/conformal/SplitConformal.cs
+tests/regression/ResidualIntervalTests.cs

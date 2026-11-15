@@ -16,14 +16,15 @@ Opened 2026-11-14 at the user's word ("that brief was getting way too long, adde
 - Slice 18's follow-up, a set's own miscoverage bound (`0f4d48e`), is built and verified: `TrainingConditional.Miscoverage`, the β-quantile of Beta(k, m − k) (Vovk 2012), read out on the split sets.
 - Slice 18's calibration at n units is proved in the Lean (`8594176`: `gaffke_calibration`, and `highProbability_risk`, what `HighProbability` reports) and verified from a clean archive. `LossBound`'s docstrings name both (`9cf0fd5`, comments only).
 - Sets built to the training-conditional guarantee (`621370c`) are built and verified: `TrainingConditional.Level(m, α, β)`, with an optional confidence on the split forms and the group form. At β 0.9 the share of calibrations whose sets miss above α falls from 0.46 to 0.0975 (residual), 0.0035 (asymmetric) and 0.0495 (equi-tailed).
+- `BassFit.GroupConformal` takes the optional confidence (`14fd05d`), built and verified.
+- Slice 17's grid-free intervals for the residual scores (`28993bb`, `ResidualShrinkage.Intervals`) are built and verified.
+- The asymmetric interval's exact law is closed (`b8cd947`, docstrings only). Where the band's width varies, the union of the two tails is Makarov's worst case given their Beta laws. Beta(k_lo + k_hi, m − k_lo − k_hi) holds only at constant width, the residual interval.
 - Slice 12a's k̂ diagnostic stays opt-in, as the user settled on 2026-11-14. That is the code's default (`ConformalOptions.LeaveOneOutParetoK`, false).
 - The defects chip owns `PredictiveChecks.cs` and `Pointwise.cs`'s weight check; a change there is agreed with it first (the archived brief's coordination note).
 
 ## Open, each with the decision it would change
 
-- **Slice 17's three follow-ups** (its report): RoBAS-Full, the horseshoe score; CBMA's evidence from the engines' own fits; a grid-free interval for the residual scores.
-- **The miscoverage bound's remaining follow-up** (its report): a tighter law for the asymmetric interval.
-- **`BassFit.GroupConformal`'s confidence pass-through,** approved and being built; it waits for verification.
+- **Slice 17's two remaining follow-ups** (its report): RoBAS-Full, the horseshoe score; CBMA's evidence from the engines' own fits.
 - **Slice 15's alternation speed** along the factorization's flat directions. It decides the cost at large n.
 - **τ through richer features,** the ratio estimator's open follow-up. It decides whether the layer offers a nonparametric τ.
 
@@ -42,6 +43,7 @@ Built at the user's pick (2026-11-14, "the grid thing from slice 17"), the third
 **Landed** on `main`, nothing pushed:
 - `28993bb`: `ResidualShrinkage.Intervals`, with `ResidualInterval` and `ResidualIntervals`, and `ResidualIntervalTests`.
 - *Nothing existing changes:* `Prediction`, the grid form, is untouched.
+- *Verified by the main session on 2026-11-14,* from a clean archive of `82f98b3` with zero skips: the Commit selection, 2,641 of 2,641, with `b8cd947`'s files in the same run ([receipts](receipts/verify-conformal-s17fu-28993bb/)).
 
 **What it computes.**
 - *The ends.* Each score's set is found without a grid, each end within a tolerance in the response's units (1e-8 by default). Each end is rounded outward, so the interval holds the exact set.
@@ -82,7 +84,7 @@ Built at the user's pick (2026-11-14, "the grid thing from slice 17"), the third
 
 Closed at the user's word (2026-11-14, "close it and record the finding and point the docstring"). The miscoverage bound's second follow-up is not built.
 
-**Landed** on `main`, nothing pushed: `b8cd947`, docstrings only. `AsymmetricConformalInterval.TrainingConditionalMiscoverage` and `SplitConformal.AsymmetricQuantiles` carry the finding and point to the one-score forms.
+**Landed** on `main`, nothing pushed: `b8cd947`, docstrings only. `AsymmetricConformalInterval.TrainingConditionalMiscoverage` and `SplitConformal.AsymmetricQuantiles` carry the finding and point to the one-score forms. *Verified by the main session on 2026-11-14:* every changed line is a doc comment, and both files ran in `28993bb`'s verification, 2,641 of 2,641 at `82f98b3`.
 
 **The finding.**
 - *No exact law in general.* The tails' scores, A = y − q_lo(x) and B = q_hi(x) − y, sum to the band's width q_hi − q_lo. Given the calibration the miss is G_A(a₍ₖ₎) + G_B(b₍ₖ₎), two Beta(k, m − k) terms.
@@ -105,6 +107,9 @@ Built as the coordinator approved: one optional parameter on `BassFit.GroupConfo
   - `BassCandidates.GroupUnits` passes it to `GroupConformal.Density`.
   - `BassGroupConformalTests` gains one test.
 - *Existing calls* compile and read unchanged.
+- *Verified by the main session on 2026-11-14,* from clean archives with zero skips:
+  - Maths.Regression.Tests' Commit selection at `19fd518`, 2,637 of 2,637 ([receipts](receipts/verify-passthru-14fd05d/)).
+  - Maths.Oracle.Tests', 56 of 57. `GbassHorseshoeReadoutTests.HBass_MeetsCorrectedHbass_OnTheSurfaceTheNoiseScaleAndV`'s R oracle timed out at 120 s while the machine was loaded (the regression run took 25 min against about 6). Rerun alone from a clean archive of `6f6bb27`, it passed, 1 of 1 ([receipts](receipts/verify-passthru-oracle-rerun/)).
 
 **Gates.**
 - *The test* (the crossed fixture, twelve held-out readers each at schools L0 and L1, m 13, α 0.5). The same seams come through the case-level call, each case in its cell's stratum, then pooled, since the strata do not touch the values.

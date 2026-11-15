@@ -1,0 +1,5 @@
+Passed 00:02:47.2685948 Maths.Oracle.Tests.GbassHorseshoeReadoutTests.HBass_MeetsCorrectedHbass_OnTheSurfaceTheNoiseScaleAndV
+    hbass as written: 63.9 s; v's step 0.122, accepted 0.979; w·var(y) 0.08234 [0.06181, 0.1105]; mean ln v -0.141, v below 0.1 0.159; M 4.16
+    hbass, v's step held at 2.5: 60.3 s; v's step 2.5, accepted 0.551; w·var(y) 0.06845 [0.04347, 0.103]; mean ln v -0.162, v below 0.1 0.172; M 5.36
+    engine, g-prior: σ² 0.07652 [0.05055, 0.1099], mean ln v -0.177, v below 0.1 0.167, M 5.84; surface gap over the wider 90% half-band: rms 0.294, worst 0.552
+    engine, ridge: σ² 0.08017 [0.05261, 0.1145], mean ln v -0.192, v below 0.1 0.167, M 5.10; surface gap over the wider 90% half-band: rms 0.400, worst 0.823
