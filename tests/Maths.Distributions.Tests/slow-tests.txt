@@ -1,0 +1,9 @@
+# The slow tier of Maths.Distributions.Tests.csproj: each test method whose cases summed to at least 10 s in one
+# profile of the whole assembly, distributions-profile.trx, run 2026-11-14T23:04:11.8958766-08:00.
+# 4 of 135 methods, 159 s of 200 s summed over the cases.
+# Written by scripts/test-select.ps1 -WriteSlowList; rewrite it from a new profile rather than by hand.
+# Edit and Commit runs leave these out; a slice's end runs them with the rest.
+Maths.Distributions.Tests.TruncatedDrawTests.Gamma_MatchesItsDensity  # 97.7 s over 15 case(s)
+Maths.Distributions.Tests.GigNormalizerTests.Sweep_MeetsTheKernelsIntegral  # 24.2 s over 1 case(s)
+Maths.Distributions.Tests.GeneralizedBetaPrimeTests.DensityAndTails_MeetAFixedStepRule  # 18.9 s over 6 case(s)
+Maths.Distributions.Tests.LogConcaveEnvelopeTests.FarReaches_DrawEachFamilysLaw  # 17.8 s over 1 case(s)
