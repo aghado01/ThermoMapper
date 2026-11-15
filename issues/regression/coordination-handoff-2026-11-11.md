@@ -165,6 +165,9 @@ Carried:
       - Group membership comes from `Cells` only where a cell identifies the held-out group. Crossed effects and grouping columns left out take explicit labels or a named grouping.
       - The 0.893 for one pooled case is the fixture's alone, not a guarantee.
       - It closes with one end-to-end test across sites.
+17. **BASS's allocation pass** ([brief](bass/allocation-pass-brief.md), drafted 2026-11-15 at the user's request). Garbage collection held 42–49% of a 4-chain tempered fit's wall (the rung report). The pass removes per-proposal and per-move allocation, every draw bit for bit: an inventory of bytes first, then the levers its rule takes.
+    - Its reading decides hosting, with server GC kept off until then.
+    - It is the user's to approve, with its five decisions, and to choose who runs the chip.
 
 Closed since the 2026-11-11 handoff: `DenseEigen`'s relative threshold (`75523c4`), the projected fit's prior rules (7d), and regression's use of the legacy `CholeskyDecomposition` (BGP moved, `5db2e40`).
 
