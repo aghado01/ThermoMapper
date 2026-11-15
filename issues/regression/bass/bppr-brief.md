@@ -57,6 +57,7 @@ Those marked **settled** are the user's; the rest are **open**, each with a reco
      - *The paper's slip:* its eq. (mhb) divides by W_{a\*} at a\* = 1, where its Algorithm 2 draws 𝒥 uniformly. The engine codes the corrected ratio, and a parity read against `BayesPPR` is made against the corrected ratio too.
      - *The moves balance as measures* (`mh_flux_symm`, `birth_death_flux`), and inserting a ridge preserves measure (`measurePreserving_piFinSuccAbove`). The code takes prior and proposal densities against one base measure, which slice 2's Geweke gate exercises.
      - *The paper's supplement* (`supplemental_materials.tex` beside `main.tex`, read in slice 0) gives the same change ratio: the collapsed likelihood ratio alone.
+   - **The change move at a = 1, settled** (the user, 2026-11-14, relayed by the coordinating session): the fair coin. In the user's words: "Use the fair coin at slice 2. For a one-coordinate ridge, redraw the sign uniformly from −1 and +1, then draw the knot from its prior conditional on the proposed sign. That last detail matters because reversing the direction changes the projected knot interval. The ridge can switch ends in one change move, and the acceptance probability still uses only the collapsed likelihood ratio."
 6. **A basis mixing ridges with BASS's hinge terms, open.**
    - *Recommended:* ridges only first. The contract allows mixing; the moment service has no exact route for a ridge, so a mixed fit's Sobol reads by sampling.
    - *Alternative:* mixed from the start.
@@ -112,6 +113,81 @@ One commit per concern; tests with the code they test; each slice ends with its 
 Under "Reports" below, newest first, per slice: what landed by commit; the gates' numbers; decisions taken beyond this brief; what was left unbuilt and why; follow-ups with the decision each would change; the doc changes owed.
 
 ## Reports
+
+### Slice 1: the directional hinge (2026-11-14)
+
+The user cleared slice 1 before the verification note arrived. The note came during it, and confirms decisions 1, 3 and 7 at their recommendations, as built: the directional hinge first, the paper's standardization with the sample deviation, categorical inputs refused. The user has since settled the change move at a = 1 for slice 2, the fair coin with the knot drawn given the proposed sign, recorded under decision 5. `LogBeta` moves onto `LogGammaRatio` as the defects chip's change (its slice 9), not E36's.
+
+**Landed.**
+- `2eab479` keeps each continuous input's training mean and sample deviation (n − 1), `Standardization`, beside its box in `RangeScale` (decision 3). `BassInputs.Standardizing(v)` reads it from the scaled value as z = a + b·u, with a = (min − mean)/sd and b = (max − min)/sd over the box, so prediction's cases standardize as training's did. A scale built without data carries none, and a directional hinge refuses it.
+- `9e249dc` adds the directional hinge, BASS's fourth case-side term type (decision 1's first stage).
+  - `ProjectionDirection` is a sparse unit θ: active variables ascending, nonzero weights, ‖θ‖² = 1 to 10⁻¹⁰, the sign its own, compared bit for bit. `DirectionalHinge(θ, t)` puts the knot on the standardized projection, continuous (decision 4's form; slice 2 draws it). The reverse hinge is (−θ, −t).
+  - `BassTerm.Directional` takes the case side alone. A product with hinge, Legendre or categorical factors refuses (decisions 6 and 7); an output side is allowed. Every other term's hash is as it was.
+  - `DirectionalHingeKernel`, the fourth case kernel, gives (θᵀz − t)₊^q/c at the fit's degree with R's powers.
+    - c is the hinge's largest value over each variable's normalization interval (the box, or the training range under that option), at the corner where u_j sits at its upper end for θ_j > 0 and its lower end otherwise; c = 1 where the hinge is zero over the box, R's guard.
+    - The derivative in u_v is the hinge's on the projection times θ_v·b_v, so at the knot at degree one it is the mean of the one-sided limits.
+  - The contract gains `Separable(term)`, default true, and `DesignKernels.Separable`. The kernel's `Factors` refuses with its reason, so the moment service refuses a fit holding one, and with it Sobol indices, effects and E8's exact route (decision 10).
+  - E8's `ActiveSubspaceRoute.Auto` now does what its own summary said: the exact route under a product law when every term has factors, the sampled route otherwise. The exact route refuses a fit without them up front. On the sampled route the Poincaré checks are left out (null, as under a joint sample), since their totals are the moment route's. Every readout passes it: a fit, a basis fit, the co-active pairs, several outputs.
+  - Prediction, the pointwise density, the gradient readout and admission go through `BassBasis` and needed no change.
+  - `BassDesignKernelTests`' test-side directional kernel is replaced by the real one.
+
+**Gates.**
+- *The contract test, promoted:* the real kernel reads its term and its variables, is differentiable, is not separable while every other part is, refuses factors, and refuses a variable outside the inputs; its derivatives match central differences at interior points.
+- *Columns against a hand computation,* with z from the raw values by the test's own compensated mean and deviation, and c at the box's maximizing corner in raw units:
+  - five hinges at degrees 1 to 3 under the box and 1 to 2 under the training range, at training cases and at points past the range on every side: worst 1.3·10⁻¹⁵ relative, and 1/c to 10⁻¹³;
+  - a hinge zero over the box is zero, with c = 1.
+- *A seeded sweep* of 300 cases: a from 1 to 3, with random variables, weights and signs; knots in [−2.5, 2.5], a fifth far out at ±5 to ±55; degrees 1 to 3 under both normalizations; points to 2·10³ past the box. Columns hold to 1.2·10⁻¹³ and derivatives, against the hand derivative q(p − t)₊^(q−1)·θ_v·b_v/c, to 8.0·10⁻¹⁴, relative to max(1, |·|).
+- *Derivatives against central differences* (h = 10⁻⁶, degrees 1 and 2, three directions): worst 9.1·10⁻¹¹ of the largest derivative. A variable outside θ gives zero. With the knot on a case's own projection, degree one's derivative there is θ_v·b_v/(2c) to 14 digits, and degree two's is 0.
+- *D06:* θ and −θ, with knots −0.8, 0 and 0.9 on θ and 0 and 0.4 on −θ, are all admitted (newest angles 1.0, 0.75, 0.029, 0.23 and 0.0080). The same term again, and θ moved by 10⁻⁹, are both refused as numerical.
+- *Through a fit* (a run's fit with two hand-built hinges, degrees 1 and 2):
+  - prediction against the hand computation within 7.8·10⁻¹⁶, and the gradient readout in raw units within 9.4·10⁻¹⁶;
+  - `Sensitivity` refuses, naming the directional hinge; E8's exact route refuses;
+  - the automatic route takes the sampled route with no Poincaré check, and with one hinge the sampled C is rank one along θ's raw-unit image θ_j/sd_j, to 1.4·10⁻¹⁵ of its largest entry.
+- *The standardization:* the mean to 14 digits and the deviation to 10⁻¹⁴ relative, against a compensated two-pass computation; a + b·u against (x − mean)/sd at the training cases to 2.6·10⁻¹⁵, under a declared domain too.
+- *Fitting untouched:* every test project test-select selects for slice 1's commits and `117230e`, which rides these gates. They ran on a snapshot whose code is `9e249dc`'s (`artifacts/chip-bppr/snap`).
+  - *Selected, per commit (classes, read from disk):*
+    - `2eab479` and `9e249dc`: Regression 241 of 333 and Oracle 21 of 39 each. No other project holds them in its closure, so none can move.
+    - `117230e` (`LogGammaRatio`): Distributions 19 of 20, Regression 325 of 330, Samplers 26 of 31, Oracle 36 of 39, Synthetic 6 of 8, DimReduction 8 of 8, Mapper 1 of 10, Ph 1 of 43, Geometry 1 of 9, VizCore 50 of 85, CumulativeField 3 of 3, and SPC 0 of 1, which has no pinned test.
+  - *The whole assembly:* Regression 3516 of 3516.
+  - *Commit scope (selected classes, slow tier left out, pinned tier in):*
+    - Distributions 430 of 430, at `117230e`'s own gate.
+    - Samplers 259 of 259, Synthetic 29 of 29, DimReduction 83 of 83, Mapper 1 of 1, Ph 1 of 1, Geometry 4 of 4, and CumulativeField 15 of 15.
+    - VizCore 384 of 386, with 2 skipped by their own `Skip`. SPC selects no test.
+  - *Oracle at commit scope:* 205 of 207. The two failures are `transport_oracle.R` timing out at 120 s, in `DiagramDistances_MatchT4TransportAndLpAssign` at p = 1 and 2.
+    - Rerun alone, both time out at 120 s again.
+    - The test reads diagram distances, which nothing in slice 1 touches.
+    - This is the defects chip's slice 8 limit. `ca56277` (8b) has since given that oracle a limit of its own, 900 s, against readings of 185 to 344 s alone. It landed after the snapshot.
+- *The cost row* (indicative: wall clock, CostProfile's meter, n = 1000 on three inputs, high priority, the machine at about 4% load; the probe is `artifacts/chip-bppr/probes/BpprCostProbe.cs`):
+
+  | Per call, µs | q = 1 | q = 2 |
+  | --- | --- | --- |
+  | Column, axis hinge, one factor | 2.5 | 2.6 |
+  | Column, axis hinge, three factors | 3.9 | 3.9 |
+  | Column, directional, a = 1 | 4.9 | 5.7 |
+  | Column, directional, a = 3 | 6.6 | 7.0 |
+  | ∂/∂x₀, axis hinge, one factor | 4.6 | 5.1 |
+  | ∂/∂x₀, axis hinge, three factors | 8.9 | 10.2 |
+  | ∂/∂x₀, directional, a = 3 | 6.3 | 6.4 |
+
+  The directional kernel allocates its projection, 8 KB a call at this n; the axis hinge's column runs in lanes and allocates nothing. A birth's and a change's costs come with slice 2's moves.
+
+**Decisions taken beyond the brief.**
+- The standardization's home is `RangeScale` beside the box, with `BassInputs.Standardizing` as its map from u. The kernel reads u, so the case inputs are unchanged and existing fits are bit for bit.
+- The hinge is normalized as BASS's are, to a largest value of one over the box or the training range, so D06's column mass and the g-form read it as they read hinges. The paper's ridge is unnormalized; Zellner–Siow is invariant to a column's scale, so its posterior is the same.
+- One directional hinge per term, alone on the case side; an output side is allowed, since a direct functional response's term is the Khatri–Rao product of its two sides.
+- `Separable` enters the contract; E8's `Auto` already promised the sampled route for terms without factors.
+- Decision 7 binds at the term: a product with a subset factor refuses. A fit's data may still hold categorical predictors other terms read; a ridges-only basis (decision 6) is slice 2's configuration.
+
+**Unbuilt.**
+- The structure chain's moves, slice 2: no configuration builds a directional fit yet, and a fit holding one is made by hand.
+- Sobol indices and effects by sampling (E25): refused, with the reason.
+
+**Follow-ups.**
+- *The projection buffer:* pooling it would remove the 8 KB allocation per column without moving a bit. Decide at slice 2, against the birth's and the change's costs.
+
+**Doc changes owed.**
+- `docs/Maths/Regression/BASS.md`: the directional hinge as a term type (its definition, normalization, derivative and refusal of factors); the contract's `Separable`; the transform's standardization beside the box, with decision 3's alternative, the box, and its trade-offs.
+- `docs/Maths/Regression/ActiveSubspaces.md`: `Auto`'s rule with separability, and the Poincaré check absent for a fit holding a directional hinge.
 
 ### Slice 0 verified from a clean archive (coordinating session, 2026-11-14)
 
