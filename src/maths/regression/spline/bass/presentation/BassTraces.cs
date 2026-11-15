@@ -41,7 +41,7 @@ public sealed record BassTraces(IReadOnlyList<BassChainTrace> Chains, bool TauSa
             {
                 BassDraw draw = store[i];
                 iterations[i] = ((long)i * store.Every + 1) * thin;
-                count[i] = draw.Structure.TermIds.Length;
+                count[i] = draw.Structure.TermCount(fit.Config.Structure.ColumnsPerTerm);
                 sigma2[i] = draw.Sigma2;
                 tau[i] = draw.Tau;
                 lambda[i] = draw.Lambda;

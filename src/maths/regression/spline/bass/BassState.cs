@@ -76,7 +76,12 @@ public sealed class BassState
 
 /// <summary>A retained structure: sorted ids into the fit's <see cref="BassTermTable"/>, an unordered collection
 /// (D01).</summary>
-public readonly record struct BassStructure(int[] TermIds);
+public readonly record struct BassStructure(int[] TermIds)
+{
+    /// <summary>M, the structure's terms: one per id, or under a ridge basis of <paramref name="columnsPerTerm"/> = K columns a term (E36's
+    /// slice 3), whose ids are its blocks' columns, one per K (<see cref="BassStructureSpec.ColumnsPerTerm"/>).</summary>
+    public int TermCount(int columnsPerTerm = 1) => TermIds.Length / columnsPerTerm;
+}
 
 /// <summary>
 /// One retained draw, its generative state (D04): the structure, τ, σ², the coefficients and λ, and σ²'s rate under a

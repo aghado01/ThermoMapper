@@ -19,15 +19,19 @@ namespace Maths.Regression.Spline.Bass;
 /// </summary>
 public readonly record struct BassStructureFit(int Terms, double LogTermPrior, double ResidualSquares, double FittedSquares,
                                                BassRefusal? Refusal = null, RidgeColumns? Ridge = null, WorkingResponse? Working = null,
-                                               OutputForms? Outputs = null)
+                                               OutputForms? Outputs = null, int? Units = null)
 {
+    /// <summary>M, the structure's terms, which the count prior reads: <see cref="Units"/> where a ridge basis expands each into K columns
+    /// (E36's slice 3), else <see cref="Terms"/>, the columns, which the marginals read.</summary>
+    public int UnitCount => Units ?? Terms;
+
     /// <summary>The design's current structure, whose terms' log prior is <paramref name="logTermPrior"/>. Several outputs (E34) carry
     /// their K × K forms in <see cref="Outputs"/>, the sums of squares then NaN.</summary>
     public static BassStructureFit Of(BassDesign design, double logTermPrior)
     {
         ArgumentNullException.ThrowIfNull(design);
         return new(design.Count, logTermPrior, design.ResidualSquares, design.FittedSquares, null, design.PriorTerms, design.Working,
-                   design.OutputForms);
+                   design.OutputForms, design.Expands ? design.Units : null);
     }
 
     /// <summary>A proposed structure, admitted or refused, whose terms' log prior is <paramref name="logTermPrior"/>, fitted on
@@ -307,7 +311,7 @@ public sealed class BassTarget : ISamplingTarget<BassState>
 
     /// <summary>The structure's untempered log prior, D02's count weight plus its terms' (on F).</summary>
     public double LogStructurePrior(BassStructureFit fit)
-        => Refusal(fit) is null ? Prior.LogCollectionWeight(fit.Terms) + fit.LogTermPrior : double.NegativeInfinity;
+        => Refusal(fit) is null ? Prior.LogCollectionWeight(fit.UnitCount) + fit.LogTermPrior : double.NegativeInfinity;
 
     /// <summary>The coefficient block's marginal for <paramref name="fit"/> at (<paramref name="tau"/>,
     /// <paramref name="inverseTemperature"/>), the integrated form's; σ²'s posterior reads it too.</summary>

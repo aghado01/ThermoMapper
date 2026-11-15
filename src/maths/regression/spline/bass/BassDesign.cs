@@ -59,8 +59,9 @@ public sealed record BassAdmission(
     {
         ArgumentNullException.ThrowIfNull(config);
         ArgumentNullException.ThrowIfNull(resolved);
-        return new(resolved.MaxBasis, config.Structure.Support.Kind, resolved.SupportMinimum, resolved.SupportMinimumFunctional,
-                   config.Structure.AngleFloor, config.Structure.MaxVarianceInflation);
+        // The cap on columns: M's, times a ridge block's K columns a term (E36's slice 3).
+        return new(resolved.MaxBasis * (config.Structure.Directional?.Columns ?? 1), config.Structure.Support.Kind, resolved.SupportMinimum,
+                   resolved.SupportMinimumFunctional, config.Structure.AngleFloor, config.Structure.MaxVarianceInflation);
     }
 }
 
@@ -137,11 +138,12 @@ public sealed class BassDesign
     private const int InitialCapacity = 32;
     private const double ExplicitBelow = 1e-8;   // ‖r′‖²/‖r_reduced‖² under which the candidate's residual is formed
 
-    private enum Move { Birth, Death, Change, Follow }
+    private enum Move { Birth, Death, Change, Follow, Block }
 
     private sealed record Pending(Move Kind, int Index, BassTerm? Term, double[]? Column, double[]? Output, double BEntry,
                                   double[,]? Strict, DesignProposal Account, RidgeSpectrum? Fresh = null, BassPriorColumn? Prior = null,
-                                  double[,]? PriorGram = null, PriorPencil? Pencil = null, Followed? Response = null, double[]? OutputCross = null);
+                                  double[,]? PriorGram = null, PriorPencil? Pencil = null, Followed? Response = null, double[]? OutputCross = null,
+                                  IReadOnlyList<BassTerm>? Units = null);
 
     // A move to another working response, pending: what it reads, and the current structure's fit on it. The columns and the factor
     // are null when only the offset moved, which keeps them.
@@ -150,7 +152,11 @@ public sealed class BassDesign
                                    DesignOutputs? Outputs = null);
 
     private readonly BassBasis _basis;
+    private readonly BassData _data;
     private readonly BassAdmission _rules;
+    private readonly RidgeExpansion? _expansion;   // a ridge basis's: each structure term held as its K columns (E36's slice 3)
+    private IReadOnlyList<BassTerm>? _units;       // the structure terms the columns expand, read back when first asked after a change
+    private BassDesign? _scratch;                  // where a ridge basis's proposals are loaded
     private readonly bool _functional, _ridge;
     private readonly BassPriorPrecision _precision; // how the prior's precision reads the columns (E21)
     // Whether the reading the design is on carries a random-effect block's whitening, by which each column is whitened (E21).
@@ -267,15 +273,18 @@ public sealed class BassDesign
     /// <paramref name="intercept"/> places the intercept for a prior apart from the Gram, which alone reads it; and
     /// <paramref name="precision"/> is the prior-precision builder: the g-form's or the normalized ridge's, as
     /// <paramref name="ridge"/> says, when null, and one that agrees with <paramref name="ridge"/> when given. A random-effect block's
-    /// whitening comes with the working response (<see cref="WorkingResponse.Whitening"/>).</summary>
+    /// whitening comes with the working response (<see cref="WorkingResponse.Whitening"/>). A ridge basis's <paramref name="expansion"/>
+    /// has the design hold each structure term as its block of K columns (E36's slice 3); null holds each term as one column.</summary>
     public BassDesign(BassBasis basis, BassData data, BassAdmission rules, bool ridge = false, WorkingResponse? working = null,
-                      GPriorCentre intercept = GPriorCentre.Mean, BassPriorPrecision? precision = null)
+                      GPriorCentre intercept = GPriorCentre.Mean, BassPriorPrecision? precision = null, RidgeExpansion? expansion = null)
     {
         ArgumentNullException.ThrowIfNull(basis);
         ArgumentNullException.ThrowIfNull(data);
         ArgumentNullException.ThrowIfNull(rules);
         _basis = basis;
+        _data = data;
         _rules = rules;
+        _expansion = expansion;
         _ridge = ridge;
         _precision = precision ?? (ridge ? BassPriorPrecision.NormalizedRidge : BassPriorPrecision.Gram);
         if (_precision.IsRidge != ridge) throw new ArgumentException("The ridge flag and the prior-precision builder disagree.", nameof(precision));
@@ -425,11 +434,25 @@ public sealed class BassDesign
         return reads;
     }
 
-    /// <summary>M, the terms.</summary>
+    /// <summary>The columns: M, one per term, under BASS's bases; K per structure term under a ridge basis (<see cref="Units"/>).</summary>
     public int Count => _terms.Count;
 
-    /// <summary>The terms, in the factor's column order.</summary>
-    public IReadOnlyList<BassTerm> Terms => _terms;
+    /// <summary>The structure's terms, in the factor's order: each column's term, or under a ridge basis the structure terms (θ, t₀) its
+    /// blocks expand (E36's slice 3).</summary>
+    public IReadOnlyList<BassTerm> Terms => _expansion is null ? _terms : _units ??= _expansion.Units(_terms);
+
+    /// <summary>The columns' terms, in the factor's order: under a ridge basis each block's K columns, which draws and readouts read.</summary>
+    public IReadOnlyList<BassTerm> ColumnTerms => _terms;
+
+    /// <summary>Whether a ridge basis expands each structure term into a block of columns.</summary>
+    public bool Expands => _expansion is not null;
+
+    /// <summary>M, the structure's terms, which the count prior reads.</summary>
+    public int Units => Terms.Count;
+
+    /// <summary>The structure terms <paramref name="columns"/> hold, as this design reads columns: themselves, or a ridge basis's blocks read
+    /// back (a snapshot's terms, say).</summary>
+    internal IReadOnlyList<BassTerm> UnitsOf(IReadOnlyList<BassTerm> columns) => _expansion is null ? columns : _expansion.Units(columns);
 
     /// <summary>N, the observations.</summary>
     public int Observations => _rows;
@@ -531,6 +554,7 @@ public sealed class BassDesign
     public DesignProposal ProposeBirth(BassTerm term)
     {
         ArgumentNullException.ThrowIfNull(term);
+        if (_expansion is not null) return ProposeUnits([.. Terms, term]);
         _pending = null;
         if (_terms.Count >= _rules.MaxBasis) return DesignProposal.Refused(BassRefusal.Cap);
         if (_terms.Contains(term)) return DesignProposal.Refused(BassRefusal.Numerical);
@@ -557,6 +581,12 @@ public sealed class BassDesign
     /// <summary>Proposes removing term <paramref name="index"/>. A death never leaves F, since the gate is downward closed.</summary>
     public DesignProposal ProposeDeath(int index)
     {
+        if (_expansion is not null)
+        {
+            IReadOnlyList<BassTerm> units = Terms;
+            if ((uint)index >= (uint)units.Count) throw new ArgumentOutOfRangeException(nameof(index));
+            return ProposeUnits([.. units.Take(index), .. units.Skip(index + 1)], death: true);
+        }
         if ((uint)index >= (uint)_terms.Count) throw new ArgumentOutOfRangeException(nameof(index));
         _pending = null;
         FactorProposal p = _factor.ProposeDeath(index);
@@ -604,6 +634,12 @@ public sealed class BassDesign
     public DesignProposal ProposeChange(int index, BassTerm term)
     {
         ArgumentNullException.ThrowIfNull(term);
+        if (_expansion is not null)
+        {
+            IReadOnlyList<BassTerm> units = Terms;
+            if ((uint)index >= (uint)units.Count) throw new ArgumentOutOfRangeException(nameof(index));
+            return ProposeUnits([.. units.Take(index), .. units.Skip(index + 1), term]);
+        }
         if ((uint)index >= (uint)_terms.Count) throw new ArgumentOutOfRangeException(nameof(index));
         _pending = null;
         if (term.Equals(_terms[index]))   // the same state
@@ -648,6 +684,32 @@ public sealed class BassDesign
         double[] border = Without(full, index);
         FactorProposal p = _factor.ProposeChange(index, border, diagonal);
         return Decide(Move.Change, index, term, column, output, border, full, diagonal, bEntry, p, rssReduced, zrReduced, prior, approximate, unit, inverseDiagonal);
+    }
+
+    // A ridge basis's proposal (E36's slice 3): the proposed structure terms, expanded and loaded strictly into a scratch design whose
+    // account is the proposal's; an acceptance loads them here the same way. Every mode the design serves is the strict build's, and the
+    // design is always its structure's strict build, so a restore or a hand-over reproduces it bit for bit. The newest angle is the least
+    // over the last block's columns, the new block's for a birth or a change, and NaN for a death, as a column's death reads it.
+    private DesignProposal ProposeUnits(IReadOnlyList<BassTerm> units, bool death = false)
+    {
+        _pending = null;
+        _scratch ??= new BassDesign(_basis, _data, _rules, _ridge, _response.Working, _intercept, _precision, _expansion);
+        if (_scratch.Load(units, _response.Working) is { } refusal) return DesignProposal.Refused(refusal);
+        DesignProposal account = _scratch.Account();
+        if (death) account = account with { NewestAngle = double.NaN };
+        _pending = new Pending(Move.Block, -1, null, null, null, 0.0, null, account, Units: units);
+        return account;
+    }
+
+    // The current structure's account, as a proposal of it reads it.
+    private DesignProposal Account()
+    {
+        double newest = double.PositiveInfinity;
+        for (int j = Math.Max(0, _terms.Count - (_expansion?.Columns ?? 1)); j < _terms.Count; j++) newest = Math.Min(newest, _factor.LeaveOneOutPivot(j));
+        if (_terms.Count == 0) newest = double.NaN;
+        return _outputs is null
+            ? new DesignProposal(null, _terms.Count, ResidualSquares, FittedSquares, MinAngle, newest, PriorTerms)
+            : new DesignProposal(null, _terms.Count, double.NaN, double.NaN, MinAngle, newest, null, OutputForms);
     }
 
     /// <summary>
@@ -756,10 +818,17 @@ public sealed class BassDesign
             Commit(followed);
             return;
         }
+        if (p.Kind == Move.Block)
+        {
+            if (Load(p.Units!, _response.Working) is { } refused)
+                throw new InvalidOperationException($"A ridge block's admitted proposal was refused on loading ({refused}).");
+            return;
+        }
         if (p.Kind == Move.Change && p.Column is null) return;   // a change to the same term
         if (p.Strict is not null) _factor.Decompose(p.Strict);
         else _factor.Accept();
         _spectrum = p.Fresh;
+        _units = null;
         if (p.Kind is Move.Death or Move.Change)
         {
             _terms.RemoveAt(p.Index);
@@ -826,6 +895,18 @@ public sealed class BassDesign
         _pending = null;
         BassDesignResponse response = working is null || ReferenceEquals(working, _response.Working) ? _response : Read(working, Reweights(working) ? null : _response);
         bool reread = _outputs is not null && !ReferenceEquals(response, _response);   // several outputs read on a new reading (E34's slice 4)
+        if (_expansion is not null && !(terms.Count > 0 && terms[0].Ridge is not null))
+        {
+            // A ridge basis loads structure terms as their blocks of columns (E36's slice 3); a block whose knots leave a column undefined
+            // lies outside the support. A draw's terms are its columns already, whole blocks in order, and load as they are.
+            var expanded = new List<BassTerm>(terms.Count * _expansion.Columns);
+            foreach (BassTerm unit in terms)
+            {
+                if (_expansion.Expand(unit) is not { } block) return BassRefusal.Support;
+                expanded.AddRange(block);
+            }
+            terms = expanded;
+        }
         if (terms.Count > _rules.MaxBasis) return BassRefusal.Cap;
         var seen = new HashSet<BassTerm>();
         var columns = new List<double[]>(terms.Count);
@@ -862,6 +943,7 @@ public sealed class BassDesign
         _factor = fresh;
         _spectrum = null;
         _terms.Clear(); _terms.AddRange(terms);
+        _units = null;
         _a.Clear(); _a.AddRange(columns);
         ResetTables();
         _h.Clear(); _h.AddRange(outputs);
@@ -908,6 +990,7 @@ public sealed class BassDesign
         _pending = null;
         _response = snapshot.Response ?? _response;
         _terms.Clear();
+        _units = null;
         _a.Clear();
         _h.Clear();
         _b.Clear();
@@ -1125,7 +1208,9 @@ public sealed class BassDesign
         _basis.Validate(term);
         var a = new double[_cases];
         _basis.CaseColumn(term, _basis.Inputs.Cases, a);
-        if (!Supported(a, _rules.SupportMinimum, _counted)) return null;
+        // A ridge block's support is its first column's, b₁ = (θᵀz − t₀)₊, the cases the block reaches: its later cubic columns are nonzero
+        // on fewer cases above t₀ by construction (E36's slice 3).
+        if (term.Ridge is not { Column: > 1 } && !Supported(a, _rules.SupportMinimum, _counted)) return null;
         // A random-effect block under weights reads the raw column: L for the fit, the column itself for the prior's side (E21's slice 4).
         if (!_functional && response.Working.Weighted is { } weighted) return Whitened(term, a, response, weighted);
         response.Working.Whitening?.Whiten(a);   // the support reads the column as evaluated, the fit its whitened image

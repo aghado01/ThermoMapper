@@ -179,6 +179,18 @@ public sealed record BassConfig
             if (directional.Problem() is { } problem) throw Bad($"Structure.Directional.{problem.Setting}", problem.Reason);
             if (s.Legendre is not null)
                 throw Bad("Structure.Directional", "and Structure.Legendre each replace BASS's hinges; a basis that mixes term types is not built (E36's decision 6)");
+            if (directional.Columns >= 2)
+            {
+                // A ridge block (E36's slice 3): the paper's columns, of degrees one and three, unnormalized.
+                if (s.Degree != 1)
+                    throw Bad("Structure.Degree", "is the hinges' power q; a ridge block's degrees are the paper's, one at t₀ and three at the quantile knots, so it takes 1");
+                if (s.Support.Kind == SupportKind.ColumnMass)
+                    throw Bad("Structure.Support.Kind", "is the column mass, which reads columns normalized to a maximum of one; a ridge block's columns are the paper's, unnormalized, so it takes the count");
+                if (s.HingeNormalization is not null)
+                    throw Bad("Structure.HingeNormalization", "sets the interval hinges are normalized over; a ridge block's columns are the paper's, unnormalized");
+                if (Coefficients?.Form is RawRidgeForm)
+                    throw Bad("Coefficients.Form", "is KHAOS's raw ridge, which reads the columns' scale; a ridge block's columns are the paper's, unnormalized, so it takes a form that reads none");
+            }
         }
         if (s.HingeNormalization is not (null or HingeNormalization.Box or HingeNormalization.TrainingRange))
             throw Bad("Structure.HingeNormalization", "is not a known interval");
@@ -527,6 +539,11 @@ public sealed record BassStructureSpec
     /// </summary>
     [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
     public HingeNormalization? HingeNormalization { get; init; }
+
+    /// <summary>The columns a structure term holds: K under a ridge basis (<see cref="DirectionalBasis.Columns"/>), else 1. A draw's ids are its
+    /// columns, so a summary that counts terms divides by it (<see cref="BassStructure.TermCount"/>).</summary>
+    [JsonIgnore]
+    public int ColumnsPerTerm => Directional?.Columns ?? 1;
 
     /// <summary>The hinge normalization in force: <see cref="HingeNormalization"/>, or the box where it is null.</summary>
     [JsonIgnore]

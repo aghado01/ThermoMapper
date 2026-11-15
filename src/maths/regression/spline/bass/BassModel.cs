@@ -14,8 +14,10 @@ public sealed class BassModel
 {
     private BassModel(BassConfig config, BassData data, BassResolved resolved, BassInputTransform transform, BassInputs inputs,
                       BassBasis basis, BassAdmission admission, BassStructurePrior prior, BassTermProposal? proposal, IBassProposalKernel kernel,
-                      BassTarget target, IBassObservationModel observation, WorkingResponse working, WorkingResponse baseReading, RandomEffectsBlock? block)
+                      BassTarget target, IBassObservationModel observation, WorkingResponse working, WorkingResponse baseReading, RandomEffectsBlock? block,
+                      RidgeExpansion? expansion)
     {
+        Expansion = expansion;
         RandomEffects = block;
         Config = config;
         Observation = observation;
@@ -110,7 +112,8 @@ public sealed class BassModel
             : config.Structure.Directional is not null ? DirectionalTermProposal.From(config, prior)
             : new LegendreTermProposal(prior, config.Structure.Legendre!);
         var target = new BassTarget(config, resolved, prior, form ?? config.Sampling.Tempering?.Form ?? config.Sampling.Smc?.Form ?? TemperedForm.Integrated, working);
-        return new(config, data, resolved, transform, inputs, basis, admission, prior, proposal, kernel, target, observation, working, baseReading, block);
+        RidgeExpansion? expansion = config.Structure.Directional is { Columns: >= 2 } ridge ? new RidgeExpansion(prior.Directional!, ridge.Columns) : null;
+        return new(config, data, resolved, transform, inputs, basis, admission, prior, proposal, kernel, target, observation, working, baseReading, block, expansion);
     }
 
     // Several outputs' noise by row (E34's decision 6): one v per case shared by its outputs, a skew γ | Σ ~ N(0, s²Σ) at zero mean, the priors
@@ -193,6 +196,10 @@ public sealed class BassModel
     /// <summary>The collapsed target (D03, D05).</summary>
     public BassTarget Target { get; }
 
+    /// <summary>A ridge basis's expansion of each structure term into its block of columns (E36's slice 3); null for a basis of one column a
+    /// term.</summary>
+    public RidgeExpansion? Expansion { get; }
+
     /// <summary>The observation model: what the Gaussian core fits of the response (F-X1).</summary>
     public IBassObservationModel Observation { get; }
 
@@ -218,5 +225,6 @@ public sealed class BassModel
 
     /// <summary>A new intercept-only design over the data, one per chain, on <paramref name="working"/>; null is the model's.</summary>
     public BassDesign NewDesign(WorkingResponse? working = null)
-        => new(Basis, Data, Admission, Config.Coefficients.Form is RidgeForm, working ?? Working, Config.Intercept, BassPriorPrecision.Of(Config.Coefficients.Form));
+        => new(Basis, Data, Admission, Config.Coefficients.Form is RidgeForm, working ?? Working, Config.Intercept, BassPriorPrecision.Of(Config.Coefficients.Form),
+               Expansion);
 }

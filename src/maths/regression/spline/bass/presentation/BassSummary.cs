@@ -69,7 +69,8 @@ public sealed record BassPosteriorSummary(PosteriorSummary Count, PosteriorSumma
         if (fit.DrawWeights is { } w && w.Length != draws.Length)
             throw new ArgumentException($"The fit has {draws.Length} draws and {w.Length} weights.", nameof(fit));
         PosteriorSummary Summarized(Func<BassDraw, double> value) => PosteriorSummary.Over(Array.ConvertAll(draws, d => value(d)), fit.DrawWeights, probabilities);
-        return new BassPosteriorSummary(Summarized(d => d.Structure.TermIds.Length), Summarized(d => d.Sigma2),
+        int perTerm = fit.Config.Structure.ColumnsPerTerm;   // a ridge basis's draws hold K columns a term (E36's slice 3)
+        return new BassPosteriorSummary(Summarized(d => d.Structure.TermCount(perTerm)), Summarized(d => d.Sigma2),
                                         !fit.Config.Coefficients.Scale.IsHeld ? Summarized(d => d.Tau) : null, Summarized(d => d.Lambda));
     }
 }

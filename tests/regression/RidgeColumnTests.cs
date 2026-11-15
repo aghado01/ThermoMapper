@@ -98,7 +98,7 @@ public sealed class RidgeColumnTests(ITestOutputHelper output)
 
     // The paper's columns and their derivatives by exact arithmetic: b₁ = (u − t₀)₊, b_ℓ = d_{ℓ−1} − d_K, d_j = ((u − t_j)₊³ − (u − t_{K+1})₊³)/(t_{K+1} − t_j);
     // `Scale` is |d_{ℓ−1}| + |d_K| and `SlopeScale` |d′_{ℓ−1}| + |d′_K|, the sizes of what each difference cancels.
-    private static (double Value, double Derivative, double Scale, double SlopeScale) Paper(double[] knots, int column, double u)
+    internal static (double Value, double Derivative, double Scale, double SlopeScale) Paper(double[] knots, int column, double u)
     {
         Exact x = Exact.Of(u), t0 = Exact.Of(knots[0]);
         if (column == 1) return ((x - t0).Positive.ToDouble(), u > knots[0] ? 1.0 : u == knots[0] ? 0.5 : 0.0, Math.Abs(u), 1.0);

@@ -28,6 +28,11 @@ public sealed record DirectionalBasis
     /// <summary>κ, the change move's power spherical concentration on a direction's active coordinates; 1000, the paper's.</summary>
     public double Concentration { get; init; } = 1000.0;
 
+    /// <summary>K, the columns each term holds (E36's slice 3): 1, the directional hinge alone at the fit's degree, slice 2's basis; K ≥ 2, the
+    /// paper's ridge block as one structural unit, b₁ = (θᵀz − t₀)₊ and K − 1 cubic columns at the quantile knots above t₀
+    /// (<see cref="RidgeColumn"/>, <see cref="RidgeExpansion"/>), whose degrees the paper fixes; 4 is the paper's default.</summary>
+    public int Columns { get; init; } = 1;
+
     /// <summary>The first setting out of range, as its name and the reason; null when every one holds.</summary>
     public (string Setting, string Reason)? Problem()
     {
@@ -36,6 +41,7 @@ public sealed record DirectionalBasis
         if (ActiveCases is { } active && !(active > 0.0 && double.IsFinite(active)))
             return (nameof(ActiveCases), "must be positive and finite, or null for min(20, n/10)");
         if (!(Concentration >= 0.0 && double.IsFinite(Concentration))) return (nameof(Concentration), "must be finite and not negative");
+        if (Columns < 1) return (nameof(Columns), "must be at least 1: 1 is the directional hinge alone, K ≥ 2 the paper's ridge block");
         return null;
     }
 }

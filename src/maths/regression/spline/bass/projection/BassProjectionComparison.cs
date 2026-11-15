@@ -118,7 +118,8 @@ internal static class BassProjectionComparisons
         int exponent = WeightScale.Exponent(w);
         double Weight(int s) => w is null ? 1.0 : WeightScale.Scaled(w[s], exponent);
         double total = w is null ? pooled.Length : Enumerable.Range(0, pooled.Length).Sum(Weight);
-        double terms = Enumerable.Range(0, pooled.Length).Sum(s => Weight(s) * pooled[s].Structure.TermIds.Length) / total;
+        int perTerm = fit.Config.Structure.ColumnsPerTerm;
+        double terms = Enumerable.Range(0, pooled.Length).Sum(s => Weight(s) * pooled[s].Structure.TermCount(perTerm)) / total;
         PredictiveCheck loo = PredictiveChecks.PsisLoo(fit.PointwiseLogDensity(data));
         double? rmse = null, explained = null;
         if (mean is not null) (rmse, explained) = Score(mean, response!);

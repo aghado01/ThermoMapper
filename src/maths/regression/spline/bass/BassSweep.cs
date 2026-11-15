@@ -237,6 +237,7 @@ public sealed class BassStructureMoves
         Sync(current);
         _candidate = null;
         BassStructureFit fit = BassStructureFit.Of(_design.ProposeFollow(working), current.Fit.LogTermPrior, working);
+        if (_design.Expands) fit = fit with { Units = current.Count };   // a ridge basis's blocks: the count prior reads structure terms
         var candidate = new BassState(current.TermArray, fit, current.LogTau, current.LogRate, current.OutputRateArray);
         if (_model.Target.Refusal(fit) is null) _candidate = new Pending(candidate, default, null, null, false);
         return candidate;
@@ -272,7 +273,7 @@ public sealed class BassStructureMoves
     {
         ArgumentNullException.ThrowIfNull(state);
         ArgumentNullException.ThrowIfNull(design);
-        if (!design.Terms.AsSpan().SequenceEqual(state.TermArray)) throw new ArgumentException("The design holds another structure.", nameof(design));
+        if (!_design.UnitsOf(design.Terms).SequenceEqual(state.TermArray)) throw new ArgumentException("The design holds another structure.", nameof(design));
         _design.Restore(design);
         _candidate = null;
         _counts = CountsOf(state.TermArray);
@@ -306,9 +307,10 @@ public sealed class BassStructureMoves
         BassCountPrior count = _model.Prior.Count;
         double lambda = Gamma.ShapeRate(count.Shape + state.Count, count.Rate + 1.0).Sample(rng);
 
-        int m = state.Count;
+        IReadOnlyList<BassTerm> columns = _design.ColumnTerms;   // the state's terms, or a ridge basis's blocks of columns (E36's slice 3)
+        int m = columns.Count;
         var ids = new int[m];
-        for (int j = 0; j < m; j++) ids[j] = terms.Intern(state.Terms[j]);
+        for (int j = 0; j < m; j++) ids[j] = terms.Intern(columns[j]);
         // The terms in the ids' order; the ids are distinct, so the sort has one answer, and `sorted` is the structure's ids.
         var order = new int[m];
         for (int j = 0; j < m; j++) order[j] = j;
@@ -320,7 +322,7 @@ public sealed class BassStructureMoves
         {
             int j = order[k];
             coefficients[k + 1] = centred[j + 1];
-            intercept -= centred[j + 1] * ColumnMean(state.Terms[j]);
+            intercept -= centred[j + 1] * ColumnMean(columns[j]);
         }
         coefficients[0] = intercept;
         // A model that rebuilds its working response from its latents keeps the latents alone on the draw (the brief's retention lever).
@@ -330,7 +332,7 @@ public sealed class BassStructureMoves
         // drawn s is the draw's generative state, and its reading a view rebuilt from it (BassDraw.WorkingOn).
         RandomEffectsBlock? block = working.Whitening;
         // Under a noise u is the state's latent, kept as it stands; at unit weights it is drawn from its conditional.
-        BassGroupDraw[]? groups = working.Effects?.Groups ?? block?.DrawGroups(_model, [.. order.Select(k => state.Terms[k])], coefficients, sigma2, rng, working);
+        BassGroupDraw[]? groups = working.Effects?.Groups ?? block?.DrawGroups(_model, [.. order.Select(k => columns[k])], coefficients, sigma2, rng, working);
         return new BassDraw(new BassStructure(sorted), tau, sigma2, coefficients, lambda, target.Sigma2Rate?.RateAt(state.LogRate),
                             working.IsResponseItself || rebuilds || _model.ScaleDrawn ? null : working, rebuilds ? working.Latents : null, groups);
     }
@@ -342,15 +344,16 @@ public sealed class BassStructureMoves
         (double[,] sigma, double[,] centred) = BassOutputDraws.Sample(target, _design, state.Fit, tau, rng, target.Evaluate(state).OutputPrior);
         BassCountPrior count = _model.Prior.Count;
         double lambda = Gamma.ShapeRate(count.Shape + state.Count, count.Rate + 1.0).Sample(rng);
-        int m = state.Count, k = sigma.GetLength(0);
+        IReadOnlyList<BassTerm> columns = _design.ColumnTerms;
+        int m = columns.Count, k = sigma.GetLength(0);
         var ids = new int[m];
-        for (int j = 0; j < m; j++) ids[j] = terms.Intern(state.Terms[j]);
+        for (int j = 0; j < m; j++) ids[j] = terms.Intern(columns[j]);
         var order = new int[m];
         for (int j = 0; j < m; j++) order[j] = j;
         int[] sorted = (int[])ids.Clone();
         Array.Sort(sorted, order);
         var means = new double[m];
-        for (int j = 0; j < m; j++) means[j] = ColumnMean(state.Terms[j]);
+        for (int j = 0; j < m; j++) means[j] = ColumnMean(columns[j]);
         var coefficients = new double[m + 1, k];
         for (int l = 0; l < k; l++)
         {
@@ -368,7 +371,7 @@ public sealed class BassStructureMoves
         // drawn last, as the scalar draw draws its group effects.
         // Under a noise U is the state's latent, kept as it stands.
         BassGroupDraw[]? groups = _design.Working.Effects?.Groups ?? (_design.Working.Whitening is { } block
-            ? block.DrawOutputGroups(_model, [.. order.Select(r => state.Terms[r])], coefficients, MatrixTPredictive.Root(sigma), rng)
+            ? block.DrawOutputGroups(_model, [.. order.Select(r => columns[r])], coefficients, MatrixTPredictive.Root(sigma), rng)
             : null);
         // Under a noise (E34's decision 6) the draw keeps the latents alone, its reading rebuilt from them as one response's is.
         ObservationLatents? latents = _design.Working.Latents is { } held && _model.Observation.Rebuilds ? held : null;
@@ -397,9 +400,10 @@ public sealed class BassStructureMoves
         var fitted = new double[n * k];
         for (int i = 0; i < n; i++)
             for (int l = 0; l < k; l++) fitted[i * k + l] = centred[0, l];
-        for (int j = 0; j < state.Count; j++)
+        IReadOnlyList<BassTerm> columns = _design.ColumnTerms;
+        for (int j = 0; j < columns.Count; j++)
         {
-            (double[] a, _) = SweepColumns(state.Terms[j]);
+            (double[] a, _) = SweepColumns(columns[j]);
             double mean = working.ColumnMean(a, null);
             for (int i = 0; i < n; i++)
                 for (int l = 0; l < k; l++) fitted[i * k + l] += centred[j + 1, l] * (a[i] - mean);
@@ -440,10 +444,11 @@ public sealed class BassStructureMoves
         int n = _design.Observations;
         var fitted = new double[n];
         Array.Fill(fitted, centred[0]);
-        if (_sweepColumns.Count > 2 * state.Count + 16) _sweepColumns.Clear();
-        for (int j = 0; j < state.Count; j++)
+        IReadOnlyList<BassTerm> columns = _design.ColumnTerms;
+        if (_sweepColumns.Count > 2 * columns.Count + 16) _sweepColumns.Clear();
+        for (int j = 0; j < columns.Count; j++)
         {
-            (double[] a, double[]? h) = SweepColumns(state.Terms[j]);
+            (double[] a, double[]? h) = SweepColumns(columns[j]);
             double mean = working.ColumnMean(a, h), c = centred[j + 1];
             if (h is null)
             {
@@ -573,6 +578,7 @@ public sealed class BassStructureMoves
     private BassState Candidate(BassState current, BassTerm[] terms, DesignProposal proposal, BassMoveKind kind, BassTerm? added, BassTerm? removed)
     {
         BassStructureFit fit = BassStructureFit.Of(proposal, proposal.Admitted ? LogTermPrior(terms) : double.NaN, current.Fit.Working);
+        if (_design.Expands && proposal.Admitted) fit = fit with { Units = terms.Length };   // a ridge basis's blocks (E36's slice 3)
         if (added is not null) Support.Add(added, proposal.Refusal == BassRefusal.Support);
         var candidate = new BassState(terms, fit, current.LogTau, current.LogRate, current.OutputRateArray);
         Kinds.Attempted(kind);

@@ -318,26 +318,35 @@ public sealed record BassResolved
                 throw new ArgumentException("A directional basis serves a response without an output part; a direct functional response's terms carry an output hinge product beside the case side, which a directional basis does not build.", nameof(data));
             if (maxInteraction < 1) throw new ArgumentException("A directional basis needs a continuous predictor.", nameof(data));
             double active = directional.ActiveCases ?? Math.Min(20.0, 0.1 * cases);
+            int perBlock = directional.Columns;
+            // A ridge block's K + 1 knots above t₀ need K + 1 cases there at least, BayesPPR's floor on n_dat_min (E36's slice 3).
+            bool floored = perBlock >= 2 && active <= perBlock;
+            if (floored) active = perBlock + 1.0;
             if (!(active < cases))
                 throw new ArgumentException($"Structure.Directional.ActiveCases is {Text(active)}, which leaves no training case below the knot's upper end among the {Text(cases)}.", "config");
             knotLevel = 1.0 - active / cases;
             maxCategorical = maxFunctional = 0;
-            log.Add(new("Directional", $"A {Text(maxInteraction)}, q {Text(knotLevel.Value)}, p₀ {Text(directional.LocalProbability)}",
-                        (directional.ActiveCases is null ? $"the knot's upper end leaves min(20, n/10) = {Text(active)}" : $"the declared ActiveCases, {Text(active)},")
+            log.Add(new("Directional", $"A {Text(maxInteraction)}, q {Text(knotLevel.Value)}, p₀ {Text(directional.LocalProbability)}" + (perBlock >= 2 ? $", K {Text(perBlock)}" : ""),
+                        (floored ? $"K + 1 = {Text(active)}, BayesPPR's floor for a ridge block's knots," : directional.ActiveCases is null
+                            ? $"the knot's upper end leaves min(20, n/10) = {Text(active)}" : $"the declared ActiveCases, {Text(active)},")
                         + $" of the {Text(cases)} training cases above it, the paper's eq. (UL)"));
         }
 
-        int bound = n - 1;   // the intercept counts toward the dimension bound
+        int perTerm = s.Directional?.Columns ?? 1;   // a ridge block's K columns a term (E36's slice 3)
+        int bound = (n - 1) / perTerm;   // the intercept counts toward the dimension bound
         int maxBasis;
         if (s.MaxBasis is { } declared)
         {
             maxBasis = Math.Min(declared, bound);
-            if (declared > bound) log.Add(new("MaxBasis", Text(maxBasis), $"the declared {declared} exceeds N − 1, the bound with the intercept"));
+            if (declared > bound)
+                log.Add(new("MaxBasis", Text(maxBasis), perTerm == 1 ? $"the declared {declared} exceeds N − 1, the bound with the intercept"
+                                                                        : $"the declared {declared} exceeds ⌊(N − 1)/K⌋ at K = {Text(perTerm)} columns a term, the bound with the intercept"));
         }
         else
         {
             maxBasis = Math.Min(1000, bound);
-            log.Add(new("MaxBasis", Text(maxBasis), "min(1000, N − 1): R's 1,000, with the intercept counting toward the dimension bound"));
+            log.Add(new("MaxBasis", Text(maxBasis), perTerm == 1 ? "min(1000, N − 1): R's 1,000, with the intercept counting toward the dimension bound"
+                                                                    : $"min(1000, ⌊(N − 1)/K⌋) at K = {Text(perTerm)} columns a term: R's 1,000, with the intercept counting toward the dimension bound"));
         }
 
         SupportRule rule = s.Support;

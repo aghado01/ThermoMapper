@@ -165,7 +165,7 @@ internal static class BassSmcFit
                 BassDraw d = stores[c][i];
                 var f = new double[names.Count];
                 int k = 0;
-                f[k++] = d.Structure.TermIds.Length;
+                f[k++] = d.Structure.TermCount(model.Config.Structure.ColumnsPerTerm);
                 if (model.Target.SamplesTau) f[k++] = d.Tau;
                 f[k++] = Temperature.LogPosterior(model.Target.Evaluate(runs[c].Result.Particles[i].State));
                 if (d.Sigma is not null)
@@ -212,7 +212,7 @@ internal static class BassSmcFit
             SmcResult<BassParticle> result = runs[c].Result;
             double atCap = 0.0;
             for (int i = 0; i < n; i++)
-                if (stores[c][i].Structure.TermIds.Length == model.MaxBasis) atCap += result.Weights[i];
+                if (stores[c][i].Structure.TermCount(model.Config.Structure.ColumnsPerTerm) == model.MaxBasis) atCap += result.Weights[i];
             massAtCap += atCap / r;
             SmcStageReport last = result.Stages[^1];
             accounts[c] = new BassSmcReplicate(runs[c].Seed, result.Stages, last.Temperature.InverseTemperature, result.LogNormalizerRatio,
