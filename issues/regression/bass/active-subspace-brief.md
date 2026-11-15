@@ -215,6 +215,14 @@ Drafted at the user's request on 2026-11-13 ("Draft slice 8"), from the five ite
 
 Every fit built before it is separable, so its route and values are unchanged. Before slice 8 starts, read `e70447c`'s diff in those files. A change to them that BPPR's later slices need is agreed with Regression expansion first, and so is one of slice 8's in `DesignKernels` or `BassBasis`.
 
+**A request, 2026-11-15: the Poincaré check for a fit holding a term without factors.** It comes from the sampled-sensitivity chip's decision 7, in its user-approved [brief](sampled-sensitivity-brief.md), through Regression expansion. That chip leaves this brief's files alone, so the change is E8's to make or to refuse with a reason.
+- *Where:* `BassActiveSubspace`'s readout, where `Poincare` is null today for a non-separable scalar fit under a product law.
+- *The totals:* `BassSensitivity.Of(fit, data, new SensitivitySpec { Measures = spec.Measures, Route = Sampled, MaxOrder = 1, Points = spec.Points, Seed = SeedTree.Derive(spec.Seed, 1)[0], Draws = spec.Draws })`, read as `TotalVariance` and `TotalVarianceError` at measure index v.
+- *The proposed rule:* a violation where T_v − C_P·C_vv > 3·√(se_T² + (C_P·se_C)²), with C_P from `InputPoincareConstant.Of`. The two errors are added in quadrature, which holds when T and C come from independent draws: the derived seed gives that, and the report confirms it.
+- *Scope now:* the scalar fit only. Functional, basis and several-output fits come with that chip's slice 3.
+- *Its own test* reads the rule on a hand-built directional fit: at most 0.80 of the bound, no violation.
+- *When:* after 8a is reported and verified, as its own commit (8a′), so 8a's verification stays clean. Its code (`c5cea88`, `07f3c2a`) is under Regression expansion's verification; start from its note.
+
 **A. Co-active output functionals at new locations** (slice 6 left them at the training locations).
 - *What exists.* `CoActiveSpec.Output` and `OtherOutput` weight the training output locations. Slice 6 gave `OutputMetric` its `Locations` for a direct fit, whose output-side factors are hinges defined across the output variables' box.
 - *What to build.* Each side's functional over declared locations, for direct functional fits, read as `OutputMetric.Locations` reads them: matched by name, in the variables' units, inside their boxes. A basis fit refuses them, as `OutputMetric` does: its basis exists only at its training locations.
