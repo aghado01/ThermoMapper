@@ -1,0 +1,16 @@
+src/maths/distributions/GammaRatio.cs
+src/maths/regression/spline/bass/BassInputTransform.cs
+src/maths/regression/spline/bass/BassInputs.cs
+src/maths/regression/spline/bass/BassTerm.cs
+src/maths/regression/spline/bass/DesignKernel.cs
+src/maths/regression/spline/bass/DesignKernels.cs
+src/maths/regression/spline/bass/DirectionalHinge.cs
+src/maths/regression/spline/bass/sensitivity/ActiveSubspaces.cs
+src/maths/regression/spline/bass/sensitivity/BassActiveSubspace.cs
+src/maths/regression/spline/bass/sensitivity/BassMultiOutputSubspaces.cs
+tests/distributions/LogGammaRatioTests.cs
+tests/oracle/DiagramMetricsTransportParityTests.cs
+tests/oracle/ROracle.cs
+tests/regression/BassDesignKernelTests.cs
+tests/regression/DirectionalHingeTests.cs
+tests/regression/InputStandardizationTests.cs

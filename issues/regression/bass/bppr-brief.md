@@ -114,6 +114,26 @@ Under "Reports" below, newest first, per slice: what landed by commit; the gates
 
 ## Reports
 
+### Slice 1 verified from a clean archive (coordinating session, 2026-11-15)
+
+- **Commits:** `2eab479` and `9e249dc`, with `117230e` (`LogGammaRatio`'s small steps) and the defects chip's `ca56277` (the transport oracle's limit) in the same run: a snapshot of `e70447c`, through `scripts/verify-csharp.ps1` over sixteen changed files, in each of the eleven projects that select.
+- **Result,** selected classes at commit scope:
+  - Distributions 430 of 430; Regression 3,199 of 3,199; Samplers 259 of 259; Synthetic 29 of 29; DimReduction 83 of 83; Mapper 1 of 1; Ph 1 of 1; Geometry 4 of 4; VizCore 384 of 386, the two left by their own `Skip`; CumulativeField 15 of 15.
+  - Oracle 213 of 214. The transport cases pass under their own limit, in 3 m 55 s and 4 m 58 s.
+  - *The one failure* is `gbass_readouts_oracle.R` at ROracle's 120 s, in `GbassHorseshoeReadoutTests.HBass_MeetsCorrectedHbass_…`. Rerun alone from a snapshot of `569f3b7`, it timed out again.
+    - Since `0dad092` a test run's whole tree is below normal, R included; this oracle took 79 s alone at normal priority (slice 0's report).
+    - So this run does not confirm that test. It passed on the same code in the chip's slice 1 gates (Oracle 205 of 207, the two transport cases its only failures). It is confirmed here once the oracle's limit is read again at below normal, which is with the defects chip.
+  - No compiler error; the warnings are the standing ones.
+- **Read.**
+  - *The standardization:* z = a + b·u with a = (min − mean)/sd and b = (max − min)/sd follows from u's box scaling; no transform is persisted, so nothing stored lacks it.
+  - *The kernel:* the peak at the corner by θ's signs, under the box and under the training range; the derivative's θ_v·b_v; the guard at a hinge that is zero over the box.
+  - *The term:* the hash adds the directional part only where there is one, and equality reads it.
+  - *E8's route:* `Auto` is exact only when every term has factors; every fit built before this slice is separable, so its route is as it was.
+  - *The tests' hand computation* is from the definition in raw units, with its own compensated mean and deviation, apart from the kernel's path through u.
+- **`117230e`,** verified with this run: Distributions 430 of 430 here, and every other project that selects for `GammaRatio.cs`.
+- **For slice 2, one list to close in its report.** These files read a term's parts by kind and do not yet read `Directional`: `BassStructurePrior.cs`, `BassResidualBirth.cs`, `BassConfig.cs`, `BassResolved.cs`, `BassModel.cs`, `BassPriorPrecision.cs`, `sensitivity/BassSensitivity.cs` and `calibration/BassEmulators.cs`. Each either handles a directional term or refuses it with its reason.
+- **Receipts:** `artifacts/verify-bppr-s1-e70447c/` and `artifacts/verify-bppr-s1-oracle-rerun/`, with the changed lists, counters and snapshots tracked in [receipts](../receipts/verify-bppr-s1-e70447c/).
+
 ### Slice 1: the directional hinge (2026-11-14)
 
 The user cleared slice 1 before the verification note arrived. The note came during it, and confirms decisions 1, 3 and 7 at their recommendations, as built: the directional hinge first, the paper's standardization with the sample deviation, categorical inputs refused. The user has since settled the change move at a = 1 for slice 2, the fair coin with the knot drawn given the proposed sign, recorded under decision 5. `LogBeta` moves onto `LogGammaRatio` as the defects chip's change (its slice 9), not E36's.
