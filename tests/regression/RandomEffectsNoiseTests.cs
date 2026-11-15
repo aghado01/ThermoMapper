@@ -417,10 +417,14 @@ public sealed class RandomEffectsNoiseTests(ITestOutputHelper output)
     // Noise fits without a block keep their draws: pinned by hash on HEAD before the change.
     // Re-pinned for B1's relative PriorPencil, 2026-11-12. Retained structures and tau match the baseline; continuous
     // latent updates amplify the changed rounding. Ranges and old/new receipts: spectral-b1-stage-one-report.md.
+    // The skewed horseshoe re-pinned for LogBeta's ratio form, 2026-11-15 (the defects brief's slice 9), f5855f7382b9826b to
+    // ffb3bdc1f3cc86df: GBP(1, ½, ½)'s normalizer reads ln B(½, ½), 1.1447298858494 before and 1.1447298858493995 after (ln π is
+    // 1.1447298858494002). A density value and no decision: the same terms in all 300 draws, the same move accounts, every value
+    // within 1.8·10⁻⁷ of the old, carried through the continuous latent updates.
     [Theory]
     [Trait("Tier", "Pinned")]
     [InlineData("t", "0d6c539efe10a3bd")]
-    [InlineData("skewed horseshoe", "f5855f7382b9826b")]
+    [InlineData("skewed horseshoe", "ffb3bdc1f3cc86df")]
     [InlineData("tempered normal-wald", "8410c6ea70239f29")]
     public void ANoiseFitWithoutABlock_KeepsItsDraws(string fit, string expected)
     {

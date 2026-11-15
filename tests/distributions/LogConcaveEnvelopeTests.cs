@@ -268,7 +268,10 @@ public sealed class LogConcaveEnvelopeTests
     // its branch in x at α from just above 1 to 2.2, where the search met x = 0, and 6 in its ln x branch at α near 10⁻³, from a
     // reach on the exponential side. No other family's draw moved. Rebaselined with the GIG's ratio-of-uniforms draw (2026-11-06), which
     // takes its untruncated draws: ce13801abaff15d3 to 624f8b056215181a, exactly its 200 untruncated cases moved, none of its truncated
-    // ones (the hat's still) and no other family's.
+    // ones (the hat's still) and no other family's. Rebaselined with LogBeta's ratio form (2026-11-15, the defects brief's slice 9):
+    // 624f8b056215181a to b3ac20e6837559c3. 84 of the 1,311 cases moved, all of them families that read ln B: 48 of the 58 Beta cases,
+    // 23 of the 30 Student t's, 13 of the 25 mixtures; each draw within 1.1·10⁻⁸ of the old, so a value and no decision moved. No GIG,
+    // modified half-normal, gamma, inverse gamma, half-Cauchy, normal or Weibull case moved.
     [Fact]
     public void Draws_ArePinned()
     {
@@ -310,7 +313,7 @@ public sealed class LogConcaveEnvelopeTests
             total = Add(total, BitConverter.Int64BitsToDouble((long)hash));
         }
         _out.WriteLine($"draws' hash {total:x16}");
-        Assert.Equal("624f8b056215181a", total.ToString("x16"));
+        Assert.Equal("b3ac20e6837559c3", total.ToString("x16"));
     }
 
     // Found by a sweep of the GIG's own truncated draws, 4 of 4,000 cases at small |p|, a and b on far upper tails: the GIG's reach there
