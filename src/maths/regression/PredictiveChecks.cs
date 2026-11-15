@@ -132,13 +132,15 @@ public static class PredictiveChecks
             return (all, null);
         }
         double total = 0.0, largest = 0.0;
-        int positive = 0;
+        int positive = 0, read = 0;
         foreach (double w in weights)
         {
             total += w;
             if (w > 0.0) positive++;
             largest = Math.Max(largest, w);
+            read++;
         }
+        if (read != weights.Count) throw PassMismatch("first", read, weights);
         var rows = new int[positive];
         var log = new double[positive];
         int scale = 0;
@@ -155,7 +157,13 @@ public static class PredictiveChecks
                 {
                     scale = WeightScale.Exponent(largest);
                     scaledTotal = 0.0;
-                    foreach (double v in weights) scaledTotal += WeightScale.Scaled(v, scale);
+                    int scaledRead = 0;
+                    foreach (double v in weights)
+                    {
+                        scaledTotal += WeightScale.Scaled(v, scale);
+                        scaledRead++;
+                    }
+                    if (scaledRead != weights.Count) throw PassMismatch("scaled", scaledRead, weights);
                 }
                 ratio = WeightScale.Scaled(w, scale) / scaledTotal;
                 if (!(ratio >= SmallestNormal))
@@ -170,6 +178,17 @@ public static class PredictiveChecks
     }
 
     private const double SmallestNormal = 2.2250738585072014e-308;   // 2^−1022
+
+    // A pass over the draw weights that read another number of rows than the list's own Count. Once, in one whole-assembly run on
+    // six threads (2026-11-15), the scaled pass read as if it had summed nothing and 13 tests read non-finite weights; the reading
+    // left is a fault in Rows' tier-1 compiled code. The guard makes a recurrence an error that names itself (the defects brief's
+    // slice 10), never a wrong value.
+    private static InvalidOperationException PassMismatch(string pass, int read, IReadOnlyList<double> weights)
+        => new($"PredictiveChecks.Rows: its {pass} pass over the draw weights read {read} rows where the list's Count is " +
+               $"{weights.Count} (the weights' runtime type {weights.GetType().FullName}). This is the fault the defects brief's " +
+               "slice 10 traps (issues/regression/shared-code-defects-brief.md). Keep the run's folder: the trx, the JIT listing " +
+               "jit-Rows.txt beside it and the run's log. Record the command, the environment and what else was running, and tell " +
+               "the second coordinating session.");
 
     /// <summary>
     /// PSIS-LOO: per unit, the importance log-ratios −log p(y_u | θ_s), or log W_s − log p(y_u | θ_s) under weights, are

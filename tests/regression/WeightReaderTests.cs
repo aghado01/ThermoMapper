@@ -1,4 +1,6 @@
 using System;
+using System.Collections;
+using System.Collections.Generic;
 using System.Linq;
 using System.Numerics;
 using Maths.Regression.Conformal;
@@ -328,5 +330,58 @@ public sealed class WeightReaderTests(ITestOutputHelper output)
             return ConformalBayes.Distribution(Density(w), candidates, new ConformalOptions { MarginBounds = MarginBounds.Carried }).Distributions[0].Margin!.UnitCarriedErrors;
         }
         Assert.Equal(Carried(unit), Carried(big));
+    }
+
+    // ---- the guard (the defects brief's slice 10) ----
+
+    // A list whose enumerator yields `shift` rows more or fewer than its Count, from its `from`-th enumeration on; its indexer is
+    // true. Rows' fault cannot be called up, so the guard is tested by a list that miscounts on purpose.
+    private sealed class MiscountingList(double[] values, int shift, int from) : IReadOnlyList<double>
+    {
+        private int _enumerations;
+        public int Count => values.Length;
+        public double this[int index] => values[index];
+        public IEnumerator<double> GetEnumerator()
+        {
+            int n = _enumerations++ >= from ? Math.Max(0, values.Length + shift) : values.Length;
+            for (int i = 0; i < n; i++) yield return values[i % values.Length];
+        }
+        IEnumerator IEnumerable.GetEnumerator() => GetEnumerator();
+    }
+
+    // [1, ε] takes the scaled branch, so Rows passes over it twice; the first enumeration is its first pass, the second its scaled pass.
+    [Theory]
+    [InlineData(-1, 0, "first", 1)]
+    [InlineData(1, 0, "first", 3)]
+    [InlineData(-2, 1, "scaled", 0)]   // the run's fault: the scaled pass read nothing
+    [InlineData(-1, 1, "scaled", 1)]
+    [InlineData(1, 1, "scaled", 3)]
+    public void APassThatReadsAnotherCountThrows_NamingItself(int shift, int from, string pass, int read)
+    {
+        var weights = new MiscountingList([1.0, double.Epsilon], shift, from);
+        var thrown = Assert.Throws<InvalidOperationException>(() => PredictiveChecks.Rows(weights, 2));
+        output.WriteLine(thrown.Message);
+        Assert.Contains("PredictiveChecks.Rows", thrown.Message);
+        Assert.Contains($"its {pass} pass over the draw weights read {read} rows where the list's Count is 2", thrown.Message);
+        Assert.Contains(typeof(MiscountingList).FullName!, thrown.Message);
+        Assert.Contains("Keep the run's folder", thrown.Message);
+        Assert.Contains("tell the second coordinating session", thrown.Message);
+    }
+
+    [Fact]
+    public void ARightCountReadsAsBefore_AndAnOrdinaryRowHasNoScaledPass()
+    {
+        // A list that miscounts only from its second enumeration: ordinary weights never take a second pass, so it reads as the array.
+        double[] ordinary = [1.0, 2.0, 3.0];
+        (int[] rows, double[]? log) = PredictiveChecks.Rows(new MiscountingList(ordinary, -3, 1), 3);
+        (int[] arrayRows, double[]? arrayLog) = PredictiveChecks.Rows(ordinary, 3);
+        Assert.Equal(arrayRows, rows);
+        Assert.Equal(arrayLog, log);
+        // A list that counts right through both passes reads the scaled branch as the array does, bit for bit.
+        double[] tiny = [1.0, double.Epsilon];
+        (rows, log) = PredictiveChecks.Rows(new MiscountingList(tiny, 0, 0), 2);
+        (arrayRows, arrayLog) = PredictiveChecks.Rows(tiny, 2);
+        Assert.Equal(arrayRows, rows);
+        Assert.Equal(arrayLog, log);
     }
 }
