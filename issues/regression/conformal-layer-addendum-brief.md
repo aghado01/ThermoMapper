@@ -42,7 +42,7 @@ Opened 2026-11-14 at the user's word ("that brief was getting way too long, adde
 
     M-1 and M-2 are proved in Lean.
   - *Candidates,* each with the decision it would change:
-    - *The full form.* Each score is recomputed with the newest observation, through the add-one-in weights over the stream; E35's brief calls it valid by the same theorem. Decides whether the monitor tests the full step's own scores, not only a fixed fit's.
+    - *The full form, built and verified* (`b07fb8d`; its report below, with two follow-ups for the user: pruning draws by weight, and both forms' capitals combined, which first needs a reading of whether the average keeps Ville's guarantee). Each score is recomputed with the newest observation, through the add-one-in weights over the stream; E35's brief calls it valid by the same theorem. Decides whether the monitor tests the full step's own scores, not only a fixed fit's.
     - *The Sleepy Jumper.* Decides whether the monitor's bet can rest between jumps. It is defined in two places on the shelf:
       - Vovk, Nouretdinov and Gammerman 2003, "Testing exchangeability on-line": `supellex-private/PDFs/Bayesian/Vovk2003.pdf`, PDF page 6;
       - Vovk, Gammerman and Shafer 2005, *Algorithmic Learning in a Random World*, §7.1: the full book at `PDFs/textbooks/Vovk2005.pdf`, book pages 176–177. Chapter 7 is not among the chapter files in `PDFs/Vovk2005/`, which hold chapters 2, 6, 8, 9 and 10.
@@ -71,6 +71,7 @@ Built at the user's pick (2026-11-15, "The full form"), the first of the Vovk it
   - a pointer in `SmoothedPValues`' docstring.
 - `FullFormPValueTests` is a new class with 11 cases.
 - *What changes for existing calls: nothing.* The monitor's constructor still builds the inductive form, and `Add(double)` reads as before. The two forms refuse each other's input.
+- *Verified by the main session on 2026-11-15,* from a clean archive of `87d9966` with zero skips: the Commit selection over `b07fb8d`'s files, 131 of 131 ([receipts](receipts/verify-conformal-fullform-b07fb8d/)). The claim that no new Lean is needed was read: the full form's scores are recomputed from the bag, so they are equivariant, and M-1's premise covers them.
 
 **What it computes.**
 - *The posterior given the stream.*
