@@ -569,7 +569,12 @@ public sealed record ConformalSet(int Case, int Stratum, int Units, int Level, d
 
 /// <summary>The sets, one per test case in the candidates' order, at miscoverage <paramref name="Alpha"/>, from the full step or the
 /// split form's density score or the n-fold pairwise score (<paramref name="Form"/>).</summary>
-public sealed record ConformalPrediction(IReadOnlyList<ConformalSet> Sets, double Alpha, ConformalForm Form = ConformalForm.Full);
+public sealed record ConformalPrediction(IReadOnlyList<ConformalSet> Sets, double Alpha, ConformalForm Form = ConformalForm.Full)
+{
+    /// <summary>β where the split form's levels are the training-conditional rule's (<see cref="SplitCalibration.Confidence"/>); null for
+    /// CB-1's.</summary>
+    public double? Confidence { get; init; }
+}
 
 /// <summary>One candidate's conformity scores (<see cref="ConformalBayes.Scores"/>): the log scores of its stratum's training
 /// units, in <paramref name="Units"/>' order, the candidate's own, the add-one-in weights' Kish ESS, and each score's Monte Carlo

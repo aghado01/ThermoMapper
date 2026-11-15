@@ -13,9 +13,11 @@ public sealed class SplitPitCalibration
     private readonly Dictionary<int, int[]> _order = [];   // each stratum's calibration units, in their scores' sorted order
     private readonly int _units;
 
-    internal SplitPitCalibration(CandidateLogDensity calibration)
+    internal SplitPitCalibration(CandidateLogDensity calibration, double? confidence = null)
     {
         SplitConformal.CheckCalibration(calibration);
+        if (confidence is double c && !(c > 0.0 && c < 1.0)) throw new ArgumentOutOfRangeException(nameof(confidence), "β lies in (0, 1).");
+        Confidence = confidence;
         _draws = new SplitDraws(calibration);
         (_rows, double[]? logWeights) = PredictiveChecks.Rows(calibration.Weights, calibration.Draws);
         _weights = CdfScores.Weights(_rows, logWeights);
@@ -39,6 +41,10 @@ public sealed class SplitPitCalibration
         }
     }
 
+    /// <summary>β where each case's equi-tailed set takes the training-conditional level, both tails reading the PIT: the largest k per tail at
+    /// most ⌊αm/2⌋ whose Beta(2k, m − 2k) β-quantile is at most α; null for ⌊αm/2⌋.</summary>
+    public double? Confidence { get; }
+
     private static double[,] RequireCdf(CandidateLogDensity seam) =>
         seam.LogCdf ?? throw new ArgumentException("The predictive distribution requires a log CDF.", nameof(seam));
 
@@ -61,6 +67,7 @@ public sealed class SplitPitCalibration
     /// </summary>
     public ConformalDistributions OnGrid(CandidateLogDensity candidates, ShiftWeights? weights = null)
     {
+        SplitConformal.CheckConfidence(Confidence, weights);
         double[,] cdf = CheckCandidates(candidates);
         if (weights is not null)
         {
@@ -88,6 +95,7 @@ public sealed class SplitPitCalibration
             {
                 Weighted = weighed,
                 Smoothed = weighed is null ? SmoothAlong(units, own) : null,
+                Confidence = Confidence,
             };
         }
         return new ConformalDistributions(distributions, ConformalForm.Split);
@@ -144,6 +152,7 @@ public sealed class SplitPitCalibration
         ArgumentNullException.ThrowIfNull(candidateAt);
         ArgumentOutOfRangeException.ThrowIfNegative(testCase);
         ConformalBisection.CheckTolerance(tolerance);
+        SplitConformal.CheckConfidence(Confidence, weights);
         if (weights is not null)
         {
             if (weights.UnitCount != _units)
@@ -185,7 +194,7 @@ public sealed class SplitPitCalibration
             }
             if (equal) running = null;
         }
-        return new SplitPredictiveDistribution(h, Sorted(h), y => y == 0.0 ? atZero : Read(y), predictiveQuantile, tolerance, running, own);
+        return new SplitPredictiveDistribution(h, Sorted(h), y => y == 0.0 ? atZero : Read(y), predictiveQuantile, tolerance, running, own, Confidence);
     }
 }
 
@@ -201,8 +210,15 @@ public sealed class SplitPredictiveDistribution
     private readonly double _own;
 
     internal SplitPredictiveDistribution(int stratum, CdfScore[] sorted, Func<double, CdfScore> score,
-                                         Func<double, double>? quantile, double tolerance, double[]? running = null, double own = 0.0)
-        => (Stratum, _sorted, _score, _quantile, _tolerance, _running, _own) = (stratum, sorted, score, quantile, tolerance, running, own);
+                                         Func<double, double>? quantile, double tolerance, double[]? running = null, double own = 0.0,
+                                         double? confidence = null)
+        => (Stratum, _sorted, _score, _quantile, _tolerance, _running, _own, Confidence) = (stratum, sorted, score, quantile, tolerance, running, own, confidence);
+
+    /// <summary>β where the equi-tailed set takes the training-conditional level (<see cref="SplitPitCalibration.Confidence"/>).</summary>
+    public double? Confidence { get; }
+
+    // Each tail's k at α: ⌊αm/2⌋, or the training-conditional level under a confidence.
+    private int Level(double alpha) => Confidence is double b ? TrainingConditional.Level(Units, alpha, b, 2) : (int)Math.Floor(0.5 * alpha * Units);
 
     public int Stratum { get; }
     public int Units => _sorted.Length + 1;
@@ -269,7 +285,7 @@ public sealed class SplitPredictiveDistribution
     public double? TrainingConditionalMiscoverage(double alpha, double beta)
     {
         SplitConformal.CheckAlpha(alpha);
-        return _running is null ? TrainingConditional.Miscoverage(Units, 2 * (int)Math.Floor(0.5 * alpha * Units), beta) : null;
+        return _running is null ? TrainingConditional.Miscoverage(Units, 2 * Level(alpha), beta) : null;
     }
 
     /// <summary>Closed equi-tailed ends. With k = ⌊αm/2⌋, the fitted CDF must reach PIT k and stay at or below PIT m − k
@@ -278,7 +294,7 @@ public sealed class SplitPredictiveDistribution
     {
         SplitConformal.CheckAlpha(alpha);
         if (_running is not null) return WeightedInterval(alpha);
-        int k = (int)Math.Floor(0.5 * alpha * Units);
+        int k = Level(alpha);
         if (k == 0) return new(double.NegativeInfinity, double.PositiveInfinity);
         return new(Crossing(_sorted[k - 1], strict: false).Lower, Crossing(_sorted[Units - k - 1], strict: true).Upper);
     }

@@ -36,4 +36,8 @@ public sealed record AsymmetricConformalInterval(int Case, int Stratum, int Unit
 
 /// <summary>Asymmetric CQR intervals with the two calibration samples ranked at α/2.</summary>
 public sealed record AsymmetricConformalIntervals(IReadOnlyList<AsymmetricConformalInterval> Intervals, double Alpha,
-                                                 SplitCalibration LowerCalibration, SplitCalibration UpperCalibration);
+                                                 SplitCalibration LowerCalibration, SplitCalibration UpperCalibration)
+{
+    /// <summary>β where each tail's level is the training-conditional rule's at confidence (1 + β)/2; null for CB-1's.</summary>
+    public double? Confidence { get; init; }
+}

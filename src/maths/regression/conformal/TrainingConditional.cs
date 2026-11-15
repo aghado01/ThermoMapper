@@ -32,4 +32,26 @@ public static class TrainingConditional
         if (!(beta > 0.0 && beta < 1.0)) throw new ArgumentOutOfRangeException(nameof(beta), "β lies in (0, 1).");
         return level == 0 ? 0.0 : Beta.Shapes(level, units - level).Quantile(beta);
     }
+
+    /// <summary>The (α, β) level at <paramref name="units"/> m: the largest k at most ⌊α·m⌋ whose Beta(k, m − k) β-quantile is at most
+    /// α, so the sets it gives miss with chance at most α with chance at least <paramref name="beta"/> over the calibration units, and cover
+    /// at least 1 − k/m ≥ 1 − α marginally (Vovk 2012's (ε, δ)-validity). 0, the whole space, where even k = 1 passes α.</summary>
+    public static int Level(int units, double alpha, double beta) => Level(units, alpha, beta, 1);
+
+    // Each of `tails` tails' k, the tails reading one score: the largest k at most ⌊α·m/tails⌋ whose Beta(tails·k, m − tails·k) β-quantile
+    // is at most α, by bisection, the quantile rising in k.
+    internal static int Level(int units, double alpha, double beta, int tails)
+    {
+        SplitConformal.CheckAlpha(alpha);
+        ArgumentOutOfRangeException.ThrowIfLessThan(units, 1);
+        if (!(beta > 0.0 && beta < 1.0)) throw new ArgumentOutOfRangeException(nameof(beta), "β lies in (0, 1).");
+        int lo = 0, hi = (int)Math.Floor(alpha * units / tails);
+        if (hi == 0 || Miscoverage(units, tails * hi, beta) <= alpha) return hi;
+        while (hi - lo > 1)
+        {
+            int mid = lo + (hi - lo) / 2;
+            if (Miscoverage(units, tails * mid, beta) <= alpha) lo = mid; else hi = mid;
+        }
+        return lo;
+    }
 }

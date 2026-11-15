@@ -119,12 +119,17 @@ public sealed record ConformalDistribution(int Case, int Stratum, int Units, dou
     /// <summary>Q's mean over τ, (B + (T + 1)/2)/m, or (Q⁻ + Q⁺)/2 where weighed: the distribution the quantiles read.</summary>
     public double Mid(int g) => Weighted is { } w ? 0.5 * (w.Lower[g] + w.Upper[g]) : (Below[g] + 0.5 * (Tied[g] + 1)) / Units;
 
-    /// <summary>k = ⌊α·m/2⌋, each tail's level at miscoverage α: the counts', which a weighed case's set does not read.</summary>
+    /// <summary>k = ⌊α·m/2⌋, each tail's level at miscoverage α: the counts', which a weighed case's set does not read; under
+    /// <see cref="Confidence"/> the training-conditional level (<see cref="SplitPitCalibration.Confidence"/>).</summary>
     public int Level(double alpha)
     {
         CheckAlpha(alpha);
-        return (int)Math.Floor(0.5 * alpha * Units);
+        return Confidence is double b ? TrainingConditional.Level(Units, alpha, b, 2) : (int)Math.Floor(0.5 * alpha * Units);
     }
+
+    /// <summary>β where the split form's equi-tailed set takes the training-conditional level (<see cref="SplitPitCalibration.Confidence"/>);
+    /// null for ⌊α·m/2⌋.</summary>
+    public double? Confidence { get; init; }
 
     /// <summary>1 − 2k/m, the equi-tailed set's coverage; 1 − α where weighed.</summary>
     public double Coverage(double alpha) => Weighted is null ? 1.0 - 2.0 * Level(alpha) / Units : 1.0 - Checked(alpha);

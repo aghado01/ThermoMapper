@@ -41,8 +41,10 @@ public static class GroupConformal
     /// <param name="alpha">α.</param>
     /// <param name="score">How each group is scored (<see cref="GroupScore"/>).</param>
     /// <param name="seed">The draws' seed under <see cref="GroupScore.OneCase"/>.</param>
+    /// <param name="confidence">β: the level the training-conditional rule's over the groups (<see cref="SplitCalibration.Confidence"/>), so
+    /// a new group's units miss with chance at most α with chance at least β over the held-out groups; null for CB-1's.</param>
     public static ConformalPrediction Density(CandidateLogDensity calibration, IReadOnlyList<int> groupOf, CandidateLogDensity candidates,
-                                              double alpha = 0.1, GroupScore score = GroupScore.WorstCase, int seed = 0)
+                                              double alpha = 0.1, GroupScore score = GroupScore.WorstCase, int seed = 0, double? confidence = null)
     {
         ArgumentNullException.ThrowIfNull(groupOf);
         SplitConformal.CheckAlpha(alpha);
@@ -63,7 +65,7 @@ public static class GroupConformal
         var conformity = new double[calibration.Cases];
         SplitConformal.LogPredictive(calibration.Values, rows, logWeights, 0, calibration.Cases, conformity);
         double[] groupScores = Scores(conformity, groupOf, score, seed);
-        var fit = new SplitCalibration(groupScores, null, alpha);
+        var fit = new SplitCalibration(groupScores, null, alpha, confidence);
         int m = fit.Units(0), k = fit.Level(0);
         var sets = new ConformalSet[candidates.Cases];
         for (int t = 0; t < candidates.Cases; t++)
@@ -87,7 +89,7 @@ public static class GroupConformal
             }
             sets[t] = new ConformalSet(t, 0, m, k, grid, p, below, tied, own, null, Form: ConformalForm.Split);
         }
-        return new ConformalPrediction(sets, alpha, ConformalForm.Split);
+        return new ConformalPrediction(sets, alpha, ConformalForm.Split) { Confidence = confidence };
     }
 
     // Each group's score, in the groups' ascending order of label: its least conformity, or one case's drawn on the group's own stream.

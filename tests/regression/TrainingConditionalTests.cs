@@ -153,6 +153,140 @@ public sealed class TrainingConditionalTests(ITestOutputHelper output)
     }
 
     [Fact]
+    public void TheLevelRule_IsTheLargestKMeetingAlphaAndBeta()
+    {
+        foreach (int m in new[] { 20, 50, 100, 200, 1000, 10000 })
+        {
+            var row = new System.Text.StringBuilder($"m {m}: ⌊αm⌋ {(int)Math.Floor(0.1 * m)}");
+            int previous = int.MaxValue;
+            foreach (double beta in new[] { 0.5, 0.9, 0.99 })
+            {
+                int k = TrainingConditional.Level(m, 0.1, beta);
+                row.Append($", β {beta}: k {k}");
+                Assert.InRange(k, 0, (int)Math.Floor(0.1 * m));
+                Assert.True(TrainingConditional.Miscoverage(m, k, beta) <= 0.1);
+                Assert.True(k == (int)Math.Floor(0.1 * m) || TrainingConditional.Miscoverage(m, k + 1, beta) > 0.1);
+                Assert.True(k <= previous, "a higher confidence takes no larger k");
+                previous = k;
+                int pair = TrainingConditional.Level(m, 0.2, beta, 2);
+                Assert.InRange(pair, 0, (int)Math.Floor(0.5 * 0.2 * m));
+                Assert.True(TrainingConditional.Miscoverage(m, 2 * pair, beta) <= 0.2);
+                Assert.True(pair == (int)Math.Floor(0.5 * 0.2 * m) || TrainingConditional.Miscoverage(m, 2 * pair + 2, beta) > 0.2);
+            }
+            output.WriteLine(row.ToString());
+        }
+        Assert.Equal(0, TrainingConditional.Level(20, 0.1, 0.9));
+        Assert.Throws<ArgumentOutOfRangeException>(() => TrainingConditional.Level(100, 0.1, 1.0));
+        Assert.Throws<ArgumentOutOfRangeException>(() => TrainingConditional.Level(0, 0.1, 0.9));
+    }
+
+    [Fact]
+    public void SetsToTheGuarantee_MissAtMostAlpha_WithChanceAtLeastBeta()
+    {
+        // 4,000 replications each: the residual interval at m 200 and α 0.1, the asymmetric one's tails at α/2, and the equi-tailed set at α 0.2
+        // (2,000), each built to β 0.9 and plain; the share of calibrations whose sets miss a new unit with chance above α.
+        const double beta = 0.9;
+        var rng = new Xoshiro256PlusPlus(2026_1144);
+        var centre = new ResidualReadings(new double[199]);
+        var at = new ResidualReadings([0.0]);
+        var quantiles = new QuantileReadings(new double[199], new double[199]);
+        var test = new QuantileReadings([0.0], [0.0]);
+        int[] residual = new int[2], asymmetric = new int[2];
+        double[] width = new double[2];
+        const int replications = 4000;
+        for (int r = 0; r < replications; r++)
+        {
+            double[] y = [.. Enumerable.Range(0, 199).Select(_ => Gaussian(rng))];
+            for (int f = 0; f < 2; f++)
+            {
+                double? confidence = f == 1 ? beta : null;
+                ConformalInterval interval = SplitConformal.Residuals(centre, y, at, 0.1, null, confidence).Intervals[0];
+                if (Phi(interval.Lower) + Phi(-interval.Upper) > 0.1) residual[f]++;
+                width[f] += interval.Width / replications;
+                AsymmetricConformalInterval tails = SplitConformal.AsymmetricQuantiles(quantiles, y, test, 0.1, null, confidence).Intervals[0];
+                if (Phi(tails.Lower) + Phi(-tails.Upper) > 0.1) asymmetric[f]++;
+            }
+        }
+        const int pitReplications = 2000;
+        double[] slope = [.. Enumerable.Repeat(0.5, 10)];
+        var equi = new int[2];
+        for (int r = 0; r < pitReplications; r++)
+        {
+            double[] x = [.. Enumerable.Range(0, 99).Select(_ => Gaussian(rng))], y = [.. x.Select(v => 0.5 * v + Gaussian(rng))];
+            CandidateLogDensity calibration = ConformalPredictiveDistributionTests.Seam(slope, 1.0, null, x, [.. y.Select(v => new[] { v })]);
+            for (int f = 0; f < 2; f++)
+            {
+                SplitPredictiveDistribution d = SplitConformal.CalibrateDistribution(calibration, f == 1 ? beta : null)
+                    .AtCase(v => ConformalPredictiveDistributionTests.Seam(slope, 1.0, null, [0.4], [[v]]));
+                GridInterval set = d.Interval(0.2);
+                if (Phi(set.Lower - 0.2) + Phi(0.2 - set.Upper) > 0.2) equi[f]++;
+            }
+        }
+        double Share(int count, int of) => count / (double)of;
+        output.WriteLine($"residual, m 200, α 0.1: k {TrainingConditional.Level(200, 0.1, beta)} against 20; miss above α in {Share(residual[0], replications):F4} plain, "
+                         + $"{Share(residual[1], replications):F4} to β {beta}; mean width {width[0]:F3} and {width[1]:F3}");
+        output.WriteLine($"asymmetric: miss above α in {Share(asymmetric[0], replications):F4} plain, {Share(asymmetric[1], replications):F4} to β");
+        output.WriteLine($"equi-tailed, m 100, α 0.2: k {TrainingConditional.Level(100, 0.2, beta, 2)} per tail against 10; miss above α in "
+                         + $"{Share(equi[0], pitReplications):F4} plain, {Share(equi[1], pitReplications):F4} to β");
+        double se = Math.Sqrt(beta * (1 - beta) / replications), pitSe = Math.Sqrt(beta * (1 - beta) / pitReplications);
+        Assert.True(Share(residual[1], replications) <= 1 - beta + 3.5 * se);
+        Assert.True(Share(asymmetric[1], replications) <= 1 - beta + 3.5 * se);
+        Assert.True(Share(equi[1], pitReplications) <= 1 - beta + 3.5 * pitSe);
+        Assert.True(Share(residual[0], replications) > 0.3, "the plain level should miss above α often");
+        Assert.True(width[1] > width[0]);
+    }
+
+    [Fact]
+    public void TheConfidence_ReachesEverySplitForm_AndRefusesWeights()
+    {
+        var rng = new Xoshiro256PlusPlus(2026_1145);
+        double[] x = [.. Enumerable.Range(0, 300).Select(_ => Gaussian(rng))], y = [.. x.Select(v => 0.5 * v + Gaussian(rng))];
+        double[] slope = [0.45, 0.5, 0.55];
+        double[] grid = [.. Enumerable.Range(0, 21).Select(g => -3.0 + 0.3 * g)];
+        int[] strata = [.. Enumerable.Range(0, 300).Select(i => i % 3 == 0 ? 1 : 0)];
+        CandidateLogDensity heldOut = ConformalPredictiveDistributionTests.Seam(slope, 1.0, null, x, [.. y.Select(v => new[] { v })]);
+        CandidateLogDensity calibration = new(heldOut.Values, heldOut.Grids, heldOut.Latents, strata) { LogCdf = heldOut.LogCdf };
+        CandidateLogDensity at = ConformalPredictiveDistributionTests.Seam(slope, 1.0, null, [0.2, -0.3], [grid, grid]);
+        CandidateLogDensity candidates = new(at.Values, at.Grids, at.Latents, [0, 1]) { LogCdf = at.LogCdf };
+
+        ConformalPrediction density = SplitConformal.Density(calibration, candidates, 0.1, null, 0.9);
+        Assert.Equal(0.9, density.Confidence);
+        foreach (ConformalSet set in density.Sets)
+        {
+            Assert.Equal(TrainingConditional.Level(set.Units, 0.1, 0.9), set.Level);
+            Assert.True(set.TrainingConditionalMiscoverage(0.9) <= 0.1);
+        }
+        ConformalPrediction plain = SplitConformal.Density(calibration, candidates);
+        Assert.Equal((201, 20), (plain.Sets[0].Units, plain.Sets[0].Level));
+        Assert.Null(plain.Confidence);
+
+        SplitCalibration scores = SplitConformal.Calibrate([.. y.Select(Math.Abs)], strata, 0.1, 0.9);
+        for (int h = 0; h < 2; h++) Assert.Equal(TrainingConditional.Level(scores.Units(h), 0.1, 0.9), scores.Level(h));
+        Assert.Equal(0, scores.Level(5));
+        Assert.Equal(0.9, scores.Confidence);
+
+        ConformalSet group = GroupConformal.Density(heldOut, [.. Enumerable.Range(0, 300).Select(i => i / 3)], at, 0.1, confidence: 0.9).Sets[0];
+        Assert.Equal(TrainingConditional.Level(101, 0.1, 0.9), group.Level);
+
+        ConformalDistribution distribution = SplitConformal.Distribution(calibration, candidates, null, 0.9).Distributions[0];
+        Assert.Equal(0.9, distribution.Confidence);
+        Assert.Equal(TrainingConditional.Level(distribution.Units, 0.2, 0.9, 2), distribution.Level(0.2));
+        Assert.True(distribution.TrainingConditionalMiscoverage(0.2, 0.9) <= 0.2);
+        Assert.Equal((int)Math.Floor(0.1 * distribution.Units), SplitConformal.Distribution(calibration, candidates).Distributions[0].Level(0.2));
+
+        // Weights move the threshold case by case, which the law does not read; β outside (0, 1).
+        ShiftWeights weights = ShiftWeights.ByCase([.. x.Select(v => 1.0 + v * v)], [2.0, 1.5], [grid, grid]);
+        Assert.Throws<ArgumentException>(() => SplitConformal.Density(calibration, candidates, 0.1, weights, 0.9));
+        Assert.Throws<ArgumentException>(() => SplitConformal.Distribution(calibration, candidates, weights, 0.9));
+        Assert.Throws<ArgumentException>(() => SplitConformal.CalibrateDistribution(calibration, 0.9)
+            .AtCase(v => ConformalPredictiveDistributionTests.Seam(slope, 1.0, null, [0.2], [[v]]), weights: new ShiftWeights([.. x.Select(_ => 1.0)], [1.0])));
+        Assert.Throws<ArgumentException>(() => SplitConformal.Residuals(new ResidualReadings(new double[300]), y, new ResidualReadings([0.0]), 0.1,
+                                                                        new ShiftWeights([.. x.Select(v => 1.0 + v * v)], [2.0]), 0.9));
+        Assert.Throws<ArgumentOutOfRangeException>(() => SplitConformal.Calibrate([.. y], null, 0.1, 1.0));
+        Assert.Throws<ArgumentOutOfRangeException>(() => SplitConformal.CalibrateDistribution(calibration, 0.0));
+    }
+
+    [Fact]
     public void TheQuantile_IsTheBinomialTailsRoot_AndOnlySplitSetsReportIt()
     {
         // Beta(k, m − k)'s CDF at q is P(Bin(m − 1, q) ≥ k), summed here term by term.

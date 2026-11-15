@@ -27,11 +27,13 @@ public enum ConformalForm
 public sealed class SplitCalibration
 {
     private readonly double[][] _sorted;   // each stratum's calibration scores, ascending
+    private readonly int[]? _levels;       // each stratum's (α, β) level where a confidence is given
 
-    internal SplitCalibration(IReadOnlyList<double> scores, int[]? stratumOf, double alpha)
+    internal SplitCalibration(IReadOnlyList<double> scores, int[]? stratumOf, double alpha, double? confidence = null)
     {
         ArgumentNullException.ThrowIfNull(scores);
         SplitConformal.CheckAlpha(alpha);
+        if (confidence is double c && !(c > 0.0 && c < 1.0)) throw new ArgumentOutOfRangeException(nameof(confidence), "β lies in (0, 1).");
         if (stratumOf is not null && stratumOf.Length != scores.Count)
             throw new ArgumentException("One stratum per calibration unit is required.", nameof(stratumOf));
         int strata = 1;
@@ -57,10 +59,21 @@ public sealed class SplitCalibration
         }
         foreach (double[] s in _sorted) Array.Sort(s);
         Alpha = alpha;
+        Confidence = confidence;
+        if (confidence is double beta)
+        {
+            _levels = new int[strata];
+            for (int h = 0; h < strata; h++) _levels[h] = TrainingConditional.Level(_sorted[h].Length + 1, alpha, beta);
+        }
     }
 
     /// <summary>The miscoverage α.</summary>
     public double Alpha { get; }
+
+    /// <summary>β where each stratum's level is the training-conditional rule's (<see cref="TrainingConditional.Level(int, double, double)"/>):
+    /// its sets miss with chance at most α with chance at least β over its calibration units, and cover at least 1 − α marginally; null
+    /// for CB-1's ⌊α·m⌋.</summary>
+    public double? Confidence { get; }
 
     /// <summary>The strata numbered from 0 below this; any stratum at or past it holds no calibration unit.</summary>
     public int Strata => _sorted.Length;
@@ -68,8 +81,12 @@ public sealed class SplitCalibration
     /// <summary>m: the stratum's calibration units and the test unit.</summary>
     public int Units(int stratum) => Scores(stratum).Length + 1;
 
-    /// <summary>k = ⌊α·m⌋.</summary>
-    public int Level(int stratum) => (int)Math.Floor(Alpha * Units(stratum));
+    /// <summary>k = ⌊α·m⌋, or under <see cref="Confidence"/> the largest k at most that whose sets meet (α, β).</summary>
+    public int Level(int stratum)
+    {
+        ArgumentOutOfRangeException.ThrowIfNegative(stratum);
+        return _levels is { } levels ? (stratum < levels.Length ? levels[stratum] : 0) : (int)Math.Floor(Alpha * Units(stratum));
+    }
 
     /// <summary>The stratum's calibration scores, ascending.</summary>
     public ReadOnlySpan<double> Scores(int stratum)
@@ -239,9 +256,10 @@ internal readonly record struct SplitDraws(int Count, IReadOnlyList<int>? ChainL
 public static class SplitConformal
 {
     /// <summary>The calibration from any conformity scores, each calibration unit's under the fit, with their strata (null: all in
-    /// stratum 0).</summary>
-    public static SplitCalibration Calibrate(IReadOnlyList<double> scores, int[]? stratumOf = null, double alpha = 0.1)
-        => new(scores, stratumOf, alpha);
+    /// stratum 0). With <paramref name="confidence"/> β each stratum's level is the training-conditional rule's
+    /// (<see cref="SplitCalibration.Confidence"/>).</summary>
+    public static SplitCalibration Calibrate(IReadOnlyList<double> scores, int[]? stratumOf = null, double alpha = 0.1, double? confidence = null)
+        => new(scores, stratumOf, alpha, confidence);
 
     /// <summary>
     /// The split form under the predictive density score: <paramref name="calibration"/> is the fit's candidate density at the
@@ -249,9 +267,11 @@ public static class SplitConformal
     /// the test cases, on their grids. Both must hold the same draws, chain lengths, weights and latent report, so that every unit is
     /// read by one function. Each case's set is π on its grid within its stratum, as the full step reports it
     /// (<see cref="ConformalSet"/>), with no add-one-in weights: no ESS, no margin, no diagnostics.
+    /// With <paramref name="confidence"/> β each stratum's level is the training-conditional rule's (<see cref="TrainingConditional.Level(int, double, double)"/>):
+    /// its sets miss with chance at most α with chance at least β over the calibration units; not with weights.
     /// </summary>
     public static ConformalPrediction Density(CandidateLogDensity calibration, CandidateLogDensity candidates, double alpha = 0.1,
-                                              ShiftWeights? weights = null)
+                                              ShiftWeights? weights = null, double? confidence = null)
     {
         CheckAlpha(alpha);
         CheckPair(calibration, candidates);
@@ -259,7 +279,8 @@ public static class SplitConformal
         (int[] rows, double[]? logWeights) = PredictiveChecks.Rows(calibration.Weights, calibration.Draws);
         var scores = new double[calibration.Cases];
         LogPredictive(calibration.Values, rows, logWeights, 0, calibration.Cases, scores);
-        var fit = new SplitCalibration(scores, calibration.StratumOf, alpha);
+        CheckConfidence(confidence, weights);
+        var fit = new SplitCalibration(scores, calibration.StratumOf, alpha, confidence);
         WeightedCalibration? shared = weights is { UnitsByCase: null } ? Weighted(weights, scores, calibration.StratumOf, alpha, candidates.Values.GetLength(1), 0, candidates.Cases) : null;
         var sets = new ConformalSet[candidates.Cases];
         for (int t = 0; t < candidates.Cases; t++)
@@ -302,7 +323,7 @@ public static class SplitConformal
             }
             sets[t] = new ConformalSet(t, h, m, k, grid, p, below, tied, own, null, Form: ConformalForm.Split);
         }
-        return new ConformalPrediction(sets, alpha, ConformalForm.Split);
+        return new ConformalPrediction(sets, alpha, ConformalForm.Split) { Confidence = confidence };
     }
 
     /// <summary>
@@ -315,13 +336,16 @@ public static class SplitConformal
     /// recalibrated by the calibration PITs, valid for any fit (CB-2), PIT included. Both seams must hold their log CDF, the same
     /// draws, chain lengths, weights and latent report. With <paramref name="weights"/> each case whose shift weights are not all one value
     /// reads its weighted ranks (<see cref="ConformalDistribution.Weighted"/>, slice 14's follow-up 1): its PIT exactly uniform under
-    /// covariate or response shift with the true ratio (<c>pit_weighted</c>).
+    /// covariate or response shift with the true ratio (<c>pit_weighted</c>). With <paramref name="confidence"/> β each case's equi-tailed
+    /// set takes the training-conditional level (<see cref="SplitPitCalibration.Confidence"/>); not with weights.
     /// </summary>
-    public static ConformalDistributions Distribution(CandidateLogDensity calibration, CandidateLogDensity candidates, ShiftWeights? weights = null)
-        => CalibrateDistribution(calibration).OnGrid(candidates, weights);
+    public static ConformalDistributions Distribution(CandidateLogDensity calibration, CandidateLogDensity candidates, ShiftWeights? weights = null,
+                                                      double? confidence = null)
+        => CalibrateDistribution(calibration, confidence).OnGrid(candidates, weights);
 
-    /// <summary>Sort the held-out PITs once per stratum for grid-free quantiles and equi-tailed sets at new cases.</summary>
-    public static SplitPitCalibration CalibrateDistribution(CandidateLogDensity calibration) => new(calibration);
+    /// <summary>Sort the held-out PITs once per stratum for grid-free quantiles and equi-tailed sets at new cases; with
+    /// <paramref name="confidence"/> β the sets take the training-conditional level (<see cref="SplitPitCalibration.Confidence"/>).</summary>
+    public static SplitPitCalibration CalibrateDistribution(CandidateLogDensity calibration, double? confidence = null) => new(calibration, confidence);
 
     // CB-2's alignment: calibration units each on their response, and every unit read by one function.
     private static void CheckPair(CandidateLogDensity calibration, CandidateLogDensity candidates)
@@ -344,16 +368,19 @@ public static class SplitConformal
     /// The split form under CQR's score: the fit's quantiles at the calibration cases with their observed
     /// <paramref name="response"/>, and at the test cases. Each test case's set is the interval [q_lo − Q, q_hi + Q], Q the negated
     /// threshold of its stratum (<c>cqr_ordConnected</c>): the k-th largest of the calibration units' max(q_lo − y, y − q_hi).
+    /// With <paramref name="confidence"/> β each stratum's level is the training-conditional rule's (<see cref="TrainingConditional.Level(int, double, double)"/>):
+    /// its sets miss with chance at most α with chance at least β over the calibration units; not with weights.
     /// </summary>
     public static ConformalIntervals Quantiles(QuantileReadings calibration, IReadOnlyList<double> response, QuantileReadings test, double alpha = 0.1,
-                                               ShiftWeights? weights = null)
+                                               ShiftWeights? weights = null, double? confidence = null)
     {
         CheckAlpha(alpha);
         int n = Check(calibration, response, nameof(calibration));
         int cases = Check(test, null, nameof(test));
         var scores = new double[n];
         for (int i = 0; i < n; i++) scores[i] = CqrScore(calibration.Lower[i], calibration.Upper[i], response[i]);
-        var fit = new SplitCalibration(scores, calibration.StratumOf, alpha);
+        CheckConfidence(confidence, weights);
+        var fit = new SplitCalibration(scores, calibration.StratumOf, alpha, confidence);
         WeightedCalibration? shared = weights is { UnitsByCase: null } ? Weighted(weights, scores, calibration.StratumOf, alpha, cases, 0, cases) : null;
         var intervals = new ConformalInterval[cases];
         for (int t = 0; t < cases; t++)
@@ -376,9 +403,11 @@ public static class SplitConformal
 
     /// <summary>Asymmetric CQR (<c>cqrAsym_coverage_half</c>): calibrate y − q_lo and q_hi − y separately at α/2.
     /// Each tail's zero level gives an infinite end. The fit uses the training split, and calibration and test units must be
-    /// exchangeable given that split.</summary>
+    /// exchangeable given that split. With <paramref name="confidence"/> β each tail takes the training-conditional level at α/2 and
+    /// confidence (1 + β)/2, so by their union the interval misses with chance at most α with chance at least β; not with weights.</summary>
     public static AsymmetricConformalIntervals AsymmetricQuantiles(QuantileReadings calibration, IReadOnlyList<double> response,
-                                                                   QuantileReadings test, double alpha = 0.1, ShiftWeights? weights = null)
+                                                                   QuantileReadings test, double alpha = 0.1, ShiftWeights? weights = null,
+                                                                   double? confidence = null)
     {
         CheckAlpha(alpha);
         int n = Check(calibration, response, nameof(calibration));
@@ -394,8 +423,10 @@ public static class SplitConformal
         }
         // A subnormal α can round α/2 to zero. Its finite ranks are still zero at every supported sample size.
         double tailAlpha = Math.Max(double.Epsilon, alpha / 2);
-        var lo = new SplitCalibration(lower, calibration.StratumOf, tailAlpha);
-        var hi = new SplitCalibration(upper, calibration.StratumOf, tailAlpha);
+        CheckConfidence(confidence, weights);
+        double? tailConfidence = confidence is double b ? (1.0 + b) / 2.0 : null;
+        var lo = new SplitCalibration(lower, calibration.StratumOf, tailAlpha, tailConfidence);
+        var hi = new SplitCalibration(upper, calibration.StratumOf, tailAlpha, tailConfidence);
         WeightedCalibration? sharedLo = weights is { UnitsByCase: null } ? Weighted(weights, lower, calibration.StratumOf, tailAlpha, cases, 0, cases) : null;
         WeightedCalibration? sharedHi = weights is { UnitsByCase: null } ? Weighted(weights, upper, calibration.StratumOf, tailAlpha, cases, 0, cases) : null;
         var intervals = new AsymmetricConformalInterval[cases];
@@ -414,23 +445,26 @@ public static class SplitConformal
             intervals[t] = new(t, h, lo.Units(h), lo.Level(h), hi.Level(h), cLo, cHi,
                                test.Lower[t] + cLo, test.Upper[t] - cHi);
         }
-        return new(intervals, alpha, lo, hi);
+        return new(intervals, alpha, lo, hi) { Confidence = confidence };
     }
 
     /// <summary>
     /// The split form under the standardized residual's score: the fit's centre and scale at the calibration cases with their
     /// observed <paramref name="response"/>, and at the test cases. Each test case's set is the interval μ ± Qρ, Q the negated
     /// threshold of its stratum: the k-th largest of the calibration units' |y − μ|/ρ.
+    /// With <paramref name="confidence"/> β each stratum's level is the training-conditional rule's (<see cref="TrainingConditional.Level(int, double, double)"/>):
+    /// its sets miss with chance at most α with chance at least β over the calibration units; not with weights.
     /// </summary>
     public static ConformalIntervals Residuals(ResidualReadings calibration, IReadOnlyList<double> response, ResidualReadings test, double alpha = 0.1,
-                                               ShiftWeights? weights = null)
+                                               ShiftWeights? weights = null, double? confidence = null)
     {
         CheckAlpha(alpha);
         int n = Check(calibration, response, nameof(calibration));
         int cases = Check(test, null, nameof(test));
         var scores = new double[n];
         for (int i = 0; i < n; i++) scores[i] = ResidualScore(calibration.Center[i], calibration.Scale?[i] ?? 1.0, response[i]);
-        var fit = new SplitCalibration(scores, calibration.StratumOf, alpha);
+        CheckConfidence(confidence, weights);
+        var fit = new SplitCalibration(scores, calibration.StratumOf, alpha, confidence);
         WeightedCalibration? shared = weights is { UnitsByCase: null } ? Weighted(weights, scores, calibration.StratumOf, alpha, cases, 0, cases) : null;
         var intervals = new ConformalInterval[cases];
         for (int t = 0; t < cases; t++)
@@ -486,6 +520,14 @@ public static class SplitConformal
         double shift = logWeights is null ? Math.Log(rows.Length) : 0.0;
         for (int b = 0; b < count; b++)
             into[b] = total[b] > 0.0 ? (logWeights is null ? top[b] + Math.Log(total[b]) - shift : top[b] + Math.Log(total[b])) : double.NegativeInfinity;
+    }
+
+    // The training-conditional level is CB-1's rank rule's; a weighted threshold moves with each case's weights, which its law does not read.
+    internal static void CheckConfidence(double? confidence, ShiftWeights? weights)
+    {
+        if (confidence is not null && weights is not null)
+            throw new ArgumentException("The confidence sets CB-1's level by the training-conditional law; a weighted threshold moves with each "
+                                        + "case's weights, which that law does not read.", nameof(confidence));
     }
 
     internal static void CheckAlpha(double alpha)
