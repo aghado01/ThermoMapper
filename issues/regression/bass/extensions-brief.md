@@ -623,6 +623,7 @@ Observational covariates, constrained parameter spaces and any calibrated poster
   - *Shapley effects* cost more, dropping under G4 from a double loop to a single one.
   - *Monte Carlo over θ draws with O-X4's analytic gradients,* the fallback for any measure and any kernel.
 - **The consumer's shape** is the [review's open question](lineage-review.md#separability-is-what-the-closed-forms-rest-on), settled at E8.
+- **The kernel side first** (2026-11-15, at the user's word that E36's dependencies come first): a [draft build brief](sampled-sensitivity-brief.md) for Sobol indices and effects on a sampled route under a product law, for fits holding a term without factors, which today is E36's directional hinge. It waits on the user's review. The readouts above, for dependent inputs, stay with this entry.
 
 ## Stochastic emulation through latent inputs
 
