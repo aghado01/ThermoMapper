@@ -1,6 +1,6 @@
 # Active subspaces on the BASS core: E8's build (chip brief)
 
-Date: 2026-11-08. Status: slices 0–7e complete and verified; slice 8, the five unbuilt items, commissioned by the user on 2026-11-14 at the plan's recommended options; slice 8a (`01035ce` to `978c960`) landed and was verified on 2026-11-15; the queued request, 8a′ (`7cca408`, report below), landed the same day and waits for verification, with 8b and 8c after it; what stays open is under [Open items](#open-items-2026-11-13); slice 7's plan approved by the user (2026-11-10); slice 7a (`7b2ca7a`) verified 2026-11-11; slice 7b (`70a2aa2`) verified 2026-11-11; slice 7c (`015d977`) verified 2026-11-11; slice 7d, the training-range hinge rule the user chose for projected fits (2026-11-11), landed (`566c1f1` to `6aff134`) and was verified 2026-11-13 (2,502 of 2,502 from a clean archive of `788d249`); slice 7e, the frame's column signs, commissioned by the user on 2026-11-13 (below), landed (`9b9e4e1` to `199abd7`) and was verified the same day in seven test projects (below). Commissioned by the user on 2026-11-08 ("kick off e8"), after KHAOS's last slice; slice 5, the Grassmann discussion's items the user settled, commissioned 2026-11-08 ("ill take as recommended"). Every slice landed and was verified by the coordinating session on 2026-11-08: slice 0 (`15fb495`, `9e3028d`, `aa62879`), slice 1 (`95294f8`, `9dfcc6d`, `1385b86`), slice 2 (`8c7db77`, `3cdc2e8`), slice 3 (`84fe230`, `1049055`), slice 4 (`20aeb06`, `bc72014`) and slice 5 (`def59f3`, `9d2ff23`, `95d2900`, `a54a537`). The follow-ups, commissioned 2026-11-10: slice 6 (`276af70`, `e9d8827`, `30df59e`, `9a669b6`, report `3c26660`) verified by the coordinating session on 2026-11-10; slice 7's plan, approved 2026-11-10, was built as 7a to 7c; E36's brief ([`bppr-brief.md`](bppr-brief.md)) is drafted and waits for the user's approval. Written by the main session from [E8's entry](extensions-brief.md#active-subspace-analysis), [gap G3](lineage-gaps-register.md#g3-sobol-indices-and-active-subspaces-have-different-standing), [the lineage review's separability question](lineage-review.md#separability-is-what-the-closed-forms-rest-on), the [Astra notes](../archive/bass-gbass-khaos-activespaces/discussion/astra-grassman-stiefel-pca-extensions.md), and the [Grassmann discussion](../archive/bass-gbass-khaos-activespaces/briefs/grassmann-stiefel-subspaces-brief.md)'s report so far. Reports go under "Reports" below, newest first.
+Date: 2026-11-08. Status: slices 0–7e complete and verified; slice 8, the five unbuilt items, commissioned by the user on 2026-11-14 at the plan's recommended options; slice 8a (`01035ce` to `978c960`) landed and was verified on 2026-11-15; the queued request, 8a′ (`7cca408`), landed and was verified the same day; slice 8b (`db82c2d`, report below) landed the same day and waits for verification, with 8c after it; what stays open is under [Open items](#open-items-2026-11-13); slice 7's plan approved by the user (2026-11-10); slice 7a (`7b2ca7a`) verified 2026-11-11; slice 7b (`70a2aa2`) verified 2026-11-11; slice 7c (`015d977`) verified 2026-11-11; slice 7d, the training-range hinge rule the user chose for projected fits (2026-11-11), landed (`566c1f1` to `6aff134`) and was verified 2026-11-13 (2,502 of 2,502 from a clean archive of `788d249`); slice 7e, the frame's column signs, commissioned by the user on 2026-11-13 (below), landed (`9b9e4e1` to `199abd7`) and was verified the same day in seven test projects (below). Commissioned by the user on 2026-11-08 ("kick off e8"), after KHAOS's last slice; slice 5, the Grassmann discussion's items the user settled, commissioned 2026-11-08 ("ill take as recommended"). Every slice landed and was verified by the coordinating session on 2026-11-08: slice 0 (`15fb495`, `9e3028d`, `aa62879`), slice 1 (`95294f8`, `9dfcc6d`, `1385b86`), slice 2 (`8c7db77`, `3cdc2e8`), slice 3 (`84fe230`, `1049055`), slice 4 (`20aeb06`, `bc72014`) and slice 5 (`def59f3`, `9d2ff23`, `95d2900`, `a54a537`). The follow-ups, commissioned 2026-11-10: slice 6 (`276af70`, `e9d8827`, `30df59e`, `9a669b6`, report `3c26660`) verified by the coordinating session on 2026-11-10; slice 7's plan, approved 2026-11-10, was built as 7a to 7c; E36's brief ([`bppr-brief.md`](bppr-brief.md)) is drafted and waits for the user's approval. Written by the main session from [E8's entry](extensions-brief.md#active-subspace-analysis), [gap G3](lineage-gaps-register.md#g3-sobol-indices-and-active-subspaces-have-different-standing), [the lineage review's separability question](lineage-review.md#separability-is-what-the-closed-forms-rest-on), the [Astra notes](../archive/bass-gbass-khaos-activespaces/discussion/astra-grassman-stiefel-pca-extensions.md), and the [Grassmann discussion](../archive/bass-gbass-khaos-activespaces/briefs/grassmann-stiefel-subspaces-brief.md)'s report so far. Reports go under "Reports" below, newest first.
 
 ## Why
 
@@ -311,8 +311,8 @@ Slice 8 is commissioned (2026-11-14); 8a has landed and waits for verification. 
 **Unbuilt** (slices 6 and 7c). The user intends to commission these (2026-11-13), after other loose ends and before BPPR. [Slice 8's plan](#slice-8s-plan-the-unbuilt-readout-and-comparison-items-2026-11-13-for-the-users-call) drafts them, with the decisions they need:
 - Co-active output functionals at locations beyond the training ones. *Built in slice 8a (`39fbc4d`).*
 - Poincaré constants for Student t, empirical and mixture laws. Uniform and truncated normal laws have them. *Built in slice 8a (`fdeab86`): mixtures and Student t laws take the finite-element constant; the empirical law has none, a finding.*
-- Cross-fitting with groupings or case weights.
-- A held-out log predictive density in the comparison.
+- Cross-fitting with groupings or case weights. *Built in slice 8b (`db82c2d`).*
+- A held-out log predictive density in the comparison. *Built in slice 8b (`db82c2d`), for scalar responses.*
 - Basis fits through a projection.
 
 **Decided since their reports:** the training range as BASS's default for wide declared domains, which the user declined on 2026-11-13 (slice 7d's report).
@@ -345,6 +345,61 @@ Slice 8 is commissioned (2026-11-14); 8a has landed and waits for verification. 
 Under "Reports" below, newest first, per slice: what landed by commit; the gates' numbers; decisions taken beyond this brief; what was left unbuilt and why; follow-ups with the decision each would change.
 
 ## Reports
+
+### Slice 8b: the comparison's held-out density, and cross-fitting with groupings and case weights (2026-11-15)
+
+**Asked for:** slice 8's items C and D at the recommended options:
+- C1(a): scalar responses now, a functional fit's density refused with that reason;
+- D1(a): case folds by default, with group folds opt-in;
+- D2(a): scores by the weights' meaning.
+
+**Landed:** `db82c2d`, one commit. C and D share `BassProjectionComparison`'s side and fold loops, so they land together.
+
+**What was built:**
+- *C, the held-out log predictive density.*
+  - Σᵢ cᵢ·ln Σ_s w̃_s p(yᵢ | xᵢ, θ_s), read through the candidate seam (`BassFit.CandidateLogDensity`, the conformal chip's, read and not edited), each held-out response its case's one candidate.
+  - The seam reads every noise law (with its quadrature where the density is an integral), the case weights and random effects. A new group's effect is integrated from its prior, and cases under random effects take their cells as strata.
+  - It is `ProjectionFitReport.HeldOutLogDensity` on both sides. Under cross-fitting it is reported per fold, with the folds' totals (`CrossFitReport.NativeLogDensity`, `RefitLogDensity` and their totals).
+  - It is null for a response that is not scalar (C1).
+- *D, groupings and case weights in cross-fitting.*
+  - Each fold's data carry the groupings' columns, levels kept, and the weights' rows. The held-out cases carry their group columns into prediction and the density.
+  - A level no training fold took is a new group: prediction puts its effect at zero and the density integrates it. Data with groupings predict with `UnseenLevel.OutsideEverySubset` for that reason, which also places a predictor's unseen level outside every subset.
+  - `ProjectionComparisonSpec.FoldGrouping` (opt-in) assigns a grouping's observed levels whole to folds, shuffled and cut as cases are.
+  - `TestWeights` gives held-out cases' weights. It is required on weighted data and refused otherwise.
+  - Replication weights count each case wᵢ times in the RMSE, the sd and the density; the seam then reads one observation, weight 1. Precision weights enter the density through the seam as σ²/wᵢ, and each case counts once in the RMSE.
+  - 7c's refusal of groupings and weights is gone, replaced by these.
+- *Unchanged bits:* without weights or groupings the scores' arithmetic is 7c's, every count 1, and slice 7c's comparison tests read as before.
+
+**Gates:**
+
+| Gate | Reading |
+| --- | --- |
+| The held-out density on 7b's ridge, 300 cases, Gaussian noise, against Σ_r ln Σ_d w_d N(y_r; f_d, σ_d²) from each side's prediction | native 206.344 to 5.5·10⁻¹⁶, refit 335.964 exactly |
+| Draw weights 1 to 3 against the draws replicated by them | 2.8·10⁻¹⁶ |
+| Under a Student t noise (ν = 5) against the seam's own values | exact |
+| Replication weights 1 to 3, 60 held-out cases, against the same cases duplicated at weight 1 | RMSE, percentage and density alike, worst 2.4·10⁻¹⁶, both sides |
+| Precision weights 0.5 to 2 | the density against Σ_r ln Σ_d w_d N(y_r; f_d, σ_d²/w_r) to 6.6·10⁻¹⁶; the RMSE once per case, exactly |
+| Group folds under a random intercept, 8 levels over 120 cases, 4 folds | disjoint, covering every case, each level in one fold, two levels a fold; every held-out case a new group, its density finite through the integrated effect; the folds' densities sum to the totals |
+| The same data by case folds | all 8 levels spread across folds |
+| Group folds, 6 levels, fold 0's responses raised by 50 | fold 0's frame the same bits, folds 1 and 2's moved |
+| Refusals | held-out cases without weights on weighted data; weights on unweighted data or without cases; a weight count off; an unknown fold grouping; more folds than observed levels; a fold grouping without folds |
+| Slice 7b and 7c's projection classes | 15 of 15, their readings as before (native held-out RMSE 0.1161, refit 0.0788; cross-fitted 0.1874 and 0.1183) |
+| 8b's own class | 6 of 6, after two tests took a random intercept: the engine refuses a grouping no random effect reads |
+| The whole Regression assembly from HEAD `84fa2e6` plus the commit's files | 3,682 of 3,682 (18 min 4 s) |
+
+**Readings:** with groups held out whole, the refit's density beats the native fit's, 23.78 against −5.87; by case folds, 65.11 against 15.50. Pooled RMSE by levels is 0.1925 against 0.2500.
+
+**Decisions beyond the brief:**
+1. *A fold grouping must be one of the data's groupings, which BASS reads only through random effects.* Data with a grouping and no random effects are refused at the fit. So leave-groups-out is asked of a random-effects fit, the question it answers.
+2. *Unseen levels* are placed outside every subset whenever the data hold groupings, for prediction and the density alike.
+3. *The densities are computed whenever held-out cases or folds are,* for a scalar response, at one candidate density per fold and side.
+
+**Doc changes owed:**
+- `docs/Maths/Regression/ActiveSubspaces.md`, slice 7's comparison section:
+  - the held-out density through the seam;
+  - the weights' meaning in each score;
+  - group folds and the new-group reading;
+  - the unseen-level rule.
 
 ### Slice 8a′: the Poincaré check for a scalar fit without factors, from sampled totals (2026-11-15)
 
