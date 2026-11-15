@@ -27,6 +27,8 @@ Opened 2026-11-14 at the user's word ("that brief was getting way too long, adde
 
 - **Slice 17's remaining follow-up** (its report): CBMA's evidence from the engines' own fits.
 - **RoBAS-Full's sets as intervals for n ≥ 4,** a conjecture (the probe's report). At n 2 and 3 they can fall in two pieces, one about the prior's centre and one about the data. From n 4 to 50 none was found. A proof would go by Bersson and Hoff's lemma. Commissioned to the conformal Lean chip at the user's word (2026-11-14, "Yes, send it"). It decides whether `Intervals` serves RoBAS-Full from n 4.
+  - *Proved, computer-assisted,* by the Lean chip. The slope at every zero is at least 0.082 at n 4 and at least 0.93 from n 5. The one transcendental input is three bounds on Dawson's function and one window bound, certified by decimal intervals on 5,325 cells.
+  - *Lean scope, the user's choice (2026-11-14, "A: bounds as hypotheses"):* everything else in Lean, with the four bounds as named hypotheses. They are stated on the module's own Dawson function, with constants from one source the checks certify. Being built.
 - **Slice 15's alternation speed** along the factorization's flat directions. It decides the cost at large n.
 - **τ through richer features,** the ratio estimator's open follow-up. It decides whether the layer offers a nonparametric τ.
 
