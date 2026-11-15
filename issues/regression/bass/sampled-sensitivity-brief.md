@@ -83,6 +83,134 @@ Under "Reports" below, newest first, per slice: what landed by commit; the gates
 
 ## Reports
 
+### Slice 1: Sobol on the sampled route, a scalar fit (2026-11-15)
+
+The coordinating session's note on starting slice 1: build what decision 3's form does not touch. The form of a main variance is with the user, so it stays a choice made in one place, `PickFreezeDesign`, and slice 1's gates read both forms. Until the user rules, the default is Saltelli's centred form, the brief's approved decision 3.
+
+**Landed** (each commit carries its own tests):
+- `5f9cdef`: the form as a choice (`MainVarianceForm`). It also registers slice 0's centring comparison in `ComparativeSweep`.
+  - `PickFreezeDesign` takes the form, Saltelli's by default.
+  - The two-difference form reads each block's reverse hybrid B_A^u (`Reverse`), N(2p + 2) values for first-order and total indices.
+  - `PickFreeze.Estimate` takes the reverse hybrids, required by that form and refused by Saltelli's.
+  - *The form:* (−1)^{|u|}·mean(D^B_u D^A_u)/2^{|u|}. f(B_A^v) and f(A_B^w) share x on v Δ w, so E[D^B_u D^A_u] = Σ_{v,w⊆u} s(v)s(w)τ_{vΔw} = 2^{|u|}(−1)^{|u|}V_u, since each d ⊆ u arises as v Δ w in 2^{|u|} ways. It is unbiased and shift-invariant.
+  - *Its error:* sd/√N of its per-row term, which is a product of two differences, each small when the piece is.
+  - *The registration:* the comparison moves into `PickFreezeTests.CentringSpread(shift, seed)`, as `CONTRIBUTING.md`'s rule on comparative assertions asks. Slice 0's test asserted it inline; my review found that.
+- `c5cea88`: the sampled route for a scalar fit.
+  - *Decision 1, the route:* `SensitivitySpec` gains `Route` (`Auto`, `Exact`, `Sampled`), `Points` (N = 4096) and `Seed` (1).
+    - `Auto` is exact when every term the selected draws hold has factors (`DesignKernels.Separable`), sampled otherwise.
+    - `Exact` refuses a term without factors up front, naming the term it meets: "is not a product of one-variable factors". It names no kind of term, so the refusal holds for directional hinges and ridge columns alike.
+    - `Sampled` runs on any scalar fit.
+  - *The points:* 2N rows from E8's sampler (`BassActiveSubspaces.Points`) from the seed. A is the first N rows and B the next N, so the rows are independent and every draw reads the same points.
+  - *The evaluation:* A, B and each block's hybrid (and reverse) are stacked as one set of cases.
+    - Each distinct term's column is read once per batch of draws through prediction's `BassSurface`, the batch sized so the columns stay under 8M values.
+    - Each draw's surface is evaluated with the intercept set to 0: every piece is shift-invariant, and the zero-variance rule then reads the same magnitude the exact route reads.
+    - A singleton block on an input no term reads takes A's values (B's for its reverse), bit for bit, and is not evaluated.
+  - *The subsets:* as the exact route reports them, those inside some term up to the order. A term without factors reads, as its variables, the continuous ones a case kernel says it reads (`IDesignKernel.ReadsVariable`), so ridge columns will be read the same way once they land.
+  - *Decision 4, the error rows:* `SobolDecomposition` gains `VarianceError`, `MainVarianceError`, `TotalVarianceError`, `MainIndexError` and `TotalIndexError`, all null on the exact route.
+    - `DecompositionStatus` gains `BelowZeroBeyondError`.
+    - Nothing is clamped on the sampled route.
+    - `SobolAnalysis` gains `Route` and `Points`.
+  - *`SensitivitySummary`:* each piece's mean standard error over its draws under the weights, with the flagged draws' count, and `Route` and `Points` on the analysis summary. The draws share their points, so their errors correlate. The mean of the errors bounds the error of the posterior mean from above (the triangle inequality on standard deviations). It is not the posterior mean's own error.
+  - *Decision 6, the measure:* `SensitivitySpec` holds a product law only. It has no field for a joint sample, so there is nothing to refuse.
+  - *Out of this slice:* a functional fit and several outputs are refused on the sampled route, naming slice 3.
+  - *Tests I don't own:* the BPPR chip's `DirectionalHingeTests` and `RidgeColumnTests` asserted that `fit.Sensitivity` refuses a fit holding a directional hinge or a ridge column. Each now asserts both halves of decision 1, at the coordinating session's direction: `Exact` refuses up front naming the term, and `Auto` returns an analysis on the sampled route. The other refusals (`Effects`, `FromCoefficients`) keep their assertions.
+  - *Shared files:* the BPPR chip landed its hunks in `BassSensitivity.cs` and both tests (`332692b`) before this commit, so the commit holds only mine: `partial` and the route's dispatch line in `OfCore`, which leave `FromCoefficients` alone, and the two assertions.
+
+**Gates.** All from a snapshot of `HEAD` (`72d3941`) with the slice's files and only my hunks in the shared files, unless a row says otherwise.
+- *Separable fits, sampled against exact, both forms.* Every draw's every piece (variance, mains and main indices for every reported subset, totals and total indices), over 24 seeds at N = 2048. z = (sampled − exact)/stated error, per cell (draw and piece).
+  - *The fits:* `SensitivityFixture`'s scalar hinge fit at degree 1 under the mixed laws (a two-normal mixture, a sub-range uniform, unequal level probabilities) and under the boxes; its degree-2 fit under an empirical marginal and a Student-t law; and a KHAOS Legendre fit.
+
+  | Fit | Form | Cells | Exact zeros | Worst √R·\|mean z\| | Pooled sd of z | Per-cell sd | Beyond 3 | Worst z |
+  | --- | --- | --- | --- | --- | --- | --- | --- | --- |
+  | hinges, mixed laws | Saltelli | 1,140 | 120 | 2.44 | 0.947 | 0.67 to 1.20 | 0.04% | 3.28 |
+  | hinges, mixed laws | two-difference | 1,140 | 120 | 3.06 | 0.967 | 0.67 to 1.44 | 0.42% | −3.92 |
+  | hinges, the boxes | Saltelli | 1,140 | 120 | 3.13 | 1.082 | 0.76 to 1.42 | 0.57% | 4.12 |
+  | hinges, the boxes | two-difference | 1,140 | 120 | 2.93 | 0.973 | 0.75 to 1.31 | 0.23% | −3.76 |
+  | degree 2, empirical and Student | Saltelli | 1,200 | 60 | 2.29 | 1.016 | 0.69 to 1.35 | 0.25% | −3.30 |
+  | degree 2, empirical and Student | two-difference | 1,200 | 60 | 1.76 | 1.006 | 0.61 to 1.37 | 0.24% | −3.43 |
+  | Legendre | Saltelli | 1,408 | 112 | 2.22 | 0.960 | 0.61 to 1.27 | 0.17% | 3.60 |
+  | Legendre | two-difference | 1,408 | 112 | 3.49 | 1.027 | 0.73 to 1.35 | 0.29% | −4.32 |
+
+  The cuts are: √R·|mean z| ≤ 4.5, the largest of about 1,200 cells near normal; pooled sd in [0.9, 1.1]; at most 1% beyond 3. Zero-variance draws agree on both routes, and the reported subsets are the same list.
+- *A hand-built directional fit against tensor quadrature,* a method apart from the estimator. The fit has two draws: (Dense, −0.5) and (Pair, 0.3), and (Pair, 0.3), (Single, 0) and (Dense, 0.7), on DirectionalHingeTests' three inputs with unequal boxes, x₂'s declared. Quadrature uses 3-node Gauss–Legendre on 48 panels per input. Halving the panels moves the main variances by 9.9·10⁻⁶ of V at degree 1 and 1.3·10⁻⁸ at degree 2. Run over 60 seeds at N = 4096, 42 cells:
+
+  | Degree | Form | Worst √R·\|mean z\| | Pooled sd of z | Per-cell sd | Beyond 3 | Worst z |
+  | --- | --- | --- | --- | --- | --- | --- |
+  | 1 | Saltelli | 1.44 | 1.076 | 0.89 to 1.24 | 0.36% | −3.83 |
+  | 1 | two-difference | 0.81 | 1.059 | 0.89 to 1.26 | 0.40% | −3.77 |
+  | 2 | Saltelli | 1.38 | 1.044 | 0.86 to 1.24 | 0.60% | −3.90 |
+  | 2 | two-difference | 1.17 | 1.045 | 0.91 to 1.18 | 0.40% | 3.79 |
+
+  Brief's wording: it says the directional fit is checked against its closed form. A directional hinge under a product uniform law has one only through the projection's piecewise-polynomial law, so quadrature stands in, with its own error read beside it.
+- *The exact route bit for bit:*
+  - `Auto` on a separable fit is `Exact`'s arrays bit for bit, with `Route = Exact`, `Points = 0` and null error rows.
+  - The fitting code is untouched; the commit scope's pinned tier and the whole assembly are below.
+- *The points from the seed, shared by every draw:*
+  - The same seed reproduces the analysis bit for bit, and another seed moves it.
+  - A draw read alone (`Draws = [d]`) is its row in the full analysis bit for bit: its variance, totals and their errors.
+- *The summary's rows:* each mean error is the weighted mean of the decomposition's own; the flagged count matches; on the exact route they are null.
+- *The primitives under the two-difference form* (slice 0's gates, extended):
+  - every reference, 300 replicates at N = 2048: worst bias 2.59 of its error, stated error / spread from 0.912 to 1.133;
+  - the 300-case sweep: 5,198 z-scores, mean −0.082, sd 0.985, 0.31% beyond 3, worst −4.24;
+  - the g-function's S = 7.2·10⁻⁵ input read to a relative spread of 3.1% (Saltelli's: 324%), and its pair piece 1.1·10⁻⁹ to 7.3% (Saltelli's spread is 1.3·10⁻⁶, 1,200 times the piece).
+- *Decision 7, the Poincaré check, read here before E8's readout takes it.* Each draw's sampled total(v), at N = 8192, against C_P(v)·C_vv, with C from E8's sampled route at its own seed and C_P from `InputPoincareConstant.Of`. At degrees 1 and 2: no violation within three errors of the two independent estimates. The largest total/bound is 0.802 at degree 1 and 0.768 at degree 2; the largest (total − bound)/error is −11.2 and −7.5.
+- *The cost row* (wall clock, `GC.GetTotalAllocatedBytes`; the machine at 9 to 31% load, so indicative; probe `artifacts/chip-sensitivity/probes/SampledCostProbe.cs`, not committed). The separable fit has 60 draws, 16 distinct terms and 3 inputs, one of them categorical, with subsets to order 3 (7 blocks).
+
+  | Per draw | Values | ms | MB |
+  | --- | --- | --- | --- |
+  | Exact route | — | 0.059 | 0.004 |
+  | Sampled, N = 1024, Saltelli | 9,216 | 0.91 | 0.074 |
+  | Prediction at 9,216 cases | | 0.14 | 0.094 |
+  | Sampled, N = 1024, two-difference | 16,384 | 1.00 | 0.099 |
+  | Prediction at 16,384 cases | | 0.22 | 0.166 |
+  | Sampled, N = 4096, Saltelli | 36,864 | 2.09 | 0.29 |
+  | Prediction at 36,864 cases | | 0.51 | 0.37 |
+  | Sampled, N = 4096, two-difference | 65,536 | 3.88 | 0.39 |
+  | Prediction at 65,536 cases | | 1.24 | 0.66 |
+  | Directional fit, N = 4096, Saltelli (degree 1; degree 2) | | 5.1; 4.3 | 3.1 |
+  | Directional fit, N = 4096, two-difference (degree 1; degree 2) | | 6.6; 7.1 | 5.2 |
+
+  The sampled route costs 35 to 65 times the exact route at N = 4096, and 3 to 4 times prediction at as many cases. The difference is the case preparation, the stacking and the reduction. The directional fit's two draws carry the fixed costs of drawing and preparing the points.
+- *Fitting untouched:*
+  - *Selected at commit scope:* test-select over the slice's ten files, per test project from disk, selects Regression 252 of 345 classes and Oracle 13 of 40. No other project holds the files in its closure.
+  - *Regression at commit scope (with the pinned tier):* 2,771 of 2,771.
+  - *Oracle at commit scope:* 57 of 57.
+  - *The whole assembly:* Regression 3,651 of 3,651, in 17 minutes at below-normal priority. The commits went onto `d4b7b8e`, two documentation commits past `72d3941`, which touch no source or test file.
+  - *An earlier full run on `2a6bb6b`:* Regression 2,757 of 2,758 at commit scope, Oracle 57 of 57, and the whole assembly 3,637 of 3,638. The one failure was `RidgeColumnTests`' old refusal, which `332692b` had just added; this slice's hunk replaces it.
+
+**Decisions taken beyond the brief.**
+- *The two-difference form built now,* as a mode of the design, so the user's choice of default changes one place. The coordinating session asked for the choice to stay in one place, and slice 1's gates read both forms. The public spec does not expose the form yet; the gates reach it through an internal `BassSensitivity.OfInForm`.
+- *The intercept is left out of the sampled values,* as the exact route's magnitudes leave it out. Every piece is shift-invariant, and the zero-variance rule then reads the same scale on both routes.
+- *One stacked set of cases per analysis,* each distinct term's column read once per batch of draws, the batch held under 8M column values (64 MB).
+- *The draws are not checked on this route.* Prediction's `BassDrawFit.Pool` checks that a draw's term ids ascend; the sampled route reads draws as the exact route does, through `Setup`, which does not. A hand-built draw with unordered ids reads correctly here and is refused by E8's gradient readout; my first directional fixture had one.
+
+**Unbuilt.**
+- *Decision 7 inside E8's readout* (`BassActiveSubspace.cs` is E8's chip's): the check is read in a test above, and the change E8 needs is below.
+- *Effects (slice 2); basis fits, functional forms and several outputs (slice 3).*
+
+**Follow-ups.**
+- *Decision 7, for E8's readout* (it changes E8's `Poincare` for fits holding a term without factors, scalar ones now):
+  - Where `Poincare` is null for a fit that is not separable under a product law, read the totals from `BassSensitivity.Of(fit, data, new SensitivitySpec { Measures = spec.Measures, Route = SensitivityRoute.Sampled, MaxOrder = 1, Points = spec.Points, Seed = SeedTree.Derive(spec.Seed, 1)[0], Draws = spec.Draws })`.
+  - `TotalVariance[d, v]` and `TotalVarianceError[d, v]`, v the readout's measure index.
+  - `MaxOrder = 1` keeps the cost at N(p + 2), and a seed apart from C's keeps the two estimates independent.
+  - Count a violation where total − C_P·C_vv > 3·√(se_T² + (C_P·se_C)²), beside the finite-element constant's relative-error allowance.
+  - A functional, basis or several-output fit's totals come with slice 3.
+- *The form's default* (decision 3), with the user. If they choose the two-difference form, it is the design constructor's default and nothing else. If they choose both as named modes, `SensitivitySpec` gains the field that `OfInForm` stands in for.
+- *The posterior mean's own Monte Carlo error:* the summary gives a bound. The exact error needs the per-row terms averaged across draws before the deviation is taken, one more pass. Worth it only if the bound proves loose for a decision.
+
+**Doc changes owed.**
+- `docs/Maths/Regression/Sensitivity.md`:
+  - the route (decision 1) with its alternatives;
+  - the points from the seed, shared by the draws;
+  - the stacked evaluation and its column budget;
+  - the error rows and the flag (decision 4);
+  - the summary's bound on the posterior mean's error;
+  - the two-difference form, its derivation and its evidence beside Saltelli's;
+  - the intercept left out;
+  - decision 6's product law.
+- `docs/Maths/Regression/ActiveSubspaces.md`: decision 7's check on a directional fit, once E8 takes it.
+- `docs/Maths/Regression/BASS.md`: `Auto`'s rule, now shared by Sobol and E8.
+
 ### Slice 0 verified from a clean archive (coordinating session, 2026-11-15)
 
 - **Commits:** `e013006`, `9578185` and `9940ab9`, on a snapshot of `1380f42`, through `scripts/verify-csharp.ps1` over the six files.
