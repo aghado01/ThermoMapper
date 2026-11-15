@@ -39,7 +39,11 @@ Opened 2026-11-14 at the user's word ("that brief was getting way too long, adde
     M-1 and M-2 are proved in Lean.
   - *Candidates,* each with the decision it would change:
     - *The full form.* Each score is recomputed with the newest observation, through the add-one-in weights over the stream; E35's brief calls it valid by the same theorem. Decides whether the monitor tests the full step's own scores, not only a fixed fit's.
-    - *The Sleepy Jumper* (Vovk, Gammerman and Shafer 2005, §7.1, not on the shelf), which the Simple Jumper simplifies (arXiv 2102.10439). Decides whether the monitor's bet can rest between jumps.
+    - *The Sleepy Jumper.* Decides whether the monitor's bet can rest between jumps. It is defined in two places on the shelf:
+      - Vovk, Nouretdinov and Gammerman 2003, "Testing exchangeability on-line": `supellex-private/PDFs/Bayesian/Vovk2003.pdf`, PDF page 6;
+      - Vovk, Gammerman and Shafer 2005, *Algorithmic Learning in a Random World*, §7.1: the full book at `PDFs/textbooks/Vovk2005.pdf`, book pages 176–177. Chapter 7 is not among the chapter files in `PDFs/Vovk2005/`, which hold chapters 2, 6, 8, 9 and 10.
+
+      The Simple Jumper, already built, simplifies it, per Vovk, Petej, Nouretdinov, Ahlberg, Carlsson and Gammerman 2021, "Retrain or not retrain", Algorithm 1: `PDFs/Bayesian/vovk21b.pdf` (COPA 2021), the same paper as arXiv 2102.10439 in `gauntlet/conformal-bayes`. No source on the shelf defines a "Composite Jumper".
     - *CUSUM's and Shiryaev–Roberts's guarantees in Lean* (Vovk 2021, Propositions 4.2 and 4.4; posed in the code, not proved). Decides whether those alarms report proved guarantees. Lean work, for the conformal-lean thread.
     - *Streams with known structure or under covariate shift,* which E35's brief leaves out: a score that removes a trend or season, or a test martingale weighted for the shift. Decides whether the monitor serves streams that are not exchangeable as they stand.
   - The pick among them is the user's.
