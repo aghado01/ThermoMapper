@@ -105,8 +105,10 @@ public sealed class BassModel
         var basis = new BassBasis(inputs, config.Structure.Degree, config.Structure.ResolvedHingeNormalization);
         BassAdmission admission = BassAdmission.From(config, resolved);
         BassStructurePrior prior = BassStructurePrior.From(config, resolved, inputs);
-        BassTermProposal? proposal = config.Structure.Legendre is null ? BassTermProposal.From(config, prior) : null;
-        IBassProposalKernel kernel = proposal ?? (IBassProposalKernel)new LegendreTermProposal(prior, config.Structure.Legendre!);
+        BassTermProposal? proposal = config.Structure.Legendre is null && config.Structure.Directional is null ? BassTermProposal.From(config, prior) : null;
+        IBassProposalKernel kernel = proposal is not null ? proposal
+            : config.Structure.Directional is not null ? DirectionalTermProposal.From(config, prior)
+            : new LegendreTermProposal(prior, config.Structure.Legendre!);
         var target = new BassTarget(config, resolved, prior, form ?? config.Sampling.Tempering?.Form ?? config.Sampling.Smc?.Form ?? TemperedForm.Integrated, working);
         return new(config, data, resolved, transform, inputs, basis, admission, prior, proposal, kernel, target, observation, working, baseReading, block);
     }
@@ -177,11 +179,15 @@ public sealed class BassModel
 
     private readonly BassTermProposal? _proposal;
 
-    /// <summary>D01's proposals over the hinges; refused for a polynomial-chaos fit, which draws from KHAOS's (<see cref="Kernel"/>).</summary>
+    /// <summary>D01's proposals over the hinges; refused for a polynomial-chaos fit, which draws from KHAOS's, and for a directional fit, which
+    /// draws from E36's (<see cref="Kernel"/>).</summary>
     public BassTermProposal Proposal
-        => _proposal ?? throw new InvalidOperationException("A Legendre basis draws from KHAOS's proposal (Kernel), not D01's.");
+        => _proposal ?? throw new InvalidOperationException(Config.Structure.Directional is not null
+            ? "A directional basis draws from E36's proposal (Kernel), not D01's."
+            : "A Legendre basis draws from KHAOS's proposal (Kernel), not D01's.");
 
-    /// <summary>The proposal kernel the structure moves draw from (F-X4): D01's over hinges, KHAOS's over a Legendre term space.</summary>
+    /// <summary>The proposal kernel the structure moves draw from (F-X4): D01's over hinges, KHAOS's over a Legendre term space, E36's over
+    /// directional hinges.</summary>
     public IBassProposalKernel Kernel { get; }
 
     /// <summary>The collapsed target (D03, D05).</summary>

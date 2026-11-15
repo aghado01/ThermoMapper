@@ -49,7 +49,7 @@ public sealed class DirectionalHingeTests(ITestOutputHelper output)
                             new ScalarResponse(y));
     }
 
-    private static double[][] Raw(BassData data) => [.. data.Predictors.Cast<ContinuousPredictor>().Select(p => p.Values.ToArray())];
+    internal static double[][] Raw(BassData data) => [.. data.Predictors.Cast<ContinuousPredictor>().Select(p => p.Values.ToArray())];
 
     // Raw points: the training cases' first ten, and points past the training range on every side, x2's inside its declared domain.
     private static double[][] Points(BassData data)
@@ -72,14 +72,14 @@ public sealed class DirectionalHingeTests(ITestOutputHelper output)
     private static BassTerm Term(ProjectionDirection direction, double knot) => new(directional: new DirectionalHinge(direction, knot));
 
     // The training mean and sample deviation of each column, compensated, apart from the engine's pairwise sums.
-    private static (double Mean, double Deviation)[] Moments(BassData data)
+    internal static (double Mean, double Deviation)[] Moments(BassData data)
         => [.. Raw(data).Select(column =>
         {
             double mean = Compensated(column) / column.Length;
             return (mean, Math.Sqrt(Compensated([.. column.Select(x => (x - mean) * (x - mean))]) / (column.Length - 1)));
         })];
 
-    private static double Compensated(IEnumerable<double> values)
+    internal static double Compensated(IEnumerable<double> values)
     {
         double sum = 0.0, carry = 0.0;
         foreach (double v in values)
@@ -93,7 +93,7 @@ public sealed class DirectionalHingeTests(ITestOutputHelper output)
 
     // The hand computation: z from the raw values by the column's own mean and deviation, c at the corner of each variable's
     // normalization interval in raw units that maximizes θᵀz, and the guard c = 1 where the hinge is zero over the box.
-    private static (double[] Values, double C) Hand(BassData data, double[][] raw, ProjectionDirection d, double knot, int degree, HingeNormalization normalization)
+    internal static (double[] Values, double C) Hand(BassData data, double[][] raw, ProjectionDirection d, double knot, int degree, HingeNormalization normalization)
     {
         (double Mean, double Deviation)[] moments = Moments(data);
         double[][] training = Raw(data);

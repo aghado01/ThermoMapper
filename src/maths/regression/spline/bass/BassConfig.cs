@@ -174,6 +174,12 @@ public sealed record BassConfig
             if (s.HingeNormalization is not null)
                 throw Bad("Structure.HingeNormalization", "sets the interval hinges are normalized over, which a Legendre basis has none of; its columns are orthonormal on the box");
         }
+        if (s.Directional is { } directional)
+        {
+            if (directional.Problem() is { } problem) throw Bad($"Structure.Directional.{problem.Setting}", problem.Reason);
+            if (s.Legendre is not null)
+                throw Bad("Structure.Directional", "and Structure.Legendre each replace BASS's hinges; a basis that mixes term types is not built (E36's decision 6)");
+        }
         if (s.HingeNormalization is not (null or HingeNormalization.Box or HingeNormalization.TrainingRange))
             throw Bad("Structure.HingeNormalization", "is not a known interval");
 
@@ -301,6 +307,16 @@ public sealed record BassConfig
         {
             if (run.LocalSteps is not null) throw Bad("Sampling.LocalSteps", "steps D01's hinge knots, which a Legendre basis has none of; its changes are KHAOS's mutations");
             if (run.FactorMoves is not null) throw Bad("Sampling.FactorMoves", "is D01's fixed-M family over hinge parts; a Legendre basis changes its terms by KHAOS's mutations");
+        }
+        if (s.Directional is not null)
+        {
+            if (run.LocalSteps is not null)
+                throw Bad("Sampling.LocalSteps", "steps D01's hinge knots along their grids; a directional hinge's knot is continuous, and its change is E36's");
+            if (run.FactorMoves is not null) throw Bad("Sampling.FactorMoves", "is D01's fixed-M family over hinge parts; a directional basis changes its terms by E36's change");
+            if (run.Births?.History is not null)
+                throw Bad("Sampling.Births.History", "reweights D01's or KHAOS's variable draws by the chain's history; E36's birth draws by the structure's own counts, and no history birth is built for it");
+            if (run.Births?.Residual is not null)
+                throw Bad("Sampling.Births.Residual", "grows continuous hinge factors onto parent terms; a directional basis has neither");
         }
         if (run.Smc is { } smc)
         {
@@ -493,6 +509,15 @@ public sealed record BassStructureSpec
     /// </summary>
     [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
     public LegendreBasis? Legendre { get; init; }
+
+    /// <summary>
+    /// A basis of directional hinges in place of BASS's axis hinges (E36): each term one (θᵀz − t)₊^q over the standardized continuous
+    /// predictors, a direction's active count capped by <see cref="MaxInteraction"/>, with the paper's priors and moves
+    /// (<see cref="DirectionalBasis"/>). Null, the default, is BASS's hinges; left out of the serialized form when null, so a hinge config's
+    /// form and fingerprint stand as they were.
+    /// </summary>
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public DirectionalBasis? Directional { get; init; }
 
     /// <summary>
     /// The interval each hinge product is normalized to a maximum of one over (E8's slice 7d). Null, the default, is the box, R's

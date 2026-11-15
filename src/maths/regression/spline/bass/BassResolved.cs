@@ -42,6 +42,10 @@ public sealed record BassResolved
     /// <summary>The cap on a term's functional factors; 0 for a scalar response.</summary>
     public required int MaxFunctionalInteraction { get; init; }
 
+    /// <summary>q, the quantile level of a directional knot's upper end, 1 − n_active/n over the training cases (E36); null without a
+    /// directional basis.</summary>
+    public double? KnotLevel { get; init; }
+
     /// <summary>The support threshold on a term's design part.</summary>
     public required double SupportMinimum { get; init; }
 
@@ -303,6 +307,25 @@ public sealed record BassResolved
                 + (data.Predictors.OfType<ContinuousPredictor>().Any(c => c.Domain is null)
                     ? "; a predictor without a declared domain takes its training range as the box the basis is orthonormal on, which moves with the sample" : "")));
         }
+        double? knotLevel = null;
+        if (s.Directional is { } directional)
+        {
+            // A directional fit (E36's slice 2): directional hinges over the continuous predictors alone, A the continuous cap; mixed term
+            // types are not built (decision 6), and categorical inputs are refused in the first slices (decision 7).
+            if (categorical > 0)
+                throw new ArgumentException($"A directional basis reads continuous predictors alone (E36's decision 7), and the data hold {categorical} categorical ones.", nameof(data));
+            if (functional)
+                throw new ArgumentException("A directional basis serves a response without an output part; a direct functional response's terms carry an output hinge product beside the case side, which a directional basis does not build.", nameof(data));
+            if (maxInteraction < 1) throw new ArgumentException("A directional basis needs a continuous predictor.", nameof(data));
+            double active = directional.ActiveCases ?? Math.Min(20.0, 0.1 * cases);
+            if (!(active < cases))
+                throw new ArgumentException($"Structure.Directional.ActiveCases is {Text(active)}, which leaves no training case below the knot's upper end among the {Text(cases)}.", "config");
+            knotLevel = 1.0 - active / cases;
+            maxCategorical = maxFunctional = 0;
+            log.Add(new("Directional", $"A {Text(maxInteraction)}, q {Text(knotLevel.Value)}, p₀ {Text(directional.LocalProbability)}",
+                        (directional.ActiveCases is null ? $"the knot's upper end leaves min(20, n/10) = {Text(active)}" : $"the declared ActiveCases, {Text(active)},")
+                        + $" of the {Text(cases)} training cases above it, the paper's eq. (UL)"));
+        }
 
         int bound = n - 1;   // the intercept counts toward the dimension bound
         int maxBasis;
@@ -434,7 +457,7 @@ public sealed record BassResolved
         return new BassResolved
         {
             Cases = cases, Locations = locations, Observations = n, MaxBasis = maxBasis,
-            MaxInteraction = maxInteraction, MaxCategoricalInteraction = maxCategorical, MaxFunctionalInteraction = maxFunctional,
+            MaxInteraction = maxInteraction, MaxCategoricalInteraction = maxCategorical, MaxFunctionalInteraction = maxFunctional, KnotLevel = knotLevel,
             SupportMinimum = support, SupportMinimumFunctional = supportFunctional,
             MonitoredPoints = points, ResponseMean = mean, CentreLevel = level, PriorLevel = priorLevel, CoefficientConstant = coefficientConstant,
             ResponseMeanSquare = meanSquare, WeightedMeanSquare = weightedMeanSquare,

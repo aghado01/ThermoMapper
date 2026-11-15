@@ -106,6 +106,9 @@ public static class BassSensitivity
         foreach (int id in s.TermIds)
         {
             BassTerm term = fit.Terms[id];
+            if (term.Directional is not null)
+                throw new ArgumentException($"Term {term} holds a directional hinge, which has no one-variable factors: its Sobol indices read by sampling (E25), "
+                                            + "neither from coefficients nor by the moment route.", nameof(fit));
             if (term.Legendre.Count == 0 || term.Continuous.Count > 0 || term.Categorical.Count > 0 || term.Functional.Count > 0)
                 throw new ArgumentException($"Term {term} is not a Legendre product, so its coefficient is not on an orthonormal basis; take Of, the moment route.", nameof(fit));
         }

@@ -382,12 +382,21 @@ internal sealed class DirectionalHingeKernel(BassInputs inputs, int degree, Hing
         return Math.Max(top - d.Knot, 0.0);
     }
 
-    // θᵀz at each case, accumulated over 𝒥 in ascending order.
     private double[] Projection(DirectionalHinge d, CaseInputs at)
     {
         var projection = new double[at.Cases];
-        IReadOnlyList<int> variables = d.Direction.Variables;
-        IReadOnlyList<double> weights = d.Direction.Weights;
+        Project(d.Direction, inputs, at, projection);
+        return projection;
+    }
+
+    /// <summary>θᵀz at each case of <paramref name="at"/> into <paramref name="projection"/>, z = a + b·u from
+    /// <paramref name="inputs"/>' standardization, accumulated over 𝒥 in ascending order: the column's projection, and the knot prior's
+    /// (<see cref="DirectionalTermSpace"/>), so the knot's range reads the cases as the column does.</summary>
+    internal static void Project(ProjectionDirection direction, BassInputs inputs, CaseInputs at, Span<double> projection)
+    {
+        projection.Clear();
+        IReadOnlyList<int> variables = direction.Variables;
+        IReadOnlyList<double> weights = direction.Weights;
         for (int k = 0; k < variables.Count; k++)
         {
             int v = variables[k];
@@ -396,7 +405,6 @@ internal sealed class DirectionalHingeKernel(BassInputs inputs, int degree, Hing
             ReadOnlySpan<double> u = at.Continuous(v);
             for (int i = 0; i < projection.Length; i++) projection[i] += w * (a + b * u[i]);
         }
-        return projection;
     }
 }
 

@@ -520,12 +520,24 @@ public sealed class BassTermProposal : IBassProposalKernel, IBassWeightedBirth
         return lq;
     }
 
-    // ln I(K) = ln(w₁ + c_K) − ln Σⱼ(w₁ + cⱼ); every term takes exactly one order in the part, so Σⱼ cⱼ = M.
-    private double LogOrder(BassStructurePrior.Part part, int count, int terms)
-        => Math.Log(OrderWeight + count) - Math.Log(OrderWeight * part.OrderCount + terms);
+    private double LogOrder(BassStructurePrior.Part part, int count, int terms) => LogOrderOf(OrderWeight, part, count, terms);
 
-    // The variable set's log probability: uniform over the p variables for one, Wallenius' for several.
     private double LogVariables(BassTerm term, BassPart kind, BassStructurePrior.Part part, int[] appearances, int shift)
+        => LogVariablesOf(VariableWeight, term, kind, part, appearances, shift);
+
+    private int DrawOrder(Xoshiro256PlusPlus rng, BassStructurePrior.Part part, int[] counts) => DrawOrderOf(rng, OrderWeight, part, counts);
+
+    private int[] DrawVariables(Xoshiro256PlusPlus rng, BassStructurePrior.Part part, int[] appearances, int k)
+        => DrawVariablesOf(rng, VariableWeight, part, appearances, k);
+
+    // ln I(K) = ln(w₁ + c_K) − ln Σⱼ(w₁ + cⱼ); every term takes exactly one order in the part, so Σⱼ cⱼ = M. D01's order law, which E36's
+    // birth draws a by (DirectionalTermProposal).
+    internal static double LogOrderOf(double orderWeight, BassStructurePrior.Part part, int count, int terms)
+        => Math.Log(orderWeight + count) - Math.Log(orderWeight * part.OrderCount + terms);
+
+    // The variable set's log probability: uniform over the p variables for one, Wallenius' for several, under the appearances less `shift`
+    // copies of the term itself. D01's variable law, which E36's birth draws 𝒥 by.
+    internal static double LogVariablesOf(double variableWeight, BassTerm term, BassPart kind, BassStructurePrior.Part part, int[] appearances, int shift)
     {
         int p = part.Sizes.Length, k = BassStructurePrior.Order(term, kind);
         Span<int> set = k <= StackLimit ? stackalloc int[k] : new int[k];
@@ -538,30 +550,30 @@ public sealed class BassTermProposal : IBassProposalKernel, IBassWeightedBirth
         if (k == 1) return -Math.Log(p);
 
         Span<double> z = p <= StackLimit ? stackalloc double[p] : new double[p];
-        for (int u = 0; u < p; u++) z[u] = VariableWeight + appearances[u];
-        foreach (int v in set) z[v] = VariableWeight + (appearances[v] - shift);
+        for (int u = 0; u < p; u++) z[u] = variableWeight + appearances[u];
+        foreach (int v in set) z[v] = variableWeight + (appearances[v] - shift);
         return Wallenius.LogProbability(z, set);
     }
 
-    private int DrawOrder(Xoshiro256PlusPlus rng, BassStructurePrior.Part part, int[] counts)
+    internal static int DrawOrderOf(Xoshiro256PlusPlus rng, double orderWeight, BassStructurePrior.Part part, int[] counts)
     {
         double total = 0.0;
-        for (int k = part.MinimumOrder; k <= part.Cap; k++) total += OrderWeight + counts[k];
+        for (int k = part.MinimumOrder; k <= part.Cap; k++) total += orderWeight + counts[k];
         double target = rng.NextDouble() * total, cumulative = 0.0;
         for (int k = part.MinimumOrder; k < part.Cap; k++)
         {
-            cumulative += OrderWeight + counts[k];
+            cumulative += orderWeight + counts[k];
             if (target < cumulative) return k;
         }
         return part.Cap;
     }
 
-    private int[] DrawVariables(Xoshiro256PlusPlus rng, BassStructurePrior.Part part, int[] appearances, int k)
+    internal static int[] DrawVariablesOf(Xoshiro256PlusPlus rng, double variableWeight, BassStructurePrior.Part part, int[] appearances, int k)
     {
         int p = part.Sizes.Length;
         if (k == 1) return [BassDraws.Below(rng, p)];
         Span<double> z = p <= StackLimit ? stackalloc double[p] : new double[p];
-        for (int u = 0; u < p; u++) z[u] = VariableWeight + appearances[u];
+        for (int u = 0; u < p; u++) z[u] = variableWeight + appearances[u];
         var set = new int[k];
         Wallenius.Sample(rng, z, set);
         return set;
@@ -626,6 +638,10 @@ public enum BassMoveKind
 
     /// <summary>A Legendre term's degree redrawn with a new composition over its variables (KHAOS's degree mutation, E4).</summary>
     DegreeChange,
+
+    /// <summary>A directional hinge's direction moved on its active coordinates by the power spherical law, or its sign by a fair coin at
+    /// a = 1, and its knot redrawn from its prior given the new direction (E36).</summary>
+    DirectionChange,
 }
 
 /// <summary>

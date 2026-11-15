@@ -20,6 +20,10 @@ public enum BassPart
 
     /// <summary>Standardized shifted Legendre factors on the continuous predictors: a polynomial-chaos fit's one part (E19).</summary>
     Legendre,
+
+    /// <summary>A directional hinge on the standardized continuous predictors: a directional fit's one part (E36), its order the
+    /// direction's active count a.</summary>
+    Directional,
 }
 
 /// <summary>
@@ -35,13 +39,16 @@ public enum BassPart
 /// <para>A polynomial-chaos fit (E19) has the Legendre part alone, whose term measure is uniform over KHAOS's term space
 /// 𝒜_{p, d_max, q_max} (<see cref="LegendreTermSpace"/>): π(term) = 1/|𝒜| for every term, so the orders are weighted by the
 /// terms each holds, not uniformly. The count prior is the same.</para>
+/// <para>A directional fit (E36) has the directional part alone, whose term measure is a density (<see cref="DirectionalTermSpace"/>): the
+/// active count a uniform on {1, …, A}, 𝒥 uniform among the C(p, a) subsets, θ_𝒥 uniform on S^(a−1) against surface measure, and the knot
+/// uniform on its range given θ. A term whose direction's range has no width lies outside the support. The count prior is the same.</para>
 /// <para><see cref="LogPrior"/> scores the term measure and <see cref="DrawTerm"/> draws from it. Immutable, so one
 /// serves every chain of a fit.</para>
 /// </summary>
 public sealed class BassStructurePrior
 {
     /// <summary>The parts a term can have, <see cref="BassPart"/>'s members.</summary>
-    public const int PartCount = 4;
+    public const int PartCount = 5;
 
     private readonly Part?[] _parts = new Part?[PartCount];
 
@@ -96,8 +103,24 @@ public sealed class BassStructurePrior
         _parts[(int)BassPart.Legendre] = Part.Legendre(space);
     }
 
+    /// <summary>
+    /// A directional fit's prior (E36): the directional part alone, its term measure <paramref name="space"/>'s, with the count prior
+    /// <paramref name="count"/>. Bases that mix directional hinges with BASS's are an option the contract allows, not built (decision 6).
+    /// </summary>
+    public BassStructurePrior(DirectionalTermSpace space, BassCountPrior count)
+    {
+        ArgumentNullException.ThrowIfNull(space);
+        ArgumentNullException.ThrowIfNull(count);
+        if (!(count.Shape > 0.0 && double.IsFinite(count.Shape))) throw new ArgumentOutOfRangeException(nameof(count), "h₁ must be positive and finite.");
+        if (!(count.Rate > 0.0 && double.IsFinite(count.Rate))) throw new ArgumentOutOfRangeException(nameof(count), "h₂ must be positive and finite.");
+        Count = count;
+        Subsets = CategoricalSubsetMeasure.SizeUniform;
+        _collectionWeight = CollectionWeightTable(count);
+        _parts[(int)BassPart.Directional] = Part.Directional(space);
+    }
+
     /// <summary>The prior <paramref name="config"/> sets, with the caps <paramref name="resolved"/> holds: over a Legendre term
-    /// space when the config declares a polynomial-chaos basis.</summary>
+    /// space when the config declares a polynomial-chaos basis, over directional hinges when it declares a directional one.</summary>
     public static BassStructurePrior From(BassConfig config, BassResolved resolved, BassInputs inputs)
     {
         ArgumentNullException.ThrowIfNull(config);
@@ -105,6 +128,10 @@ public sealed class BassStructurePrior
         ArgumentNullException.ThrowIfNull(inputs);
         if (config.Structure.Legendre is { } legendre)
             return new(new LegendreTermSpace(inputs.Cases.ContinuousCount, legendre.MaxDegree, resolved.MaxInteraction), config.Count);
+        if (config.Structure.Directional is { } directional)
+            return new(new DirectionalTermSpace(inputs, resolved.MaxInteraction,
+                                                resolved.KnotLevel ?? throw new ArgumentException("The resolution holds no knot level for the directional basis.", nameof(resolved)),
+                                                directional.LocalProbability), config.Count);
         return new(inputs, resolved.MaxInteraction, resolved.MaxCategoricalInteraction, resolved.MaxFunctionalInteraction,
                    config.Structure.CategoricalSubsets, config.Count);
     }
@@ -129,6 +156,9 @@ public sealed class BassStructurePrior
 
     /// <summary>The Legendre term space of a polynomial-chaos fit; null for a hinge fit.</summary>
     public LegendreTermSpace? Legendre => _parts[(int)BassPart.Legendre]?.Space;
+
+    /// <summary>The directional term space of a directional fit (E36); null otherwise.</summary>
+    public DirectionalTermSpace? Directional => _parts[(int)BassPart.Directional]?.Directions;
 
     internal Part? this[BassPart part] => _parts[(int)part];
 
@@ -158,12 +188,21 @@ public sealed class BassStructurePrior
     /// A term drawn from the term measure, the law <see cref="LogPrior"/> scores: each part's order uniform, its
     /// variables a uniform subset of that size, each hinge's sign and knot uniform, each subset from the declared
     /// measure. Null is the intercept, the draw whose parts all came out empty; it has mass only when the fit has several
-    /// parts, and it lies outside F.
+    /// parts, and it lies outside F. A directional fit's draw is a, 𝒥, θ and the knot from theirs (<see cref="DirectionalTermSpace"/>); it is
+    /// null where the drawn direction's knot range has no width, a term outside the support.
     /// </summary>
     public BassTerm? DrawTerm(Xoshiro256PlusPlus rng)
     {
         ArgumentNullException.ThrowIfNull(rng);
         if (Legendre is { } space) return space.Draw(rng);
+        if (Directional is { } directions)
+        {
+            int active = 1 + BassDraws.Below(rng, directions.MaxActive);
+            ProjectionDirection direction = directions.DrawDirection(rng, UniformSubset(rng, directions.Variables, active));
+            return directions.KnotRangeOf(direction) is { } range
+                ? new BassTerm(directional: new DirectionalHinge(direction, DirectionalTermSpace.DrawKnot(rng, range)))
+                : null;
+        }
         Span<int> orders = stackalloc int[3];
         bool empty = true;
         for (int index = 0; index < 3; index++)
@@ -253,6 +292,12 @@ public sealed class BassStructurePrior
     public void Validate(BassTerm term)
     {
         ArgumentNullException.ThrowIfNull(term);
+        if (Directional is { } directions)
+        {
+            directions.Validate(term);
+            return;
+        }
+        if (term.Directional is not null) throw new ArgumentException("The fit has no directional part.", nameof(term));
         if (Legendre is { } space)
         {
             space.Validate(term);
@@ -294,6 +339,7 @@ public sealed class BassStructurePrior
         BassPart.Continuous => term.Continuous.Count,
         BassPart.Categorical => term.Categorical.Count,
         BassPart.Legendre => term.Legendre.Count,
+        BassPart.Directional => term.Directional?.Direction.Count ?? 0,
         _ => term.Functional.Count,
     };
 
@@ -305,6 +351,7 @@ public sealed class BassStructurePrior
         BassPart.Continuous => "continuous",
         BassPart.Categorical => "categorical",
         BassPart.Legendre => "Legendre",
+        BassPart.Directional => "directional",
         _ => "functional",
     };
 
@@ -350,9 +397,17 @@ public sealed class BassStructurePrior
         /// <summary>The Legendre part's term space, whose uniform measure is the part's; null for the others.</summary>
         public LegendreTermSpace? Space { get; private init; }
 
+        /// <summary>The directional part's term space, whose direction and knot densities are the part's factors; null for the others.</summary>
+        public DirectionalTermSpace? Directions { get; private init; }
+
         /// <summary>The Legendre part over <paramref name="space"/>: its variables, its order cap q_max, its smallest order 1.</summary>
         public static Part Legendre(LegendreTermSpace space)
             => new(BassPart.Legendre, new int[space.Variables], space.MaxOrder, 1) { Space = space };
+
+        /// <summary>The directional part over <paramref name="space"/>: its variables, its order cap A, its smallest order 1, so the order is
+        /// uniform on {1, …, A} and the variable set uniform among the C(p, a) subsets, as the paper's a and 𝒥 are.</summary>
+        public static Part Directional(DirectionalTermSpace space)
+            => new(BassPart.Directional, new int[space.Variables], space.MaxActive, 1) { Directions = space };
 
         public static Part? Hinges(BassPart kind, int[] knots, int cap, int minimum, string capName)
         {
@@ -383,9 +438,14 @@ public sealed class BassStructurePrior
             return new Part(BassPart.Categorical, levels, cap, minimum) { LogSubset = log };
         }
 
-        /// <summary>The term's factors in this part: signs and knots, or subsets.</summary>
+        /// <summary>The term's factors in this part: signs and knots, subsets, or a direction on its subsphere and a knot on its range.</summary>
         public double LogFactors(BassTerm term)
         {
+            if (Directions is { } directions)
+            {
+                DirectionalHinge hinge = term.Directional!;
+                return directions.LogDirection(hinge.Direction.Count) + directions.LogKnot(hinge);
+            }
             double lp = 0.0;
             if (LogSubset is { } subset)
                 foreach (CategoricalFactor c in term.Categorical) lp += subset[c.Variable][c.Levels.Count];
@@ -534,6 +594,11 @@ public sealed class BassTermCounts
             foreach (CategoricalFactor c in term.Categorical) yield return c.Variable;
         else if (part == BassPart.Legendre)
             foreach (LegendreFactor f in term.Legendre) yield return f.Variable;
+        else if (part == BassPart.Directional)
+        {
+            if (term.Directional is { } hinge)
+                foreach (int v in hinge.Direction.Variables) yield return v;
+        }
         else
             foreach (HingeFactor h in BassStructurePrior.Hinges(term, part)) yield return h.Variable;
     }
