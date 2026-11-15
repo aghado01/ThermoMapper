@@ -112,3 +112,115 @@ One commit per concern; tests with the code they test; each slice ends with its 
 Under "Reports" below, newest first, per slice: what landed by commit; the gates' numbers; decisions taken beyond this brief; what was left unbuilt and why; follow-ups with the decision each would change; the doc changes owed.
 
 ## Reports
+
+### Slice 0: sources, references and the power spherical law (2026-11-14)
+
+**Landed.**
+- `a7a7667` pins CRAN's `BayesPPR` 0.2.0 in `r/renv.lock` (DESCRIPTION import, README line). It imports only base R's `methods` and `parallel`, so nothing else entered the lock. CRAN binary, published 2026-09-18, maintainer J. Derek Tucker. renv's description hash `d20a627318d483a1d721a89c3b2376fb`; the lock is sanitized of hashes. A short fit of exp(0.6x₁ + 0.8x₂) on [0, 1]³ settles on one ridge at (0.596, 0.803, 0.003).
+- `63b5a63` fixes `SpecialFunctions.Log1p`: Goldberg's ln(u)·x/(u − 1) overflowed to +∞ above x ≈ 2.5·10³⁰⁵. It now returns ln u there. Only outputs that were +∞ change, so no finite result moves.
+- `8be8b1d` adds `SpecialFunctions.LogGammaRatio(x, s)` = ln Γ(x + s) − ln Γ(x). It raises x to 16 by the recurrence, then differences Stirling's series term by term. The power spherical normalizer at κ = 10⁵ needs it: there each ln Γ is about 10⁶, and their difference would lose about five digits.
+- `738630b` adds `PowerSpherical` (`Maths.Distributions`): density, log normalizer, `CosineLaw` (Beta(α, β) of (1 + μᵀx)/2) and draws, on S^(d−1) for d ≥ 1.
+  - A draw is two gamma variates, so 1 − t and √(1 − t²) keep their digits as t → 1.
+  - The map onto μ is the reflection along e₁ − μ, or minus the one along e₁ + μ when μ₁ > 0, so the map is defined at μ = e₁ and never subtracts nearly equal numbers.
+  - The density reads 1 + μᵀx as ‖x + μ‖²/2. It is exact near the antipode and symmetric in μ and x bit for bit.
+  - On S⁰ it is the point mass at μ for κ > 0 (Lean's `powerSpherical_antipode`), and uniform on ±1 at κ = 0.
+- `741d5ec` adds E36's references (`tests/regression/ProjectionPursuitReferences.cs`) beside E8's `ReferenceFunction` family. Each carries its law and the unit directions that span C's range:
+  - a single index exp(0.6x₁ + 0.8x₂) on [0, 1]⁴;
+  - a dense single index sin(π(x₁ − x₂ + ½x₃ + ½x₄)) on [0, 1]⁵, with four active coordinates, more than one ridge's three;
+  - a single index cos(2(x₁ + x₃)) on [0, 1] × [0, 4] × [−1, 1], where standardizing turns (1, 0, 1)/√2 into (1, 0, 2)/√5, for decision 3's metric;
+  - two ridges sharing x₂, at cosine 0.36;
+  - Friedman's function on [0, 1]⁶ (`FriedmanReference`), whose C is in closed form through Cin(2π). ∂₄f : ∂₅f is 2 : 1 everywhere, so 10x₄ + 5x₅ is one ridge on (2, 1)/√5 and C has rank 4, spanned by e₁, e₂, e₃ and (2e₄ + e₅)/√5. The paper's posterior agrees: its ridges sit on {3}, {4} and three times on {1, 2, 5}.
+
+**Gates.**
+- *The law's draws against its density:* 12 cases, d ∈ {2, 3} by κ ∈ {0, ½, 3, 30, 10³, 10⁵}, 20,000 draws each. Cells sit off-centre from μ (arcs on the circle, polar bands by azimuthal sectors on the sphere), and each cell's probability is quadrature of `LogPdf` itself. Smallest χ² p-value 0.083. The cells sum to 1 within 1.7·10⁻¹¹, except 4.1·10⁻⁸ at d = 3, κ = ½, where the antipode is a cone point of the density inside a panel.
+- *The cosine's law against its closed form, and the tangent's against the uniform's:* Kolmogorov–Smirnov on (1 − μᵀx)/2 ~ Beta(β, α) and on the tangent along a fixed direction orthogonal to μ, over all draws and within each half split at the cosine's median.
+  - 11 chosen cases, d up to 16 and κ up to 10⁵: worst √n·D 1.43.
+  - A seeded sweep of 300 cases, d ∈ [2, 16], κ ∈ {0, 1000} ∪ [10⁻³, 10⁵]. A quarter of the means are at the reflection's branch (μ₁ = ±10⁻¹⁷…10⁻¹³) and a quarter next to ±e₁ (1 − |μ₁| from 10⁻¹⁴ to 10⁻⁶). Worst √n·D 1.81, worst sign |z| 1.83, worst |‖x‖² − 1| 2.7·10⁻¹⁵. The cut is 2.6.
+- *The normalizer:* against the beta's, through the tangent-normal decomposition, for d = 2…40, nine κ to 10⁵ and seven cosines down to w = 10⁻¹². Worst error is 0.13 of a rounding tolerance scaled by the ln Γ terms. At κ = 0 the density equals 1/|S^(d−1)|.
+- *The proposal's symmetry:*
+  - The density is symmetric in μ and x bit for bit, over 4,000 pairs with d from 1 to 12.
+  - One step from the uniform law: 5 cases, 40,000 pairs each. The law of θ* stays uniform, with √n·D at most 1.26. Three statistics that change sign under swapping the pair, h(θ) − h(θ*) for two choices of h and θ₁θ*₂ − θ*₁θ₂, are positive about half the time: sign |z| at most 1.83.
+  - On S⁰, 1,000 draws all keep the sign.
+- *`LogGammaRatio`:*
+  - integer steps against Σ ln(x + i), for x from 10⁻⁶ to 10⁹;
+  - s = ½ against the central binomial product to 10⁻¹⁴, for n up to 10⁶;
+  - 2,000 moderate cases against the ln Γ difference;
+  - a 20,000-case additivity sweep over x ∈ [10⁻³⁰⁰, 10¹⁵] and s, r ∈ [10⁻⁶, 10⁶]. This sweep found the `Log1p` overflow.
+- *Each reference's C in closed form:*
+  - against tensor Gauss–Legendre quadrature of its gradient: at most 1.8·10⁻¹⁵ of C's largest entry;
+  - gradients against fourth-order differences: at most 7.9·10⁻¹²;
+  - the declared directions against C: ‖C − PCP‖/‖C‖ at most 4.6·10⁻¹⁶, and C is positive definite on the span (smallest pivot over largest diagonal 0.10 for the two ridges, 0.55 for Friedman's), so the span is C's range, rank included;
+  - Cin(2π) = 2.437653393057224, summed in decimal, against compensated quadrature within 1.5·10⁻¹⁵.
+- *Fitting untouched:* every test project that test-select selects for these commits, run on a snapshot of `HEAD` holding the four commits' files (`artifacts/chip-bppr/snap`).
+  - *Selected, per commit (classes, read from disk):*
+    - `63b5a63` (`Log1p`) and `8be8b1d` (`LogGammaRatio`): Distributions 19 of 20, Regression 324 of 329 (325 of 330 for `8be8b1d`), Samplers 26 of 31, Oracle 36 of 39, Synthetic 6 of 8, DimReduction 8 of 8, Mapper 1 of 10, Ph 1 of 43, Geometry 1 of 9, VizCore 50 of 85, CumulativeField 3 of 3.
+    - `738630b`: Distributions 1 of 20, nothing else. `741d5ec`: Regression 1 of 330, nothing else.
+    - `Clustering.Graphical.SPC.Tests` holds the changes in its closure and selects 0 of 1; it has no pinned test. HdbScanSmoke, the Spc projects and VizCoreSmoke have no test classes. No other project holds the changes in its closure, so none can move.
+  - *Whole assemblies:* Regression 3497 of 3497, Distributions 429 of 429 (and 416 of 416 at commit scope before it).
+  - *Commit scope (selected classes, slow tier left out, pinned tier in):* Samplers 259 of 259, Synthetic 29 of 29, DimReduction 83 of 83, Mapper 1 of 1, Ph 1 of 1, Geometry 4 of 4, VizCore 384 of 386 (2 skipped by their own `Skip`), CumulativeField 15 of 15, SPC no test.
+  - *Oracle at commit scope:* 204 of 207. The three failures were R oracles timing out at 120 s under load: `transport_oracle.R` (`DiagramDistances_MatchT4TransportAndLpAssign`, p = 1 and 2) and `gbass_readouts_oracle.R` (`HBass_MeetsCorrectedHbass_…`). Rerun alone, all three pass, in 115 s, 114 s and 79 s. The transport pair sits 5 s inside its limit even alone.
+- *The cost row:* nothing to cost yet. Slice 0 has no move or readout; the first row comes with slice 1's readout and slice 2's moves.
+
+**The paper, read in full (with its supplement) and De Cao and Aziz.**
+- *The supplement is on disk,* as `supplemental_materials.tex` beside `main.tex`; the Sources section above says it is not. It holds the death and change ratios. Its change ratio is the collapsed likelihood ratio alone, as `change_ratio_powerSpherical` derives.
+- *The paper's slips beyond the two the brief records* (eq. (mhb) at a\* = 1, and Algorithm 4's bounds):
+  - Algorithm 1 draws β and then σ² ~ IG(n/2, ‖y − Bβ‖²/2). That is not σ²'s full conditional, since β's prior scales with σ²; the full conditional is IG((n + 1 + KM)/2, (‖y − Bβ‖² + βᵀBᵀBβ/τ)/2). `BayesPPR` draws σ² from its marginal given τ, IG(n/2, (yᵀy − τ/(1 + τ)·qf)/2), before β, which is correct.
+  - The supplement's death ratio reads υ_j at s − 1, with the dying ridge still counted. The reverse birth proposes from the reduced state, so the reduced counts are right, as they already are for ω_a. `BayesPPR` uses the reduced counts for both.
+- *Conventions to note for parity:*
+  - The intercept sits inside the g-prior, shrunk toward 0 by τ/(1 + τ). This is R BASS's zero centre and is not location-invariant. A parity read takes the engine's zero-centre option.
+  - Bounds and knots are R's type-7 quantiles.
+  - q = 1 − min(20, n/10)/n.
+- *Not on disk:* the published version (Statistics and Computing 2023, DOI 10.1007/s11222-023-10334-z, as the package's DESCRIPTION cites it). v1 was read.
+- *De Cao and Aziz:* the law, its Beta marginal and Algorithm 1 agree with the code above. Their Householder vector e₁ − μ is undefined at μ = e₁; the engine's sign choice removes that.
+
+**`BayesPPR` 0.2.0 against the paper and the Lean ratios.** Read from the installed namespace, deparsed to `artifacts/chip-bppr/oracle-source/`.
+- *Where it meets Lean:*
+  - A birth accepts on L′/L · λ/(M + 1) · P_D(M + 1)/P_B(M) · π(a)π(𝒥|a)/(q(a)q(𝒥|a)), with no further 1/(M + 1). Births append and deaths pick uniformly; that is the point-process accounting, where the paper's random insertion position cancels the same factor.
+  - P_D/P_B follows the move menu: birth alone at M = 0; death or change at the cap; birth or death when no ridge has a direction. The paper's uniform choice of move omits this factor, which is right only if impossible moves are proposed and rejected.
+  - At a = 1, 𝒥 is uniform and no Wallenius term enters, which corrects eq. (mhb).
+  - A death's reverse birth uses the reduced counts, which corrects the supplement.
+  - A change accepts on the likelihood ratio alone.
+  - BASS's own variable proposal is the same law: uniform for one variable, Wallenius on counts plus one for several. So decision 5's recommendation coincides with the corrected paper.
+- *Departures:*
+  1. **At a = 1 a change draws the sign by a fair coin,** θ* = ±1 independent of θ, with a fresh t₀. This is valid: a symmetric independence proposal under the uniform prior on ±1, accepted on the likelihood ratio. The paper's law at a = 1 would keep θ. The brief says only that the sampler treats a = 1 apart; the form is a choice for slice 2, below.
+  2. M is capped at min(150, ⌊n/K⌋ − 2), a truncated Poisson.
+  3. Inputs with two distinct values become categorical and are not standardized. Inputs with three to K values become "disc", with a linear ridge (one projection column). Neither is in the paper.
+  4. Admission refuses a design whose Cholesky diagonal ratio, max(d₂, …)/min(d), exceeds 1000. That is R BASS's `getQf` rule, order-dependent, and D06 replaces it.
+  5. `adapt_act_feat = FALSE` drops π/q for a and 𝒥 from the ratio, so `w_n_act` and `w_feat` become the prior. With TRUE they are the proposal's starting counts under a uniform prior. A sampler flag thus changes the target; the manual documents it.
+  6. **`bppr_resume` restarts the move-menu factor at 0** whatever M is resumed. Births and deaths after a resume are off by ln 3 or ln 2 until one is accepted. This is a defect in resume only.
+  7. `dwallenius` is R BASS's inclusion–exclusion (`dmwnchBass`), which loses digits under skewed weights.
+  8. `rps` divides by zero at μ = e₁, a measure-zero event that ends in a rejection. Through t = 2z − 1 it loses about log₁₀κ digits of √(1 − t²); this is immaterial at κ = 1000.
+  9. `prior_coefs = "flat"` uses c = 1 with a ln 10⁻⁵ penalty per ridge, which is no coherent posterior over M. It is not ported.
+  10. `n_adapt` iterations skip the σ², β and τ steps. That affects burn-in only; the default is 0.
+  11. `scale_proj_dir_prop = s` maps to κ = (1/s − 1) + √((1/s)(1/s − 1)), so s ≈ 0.002 gives κ = 1000. This map is not in the paper.
+  12. The manual's argument table is shifted one row (for example, `n_ridge_max` is described as the Poisson mean).
+- *The recommendations, read against the sources:* nothing argues against decisions 1, 3, 4, 5, 6 or 7.
+  - On 3: `BayesPPR` standardizes with the sample sd (n − 1). The engine's transform should match it for a like-for-like Friedman comparison.
+  - On 7: since `BayesPPR` makes two-valued inputs categorical by itself, a parity read must use inputs with more than K distinct values.
+
+**Decisions taken beyond the brief.**
+- The law is a class in `Maths.Distributions`, defined for d ≥ 1, S⁰ included.
+- `LogGammaRatio` lives in `SpecialFunctions`. Because `SpecialFunctions` is a hub, test-select selects most classes in ten projects for these commits.
+- The `Log1p` fix was made in place, since it moves only +∞ results.
+- The references are test fixtures beside E8's.
+
+**Unbuilt.**
+- The oracle script, `r/oracles/bppr_oracle.R`: the fixed-draw parity read (the basis matrix, the collapsed likelihood ratio, the birth's acceptance) binds at slice 3, where the brief's table puts the oracle.
+- No term type yet; that is slice 1.
+
+**Follow-ups.**
+- *The change move at a = 1* (binds at slice 2):
+  - (i) `BayesPPR`'s fair coin on the sign, with t₀ from its prior: a one-coordinate ridge can flip ends in one step.
+  - (ii) Keep the sign and redraw t₀ only: a sign then changes only through death and rebirth.
+  - Recommended: (i). Both accept on the likelihood ratio.
+- *`LogBeta` at large shapes:* `LogBeta` has the cancellation `LogGammaRatio` removes, about 10⁻¹⁰ absolute at shapes near 10⁵. Moving `LogBeta` onto `LogGammaRatio` would change the bits of fits that read beta densities (BARS's locality proposal), so it is a question of its own. It is not done.
+- *The Sources section above* still says the supplement is not on disk. Its text is left as approved.
+- *Not E36's, found by its gates:*
+  - `GeneralizedBetaPrimeTests.TheIntegratedDensity_MeetsTheGeneralizedHyperbolicsClosedForm` at (−0.5, 0.09, 1.0, 1.2, 0.5) ran 22 min at commit scope and 15 min in the whole assembly; its comment speaks of 20 s. `Maths.Distributions.Tests` has no `slow-tests.txt`, so every Distributions scope runs it. Every `Log1p` call on its path takes |x| ≤ 1, where `63b5a63` is bit for bit, so these commits do not move it.
+  - The test host of a test-select run is not below normal. Read during the Regression run, the chain was testhost (Normal) ← dotnet (Normal) ← dotnet (Normal) ← test-select's dotnet (BelowNormal). So test-select runs do not keep the shared-machine rule.
+  - `transport_oracle.R`'s cases take 115 s alone against the oracle's 120 s timeout, so any load fails them.
+
+**Doc changes owed.**
+- `docs/Maths/ProbabilityAndInformation.md`: the power spherical law (density, cosine law, draw, symmetry, S⁰), `LogGammaRatio`, and `Log1p`'s range.
+- `docs/Maths/Regression/Sources&Changes.md`: the paper's σ² step and the supplement's death weights, `BayesPPR`'s resume defect, the `adapt_act_feat` target switch, and the a = 1 coin.
+- `docs/Maths/Regression/ActiveSubspaces.md`: E36's references beside E8's, and Friedman's rank-4 C.
