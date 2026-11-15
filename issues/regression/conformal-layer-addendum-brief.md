@@ -40,6 +40,48 @@ As in the archived brief: each slice is reported here, then waits for the main s
 
 Newest first.
 
+### 2026-11-15 — RoBAS-Full's grid-free intervals from n 4
+
+Built at the user's word (2026-11-15, "Wire it now"), on the conformal-lean thread's proof (700c718). `robasFull_interval`: RoBAS-Full's sets are intervals for n ≥ 4 when the calibration residuals are not all equal, granted `RobasDawsonBounds`, four bounds on Dawson's function that the checks certify and that go into Lean next. `robas_common_point`: a point where the p-value is 1. The user chose to wire it before the bounds land in Lean.
+
+**Landed** on `main`, nothing pushed:
+- `c3539b7`: `ResidualShrinkage.Intervals` serves `ResidualScore.Horseshoe`, and the internal `ResidualShrinkage.CommonPoint` finds its start.
+- *Docstrings:* `ResidualScore.Horseshoe`'s and `Intervals`' state the theorem and its hypothesis.
+- *Tests:* `HorseshoeScoreTests` gains the common point's test, and its refusal check becomes the new boundary. `ResidualIntervalTests` take RoBAS-Full back into both of their sweeps.
+- *Existing calls:* none changes except an `Intervals` call on RoBAS-Full at n ≥ 4 with residuals not all equal. It was refused and is now served.
+
+**What it computes.**
+- *Where it serves.* RoBAS-Full from n 4.
+  - Refused below n 4 at a level above 0, where its sets fall in two pieces (n 2 and 3).
+  - Refused on calibration residuals all equal, outside the theorem.
+  - The whole line at k = 0, as for every score.
+- *The start: the common point.* z₀ with n·z₀ = S·g(S²/(2T(z₀))), where S is the calibration residuals' sum, T(z) the spread over them and z, and g = K₁/K₀.
+  - Up to x = 1, g is the ratio of the series K_j(x) = Σ xᵏ/(k!(2k + 2j + 1)).
+  - Past it, by the ODE 2xK₁ + K₀ = eˣ, g(x) = (1/₁F₁(1; 3/2; −x) − 1)/(2x) through `LogKummer`.
+  - g rises from 1/3 to 1, so z₀ lies between S/(3n) and S/n, where n·z − S·g changes sign; bisection finds it.
+  - Every unit's score reaches the candidate's there, so the p-value is 1 and the start is accepted at every level.
+- *The search* is as for the other scores: doubling outward to a refusal, then bisecting each end to the tolerance, rounded outward.
+
+**Gates.**
+- *The common point:* at n 4, 5, 8, 15 and 40, shifts 0, 0.7, −3 and 25, with spreads from tight to wide, z₀ lies in [S/(3n), S/n], and the grid form's p-value there is exactly 1.
+- *Against the grid form,* RoBAS-Full now in the sweep (n 19, 49 and 99, shifts 0 and 1.5, a grid of step 0.001 over [−8, 8]):
+  - the grid's accepted values form one interval inside [L, U], each end within the tolerance of the grid's first refused value;
+  - read on both sides of each end at 1e-9, the end is refused and two tolerances inside is accepted.
+- *Coverage under a mean shift* (residuals N(1.5, 1), 49 units, 2,000 replications, α 0.1): RoBAS-Full 0.9030 at mean width 3.400, beside RoBAS-EB's 0.9045 at 3.398 (se 0.0067).
+- *The boundary:*
+  - n 20 is served;
+  - n 3 at k 1 is refused ("below n 4"), the pinned counterexample still reading two pieces on the grid form;
+  - residuals all equal are refused ("not all equal").
+- *Neighbours:* `ScoresBeyondTheModelTests` pass unchanged.
+- *Per commit,* the selected classes and the pinned tier: the four classes reading the files with the pinned tier, Maths.Regression.Tests 61 of 61.
+- *A build note.* `SpecialFunctions.Expm1` is internal to the distributions assembly, unlike `Log1p`. The first build failed on it, and its test passes were stale binaries, so they are not counted here. The series form replaced it, and the gate script now stops when the build fails.
+
+**Defects found: none.**
+
+**Follow-up, on the conformal-lean thread's side:** once `RobasDawsonBounds` is proved in Lean, the docstrings drop "granted four bounds … that the checks certify".
+
+**Doc changes owed:** the scores-beyond-the-model section: RoBAS-Full's intervals from n 4 with the theorem's hypothesis, the common point and how it is found, the boundary, and the gates' numbers.
+
 ### 2026-11-14 — Slice 17's follow-up: CBMA's evidence from the engines' fits
 
 Built at the user's pick (2026-11-14, "CBMA evidence from the engines' fits"). The engines' side was settled with the coordinator (its answers to Q1 and Q2):
