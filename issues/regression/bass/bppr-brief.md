@@ -114,6 +114,92 @@ Under "Reports" below, newest first, per slice: what landed by commit; the gates
 
 ## Reports
 
+### Slice 4: the determinant direction prior (2026-11-15)
+
+The coordinating session verified slice 3 and started slice 4: the determinant as a labelled option, with c_M stated and its tilt on M reported. gcbeck's quantile knots are not taken, since decision 4 stands at the paper's t₀.
+
+**Landed** (`3ef7dc4`).
+- `DirectionPrior` (new): `Independent`, the paper's and the default, and `Determinant`. It is set as `DirectionalBasis.Directions`.
+- `DirectionDeterminant` (new):
+  - π(Θ | M) = Π_m π(θ_m)·det(ΘᵀΘ)/c_M over the structure terms' unit directions, with c_M = E[det ΘᵀΘ] under the independent law;
+  - `LogNormalizer` gives ln c_M = ln p! − ln (p − M)! − M ln p, −∞ past M = p;
+  - `LogDeterminant` gives ln det(ΘᵀΘ) through the Gram's Cholesky factor over the sparse directions; a pivot at most 10⁻¹³ times its diagonal entry reads as a dependence;
+  - `LogCoupling` gives ln det − ln c_M, −∞ past p or on a dependence.
+- `BassStructurePrior.LogTermsPrior`: a structure's term prior, its terms' priors summed as before, plus the coupling under the option. The sweep's candidates and the prior sampler both read it, so every move, tempering, SMC and the flat histogram take the coupling from the target. No move changes.
+- `BassPriorSampler`: under the option it draws M from p(M)/c_M and keeps a collection with probability det(ΘᵀΘ) ≤ 1 (Hadamard). This is exact rejection from p(M)·Π π(θ_m)·det/c_M on F. It counts its `DeterminantRejections`, carried in a ladder's restart state.
+- `BassResolved`:
+  - M's cap is cut at p under the option, with a log row: the determinant has no mass past M = p;
+  - a `Directions` row states c_1 … c_M and the tilt (below).
+
+**c_M is closed for sparse directions too.** The Grassmann discussion derived c_M = p!/((p − M)!p^M) for dense directions, and the brief planned a Monte Carlo table for sparse ones.
+- *The derivation:*
+  - By Cauchy–Binet, det(ΘᵀΘ) = Σ_{|S| = M} det(Θ_S)².
+  - For a square matrix with independent columns, each with second moment Σ, E[det(A)²] = M!·det Σ.
+  - So c_M depends only on E[θθᵀ]. Any law on unit vectors that is exchangeable over the coordinates and symmetric in each sign has E[θθᵀ] = I/p. The paper's sparse law is one: a, then 𝒥 uniform, then θ_𝒥 uniform on its subsphere.
+  - Hence c_M = C(p, M)·M!·p^(−M), the dense form.
+- *Gated by Monte Carlo* rather than tabulated by it (below): an exact constant beats a noisy table.
+
+**The tilt on M**, by the engine's convention (the prior restricted to F, unnormalized, its tilts reported):
+- *With c_M stated,* the directions' law integrates to one at each M ≤ p. The option's tilt on M is therefore the cut at p: the count law's mass past p lies outside F. The resolution reports that mass.
+- *c_M itself* is the tilt the count law would take with the normalizer left out, as gcbeck's `zellner.h` leaves it. The resolution states c_1 … c_M beside it. At p = 4 they are 1, 1, 0.75, 0.375, 0.094; at p = 10, c_5 = 0.30.
+- *F's own tilt* reads through the existing readouts: the support tally by order, and the mass at the cap, which is now p.
+
+**Gates** (`DirectionDeterminantTests`, 10 cases):
+- *c_M against the product Π_{j<M}(p − j)/p* for p = 1 … 12 and M = 0 … p: 6.8·10⁻¹⁵ relative; −∞ at M = p + 1.
+- *c_M against Monte Carlo* (40,000 collections each; the determinant computed by elimination with partial pivoting, apart from the engine's Cholesky): worst |z| 1.92 over twelve cases.
+  - Dense directions, drawn in the test as normalized Gaussians: (p, M) = (3, 2), (3, 3), (5, 3), (6, 6), (10, 5).
+  - The engine's sparse term measure: A = 3 at p = 6 (M 2, 3, 6) and p = 10 (M 3, 5); A = 2 at p = 4, M = 4; and A = 1 at p = 6, M = 3, where c_M is the chance of three distinct coordinates.
+- *The determinant by hand:*
+  - ln det against elimination on 400 sparse collections, M = 1 … 6: 1.6·10⁻¹¹;
+  - a birth's factor det(Θ′ᵀΘ′)/det(ΘᵀΘ) against the new direction's sin² to the others' span by Gram–Schmidt: 3.4·10⁻¹¹;
+  - −∞ on a sign pair, a repeat (the pivot floor), three directions in a 2-plane and M past p; directions on disjoint coordinates give det 1.
+- *Each move's ratio against a direct evaluation* (slice 2's fixture under the option): slice 2's dense-marginal, count and order-and-variable ratios, plus ln sin² − ln((p − M)/p) for a birth and the determinants' ratio for a change. Worst 7.3·10⁻¹⁴ over three births, their deaths and eight changes. The two births that repeat a current direction have −∞, as the target says.
+- *The tilt against its definition* (p = 4, count law h₁ = 40, h₂ = 10, so λ is near 4; declared cap 8):
+  - the resolution cuts M's cap to 4 and reports the count law's mass past p, 0.3533, against the sum by hand;
+  - the prior sampler's M over 40,000 draws against the count law cut at p: χ² 5.27 on 4 degrees of freedom;
+  - F refused none of its draws; the determinant turned back 138,219 of 178,219 attempts.
+- *Geweke's test with the prior alone* under the option (the same fixture; 200,000 sweeps against 40,000 prior draws; slice 2's 15 statistics with det(ΘᵀΘ) and M = 4's indicator): worst |z| 2.69 (M = 4's indicator) and 1.38 on two seeds. Births 69% accepted at b = 0, deaths 49%.
+- *Unchanged without the option:* the terms' prior is the plain sum bit for bit; the default basis equals one declaring `Independent`; the config round-trips the option and refuses an unknown value.
+- *A fit* on the single index (n = 300, noise sd 0.1):
+  - Every draw's directions are independent and number p at most.
+  - With ridge blocks, the option's regime, the surface's RMSE is 3.0% of the spread under the chain and 2.9% under SMC, with one direction in every draw.
+  - With one-column hinges it is 5.0%, read at a 10% bound. Several hinges along nearly one direction are what a hinge basis needs for a single index, and they are what the determinant taxes (the Grassmann discussion's reading).
+- *Fitting untouched:* every test project test-select selects for `3ef7dc4`, read from disk, on a snapshot of `60459fc` plus its eight files (only docs landed before the commit): Oracle 22 of 40 classes, 106 of 106; Regression 251 of 346, 2,745 of 2,745. The other 25 projects hold none of the files and select nothing.
+- *The cost row:* (indicative: slice 3's probe, wall clock, high priority on cores 0 to 7, the machine at 17% load before; `artifacts/chip-bppr/probes/BpprDeterminantCostProbe.cs`):
+
+  | Median µs | birth | death | change | sweep | prediction per draw |
+  | --- | --- | --- | --- | --- | --- |
+  | n = 300, ridge K = 4, independent (M 1) | 54.8 | 4.3 | 36.7 | 36.0 | 18 |
+  | n = 300, ridge K = 4, determinant (M 1) | 54.7 | 2.4 | 32.1 | 31.9 | 18 |
+  | n = 1000, ridge K = 4, independent (M 1) | 164 | 5.3 | 112 | 98 | 52 |
+  | n = 1000, ridge K = 4, determinant (M 1) | 171 | 3.1 | 110 | 99 | 52 |
+  | n = 1000, hinge, independent (M 5) | 20.2 | 1.0 | 23.4 | 15.9 | 49 |
+  | n = 1000, hinge, determinant (M 2) | 18.3 | 0.7 | 19.2 | 14.6 | 49 |
+
+  At the same state the coupling is within the noise: an M × M Gram and its factor at M ≤ p. The determinant's deaths allocate less because its column cap, p·K, is smaller. The hinge rows compare different states, since the chains settle at different M. At n = 300 the determinant's hinge chain sits at its cap, M = 4, where a birth is a cap refusal (3.3 µs), so that row is left out.
+
+**Decisions taken beyond the brief.**
+- *c_M in closed form for sparse directions,* by the derivation above, with Monte Carlo as its gate. The brief and the user's settlement said "tabulated by Monte Carlo for sparse directions" because no closed form was known; the constant is now exact. The coordinating session can turn this.
+- *M's cap is cut at p* in the resolution rather than left to the prior's −∞, so a birth past p is a cap refusal, and the mass at the cap reads the cut.
+- *The pivot floor,* 10⁻¹³ of the diagonal entry: an exact dependence that rounding leaves a hair above zero (three directions in a coordinate 2-plane) reads as none. Its cost is the mass where sin² < 10⁻¹³.
+- *The determinant on a hinge basis is served, not refused.* Its cost there is measured above.
+
+**Unbuilt.**
+- *gcbeck's quantile knots:* decision 4 stands.
+- *A tempered det^γ:* γ softens none of the determinant's consequences, since 0^γ = 0 (the discussion).
+- *The discussion's local, sign-aware kernel* exp(κ(θᵀθ′ − 1)), with c_M(κ) by Monte Carlo: not asked for.
+
+**Follow-ups.**
+- *Rank-one updates of the Gram's factor.* Each candidate's coupling refactors the M × M Gram, O(M³) at M ≤ p, which is negligible at the gates' p. It matters only in the option's own regime of many inputs, with M in the tens. Decide from a cost row at such p.
+
+**Doc changes owed.**
+- `docs/Maths/Regression/BASS.md`, the determinant direction prior:
+  - its definition; c_M and its derivation for sparse directions; the cut at p and its tilt; the prior sampler's rejection; the pivot floor;
+  - its cost on a hinge basis; the cost row.
+- `docs/Maths/Regression/Sources&Changes.md`:
+  - gcbeck's missing normalizer and the tilt it puts on M;
+  - c_M's closed form for sparse directions, which corrects the Grassmann discussion's "Sparse directions need E36's Monte Carlo".
+
 ### Slice 3 verified from a clean archive (coordinating session, 2026-11-15)
 
 - **Commits:** `332692b`, `349ab81` and `10b290d`, on a snapshot of `72d3941`, through `scripts/verify-csharp.ps1` over their 25 changed files, in the two projects that select.
