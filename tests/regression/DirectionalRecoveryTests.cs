@@ -87,7 +87,8 @@ public sealed class DirectionalRecoveryTests(ITestOutputHelper output)
         BassFit fit = Bass.Fit(Config(sampler, seed), data);
         int k = reference.Directions.Length, p = reference.Function.Dimension;
         ActiveSubspaceAnalysis analysis = fit.ActiveSubspace(data, new ActiveSubspaceSpec { Dimension = k, Points = 1024 });
-        Assert.Null(analysis.Poincare);   // the sampled route, which a directional fit takes
+        Assert.Equal(0, analysis.Poincare!.Violations);   // E8 slice 8a′: the totals are Sobol's sampled route's, with their errors
+        Assert.NotNull(analysis.Poincare.TotalError);
         double[,] vectors = analysis.Posterior.MeanCVectors;
         var leading = new double[p, k];
         for (int j = 0; j < p; j++)

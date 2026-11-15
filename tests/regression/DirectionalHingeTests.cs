@@ -382,7 +382,8 @@ public sealed class DirectionalHingeTests(ITestOutputHelper output)
         lone.Add(new BassDraw(new BassStructure([ids[0]]), 1.0, 1.0, [0.4, 1.5], 1.0));
         ActiveSubspaceAnalysis analysis = (fit with { Draws = [lone] }).ActiveSubspace(data, new ActiveSubspaceSpec { Metric = InputMetric.Raw, Points = 256 });
         Assert.Equal(ActiveSubspaceRoute.Sampled, analysis.Route);
-        Assert.Null(analysis.Poincare);   // its totals are the moment route's
+        Assert.Equal(0, analysis.Poincare!.Violations);   // E8 slice 8a′: the totals are Sobol's sampled route's, with their errors
+        Assert.NotNull(analysis.Poincare.TotalError);
         double[,] meanC = analysis.Posterior.MeanC;
         double[] v = [.. Enumerable.Range(0, 3).Select(j => Dense.WeightOn(j) / moments[j].Deviation)];
         double vNorm = Math.Sqrt(v.Sum(x => x * x));

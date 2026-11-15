@@ -253,9 +253,13 @@ public sealed record CoActiveError(double[,] Cf, double[,] Cg, double[,] Cfg);
 /// functional fit, with W_y = RᵀR, total(v) is Σ_r of the outputs Ry's totals, which each meet it, so the sum meets
 /// C = E[JᵀW_yJ]'s. On a scalar Legendre fit under the product uniform law on the boxes, SG-4(b)'s total(v) ≤ ½·E[x_v(1 − x_v)(∂_v f)²]
 /// as well. A ratio above one beyond rounding, or beyond three Monte Carlo errors on the sampled route, and beyond a finite-element
-/// constant's estimated relative error, is a violation, which is a defect.
+/// constant's estimated relative error, is a violation, which is a defect. Since slice 8a′, a scalar fit holding a term without
+/// one-variable factors (a directional hinge), which the moment route cannot integrate, reads total(v) from Sobol's sampled route
+/// (<see cref="TotalError"/>) at a seed apart from C's, and a violation is a total above its bound by more than three errors of the two
+/// independent estimates added in quadrature.
 /// </summary>
-/// <param name="Total">total(v), the input's unnormalized total variance, per draw (the moment route's, under W_y for a functional fit).</param>
+/// <param name="Total">total(v), the input's unnormalized total variance, per draw: the moment route's, under W_y for a functional fit;
+/// the sampled route's for a scalar fit the moment route cannot integrate (slice 8a′).</param>
 /// <param name="Bound">The Poincaré bound per draw.</param>
 /// <param name="Ratio">Total over Bound.</param>
 /// <param name="JacobiRatio">Total over ½·the Jacobi measure, for a Legendre fit under the product uniform law; null otherwise.</param>
@@ -264,6 +268,10 @@ public sealed record PoincareCheck(double[,] Total, double[,] Bound, double[,] R
 {
     /// <summary>Each continuous predictor's constant, in the readout's order, and how it was read (slice 8).</summary>
     public IReadOnlyList<InputPoincareConstant>? Constants { get; init; }
+
+    /// <summary>Each <see cref="Total"/>'s standard error where the sampled route read it (slice 8a′); null where the moment route
+    /// gave the totals exactly.</summary>
+    public double[,]? TotalError { get; init; }
 }
 
 /// <summary>How an input's Poincaré constant was read (E8, slice 8).</summary>
@@ -338,7 +346,8 @@ public sealed record InputPoincareConstant(double Value, PoincareConstantKind Ki
 /// <param name="Posterior">The draws' C, subspaces and summaries, in the metric.</param>
 /// <param name="MonteCarloError">The sampled route's standard error of each entry of each draw's C, in the metric; null on the exact route.</param>
 /// <param name="Poincare">The per-draw consistency checks; null under a joint sample, which has no marginal bound to check, and for a
-/// fit holding a directional hinge, whose totals the moment route cannot integrate.</param>
+/// functional, basis or several-output fit holding a directional hinge, whose totals the moment route cannot integrate; a scalar such
+/// fit reads its totals from the sampled route (slice 8a′).</param>
 /// <param name="DrawIndex">Each draw's index among the fit's pooled draws.</param>
 /// <param name="Ranks">Each draw at its own rank by the spec's rule (slice 5); null without a rule.</param>
 /// <param name="Outputs">G = E[J W_x Jᵀ]'s patterns (slice 5); null unless asked of a functional fit.</param>

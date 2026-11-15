@@ -331,7 +331,8 @@ public sealed class RidgeColumnTests(ITestOutputHelper output)
         // One block: every gradient is a multiple of θ's raw-unit image v_j = θ_j/sd_j, so the sampled C is rank one along v.
         ActiveSubspaceAnalysis analysis = fit.ActiveSubspace(data, new ActiveSubspaceSpec { Metric = InputMetric.Raw, Points = 256 });
         Assert.Equal(ActiveSubspaceRoute.Sampled, analysis.Route);
-        Assert.Null(analysis.Poincare);
+        Assert.Equal(0, analysis.Poincare!.Violations);   // E8 slice 8a′: the totals are Sobol's sampled route's, with their errors
+        Assert.NotNull(analysis.Poincare.TotalError);
         double[,] meanC = analysis.Posterior.MeanC;
         double[] v = [.. Enumerable.Range(0, 3).Select(j => Dense.WeightOn(j) / moments[j].Deviation)];
         double norm = Math.Sqrt(v.Sum(x => x * x));

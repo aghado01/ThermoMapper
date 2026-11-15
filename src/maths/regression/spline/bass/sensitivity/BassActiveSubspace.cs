@@ -161,6 +161,8 @@ internal static partial class BassActiveSubspaces
             double[,]? jacobi = !functional && !named && LegendreOnBoxes(fit.Terms, pooled, frame, selected) ? Jacobi(fit, data, frame, selected) : null;
             poincare = Poincare(frame, moments!, forms, cMetric, error, jacobi, constants!);
         }
+        else if (!functional && !named && frame.Measure is not null)
+            poincare = SampledPoincare(fit, data, spec, frame, selected, cMetric, error!);
         (MatrixPoincareCheck? matrix, MatrixPoincareStatus status) = MatrixCheckIf(spec.MatrixPoincare, frame, moments, forms, hs, w, constants);
         var analysis = new ActiveSubspaceAnalysis(Array.AsReadOnly(frame.Names), Array.AsReadOnly(frame.Excluded), frame.Route, spec.Metric, frame.Map,
                                                   frame.Measure, PointCount(frame, spec.Points), posterior, error, poincare, Array.AsReadOnly(selected),
@@ -1538,6 +1540,47 @@ internal static partial class BassActiveSubspaces
             }
         }
         return new PoincareCheck(total, bound, ratio, jacobiRatio, violations) { Constants = Array.AsReadOnly(constants) };
+    }
+
+    // Decision 6's per-input check for a scalar fit the moment route cannot integrate, a term without one-variable factors among its
+    // terms (slice 8a′; the sampled-sensitivity brief's decision 7). total(v) per draw comes from Sobol's sampled route at first order,
+    // at the readout's N and at a seed derived apart from C's, so the two estimates are independent; a violation is a total above
+    // C_P·C_vv by more than three errors of the two added in quadrature, beside a finite-element constant's relative-error allowance.
+    private static PoincareCheck SampledPoincare(BassFit fit, BassData data, ActiveSubspaceSpec spec, Frame frame, int[] selected, double[][,] cMetric,
+                                                 double[][,] error)
+    {
+        SobolAnalysis sobol = BassSensitivity.Of(fit, data, new SensitivitySpec
+        {
+            Measures = spec.Measures, Route = SensitivityRoute.Sampled, MaxOrder = 1, Points = spec.Points,
+            Seed = SeedTree.Derive(spec.Seed, 1)[0], Draws = selected,
+        });
+        SobolDecomposition s = sobol.Decompositions[0];
+        InputPoincareConstant[] constants = Constants(frame);
+        int draws = selected.Length, p = frame.P;
+        var total = new double[draws, p];
+        var totalError = new double[draws, p];
+        var bound = new double[draws, p];
+        var ratio = new double[draws, p];
+        int violations = 0;
+        for (int i = 0; i < p; i++)
+        {
+            int v = frame.Variables[i];
+            InputPoincareConstant known = constants[i];
+            bool checks = known.Kind != PoincareConstantKind.None, infinite = double.IsPositiveInfinity(known.Value);
+            double toBox = 1.0 / (frame.L[i, i] * frame.L[i, i]);
+            for (int d = 0; d < draws; d++)
+            {
+                double t = s.TotalVariance[d, v], se = s.TotalVarianceError![d, v];
+                total[d, i] = t;
+                totalError[d, i] = se;
+                bound[d, i] = infinite ? double.PositiveInfinity : known.Value * cMetric[d][i, i] * toBox;
+                ratio[d, i] = checks ? (bound[d, i] > 0.0 ? t / bound[d, i] : (t > 0.0 ? double.PositiveInfinity : 0.0)) : double.NaN;
+                if (!checks || infinite) continue;
+                double seBound = known.Value * error[d][i, i] * toBox;
+                if (t > bound[d, i] + 3.0 * Math.Sqrt(se * se + seBound * seBound) + known.RelativeError * Math.Abs(bound[d, i])) violations++;
+            }
+        }
+        return new PoincareCheck(total, bound, ratio, null, violations) { Constants = Array.AsReadOnly(constants), TotalError = totalError };
     }
 
     // The Jacobi measure per selected draw and continuous input, from a scalar Legendre fit's coefficients.
