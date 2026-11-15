@@ -83,9 +83,10 @@ public sealed class BassInputs
     private readonly double[][] _continuousKnots, _functionalKnots;
     private readonly int[] _levelCounts;
     private readonly (bool Continuous, int Index)[] _positions;
+    private readonly (double Offset, double Slope)?[] _standardizing;
 
     private BassInputs(CaseInputs cases, OutputInputs? outputs, double[][] continuousKnots, double[][] functionalKnots,
-                       int[] levelCounts, (bool, int)[] positions)
+                       int[] levelCounts, (bool, int)[] positions, (double, double)?[] standardizing)
     {
         Cases = cases;
         Outputs = outputs;
@@ -93,6 +94,7 @@ public sealed class BassInputs
         _functionalKnots = functionalKnots;
         _levelCounts = levelCounts;
         _positions = positions;
+        _standardizing = standardizing;
     }
 
     /// <summary>The training cases' inputs.</summary>
@@ -113,6 +115,13 @@ public sealed class BassInputs
     /// <summary>Data predictor <paramref name="predictor"/>'s kind and its position among its kind.</summary>
     public (bool Continuous, int Index) PredictorPosition(int predictor) => _positions[predictor];
 
+    /// <summary>
+    /// Continuous predictor <paramref name="variable"/>'s <see cref="Standardization"/> read from its scaled value u: z = Offset + Slope·u,
+    /// with Offset = (min − mean)/deviation and Slope = (max − min)/deviation over the scale's box, so it holds at any cases the transform
+    /// scaled, prediction's included. Null when the scale carries no standardization.
+    /// </summary>
+    public (double Offset, double Slope)? Standardizing(int variable) => _standardizing[variable];
+
     /// <summary>The inputs of <paramref name="data"/> through <paramref name="transform"/>, fitted on it.</summary>
     public static BassInputs Prepare(BassData data, BassInputTransform transform)
     {
@@ -124,6 +133,7 @@ public sealed class BassInputs
         var knots = new List<double[]>();
         var categorical = new List<int[]>();
         var levels = new List<int>();
+        var standardizing = new List<(double, double)?>();
         var positions = new (bool, int)[data.Predictors.Count];
         for (int j = 0; j < positions.Length; j++)
         {
@@ -137,6 +147,9 @@ public sealed class BassInputs
                     double[] scaled = Scaled(c, scale);
                     continuous.Add(scaled);
                     knots.Add(Distinct(scaled));
+                    standardizing.Add(scale.Standardization is { } s
+                        ? ((scale.Min - s.Mean) / s.Deviation, (scale.Max - scale.Min) / s.Deviation)
+                        : null);
                     break;
                 case (CategoricalPredictor f, TrainingLevels training):
                     positions[j] = (false, categorical.Count);
@@ -167,7 +180,7 @@ public sealed class BassInputs
             outputs = new OutputInputs(columns);
         }
         return new BassInputs(new CaseInputs([.. continuous], [.. categorical]), outputs, [.. knots], functionalKnots,
-                              [.. levels], positions);
+                              [.. levels], positions, [.. standardizing]);
     }
 
     private static double[] Scaled(ContinuousPredictor column, RangeScale scale)
