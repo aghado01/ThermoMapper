@@ -37,6 +37,26 @@ public enum DecompositionStatus
 
     /// <summary>A contribution is negative beyond the tolerance; it is kept as computed.</summary>
     NegativeBeyondTolerance = 4,
+
+    /// <summary>On the sampled route: a main or total variance is below zero by more than three Monte Carlo errors and rounding
+    /// allow (the sampled-sensitivity brief, decision 4). Nothing is clamped there: the estimate stands beside its error.</summary>
+    BelowZeroBeyondError = 8,
+}
+
+/// <summary>How a sensitivity analysis computes each draw's decomposition (the sampled-sensitivity brief, decision 1).</summary>
+public enum SensitivityRoute
+{
+    /// <summary>The exact route when every term the draws hold has one-variable factors, the sampled route otherwise.</summary>
+    Auto,
+
+    /// <summary>The moment service's closed forms (<see cref="BassMoments"/>): exact. Refused for a fit holding a term without
+    /// factors, such as E36's directional hinge.</summary>
+    Exact,
+
+    /// <summary>Pick-freeze on two base sets of <see cref="SensitivitySpec.Points"/> rows drawn once from the product law and shared
+    /// by every draw (<see cref="Maths.Regression.Sensitivity.PickFreeze"/>), each piece with its Monte Carlo error. Any fit; on a
+    /// separable one it checks the estimator against the closed forms.</summary>
+    Sampled,
 }
 
 /// <summary>
@@ -83,8 +103,18 @@ public sealed record SensitivitySpec
     public IReadOnlyList<double[]>? Coordinates { get; init; }
 
     /// <summary>The rounding tolerance: a total variance at most this times its terms' moment magnitudes is zero, and a
-    /// contribution above −this times the total is clamped to 0.</summary>
+    /// contribution above −this times the total is clamped to 0. On the sampled route the magnitude is the values' rounding scale,
+    /// and nothing is clamped.</summary>
     public double RoundingTolerance { get; init; } = 1e-10;
+
+    /// <summary>The route (decision 1).</summary>
+    public SensitivityRoute Route { get; init; } = SensitivityRoute.Auto;
+
+    /// <summary>The sampled route's rows N in each of its two base sets, drawn once from the product law and shared by every draw.</summary>
+    public int Points { get; init; } = 4096;
+
+    /// <summary>The seed of the sampled route's base sets.</summary>
+    public int Seed { get; init; } = 1;
 }
 
 /// <summary>
@@ -157,6 +187,23 @@ public sealed class SobolDecomposition
     /// <summary>The draws' weights; null for equal weights (MCMC).</summary>
     public double[]? Weights { get; }
 
+    /// <summary>The sampled route's Monte Carlo standard error of each draw's <see cref="Variance"/>; null on the exact route.</summary>
+    public double[]? VarianceError { get; init; }
+
+    /// <summary>The sampled route's standard error of each <see cref="MainVariance"/> entry; null on the exact route.</summary>
+    public double[,]? MainVarianceError { get; init; }
+
+    /// <summary>The sampled route's standard error of each <see cref="TotalVariance"/> entry; null on the exact route.</summary>
+    public double[,]? TotalVarianceError { get; init; }
+
+    /// <summary>The sampled route's standard error of each main index by the delta method, NaN where undefined; null on the exact
+    /// route.</summary>
+    public double[,]? MainIndexError { get; init; }
+
+    /// <summary>The sampled route's standard error of each total index by the delta method, NaN where undefined; null on the exact
+    /// route.</summary>
+    public double[,]? TotalIndexError { get; init; }
+
     /// <summary>The draws.</summary>
     public int Count => Variance.Length;
 
@@ -224,4 +271,11 @@ public sealed record SobolAnalysis(
     IReadOnlyList<double[]>? Coordinates,
     IReadOnlyList<bool>? CoordinatesOutside,
     IReadOnlyList<string>? CoordinateVariables,
-    double MomentError);
+    double MomentError)
+{
+    /// <summary>The route that ran (decision 1).</summary>
+    public SensitivityRoute Route { get; init; } = SensitivityRoute.Exact;
+
+    /// <summary>The sampled route's rows N in each base set; 0 on the exact route.</summary>
+    public int Points { get; init; }
+}

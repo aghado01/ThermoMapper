@@ -319,8 +319,12 @@ public sealed class RidgeColumnTests(ITestOutputHelper output)
         Assert.True(worstValue <= 1e-12, $"prediction {worstValue:E2}");
         Assert.True(worstSlope <= 1e-12, $"gradient {worstSlope:E2}");
 
-        NotSupportedException refusal = Assert.Throws<NotSupportedException>(() => fit.Sensitivity(data));
-        Assert.Contains("ridge block's column", refusal.Message);
+        // Sobol's exact route refuses up front, naming the term, and its automatic route takes the sampled route (the sampled-sensitivity
+        // brief, decision 1).
+        ArgumentException refusal = Assert.Throws<ArgumentException>(() => fit.Sensitivity(data, new SensitivitySpec { Route = SensitivityRoute.Exact }));
+        Assert.Contains("not a product of one-variable factors", refusal.Message);
+        Assert.Contains(table[ids[0]].ToString(), refusal.Message);
+        Assert.Equal(SensitivityRoute.Sampled, fit.Sensitivity(data, new SensitivitySpec { Points = 64 }).Route);
         Assert.Throws<ArgumentException>(() => fit.ActiveSubspace(data, new ActiveSubspaceSpec { Route = ActiveSubspaceRoute.Exact }));
         Assert.Contains("ridge block's column", Assert.ThrowsAny<Exception>(() => BassSensitivity.FromCoefficients(fit, data)).Message);
 

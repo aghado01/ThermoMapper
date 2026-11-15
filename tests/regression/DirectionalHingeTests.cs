@@ -369,9 +369,12 @@ public sealed class DirectionalHingeTests(ITestOutputHelper output)
         Assert.True(worstValue <= 1e-12, $"prediction {worstValue:E2}");
         Assert.True(worstSlope <= 1e-12, $"gradient {worstSlope:E2}");
 
-        // The moment service refuses, with its reason; E8's automatic route takes the sampled route, the exact route refuses up front.
-        NotSupportedException refusal = Assert.Throws<NotSupportedException>(() => fit.Sensitivity(data));
-        Assert.Contains("directional hinge", refusal.Message);
+        // Sobol's exact route refuses up front, with its reason, and its automatic route takes the sampled route (the sampled-sensitivity
+        // brief, decision 1); E8's automatic route takes the sampled route, the exact route refuses up front.
+        ArgumentException refusal = Assert.Throws<ArgumentException>(() => fit.Sensitivity(data, new SensitivitySpec { Route = SensitivityRoute.Exact }));
+        Assert.Contains("not a product of one-variable factors", refusal.Message);
+        Assert.Contains(table[ids[0]].ToString(), refusal.Message);
+        Assert.Equal(SensitivityRoute.Sampled, fit.Sensitivity(data, new SensitivitySpec { Points = 64 }).Route);
         Assert.Throws<ArgumentException>(() => fit.ActiveSubspace(data, new ActiveSubspaceSpec { Route = ActiveSubspaceRoute.Exact }));
 
         // One hinge alone: every gradient is a multiple of θ's raw-unit image v_j = θ_j/sd_j, so the sampled C is rank one along v.

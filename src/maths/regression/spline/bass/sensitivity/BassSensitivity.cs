@@ -16,7 +16,7 @@ namespace Maths.Regression.Spline.Bass.Sensitivity;
 /// each coordinate has its own decomposition. A coordinate may hold only some of them (R's <c>func.var</c>): hⱼ then carries
 /// the held factors with the output side's normalizer, and the others stay inputs.</para>
 /// </summary>
-public static class BassSensitivity
+public static partial class BassSensitivity
 {
     /// <summary>
     /// The Sobol decomposition of <paramref name="fit"/>'s draws under <paramref name="spec"/>, on <paramref name="data"/>,
@@ -29,10 +29,11 @@ public static class BassSensitivity
     internal static SobolAnalysis Projected(BassFit fit, BassData data, double[] output, SensitivitySpec? spec)
         => OfCore(fit, data, spec, output);
 
-    private static SobolAnalysis OfCore(BassFit fit, BassData data, SensitivitySpec? spec, double[]? output)
+    private static SobolAnalysis OfCore(BassFit fit, BassData data, SensitivitySpec? spec, double[]? output, Maths.Regression.Sensitivity.MainVarianceForm? form = null)
     {
         spec ??= new SensitivitySpec();
         Setup s = Setup.Of(fit, data, spec, output);
+        if (Resolve(fit, spec, s) == SensitivityRoute.Sampled) return Sampled(fit, spec, s, output is not null, form);
         int maxOrder = spec.MaxOrder ?? Math.Max(1, s.TermIds.Select(id => s.Moments.Variables(fit.Terms[id]).Count).DefaultIfEmpty(0).Max());
         int[][] subsets = Subsets(s.TermIds.Select(id => s.Moments.Variables(fit.Terms[id])), maxOrder, spec.SubsetBudget);
         var index = new Dictionary<int[], int>(subsets.Length, SubsetComparer.Instance);
