@@ -60,6 +60,87 @@ As in the archived brief: each slice is reported here, then waits for the main s
 
 Newest first.
 
+### 2026-11-15 — Conformal test martingales: streams under covariate shift
+
+Built at the user's pick (2026-11-15, "Streams under shift"). Two choices settled the scope and the guarantee:
+- the scope, "Covariate shift first": streams with known structure, the Mondrian monitor, stay on the open list;
+- the guarantee, "Build, checks now": build with an exact enumeration gate, and pose the statement to the conformal-lean thread as a follow-up.
+
+**Landed** on `main`, nothing pushed:
+- `d4c97d4`:
+  - `CovariateShiftPValues` and `WeightedPValue`;
+  - `ConformalTestMartingale.CovariateShift` with `Add(score, weight)`, returning `WeightedMartingaleStep`;
+  - `MonitorForm`, read by `Form`. `IsFullForm` stays.
+- `CovariateShiftPValueTests` is a new class, nine cases.
+- *What changes for existing calls: nothing.* The two earlier forms read as before, and each form refuses the others' input with a message naming the form's own `Add`.
+
+**The sources.**
+- The weighting is Tibshirani, Barber, Candès and Ramdas 2019: Definition 1 (weighted exchangeability) and Lemma 3 (the chance that the last position holds each unit, given the bag). It is on the shelf, `gauntlet/conformal-bayes/1904.06019v3`.
+- The online form is Vovk, Nouretdinov and Gammerman 2003's reverse-filtration proof of M-1.
+- The paper that builds weighted conformal test martingales is not on the shelf: Prinster, Han, Liu and Saria 2025, *WATCH*, I believe. So the method here is derived, not ported. Its premise and gate are below.
+
+**What it computes.**
+- *The design.* A reference sample of m units from the source law P comes first, scored by the fit that scores the stream. Then the stream arrives from the target law Q: the inputs' law shifted, y given x unchanged. Every unit carries w(x) = dQ/dP, the reference units included.
+- *The p-value at the k-th stream arrival* (n = m + k units). Unit j holds the newest position with chance Pⱼ = πⱼ/k.
+  - πⱼ = wⱼ e_(k−1)(w₋ⱼ)/e_k(w) is the chance it holds one of the k stream positions: the conditional Poisson inclusion probability.
+  - p = Σ Pⱼ[αⱼ < αₙ] + θ Σ Pⱼ[αⱼ = αₙ].
+  - Equal weights give the unweighted ranks. With no reference sample it is `SmoothedPValues`' p.
+- *The arithmetic.*
+  - Tilting every weight by c leaves π unchanged, and with aᵢ = c wᵢ/(1 + c wᵢ) the count of units drawn is Poisson-binomial. So πⱼ = aⱼ P₋ⱼ(count = k − 1)/P(count = k).
+  - c is solved so the expected count is k, so the probabilities read lie near the mode and none underflows.
+  - Leave-one-out comes from prefix and suffix tables. Every term is positive, so nothing cancels.
+  - Where k exceeds m, the units not drawn are counted instead, so the cost is O(n·min(k, m)) per arrival.
+- *Weights of zero.* A reference unit may have w = 0, outside the target law, and never holds a stream position. A stream unit may not: the null rules it out, so such a unit is itself evidence of a shift beyond the stated one, and it is refused.
+
+**The guarantee (posed; checked by enumeration; not in Lean).**
+- The premise: the units' joint law is weighted exchangeable with weights 1 on the reference positions and w on the stream's (independent draws, as Tibshirani et al.'s Lemma 1 notes), and the scores are one fixed function.
+- The claim: the stream's p-values are i.i.d. uniform.
+- The argument, two steps:
+  - Given the bag at time n and every later unit, the arrangement has chance ∝ Π w over the stream positions (their Lemma 3), so pₙ is uniform given them.
+  - Every later p-value reads only that bag and the later units, so it is independent of pₙ.
+- *For the Lean thread:* this is M-1 with weighted orderings, `seqRank_uniform`'s finite core with each ordering weighed by Π w over the stream positions. The test below is its enumeration.
+
+**Gates.**
+- *The inclusion chances.*
+  - Against their definition, enumerated over every k-subset: 300 bags of 2 to 10 units, weights from 10⁻⁸ to 10⁸, some zero, every k. The largest relative error is 3.6·10⁻¹⁵, and Σπ = k.
+  - Beyond enumeration, 150 units at k 1 to 149, against ln e_r by a log-space recursion with each unit left out: within 10⁻¹² relative.
+- *The finite core, by enumeration.* Six units, every ordering weighed by its likelihood. The stream's p-values are jointly uniform, P(every pₜ ≤ uₜ) = Π uₜ over a grid, with the largest departure:
+
+  | bag | weighted p-values | unweighted ranks |
+  |---|---|---|
+  | 3 reference units | 2.3·10⁻¹⁵ | 0.059 |
+  | a reference unit of weight 0 | 1.9·10⁻¹⁶ | 0.118 |
+  | ties, 4 reference units | 8.9·10⁻¹⁶ | 0.196 |
+  | equal weights | 1.1·10⁻¹⁵ | 1.1·10⁻¹⁵ |
+- *On a stream under the stated shift.*
+  - The fixture is slice 14's: x uniform for the source, density 2x for the target, so w = 2x, with noise growing with x and a one-scale fit's log density. Each stream has 50 reference units, then 100 stream units.
+  - Over 2,000 streams, the weighted p-values' KS pooled is 0.0028 against the 1% critical 0.0036; at k 1, 50 and 100 it is 0.020, 0.029 and 0.022 against 0.036; the mean p is 0.499, the lag-one correlation 0.0013, and Ville's false alarms at c = 20 under the Sleepy Jumper are 0.0005 against 0.05. The unweighted ranks of the same units read KS 0.067 and mean p 0.457.
+  - The first run, at 500 streams, read a pooled KS of 0.0075 against the 1% critical 0.0073, a draw of about p 0.008.
+  - A probe at 2,000 streams on another seed read 0.0017 against 0.0036, with every block of 25 arrivals flat (KS at most 0.0039 against 0.0073) and the chances matching the log-space recursion at 150 units. So the test runs 2,000 streams.
+- *A change in y given x.*
+  - The fixture: 100 streams, 100 units under the stated shift, then 200 whose noise doubles; the Sleepy Jumper with Ville at c = 20.
+  - There were no false alarms before the change. 0.99 of streams alarmed after it, with a median delay of 40.
+- *Equal weights* give the unweighted counts over n to 14 digits, and with no reference sample `SmoothedPValues`' p. The monitor's p-values and capital are the source's under the same bet. Each bad input is refused.
+- *The cost per arrival,* 200 reference units, wall clock, indicative: 251 µs at k up to 100, 418 µs to 200, 829 µs to 500, 1,581 µs to 1,000 and 2,482 µs to 2,000, linear in n at fixed m.
+- *Per commit,* the selected classes and the pinned tier across every test project: 113 of 113 in the 4 classes selected in Maths.Regression.Tests; Maths.Oracle.Tests compiles the two source files and selects no class; no other project's compile closure holds them.
+
+**Defects found: none.**
+
+**The decision it serves:** whether the monitor serves streams that are not exchangeable as they stand. It now serves a stated covariate shift.
+- The weighted monitor tolerates the stated shift and alarms on a change in y given x.
+- The unweighted ranks of the same stream are not uniform under it (KS 0.067, mean p 0.457), so their capital carries no guarantee there.
+- At this shift's size their Ville alarms stayed rare (0.002 of streams), but a larger shift would move them further.
+
+**Follow-ups:**
+- *The guarantee in Lean* (the user's choice above): the statement goes to the conformal-lean thread.
+- *The Mondrian monitor for streams with known structure* (seasons, categories), from Vovk, Gammerman and Shafer 2005, §8.4. It stays on the open list, the user's.
+- *An estimated ratio.*
+  - With w fitted outside the stream, by `DensityRatio.Logistic` or `.Spline`, validity is lost by however far the weights move. No bound is read out here.
+  - A bound like the weighted split rule's TV term would decide whether the monitor reports its own loss. The user's.
+- *WATCH on the shelf.* Reading it would check the method here against its source. It also proposes diagnosing a concept shift against an out-of-support covariate shift. The user's.
+
+**Doc changes owed:** the conformal test martingales section: the covariate-shift form, its design, the p-value and its inclusion chances, the tilted Poisson-binomial arithmetic, the guarantee's statement and argument, the enumeration gate, the stream readings, and the zero-weight rule.
+
 ### 2026-11-15 — Conformal test martingales: the Sleepy Jumper
 
 Built at the user's pick (2026-11-15, "The Sleepy Jumper").
