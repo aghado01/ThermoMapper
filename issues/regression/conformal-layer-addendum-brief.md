@@ -60,6 +60,80 @@ As in the archived brief: each slice is reported here, then waits for the main s
 
 Newest first.
 
+### 2026-11-15 — Conformal test martingales: the Sleepy Jumper
+
+Built at the user's pick (2026-11-15, "The Sleepy Jumper").
+
+**Landed** on `main`, nothing pushed:
+- `765795c`:
+  - `SleepyJumperBet(sleep, jump, levels)`, an `IBettingFunction` beside Simple Jumper;
+  - the readouts `Sleep`, `Jump`, `Levels`, `BettingShare` and `Mixture()`.
+- `BettingCapitalTests` gains:
+  - two bets in its integral and past-only theories;
+  - a path enumeration with four parameter sets;
+  - the resting test;
+  - the Sleepy Jumper in the change and cost readings.
+- `MartingaleAlarmTests` gains a Ville row and the Sleepy Jumper in the delay reading.
+- *What changes for existing calls: nothing.*
+
+**What it computes.**
+- *The sources.* Both define it alike: Vovk, Nouretdinov and Gammerman 2003, §6 (`Vovk2003.pdf`, PDF page 6), and Vovk, Gammerman and Shafer 2005, §7.1 (book pages 176–177).
+- *The automaton.*
+  - The states are (awake or asleep, ε̃), and it starts asleep at ε̃ = 1.
+  - Asleep, it wakes with probability R and keeps ε̃.
+  - Awake, ε̃ jumps to a uniform draw with probability J, and independently it falls asleep with probability R.
+  - Awake, it bets the power bet εp^(ε−1) with ε = ε̃; asleep, it bets 1, a rest. So the starting ε̃ = 1 rests even awake, until its first jump.
+- *The bet.*
+  - The step's bet is the mixture over the states, each weighted by the capital its paths have earned.
+  - It is filtered forward, in logs: O(levels) per step.
+  - ε̃ lies on `levels` midpoints of [0, 1], 100 by default, with the starting level 1 held apart. The jump's uniform law is the midpoint rule.
+- *Exact for its grid.* Each bet mixes power bets, each integrating to 1, with weights from the past. No margin or quadrature enters.
+- *The defaults* are Vovk et al.'s R = 0.01 and J = 0.001.
+
+**Gates.**
+- *The automaton's mixture.* Every path of six steps over two levels, weighed literally by the sources' rules, gives the capital at each step to 10⁻¹² relative. It holds at (R, J) = (0.3, 0.4), (0.01, 0.001), (1, 1) and (0, 0.5).
+- *Integrates to 1.* After uniform and skewed histories of 0 to 333 p-values, |∫ f − 1| is at most 3.0·10⁻¹⁴ at the defaults and 2.5·10⁻¹⁴ at (0.3, 0.2, 20 levels). The tail below e^(−700) comes from `Mixture()`, Σ w·a^ε.
+- *Reads only the past*, as every bet must.
+- *Ville's false alarms* over 10,000 streams of 300 uniform p-values at c = 10: 0.0023, against 1/c = 0.1.
+- *What resting buys.*
+  - The fixture: 200 streams of 2,000 exchangeable arrivals, then 300 whose scores fall by 1.5 sds; Ville at c = 100, from the start.
+
+    | bet | mean ln S at the change (lowest) | alarmed after it | median delay |
+    |---|---|---|---|
+    | Sleepy Jumper | −0.79 (−0.91) | 1.000 | 14 |
+    | Simple Jumper | −7.98 (−11.20) | 1.000 | 55 |
+    | power mixture | −602 | 0 | none |
+    | power 0.5 | −389 | 0 | none |
+
+  - The share of the capital betting was 0.07 at the change and 0.97 fifty arrivals after it.
+  - The test pins each reading: the Sleepy Jumper above −2 and above Simple Jumper at the change, alarming in every stream, sooner, and waking.
+- *The delay reading* (qualification; 300 streams, 500 exchangeable arrivals then 1,000 changed; c = 100). Each cell gives the share of false alarms, the share detected and the median delay:
+
+  | change | procedure | Sleepy Jumper | Simple Jumper |
+  |---|---|---|---|
+  | mean | Ville | 0.000, 1.000, 86 | 0.007, 0.990, 119 |
+  | mean | CUSUM | 0.000, 1.000, 81 | 0.020, 0.980, 81 |
+  | noise | Ville | 0.000, 1.000, 48 | 0.017, 0.983, 110 |
+  | noise | CUSUM | 0.000, 1.000, 47 | 0.030, 0.970, 75 |
+
+  Shiryaev–Roberts alarms falsely in every stream for both jumpers at c = 100. A bet near 1 adds about 1 to Rₙ per step, so it passes c near step c, well inside 500 arrivals. Its posed guarantee, a mean time to a false alarm of at least c, allows that, so this is a reading, as slice 6c found for Simple Jumper.
+- *The cost per arrival,* wall clock and indicative: 4.8 µs at 100 levels, against Simple Jumper's 0.39 µs and the plug-in's 0.71 µs.
+- *The change reading* at 200 exchangeable arrivals: ln S was −0.06 at the change, and peaked at 50.9 against Simple Jumper's 36.2.
+- *Per commit,* the selected classes and the pinned tier across every test project: 104 of 104 in the 3 classes selected in Maths.Regression.Tests; Maths.Oracle.Tests compiles the source file and selects no class; no other project's compile closure holds them.
+
+**Defects found: none.**
+
+**The decision it serves:** whether the monitor's bet can rest between jumps. It can, and resting is what keeps Ville's alarm alive on long streams.
+- Ville's statistic reads the capital from the start, so a capital lost to an exchangeable stretch stays lost. Through 2,000 such arrivals, Simple Jumper loses about 8 in ln S and the Sleepy Jumper under 1.
+- So after a change the Sleepy Jumper alarms sooner, a median 14 against 55, and with fewer false alarms.
+- CUSUM reads past a lost capital, so the two jumpers' CUSUM delays are close on a mean change: 81 and 81.
+
+**Follow-ups, the user's to decide:**
+- *ε̃ that drifts slowly as well as jumping,* which the book suggests (Vovk, Gammerman and Shafer 2005, page 177). It decides whether the bet tracks a change that grows gradually.
+- *The grid's effect on the delays,* not measured. Any grid is exact, so the grid only moves power.
+
+**Doc changes owed:** the conformal test martingales section: the Sleepy Jumper, its automaton and grid, its defaults, the resting table, the delay table and the Shiryaev–Roberts reading, and the cost.
+
 ### 2026-11-15 — Conformal test martingales: the full form
 
 Built at the user's pick (2026-11-15, "The full form"), the first of the Vovk items.
