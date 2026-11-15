@@ -115,6 +115,132 @@ public sealed class SimpleJumperBet : IBettingFunction
 }
 
 /// <summary>
+/// The Sleepy Jumper (Vovk, Nouretdinov and Gammerman 2003, §6; Vovk, Gammerman and Shafer 2005, §7.1): power bets εp^(ε−1) mixed
+/// over the paths of an automaton that can rest between jumps. Its states are (awake or asleep, ε̃). It starts asleep at ε̃ = 1.
+/// <list type="bullet">
+/// <item><b>Asleep</b>, it wakes with probability R, keeping ε̃, and otherwise stays asleep.</item>
+/// <item><b>Awake</b>, ε̃ jumps to a uniform draw with probability J and otherwise stays, and independently it falls asleep with
+/// probability R.</item>
+/// <item><b>The bet.</b> Awake it bets ε = ε̃, asleep ε = 1, that is f ≡ 1, a rest. The starting ε̃ = 1 rests even awake until its first
+/// jump.</item>
+/// </list>
+/// The step's bet is the mixture over the states, weighted by the capital each path has earned so far, and it is filtered forward.
+/// ε̃ is held on <c>levels</c> midpoints of [0, 1], the jump's uniform law by the midpoint rule, with the starting level 1 apart. The
+/// martingale is exact for its grid: each bet mixes power bets, each integrating to 1, with weights from the past. Vovk et al.'s runs
+/// take R = 0.01 and J = 0.001, the defaults here. O(levels) per step.
+/// </summary>
+public sealed class SleepyJumperBet : IBettingFunction
+{
+    private readonly double _sleep, _jump;
+    private readonly double[] _epsilon, _logEpsilon;   // the levels' ε̃, midpoints of [0, 1]
+    private readonly double[] _awake, _asleep;         // the next step's weights per level, the last the starting level ε̃ = 1
+
+    /// <param name="sleep">R, the probability of falling asleep when awake and of waking when asleep, in [0, 1]; 0.01 by default.</param>
+    /// <param name="jump">J, the probability that an awake ε̃ jumps, in [0, 1]; 0.001 by default.</param>
+    /// <param name="levels">The midpoints of [0, 1] that hold ε̃, at least 1; 100 by default.</param>
+    public SleepyJumperBet(double sleep = 0.01, double jump = 0.001, int levels = 100)
+    {
+        if (!(sleep >= 0.0 && sleep <= 1.0)) throw new ArgumentOutOfRangeException(nameof(sleep), "R lies in [0, 1].");
+        if (!(jump >= 0.0 && jump <= 1.0)) throw new ArgumentOutOfRangeException(nameof(jump), "J lies in [0, 1].");
+        ArgumentOutOfRangeException.ThrowIfLessThan(levels, 1);
+        _sleep = sleep;
+        _jump = jump;
+        _epsilon = new double[levels];
+        _logEpsilon = new double[levels];
+        for (int k = 0; k < levels; k++)
+        {
+            _epsilon[k] = (k + 0.5) / levels;
+            _logEpsilon[k] = Math.Log(_epsilon[k]);
+        }
+        _awake = new double[levels + 1];
+        _asleep = new double[levels + 1];
+        _asleep[levels] = 1.0;
+    }
+
+    /// <summary>R.</summary>
+    public double Sleep => _sleep;
+
+    /// <summary>J.</summary>
+    public double Jump => _jump;
+
+    /// <summary>The midpoints that hold ε̃.</summary>
+    public int Levels => _epsilon.Length;
+
+    /// <summary>The share of the capital that bets at the next step, awake below ε̃ = 1; the rest rests.</summary>
+    public double BettingShare
+    {
+        get
+        {
+            double share = 0.0;
+            for (int k = 0; k < _epsilon.Length; k++) share += _awake[k];
+            return share;
+        }
+    }
+
+    /// <summary>The next step's bet as its mixture of power bets, εp^(ε−1) with each weight: one per level, awake, and last ε = 1,
+    /// every resting state together.</summary>
+    public (double Epsilon, double Weight)[] Mixture()
+    {
+        var mixture = new (double, double)[_epsilon.Length + 1];
+        for (int k = 0; k < _epsilon.Length; k++) mixture[k] = (_epsilon[k], _awake[k]);
+        mixture[^1] = (1.0, Resting());
+        return mixture;
+    }
+
+    /// <inheritdoc/>
+    public double LogBet(double p)
+    {
+        (double top, double sum) = Scaled(Math.Log(p));
+        return top + Math.Log(sum);
+    }
+
+    /// <inheritdoc/>
+    public void Observe(double p)
+    {
+        double logP = Math.Log(p);
+        (double top, double sum) = Scaled(logP);
+        int levels = _epsilon.Length;
+        // Each state's weight times its bet, over the step's bet: the capitals' shares after pₙ.
+        for (int k = 0; k < levels; k++)
+            if (_awake[k] > 0.0) _awake[k] *= Math.Exp(_logEpsilon[k] + (_epsilon[k] - 1.0) * logP - top) / sum;
+        double rest = Math.Exp(-top) / sum;
+        _awake[levels] *= rest;
+        for (int k = 0; k <= levels; k++) _asleep[k] *= rest;
+        // The automaton's step: an awake ε̃ jumps with J to a uniform level; then each state wakes or falls asleep with R.
+        double awake = 0.0;
+        for (int k = 0; k <= levels; k++) awake += _awake[k];
+        for (int k = 0; k <= levels; k++)
+        {
+            double kept = (1.0 - _jump) * _awake[k] + (k < levels ? _jump * awake / levels : 0.0), asleep = _asleep[k];
+            _awake[k] = _sleep * asleep + (1.0 - _sleep) * kept;
+            _asleep[k] = (1.0 - _sleep) * asleep + _sleep * kept;
+        }
+    }
+
+    /// <inheritdoc/>
+    public bool IntegratesToOne => true;
+
+    private double Resting()
+    {
+        double rest = _awake[^1];
+        foreach (double w in _asleep) rest += w;
+        return rest;
+    }
+
+    // The step's bet at ln p as e^top·sum, top the largest log term of a state with weight.
+    private (double Top, double Sum) Scaled(double logP)
+    {
+        double rest = Resting(), top = rest > 0.0 ? 0.0 : double.NegativeInfinity;
+        for (int k = 0; k < _epsilon.Length; k++)
+            if (_awake[k] > 0.0) top = Math.Max(top, _logEpsilon[k] + (_epsilon[k] - 1.0) * logP);
+        double sum = rest * Math.Exp(-top);
+        for (int k = 0; k < _epsilon.Length; k++)
+            if (_awake[k] > 0.0) sum += _awake[k] * Math.Exp(_logEpsilon[k] + (_epsilon[k] - 1.0) * logP - top);
+        return (top, sum);
+    }
+}
+
+/// <summary>
 /// The plug-in bet (Fedorova, Gammerman, Nouretdinov and Vovk 2012): a kernel density of the p-values so far, reflected at 0 and 1, as
 /// the next step's bet, which asymptotically does at least as well as any power bet.
 /// <list type="bullet">

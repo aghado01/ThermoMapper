@@ -37,6 +37,7 @@ public sealed class MartingaleAlarmTests(ITestOutputHelper output)
         "mixture" => new PowerMixtureBet(),
         "plug-in" => new PlugInBet(),
         "plug-in, 20 bins" => new PlugInBet(bins: 20),
+        "sleepy" => new SleepyJumperBet(),
         _ => throw new ArgumentOutOfRangeException(nameof(name)),
     };
 
@@ -97,6 +98,7 @@ public sealed class MartingaleAlarmTests(ITestOutputHelper output)
     [InlineData("power 0.5", 10.0)]
     [InlineData("mixture", 10.0)]
     [InlineData("plug-in, 20 bins", 10.0)]
+    [InlineData("sleepy", 10.0)]
     public void Ville_FalseAlarms_AtMostOneOverC(string name, double c)
     {
         // 10,000 streams of 300 i.i.d. uniform p-values, M-1's conclusion: the share of streams with any alarm.
@@ -193,7 +195,7 @@ public sealed class MartingaleAlarmTests(ITestOutputHelper output)
         if (!BassQualification.Enabled) return;
         const int streams = 300, before = 500, after = 1000;
         const double c = 100.0;
-        foreach (string name in new[] { "jumper", "power 0.5", "mixture", "plug-in" })
+        foreach (string name in new[] { "jumper", "power 0.5", "mixture", "plug-in", "sleepy" })
         {
             var rows = new List<string>();
             foreach (AlarmProcedure procedure in Procedures)

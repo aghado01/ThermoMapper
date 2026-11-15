@@ -14,7 +14,8 @@ namespace Maths.Regression.Tests;
 /// <item>Each bet integrates to 1, the plug-in to at most 1, by quadrature at states after random histories.</item>
 /// <item>Each bet reads only the past: its curve before pₙ is a fresh bet's fed p₁, …, pₙ₋₁.</item>
 /// <item>Simple Jumper is Vovk et al.'s Algorithm 1, and the power mixture is its integral over ε. The plug-in's incremental density is
-/// its refit from the counts.</item>
+/// its refit from the counts. The Sleepy Jumper's capital is the mixture over its automaton's paths, enumerated.</item>
+/// <item>Through a long exchangeable stretch the Sleepy Jumper rests and keeps its capital; after a change it wakes and bets.</item>
 /// <item>The capital has expectation 1 on exchangeable streams, end to end through the ranks.</item>
 /// <item>A bet that peeks at the current p, or integrates above 1, breaks it.</item>
 /// </list>
@@ -28,7 +29,7 @@ public sealed class BettingCapitalTests(ITestOutputHelper output)
         return Math.Sqrt(-2.0 * Math.Log(u1)) * Math.Cos(2.0 * Math.PI * u2);
     }
 
-    public static TheoryData<string> Bets => ["power 0.2", "power 0.9", "mixture", "jumper", "jumper 0.3", "plug-in", "plug-in, floor 0.1"];
+    public static TheoryData<string> Bets => ["power 0.2", "power 0.9", "mixture", "jumper", "jumper 0.3", "plug-in", "plug-in, floor 0.1", "sleepy", "sleepy 0.3 0.2 20"];
 
     private static IBettingFunction Bet(string name) => name switch
     {
@@ -39,6 +40,8 @@ public sealed class BettingCapitalTests(ITestOutputHelper output)
         "jumper 0.3" => new SimpleJumperBet(0.3),
         "plug-in" => new PlugInBet(),
         "plug-in, floor 0.1" => new PlugInBet(floor: 0.1),
+        "sleepy" => new SleepyJumperBet(),
+        "sleepy 0.3 0.2 20" => new SleepyJumperBet(0.3, 0.2, 20),
         _ => throw new ArgumentOutOfRangeException(nameof(name)),
     };
 
@@ -68,7 +71,8 @@ public sealed class BettingCapitalTests(ITestOutputHelper output)
     [MemberData(nameof(Bets))]
     public void EachBet_IntegratesToOne_OrAtMostOne_AfterAnyHistory(string name)
     {
-        // The mass below a = e^(−700): a^ε for a power bet, (a − 1)/ln a for the mixture (∫₀¹ a^ε dε), at most a·max f for the bounded ones.
+        // The mass below a = e^(−700): a^ε for a power bet, (a − 1)/ln a for the mixture (∫₀¹ a^ε dε), Σ w a^ε over the Sleepy Jumper's
+        // components, and at most a·max f for the bounded ones.
         var rng = new Xoshiro256PlusPlus(seed: 20261108 + name.Length);
         double a = Math.Exp(-700.0), worst = 0.0;
         foreach (int history in new[] { 0, 7, 10, 40, 333 })
@@ -76,7 +80,13 @@ public sealed class BettingCapitalTests(ITestOutputHelper output)
             {
                 IBettingFunction bet = Bet(name);
                 for (int i = 0; i < history; i++) bet.Observe(HistoryP(rng, skewed));
-                double tail = bet switch { PowerBet power => Math.Pow(a, power.Epsilon), PowerMixtureBet => (a - 1.0) / Math.Log(a), _ => 0.0 };
+                double tail = bet switch
+                {
+                    PowerBet power => Math.Pow(a, power.Epsilon),
+                    PowerMixtureBet => (a - 1.0) / Math.Log(a),
+                    SleepyJumperBet sleepy => sleepy.Mixture().Sum(c => c.Weight * Math.Pow(a, c.Epsilon)),
+                    _ => 0.0,
+                };
                 double total = MassAboveTail(bet) + tail;
                 worst = Math.Max(worst, Math.Abs(total - 1.0));
                 if (bet.IntegratesToOne) Assert.True(Math.Abs(total - 1.0) < 1e-8, $"{name} after {history} ({(skewed ? "skewed" : "uniform")}): ∫ f = {total:R}");
@@ -126,6 +136,51 @@ public sealed class BettingCapitalTests(ITestOutputHelper output)
                 double logCapital = capital.Add(p).LogCapital, expected = Math.Log(c.Sum());
                 Assert.True(Math.Abs(logCapital - expected) <= 1e-12 * Math.Max(1.0, Math.Abs(expected)), $"J {jump}, step {n}: {logCapital:R} against {expected:R}");
             }
+        }
+    }
+
+    [Theory]
+    [InlineData(0.3, 0.4)]
+    [InlineData(0.01, 0.001)]
+    [InlineData(1.0, 1.0)]
+    [InlineData(0.0, 0.5)]
+    public void SleepyJumper_IsTheMixtureOverItsAutomatonsPaths(double sleep, double jump)
+    {
+        // Two levels, ε̃ in {¼, ¾}, and the starting ε̃ = 1. Every path of six steps from (asleep, 1), weighed by the automaton's rules as
+        // Vovk et al. write them, times Π εₙpₙ^(εₙ−1) with εₙ = ε̃ₙ awake and 1 asleep: the mixture Mₙ at each n, against the capital.
+        double[] tilde = [0.25, 0.75, 1.0];
+        double Step((bool Awake, int Level) from, (bool Awake, int Level) to)
+        {
+            if (!from.Awake) return to.Level != from.Level ? 0.0 : to.Awake ? sleep : 1.0 - sleep;
+            double level = (to.Level == from.Level ? 1.0 - jump : 0.0) + (to.Level < 2 ? jump / 2.0 : 0.0);
+            return level * (to.Awake ? 1.0 - sleep : sleep);
+        }
+        (bool, int)[] states = [.. new[] { false, true }.SelectMany(a => Enumerable.Range(0, 3).Select(k => (a, k)))];
+        var rng = new Xoshiro256PlusPlus(seed: 13);
+        double[] ps = [.. Enumerable.Range(0, 6).Select(i => HistoryP(rng, i % 2 == 0))];
+        var capital = new BettingCapital(new SleepyJumperBet(sleep, jump, levels: 2));
+        for (int n = 1; n <= ps.Length; n++)
+        {
+            double mixture = 0.0;
+            var paths = new List<((bool Awake, int Level) State, double Weight)> { ((false, 2), 1.0) };
+            for (int i = 0; i < n; i++)
+            {
+                var next = new List<((bool Awake, int Level) State, double Weight)>();
+                foreach (((bool awake, int level), double weight) in paths)
+                {
+                    double epsilon = awake ? tilde[level] : 1.0, bet = epsilon * Math.Pow(ps[i], epsilon - 1.0);
+                    if (i == n - 1) { mixture += weight * bet; continue; }
+                    foreach ((bool, int) to in states)
+                    {
+                        double move = Step((awake, level), to);
+                        if (move > 0.0) next.Add((to, weight * bet * move));
+                    }
+                }
+                paths = next;
+            }
+            double logCapital = capital.Add(ps[n - 1]).LogCapital;
+            Assert.True(Math.Abs(logCapital - Math.Log(mixture)) <= 1e-12 * Math.Max(1.0, Math.Abs(logCapital)),
+                        $"R {sleep}, J {jump}, n {n}: {logCapital:R} against {Math.Log(mixture):R}");
         }
     }
 
@@ -280,7 +335,7 @@ public sealed class BettingCapitalTests(ITestOutputHelper output)
         // The adaptive bets' capital grows by far more than 100. A fixed power bet has decayed under the null by then, by about
         // 1 − ε + ln ε per step, which is what CUSUM and Shiryaev–Roberts read past (6c). A reading, not a rate: 6c's delays measure it.
         var rise = new Dictionary<string, double>();
-        foreach (string name in new[] { "power 0.2", "power 0.9", "mixture", "jumper", "plug-in" })
+        foreach (string name in new[] { "power 0.2", "power 0.9", "mixture", "jumper", "plug-in", "sleepy" })
         {
             var rng = new Xoshiro256PlusPlus(seed: 12);
             var martingale = new ConformalTestMartingale(Bet(name), seed: 3);
@@ -289,7 +344,58 @@ public sealed class BettingCapitalTests(ITestOutputHelper output)
             rise[name] = peak - atChange;
             output.WriteLine($"{name}: ln S {atChange:F2} at the change, its peak after {peak:F2}, {martingale.LogPath[^1]:F2} at 400");
         }
-        Assert.True(rise["jumper"] > Math.Log(100.0) && rise["plug-in"] > Math.Log(100.0), $"Simple Jumper rose {rise["jumper"]:F2}, the plug-in {rise["plug-in"]:F2}");
+        Assert.True(rise["jumper"] > Math.Log(100.0) && rise["plug-in"] > Math.Log(100.0) && rise["sleepy"] > Math.Log(100.0),
+                    $"Simple Jumper rose {rise["jumper"]:F2}, the plug-in {rise["plug-in"]:F2}, the Sleepy Jumper {rise["sleepy"]:F2}");
+    }
+
+    [Fact]
+    public void TheSleepyJumper_RestsThroughALongExchangeableStretch_ThenWakesAndBets()
+    {
+        // 200 streams: 2,000 exchangeable arrivals, then 300 whose scores fall by 1.5 sds. Each bet's capital at the change, the share of
+        // streams whose capital passes 100 after it (Ville's alarm at c = 100 from the start, so a capital lost before the change stays
+        // lost), the median delay, and the Sleepy Jumper's share betting at the change and 50 arrivals after it.
+        const int streams = 200, before = 2000, after = 300;
+        const double c = 100.0;
+        string[] names = ["sleepy", "jumper", "mixture", "power 0.5"];
+        var atChange = names.ToDictionary(n => n, _ => new List<double>());
+        var delays = names.ToDictionary(n => n, _ => new List<int>());
+        double bettingAtChange = 0.0, bettingAfter = 0.0;
+        for (int r = 0; r < streams; r++)
+        {
+            var rng = new Xoshiro256PlusPlus(seed: 5000 + r);
+            double[] scores = [.. Enumerable.Range(0, before + after).Select(n => Gaussian(rng) - (n >= before ? 1.5 : 0.0))];
+            foreach (string name in names)
+            {
+                IBettingFunction bet = name == "power 0.5" ? new PowerBet(0.5) : Bet(name);
+                var martingale = new ConformalTestMartingale(bet, r, new MartingaleAlarm(AlarmProcedure.Ville, c));
+                for (int n = 1; n <= before + after; n++)
+                {
+                    martingale.Add(scores[n - 1]);
+                    if (n == before)
+                    {
+                        atChange[name].Add(martingale.LogCapital);
+                        if (bet is SleepyJumperBet s) bettingAtChange += s.BettingShare / streams;
+                    }
+                    if (n == before + 50 && bet is SleepyJumperBet t) bettingAfter += t.BettingShare / streams;
+                }
+                int first = martingale.Alarms[0].AlarmTimes.FirstOrDefault(t => t > before);
+                if (first > 0) delays[name].Add(first - before);
+            }
+        }
+        foreach (string name in names)
+        {
+            List<int> d = delays[name];
+            d.Sort();
+            output.WriteLine($"{name}: mean ln S at the change {atChange[name].Average():F2} (lowest {atChange[name].Min():F2}); alarmed after it "
+                             + $"{d.Count / (double)streams:F3}, median delay {(d.Count > 0 ? d[d.Count / 2].ToString() : "none")}");
+        }
+        output.WriteLine($"the Sleepy Jumper's share betting: {bettingAtChange:F4} at the change, {bettingAfter:F4} 50 arrivals after it");
+        // Resting, it loses about a unit of ln S over the stretch where Simple Jumper loses several and the power bets hundreds, so it
+        // alarms in every stream, sooner; it wakes after the change.
+        Assert.True(atChange["sleepy"].Min() > -2.0 && atChange["sleepy"].Average() > atChange["jumper"].Average());
+        Assert.Equal(streams, delays["sleepy"].Count);
+        Assert.True(delays["sleepy"][streams / 2] < delays["jumper"][delays["jumper"].Count / 2]);
+        Assert.True(bettingAtChange < 0.2 && bettingAfter > 0.5, $"betting {bettingAtChange:F4} at the change, {bettingAfter:F4} after it");
     }
 
     [Fact]
@@ -301,7 +407,7 @@ public sealed class BettingCapitalTests(ITestOutputHelper output)
         double[] scores = [.. Enumerable.Range(0, 100_000).Select(_ => Gaussian(rng))];
         var warm = new ConformalTestMartingale(new PlugInBet(), seed: 1);
         for (int i = 0; i < 100_000; i++) warm.Add(scores[i]);
-        foreach (string name in new[] { "power 0.2", "mixture", "jumper", "plug-in" })
+        foreach (string name in new[] { "power 0.2", "mixture", "jumper", "plug-in", "sleepy" })
         {
             var martingale = new ConformalTestMartingale(Bet(name), seed: 1);
             long t0 = BassCost.Tick();
