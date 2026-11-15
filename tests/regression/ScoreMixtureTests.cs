@@ -175,6 +175,33 @@ public sealed class ScoreMixtureTests(ITestOutputHelper output)
     }
 
     [Fact]
+    public void TheExtrapolatedAlternation_EndsNoHigher_InFewerPasses()
+    {
+        // The true two-cluster τ at 1,000 inputs, exact and with noise 0.01 clamped into (0, 1): at J 2 to 4, five restarts each, the
+        // extrapolated alternation's residual is not above the plain one's and it takes no more passes.
+        foreach (double noise in new[] { 0.0, 0.01 })
+        {
+            var rng = new Xoshiro256PlusPlus(2026_1160 + 1000);
+            double[] x = [.. Enumerable.Range(0, 1000).Select(_ => rng.NextDouble())];
+            double[] levels = [0.05, 0.1, 0.15, 0.2, 0.3, 0.45, 0.65, 0.9, 1.3];
+            double F(double level, double sigma) => 2.0 * Math.Exp(Normal.StandardLogCdf(level / sigma)) - 1.0;
+            double[][] tau = [.. x.Select(v => levels.Select(l => Math.Clamp(Membership(v) * F(l, 0.2) + (1.0 - Membership(v)) * F(l, 1.0)
+                                                                                + noise * Gaussian(rng), 1e-6, 1 - 1e-6)).ToArray())];
+            foreach (int j in new[] { 2, 3, 4 })
+            {
+                var plain = new ScoreMixtureCost();
+                var pushed = new ScoreMixtureCost();
+                (_, double plainR2) = ScoreMixture.Factor(tau, j, 5, new Xoshiro256PlusPlus(7), plain, extrapolate: false)!.Value;
+                (_, double pushedR2) = ScoreMixture.Factor(tau, j, 5, new Xoshiro256PlusPlus(7), pushed)!.Value;
+                output.WriteLine($"noise {noise}, J {j}: plain 1 − R² {1 - plainR2:E6} in {plain.Passes} passes; extrapolated {1 - pushedR2:E6} in {pushed.Passes} "
+                                 + $"({pushed.PushesKept} of {pushed.Pushes} pushes kept)");
+                Assert.True(1 - pushedR2 <= (1 - plainR2) * (1 + 1e-4), $"J {j}, noise {noise}");
+                Assert.True(pushed.Passes <= plain.Passes, $"J {j}, noise {noise}: {pushed.Passes} passes against {plain.Passes}");
+            }
+        }
+    }
+
+    [Fact]
     public void EndToEnd_TheEstimatedMembershipsCover()
     {
         // The mixture fitted once on a training split of 400, the calibration split's size, as their D′ and D are: the precision rule reads
