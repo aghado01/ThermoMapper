@@ -205,12 +205,15 @@ public static partial class SpecialFunctions
         throw new ArithmeticException($"Incomplete beta continued fraction did not converge for a = {a}, b = {b}, x = {x}.");
     }
 
-    /// <summary><c>ln(1 + x)</c>, accurate for small <c>x</c> (Goldberg's correction).</summary>
+    /// <summary><c>ln(1 + x)</c>, accurate for small <c>x</c> (Goldberg's correction). Past x ≈ 2.5·10³⁰⁵ the correction's product
+    /// ln(u)·x overflows; there u is x, the correction is 1, and it returns ln u.</summary>
     public static double Log1p(double x)
     {
         if (double.IsPositiveInfinity(x)) return x;
         double u = 1.0 + x;
-        return u == 1.0 ? x : Math.Log(u) * x / (u - 1.0);
+        if (u == 1.0) return x;
+        double corrected = Math.Log(u) * x / (u - 1.0);
+        return double.IsPositiveInfinity(corrected) ? Math.Log(u) : corrected;
     }
 
     /// <summary><c>eˣ − 1</c>, accurate for small <c>x</c> (Kahan's correction).</summary>
