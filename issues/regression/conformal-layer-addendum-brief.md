@@ -33,6 +33,63 @@ As in the archived brief: each slice is reported here, then waits for the main s
 
 Newest first.
 
+### 2026-11-14 — Sets to the guarantee: the split forms' (α, β) level
+
+Built at the user's pick (2026-11-14, "Sets to the guarantee"), the first of the miscoverage bound's two follow-ups. Separately, `LossBound`'s docstrings now name the Lean's `gaffke_calibration` and `highProbability_risk` beside their Theorem 1 citations (`9cf0fd5`, comment only), as the conformal-lean thread offered (8594176).
+
+**Landed** on `main`, nothing pushed:
+- `621370c`:
+  - `TrainingConditional.Level(m, α, β)`;
+  - an optional `confidence` β on `SplitConformal.Calibrate`, `Density`, `Quantiles`, `AsymmetricQuantiles`, `Residuals`, `Distribution` and `CalibrateDistribution`, and on `GroupConformal.Density`;
+  - `SplitCalibration.Confidence`, `SplitPitCalibration.Confidence`, and `Confidence` on `ConformalPrediction`, `AsymmetricConformalIntervals`, `ConformalDistribution` and `SplitPredictiveDistribution`;
+  - three tests in `TrainingConditionalTests`.
+- *Nothing existing changes.* Without a confidence every level is ⌊αm⌋ (⌊αm/2⌋ per tail) as before; the existing classes pass unchanged.
+
+**What it computes.**
+- *The level.* The largest k at most ⌊αm⌋ whose Beta(k, m − k) β-quantile is at most α (Vovk 2012's (ε, δ)-validity), by bisection, the quantile rising in k. With chance at least β over the calibration units, the stratum's sets miss a new unit with chance at most α. The cap keeps the marginal guarantee 1 − k/m ≥ 1 − α beside it. It is 0, the whole space, where even k = 1 passes α: at α 0.1 and β 0.9 that is m up to 22, where 1 − 0.1^(1/(m − 1)) passes 0.1.
+- *Where it lives.* `SplitCalibration` takes the confidence and caches each stratum's level, so every reading of `Level(h)` follows: thresholds, ranks, sets and the readouts.
+- *Per form.*
+  - The density, CQR and residual forms: per stratum.
+  - The group form: over the held-out groups.
+  - The asymmetric interval: each tail at α/2 and confidence (1 + β)/2, joined by their union.
+  - The equi-tailed set of the predictive distribution: the largest k per tail whose Beta(2k, m − 2k) quantile is at most α, both tails reading the PIT.
+- *Refused.*
+  - A confidence with weights, on every form. The weighted threshold moves with each case's weights, which the law does not read.
+  - β outside (0, 1).
+- *What k it takes* at α 0.1:
+
+  | m | ⌊αm⌋ | β 0.5 | β 0.9 | β 0.99 |
+  |---|---|---|---|---|
+  | 20 | 2 | 2 | 0 | 0 |
+  | 50 | 5 | 5 | 2 | 1 |
+  | 100 | 10 | 10 | 6 | 4 |
+  | 200 | 20 | 20 | 15 | 11 |
+  | 1,000 | 100 | 100 | 88 | 78 |
+  | 10,000 | 1,000 | 1,000 | 962 | 931 |
+
+**Gates** (β 0.9; the share of calibrations whose sets miss a new unit with chance above α, each set's miss read exactly):
+
+| Form | k, plain → to β | Share above α, plain → to β |
+|---|---|---|
+| Residual interval, m 200, α 0.1, 4,000 replications | 20 → 15 | 0.4617 → 0.0975 (mean width 3.309 → 3.586, +8%) |
+| Asymmetric CQR, m 200, 4,000 replications | each tail at (1 + β)/2 | 0.4695 → 0.0035 |
+| Equi-tailed set, m 100, α 0.2, 2,000 replications | 10 → 7 per tail | 0.4825 → 0.0495 |
+
+- *Reading the table.* The plain level misses above α in about half of all calibrations, as its Beta law's median near k/m says. To β the residual interval sits at 1 − β, its scores continuous. The asymmetric interval's union and the equi-tailed set's whole-k step make those two conservative.
+- *The rule.* At each m and β the level is the largest k meeting (α, β), at most ⌊αm⌋, and falls as β rises; the two-tail rule likewise.
+- *Every form reads it.* The density sets take the level per stratum. The group form takes it over its 100 groups. `Calibrate` takes it per stratum, with a stratum past the last at 0. The grid distribution's `Level(α)` and its readout agree. Without a confidence, the levels are ⌊αm⌋ and ⌊αm/2⌋.
+- *Refusals:* a confidence with weights (`Density`, `Distribution`, `AtCase`, `Residuals`), and β of 0 or 1.
+- *Existing classes,* the miscoverage bound's five, pass unchanged.
+- *Per commit,* the selected classes and the pinned tier: Maths.Regression.Tests 236 of 327 classes, 2,636 of 2,636; Maths.Oracle.Tests 13 of 39 classes, 57 of 57; Maths.Samplers.Tests compiles none of these files.
+
+**Defects found: none.**
+
+**Not wired:** `BassFit.GroupConformal`, GBASS's file, takes no confidence yet. It would be one parameter passed through to `BassCandidates.GroupUnits`, left for GBASS or the coordinator to approve.
+
+**Doc changes owed:**
+- the guarantee-read-out section: building sets to (α, β), the level rule and its cap, the two-tail rule, the per-form table above, and the k table;
+- the API rows for `TrainingConditional.Level` and the `confidence` parameters and properties.
+
 ### 2026-11-14 — Slice 18's follow-up: a set's own miscoverage bound
 
 Built at the user's pick (2026-11-14, "miscoverage it is"). Slice 18's other follow-up, the Lean's calibration at n ≥ 2, is being handled in the conformal-lean thread.
