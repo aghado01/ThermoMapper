@@ -211,6 +211,189 @@ Decided by the user on 2026-11-14, as a distributions change of its own. It come
 
 Newest first. Each gives the commits, the gates' results, defects found, decisions for the user and "Doc changes owed".
 
+### 2026-11-14 — Slice 8: three problems in the test tooling
+
+**Commits.**
+- `313504e`: the In-progress entry.
+- `0dad092`: 8a, `-lowPriority` on test-select's `dotnet test`.
+- `ca56277` and `5e1ce65`: 8b, the transport oracle's limit of its own, then raised to 1200 s at the coordinating session's review.
+- `141db20`: 8c, the mixtures' tail integral bracketed to the scan's spacing.
+- `bd2daab`: 8c, Distributions' slow tier.
+- This report.
+
+Every time below was read on 2026-11-14 with the load beside it: the busy cores out of 18, and the other test hosts and their classes. A timed block ran at High, pinned to 0xFF, and raised its process tree to High as each process appeared. High is not passed to a child (8a below), so the tree had to be raised by hand. Probes, logs and receipts are in `artifacts/chip-defects/slice8/`.
+
+#### 8a. Test runs keep the shared-machine rule
+
+**The reading before any change** (as in the In-progress entry). Every process under the run was read from `Win32_Process` every 0.5 s.
+- *Through test-select,* LinAlg, Slice scope (two project references):
+  - `dotnet test`: BelowNormal.
+  - MSBuild's worker node: Normal. It was started with `/nodemode:1 /nodeReuse:false /low:false`, and since the build was not asked for low priority, the node sets itself to Normal.
+  - What the node starts: Normal. That is csc for the projects it builds, `vstest.console` and testhost.
+  - 193/193.
+- *Through verify-csharp,* LinAlg, Commit scope over `BandCholesky.cs`: the same chain. 116/116.
+- *A build that starts no node* (`TestHarness.Runner.Tests`, one reference): BelowNormal throughout. 19/19.
+- *The chain is test-select's own.* test-select starts `dotnet test` itself; `src/test-harness` is `fact-harness.ps1`'s runner and is not in it.
+
+**The fix.**
+- MSBuild's own switch, `-lowPriority` (read in `dotnet msbuild -h`), on the `dotnet test` that test-select starts. The start's own lowering stays.
+- After the fix the node starts with `/low:true`, and every process of the tree is BelowNormal.
+  - Through test-select: LinAlg 193/193, `TestHarness.Runner.Tests` 19/19.
+  - Through verify-csharp: LinAlg 116/116.
+- The caps are untouched lines: `MaxParallelThreads` in the runsettings, `MSBUILDDISABLENODEREUSE`, and verify-csharp's `DOTNET_PROCESSOR_COUNT=2`.
+- The coordinating session verified it from its own run (`e671539`).
+
+**A block that sets itself to High under a BelowNormal parent,** read directly (`raise-check.ps1`).
+- A child of a BelowNormal process sets itself to High and pins itself to 0xFF, and both hold.
+- A process that child starts comes up Normal. Windows passes only Idle and BelowNormal on to a child; affinity is passed.
+- So a timed block that starts processes must raise them itself. An R oracle under a timed block is one.
+
+**The timed blocks, and how each stands after the fix.**
+- *Raise themselves:* `CostProfile.Run`, behind the cost-profile switches.
+  - It sets AboveNormal for its timed pass, or `COST_PROFILE_PRIORITY`, and restores the class afterwards. It does not pin, and it starts no process.
+  - After the fix it raises from BelowNormal as before, so it stands as it did.
+  - It is AboveNormal and unpinned, short of the rule's High and pinned.
+- *Lower themselves:* they time below normal by their own call, before the fix and after it.
+  - `BassBasinHoldTests` and `BassWaitingTimeTests` (`Quietly()`).
+  - The TDA.Ph cost facts (`ZigzagCyclesTests`, `RelativeFiltrationTests`, `EssentialCyclesTests`, switch-gated; they read CPU time and allocations).
+  - VizCore's `ClosureGap*Harness` probes.
+- *Inherit their class:*
+  - The qualification tests time blocks without setting a class. They run through `verify-qualification.ps1`, which starts `dotnet test` itself, not through test-select. The fix does not reach them: their test host stays Normal through the node, as before.
+  - Under test-select, a test that reads wall time now runs at BelowNormal: `RandomEffectsCandidateTests`' 10 s theory timeout, VizCore's 300 s fixture timeouts, and every R oracle's limit. A test host now passes BelowNormal on to Rscript, which is why 8b's reading matters.
+
+**The fact harness,** read once, as the coordinating session asked.
+- Started from a BelowNormal parent on LinAlg with two workers: 193/193.
+- Every process in its tree stayed BelowNormal:
+  - `dotnet run`, the runner, and its `dotnet build`;
+  - that build's one node (`/nodeReuse:true /low:false`, BelowNormal in every sample);
+  - 166 per-case `dotnet test`, `vstest.console` and testhost processes.
+- It passes neither `--disable-build-servers` nor `MSBUILDDISABLENODEREUSE`.
+  - Its compiles went to the shared compiler server, outside the run's tree. That server had shut down idle by the time I looked, so its class was not read.
+  - From a Normal caller the harness's whole tree runs Normal, since it never lowers itself.
+- Left as it is, by the coordinating session's word; a follow-up below.
+
+#### 8b. The transport oracle's time against its limit
+
+**Where the time goes,** each part timed alone.
+
+| Part | Time | Class and load |
+|---|---|---|
+| R's start, renv included | 6.0 s | High, pinned |
+| `library(T4transport); library(lpSolve)` | 0.2 to 0.4 s | High, pinned |
+| `swdist`, 20000 projections | 151 s (p = 2); 259 s (p = 1) | High, pinned; Normal, pinned, 15 of 18 busy |
+| `lp.assign` | 0.3 to 0.4 s | |
+| `sinkhornD` | 0.1 to 0.2 s | |
+| The whole oracle | 185 s (p = 1) | High, pinned, 13 to 16 busy |
+| The whole oracle | 344 s (p = 1), 320 s (p = 2) | BelowNormal, unpinned, 15 to 16 busy |
+
+- `swdist` (T4transport 0.1.8) runs its 20000 projections in R. Each projection builds two `ecdf`s and reads 1000 quantiles from each. Nothing is computed twice.
+- So no time comes out without changing the reference, and 120 s fails even with the machine at High.
+
+**The options,** brought to the coordinating session before any choice.
+1. A limit of its own. Taken.
+2. Fewer projections. The reference values would move. The user's question.
+3. Record R's output beside the fixture and read it. The test would no longer be a live oracle. The user's question.
+4. A vectorized rewrite of `swdist` with the same random stream. Not taken: the reference would become ours instead of T4transport's.
+5. The slow tier. Not taken: it conflicts with "Oracle 207 of 207 at commit scope".
+
+**The change.**
+- `ROracle.Run(TimeSpan limit, …)` sits beside the existing `Run`, which delegates to it at `DefaultLimit` = 120 s. Every other oracle keeps 120 s.
+- `DiagramMetricsTransportParityTests` states 1200 s, with every reading beside it. That is about 2.5 times the slowest, 488 s.
+- It was 900 s in `ca56277`, set before the alone runs below. Raised in `5e1ce65` at the coordinating session's review.
+- Fixture, reference values and tolerances are unchanged.
+
+**Gates.**
+- The two cases alone, at BelowNormal:
+  - 488 s and 325 s, with 15 of 18 busy, five of those this chip's own High probes;
+  - later, 232 s and 137 s, with 11 to 15 busy.
+- Inside the whole Oracle run: 360 s and 287 s.
+- The Oracle Commit selection over `ca56277`'s files: 39 of 39 classes, the whole assembly, 214/214. The brief's 207 has grown since.
+- At 1200 s, the class alone: 174 s and 194 s, 2/2.
+
+#### 8c. The Distributions case that ran 15 to 22 minutes
+
+**The reading before any change.**
+- *The case alone,* at High and pinned: 17 min 40 s, with 14 to 15 of 18 busy. So the time is in the code path, not in contention.
+- *A probe of its steps:* the whole time sits in the first quantile, the tail table's build, which took 1143 s. The eight quantiles and densities after it took nothing.
+- *The test's comment.* It comes from `4662639`, the commit that added the row. That commit says the integral about the peak brought a strong-drift GH's table down from 20 s.
+- *Since which commit.* Built at `4662639`, `a670046` and `019738d`, the probe was still inside the first quantile after 12 minutes at each. So the case has been slow since its own commit; no later commit made it slow.
+
+**Where the time goes.** I instrumented the integral in a staged copy, counting Gauss–Kronrod evaluations, panels capped at depth 40, and each integral's scan and peak.
+- It is the table's walk out the drift's side: the survival integrals at x from 128 to 422.
+- At x = 422 one integral had run for over 3 minutes, at about 3 million evaluations a second, with about 45,000 panels a second halving to the depth limit.
+- *The cause.* Where x and the drift share a sign, the integrand in t = u − ln(x/m) has a peak at most 2/|front| wide, |front| = 2√(xm)/s.
+  - Under a tail, the golden section looked for the peak only within ½ of the scan's best point.
+  - The scan's steps grow by 1.25 from 0.25 and pass ½ out there, so they stepped over the peak, and the section stayed ½ away from it.
+  - At x = 422: the scan's best was t = 1.02, and the section ended on its bracket's edge at 0.518. Its top was −30.4, about 10 nats below the integrand's own peak near t = 0.02.
+  - The panels' tolerance is relative to that top. Near the real peak the integrand's rounding was above the tolerance, so the panels halved to depth 40 across the peak.
+- *Where the peak sits.* For the GH far out, h′ = 0 puts the peak at t* = −½·ln(1 + a·s²/m²), whatever the x:
+  - −0.008 for the case's law;
+  - −1.15 for the Normal-Wald GH(−0.5, 2.25, 1), m 0.4, s 0.8.
+  - A first version of the fix, a section about t = 0, missed the Normal-Wald's peak. The new test found that before any commit.
+
+**The fix.**
+- Under a tail, the section now reaches out to the best point's neighbours in the scan: 1.25 of the step that reached it, and never less than ½.
+- A wider bracket takes the extra sections that bring it to the ½-bracket's final resolution.
+- The density's path is unchanged: it already searches the whole span, and its narrow peak is found by Newton.
+- *Where it is bit for bit what it was:* every density, and every tail whose best point was reached by a step of 0.4 or less. There the bracket is ½, the sections 25, and the arithmetic the same lines.
+
+**Were values wrong before, or only slow?** Only slow, as far as read.
+- The case's eight quantiles and densities, before against after the first version: bit for bit. Against the final fix, the 0.999999 quantile moves from 222.62624393887253 to 222.62624393887262, 4·10⁻¹⁶ relative; the other seven are bit for bit.
+- The old build at the new test's far-tail points: at the test's GH points to x = 312.5 it agreed with the closed form to 3·10⁻¹⁵ in no time. At x = 422.03, the table's own stall, it returned −22.156594787144787 after 304 s at BelowNormal: the fix's value bit for bit, 5.9·10⁻¹⁵ from the closed form. At x = 1562.5 it had not returned after 30 min, and was stopped.
+- The old integral reached its value by halving to the depth limit, and a capped panel returns its Kronrod sum. So the digits were there, at that cost.
+
+**The fix against an outside reference.**
+- *The new test,* `FarOnTheDriftsSide_TheTailIsTakenAboutItsPeak`. It takes three GH laws (the case's, the Normal-Wald, a skewed t) at front² from 400 to 10⁵, and reads each far tail against the closed form's density integrated over [x, ±∞) in w = ln(y/x). That reference never touches the integral over v.
+  - Worst errors: 3.8·10⁻¹⁵, 1.0·10⁻¹⁵, 2.0·10⁻¹⁴. Asserted at 10⁻¹⁰.
+  - 386 ms.
+- *A seeded sweep* (`probe8c-sweep`) of 40 GH and 40 normal-GBP laws:
+  - x on the drift's side at front² from 50 to 10⁶, both tails, 480 integrals;
+  - against a brute-force reference: Gauss–Kronrod 15 on fixed panels, 2.5·10⁻⁴ wide within 2 of the step, over the span within 80 of the maximum;
+  - none past 10⁻¹⁰; the worst 4.7·10⁻¹¹ absolute, on a log tail near 0;
+  - the slowest single integral 3.4 s, at front² 3.7·10⁵ and BelowNormal.
+
+**Gates.**
+- *The case alone,* at High and pinned: 17 min 40 s before; 0.05 s after. The second reading after is 0.11 s, with 15 of 18 busy.
+- *The assertion and its tolerance* are unchanged.
+- *Distributions whole* (Slice scope, over `ca56277` and the 8c files): 444/444 in 1 min 51 s.
+- *Every project the changed files select.* Swept over the 27 test projects on disk:
+  - Distributions: 1 of 20 classes, inside the whole run above.
+  - Oracle: 23 of 39, 108/108.
+  - Regression: 278 of 332 and the pinned tier, 2830/2830, the slow tier's 71 methods left out.
+  - The other 24 projects: no class selected.
+
+**The slow tier.** After the fix, four methods still reach 10 s in the whole-assembly profile above, which ran at BelowNormal with 13 of 18 cores busy.
+- The list is written by the tool's own route, `-WriteSlowList` from that profile's trx, at `tests/Maths.Distributions.Tests/slow-tests.txt`:
+  - `TruncatedDrawTests.Gamma_MatchesItsDensity`: 97.7 s over 15 cases;
+  - `GigNormalizerTests.Sweep_MeetsTheKernelsIntegral`: 24.2 s;
+  - `GeneralizedBetaPrimeTests.DensityAndTails_MeetAFixedStepRule`: 18.9 s over 6 cases;
+  - `LogConcaveEnvelopeTests.FarReaches_DrawEachFamilysLaw`: 17.8 s.
+- So Edit and Commit runs leave these four out, and a slice's end runs them.
+
+#### Follow-ups, each with the decision it waits on
+
+1. **`verify-qualification.ps1`** has 8a's defect. It starts `dotnet test` itself, without `-lowPriority`, so the regression build's node takes testhost to Normal.
+   - The qualification tests time blocks without setting a class.
+   - The decision: lower the script now, so those blocks time at BelowNormal, or first have each timed block raise itself to High, pinned. One line either way.
+2. **The fact harness:**
+   - whether a performance runner lowers itself, its starts included;
+   - whether it turns the build servers off (`--disable-build-servers`, `MSBUILDDISABLENODEREUSE`).
+   - From a BelowNormal caller nothing in its tree left below normal. From a Normal caller all of it runs Normal.
+3. **Timed blocks short of the rule (High, pinned, the load beside it):**
+   - `CostProfile.Run` at AboveNormal, unpinned;
+   - the blocks that lower themselves (8a's list).
+   - The decision: bring them to the rule, raising any process they start.
+4. **The transport oracle's options 2 and 3** remain the user's.
+5. **`TruncatedDrawTests.Gamma_MatchesItsDensity`,** 98 s over 15 cases, now in the slow tier. Whether that cost is expected was not read here.
+
+**Doc changes owed.**
+- `CONTRIBUTING.md`, testing standards:
+  - test-select's runs below normal, nodes and test host included, through `-lowPriority`;
+  - High is not passed to a child, so a timed block raises what it starts;
+  - Distributions' slow tier.
+- The oracle docs (`r/README.md` or the docs page on oracles): `ROracle.Run(TimeSpan, …)` and the transport oracle's stated limit.
+- `docs/Maths/ProbabilityAndInformation.md`, the mixtures' integral: under a tail the golden section reaches the scan's neighbours, and the peak sits at t* = −½·ln(1 + a·s²/m²) on the drift's side.
+
 ### 2026-11-14 — Slice 8a verified (coordinating session)
 
 - **Commit:** `0dad092`, `scripts/test-select.ps1` alone: `-lowPriority` on the `dotnet test` it starts, and two comments.
@@ -221,22 +404,6 @@ Newest first. Each gives the commits, the gates' results, defects found, decisio
 - **Open, for the chip's report:** `scripts/fact-harness.ps1` starts `dotnet test` through `src/test-harness`, a separate entry point. Its chain has not been read under a project that starts a worker node.
 - **What follows from it.** Every test-select run and every clean-archive verification before `0dad092` did its building and testing at normal priority. Their results stand; their load on the machine was above what the rule allows.
 - **Receipts:** [verify-defects-s8a-0dad092](receipts/verify-defects-s8a-0dad092/), with the sampled chain.
-
-### 2026-11-14 — Slice 8: in progress
-
-**8a, the reading before any change.** Every process under the run, read from `Win32_Process` every 0.5 s, from `2ded631` staged.
-- *Where the chain leaves below normal: MSBuild's worker node.*
-  - test-select starts `dotnet test` below normal, and its start holds.
-  - MSBuild, inside that process, starts its worker node with `/nodemode:1 /nodeReuse:false /low:false`. The build was not asked for low priority, so the node sets itself to Normal.
-  - Everything the node starts inherits Normal: csc for the projects it builds, `vstest.console`, and testhost.
-- *Through test-select,* LinAlg (two project references), Slice scope: dotnet test BelowNormal; node Normal; csc Normal under the node (BelowNormal in the main node); vstest.console Normal; testhost Normal. 193/193.
-- *Through verify-csharp,* LinAlg, Commit scope over `BandCholesky.cs`: the same chain. 116/116.
-- *With no worker node,* in `TestHarness.Runner.Tests` (one reference), MSBuild started no node and the whole tree stayed BelowNormal, 19/19. So the defect shows wherever MSBuild starts a node, as it does for the regression project.
-- *The fact harness is not in the chain.* test-select starts `dotnet test` itself; `src/test-harness` is the runner behind `scripts/fact-harness.ps1`, a separate entry point.
-- *MSBuild's switch, read:* `dotnet msbuild -h` lists `-lowPriority[:True|False]`, short `-low`.
-- *Trial in a staged copy,* with `-lowPriority` on test-select's `dotnet test`: the node gets `/low:true`, and the whole tree stays BelowNormal. 193/193.
-
-**Next.** 8a's edit waits for the coordinating session to confirm that no verification is mid-run. 8b's timings are running.
 
 ### 2026-11-14 — Slice 7 verified from a clean archive (coordinating session)
 
