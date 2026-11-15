@@ -1,0 +1,14 @@
+regime                          new, worst  old, worst   error over max(1, |ln B|), 300 points each
+both under 10                     5.67e-16    2.33e-15
+one under 10, one to 1e15         6.34e-16    4.40e-01
+one under 10, one to 1e300        7.35e-16    1.00e+00
+both 10 to 1e6                    2.27e-16    1.16e-11
+balanced, 1e6 to 1e15             2.37e-16    2.94e-14
+balanced, 1e15 to 1e290           2.34e-16    3.30e-13
+both at least 10, far apart       2.84e-16    1.00e+00
+ln B(x, 1) = -ln x:
+   x = 100000: new -11.512925464970229, old -11.512925465358421, -ln x -11.512925464970229
+   x = 1e+16: new -36.841361487904734, old 0.0, -ln x -36.841361487904734
+   x = 1e+100: new -230.25850929940458, old 0.0, -ln x -230.25850929940458
+ln B(1/2, 1/2) = ln pi = 1.1447298858494002: new 1.1447298858494004, old 1.1447298858494008
+new form within 5e-15 everywhere

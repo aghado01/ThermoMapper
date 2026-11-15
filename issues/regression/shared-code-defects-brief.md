@@ -211,6 +211,27 @@ Decided by the user on 2026-11-14, as a distributions change of its own. It come
 
 Newest first. Each gives the commits, the gates' results, defects found, decisions for the user and "Doc changes owed".
 
+### 2026-11-15 — Slices 8b, 8c and 9 verified from a clean archive (coordinating session)
+
+- **Commits, in one pass** on a snapshot of `b5fac86`: `ca56277` and `5e1ce65` (the transport oracle's limit, 1,200 s), `de7d0eb` (ROracle's default, 500 s), `141db20` (the mixture's tail integral), `bd2daab` (Distributions' slow tier), `4f32555` (`LogGamma` at subnormals), `b8418c4` (`LogBeta`) and `2a6bb6b` (the two re-pins). BPPR's slice 2 files rode the same pass for their Oracle selection.
+- **Result,** selected classes at commit scope in the eleven projects that select:
+  - Distributions 455 of 455; Regression 3,243 of 3,243; Samplers 259 of 259; Synthetic 29 of 29; DimReduction 83 of 83; Mapper 1 of 1; Ph 1 of 1; Geometry 4 of 4; VizCore 384 of 386, the two left by their own `Skip`; CumulativeField 15 of 15.
+  - **Oracle 214 of 214,** the first clean Oracle run from an archive since slice 6. The transport cases took 2 m 22 s and 2 m 53 s; `gbass_readouts_oracle.R`'s case, which timed out twice at 120 s after 8a, passed in 1 m 34 s.
+  - The generalized hyperbolic case that ran 15 to 22 minutes: every case of its method under 0.05 s.
+- **Read.**
+  - *8c:* the bracket reaches both scan neighbours of the best point, the step that reached it inward and 1.25 of it outward; at a step of 0.4 or less the bracket and the section count are what they were.
+  - *`LogBeta`:* the arrangement for both shapes at least 10 is Stirling's form of the three ln Γ with the −s − l + (s + l) cancelled, as R's `lbeta` writes it; μ's eight coefficients are B₂ₖ/(2k(2k − 1)); shapes that are not finite and positive keep the three-term form.
+  - *`LogGamma`:* the new branch is taken only where π/sin(πx) is +∞ at x > 0, so only results that were +∞ move.
+- **Checked from outside the engine** ([script and output](receipts/verify-defects-s8s9-b5fac86/)): `LogBeta`'s two forms transcribed into doubles, against mpmath at 420 digits, 300 points in each of seven regimes.
+  - The new forms hold 7.4·10⁻¹⁶ or better of max(1, |ln B|) in every regime.
+  - Today's form reads 2.3·10⁻¹⁵ for shapes under 10, 1.2·10⁻¹¹ for both in 10 to 10⁶, 0.44 with one shape to 10¹⁵, and 1.0 where it returns 0.
+  - Python's lgamma stands in for the engine's `LogGamma` there, so the last bits at small shapes are the stand-in's.
+- **The user's order, met.** Qualified against an outside reference before any code moved; the pins run before any expectation changed; two pins moved, each a density value with no decision changed, and only those two re-pinned; BARS read directly at the coordinating session's asking (`cf5ba02`), the same doubles in all four runs.
+- **With the user:**
+  - a third regime for shapes both under 10. The readings do not support it: the ratio form is closer by more than an ulp at 116 of 699 points and today's at 26;
+  - whether a performance runner lowers its own priority and turns the build servers off (slice 8's follow-up on `fact-harness`).
+- **Receipts:** `artifacts/verify-defects-s8s9-b5fac86/`, with the changed list, the counters, the snapshot and the outside check tracked in [receipts](receipts/verify-defects-s8s9-b5fac86/).
+
 ### 2026-11-15 — Slice 9: BARS under the new `LogBeta`, read directly
 
 At the coordinating session's word, answering the user's question that slice 9's report left open: in BARS, does the change move a density value or an accept/reject decision? No code changed.

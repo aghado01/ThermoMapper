@@ -275,7 +275,8 @@ The coordinating session let the design below stand and asked for four points to
 
 - **Commit:** `1e7bbea`, on a snapshot of `31b612b`, through `scripts/verify-csharp.ps1` over its twelve changed files.
 - **Result:** Regression 2,698 of 2,698 at commit scope, the 32 directional cases among them. No other project but Oracle selects.
-- **Oracle, not yet run here.** Its selection (21 of 39 classes) goes in the pass that verifies the defects chip's oracle limits (`de7d0eb`, 500 s), so that a timeout there is not read as this slice's. The chip's own run: 104 of 105, the one failure `khaos_readouts_oracle.R` at the old 120 s, passing alone.
+- **Oracle, confirmed since** in the pass that verified the defects chip's oracle limits, on a snapshot of `b5fac86` with this slice's files in the changed list: 214 of 214 ([receipts](../receipts/verify-defects-s8s9-b5fac86/)). That pass also confirms slice 1's one open test, `GbassHorseshoeReadoutTests.HBass_MeetsCorrectedHbass_…`, which passed in 1 m 34 s under the 500 s default.
+- **Oracle, as first recorded:** its selection (21 of 39 classes) was held for that pass, so that a timeout there was not read as this slice's. The chip's own run: 104 of 105, the one failure `khaos_readouts_oracle.R` at the old 120 s, passing alone.
 - **Read, against Lean's line under decision 5 and the paper's TeX.**
   - *The birth:* its proposal ratio carries one −ln(M + 1), the death's uniform choice, and the count law supplies the rest, so the count factor is (M + h₁)/((M + 1)(h₂ + 1)) and no further 1/(M + 1) enters. θ and the knot are drawn from their priors and cancel.
   - *The death:* the dying term's birth under the counts without it.
