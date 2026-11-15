@@ -239,6 +239,79 @@ Decided by the user on 2026-11-15 ("Guard and trap"), on the [report of the one-
 
 Newest first. Each gives the commits, the gates' results, defects found, decisions for the user and "Doc changes owed".
 
+### 2026-11-15 — Slice 10: a guard in the weight reader and a trap for its compiled code
+
+**Commits.**
+- `1dd5974`: the trap, in `scripts/test-select.ps1`, `verify-csharp.ps1` and `verify-qualification.ps1`.
+- `17abf21`: the guard, in `src/maths/regression/PredictiveChecks.cs`, with its tests in `WeightReaderTests.cs`.
+- This report.
+- The loop in `Rows` stays as it is, so the fault stays observable. A hunt and a rewrite are not taken.
+
+**The guard: which passes carry the check, and why.**
+- `Rows` passes over the weights by enumerator twice at most:
+  - the *first pass,* on every call, sums the weights, counts the positive ones and finds the largest;
+  - the *scaled pass,* only when a ratio leaves the normal range, sums the weights scaled by 2⁻ᵉ. The run's failures fit this pass.
+- Each now counts its rows and compares the count with `weights.Count`. Another count throws `InvalidOperationException` naming:
+  - `PredictiveChecks.Rows`;
+  - the pass, and both counts;
+  - the weights' runtime type.
+- The message says to keep the run's folder (the trx, `jit-Rows.txt`, the log), record the command, the environment and what else was running, and tell the second coordinating session. The script's help says the same.
+- *Cost:* one integer increment per weight per pass, and one comparison per pass. The arithmetic is untouched, so every result is as it was. The increment does sit in the loops' bodies, so their compiled code is not the same code as before.
+- *The ordinary branch's passes do not carry it,* because they are not enumerations.
+  - The ordinary branch reads the weights in the row loop by index, `weights[d]` for d below s. A skipped enumeration cannot reach it.
+  - A check of the same kind there would be one comparison at the end, between the rows the loop reached and the first pass's count of positive weights. It would catch an indexer that disagrees with the enumerator.
+  - That is a different fault from the one seen, so it is not built. It is an option, at one comparison a call.
+- *Tests* (`WeightReaderTests`):
+  - `APassThatReadsAnotherCountThrows_NamingItself`, five cases. A list whose enumerator yields fewer or more rows than its `Count`, from its first or its second enumeration, so the first pass and the scaled pass each throw. The run's own case is among them: a scaled pass that read nothing.
+  - `ARightCountReadsAsBefore_AndAnOrdinaryRowHasNoScaledPass`: a list that counts right reads exactly as the array does, and ordinary weights never take a second pass.
+
+**The trap.**
+- *Route.* The runsettings that test-select writes gain `RunConfiguration/EnvironmentVariables`, so the test host alone takes:
+  - `DOTNET_JitDisasm=Maths.Regression.PredictiveChecks:Rows`;
+  - `DOTNET_JitStdOutFile=<run folder>\jit-Rows.txt`, beside the trx.
+- *The route reaches the test host:* the file appears in the run's folder.
+- *The method named in full:* `Rows` alone also lists EMeans', ScoreMixture's and BassProjectionComparison's `Rows`, and `PredictiveChecks:Rows` lists nothing.
+- *Read first, on release 10.0.5:*
+  - the JIT appends to the file: two processes in turn left both sets of listings;
+  - processes writing one file at once lose listings: three left 7 of 9;
+  - a process that never compiles `Rows` writes no file.
+  - So one file per run folder. Each test-select run has one test host and its own folder.
+- *A whole Regression run's file* (Slice scope through the trap, 3707 tests): 71.6 KB, with:
+  - `Rows(IReadOnlyList<double>, int)` at instrumented tier 0, twice, and at tier 1;
+  - the one-line overload at tier 0, instrumented tier 0 and tier 1.
+  - A short run stops at tier-1 OSR: three classes, 25 KB.
+- *verify-csharp* keeps the file: `jit-*.txt` from the trx's folder, newer than the run's start, is copied beside `commit<suffix>.trx` before `verify-main` is removed.
+- *verify-qualification* runs its own `dotnet test`, which now takes the two variables by `-e`, the file going to the kept `results` folder (created before the host starts).
+- *Cost:*
+  - on a settled build, the same three Regression classes ran in 12 s through test-select both with and without the trap, with test durations of 1 to 2 s;
+  - the file runs from 20 to 72 KB;
+  - a project that never compiles `Rows`, `TestHarness.Runner.Tests`, passed 19/19 and left no file.
+
+**Every way to start the regression test host, and whether it carries the trap.** The guard covers every one of them.
+
+| Entry point | Trap |
+|---|---|
+| `scripts/test-select.ps1` | yes, through its runsettings |
+| `scripts/verify-csharp.ps1` | yes: it calls test-select and keeps the file in `artifacts/verify-<Name>/` |
+| `scripts/verify-qualification.ps1` | yes, by `-e`, the file in `artifacts/verify-<Name>/results/` |
+| `scripts/fact-harness.ps1` | no: its runner writes a runsettings file per case and passes its own variables, but not these |
+| a bare `dotnet test` | no, unless the caller sets the two variables |
+
+**Gates.**
+- *The guard's tests, and the three classes as they were:* `WeightReaderTests`, `PredictiveChecksTests` and `ConformalCdfMarginTests`, 55/55 (the guard's six cases among them).
+- *The projects the guard's files select, among the 27 on disk:* Regression, 262 of 351 classes; Oracle, 14 of 40. The other 25 select none.
+  - Regression whole, 3707/3707 in 16 m 21 s, with the slow tier and the pinned tier.
+  - Oracle's Commit selection, 68/68, the pinned tier included.
+- *The trap's file:*
+  - after a Regression run through test-select: present, holding the tiers above;
+  - through verify-csharp, a Regression selection over `PredictiveChecks.cs`: 2816/2816 in 615 s, with `artifacts/verify-chip-defects-s10-trap/jit-Rows.txt` (64 KB: instrumented tier 0, tier-1 OSR and tier 1) kept after `verify-main` was removed;
+  - through verify-qualification: `WeightedMarginTests.TheFullStepsWeightedSets_CarryTheirMargin`, which reaches `Rows` through `ConformalBayes.FullStep`, left `results/jit-Rows.txt` (20 KB; tier 0 and instrumented tier 0 in one short test). Two tests that never compile `Rows` left none: `TheWeightedBand_IsTheLeansDefinition_OnASweep` and `GbpMixingTests.TheExactLaws_StepByTheirDraw_NumberForNumber`.
+- *Builds:* each from a fresh folder per base, in `artifacts/chip-defects/slice10/`: `build` for the three-class runs, `build-harness`, and `build-gate` for the whole runs. verify-csharp and verify-qualification build a fresh snapshot each time.
+
+**Doc changes owed.**
+- `CONTRIBUTING.md`, testing standards: the trap's file beside each run's trx; what to keep and whom to tell if the guard throws.
+- The fact harness and a bare `dotnet test` don't carry the trap.
+
 ### 2026-11-15 — The weight reader's one-off wrong values: a fault in compiled code, not reproduced
 
 At the coordinating session's word: a read only, docs only. No code changed; the indexed loop, the check and any hunt wait on the user.
