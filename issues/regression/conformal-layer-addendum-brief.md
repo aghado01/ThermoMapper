@@ -22,13 +22,14 @@ Opened 2026-11-14 at the user's word ("that brief was getting way too long, adde
 - Slice 17's RoBAS-Full (`942df9c`, `ResidualScore.Horseshoe`) is built and verified. It is served by `Prediction`, the grid form. Its sets are not always intervals: two pieces at n 2 and 3 (`f400892`, probed and verified).
 - RoBAS-Full's sets are intervals from n 4 when the residuals are not all equal. The Lean proves it (`robasFull_interval`, `700c718`, verified), granted four bounds on Dawson's function that the checks certify. `Intervals` serves RoBAS-Full there (`c3539b7`, verified) and refuses it below n 4.
 - CBMA reads each model's evidence from its BASS or BARS fit (`3e3b7f2`, verified): the `ModelEvidence` seam and the two engines' `ForAveraging` adapters, with both engines' constants pinned against the closed form.
+- Slice 15's alternation speed (`192ee84`, verified): safeguarded extrapolation of γ, 1.3–3× fewer passes at n 1,000 to 10,000. It is on by default and moves existing results within the fit's tolerance (report).
 - Slice 12a's k̂ diagnostic stays opt-in, as the user settled on 2026-11-14. That is the code's default (`ConformalOptions.LeaveOneOutParetoK`, false).
 - The defects chip owns `PredictiveChecks.cs` and `Pointwise.cs`'s weight check; a change there is agreed with it first (the archived brief's coordination note).
 
 ## Open, each with the decision it would change
 
 - **The four Dawson bounds in Lean (scope B),** at the user's word in the Lean chip's session. Half built in the chip's scratch: the certificates pass in Python, but the Lean form compiles in about 10 minutes, too slowly as it stands. When it lands, `robasFull_interval` drops its `RobasDawsonBounds` hypothesis, and the C# docstrings drop "granted four bounds … the checks certify".
-- **Slice 15's alternation speed** along the factorization's flat directions. It decides the cost at large n.
+- **A stop that reads R², for slice 15's factorization** (the alternation speed's finding). On noisy τ at J ≥ 3, the 300-pass cap still binds after R² has settled. It decides whether the factorization stops on R² and cuts that cost severalfold. The user's.
 - **τ through richer features,** the ratio estimator's open follow-up. It decides whether the layer offers a nonparametric τ.
 - **Conformal test martingales beyond E35's slice 6,** queued at the user's word (2026-11-15, "lets add conformal test martingales to the outstanding conformal work queue").
   - *Already built,* in slice 6 on 2026-11-08 (`4dd1dfb`, `415c08c`, `206eca9`, `befb449`):
@@ -63,6 +64,7 @@ Built at the user's pick (2026-11-15, "slice 15's alternation speed then τ thro
 **Landed** on `main`, nothing pushed:
 - `192ee84`: `ScoreMixture`'s factorization extrapolates γ's step, its least-squares update moved into `SolveProfiles`. `Factor` gains `extrapolate` (on by default; internal), and `ScoreMixtureCost` counts pushes and pushes kept.
 - `ScoreMixtureTests` gains a test.
+- *Verified by the main session on 2026-11-15,* from a clean archive of `ec771c1` with zero skips: the Commit selection over `192ee84`'s files, 50 of 50 ([receipts](receipts/verify-conformal-s15speed-192ee84/)). `ScoreMixture` has no caller outside its tests. The safeguard was read in the code: a push is kept only below the previous pass's residual, else γ_LS, the factor capped at 4.
 - *What changes for existing calls.* A fit's γ, π and R² now come from the extrapolated alternation, which stops at a slightly different point within the same 10⁻⁷ rule and 300-pass cap. Downstream readings move with it, by amounts within the fit's own tolerance. In the existing classes:
   - the unequal-split test's mean ESS at 399 units went from 100.0 to 100.2, and the training's from 107.2 to 108.2;
   - its whole-space share at the training's m went from 13.4% to 13.5%, and its marginal coverage at the calibration's from 0.9155 to 0.9145, m staying 45;
