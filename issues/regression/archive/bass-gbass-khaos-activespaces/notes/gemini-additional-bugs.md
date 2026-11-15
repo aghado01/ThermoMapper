@@ -1,20 +1,3 @@
-Viewed baps-bgp-baseline-repairs-brief.md:1-100
-Viewed bass-preparation-brief.md:1-256
-Viewed Samplers.review.md:1-35
-Viewed BayesianRegression.review.md:1-51
-Viewed Samplers.md:1-183
-Viewed BayesianRegression.md:1-250
-Viewed BayesianRegression.md:251-292
-Listed directory regression
-Viewed bass-adaptation-prerequisites-review.md:1-120
-Viewed bass-adaptation-prerequisites-review.md:121-156
-Viewed ExactChangepoint.cs:170-185
-Viewed BarsEnsemble.cs:330-345
-Viewed BarsEnsemble.cs:420-460
-Viewed PoissonModel.cs:100-145
-Viewed ChainDiagnostics.cs:80-115
-Viewed ChainDiagnostics.cs:116-172
-Viewed ReversibleJumpChain.cs:45-75
 
 A comparison of the four deliverable documents ([`Samplers.review.md`](file:///d:/aghado01/capstone/runs/run_1/deliverable-review/Samplers.review.md), [`BayesianRegression.review.md`](file:///d:/aghado01/capstone/runs/run_1/deliverable-review/BayesianRegression.review.md), [`BayesianRegression.md`](file:///d:/aghado01/capstone/runs/run_1/deliverables/docs/BayesianRegression.md), and [`Samplers.md`](file:///d:/aghado01/capstone/runs/run_1/deliverables/docs/Samplers.md)) against the two briefs ([`baps-bgp-baseline-repairs-brief.md`](file:///d:/aghado01/ThermoMapper/issues/regression/baps-bgp-baseline-repairs-brief.md) and [`bass-preparation-brief.md`](file:///d:/aghado01/ThermoMapper/issues/regression/bass-preparation-brief.md)) reveals several bugs, statistical nuances, and design considerations that are **not covered** in the briefs.
 
