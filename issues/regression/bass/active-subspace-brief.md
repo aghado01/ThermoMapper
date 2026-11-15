@@ -354,6 +354,8 @@ Under "Reports" below, newest first, per slice: what landed by commit; the gates
 - E3(a): a new type, `BassProjectedBasisFit`.
 
 **Landed:** `579a69b`, one commit.
+- *Verified by the main session on 2026-11-15,* from a clean archive of `bb71991` with zero skips, over the commit's files ([receipts](../receipts/verify-e8-s8c-579a69b/)): Maths.Regression.Tests' Commit selection, 100 of 100. Maths.Oracle.Tests selects no class for these files.
+  - The 13 failures in one earlier whole run (`s8c-reg-all`, WeightReaderTests and one ConformalCdfMarginTests case) came from a stale build, not from the code. Each snapshot base was built into one reused ArtifactsRoot. `git archive` stamps files with their commit time, so a DLL from an older base, built before the defects chip's LogGamma and Log1p fixes, was kept. Each base now builds fresh.
 
 **What was built:**
 - *`BassProjectedBasisFit.Of(projection, native)`* refits a basis fit's components on one frame's active variables.

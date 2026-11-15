@@ -1,0 +1,2 @@
+regression    total 100 executed 100 passed 100 failed 0 notExecuted 0
+oracle        total 0 executed 0 passed 0 failed 0 notExecuted 0

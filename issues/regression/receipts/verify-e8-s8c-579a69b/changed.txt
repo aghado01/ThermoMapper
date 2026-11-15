@@ -1,0 +1,5 @@
+src/maths/regression/spline/bass/projection/BassProjectedBasisFit.cs
+src/maths/regression/spline/bass/projection/BassProjectedFit.cs
+src/maths/regression/spline/bass/projection/BassProjection.cs
+src/maths/regression/spline/bass/projection/BassProjectionComparison.cs
+tests/regression/BassProjectedBasisFitTests.cs
