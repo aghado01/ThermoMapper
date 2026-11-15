@@ -62,6 +62,71 @@ As in the archived brief: each slice is reported here, then waits for the main s
 
 Newest first.
 
+### 2026-11-15 — Conformal test martingales: the Mondrian monitor, for streams with known structure
+
+Built at the user's pick (2026-11-15, "Mondrian monitor"). Every statistical gate's size, seed and level, and the uniformity test's rerun rule, were fixed in the tests before their first reading, as the coordinator asked after the covariate-shift item.
+
+**Landed** on `main`, nothing pushed:
+- `c64ccc9`:
+  - strata in the inductive ranker, `SmoothedPValues.Add(score, stratum)`, with `CountIn(stratum)`;
+  - the monitor's `Add(score, stratum)`.
+  - `Add(score)` is stratum 0, so the unstratified form is the one-stratum case.
+- `MondrianPValueTests` is a new class, seven cases.
+- *What changes for existing calls: nothing.* `SmoothedPValues.Count` still counts every arrival. `SmoothedPValue.Count` is the arrival's own stratum's count, which equals all arrivals in an unstratified stream. The inductive monitor's wrong-form message now names `Add(score, stratum)`.
+
+**The source.** Vovk, Gammerman and Shafer 2005:
+- §4.5, Mondrian conformal transducers: the taxonomy κ(n, z), each category a rectangle of positions by units, and each score ranked within its category;
+- Proposition 4.10, a case of Theorem 8.2 per §8.4's Mondrian-exchangeability models: the smoothed p-values are i.i.d. uniform given the categories, if the units are exchangeable within each category.
+
+The C# follows them. No new guarantee, so nothing goes to the Lean thread. It is M-1's finite core per stratum, with the strata's orderings independent.
+
+**What it computes.**
+- Each arrival carries a stratum, fixed in advance from its position and its own unit, each separately: a phase of the position (a season), a category of the unit, or a pair of both.
+- Each score is ranked among its stratum's scores only, one order-statistic tree per stratum, at O(log n) in its stratum.
+- θ comes from the stream's one seeded generator.
+
+**Gates.**
+- *The finite core, by enumeration.* For three bags with ties, over every ordering within the strata (24, 8 and 36), every within-stratum rank sequence has total probability exactly 1. The unstratified ranks of the same orderings reach 24 of 5,040, 8 of 720 and 72 of 720 sequences, so they are not uniform.
+- *A seasonal stream.*
+  - Four seasons by position, each its own law: N(0, 1), N(2, 0.5²), N(−1, 2²), N(1, 1). The score −|y| ignores the season.
+  - Fixed beforehand: 1,000 streams of 200, seed 2026_1126, the 1% level, and a rerun at 4,000 streams on seed 2026_1127 if a KS gate failed below 1.1 times its critical value.
+  - Read once, with no rerun needed:
+    - Mondrian KS pooled 0.0022 against 0.0036, and by season 0.0042, 0.0020, 0.0026 and 0.0040 against 0.0073;
+    - lag-one correlation 0.0013;
+    - Ville's false alarms at c = 20 under the Sleepy Jumper: 0.0010.
+  - The unstratified ranks of the same scores read KS by season of 0.31, 0.40, 0.13 and 0.13.
+- *A change: one pooled capital against a per-stratum watch.*
+  - The fixture: 200 streams, 200 seasonal arrivals, then 400 changed, all under the Sleepy Jumper.
+  - The pooled Mondrian monitor bets into one capital at c = 20. The per-stratum watch runs one monitor per season at c = 80, so its false alarms over the four stay within 1/20.
+  - Each cell gives the share of streams alarmed after the change, then the median delay:
+
+    | change | pooled capital | per-stratum watch |
+    |---|---|---|
+    | every season's sd × 2.5 (seed 2026_1130) | 1.000, 26 | 0.875, 149 |
+    | season 2's sd 2 → 5 (seed 2026_1128) | 0.100, 141 | 0.495, 167 |
+
+    Neither had a false alarm before the change, which each case asserts.
+  - **A pre-stated gate failed.** The one-season case's gate, fixed before its first reading, was that the pooled monitor alarms in at least 0.8 of the streams. It read 0.10, so the gate failed. The case now pins its readings and its false-alarm bound. The every-season case was added afterward, with its gate (pooled at least 0.8) fixed before its first reading, and it passed at 1.000.
+- *One stratum, the monitor and the refusals.*
+  - `Add(score)` is `Add(score, 0)` bit for bit, and a unit alone in its stratum reads p = θ.
+  - The monitor's p-values and capital are the source's.
+  - A negative stratum, a NaN score and the other forms' monitors are refused.
+- *Existing classes* `SmoothedPValueTests` pass, 19 of 19.
+- *Per commit,* the selected classes and the pinned tier across every test project: 157 of 157 in the 7 classes selected in Maths.Regression.Tests; Maths.Oracle.Tests compiles the two source files and selects no class; no other project's compile closure holds them.
+
+**Defects found: none.**
+
+**The finding, which E35's strata question asked:** whether the monitor routes by stratum or the caller runs one per stratum. Both serve, for different changes, and neither dominates.
+- *The pooled capital* (one monitor, `Add(score, stratum)`) is right for a change that reaches every stratum: it alarmed in every stream, in a median of 26 arrivals against the watch's 149.
+- *A per-stratum watch* (one monitor per stratum, its c raised by the strata's number) is right for a change confined to one stratum: 0.495 against 0.100.
+- The pooled capital pays for the unchanged strata's uniform p-values, and in either form a changed stratum's bag fills with changed units, so its p-values drift back toward uniform.
+
+**Follow-ups, the user's to decide:**
+- *Both at once:* run the pooled capital and the per-stratum watch side by side, with the false-alarm budget split between them, for example c = 40 pooled and c = 160 per stratum. This decides whether the monitor offers the hedge itself.
+- *Strata for the full and covariate-shift forms.* Rescoring or weighting within each stratum should hold by the same argument per stratum, but it is neither built nor checked.
+
+**Doc changes owed:** the conformal test martingales section: strata, the Mondrian form, the taxonomy's rectangle condition, Proposition 4.10, the seasonal readings, the pooled-against-per-stratum table, and the failed pre-stated gate.
+
 ### 2026-11-15 — Conformal test martingales: streams under covariate shift
 
 Built at the user's pick (2026-11-15, "Streams under shift"). Two choices settled the scope and the guarantee:
