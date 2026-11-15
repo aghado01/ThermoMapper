@@ -19,16 +19,15 @@ Opened 2026-11-14 at the user's word ("that brief was getting way too long, adde
 - `BassFit.GroupConformal` takes the optional confidence (`14fd05d`), built and verified.
 - Slice 17's grid-free intervals for the residual scores (`28993bb`, `ResidualShrinkage.Intervals`) are built and verified.
 - The asymmetric interval's exact law is closed (`b8cd947`, docstrings only). Where the band's width varies, the union of the two tails is Makarov's worst case given their Beta laws. Beta(k_lo + k_hi, m − k_lo − k_hi) holds only at constant width, the residual interval.
-- Slice 17's RoBAS-Full (`942df9c`, `ResidualScore.Horseshoe`) is built and verified. It is served by `Prediction`, the grid form. Its sets are not always intervals: two pieces at n 2 and 3 (`f400892`, probed and verified), so `Intervals` refuses it at every n.
+- Slice 17's RoBAS-Full (`942df9c`, `ResidualScore.Horseshoe`) is built and verified. It is served by `Prediction`, the grid form. Its sets are not always intervals: two pieces at n 2 and 3 (`f400892`, probed and verified).
+- RoBAS-Full's sets are intervals from n 4 when the residuals are not all equal. The Lean proves it (`robasFull_interval`, `700c718`, verified), granted four bounds on Dawson's function that the checks certify. `Intervals` serves RoBAS-Full there (`c3539b7`, verified) and refuses it below n 4.
+- CBMA reads each model's evidence from its BASS or BARS fit (`3e3b7f2`, verified): the `ModelEvidence` seam and the two engines' `ForAveraging` adapters, with both engines' constants pinned against the closed form.
 - Slice 12a's k̂ diagnostic stays opt-in, as the user settled on 2026-11-14. That is the code's default (`ConformalOptions.LeaveOneOutParetoK`, false).
 - The defects chip owns `PredictiveChecks.cs` and `Pointwise.cs`'s weight check; a change there is agreed with it first (the archived brief's coordination note).
 
 ## Open, each with the decision it would change
 
-- **Slice 17's remaining follow-up** (its report): CBMA's evidence from the engines' own fits.
-- **RoBAS-Full's sets as intervals for n ≥ 4,** a conjecture (the probe's report). At n 2 and 3 they can fall in two pieces, one about the prior's centre and one about the data. From n 4 to 50 none was found. A proof would go by Bersson and Hoff's lemma. Commissioned to the conformal Lean chip at the user's word (2026-11-14, "Yes, send it"). It decides whether `Intervals` serves RoBAS-Full from n 4.
-  - *Proved, computer-assisted,* by the Lean chip. The slope at every zero is at least 0.082 at n 4 and at least 0.93 from n 5. The one transcendental input is three bounds on Dawson's function and one window bound, certified by decimal intervals on 5,325 cells.
-  - *Lean scope, the user's choice (2026-11-14, "A: bounds as hypotheses"):* everything else in Lean, with the four bounds as named hypotheses. They are stated on the module's own Dawson function, with constants from one source the checks certify. Being built.
+- **The four Dawson bounds in Lean (scope B),** at the user's word in the Lean chip's session. Half built in the chip's scratch: the certificates pass in Python, but the Lean form compiles in about 10 minutes, too slowly as it stands. When it lands, `robasFull_interval` drops its `RobasDawsonBounds` hypothesis, and the C# docstrings drop "granted four bounds … the checks certify".
 - **Slice 15's alternation speed** along the factorization's flat directions. It decides the cost at large n.
 - **τ through richer features,** the ratio estimator's open follow-up. It decides whether the layer offers a nonparametric τ.
 - **Conformal test martingales beyond E35's slice 6,** queued at the user's word (2026-11-15, "lets add conformal test martingales to the outstanding conformal work queue").
@@ -62,6 +61,7 @@ Built at the user's word (2026-11-15, "Wire it now"), on the conformal-lean thre
 - *Docstrings:* `ResidualScore.Horseshoe`'s and `Intervals`' state the theorem and its hypothesis.
 - *Tests:* `HorseshoeScoreTests` gains the common point's test, and its refusal check becomes the new boundary. `ResidualIntervalTests` take RoBAS-Full back into both of their sweeps.
 - *Existing calls:* none changes except an `Intervals` call on RoBAS-Full at n ≥ 4 with residuals not all equal. It was refused and is now served.
+- *Verified by the main session on 2026-11-15,* from a clean archive of `77f4ccd` with zero skips, in one run with `3e3b7f2` ([receipts](receipts/verify-cbma-robasint-c3539b7/)): Maths.Regression.Tests' Commit selection 2,823 of 2,823, Maths.Oracle.Tests' 108 of 108. The Lean it rests on, `700c718`, was verified from a clean archive the same day.
 
 **What it computes.**
 - *Where it serves.* RoBAS-Full from n 4.
@@ -109,6 +109,7 @@ Built at the user's pick (2026-11-14, "CBMA evidence from the engines' fits"). T
   - `ModelEvidenceTests` and `EngineEvidenceTests`.
 - The log-weight `FullStep` and the new overload share one core. It reads each model's scores and predictive density once per candidate, then mixes them under every weight vector. The log-weight form runs exactly its old arithmetic.
 - `ScoresBeyondTheModelTests`' three fixture helpers are now `internal`, for reuse.
+- *Verified by the main session on 2026-11-15,* from a clean archive of `77f4ccd` with zero skips, in one run with `c3539b7` ([receipts](receipts/verify-cbma-robasint-c3539b7/)): Maths.Regression.Tests' Commit selection 2,823 of 2,823, Maths.Oracle.Tests' 108 of 108.
 
 **What it computes.**
 - *The overload.*
