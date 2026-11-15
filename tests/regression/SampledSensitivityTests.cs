@@ -116,6 +116,15 @@ public sealed class SampledSensitivityTests(ITestOutputHelper output)
                          worstZ, worstZCell);
     }
 
+    // The cut for √R·|mean z| over `cells` cells, each near a standard normal when the estimate is unbiased: Bonferroni's at a
+    // family-wise level of 10⁻³, so the cut grows with the cells read (4.2 at 42 cells, 5.2 at 6,000).
+    internal static double BiasCut(int cells) => Maths.Distributions.Normal.StandardQuantile(1.0 - 0.0005 / cells);
+
+    // The pooled spread of z over a fit's cells: the cells of one seed share its points, so the pooled spread has about the seeds' few
+    // degrees of freedom and moves by some 10% between seed sets; the primitives' gates (slice 0, 300 replicates) read calibration
+    // sharply, and these read it against gross error.
+    internal const double PooledLow = 0.85, PooledHigh = 1.15;
+
     private void Report(string name, Tally t) =>
         output.WriteLine($"{name}: {t.Cells} cells, {t.Exact} exact zeros; worst √R·|mean z| {t.WorstBias:F2} ({t.WorstBiasCell}); pooled sd of z "
                          + $"{t.PooledSd:F3}, per cell {t.LowestSd:F2} to {t.HighestSd:F2}; beyond 3: {t.Beyond3:P2}; worst z {t.WorstZ:F2} ({t.WorstZCell})");
@@ -154,8 +163,8 @@ public sealed class SampledSensitivityTests(ITestOutputHelper output)
         }
         Tally t = Summarize(runs, cell => cell.Split(' ')[2].StartsWith('S') ? 1.0 : exact.Variance[int.Parse(cell.Split(' ')[1])]);
         Report($"{name}, {form}", t);
-        Assert.True(t.WorstBias <= 4.5, $"{t.WorstBiasCell}: √R·|mean z| {t.WorstBias:F2}");
-        Assert.True(t.PooledSd >= 0.9 && t.PooledSd <= 1.1, $"pooled sd of z {t.PooledSd:F3}");
+        Assert.True(t.WorstBias <= BiasCut(t.Cells), $"{t.WorstBiasCell}: √R·|mean z| {t.WorstBias:F2} against {BiasCut(t.Cells):F2}");
+        Assert.True(t.PooledSd >= PooledLow && t.PooledSd <= PooledHigh, $"pooled sd of z {t.PooledSd:F3}");
         Assert.True(t.Beyond3 <= 0.01, $"{t.Beyond3:P2} beyond 3");
     }
 
@@ -206,7 +215,7 @@ public sealed class SampledSensitivityTests(ITestOutputHelper output)
 
     // The hand surface of a draw in raw units, DirectionalHingeTests.Hand's arithmetic: z by the training mean and sample deviation, each
     // hinge over its normalizer c.
-    private static Func<double[], double> HandSurface(BassData data, int degree, int draw)
+    internal static Func<double[], double> HandSurface(BassData data, int degree, int draw)
     {
         (double Mean, double Deviation)[] moments = DirectionalHingeTests.Moments(data);
         double[][] probe = [[0.5], [0.0], [11.0]];
@@ -282,8 +291,8 @@ public sealed class SampledSensitivityTests(ITestOutputHelper output)
         Report($"degree {degree}, {form}", t);
         output.WriteLine($"degree {degree}: the quadrature's main variances move by at most {coarse:E2} of V on halving its panels");
         Assert.True(coarse <= 1e-3, $"quadrature at {coarse:E2}");
-        Assert.True(t.WorstBias <= 4.0, $"{t.WorstBiasCell}: √R·|mean z| {t.WorstBias:F2}");
-        Assert.True(t.PooledSd >= 0.9 && t.PooledSd <= 1.1, $"pooled sd of z {t.PooledSd:F3}");
+        Assert.True(t.WorstBias <= BiasCut(t.Cells), $"{t.WorstBiasCell}: √R·|mean z| {t.WorstBias:F2} against {BiasCut(t.Cells):F2}");
+        Assert.True(t.PooledSd >= PooledLow && t.PooledSd <= PooledHigh, $"pooled sd of z {t.PooledSd:F3}");
         Assert.True(t.LowestSd >= 0.7 && t.HighestSd <= 1.35, $"per-cell sd of z from {t.LowestSd:F2} to {t.HighestSd:F2}");
         Assert.True(t.Beyond3 <= 0.01, $"{t.Beyond3:P2} beyond 3");
     }
@@ -450,7 +459,9 @@ internal sealed class QuadratureReference : SobolReference
 
     public override (int Nodes, int Panels) Quadrature(int v) => (3, _panels);
 
-    public override double Mean => SobolQuadrature.Mean(this, _rules);
+    private double? _mean;
+
+    public override double Mean => _mean ??= SobolQuadrature.Mean(this, _rules);
 
     public override double ClosedVariance(int[] u)
     {

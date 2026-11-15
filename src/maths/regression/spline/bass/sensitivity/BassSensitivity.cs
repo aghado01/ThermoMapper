@@ -165,8 +165,10 @@ public static partial class BassSensitivity
 
     /// <summary>
     /// The main and two-way effect functions of <paramref name="fit"/>'s draws under <paramref name="spec"/>'s measure and the
-    /// fit's degree, on <paramref name="data"/>, the data the fit was run on. Refused, with its reason, for an effect of any
-    /// other size, an input no variable has, a grid under two points, or more values than <see cref="EffectSpec.CellBudget"/>.
+    /// fit's degree, on <paramref name="data"/>, the data the fit was run on, by the route <paramref name="spec"/> resolves to: in
+    /// closed form, or on the sampled route by pinning the inputs over the shared base rows, each value with its error. Refused,
+    /// with its reason, for an effect of any other size, an input no variable has, a grid under two points, or more values than
+    /// <see cref="EffectSpec.CellBudget"/>.
     /// </summary>
     public static EffectAnalysis Effects(BassFit fit, BassData data, SensitivitySpec? spec = null, EffectSpec? effects = null)
     {
@@ -174,56 +176,9 @@ public static partial class BassSensitivity
         effects ??= new EffectSpec();
         if (effects.GridPoints < 2) throw new ArgumentOutOfRangeException(nameof(effects), "An effect grid needs two points.");
         Setup s = Setup.Of(fit, data, spec);
+        if (Resolve(fit, spec, s) == SensitivityRoute.Sampled) return SampledEffects(fit, spec, effects, s);
         ProductMeasure measure = s.Moments.Measure;
-
-        int[][] chosen;
-        if (effects.Subsets is { } named)
-        {
-            chosen = new int[named.Count][];
-            for (int e = 0; e < named.Count; e++)
-            {
-                string[] names = named[e] ?? throw new ArgumentException($"Effect {e} is null.", nameof(effects));
-                if (names.Length is not (1 or 2)) throw new ArgumentException($"Effects are main or two-way; effect {e} names {names.Length} inputs.", nameof(effects));
-                int[] vars = [.. names.Select(name => IndexOf(measure, name))];
-                if (vars.Length == 2 && vars[0] == vars[1]) throw new ArgumentException($"Effect {e} names '{names[0]}' twice.", nameof(effects));
-                Array.Sort(vars);
-                chosen[e] = vars;
-            }
-        }
-        else
-        {
-            var pairs = new SortedSet<(int, int)>();
-            foreach (int id in s.TermIds)
-            {
-                IReadOnlyList<int> v = s.Moments.Variables(fit.Terms[id]);
-                for (int i = 0; i < v.Count; i++)
-                    for (int k = i + 1; k < v.Count; k++) pairs.Add((v[i], v[k]));
-            }
-            chosen = [.. Enumerable.Range(0, measure.Count).Select(v => new[] { v }), .. pairs.Select(p => new[] { p.Item1, p.Item2 })];
-        }
-
-        // Each variable's grid: scaled points (or level indices) and their presentation.
-        var scaled = new double[measure.Count][];
-        var grids = new EffectGrid[measure.Count];
-        for (int v = 0; v < measure.Count; v++)
-        {
-            if (measure.Continuous(v) is { } c)
-            {
-                scaled[v] = [.. Enumerable.Range(0, effects.GridPoints).Select(i => c.Lower + (c.Upper - c.Lower) * i / (effects.GridPoints - 1))];
-                RangeScale range = s.RangeOf(v);
-                grids[v] = new EffectGrid([.. scaled[v].Select(x => range.Min + x * (range.Max - range.Min))], null);
-            }
-            else
-            {
-                var levels = ((TrainingLevels)fit.Transform.Predictors[v]).Levels;
-                scaled[v] = [.. Enumerable.Range(0, levels.Count).Select(l => (double)l)];
-                grids[v] = new EffectGrid([.. scaled[v]], levels);
-            }
-        }
-        long cells = chosen.Sum(u => u.Aggregate(1L, (acc, v) => acc * scaled[v].Length));
-        long values = cells * s.Draws.Length * s.Surfaces;
-        if (values > effects.CellBudget)
-            throw new ArgumentException($"The effects hold {values} values ({cells} cells × {s.Draws.Length} draws × {s.Surfaces} surfaces), above the budget of {effects.CellBudget}: name fewer effects, a coarser grid, or raise the budget.", nameof(effects));
+        (int[][] chosen, double[][] scaled, EffectGrid[] grids) = EffectRequest(fit, s, effects, id => s.Moments.Variables(fit.Terms[id]));
 
         // Per term: its centred factor values on each of its variables' grids, and κ·Π E φ over the variables outside an effect.
         var centred = new Dictionary<int, double[][]>();
