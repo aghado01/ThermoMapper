@@ -3,18 +3,56 @@ using System.Collections.Generic;
 using Maths.Distributions;
 using Maths.Rng;
 using Xunit;
+using Xunit.Abstractions;
 
 namespace Maths.Distributions.Tests;
 
 /// <summary>
 /// <see cref="SpecialFunctions.LogGammaRatio"/> against references that subtract no large numbers: at an integer step s = m, the sum
-/// Σ ln(x + i); at s = ½ and an integer x = n, ½ ln π + ln n + Σₖ ln(1 − 1/(2k)), from Γ(n + ½)/Γ(n) = √π·n·Πₖ (2k − 1)/(2k); and against
-/// the difference of two ln Γ where both are small enough to keep their digits. A seeded sweep from x = 10⁻³⁰⁰ to 10¹⁵ checks
-/// additivity, ln Γ(x + s + r)/Γ(x) = ln Γ(x + s)/Γ(x) + ln Γ(x + s + r)/Γ(x + s), the property no single reference spans.
+/// Σ ln(x + i); at s = ½ and an integer x = n, ½ ln π + ln n + Σₖ ln(1 − 1/(2k)), from Γ(n + ½)/Γ(n) = √π·n·Πₖ (2k − 1)/(2k); at a small
+/// step, Taylor's series in s through the polygammas; and against the difference of two ln Γ where both are small enough to keep their
+/// digits. A seeded sweep from x = 10⁻³⁰⁰ to 10¹⁵ checks additivity, ln Γ(x + s + r)/Γ(x) = ln Γ(x + s)/Γ(x) + ln Γ(x + s + r)/Γ(x + s),
+/// the property no single reference spans.
 /// </summary>
-public sealed class LogGammaRatioTests
+public sealed class LogGammaRatioTests(ITestOutputHelper output)
 {
     private const double Eps = 2.220446049250313e-16;
+
+    /// <summary>
+    /// A small step keeps its relative digits: against s·ψ(x) + s²/2·ψ′(x) + s³/6·ψ″(x), whose next term is below 2·10⁻¹⁷ of the value
+    /// at s ≤ 10⁻⁶ and x ≥ ¼ (1.5·10⁻¹⁷ at x = ¼). The polygammas come from outside the function: from their values at ¼, ½ or 1 by their
+    /// recurrences, summed in decimal, or at 10⁶ and 10⁹ by their asymptotic series with ln x = m·ln 10. Until 2026-11-14 the function
+    /// subtracted Stirling's remainder at x + s from the one at x, two rounded values near 1/(12x), for an absolute error up to about
+    /// 2·10⁻¹⁸ however small s was: up to 4·10⁻⁶ of the value at s = 10⁻¹² in the slice 0 review's sweep, and 2.5·10⁻¹⁴ to 3.3·10⁻¹² here.
+    /// </summary>
+    [Theory]
+    [InlineData(0.25)]
+    [InlineData(0.5)]
+    [InlineData(1.0)]
+    [InlineData(2.0)]
+    [InlineData(2.5)]
+    [InlineData(10.0)]
+    [InlineData(15.5)]
+    [InlineData(16.0)]
+    [InlineData(17.0)]
+    [InlineData(99.5)]
+    [InlineData(12345.0)]
+    [InlineData(1e5)]
+    [InlineData(1e6)]
+    [InlineData(1e9)]
+    public void SmallSteps_KeepTheirRelativeDigits(double x)
+    {
+        var (psi, trigamma, tetragamma) = Polygammas(x);
+        double worst = 0.0;
+        foreach (double s in new[] { 1e-6, 1e-8, 1e-10, 1e-12, 1e-15 })
+        {
+            double truth = s * (psi + 0.5 * s * (trigamma + s / 3.0 * tetragamma));
+            double got = SpecialFunctions.LogGammaRatio(x, s), relative = Math.Abs(got - truth) / Math.Abs(truth);
+            worst = Math.Max(worst, relative);
+            Assert.True(relative <= 1e-14, $"x = {x:R}, s = {s:R}: {got:R} against {truth:R}, relative {relative:E2}");
+        }
+        output.WriteLine($"x = {x:R}: ψ = {psi:R}, worst relative error {worst:E2}");
+    }
 
     [Theory]
     [InlineData(1e-6)]
@@ -110,6 +148,58 @@ public sealed class LogGammaRatioTests
         Assert.Throws<ArgumentOutOfRangeException>(() => SpecialFunctions.LogGammaRatio(double.NaN, 1.0));
         Assert.Throws<ArgumentOutOfRangeException>(() => SpecialFunctions.LogGammaRatio(1.0, -0.5));
         Assert.Throws<ArgumentOutOfRangeException>(() => SpecialFunctions.LogGammaRatio(1.0, double.PositiveInfinity));
+    }
+
+    // ψ, ψ′ and ψ″ at x = ¼, at an integer or half-integer x ≥ ½, or at x = 10ᵐ ≥ 10⁶, in decimal, then rounded once.
+    private static (double Psi, double Trigamma, double Tetragamma) Polygammas(double x)
+    {
+        const decimal EulerGamma = 0.5772156649015328606065120901m, Ln2 = 0.6931471805599453094172321215m;
+        const decimal Ln10 = 2.3025850929940456840179914547m, Pi = 3.1415926535897932384626433833m;
+        const decimal Zeta3 = 1.2020569031595942853997381615m, Catalan = 0.9159655941772190150546035149m;
+        decimal psi, trigamma, tetragamma;
+        if (x >= 1e6)
+        {
+            // ψ ~ ln x − 1/(2x) − 1/(12x²) + 1/(120x⁴), ψ′ ~ 1/x + 1/(2x²) + 1/(6x³), ψ″ ~ −1/x² − 1/x³ − 1/(2x⁴): the next terms are below 10⁻³⁰.
+            int m = (int)Math.Round(Math.Log10(x));
+            Assert.Equal(Math.Pow(10.0, m), x);
+            decimal u = 1m / (decimal)x, u2 = u * u;
+            psi = m * Ln10 - u / 2m - u2 / 12m + u2 * u2 / 120m;
+            trigamma = u + u2 / 2m + u2 * u / 6m;
+            tetragamma = -u2 - u2 * u - u2 * u2 / 2m;
+        }
+        else
+        {
+            decimal t = (decimal)x - decimal.Floor((decimal)x);
+            if (x == 0.25)
+            {
+                psi = -EulerGamma - Pi / 2m - 3m * Ln2;
+                trigamma = Pi * Pi + 8m * Catalan;
+                tetragamma = -2m * Pi * Pi * Pi - 56m * Zeta3;
+            }
+            else if (t == 0.5m)
+            {
+                psi = -EulerGamma - 2m * Ln2;
+                trigamma = Pi * Pi / 2m;
+                tetragamma = -14m * Zeta3;
+            }
+            else
+            {
+                Assert.Equal(0m, t);
+                t = 1m;
+                psi = -EulerGamma;
+                trigamma = Pi * Pi / 6m;
+                tetragamma = -2m * Zeta3;
+            }
+            // ψ(t + 1) = ψ(t) + 1/t, ψ′(t + 1) = ψ′(t) − 1/t², ψ″(t + 1) = ψ″(t) + 2/t³.
+            for (; t < (decimal)x; t += 1m)
+            {
+                decimal inverse = 1m / t;
+                psi += inverse;
+                trigamma -= inverse * inverse;
+                tetragamma += 2m * inverse * inverse * inverse;
+            }
+        }
+        return ((double)psi, (double)trigamma, (double)tetragamma);
     }
 
     private sealed class Neumaier
