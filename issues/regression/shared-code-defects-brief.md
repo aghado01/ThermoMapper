@@ -277,6 +277,18 @@ At the coordinating session's word: a read only, docs only. No code changed; the
   - *The 16 cases after it* pass ordinary `double[]` weights, which stay in the normal branch.
 - So the profile was shaped by the roughly 2480 earlier tests in other classes, on six threads. A replay is the cheapest first attempt if the user chooses a hunt, and it should replay that whole order, multi-threaded, not these 24.
 
+**The cold-branch probe: no failure in 1836 fresh processes** (at the coordinating session's word, 07:48 to 08:48, BelowNormal).
+- *What it tests.* The 24 tests say the first call ever to take the scaled branch with a `double[]` failed, and so did every one after it. The calls before it were all in the normal branch. So `Rows` reached tier 1 with the scaled branch never executed.
+- *The probe* (`weights-probe`, mode `cold`; driver `hunt.ps1`):
+  - Each fresh process warms `Rows` from 4 to 8 threads, on random ordinary `double[]` weights only, for 0.5 to 3 s; every ratio stays in the normal branch.
+  - It then calls `Rows` once at [1, `double.Epsilon`] and once at [10³⁰⁸, 10³⁰⁸].
+  - `DOTNET_JitDisasm=Rows` with `DOTNET_JitStdOutFile` was on in every process.
+- *Result:*
+  - In all 1836 processes, `Rows` was at tier 1 before the cold calls: two listings at instrumented tier 0, then tier 1, optimized using Synthesized PGO. Both cold calls read finite in every one.
+  - A passing listing is kept: `hunt-pass-sample.txt`.
+  - No failing setup was found, so the two controls (`DOTNET_TieredPGO=0`, `DOTNET_JitObjectStackAllocation=0`) were not run.
+- *So the fault stays unreproduced.* The run's condition not yet met here is the full call mix: about 2480 tests in other classes, on six xUnit threads, around and before the first scaled call.
+
 **Options for the user, neither built.**
 - *Keeping `Rows`' compiled code at each tier.* Release .NET 10 honors `DOTNET_JitDisasm` and `DOTNET_JitStdOutFile` for one method.
   - Read here: `DOTNET_JitDisasm=Rows` (the bare name; the class-qualified pattern listed nothing) wrote `Rows` at instrumented tier 0, twice, and at tier 1 with PGO, about 1700 lines.
