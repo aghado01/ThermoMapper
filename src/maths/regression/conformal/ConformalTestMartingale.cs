@@ -509,6 +509,24 @@ public sealed class MartingaleAlarm
 /// that fired at it (empty when none did).</summary>
 public readonly record struct MartingaleStep(SmoothedPValue PValue, double LogBet, double LogCapital, IReadOnlyList<AlarmProcedure>? Fired = null);
 
+/// <summary>One arrival of a conformal test martingale under covariate shift: its weighted smoothed p-value
+/// (<see cref="CovariateShiftPValues"/>), the bet's log at it, the log capital after it, and the alarms that fired at it.</summary>
+public readonly record struct WeightedMartingaleStep(WeightedPValue PValue, double LogBet, double LogCapital, IReadOnlyList<AlarmProcedure> Fired);
+
+/// <summary>The form of a conformal test martingale (<see cref="ConformalTestMartingale"/>), fixed at construction.</summary>
+public enum MonitorForm
+{
+    /// <summary>Each unit's score from a fixed fit (<see cref="SmoothedPValues"/>).</summary>
+    Inductive,
+
+    /// <summary>Every unit rescored at each arrival under the fit's draws reweighted by the stream so far (<see cref="FullFormPValues"/>).</summary>
+    Full,
+
+    /// <summary>A reference sample, then a stream under a known covariate shift, ranked by weights from the likelihood ratio
+    /// (<see cref="CovariateShiftPValues"/>).</summary>
+    CovariateShift,
+}
+
 /// <summary>
 /// A conformal test martingale (E35; Vovk, Nouretdinov and Gammerman 2003; Vovk et al. 2021): each arrival's conformity score is ranked
 /// into its smoothed p-value (<see cref="SmoothedPValues"/>, M-1), and a betting function turns the p-values into capital
@@ -516,10 +534,17 @@ public readonly record struct MartingaleStep(SmoothedPValue PValue, double LogBe
 /// at most 1, so its value at any stopping time that reads only the past is an e-value (<see cref="EValue"/>), and growth is evidence
 /// against exchangeability. Alarms read the capital (<see cref="MartingaleAlarm"/>): Ville's, proved, and CUSUM and Shiryaev–Roberts, whose
 /// guarantees are posed.
-/// <para>Two forms, fixed at construction. The inductive form, by the constructor, takes each unit's score from a fixed fit
-/// (<see cref="Add(double)"/>). The full form, by <see cref="Full"/>, takes each unit's terms under the fit's draws and recomputes every
-/// unit's score under the draws reweighted by the stream so far (<see cref="FullFormPValues"/>; <see cref="Add(ReadOnlySpan{double}, ReadOnlySpan{double})"/>).
-/// Both forms' p-values are i.i.d. uniform on exchangeable streams (M-1). Each refuses the other's input.</para>
+/// <para>Three forms, fixed at construction (<see cref="Form"/>).
+/// <list type="bullet">
+/// <item>The inductive form, by the constructor, takes each unit's score from a fixed fit (<see cref="Add(double)"/>).</item>
+/// <item>The full form, by <see cref="Full"/>, takes each unit's terms under the fit's draws and recomputes every unit's score under the
+/// draws reweighted by the stream so far (<see cref="FullFormPValues"/>; <see cref="Add(ReadOnlySpan{double}, ReadOnlySpan{double})"/>).</item>
+/// <item>The covariate-shift form, by <see cref="CovariateShift"/>, takes a reference sample and then each stream unit's score with its
+/// likelihood ratio (<see cref="CovariateShiftPValues"/>; <see cref="Add(double, double)"/>).</item>
+/// </list>
+/// The first two forms' p-values are i.i.d. uniform on exchangeable streams (M-1). The third's are i.i.d. uniform on a stream under the
+/// stated covariate shift. So it tolerates that shift and alarms on any other change, in y given x or in the inputs beyond the stated
+/// ratio. Each form refuses the others' input.</para>
 /// Not thread-safe: one per stream.
 /// </summary>
 public sealed class ConformalTestMartingale
@@ -527,6 +552,7 @@ public sealed class ConformalTestMartingale
     private static readonly AlarmProcedure[] None = [];
     private readonly SmoothedPValues? _pValues;
     private readonly FullFormPValues? _full;
+    private readonly CovariateShiftPValues? _shift;
     private readonly BettingCapital _capital;
     private readonly List<double> _path = [];
     private readonly MartingaleAlarm[] _alarms;
@@ -536,15 +562,17 @@ public sealed class ConformalTestMartingale
     /// <param name="seed">The tie-breaking draws' seed.</param>
     /// <param name="alarms">The alarms that read the capital, each fresh for this stream.</param>
     public ConformalTestMartingale(IBettingFunction bet, int seed, params MartingaleAlarm[] alarms)
-        : this(bet, new SmoothedPValues(seed), null, alarms)
+        : this(bet, new SmoothedPValues(seed), null, null, alarms)
     {
     }
 
-    private ConformalTestMartingale(IBettingFunction bet, SmoothedPValues? pValues, FullFormPValues? full, MartingaleAlarm[] alarms)
+    private ConformalTestMartingale(IBettingFunction bet, SmoothedPValues? pValues, FullFormPValues? full, CovariateShiftPValues? shift,
+                                    MartingaleAlarm[] alarms)
     {
         _capital = new BettingCapital(bet);
         _pValues = pValues;
         _full = full;
+        _shift = shift;
         ArgumentNullException.ThrowIfNull(alarms);
         _alarms = [.. alarms];
         foreach (MartingaleAlarm alarm in _alarms) ArgumentNullException.ThrowIfNull(alarm, nameof(alarms));
@@ -560,7 +588,21 @@ public sealed class ConformalTestMartingale
     /// <param name="alarms">The alarms that read the capital, each fresh for this stream.</param>
     public static ConformalTestMartingale Full(IBettingFunction bet, int seed, int draws, IReadOnlyList<double>? drawWeights = null,
                                                FullFormScore score = FullFormScore.Density, params MartingaleAlarm[] alarms)
-        => new(bet, null, new FullFormPValues(draws, seed, drawWeights, score), alarms);
+        => new(bet, null, new FullFormPValues(draws, seed, drawWeights, score), null, alarms);
+
+    /// <summary>The covariate-shift form (<see cref="CovariateShiftPValues"/>): a reference sample from the source law, then each stream
+    /// unit's score with its likelihood ratio w(x) = dQ/dP.</summary>
+    /// <param name="bet">The betting function, fresh for this stream.</param>
+    /// <param name="seed">The tie-breaking draws' seed.</param>
+    /// <param name="referenceScores">The reference units' conformity scores, from the fit that scores the stream.</param>
+    /// <param name="referenceWeights">The reference units' likelihood ratios.</param>
+    /// <param name="alarms">The alarms that read the capital, each fresh for this stream.</param>
+    public static ConformalTestMartingale CovariateShift(IBettingFunction bet, int seed, IReadOnlyList<double> referenceScores,
+                                                         IReadOnlyList<double> referenceWeights, params MartingaleAlarm[] alarms)
+        => new(bet, null, null, new CovariateShiftPValues(referenceScores, referenceWeights, seed), alarms);
+
+    /// <summary>The form, fixed at construction.</summary>
+    public MonitorForm Form => _full is not null ? MonitorForm.Full : _shift is not null ? MonitorForm.CovariateShift : MonitorForm.Inductive;
 
     /// <summary>Whether this monitor is in the full form.</summary>
     public bool IsFullForm => _full is not null;
@@ -588,7 +630,7 @@ public sealed class ConformalTestMartingale
     /// the step.</summary>
     public MartingaleStep Add(double score)
     {
-        if (_pValues is null) throw new InvalidOperationException("This monitor is in the full form: it takes each unit's terms under the fit's draws, not a score.");
+        if (_pValues is null) throw WrongForm();
         return Step(_pValues.Add(score));
     }
 
@@ -598,26 +640,49 @@ public sealed class ConformalTestMartingale
     /// <param name="logCdf">Each draw's ln F(yₙ | xₙ, θ_s), read for the centrality.</param>
     public MartingaleStep Add(ReadOnlySpan<double> logDensity, ReadOnlySpan<double> logCdf = default)
     {
-        if (_full is null) throw new InvalidOperationException("This monitor is in the inductive form: it takes each unit's score from a fixed fit.");
+        if (_full is null) throw WrongForm();
         return Step(_full.Add(logDensity, logCdf));
     }
 
     /// <summary>The full form: each unit of <paramref name="units"/> in turn, through the candidate seam (<see cref="FullFormPValues.AddRange"/>).</summary>
     public MartingaleStep[] AddRange(CandidateLogDensity units)
     {
-        if (_full is null) throw new InvalidOperationException("This monitor is in the inductive form: it takes each unit's score from a fixed fit.");
+        if (_full is null) throw WrongForm();
         var steps = new List<MartingaleStep>();
         foreach ((double[] density, double[]? cdf) in _full.Units(units)) steps.Add(Step(_full.Add(density, cdf)));
         return [.. steps];
     }
 
+    /// <summary>The covariate-shift form: ranks the stream unit's <paramref name="score"/> by the weights its likelihood ratio
+    /// <paramref name="weight"/> and the units so far give (<see cref="CovariateShiftPValues.Add"/>), bets on its p-value and gives the step.</summary>
+    public WeightedMartingaleStep Add(double score, double weight)
+    {
+        if (_shift is null) throw WrongForm();
+        WeightedPValue p = _shift.Add(score, weight);
+        (double logBet, double logCapital, IReadOnlyList<AlarmProcedure> fired) = Bet(p.P);
+        return new WeightedMartingaleStep(p, logBet, logCapital, fired);
+    }
+
     private MartingaleStep Step(SmoothedPValue p)
     {
-        CapitalStep step = _capital.Add(p.P);
+        (double logBet, double logCapital, IReadOnlyList<AlarmProcedure> fired) = Bet(p.P);
+        return new MartingaleStep(p, logBet, logCapital, fired);
+    }
+
+    private (double LogBet, double LogCapital, IReadOnlyList<AlarmProcedure> Fired) Bet(double p)
+    {
+        CapitalStep step = _capital.Add(p);
         _path.Add(step.LogCapital);
         List<AlarmProcedure>? fired = null;
         foreach (MartingaleAlarm alarm in _alarms)
             if (alarm.Step(step.LogBet)) (fired ??= []).Add(alarm.Procedure);
-        return new MartingaleStep(p, step.LogBet, step.LogCapital, fired is null ? None : fired);
+        return (step.LogBet, step.LogCapital, fired is null ? None : fired);
     }
+
+    private InvalidOperationException WrongForm() => new(Form switch
+    {
+        MonitorForm.Full => "This monitor is in the full form: it takes each unit's terms under the fit's draws, Add(logDensity, logCdf).",
+        MonitorForm.CovariateShift => "This monitor is in the covariate-shift form: it takes each stream unit's score and likelihood ratio, Add(score, weight).",
+        _ => "This monitor is in the inductive form: it takes each unit's score from a fixed fit, Add(score).",
+    });
 }
