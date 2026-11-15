@@ -1,5 +1,6 @@
 using System;
 using System.Buffers;
+using System.Linq;
 using System.Runtime.CompilerServices;
 using Maths.Distributions;
 using Maths.Rng;
@@ -170,6 +171,39 @@ public sealed class DirectionalTermSpace
     {
         ArgumentNullException.ThrowIfNull(rng);
         return range.Upper - range.Width * rng.NextDouble();
+    }
+
+    /// <summary>
+    /// The knots of the ridge block of <paramref name="columns"/> = K columns on <paramref name="hinge"/>'s direction θ and knot t₀ (E36's slice 3):
+    /// t₀, then t_ℓ for ℓ = 1, …, K + 1 the type-7 quantiles at (ℓ − 1)/K of the projected training cases above t₀, the paper's
+    /// eq. (eta_-0) as <c>BayesPPR</c> reads it (<c>quantile(proj[proj &gt; knot0], seq(0, 1, length.out = K + 1))</c>). Null where they
+    /// leave a column undefined: fewer than two cases above t₀, or t_K = t_{K+1} with K ≥ 2.
+    /// </summary>
+    public double[]? RidgeKnots(DirectionalHinge hinge, int columns)
+    {
+        ArgumentNullException.ThrowIfNull(hinge);
+        if (columns < 1) throw new ArgumentOutOfRangeException(nameof(columns), "K is at least 1.");
+        CaseInputs cases = _inputs.Cases;
+        var projection = new double[cases.Cases];
+        DirectionalHingeKernel.Project(hinge.Direction, _inputs, cases, projection);
+        double t0 = hinge.Knot;
+        double[] above = [.. projection.Where(p => p > t0)];
+        if (above.Length < 2) return null;
+        Array.Sort(above);
+        var knots = new double[columns + 2];
+        knots[0] = t0;
+        double step = 1.0 / columns;   // R's seq(0, 1, length.out = K + 1): its ends exact, (ℓ − 1)·(1/K) between
+        for (int l = 0; l <= columns; l++)
+        {
+            double probability = l == 0 ? 0.0 : l == columns ? 1.0 : l * step;
+            double index = 1.0 + (above.Length - 1) * probability;
+            double floor = Math.Floor(index);
+            int lo = (int)floor;
+            double h = index - floor;
+            double atLo = above[lo - 1];
+            knots[l + 1] = h > 0.0 && above[lo] != atLo ? (1.0 - h) * atLo + h * above[lo] : atLo;
+        }
+        return columns >= 2 && !(knots[columns] < knots[columns + 1]) ? null : knots;
     }
 
     // U as R's type-7 quantile at q, index 1 + (n − 1)q, lo its floor and h its fraction: (1 − h)·x₍lo₎ + h·x₍lo+1₎ where h > 0 and the two

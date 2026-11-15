@@ -112,3 +112,105 @@ public sealed record DirectionalHinge
     public override string ToString()
         => $"({Direction} {(Knot < 0.0 ? '+' : '−')} {Math.Abs(Knot).ToString("R", CultureInfo.InvariantCulture)})₊";
 }
+
+/// <summary>
+/// One column of a ridge block (E36's slice 3): b_ℓ(θᵀz | t), ℓ = 1, …, K, of Collins, Francom and Rumsey's modified natural spline over the
+/// projection θᵀz with knots t = (t₀, t₁, …, t_{K+1}), their eq. (spline_expansion):
+/// <list type="bullet">
+/// <item>b₁(u) = (u − t₀)₊, zero below t₀;</item>
+/// <item>b_ℓ(u) = d_{ℓ−1}(u) − d_K(u) for ℓ ≥ 2, with d_j(u) = ((u − t_j)₊³ − (u − t_{K+1})₊³)/(t_{K+1} − t_j), cubic between the knots and
+/// linear beyond t_{K+1}, where it is (t_K − t_{ℓ−1})(3u − t_{ℓ−1} − t_K − t_{K+1}) exactly; that form is read there, since the cubes'
+/// difference loses digits as u grows.</item>
+/// </list>
+/// The knots are the column's own, fixed when the design expanded its block from the structure term (θ, t₀), so prediction reads it without
+/// the training data. The column is the paper's, unnormalized. Compared by value, bit for bit.
+/// </summary>
+public sealed class RidgeColumn : IEquatable<RidgeColumn>
+{
+    private readonly double[] _knots;
+    private readonly int _hash;
+
+    /// <summary>Column <paramref name="column"/> = ℓ of the block on <paramref name="direction"/> with knots <paramref name="knots"/> =
+    /// (t₀, …, t_{K+1}), K ≥ 1: finite, t₀ &lt; t₁ ≤ … ≤ t_{K+1}, and t_K &lt; t_{K+1} where K ≥ 2, so every divided difference is defined.</summary>
+    public RidgeColumn(ProjectionDirection direction, IEnumerable<double> knots, int column)
+    {
+        Direction = direction ?? throw new ArgumentNullException(nameof(direction));
+        ArgumentNullException.ThrowIfNull(knots);
+        _knots = knots.ToArray();
+        int k = _knots.Length - 2;
+        if (k < 1) throw new ArgumentException("A ridge block's knots are t₀, t₁, …, t_{K+1} with K ≥ 1.", nameof(knots));
+        if (column < 1 || column > k) throw new ArgumentOutOfRangeException(nameof(column), $"ℓ lies in [1, {k}].");
+        foreach (double t in _knots)
+            if (!double.IsFinite(t)) throw new ArgumentException("A knot is a finite projection value.", nameof(knots));
+        if (!(_knots[0] < _knots[1])) throw new ArgumentException("t₀ lies below t₁, the least projection above it.", nameof(knots));
+        for (int j = 2; j < _knots.Length; j++)
+            if (_knots[j] < _knots[j - 1]) throw new ArgumentException("The knots t₁, …, t_{K+1} do not decrease.", nameof(knots));
+        if (k >= 2 && !(_knots[k] < _knots[k + 1])) throw new ArgumentException("t_K lies below t_{K+1}, or d_K's denominator vanishes.", nameof(knots));
+        Column = column;
+        var hash = new HashCode();
+        hash.Add(direction);
+        hash.Add(column);
+        foreach (double t in _knots) hash.Add(t);
+        _hash = hash.ToHashCode();
+    }
+
+    /// <summary>The direction θ.</summary>
+    public ProjectionDirection Direction { get; }
+
+    /// <summary>The knots t₀, t₁, …, t_{K+1}.</summary>
+    public IReadOnlyList<double> Knots => _knots;
+
+    /// <summary>ℓ, the column's place in its block, 1 to K.</summary>
+    public int Column { get; }
+
+    /// <summary>K, the block's columns.</summary>
+    public int Columns => _knots.Length - 2;
+
+    /// <summary>b_ℓ(<paramref name="u"/>).</summary>
+    public double Value(double u)
+    {
+        if (Column == 1) return Math.Max(u - _knots[0], 0.0);
+        int k = Columns;
+        double a = _knots[Column - 1], b = _knots[k], top = _knots[k + 1];
+        if (u >= top) return (b - a) * (3.0 * u - a - b - top);
+        return Cube(u, a) / (top - a) - Cube(u, b) / (top - b);
+    }
+
+    /// <summary>b_ℓ′(<paramref name="u"/>): at t₀, b₁'s kink, the mean of its one-sided limits, ½, as BASS's hinges take it; the cubic columns
+    /// are twice continuously differentiable.</summary>
+    public double Derivative(double u)
+    {
+        if (Column == 1) return u > _knots[0] ? 1.0 : u == _knots[0] ? 0.5 : 0.0;
+        int k = Columns;
+        double a = _knots[Column - 1], b = _knots[k], top = _knots[k + 1];
+        if (u >= top) return 3.0 * (b - a);
+        return 3.0 * (Square(u, a) / (top - a) - Square(u, b) / (top - b));
+    }
+
+    private static double Cube(double u, double t)
+    {
+        double d = Math.Max(u - t, 0.0);
+        return d * d * d;
+    }
+
+    private static double Square(double u, double t)
+    {
+        double d = Math.Max(u - t, 0.0);
+        return d * d;
+    }
+
+    /// <inheritdoc/>
+    public bool Equals(RidgeColumn? other)
+        => other is not null && (ReferenceEquals(this, other)
+            || (_hash == other._hash && Column == other.Column && Direction.Equals(other.Direction) && _knots.AsSpan().SequenceEqual(other._knots)));
+
+    /// <inheritdoc/>
+    public override bool Equals(object? obj) => Equals(obj as RidgeColumn);
+
+    /// <inheritdoc/>
+    public override int GetHashCode() => _hash;
+
+    /// <inheritdoc/>
+    public override string ToString()
+        => $"b{Column}({Direction} | {string.Join(", ", _knots.Select(t => t.ToString("G6", CultureInfo.InvariantCulture)))})";
+}

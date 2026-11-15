@@ -297,7 +297,7 @@ public sealed class BassStructurePrior
             directions.Validate(term);
             return;
         }
-        if (term.Directional is not null) throw new ArgumentException("The fit has no directional part.", nameof(term));
+        if (term.Directional is not null || term.Ridge is not null) throw new ArgumentException("The fit has no directional part.", nameof(term));
         if (Legendre is { } space)
         {
             space.Validate(term);

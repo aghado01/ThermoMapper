@@ -30,7 +30,7 @@ public sealed class DirectionalHingeTests(ITestOutputHelper output)
 
     // Three continuous inputs on unequal ranges: x0 on [0, 1], x1 on [−2, 5] skewed toward −2, x2 on [10, 13] inside a declared
     // domain [9, 14], so the box, the training range and the standardization all differ.
-    private static BassData Data()
+    internal static BassData Data()
     {
         const int n = 80;
         var x0 = new double[n];
@@ -52,17 +52,17 @@ public sealed class DirectionalHingeTests(ITestOutputHelper output)
     internal static double[][] Raw(BassData data) => [.. data.Predictors.Cast<ContinuousPredictor>().Select(p => p.Values.ToArray())];
 
     // Raw points: the training cases' first ten, and points past the training range on every side, x2's inside its declared domain.
-    private static double[][] Points(BassData data)
+    internal static double[][] Points(BassData data)
     {
         double[][] raw = Raw(data);
         double[][] extra = [[-0.3, 1.4, 0.5, 0.0], [-3.0, 6.5, 1.0, 5.0], [9.2, 13.8, 11.0, 12.9]];
         return [.. raw.Select((column, j) => column.Take(10).Concat(extra[j]).ToArray())];
     }
 
-    private static CaseInputs Scaled(BassInputTransform transform, double[][] raw)
+    internal static CaseInputs Scaled(BassInputTransform transform, double[][] raw)
         => new([.. raw.Select((column, j) => column.Select(x => ((RangeScale)transform.Predictors[j]).Scale(x)).ToArray())], []);
 
-    private static (BassInputTransform Transform, BassInputs Inputs, BassBasis Basis) Setup(BassData data, int degree, HingeNormalization normalization = HingeNormalization.Box)
+    internal static (BassInputTransform Transform, BassInputs Inputs, BassBasis Basis) Setup(BassData data, int degree, HingeNormalization normalization = HingeNormalization.Box)
     {
         BassInputTransform transform = BassInputTransform.Fit(data);
         BassInputs inputs = BassInputs.Prepare(data, transform);

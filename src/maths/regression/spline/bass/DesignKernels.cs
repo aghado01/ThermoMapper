@@ -7,10 +7,10 @@ namespace Maths.Regression.Spline.Bass;
 
 /// <summary>
 /// BASS's term types behind the design-kernel contract (<see cref="IDesignKernel{TPoints}"/>), bound to a fit's inputs
-/// and hinge degree: on the case side the continuous hinge product, the categorical subsets, the Legendre product (E19) and the
-/// directional hinge (E36), on the output side the functional hinge product. <see cref="BassBasis"/> composes a term's column from
-/// them in this order, and <see cref="BassMoments"/> its factors. A term without a part leaves the column as it is, so a hinge
-/// term's column is the same bits with the Legendre and directional kernels present.
+/// and hinge degree: on the case side the continuous hinge product, the categorical subsets, the Legendre product (E19), the
+/// directional hinge (E36) and a ridge block's column (E36's slice 3), on the output side the functional hinge product.
+/// <see cref="BassBasis"/> composes a term's column from them in this order, and <see cref="BassMoments"/> its factors. A term without a
+/// part leaves the column as it is, so a hinge term's column is the same bits with the Legendre and E36's kernels present.
 /// </summary>
 public sealed class DesignKernels
 {
@@ -28,7 +28,8 @@ public sealed class DesignKernels
             throw new ArgumentOutOfRangeException(nameof(normalization), $"No hinge normalization {normalization}.");
         Normalization = normalization;
         _continuous = new ContinuousHingeKernel(inputs, degree, normalization);
-        Case = [_continuous, new CategoricalSubsetKernel(inputs), new LegendreProductKernel(inputs), new DirectionalHingeKernel(inputs, degree, normalization)];
+        Case = [_continuous, new CategoricalSubsetKernel(inputs), new LegendreProductKernel(inputs), new DirectionalHingeKernel(inputs, degree, normalization),
+                new RidgeColumnKernel(inputs)];
         Output = [new FunctionalHingeKernel(inputs, degree, normalization)];
     }
 
@@ -36,7 +37,7 @@ public sealed class DesignKernels
     public HingeNormalization Normalization { get; }
 
     /// <summary>Whether every part of <paramref name="term"/> is a product of one-variable factors the moment service integrates
-    /// (<see cref="IDesignKernel{TPoints}.Separable"/>): false for a term holding a directional hinge.</summary>
+    /// (<see cref="IDesignKernel{TPoints}.Separable"/>): false for a term holding a directional hinge or a ridge block's column.</summary>
     public bool Separable(BassTerm term)
     {
         ArgumentNullException.ThrowIfNull(term);
@@ -406,6 +407,64 @@ internal sealed class DirectionalHingeKernel(BassInputs inputs, int degree, Hing
             for (int i = 0; i < projection.Length; i++) projection[i] += w * (a + b * u[i]);
         }
     }
+}
+
+// A ridge block's column b_ℓ(θᵀz | t) on the case side (E36's slice 3; RidgeColumn), z the standardized continuous predictors read from
+// their scaled values as the directional hinge reads them, through the same projection. The column is the paper's, unnormalized: the
+// configurations a ridge basis serves read no column's scale. One projection reads every variable of θ, so the part has no separable
+// factors: Factors refuses, and the moment service with it. A derivative in u_v is b_ℓ′ on the projection times θ_v·b_v.
+internal sealed class RidgeColumnKernel(BassInputs inputs) : IDesignKernel<CaseInputs>
+{
+    public bool Reads(BassTerm term) => term.Ridge is not null;
+
+    public bool Differentiable => true;
+
+    public bool Separable(BassTerm term) => term.Ridge is null;
+
+    public bool ReadsVariable(BassTerm term, int variable) => term.Ridge is { } r && r.Direction.WeightOn(variable) != 0.0;
+
+    public void Validate(BassTerm term)
+    {
+        if (term.Ridge is not { } r) return;
+        foreach (int v in r.Direction.Variables)
+        {
+            if (v >= inputs.Cases.ContinuousCount) throw new ArgumentException($"Continuous variable {v} does not exist.", nameof(term));
+            if (inputs.Standardizing(v) is null)
+                throw new ArgumentException($"Continuous variable {v}'s scale carries no standardization, the metric a ridge block reads; fit the transform from the data.", nameof(term));
+        }
+    }
+
+    public void Multiply(BassTerm term, CaseInputs at, Span<double> column)
+    {
+        if (term.Ridge is not { } r) return;
+        double[] projection = new double[at.Cases];
+        DirectionalHingeKernel.Project(r.Direction, inputs, at, projection);
+        for (int i = 0; i < column.Length; i++) column[i] *= r.Value(projection[i]);
+    }
+
+    public void MultiplyDerivative(BassTerm term, int variable, CaseInputs at, Span<double> column)
+    {
+        if (variable < 0) throw new ArgumentOutOfRangeException(nameof(variable));
+        if (!ReadsVariable(term, variable))
+        {
+            column.Clear();
+            return;
+        }
+        RidgeColumn r = term.Ridge!;
+        double slope = r.Direction.WeightOn(variable) * inputs.Standardizing(variable)!.Value.Slope;
+        double[] projection = new double[at.Cases];
+        DirectionalHingeKernel.Project(r.Direction, inputs, at, projection);
+        for (int i = 0; i < column.Length; i++) column[i] *= r.Derivative(projection[i]) * slope;
+    }
+
+    public double Scale(BassTerm term) => 1.0;
+
+    public IReadOnlyList<DesignFactor> Factors(BassTerm term, ProductMeasure measure)
+        => term.Ridge is null
+            ? []
+            : throw new NotSupportedException($"Term {term} is a ridge block's column, which reads several inputs through one projection and so has no "
+                                              + "one-variable factors: the moment service, which Sobol indices, effects and E8's exact route read, cannot "
+                                              + "integrate it. E8 reads its C on the sampled route.");
 }
 
 // The categorical predictors' subset indicators Πₗ 1(zₗ ∈ Dₗ), on the case side: values 0 or 1, with no derivative.

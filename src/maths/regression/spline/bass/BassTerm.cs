@@ -104,13 +104,15 @@ public sealed class BassTerm : IEquatable<BassTerm>
     private readonly CategoricalFactor[] _categorical;
     private readonly LegendreFactor[] _legendre;
     private readonly DirectionalHinge? _directional;
+    private readonly RidgeColumn? _ridge;
     private readonly int _hash;
 
-    /// <summary>The term with these factors, in any order. A <paramref name="directional"/> hinge takes the case side alone: its
-    /// product with hinge, Legendre or categorical factors is no term type here (E36's decisions 6 and 7).</summary>
+    /// <summary>The term with these factors, in any order. A <paramref name="directional"/> hinge, or a ridge block's column
+    /// <paramref name="ridge"/>, takes the case side alone: its product with hinge, Legendre or categorical factors, or with the other, is no
+    /// term type here (E36's decisions 6 and 7).</summary>
     public BassTerm(IEnumerable<HingeFactor>? continuous = null, IEnumerable<CategoricalFactor>? categorical = null,
                     IEnumerable<HingeFactor>? functional = null, IEnumerable<LegendreFactor>? legendre = null,
-                    DirectionalHinge? directional = null)
+                    DirectionalHinge? directional = null, RidgeColumn? ridge = null)
     {
         _continuous = Hinges(continuous, "continuous");
         _functional = Hinges(functional, "functional");
@@ -125,7 +127,10 @@ public sealed class BassTerm : IEquatable<BassTerm>
         _directional = directional;
         if (directional is not null && _continuous.Length + _categorical.Length + _legendre.Length > 0)
             throw new ArgumentException("A directional hinge takes the case side alone; its product with hinge, Legendre or categorical factors is no term type here.", nameof(directional));
-        if (_continuous.Length + _categorical.Length + _functional.Length + _legendre.Length == 0 && directional is null)
+        _ridge = ridge;
+        if (ridge is not null && (_continuous.Length + _categorical.Length + _legendre.Length > 0 || directional is not null))
+            throw new ArgumentException("A ridge block's column takes the case side alone; its product with any other case-side factor is no term type here.", nameof(ridge));
+        if (_continuous.Length + _categorical.Length + _functional.Length + _legendre.Length == 0 && directional is null && ridge is null)
             throw new ArgumentException("A term needs a factor; the intercept is not a term.");
 
         var hash = new HashCode();
@@ -143,6 +148,11 @@ public sealed class BassTerm : IEquatable<BassTerm>
         {
             hash.Add(-4);
             hash.Add(_directional);
+        }
+        if (_ridge is not null)   // likewise
+        {
+            hash.Add(-5);
+            hash.Add(_ridge);
         }
         _hash = hash.ToHashCode();
     }
@@ -190,6 +200,9 @@ public sealed class BassTerm : IEquatable<BassTerm>
     /// <summary>The directional hinge (E36), or null for a term without one.</summary>
     public DirectionalHinge? Directional => _directional;
 
+    /// <summary>The ridge block's column (E36's slice 3), or null for a term without one.</summary>
+    public RidgeColumn? Ridge => _ridge;
+
     /// <summary>The Legendre part's degree d, the sum of its factors' α; 0 for a term without one.</summary>
     public int LegendreDegree
     {
@@ -206,7 +219,7 @@ public sealed class BassTerm : IEquatable<BassTerm>
         => other is not null && (ReferenceEquals(this, other)
             || (_hash == other._hash && _continuous.AsSpan().SequenceEqual(other._continuous)
                 && _functional.AsSpan().SequenceEqual(other._functional) && _legendre.AsSpan().SequenceEqual(other._legendre)
-                && _categorical.SequenceEqual(other._categorical) && Equals(_directional, other._directional)));
+                && _categorical.SequenceEqual(other._categorical) && Equals(_directional, other._directional) && Equals(_ridge, other._ridge)));
 
     /// <inheritdoc/>
     public override bool Equals(object? obj) => Equals(obj as BassTerm);
@@ -221,6 +234,7 @@ public sealed class BassTerm : IEquatable<BassTerm>
         parts.AddRange(_continuous.Select(h => $"x{h.Variable}{(h.Sign > 0 ? '+' : '−')}k{h.Knot}"));
         parts.AddRange(_categorical.Select(c => c.ToString()));
         if (_directional is not null) parts.Add(_directional.ToString());
+        if (_ridge is not null) parts.Add(_ridge.ToString());
         parts.AddRange(_functional.Select(h => $"t{h.Variable}{(h.Sign > 0 ? '+' : '−')}k{h.Knot}"));
         parts.AddRange(_legendre.Select(f => $"ψ{f.Degree}(x{f.Variable})"));
         return string.Join(" · ", parts);
