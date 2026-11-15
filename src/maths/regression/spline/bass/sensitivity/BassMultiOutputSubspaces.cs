@@ -9,6 +9,7 @@ internal static partial class BassActiveSubspaces
     internal static CoActiveAnalysis MultiOutput(BassFit fit, BassData data, CoActiveSpec spec)
     {
         ArgumentNullException.ThrowIfNull(spec);
+        NamedPairLocations(spec);
         if (spec.OtherDraws is not null) throw new ArgumentException("Two outputs of one fit pair each draw with itself.", nameof(spec));
         double[] a = BassMultiOutput.Functional(data.Response.Outputs, spec.Output ?? throw new ArgumentException("The first output functional is required.", nameof(spec)));
         double[] b = BassMultiOutput.Functional(data.Response.Outputs, spec.OtherOutput ?? throw new ArgumentException("The second output functional is required.", nameof(spec)));
