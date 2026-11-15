@@ -211,6 +211,67 @@ Decided by the user on 2026-11-14, as a distributions change of its own. It come
 
 Newest first. Each gives the commits, the gates' results, defects found, decisions for the user and "Doc changes owed".
 
+### 2026-11-15 — Slice 9: in progress, the qualification
+
+**The reference: ln B(a, b) to 400 digits, outside the engine.** No code has changed.
+- It runs in Python's `decimal`:
+  - ln Γ by the upward recurrence to x ≥ 40, then Stirling's series with exact Bernoulli numbers (`fractions`);
+  - π by Machin's formula;
+  - each double input read exactly, so the reference is ln B of the exact binary values.
+- *Checked against closed forms,* each to 10⁻⁹⁵ or better: ln Γ(1), ln Γ(2), ln Γ(½) = ln √π, ln 49!, ln 99999!, ln B(½, ½) = ln π, ln B(x, 1) = −ln x at x = 10¹⁶ and 10³⁰⁰, and ln B(3, 4).
+- *Why not a library:* mpmath, Rmpfr and sympy are not installed here, and installing one is a download, so I did not.
+- Probe and reference are in `artifacts/chip-defects/slice9/`.
+
+**The forms read.** In each, l is the larger shape and s the smaller.
+- *Today's:* ln Γ(a) + ln Γ(b) − ln Γ(a + b).
+- *The ratio form:* ln Γ(s) − `LogGammaRatio`(l, s).
+- *R's `lbeta` arrangement, for both shapes at least 10* (p = s, q = l): −½·ln q + ½·ln 2π + μ(p) + μ(q) − μ(p + q) + (p − ½)·ln(p/(p + q)) + q·log1p(−p/(p + q)).
+  - μ is Stirling's correction, ln Γ(x) − (x − ½)·ln x + x − ½·ln 2π, taken to eight terms in the probe.
+  - No two values of size a·ln a cancel in it.
+
+**The table.** 2428 points: 28 chosen, and 300 per regime from seed 20261114. Each cell is the worst |error| / max(1, |ln B|).
+
+| Regime | Today's | Ratio | Ratio; R's form where both ≥ 10 |
+|---|---|---|---|
+| balanced, 10⁻¹² to 1 | 1.9e-15 | 1.5e-15 | 1.5e-15 |
+| balanced, 1 to 10³ | 3.1e-15 | 1.7e-15 | 1.7e-15 |
+| balanced, 10³ to 10¹⁵ | 2.3e-14 | 6.5e-15 | 2.8e-16 |
+| balanced, 10¹⁵ to 10³⁰⁰ | 2.8e-13 | 1.2e-13 | 2.5e-16 |
+| both small, s 10⁻¹² to 10⁻², l from s to 1 | 5.0e-16 | 3.7e-16 | 3.7e-16 |
+| unequal, s < 1, l 1 to 10³⁰⁰ | 1 (returns 0) | 1.2e-15 | 1.2e-15 |
+| unequal, s 1 to 10³, l/s 10 to 10⁶ | 5.0e-10 | 5.2e-16 | 3.3e-16 |
+| unequal, s 1 to 10⁶, l 10¹⁰ to 10³⁰⁰ | 1 (returns 0) | 2.5e-16 | 3.6e-16 |
+
+**Where each holds its digits.**
+- *Today's form.*
+  - It holds about 3·10⁻¹⁵ while both shapes are under 10³ and comparable.
+  - Unequal shapes cost it digits as l/s grows: 5·10⁻¹⁰ at l/s = 10⁶, 4.7·10⁻⁹ at (10⁸, 3), 3.6·10⁻⁶ at (10¹⁰, ½).
+  - Past l/s ≈ 10¹⁶ it returns 0: ln B(10¹⁶, 1) = 0, ln B(10³⁰⁰, 1) = 0.
+  - Balanced shapes cost it digits as they grow: 2.3·10⁻¹⁴ to 10¹⁵, 2.8·10⁻¹³ at 10²⁴⁶.
+- *The ratio form.*
+  - It holds 1.2·10⁻¹⁵ at every unequal and small case read: ln B(10¹⁶, 1) to 9·10⁻¹⁷, ln B(10⁵, 1) to 1.7·10⁻¹⁶.
+  - **It loses digits in balanced large shapes,** about as today's form does: 6.5·10⁻¹⁵ by 10¹⁵, 1.2·10⁻¹³ by 10¹⁹⁹.
+    - The cause is the same: ln Γ(s) and the ratio are each near s·ln s, and their difference near −(a + b)·ln 2.
+    - There both forms carry cancellation noise up to ~10⁻¹³, and which one is closer varies from point to point. The ratio form is the worse of the two by more than an ulp at 133 of the 2428 points, all of them balanced and above 10¹⁵. The worst: 1.2·10⁻¹³ against 1.4·10⁻¹⁴ at (1.16·10¹⁹⁹, 1.13·10¹⁹⁹).
+- *R's arrangement where both shapes are ≥ 10:* 2.8·10⁻¹⁶ or better at every such point read, balanced and unequal alike. Below 10 the ratio form holds.
+
+**Another finding: `LogGamma` below 5.6·10⁻³⁰⁹.**
+- For x < ½, `LogGamma` takes ln(π/sin(πx)) − ln Γ(1 − x), and π/sin(πx) ≈ 1/x overflows below about 5.6·10⁻³⁰⁹. So `LogGamma` is +∞ there.
+- So ln B(5·10⁻³²⁴, 1) is +∞ in every form, where its value is 744.44.
+- It is outside this slice's change and its files.
+
+**The decision before building.** The user's order says a regime where the ratio form loses digits goes back with the form that would hold them, so the build waits.
+1. **The ratio form alone, as decided.**
+   - It fixes every unequal case.
+   - In balanced large shapes it stays within 1.2·10⁻¹³, where today's form reaches 2.8·10⁻¹³.
+2. **The ratio form below 10, and R's arrangement where both shapes are ≥ 10.**
+   - It holds 2.8·10⁻¹⁶ there too.
+   - It changes `LogBeta` in the last bits at every pair of shapes both ≥ 10, so more pins may move.
+   - It needs a Stirling correction μ in `SpecialFunctions.cs` beside `LogBeta`.
+- In both, `GammaRatio.cs` is untouched.
+
+**Next.** The decision; then the existing pins run before any expectation changes.
+
 ### 2026-11-14 — Slice 8: three problems in the test tooling
 
 **Commits.**
