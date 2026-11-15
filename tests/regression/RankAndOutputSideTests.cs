@@ -434,7 +434,7 @@ public sealed class RankAndOutputSideTests(ITestOutputHelper output)
     /// <summary>
     /// On fitted draws under the uniform law, asked: no violation for a scalar fit, a direct functional fit under a full W_y and a basis
     /// fit. By default it is not asked, and nothing is read. Asked where it does not apply (a categorical input, a law with no Poincaré
-    /// constant here, a joint sample), it is not applicable.
+    /// constant, the empirical marginal since slice 8 gave mixtures one, a joint sample), it is not applicable.
     /// </summary>
     [Fact]
     public void MatrixPoincare_HoldsOnFittedDraws()
@@ -467,7 +467,7 @@ public sealed class RankAndOutputSideTests(ITestOutputHelper output)
         foreach (ActiveSubspaceAnalysis na in new[]
         {
             SensitivityFixture.FitScalar(1).ActiveSubspace(SensitivityFixture.Scalar(), new ActiveSubspaceSpec { MatrixPoincare = true }),
-            f.ActiveSubspace(df, new ActiveSubspaceSpec { MatrixPoincare = true, Measures = new Dictionary<string, InputMeasure> { ["x0"] = new MixtureMeasure([new NormalComponent(0.5, 0.3, 0.1), new NormalComponent(0.5, 0.7, 0.1)]) } }),
+            f.ActiveSubspace(df, new ActiveSubspaceSpec { MatrixPoincare = true, Measures = new Dictionary<string, InputMeasure> { ["x0"] = new EmpiricalMeasure() } }),
             f.ActiveSubspace(df, new ActiveSubspaceSpec { MatrixPoincare = true, Sample = sample }),
         })
         {

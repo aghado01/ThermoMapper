@@ -20,7 +20,7 @@ namespace Maths.Regression.Tests;
 /// quadrature of the gradient readout there, the routes agree, and what is refused;</item>
 /// <item>the matrix check's Gram cache is pure: every draw's ratio the same bits read alone or among the others;</item>
 /// <item>Poincaré constants for truncated normals: the smaller of σ² and (b − a)²/π² taken, the Gaussian equality on a linear factor, a
-/// seeded sweep of the two cited bounds, no violation on fitted draws, and the laws with no constant;</item>
+/// seeded sweep of the two cited bounds, no violation on fitted draws, and the law with no constant, the empirical marginal;</item>
 /// <item>activity scores on known spectra and through the readout.</item>
 /// </list>
 /// </summary>
@@ -397,20 +397,16 @@ public sealed class ActiveSubspaceFollowUpTests(ITestOutputHelper output)
         return energy > 0.0 && variance > 1e-12 * m2 / mass ? variance / (constant * energy / mass) : double.NaN;
     }
 
-    /// <summary>Laws with no constant here leave both checks unread for that input: a mixture of two normals, a Student t component, the
-    /// empirical marginal. The matrix check, asked, is not applicable, and the per-input ratio is NaN.</summary>
+    /// <summary>The law with no constant leaves both checks unread for that input: the empirical marginal. The matrix check, asked, is
+    /// not applicable, and the per-input ratio is NaN. (Slice 8 gave a mixture of two normals and a Student t component the
+    /// finite-element constant, which <see cref="PoincareConstantsTests"/> checks.)</summary>
     [Fact]
     public void LawsWithoutAConstant_AreNotApplicable()
     {
         (BassData df, _) = CoActiveFixture.Data();
         (BassFit f, _) = CoActiveFixture.Fits();
         string x0 = f.Transform.Predictors[0].Name;
-        InputMeasure[] laws =
-        [
-            new MixtureMeasure([new NormalComponent(0.5, 0.3, 0.1), new NormalComponent(0.5, 0.7, 0.1)]),
-            new MixtureMeasure([new StudentComponent(1.0, 4.0, 0.5, 0.2)]),
-            new EmpiricalMeasure(),
-        ];
+        InputMeasure[] laws = [new EmpiricalMeasure()];
         foreach (InputMeasure law in laws)
         {
             ActiveSubspaceAnalysis a = f.ActiveSubspace(df, new ActiveSubspaceSpec { MatrixPoincare = true, Measures = new Dictionary<string, InputMeasure> { [x0] = law } });

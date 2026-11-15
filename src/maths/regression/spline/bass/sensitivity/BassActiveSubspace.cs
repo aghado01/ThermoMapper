@@ -155,13 +155,14 @@ internal static partial class BassActiveSubspaces
         }
         var posterior = SubspacePosterior.Of(draws, weights);
         PoincareCheck? poincare = null;
+        InputPoincareConstant[]? constants = forms is null ? null : Constants(frame);
         if (forms is not null)
         {
             // The Jacobi measure reads a scalar fit's coefficients; a fit of several outputs holds none.
             double[,]? jacobi = !functional && !named && LegendreOnBoxes(fit.Terms, pooled, frame, selected) ? Jacobi(fit, data, frame, selected) : null;
-            poincare = Poincare(frame, moments!, forms, cMetric, error, jacobi);
+            poincare = Poincare(frame, moments!, forms, cMetric, error, jacobi, constants!);
         }
-        (MatrixPoincareCheck? matrix, MatrixPoincareStatus status) = MatrixCheckIf(spec.MatrixPoincare, frame, moments, forms, hs, w);
+        (MatrixPoincareCheck? matrix, MatrixPoincareStatus status) = MatrixCheckIf(spec.MatrixPoincare, frame, moments, forms, hs, w, constants);
         var analysis = new ActiveSubspaceAnalysis(Array.AsReadOnly(frame.Names), Array.AsReadOnly(frame.Excluded), frame.Route, spec.Metric, frame.Map,
                                                   frame.Measure, PointCount(frame, spec.Points), posterior, error, poincare, Array.AsReadOnly(selected),
                                                   spec.Rank is null ? null : RankPosterior.Of(draws, weights, spec.Rank),
@@ -233,8 +234,9 @@ internal static partial class BassActiveSubspaces
         }
         double[] weights = [.. selected.Select(_ => 1.0)];
         var posterior = SubspacePosterior.Of(draws, weights);
-        PoincareCheck? poincare = forms is null ? null : Poincare(frame, moments!, forms, cMetric, error, null);
-        (MatrixPoincareCheck? matrix, MatrixPoincareStatus status) = MatrixCheckIf(spec.MatrixPoincare, frame, moments, forms, hs, w);
+        InputPoincareConstant[]? constants = forms is null ? null : Constants(frame);
+        PoincareCheck? poincare = forms is null ? null : Poincare(frame, moments!, forms, cMetric, error, null, constants!);
+        (MatrixPoincareCheck? matrix, MatrixPoincareStatus status) = MatrixCheckIf(spec.MatrixPoincare, frame, moments, forms, hs, w, constants);
         return new ActiveSubspaceAnalysis(Array.AsReadOnly(frame.Names), Array.AsReadOnly(frame.Excluded), frame.Route, spec.Metric, frame.Map,
                                           frame.Measure, PointCount(frame, spec.Points), posterior, error, poincare, Array.AsReadOnly(selected),
                                           spec.Rank is null ? null : RankPosterior.Of(draws, weights, spec.Rank),
@@ -378,20 +380,22 @@ internal static partial class BassActiveSubspaces
         }
     }
 
-    // The matrix check when asked and applicable (a product law, which gives the moment route's forms, of uniform laws over continuous
-    // inputs alone); otherwise its status says why it was not read.
+    // The matrix check when asked and applicable (a product law, which gives the moment route's forms, over continuous inputs alone,
+    // each with a finite constant); otherwise its status says why it was not read.
     private static (MatrixPoincareCheck? Check, MatrixPoincareStatus Status) MatrixCheckIf(bool asked, Frame frame, BassMoments? moments,
-                                                                                          (BassTerm[] Terms, double[,] M)[]? forms, double[][,]? hs, MetricRoots w)
+                                                                                          (BassTerm[] Terms, double[,] M)[]? forms, double[][,]? hs, MetricRoots w,
+                                                                                          InputPoincareConstant[]? constants)
     {
         if (!asked) return (null, MatrixPoincareStatus.NotAsked);
         if (forms is null) return (null, MatrixPoincareStatus.NotApplicable);
-        MatrixPoincareCheck? check = MatrixCheck(frame, moments!, forms, hs!, w.Range);
+        MatrixPoincareCheck? check = MatrixCheck(frame, moments!, forms, hs!, w.Range, constants!);
         return (check, check is null ? MatrixPoincareStatus.NotApplicable : MatrixPoincareStatus.Computed);
     }
 
-    // The matrix Poincaré check per draw under a product law over continuous inputs alone, each with a known Poincaré constant
-    // (PoincareConstant): Cov(Rf) = (RH)Σ_B(RH)ᵀ against E[RJ D JᵀRᵀ] = (RH)K_D(RH)ᵀ, R W_y's root, Σ_B the terms' covariances, K_D their gradients' Gram
-    // under D, the constants in box units. Σ_B and K_D depend on a draw's terms alone, which draws repeat, so they are kept per structure
+    // The matrix Poincaré check per draw under a product law over continuous inputs alone, each with a finite Poincaré constant
+    // (InputPoincareConstant.Of): Cov(Rf) = (RH)Σ_B(RH)ᵀ against E[RJ D JᵀRᵀ] = (RH)K_D(RH)ᵀ, R W_y's root, Σ_B the terms' covariances, K_D their gradients' Gram
+    // under D, the constants in box units. A finite-element constant lies under the law's by about its relative error, so the ratio's
+    // tolerance takes the largest of them beside rounding's 10⁻⁹ (slice 8). Σ_B and K_D depend on a draw's terms alone, which draws repeat, so they are kept per structure
     // within the readout up to a constant budget of values (slice 6): a pure cache, filled in draw order and never evicted, whose entries
     // are what a miss computes, so the ratios are the same bits whether a draw hits it or not.
     //
@@ -399,16 +403,20 @@ internal static partial class BassActiveSubspaces
     // when W_y is positive definite), and its ratio the pencil (Σ_B, K_D)'s over range(Mᵀ). When M has full column rank that is the whole
     // term space and the ratio is its structure's, kept with the structure's forms and read once; a rank-deficient draw's is read over its
     // own range(Mᵀ), as two such draws can share terms and differ.
-    private static MatrixPoincareCheck? MatrixCheck(Frame frame, BassMoments moments, (BassTerm[] Terms, double[,] M)[] forms, double[][,] hs, double[,]? range)
+    private static MatrixPoincareCheck? MatrixCheck(Frame frame, BassMoments moments, (BassTerm[] Terms, double[,] M)[] forms, double[][,] hs, double[,]? range,
+                                                    InputPoincareConstant[] constants)
     {
         if (frame.Inputs.Cases.CategoricalCount > 0) return null;
         int p = frame.P;
         var d = new double[p, p];
+        double grid = 0.0;
         for (int i = 0; i < p; i++)
         {
-            if (PoincareConstant(frame, i) is not { } constant) return null;
-            d[i, i] = constant;
+            if (!double.IsFinite(constants[i].Value)) return null;
+            d[i, i] = constants[i].Value;
+            grid = Math.Max(grid, constants[i].RelativeError);
         }
+        double tolerance = 1e-9 + grid;
         var pencils = new Dictionary<BassTerm[], TermPencil>(Structure.Instance);
         long kept = 0;
         var ratios = new double[forms.Length];
@@ -430,7 +438,7 @@ internal static partial class BassActiveSubspaces
             double[,]? q = MatrixPoincare.RowSpace(map);
             ratios[s] = q is null ? pencil.WholeSpace
                                   : MatrixPoincare.PencilRatio(MatrixPoincare.Restrict(pencil.Covariance, q), MatrixPoincare.Restrict(pencil.Bound, q));
-            if (!(ratios[s] <= 1.0 + 1e-9)) violations++;
+            if (!(ratios[s] <= 1.0 + tolerance)) violations++;
         }
         return new MatrixPoincareCheck(Array.AsReadOnly(ratios), violations);
     }
@@ -447,26 +455,10 @@ internal static partial class BassActiveSubspaces
         public double WholeSpace => _wholeSpace ??= MatrixPoincare.PencilRatio(Covariance, Bound);
     }
 
-    // Continuous predictor i's Poincaré constant in box units (slice 6), or null where none is known here: (b − a)²/π² for a uniform law
-    // on [a, b]; min(σ², (b − a)²/π²) for a normal N(μ, σ²) truncated to [a, b], a mixture of one normal component, which is log-concave
-    // with potential curvature 1/σ², so the Bakry–Émery bound σ² holds, and on an interval the weighted Payne–Weinberger bound (both cited
-    // from memory). A mixture of several components, a Student t and an empirical marginal have none here.
-    private static double? PoincareConstant(Frame frame, int i)
-    {
-        int v = frame.Variables[i];
-        ContinuousMeasure law = frame.Measure!.Continuous(v)!;
-        double interval = (law.Upper - law.Lower) * (law.Upper - law.Lower) / (Math.PI * Math.PI);
-        switch (frame.Measure.Declared[v])
-        {
-            case UniformMeasure:
-                return interval;
-            case MixtureMeasure { Components: [NormalComponent normal] }:
-                double sd = normal.Sd / frame.Widths[i];
-                return Math.Min(sd * sd, interval);
-            default:
-                return null;
-        }
-    }
+    // Each continuous predictor's Poincaré constant under the product law (InputPoincareConstant.Of), in the readout's order, read once
+    // per readout for both checks.
+    private static InputPoincareConstant[] Constants(Frame frame)
+        => [.. Enumerable.Range(0, frame.P).Select(i => InputPoincareConstant.Of(frame.Measure!, frame.Variables[i], frame.Widths[i]))];
 
     // Draws' term lists compared by their terms' identities: a fit's term table hands out one instance per term, so the draws of one
     // structure meet here; equal terms from other instances only miss.
@@ -1439,8 +1431,10 @@ internal static partial class BassActiveSubspaces
     // Poincaré per draw and continuous input with a known constant (a uniform law, or since slice 6 a truncated normal), from totals
     // Σ_ab M_ab·T_ab(v) over the term pairs' totals, the moment route's on either route; and SG-4(b) where the Jacobi measure is given.
     // C and its errors come in the metric, which a product law makes diagonal, so the box's C_vv is C_vv/L_vv².
+    // A finite-element constant's estimated relative error widens the tolerance by that share of the bound (slice 8); an infinite
+    // constant, from a density that underflows over part of its interval, bounds nothing and reads a ratio of 0.
     private static PoincareCheck Poincare(Frame frame, BassMoments moments, (BassTerm[] Terms, double[,] M)[] forms, double[][,] cMetric,
-                                          double[][,]? error, double[,]? jacobi)
+                                          double[][,]? error, double[,]? jacobi, InputPoincareConstant[] constants)
     {
         int draws = forms.Length, p = frame.P;
         var total = new double[draws, p];
@@ -1464,19 +1458,22 @@ internal static partial class BassActiveSubspaces
         int violations = 0;
         for (int i = 0; i < p; i++)
         {
-            double? known = PoincareConstant(frame, i);
-            double constant = known ?? double.NaN;
+            InputPoincareConstant known = constants[i];
+            bool checks = known.Kind != PoincareConstantKind.None, infinite = double.IsPositiveInfinity(known.Value);
+            double constant = known.Value;
             double toBox = 1.0 / (frame.L[i, i] * frame.L[i, i]);
             for (int d = 0; d < draws; d++)
             {
                 double t = total[d, i];
-                bound[d, i] = constant * cMetric[d][i, i] * toBox;
-                ratio[d, i] = known is not null ? (bound[d, i] > 0.0 ? t / bound[d, i] : (t > 0.0 ? double.PositiveInfinity : 0.0)) : double.NaN;
-                if (known is not null)
+                bound[d, i] = infinite ? double.PositiveInfinity : constant * cMetric[d][i, i] * toBox;
+                ratio[d, i] = checks ? (bound[d, i] > 0.0 ? t / bound[d, i] : (t > 0.0 ? double.PositiveInfinity : 0.0)) : double.NaN;
+                if (checks && !infinite)
                 {
-                    // Rounding on the exact route; three standard errors of the bound on the sampled route.
+                    // Rounding on the exact route; three standard errors of the bound on the sampled route; and a finite-element
+                    // constant's relative error.
                     double slack = error is null ? 1e-9 * Math.Max(Math.Abs(t), Math.Abs(bound[d, i]))
                                                  : 3.0 * constant * error[d][i, i] * toBox;
+                    slack += known.RelativeError * Math.Abs(bound[d, i]);
                     if (t > bound[d, i] + slack) violations++;
                 }
                 if (jacobi is not null)
@@ -1487,7 +1484,7 @@ internal static partial class BassActiveSubspaces
                 }
             }
         }
-        return new PoincareCheck(total, bound, ratio, jacobiRatio, violations);
+        return new PoincareCheck(total, bound, ratio, jacobiRatio, violations) { Constants = Array.AsReadOnly(constants) };
     }
 
     // The Jacobi measure per selected draw and continuous input, from a scalar Legendre fit's coefficients.

@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using Maths.Distributions;
 using Maths.LinAlg;
 using Maths.Regression.Subspaces;
 
@@ -119,19 +120,21 @@ public enum MatrixPoincareStatus
     /// <summary>Not asked: <see cref="ActiveSubspaceSpec.MatrixPoincare"/> is off, its default.</summary>
     NotAsked,
 
-    /// <summary>Asked, but the law is not a product over continuous inputs alone of laws with a Poincaré constant here: a uniform law,
-    /// or a truncated normal (<see cref="MatrixPoincareCheck"/>).</summary>
+    /// <summary>Asked, but the law is not a product over continuous inputs alone of laws with a finite Poincaré constant
+    /// (<see cref="MatrixPoincareCheck"/>): an empirical marginal has none (<see cref="PoincareConstantKind.None"/>), and a law whose
+    /// density underflows over part of its interval reads an infinite one.</summary>
     NotApplicable,
 }
 
 /// <summary>
 /// The matrix Poincaré check per draw (E8, slice 5): the largest generalized eigenvalue of the outputs' covariance Cov_ρ(f) against
 /// E[J D Jᵀ], D the inputs' Poincaré constants in box units, both under the output metric's root; at most 1 when Efron–Stein and each
-/// input's Poincaré inequality hold. Read from the moment route under a product law whose every input is continuous with a known
-/// constant (slice 6): (b − a)²/π² for a uniform law on [a, b]; min(σ², (b − a)²/π²) for a normal N(μ, σ²) truncated to [a, b], a
-/// mixture of one normal component, since it is log-concave with potential curvature 1/σ² (Bakry–Émery) on an interval (the weighted
-/// Payne–Weinberger bound), both cited from memory. A ratio above 1 + 10⁻⁹ is a violation, which is a defect. The term-pair Grams it
-/// reads are cached per structure within a readout (slice 6).
+/// input's Poincaré inequality hold. Read from the moment route under a product law whose every input is continuous with a finite
+/// constant (<see cref="InputPoincareConstant"/>): (b − a)²/π² for a uniform law on [a, b]; min(σ², (b − a)²/π²) for a normal
+/// N(μ, σ²) truncated to [a, b], a mixture of one normal component, since it is log-concave with potential curvature 1/σ² (Bakry–Émery)
+/// on an interval (the weighted Payne–Weinberger bound), both cited from memory (slice 6); and since slice 8 the finite-element
+/// constant for other mixtures and Student t components. A ratio above 1 + 10⁻⁹, plus the largest finite-element constant's estimated
+/// relative error, is a violation, which is a defect. The term-pair Grams it reads are cached per structure within a readout (slice 6).
 /// </summary>
 /// <param name="Ratios">Each draw's ratio.</param>
 /// <param name="Violations">The ratios above one beyond rounding.</param>
@@ -233,17 +236,82 @@ public sealed record CoActiveError(double[,] Cf, double[,] Cg, double[,] Cfg);
 
 /// <summary>
 /// Decision 6's per-draw consistency checks, reported and not enforced, for each draw and continuous predictor in the readout's
-/// order. Poincaré on a uniform input on [a, b]: total(v) ≤ ((b − a)²/π²)·C_vv in box units, and since slice 6 on a normal truncated to
-/// [a, b] with min(σ², (b − a)²/π²) as the constant (<see cref="MatrixPoincareCheck"/>); NaN where no constant is known here; for a functional fit, with W_y = RᵀR, total(v) is Σ_r of the outputs Ry's totals, which each meet it, so the sum meets
+/// order. Poincaré: total(v) ≤ C_P(v)·C_vv in box units, C_P(v) the input's constant (<see cref="Constants"/>): (b − a)²/π² on a uniform
+/// input on [a, b]; since slice 6 min(σ², (b − a)²/π²) on a normal truncated to [a, b] (<see cref="MatrixPoincareCheck"/>); since
+/// slice 8 the finite-element constant on other mixtures and Student t components; NaN for an empirical marginal, which has none. For a
+/// functional fit, with W_y = RᵀR, total(v) is Σ_r of the outputs Ry's totals, which each meet it, so the sum meets
 /// C = E[JᵀW_yJ]'s. On a scalar Legendre fit under the product uniform law on the boxes, SG-4(b)'s total(v) ≤ ½·E[x_v(1 − x_v)(∂_v f)²]
-/// as well. A ratio above one beyond rounding, or beyond three Monte Carlo errors on the sampled route, is a violation, which is a defect.
+/// as well. A ratio above one beyond rounding, or beyond three Monte Carlo errors on the sampled route, and beyond a finite-element
+/// constant's estimated relative error, is a violation, which is a defect.
 /// </summary>
 /// <param name="Total">total(v), the input's unnormalized total variance, per draw (the moment route's, under W_y for a functional fit).</param>
 /// <param name="Bound">The Poincaré bound per draw.</param>
 /// <param name="Ratio">Total over Bound.</param>
 /// <param name="JacobiRatio">Total over ½·the Jacobi measure, for a Legendre fit under the product uniform law; null otherwise.</param>
 /// <param name="Violations">The ratios above one beyond their tolerance.</param>
-public sealed record PoincareCheck(double[,] Total, double[,] Bound, double[,] Ratio, double[,]? JacobiRatio, int Violations);
+public sealed record PoincareCheck(double[,] Total, double[,] Bound, double[,] Ratio, double[,]? JacobiRatio, int Violations)
+{
+    /// <summary>Each continuous predictor's constant, in the readout's order, and how it was read (slice 8).</summary>
+    public IReadOnlyList<InputPoincareConstant>? Constants { get; init; }
+}
+
+/// <summary>How an input's Poincaré constant was read (E8, slice 8).</summary>
+public enum PoincareConstantKind
+{
+    /// <summary>The law's constant in closed form: (b − a)²/π² for a uniform law on [a, b].</summary>
+    Exact,
+
+    /// <summary>A closed bound above the law's constant: min(σ², (b − a)²/π²) for a normal truncated to [a, b] (slice 6).</summary>
+    Bound,
+
+    /// <summary>The finite-element constant (<see cref="Maths.Distributions.IntervalPoincare"/>), under the law's by about its
+    /// estimated relative error: a mixture of several components, or of Student t components, which need not be log-concave.</summary>
+    Numerical,
+
+    /// <summary>None exists: an empirical marginal's atoms let a function change between training values with zero derivative on the
+    /// support. The input is left unchecked.</summary>
+    None,
+}
+
+/// <summary>
+/// One continuous input's Poincaré constant in box units (E8, slice 8), the least C with Var(f) ≤ C·E[f′²] under its law, or a bound
+/// above it.
+/// </summary>
+/// <param name="Value">The constant; NaN under <see cref="PoincareConstantKind.None"/>; +∞ where a numerical law's density underflows
+/// over part of its interval.</param>
+/// <param name="Kind">How it was read.</param>
+/// <param name="Elements">The finite-element grid's elements; 0 otherwise.</param>
+/// <param name="RelativeError">The finite-element constant's estimated relative error; 0 otherwise.</param>
+public sealed record InputPoincareConstant(double Value, PoincareConstantKind Kind, int Elements, double RelativeError)
+{
+    /// <summary>
+    /// Continuous variable <paramref name="variable"/>'s constant under <paramref name="measure"/>, in box units, its box
+    /// <paramref name="width"/> wide in the input's own units: (b − a)²/π² for a uniform law on [a, b]; min(σ², (b − a)²/π²) for a normal
+    /// N(μ, σ²) truncated to [a, b], a mixture of one normal component, which is log-concave with potential curvature 1/σ², so the
+    /// Bakry–Émery bound σ² holds, and on an interval the weighted Payne–Weinberger bound (both cited from memory; slice 6); the
+    /// finite-element constant (<see cref="IntervalPoincare"/>) for other mixtures and Student t components, which need not be
+    /// log-concave, each truncated to a bounded interval where its density is bounded away from zero, so a constant exists (slice 8);
+    /// none for an empirical marginal. It reads the measure alone, so any route's totals can be checked against it.
+    /// </summary>
+    internal static InputPoincareConstant Of(ProductMeasure measure, int variable, double width)
+    {
+        ContinuousMeasure law = measure.Continuous(variable) ?? throw new ArgumentException($"Variable {variable} is not continuous.", nameof(variable));
+        double interval = (law.Upper - law.Lower) * (law.Upper - law.Lower) / (Math.PI * Math.PI);
+        switch (measure.Declared[variable])
+        {
+            case UniformMeasure:
+                return new InputPoincareConstant(interval, PoincareConstantKind.Exact, 0, 0.0);
+            case MixtureMeasure { Components: [NormalComponent normal] }:
+                double sd = normal.Sd / width;
+                return new InputPoincareConstant(Math.Min(sd * sd, interval), PoincareConstantKind.Bound, 0, 0.0);
+            case MixtureMeasure:
+                IntervalPoincare numerical = IntervalPoincare.Of(((IContinuousDistribution)law.Measure).LogPdf, law.Lower, law.Upper);
+                return new InputPoincareConstant(numerical.Constant, PoincareConstantKind.Numerical, numerical.Elements, numerical.RelativeError);
+            default:
+                return new InputPoincareConstant(double.NaN, PoincareConstantKind.None, 0, 0.0);
+        }
+    }
+}
 
 /// <summary>
 /// E8's readout (<see cref="BassFit.ActiveSubspace"/>): the active subspaces of a fit's draws under a law, in a declared metric.
