@@ -1,0 +1,4 @@
+src/maths/regression/conformal/DensityRatio.cs
+src/maths/regression/conformal/ScoreMixture.cs
+tests/regression/DensityRatioTests.cs
+tests/regression/ScoreMixtureTests.cs
