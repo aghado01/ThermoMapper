@@ -35,6 +35,49 @@ As in the archived brief: each slice is reported here, then waits for the main s
 
 Newest first.
 
+### 2026-11-14 — Slice 17's follow-up: grid-free intervals for the residual scores
+
+Built at the user's pick (2026-11-14, "the grid thing from slice 17"), the third of slice 17's follow-ups. Sources read in TeX: RoBAS (arXiv 2607.04236v2), §3.4 with Algorithm 1 and the interval theorem, and Appendix's complexity note.
+
+**Landed** on `main`, nothing pushed:
+- `28993bb`: `ResidualShrinkage.Intervals`, with `ResidualInterval` and `ResidualIntervals`, and `ResidualIntervalTests`.
+- *Nothing existing changes:* `Prediction`, the grid form, is untouched.
+
+**What it computes.**
+- *The ends.* Each score's set is found without a grid, each end within a tolerance in the response's units (1e-8 by default). Each end is rounded outward, so the interval holds the exact set.
+- *Why each score's set is an interval.*
+  - Distance to origin: at every n, the set is the centre ± the k-th largest |r|.
+  - Distance to average: at every n. Each unit's acceptance is |m·rᵢ − S − z| ≥ |n·z − S|, an interval in z about the calibration mean S/n, and the k-fold cover of intervals sharing a point is an interval.
+  - RoBAS-EB: for n ≥ 4, by their interval theorem. Below it, a level above 0 is refused, pointing to the grid form.
+- *The search.*
+  - Their Algorithm 1 starts from an approximate maximiser of the p-value, found by bracketed search. Here it starts from the candidate residual whose own score is 0: â·r̄ over the calibration residuals alone, which is 0 for distance to origin and r̄ for distance to average. That point is accepted, since the candidate's ties count for it and k ≤ n.
+  - From there each side doubles a step until a candidate is refused. That happens since the candidate's score grows as |z| and each other's as |z|/n.
+  - Each side then bisects to the tolerance, `ConformalBisection.Narrow` as the split predictive distribution's ends use it. Each case costs about 2·log₂(range/tolerance) evaluations of O(n). The set is the same for every case up to the centre f(x), so it is found once per call.
+- *Readouts.* CB-1's coverage 1 − k/m. As a full-conformal set it reports no training-conditional law.
+
+**Gates.**
+- *Against the grid form* (n 19, 49, 99, mean shifts 0 and 1.5, all three scores, a grid of step 0.001 over [−8, 8]):
+  - the grid's accepted values form one interval, and they all lie inside [L, U];
+  - each end lies within the tolerance of the grid's first refused value beyond it;
+  - read on both sides of each end at tolerance 1e-9, the end itself is refused and two tolerances inside is accepted.
+- *Distance to origin's closed form:* the ends are the centre ± the 6th largest |r| at m 60, to within 1e-10.
+- *Coverage under a mean shift* (residuals N(1.5, 1), 49 calibration units, 2,000 replications, α 0.1, se 0.0067):
+
+  | Score | Coverage | Mean width |
+  |---|---|---|
+  | distance to origin | 0.9035 | 5.640 |
+  | distance to average | 0.9065 | 3.397 |
+  | RoBAS-EB | 0.9045 | 3.398 |
+
+- *The whole line* at k = 0.
+- *Refused:* RoBAS-EB at n 3 with a level above 0 (distance to average serves there); a tolerance of 0; a nonfinite residual or centre, at any level; an undefined score.
+- *Neighbours:* slice 17's `ScoresBeyondTheModelTests` pass unchanged.
+- *Per commit,* the selected classes and the pinned tier: ResidualIntervalTests and ScoresBeyondTheModelTests, the classes reading the file, with the pinned tier: Maths.Regression.Tests 52 of 52; Maths.Oracle.Tests compiles the file and selects no class; Maths.Samplers.Tests compiles neither file.
+
+**Defects found: none.**
+
+**Doc changes owed:** the scores-beyond-the-model section: the grid-free intervals, why each score's set is an interval, the zero-score start against their maximiser, the gates' numbers, and the API rows for `Intervals`, `ResidualInterval` and `ResidualIntervals`.
+
 ### 2026-11-14 — Closed: an exact law for the asymmetric interval
 
 Closed at the user's word (2026-11-14, "close it and record the finding and point the docstring"). The miscoverage bound's second follow-up is not built.
