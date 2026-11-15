@@ -108,6 +108,137 @@ One commit per concern; tests with the code they test; each slice ends with its 
 - A commit that touches shared code names in its report every test project that `scripts/test-select.ps1` selects for it, read from disk, with each one's count.
 - After each slice, report to the main session and wait for its verification note before starting the next. For this chip "the main session" is the second coordinating session (the [handoff](../coordination-handoff-2026-11-11.md#sessions)'s Sessions table), which verifies each slice from a clean archive. `artifacts/verify-main` is the coordinators' workspace; leave it alone.
 
+## Slices 5 and 6: categorical inputs and mixed bases (draft for the user)
+
+The user chose these as E36's next work, decision 7's and decision 6's later steps. This is a design for review, and nothing is built until it is approved. Decisions marked **open** go at their recommendation unless the user turns them. Each line says what the other outcome would change.
+
+### Slice 5: categorical inputs, BASS's subset factors multiplying a ridge
+
+**Refused today.**
+- `BassResolved.cs:316` refuses categorical predictors in a directional fit (decision 7).
+- `BassTerm`'s constructor (`BassTerm.cs:129`, `:132`) refuses a directional hinge or a ridge column beside any other case-side factor.
+- `DirectionalTermSpace.Validate` refuses any part but a direction.
+- The directional prior (`BassStructurePrior`) holds the directional part alone.
+
+**The design** (decision 7's direction, at its recommendation). A term is a direction part times a categorical part: Π_v 1{c_v ∈ S_v} · b(θᵀz | t), with the subsets drawn from BASS's subset measure.
+- *The kernels already compose this.* A column is the product of every case kernel's part (`BassBasis.CaseColumn`). The categorical kernel reads no continuous variable, so the derivative's product rule holds (`BassBasis.CaseDerivative`).
+- *Ridge blocks:* the categorical part multiplies all K columns of a block, which stays one structural unit.
+- *The prior:* BASS's term measure over two parts. Each part's order is uniform up to its cap, A for the direction and BASS's `MaxCategoricalInteraction` (3) for the categories. The variables are a uniform subset of that size, and the subsets come from `CategoricalSubsets` (R's size-uniform). A draw with both parts empty is the intercept and lies outside F, as in BASS's several-part fits.
+- *The moves:*
+  - A birth draws both parts' orders and variables by D01's law under each part's counts, then θ, the knot and the subsets from their priors.
+  - A death is slice 2's.
+  - A change on a term holding both parts picks one of them with probability ½. On the direction it is E36's change (power spherical, or the fair coin at a = 1). On a categorical factor it is D01's redraw from the subset measure.
+  - Every move accepts on the collapsed likelihood ratio and the count and order terms, as now.
+- *The paper's dummy coding, not taken.* It appends L − 1 dummies to x, so they enter θ. A ridge whose 𝒥 holds only dummies becomes β(1 − Π(1 − d_ℓ)), an indicator of at least one of its categories (the paper's eq. (cat_ridge)).
+  - *What it gives that subsets do not:* a category-dependent shift of one ridge's argument, g(θᵀz + Σθ_ℓd_ℓ), so categories share a curve's shape with moved knots. It also gives a union across several categorical variables, and parity with `BayesPPR`.
+  - *Its costs:* the ridge is no longer separable in the category, so sensitivity and E8 cannot sum the categories exactly. The dropped reference level changes the prior. And the dummies' scale enters the sphere θ is uniform on (decision 3's metric).
+  - *What subsets give instead:* separability in the category, BASS's validated subset law, and a pure categorical term (an empty direction) that equals the paper's indicator ridge for one variable.
+
+**Decisions for the user.**
+- **5a, the knot's range under a subset, open.**
+  - *Recommended:* t₀'s range and the ridge's quantile knots are read from the projections of the cases the term reaches (its cells), so about n_active of its own cases lie above U, and K + 1 knots exist where it is nonzero. The range is cached per (θ, subsets). A categorical change redraws the knot from its prior given the new cells, so the move still accepts on the likelihood ratio alone.
+  - *Alternative:* the range over all cases, BASS's own convention for a hinge beside a categorical factor. The knot's prior then ignores the subsets, and a categorical change keeps the knot. But a small subset leaves few of its cases above U, so the support count refuses many of its draws.
+- **5b, pure categorical terms, open.**
+  - *Recommended:* allowed (the direction's order may be 0), as BASS allows a categorical main effect. Under a ridge basis such a term is one column. Without it, a level's shift needs a ridge.
+  - *Alternative:* every term holds a direction, and categories only gate ridges.
+- **5c, the determinant prior beside categories, open.**
+  - *Recommended:* it reads directions alone, so one direction gated by two subsets has det 0 and no mass under the option. That is the option's stated belief, many distinct directions, which the report states.
+  - *Alternative:* a determinant within each set of terms sharing a cell, which no source proposes and which costs a cell bookkeeping.
+
+**Gates, slice 5.**
+- *Columns and knots:* gated columns and blocks against the indicator times slice 1's and slice 3's hand columns. Knots over the cells against R's type-7 quantile.
+- *The prior:* the term measure's log density by hand over both parts, and draws against it by χ².
+- *Moves and Geweke:* each move's ratio against a direct evaluation, gated and ungated terms with both kinds of change. Geweke's test with the prior alone, with categorical statistics.
+- *Recovery from outside the model:* a category-gated ridge, for example 1{c ∈ S}·exp(0.6x₁ + 0.8x₂) plus a level shift. E8's angle and the surface against BASS's hinges on the same data, and `BayesPPR`'s dummy coding read beside it as exploration.
+- *Readouts:*
+  - prediction and the gradient on gated terms by hand;
+  - the calibration emulator's split keeps a gated ridge's direction (below);
+  - the sampled sensitivity on a gated fit against a closed form.
+- *Fitting untouched.*
+
+### Slice 6: mixed bases, ridges beside BASS's hinge terms
+
+**Refused today.**
+- `BassConfig.cs:181` refuses a directional basis beside `Structure.Legendre`.
+- `Structure.Directional` replaces BASS's hinges outright: its prior holds no continuous hinge part, and `BassModel` builds E36's kernel alone.
+- `BassTermProposal`, D01's kernel, refuses a directional config by name (`BassModel.Proposal`).
+
+**The design** (E28's questions, answered for ridges beside hinge terms).
+- **6a, the label, open.**
+  - *Recommended:* one kind per term, a ridge (a direction with its categorical part) or a BASS hinge term (continuous hinges with theirs). The term measure is the mixture ρ·π_ridge + (1 − ρ)·π_hinge.
+  - *Per variable,* E28's middle: each continuous variable is labelled for ridges or for hinges, declared or drawn. It is simpler to read ("kinked in x₁, oblique in x₂, x₃"), but a ridge cannot then reach a hinge variable. A drawn label moves every term on that variable at once, which no move here makes. A declared one is cheap and could be an option over the recommendation.
+  - *Per part within a term* (a hinge on x₃ times a ridge on x₁, x₂): not recommended. The derivative's product rule assumes one kernel reads each variable, no source proposes it, and it multiplies the label space.
+  - *One fit per basis, compared by evidence* (E9; the ladder and SMC evidence exist): no new code, and it gives a choice between bases rather than a mixture. It is the cheapest answer, and a reading worth taking first whichever way 6a goes.
+- **6b, ρ's prior, open.**
+  - *Recommended:* ρ ~ Beta(1, 1) integrated, as λ is (D02). The collection weight gains B(1 + M_r, 1 + M_h)/B(1, 1), so the split between ridges and hinges is uniform at every M. That factor depends on the collection, so it sits in the terms' prior beside the determinant's coupling, and the target is unchanged.
+  - *Alternative:* ρ fixed at ½. That is a binomial on the split, which says that about half the terms are ridges, more firmly as M grows.
+- **6c, a ridge's least active count in a mixed fit, open.**
+  - *Recommended:* a ≥ 2. A ridge at a = 1 is an axis hinge on one variable, its knot continuous rather than at a data value. The two kinds then represent the same column, so the label is unidentified there, and D06 refuses near-duplicate pairs across kinds. Oblique directions are what ridges add.
+  - *Alternative:* a ≥ 1, the paper's own law.
+- **6d, the coefficient prior, open.**
+  - *Recommended:* the g-prior's forms only (Zellner–Siow, the g-form), which are unchanged by rescaling columns. Hinge columns are normalized to a maximum of one; ridge columns are the paper's, unnormalized. So a scale-sensitive form (E21's ridge, KHAOS's raw ridge) would shrink the two kinds unequally, and it is refused, as slice 3 refused the raw ridge at K ≥ 2.
+  - *Alternative:* a per-kernel scale (E21's standardization). It changes every fit's column scale under those forms, so it is its own decision.
+- **The moves.**
+  - A birth draws the kind with probability ½, then that kind's birth: D01's law under the hinge terms' counts, or E36's under the ridges' counts.
+  - A death is uniform over all terms, its ratio reading the dead term's kind.
+  - A change keeps the kind: D01's redraw for a hinge term, E36's change (or 5's categorical redraw) for a ridge. A term changes kind only by a death and a birth; the coefficients are integrated, so that needs no Jacobian.
+  - Local steps, the fixed-M family, and E4's history and residual births stay refused in a mixed fit at first, since each reads hinge terms alone.
+- **The counts and the count prior.** M = M_r + M_h feeds the count law, as now. Each kind's birth reads its own counts: D01's orders and appearances over hinge terms, E36's a and 𝒥 over ridges. The categorical part's counts are kept per kind. Every readout that counts terms reports M with M_r and M_h beside it.
+- **Mixing and identifiability.** One oblique effect can be one ridge or many hinge products, and the path between them crosses poor states: E28's multimodality, which tempering and SMC are for. f's functionals do not care which representation is drawn. The per-kind counts and inclusion readouts say less the freer the mix. Slice 3's finding stands: a settled chain holds M, so a mixed fit's default sampler is part of the mixing reading.
+
+**Gates, slice 6.**
+- *The prior:* the label's collection weight by hand, and the term measure's draws against it.
+- *Moves and Geweke:* each move's ratio across kinds against a direct evaluation. Geweke's test with the prior alone, with M_r, M_h and per-kind statistics.
+- *Blocks:* K-column ridge blocks beside one-column hinge terms, expanded and read back bit for bit.
+- *Recovery from outside the model:* an oblique ridge plus an axis effect, for example exp(0.6x₁ + 0.8x₂) + sin(2πx₃). The mixed fit against a ridge-only and a hinge-only fit, and the evidence comparison on the same data.
+- *Fitting untouched.*
+
+### How both meet what is built
+
+- **K-column ridge blocks.**
+  - `RidgeExpansion` expands every structure term today. Under slice 6 it expands ridge terms alone, and its read-back groups each ridge's K columns, leaving a hinge column as its own term.
+  - `BassDesign.Load` tells a draw's columns from structure terms by its first term's kind; that becomes per term.
+  - The column cap: K·M_max today; M_max on structure terms and N − 1 on columns, apart, under a mixed basis.
+  - Slice 3's refusal of `Structure.Degree` ≠ 1 at K ≥ 2 lifts in a mixed fit, where the hinges read it.
+- **The determinant prior.** It reads ridges' directions alone, with c at M_r. The cut of M's cap at p becomes the coupling's −∞ past M_r = p, since hinge terms are not capped by p. The prior sampler draws the kinds first, then M_r from its law over c.
+- **The fair coin** is unchanged, and under 6c's recommendation it never fires in a mixed fit.
+- **Admission.** D06 reads every column of both kinds; the support count reads a gated ridge's b₁ over its cells.
+- **The readouts.**
+  - *Prediction, the pointwise density and the conformal layer* read columns through the kernels, so they need nothing.
+  - *The gradient* holds by the one-kernel-per-variable rule, under 5's design and 6a's recommendation.
+  - *E8* takes its sampled route, since a ridge is not separable; its product law already carries categorical marginals.
+  - *The sampled sensitivity's whole-surface route* reads any fit. Its slice 4 split takes f_sep as the hinge terms and the pure categorical terms, exact from the moment service, and f_ns as the ridge terms. A gated ridge is separable between its categories and its direction, so its categorical sums can be exact inside the sampled part.
+  - `BassSensitivity.FromCoefficients` keeps refusing ridges.
+- **One defect slice 5 must fix.** The calibration emulator's split on categorical calibration parameters (`BassEmulators.cs:457`) rebuilds a term from its hinge, Legendre and functional parts, which would drop a gated ridge's direction. Slice 2 found it unreachable because a direction held no categorical factor; slice 5 makes it reachable.
+
+### The files that read a term's parts by kind
+
+| File | Today | Slice 5 | Slice 6 |
+| --- | --- | --- | --- |
+| `BassTerm.cs` | refuses a direction or ridge column beside another case-side part | allows categorical factors beside them | still refuses hinge × ridge in one term |
+| `BassConfig.cs` | refuses a directional basis beside Legendre; refuses local steps, the fixed-M family, history and residual births | — | declares a mixed basis; refuses scale-sensitive forms there; lifts the degree refusal at K ≥ 2 |
+| `BassResolved.cs` | refuses categorical predictors | resolves the categorical cap for a directional fit | caps per kind; the determinant's cut moves to the coupling |
+| `BassStructurePrior.cs` | the directional part alone | the categorical part beside it | both kinds, ρ's weight, the coupling over ridges |
+| `DirectionalTermSpace.cs` | refuses any other part; ranges per direction | ranges and knots per (θ, cells) | — |
+| `DirectionalTermProposal.cs` | directional births, deaths, changes | categorical draws and redraws | one kind of a mixed kernel |
+| `BassTermProposal.cs` | refuses a directional config | — | the hinge kind of the mixed kernel |
+| `BassModel.cs` | E36's kernel for a directional config | — | the mixed kernel; the expansion over ridges |
+| `RidgeExpansion.cs`, `BassDesign.cs` | every unit expanded; draw or units by the first term | the categorical factor on every column; b₁'s support over the cells | ridge units alone; per-term read-back; two caps |
+| `BassBasis.cs`, `DesignKernels.cs` | product of kernels; one kernel per variable for derivatives | nothing | nothing under 6a's recommendation |
+| `DirectionDeterminant.cs`, `BassPriorSampler.cs` | every term's direction; M from p(M)/c_M | — | ridges alone; kinds, then M_r |
+| `BassSweep.cs`, `BassTarget.cs` | the terms' prior; the count prior on structure terms | — | per-kind units; the label factor in the terms' prior |
+| `BassDiagnostics.cs` | the support tally by part and order | the categorical part's orders too | per kind |
+| `BassResidualBirth.cs`, `BassBirthMixture.cs`, `BassPriorPrecision.cs` | refused for a directional basis | refused | refused in a mixed fit |
+| `calibration/BassEmulators.cs` | drops a direction on a categorical split (unreachable) | keeps it (the defect above) | — |
+| `sensitivity/BassSensitivity.cs`, `BassActiveSubspace.cs`, `BassSampledSensitivity.cs` | refuse a ridge on the exact routes; the sampled routes read any fit | — | the split's f_sep and f_ns (its slice 4) |
+
+**Left out of both.**
+- The paper's dummy coding, and ridges times Legendre terms (KHAOS beside ridges).
+- Learned category positions (E29).
+- A direct functional response with ridges.
+- Per-part mixing.
+- History and residual births for ridges.
+
 ## Report
 
 Under "Reports" below, newest first, per slice: what landed by commit; the gates' numbers; decisions taken beyond this brief; what was left unbuilt and why; follow-ups with the decision each would change; the doc changes owed.
