@@ -1,0 +1,12 @@
+src/maths/regression/spline/bass/BassConfig.cs
+src/maths/regression/spline/bass/BassModel.cs
+src/maths/regression/spline/bass/BassResolved.cs
+src/maths/regression/spline/bass/BassStructurePrior.cs
+src/maths/regression/spline/bass/BassTermProposal.cs
+src/maths/regression/spline/bass/DesignKernels.cs
+src/maths/regression/spline/bass/DirectionalTermProposal.cs
+src/maths/regression/spline/bass/DirectionalTermSpace.cs
+src/maths/regression/spline/bass/sensitivity/BassSensitivity.cs
+tests/regression/DirectionalChainTests.cs
+tests/regression/DirectionalHingeTests.cs
+tests/regression/DirectionalRecoveryTests.cs

@@ -114,6 +114,20 @@ Under "Reports" below, newest first, per slice: what landed by commit; the gates
 
 ## Reports
 
+### Slice 2 verified from a clean archive, its Oracle selection to follow (coordinating session, 2026-11-15)
+
+- **Commit:** `1e7bbea`, on a snapshot of `31b612b`, through `scripts/verify-csharp.ps1` over its twelve changed files.
+- **Result:** Regression 2,698 of 2,698 at commit scope, the 32 directional cases among them. No other project but Oracle selects.
+- **Oracle, not yet run here.** Its selection (21 of 39 classes) goes in the pass that verifies the defects chip's oracle limits (`de7d0eb`, 500 s), so that a timeout there is not read as this slice's. The chip's own run: 104 of 105, the one failure `khaos_readouts_oracle.R` at the old 120 s, passing alone.
+- **Read, against Lean's line under decision 5 and the paper's TeX.**
+  - *The birth:* its proposal ratio carries one −ln(M + 1), the death's uniform choice, and the count law supplies the rest, so the count factor is (M + h₁)/((M + 1)(h₂ + 1)) and no further 1/(M + 1) enters. θ and the knot are drawn from their priors and cancel.
+  - *The death:* the dying term's birth under the counts without it.
+  - *The change:* the within-move ratio ln π(t | θ) − ln π(t\* | θ\*) is the proposal's, the power spherical law being symmetric and the coin fair; the prior's ratio cancels it, so the move accepts on the collapsed likelihood ratio alone.
+  - *The knot's range* is the paper's eq. (UL), read in its TeX: U = Q_q and L = U − (U − Q₀)/p₀. The report's reading of the p₀ sentence is right: under (UL), P(t > Q₀) = p₀.
+  - *The shared order and variable laws* were lifted out of `BassTermProposal` with their bodies unchanged.
+- **One point to state in slice 3's report.** The target is the prior restricted to directions with a knot range, not renormalized, so the count law is tilted by P(range)^M. Say what the Geweke test's prior sampler does with a draw that has no range, a rejection of the whole draw or the term dropped, and that it matches the chain's target. The two differ only at order ε = 0.14% under the integrated count law, below what the test reads.
+- **Receipts:** `artifacts/verify-bppr-s2-31b612b/`, with the changed list, the counters and the snapshot tracked in [receipts](../receipts/verify-bppr-s2-31b612b/).
+
 ### Slice 2: directions in the structure chain (2026-11-15)
 
 The coordinating session read slice 1's code with no defect and asked for slice 2's reading and design while its clean-archive run went on, with nothing of slice 2 committed before the verification note. Its note came at the end of the build: slice 1 verified from a clean archive at `e70447c` (above), with this list of eight files to close.
