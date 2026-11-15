@@ -101,7 +101,9 @@ Under "Reports" below, newest first, per slice: what landed by commit; the gates
 - *The request, shared by both routes:* `EffectRequest` (the effects asked for, or the default list of mains and the pairs some term holds; the grids; the cell budget) moved out of `Effects` and is called by both. It finds a term's variables through slice 1's `TermVariables`, so the default pairs come from a directional term's or a ridge column's active coordinates too. The exact route's code is otherwise as it was.
 - *The gates' cuts, in both slices' fit-level tallies:*
   - The bias cut is Bonferroni's at a family-wise level of 10⁻³ (`BiasCut`), so it grows with the cells read: 4.2 at 42 cells, 5.2 at 6,000.
-  - The pooled spread of z is held within [0.85, 1.15]. The cells of one seed share its points, so that spread has about the seeds' few degrees of freedom and moves by some 10% between seed sets. The primitives' gates (slice 0, 300 replicates) read calibration sharply.
+    - *Why:* at 5,910 cells a flat 4.5 fails by chance about 3.5% of the time per fit (5,910 × 2Φ(−4.53), the coordinating session's figure).
+    - *What it costs:* at 24 seeds the smallest bias a fit-level cell can show moves from about 0.92 of a standard error (4.5/√24) to 1.07 (5.23/√24). The primitives' gates, at 300 replicates, still read 0.23.
+  - The pooled spread of z is held within [0.85, 1.15]. The cells of one seed share its points, so that spread has about the seeds' few degrees of freedom. Slices 1 and 2's eight separable tables read 0.909 to 1.082, which makes ±0.1 about a two-sigma band. None of them was outside [0.9, 1.1], so the wider band is pre-emptive. The primitives' gates (slice 0, 300 replicates) read calibration sharply.
   - The trigger: under the old flat cut of 4.5, one cell of the 5,910 in "hinges, the boxes" read 4.53. Over 200 fresh seeds the same cell reads √R·mean z −0.53 and sd of z 1.011 (probe `artifacts/chip-sensitivity/probes/EffectCellProbe.cs`): chance, the extreme of many correlated cells.
   - Slice 1's thresholds move with them, and slice 1's numbers stand under both.
 

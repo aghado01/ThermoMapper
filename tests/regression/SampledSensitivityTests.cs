@@ -121,8 +121,8 @@ public sealed class SampledSensitivityTests(ITestOutputHelper output)
     internal static double BiasCut(int cells) => Maths.Distributions.Normal.StandardQuantile(1.0 - 0.0005 / cells);
 
     // The pooled spread of z over a fit's cells: the cells of one seed share its points, so the pooled spread has about the seeds' few
-    // degrees of freedom and moves by some 10% between seed sets; the primitives' gates (slice 0, 300 replicates) read calibration
-    // sharply, and these read it against gross error.
+    // degrees of freedom. Slices 1 and 2's eight separable tables read 0.909 to 1.082, which makes ±0.1 about a two-sigma band; the
+    // band here is ±0.15. The primitives' gates (slice 0, 300 replicates) read calibration sharply, and these read it against gross error.
     internal const double PooledLow = 0.85, PooledHigh = 1.15;
 
     private void Report(string name, Tally t) =>
