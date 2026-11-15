@@ -114,6 +114,27 @@ Under "Reports" below, newest first, per slice: what landed by commit; the gates
 
 ## Reports
 
+### Slice 3: the ridge block — in progress (2026-11-15)
+
+**The design.** The ridge block enters at the design boundary, so the structure chain stays slice 2's.
+- *A structure term* is slice 2's directional term (θ, t₀): the prior, E36's kernel, the moves, the counts and Geweke's test with the prior alone carry over unchanged. t₀'s prior is already eq. (UL), and the remaining knots are fixed given θ and t₀, so they add no density.
+- *A ridge basis*, `DirectionalBasis.Columns = K` (1, today's hinge alone; 4, the paper's), has the design expand each structure term into K column terms:
+  - b₁ = (θᵀz − t₀)₊;
+  - b_ℓ = d_{ℓ−1} − d_K for ℓ = 2, …, K, with d_ℓ the paper's divided differences;
+  - t₁, …, t_{K+1} are the type-7 quantiles at (ℓ − 1)/K of the projected training cases above t₀, as `BayesPPR`'s `get_mns_basis` reads them.
+- *Each column term* carries θ and the K + 2 knots, so prediction needs no training data. Draws, prediction, the gradient readout, E8 and the conformal layer already read one coefficient per column term, so they read a ridge as they read hinges.
+- *Admission:* D06's angle gate reads the K columns. The support count reads b₁, the block's reach, since the late cubic columns are nonzero on only the top quarter of the cases above t₀. M's cap counts structure terms, and the design's column cap is K times it.
+- *The alternatives, not taken:*
+  - one term carrying K columns, which changes every readout's coefficient layout;
+  - units of K terms in the structure layer, which changes every move and the prior.
+
+**The plan, one commit per concern:**
+1. the column terms, their kernel's value and derivative, and the knots, against eq. (spline_expansion) by hand;
+2. the design's K-column proposals and the expansion, with the configurations they do not serve refused with reasons;
+3. Geweke's test, the oracle's fixed-draw parity against the corrected ratios, and Friedman's function under a stated count prior (exploration, not validation).
+
+**For this slice's report** (the coordinating session's point): the prior sampler rejects a whole draw when any of its terms has no knot range (`BassPriorSampler.DrawOn`: a null term redraws the collection). It therefore samples p(M)·P(range)^M on F, the same restriction the chain's target carries, unnormalized.
+
 ### Slice 2 verified from a clean archive, its Oracle selection to follow (coordinating session, 2026-11-15)
 
 - **Commit:** `1e7bbea`, on a snapshot of `31b612b`, through `scripts/verify-csharp.ps1` over its twelve changed files.
