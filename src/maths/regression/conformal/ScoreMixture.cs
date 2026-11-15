@@ -42,8 +42,14 @@ public sealed record ScoreMixtureOptions
     /// gets the whole space, and the self-weight grows as the calibration split shrinks.</summary>
     public double MaxSelfWeight { get; init; } = 1.0 / 30.0;
 
-    /// <summary>The logistic fits' ridge per pooled point on the standardized features (<see cref="DensityRatio.Logistic(double[,], double[,], double, int, double)"/>).</summary>
+    /// <summary>The logistic fits' ridge per pooled point on the standardized features (<see cref="DensityRatio.Logistic(double[,], double[,], double, int, double)"/>);
+    /// under <see cref="Knots"/>, cross-validation chooses it instead.</summary>
     public double Ridge { get; init; } = 1e-4;
+
+    /// <summary>Null, the default, fits τ on the features as given, linear in them. A count expands each feature into cubic B-splines with
+    /// that many interior knots, the ridge chosen by cross-validation (<see cref="DensityRatio.Spline"/>), so τ is nonparametric in each
+    /// feature: the ratio estimator's follow-up, τ through richer features.</summary>
+    public int? Knots { get; init; }
 
     /// <summary>The factorization's k-means++ starts per J; the fit with the least residual is kept.</summary>
     public int Restarts { get; init; } = 5;
@@ -222,7 +228,7 @@ public sealed class ScoreMixture
                 }
                 if (under) b++; else a++;
             }
-            fits[t] = DensityRatio.Logistic(source, target, o.Ridge);
+            fits[t] = o.Knots is int knots ? DensityRatio.Spline(source, target, knots) : DensityRatio.Logistic(source, target, o.Ridge);
             prior[t] = Math.Log((double)(n - below) / below);
         }
 
@@ -787,6 +793,7 @@ public sealed class ScoreMixture
     {
         ArgumentOutOfRangeException.ThrowIfLessThan(o.Levels, 1, nameof(o.Levels));
         if (o.Clusters is int j) ArgumentOutOfRangeException.ThrowIfLessThan(j, 1, nameof(o.Clusters));
+        if (o.Knots is int k) ArgumentOutOfRangeException.ThrowIfLessThan(k, 1, nameof(o.Knots));
         ArgumentOutOfRangeException.ThrowIfLessThan(o.MaxClusters, 1, nameof(o.MaxClusters));
         if (!(o.ClusterGain >= 0.0 && double.IsFinite(o.ClusterGain))) throw new ArgumentOutOfRangeException(nameof(o.ClusterGain), "The gain is finite and nonnegative.");
         if (o.Precision is int m) ArgumentOutOfRangeException.ThrowIfLessThan(m, 1, nameof(o.Precision));

@@ -135,6 +135,40 @@ public sealed class ScoreMixtureTests(ITestOutputHelper output)
     }
 
     [Fact]
+    public void AMiddleCluster_TheKnotsRecoverIt_FromTheRawInput_WhereLinearTauCannot()
+    {
+        // The narrow cluster holds the middle of x, |x − ½| below about 0.2: its membership is not monotone in x, so τ linear in x cannot
+        // hold it, where the knots option's splines of x can (τ through richer features).
+        static double Middle(double x) => 1.0 / (1.0 + Math.Exp((Math.Abs(x - 0.5) - 0.2) / 0.04));
+        var rng = new Xoshiro256PlusPlus(2026_1119);
+        double[] x = [.. Enumerable.Range(0, 1000).Select(_ => rng.NextDouble())];
+        double[] scores = [.. x.Select(v => Math.Abs((rng.NextDouble() < Middle(v) ? 0.2 : 1.0) * Gaussian(rng)))];
+        static double[,] Raw(IReadOnlyList<double> v)
+        {
+            var f = new double[v.Count, 1];
+            for (int i = 0; i < v.Count; i++) f[i, 0] = v[i];
+            return f;
+        }
+        double[] grid = [.. Enumerable.Range(1, 99).Select(g => g / 100.0)];
+        double Error(ScoreMixture fit)
+        {
+            double[,] pi = fit.Memberships(Raw(grid));
+            return Enumerable.Range(0, fit.Clusters).Min(k => grid.Select((v, g) => Math.Abs(pi[g, k] - Middle(v))).Average());
+        }
+        var clock = System.Diagnostics.Stopwatch.StartNew();
+        ScoreMixture splines = ScoreMixture.Fit(Raw(x), scores, new ScoreMixtureOptions { Seed = 3, Knots = 6 });
+        double seconds = clock.Elapsed.TotalSeconds;
+        ScoreMixture linear = ScoreMixture.Fit(Raw(x), scores, new ScoreMixtureOptions { Seed = 3 });
+        double splineError = Error(splines), linearError = Error(linear);
+        output.WriteLine($"knots 6: J {splines.Clusters}, mean membership error {splineError:F4}, R² by J {string.Join(", ", splines.RSquared.Select(v => v.ToString("F4")))}, "
+                         + $"{seconds:F2} s; linear: J {linear.Clusters}, mean membership error {linearError:F4}, R² by J {string.Join(", ", linear.RSquared.Select(v => v.ToString("F4")))}");
+        Assert.Equal(2, splines.Clusters);
+        Assert.True(splineError < 0.08, $"the splines' mean membership error {splineError:F4}");
+        Assert.True(linearError > 0.15, $"the linear fit's mean membership error {linearError:F4}");
+        Assert.Throws<ArgumentOutOfRangeException>(() => ScoreMixture.Fit(Raw(x), scores, new ScoreMixtureOptions { Knots = 0 }));
+    }
+
+    [Fact]
     public void TheFactorization_RecoversTheTrueMemberships()
     {
         // The true τ_t(x) = π₁(x)F₁(ξ_t) + π₂(x)F₂(ξ_t) at 1,000 inputs and the deciles of the mixture's scores: the factorization at J = 2
