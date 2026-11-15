@@ -1,6 +1,6 @@
 # Active subspaces on the BASS core: E8's build (chip brief)
 
-Date: 2026-11-08. Status: slices 0–7e complete and verified; slice 8, the five unbuilt items, commissioned by the user on 2026-11-14 at the plan's recommended options; slice 8a (`01035ce` to `978c960`) landed and was verified on 2026-11-15; the queued request, 8a′ (`7cca408`), landed and was verified the same day; slice 8b (`db82c2d`, report below) landed the same day and waits for verification, with 8c after it; what stays open is under [Open items](#open-items-2026-11-13); slice 7's plan approved by the user (2026-11-10); slice 7a (`7b2ca7a`) verified 2026-11-11; slice 7b (`70a2aa2`) verified 2026-11-11; slice 7c (`015d977`) verified 2026-11-11; slice 7d, the training-range hinge rule the user chose for projected fits (2026-11-11), landed (`566c1f1` to `6aff134`) and was verified 2026-11-13 (2,502 of 2,502 from a clean archive of `788d249`); slice 7e, the frame's column signs, commissioned by the user on 2026-11-13 (below), landed (`9b9e4e1` to `199abd7`) and was verified the same day in seven test projects (below). Commissioned by the user on 2026-11-08 ("kick off e8"), after KHAOS's last slice; slice 5, the Grassmann discussion's items the user settled, commissioned 2026-11-08 ("ill take as recommended"). Every slice landed and was verified by the coordinating session on 2026-11-08: slice 0 (`15fb495`, `9e3028d`, `aa62879`), slice 1 (`95294f8`, `9dfcc6d`, `1385b86`), slice 2 (`8c7db77`, `3cdc2e8`), slice 3 (`84fe230`, `1049055`), slice 4 (`20aeb06`, `bc72014`) and slice 5 (`def59f3`, `9d2ff23`, `95d2900`, `a54a537`). The follow-ups, commissioned 2026-11-10: slice 6 (`276af70`, `e9d8827`, `30df59e`, `9a669b6`, report `3c26660`) verified by the coordinating session on 2026-11-10; slice 7's plan, approved 2026-11-10, was built as 7a to 7c; E36's brief ([`bppr-brief.md`](bppr-brief.md)) is drafted and waits for the user's approval. Written by the main session from [E8's entry](extensions-brief.md#active-subspace-analysis), [gap G3](lineage-gaps-register.md#g3-sobol-indices-and-active-subspaces-have-different-standing), [the lineage review's separability question](lineage-review.md#separability-is-what-the-closed-forms-rest-on), the [Astra notes](../archive/bass-gbass-khaos-activespaces/discussion/astra-grassman-stiefel-pca-extensions.md), and the [Grassmann discussion](../archive/bass-gbass-khaos-activespaces/briefs/grassmann-stiefel-subspaces-brief.md)'s report so far. Reports go under "Reports" below, newest first.
+Date: 2026-11-08. Status: slices 0–7e complete and verified; slice 8, the five unbuilt items, commissioned by the user on 2026-11-14 at the plan's recommended options; slice 8a (`01035ce` to `978c960`) landed and was verified on 2026-11-15; the queued request, 8a′ (`7cca408`), landed and was verified the same day; slice 8b (`db82c2d`) landed and was verified the same day; slice 8c (`579a69b`, report below) landed the same day and waits for verification, closing slice 8; what stays open is under [Open items](#open-items-2026-11-13); slice 7's plan approved by the user (2026-11-10); slice 7a (`7b2ca7a`) verified 2026-11-11; slice 7b (`70a2aa2`) verified 2026-11-11; slice 7c (`015d977`) verified 2026-11-11; slice 7d, the training-range hinge rule the user chose for projected fits (2026-11-11), landed (`566c1f1` to `6aff134`) and was verified 2026-11-13 (2,502 of 2,502 from a clean archive of `788d249`); slice 7e, the frame's column signs, commissioned by the user on 2026-11-13 (below), landed (`9b9e4e1` to `199abd7`) and was verified the same day in seven test projects (below). Commissioned by the user on 2026-11-08 ("kick off e8"), after KHAOS's last slice; slice 5, the Grassmann discussion's items the user settled, commissioned 2026-11-08 ("ill take as recommended"). Every slice landed and was verified by the coordinating session on 2026-11-08: slice 0 (`15fb495`, `9e3028d`, `aa62879`), slice 1 (`95294f8`, `9dfcc6d`, `1385b86`), slice 2 (`8c7db77`, `3cdc2e8`), slice 3 (`84fe230`, `1049055`), slice 4 (`20aeb06`, `bc72014`) and slice 5 (`def59f3`, `9d2ff23`, `95d2900`, `a54a537`). The follow-ups, commissioned 2026-11-10: slice 6 (`276af70`, `e9d8827`, `30df59e`, `9a669b6`, report `3c26660`) verified by the coordinating session on 2026-11-10; slice 7's plan, approved 2026-11-10, was built as 7a to 7c; E36's brief ([`bppr-brief.md`](bppr-brief.md)) is drafted and waits for the user's approval. Written by the main session from [E8's entry](extensions-brief.md#active-subspace-analysis), [gap G3](lineage-gaps-register.md#g3-sobol-indices-and-active-subspaces-have-different-standing), [the lineage review's separability question](lineage-review.md#separability-is-what-the-closed-forms-rest-on), the [Astra notes](../archive/bass-gbass-khaos-activespaces/discussion/astra-grassman-stiefel-pca-extensions.md), and the [Grassmann discussion](../archive/bass-gbass-khaos-activespaces/briefs/grassmann-stiefel-subspaces-brief.md)'s report so far. Reports go under "Reports" below, newest first.
 
 ## Why
 
@@ -345,6 +345,63 @@ Slice 8 is commissioned (2026-11-14); 8a has landed and waits for verification. 
 Under "Reports" below, newest first, per slice: what landed by commit; the gates' numbers; decisions taken beyond this brief; what was left unbuilt and why; follow-ups with the decision each would change.
 
 ## Reports
+
+### Slice 8c: basis fits through a projection (2026-11-15)
+
+**Asked for:** slice 8's item E, at the recommended options:
+- E1(a): one frame from the basis fit's own E[C] over its reconstruction under W_y;
+- E2(a): the decomposition reused, and under cross-fitting decomposed per fold;
+- E3(a): a new type, `BassProjectedBasisFit`.
+
+**Landed:** `579a69b`, one commit.
+
+**What was built:**
+- *`BassProjectedBasisFit.Of(projection, native)`* refits a basis fit's components on one frame's active variables.
+  - The native decomposition is the refit's, the same object.
+  - The component mode carries over: components fitted apart are refitted apart (`BassComponents.Fit`), a joint fit jointly (`FitJoint`). Each takes its native config, with slice 7d's training-range rule and the basis fit's master seed.
+  - `BassComponents` is called, not changed.
+- *`Predict`* takes cases in the original units and returns the reconstruction.
+- *`Gradient`* gives the reconstruction's partials in the original inputs per joint draw, by the chain rule through the components' gradients in u and the map: ∂y_ℓ/∂x_i = s_ℓ Σ_k K_ℓk Σⱼ (a_ij/width_i)·∂w_k/∂u_j.
+- *`ActiveSubspace`* reads E8 on the refit in u, at the pushforward joint sample, mapped to x as the scalar refit's readout is. Its rules and the mapping are now shared helpers of `BassProjectedFit`, `Pushforward` and `ToInputs`, with the same bits.
+- *`Compare(native, analysis, spec)`* gives:
+  - each side's basis functions per joint draw, summed over the components;
+  - PSIS-LOO on the coefficients;
+  - the reconstruction's held-out RMSE and percentage;
+  - the refit's subspace against the frame, and the native draws' spread about it.
+
+  No evidence and no density (C1).
+- *`BassProjection.ProjectPredictors`* projects a predictor list as `Project(BassData)` does, which now calls it.
+
+**Gates:**
+
+| Gate | Reading |
+| --- | --- |
+| The decomposition reused | the same object, on a fit apart and on a joint fit; the joint mode carried over with its master seed; every refit component at the training range |
+| The reconstruction's gradient at 15 interior points and 4 joint draws, against central differences of each draw's prediction at h = 10⁻⁷ | 7.9·10⁻⁹ against a gradient of size 3.8 |
+| The refit's mapped C in span(W₁) | ‖P⊥CP⊥‖/‖C‖ at most 9.3·10⁻¹⁷ over 60 draws |
+| A functional ridge g(wᵀx)·φ(t), from outside the model: five inputs, twenty locations, 300 cases, rank 2 | the native frame 2.93° from w; at d = 1 the refit takes 7.7 basis functions per joint draw against the native 21.8, held-out RMSE 0.0411 (93.3%) against 0.0807 (86.8%) over 300 new cases |
+| The comparison's criteria against their direct computation | basis functions, PSIS-LOO, RMSE to rounding; no evidence, no density, the mapped subspace on the frame at k = d |
+| Refusals | cross-fitting a basis fit; held-out weights; an analysis the frame was not read from; a projection on other inputs; a declared product law for the refit's readout |
+| The projection classes (7b, 7c, 8b, hinge normalization) | 30 of 30 beside 8c's 5 |
+| The whole Regression assembly | from `e8446eb` plus the commit's files, 3,700 of 3,700. An earlier run from `418638a` plus the same files read 3,674 of 3,687: 13 failures, all in `WeightReaderTests` and `ConformalCdfMarginTests`, which no 8c file reaches. Those classes pass alone there (42 of 42) and beside 8c's (47 of 47); `418638a` without 8c passes whole (3,682); and the rerun passes. Read as intermittent, a follow-up for the weight reader's owners |
+
+**The fixture:** at 150 cases and one short chain the native frame sat 8.65° from w, though the refit still won (5.1 basis functions against 13.2, RMSE 0.0994 against 0.1684). At 300 cases and two chains of 3,000 burn-in it sits at 2.93°.
+
+**Cost (indicative, shared machine):** on the gate's fixture, the native basis fit takes 0.37 s and the refit 0.10 s.
+
+**Left unbuilt:**
+- *Cross-fitting a basis fit,* refused with its reason. E2 has each fold's native fit decompose the other folds' outputs, but a decomposition does not record the spec it was made with: centring, scaling and the rank rule, or a user's basis from `FromBasis`. A fold's basis would therefore be a guess.
+- Decision it needs: either the decomposition keeps its `BassPcaSpec` and the folds re-run `FromPca` with it (PCA decompositions only), or the comparison takes a decomposition spec for the folds. Either way a user's own basis stays refused.
+
+**Decisions beyond the brief:**
+1. *The refit takes the native fit's configs,* per component or joint, with the training-range rule. There is no config parameter: a basis fit's configs are per component, and the native's are the natural default. A different config needs a native fit run under it.
+2. *The readout's rules and mapping are shared* by the two refit types.
+
+**Doc changes owed:**
+- `docs/Maths/Regression/ActiveSubspaces.md`, slice 7's section:
+  - basis fits through a projection: E1 to E3 with their alternatives;
+  - the reconstruction's chain rule;
+  - the comparison for basis fits, and why cross-fitting one waits for the decomposition's spec.
 
 ### Slice 8b: the comparison's held-out density, and cross-fitting with groupings and case weights (2026-11-15)
 
