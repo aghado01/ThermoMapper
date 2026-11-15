@@ -200,14 +200,25 @@ public sealed record CoActiveSpec
     /// selections to have one length.</summary>
     public IReadOnlyList<int>? OtherDraws { get; init; }
 
-    /// <summary>f's output functional a_f, one weight per training output location, f = a_fᵀy: required where f is read from a functional
-    /// fit, refused for a scalar one. For a fit of several named outputs (E34), one weight per output in <see cref="MultiOutputResponse.Names"/>'s order. For
-    /// two outputs of one fit, the first output.</summary>
+    /// <summary>f's output functional a_f, one weight per training output location, or per location of <see cref="OutputLocations"/>
+    /// when declared, f = a_fᵀy: required where f is read from a functional fit, refused for a scalar one. For a fit of several named
+    /// outputs (E34), one weight per output in <see cref="MultiOutputResponse.Names"/>'s order. For two outputs of one fit, the first
+    /// output.</summary>
     public IReadOnlyList<double>? Output { get; init; }
 
-    /// <summary>g's output functional a_g, as <see cref="Output"/>, over the second fit's training output locations, or for two outputs of
-    /// one fit, the second output.</summary>
+    /// <summary>g's output functional a_g, as <see cref="Output"/>, over the second fit's training output locations or
+    /// <see cref="OtherOutputLocations"/>, or for two outputs of one fit, the second output.</summary>
     public IReadOnlyList<double>? OtherOutput { get; init; }
+
+    /// <summary>The locations <see cref="Output"/> weighs (slice 8), for a direct functional fit: one column per output variable
+    /// matched by name, in the variables' own units, each inside the variable's box, as <see cref="OutputMetric.Locations"/> takes them;
+    /// the training locations when null. A basis fit refuses them, since its basis exists only at its training locations, and so do a
+    /// scalar fit and a fit of several named outputs, which have no output locations.</summary>
+    public IReadOnlyList<ContinuousColumn>? OutputLocations { get; init; }
+
+    /// <summary>The locations <see cref="OtherOutput"/> weighs, as <see cref="OutputLocations"/>: the second fit's, or for two outputs of
+    /// one fit, the second output's, which may differ from the first's.</summary>
+    public IReadOnlyList<ContinuousColumn>? OtherOutputLocations { get; init; }
 }
 
 /// <summary>

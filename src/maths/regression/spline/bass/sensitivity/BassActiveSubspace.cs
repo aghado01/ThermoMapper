@@ -142,8 +142,7 @@ internal static partial class BassActiveSubspaces
             {
                 int[] chunk = selected[start..Math.Min(selected.Length, start + batch)];
                 BassGradient g = named ? BassMultiOutput.Gradient(fit, data, points.Cases, chunk)
-                               : at is null ? fit.Gradient(data, points.Cases, chunk)
-                               : BassGradients.Of(fit.ModelFor(data), fit.Terms, fit.Draws, fit.DrawWeights, points.Cases, chunk, spec.OutputMetric!.Locations);
+                                       : GradientAt(fit, data, points, chunk, at, spec.OutputMetric?.Locations);
                 for (int b = 0; b < chunk.Length; b++)
                 {
                     int bb = b;
@@ -540,13 +539,15 @@ internal static partial class BassActiveSubspaces
 
     // ── Co-active pairs ───────────────────────────────────────────────────────────────────────────────────────────────
 
-    // Two fits on the same inputs, each read as itself (a scalar fit) or through its output functional (a direct functional fit); draws
-    // pair by position, each pair weighted by the product of the two fits' weights.
+    // Two fits on the same inputs, each read as itself (a scalar fit) or through its output functional (a direct functional fit, at its
+    // training output locations or declared ones, slice 8); draws pair by position, each pair weighted by the product of the two fits'
+    // weights.
     public static CoActiveAnalysis CoActive(BassFit fit, BassData data, BassFit other, BassData otherData, CoActiveSpec spec)
     {
         ArgumentNullException.ThrowIfNull(other);
         ArgumentNullException.ThrowIfNull(spec);
-        return CoActive(DirectSide(fit, data, spec.Output, "Output"), DirectSide(other, otherData, spec.OtherOutput, "OtherOutput"), spec);
+        return CoActive(DirectSide(fit, data, spec.Output, spec.OutputLocations, "Output", "OutputLocations"),
+                        DirectSide(other, otherData, spec.OtherOutput, spec.OtherOutputLocations, "OtherOutput", "OtherOutputLocations"), spec);
     }
 
     // A fit paired with a basis fit on the same inputs (slice 6): f as above, g = a_gᵀy over the basis fit's joint draws.
@@ -554,7 +555,8 @@ internal static partial class BassActiveSubspaces
     {
         ArgumentNullException.ThrowIfNull(other);
         ArgumentNullException.ThrowIfNull(spec);
-        return CoActive(DirectSide(fit, data, spec.Output, "Output"), BasisSide(other, spec.OtherOutput, "OtherOutput"), spec);
+        return CoActive(DirectSide(fit, data, spec.Output, spec.OutputLocations, "Output", "OutputLocations"),
+                        BasisSide(other, spec.OtherOutput, spec.OtherOutputLocations, "OtherOutput", "OtherOutputLocations"), spec);
     }
 
     // Two basis fits on the same inputs (slice 6), each through its output functional over its joint draws.
@@ -563,7 +565,8 @@ internal static partial class BassActiveSubspaces
         ArgumentNullException.ThrowIfNull(fit);
         ArgumentNullException.ThrowIfNull(other);
         ArgumentNullException.ThrowIfNull(spec);
-        return CoActive(BasisSide(fit, spec.Output, "Output"), BasisSide(other, spec.OtherOutput, "OtherOutput"), spec);
+        return CoActive(BasisSide(fit, spec.Output, spec.OutputLocations, "Output", "OutputLocations"),
+                        BasisSide(other, spec.OtherOutput, spec.OtherOutputLocations, "OtherOutput", "OtherOutputLocations"), spec);
     }
 
     // One side of a pair of fits (slice 6): its inputs, degree and hinge normalization, its pooled draws (a basis fit's joint draws) with
@@ -574,9 +577,11 @@ internal static partial class BassActiveSubspaces
                                Func<int, Surface> Surface, double[]? Output, long Width,
                                Func<PointSet, int[], Func<int, Func<int, int, double>>> Gradient);
 
-    private static Side DirectSide(BassFit fit, BassData data, IReadOnlyList<double>? output, string name)
+    private static Side DirectSide(BassFit fit, BassData data, IReadOnlyList<double>? output, IReadOnlyList<ContinuousColumn>? locations, string name,
+                                   string locationsName)
     {
         Fingerprint(fit, data);
+        OutputInputs? at = SideLocations(data, locations, fit.Transform, locationsName);
         BassInputs inputs = BassInputs.Prepare(data, fit.Transform);
         BassDraw[] pooled = [.. fit.Draws.SelectMany(c => c)];
         bool separable = Separable(inputs, fit.Config.Structure.Degree, fit.Config.Structure.ResolvedHingeNormalization, [fit.Terms]);
@@ -593,18 +598,24 @@ internal static partial class BassActiveSubspaces
                                 return s => Directional(g, s, b);
                             });
         }
-        double[]? a = OutputOf(output, data, name);
+        double[]? a = OutputOf(output, data, name, at);
         return new Side(fit.Transform, inputs, fit.Config.Structure.Degree, fit.Config.Structure.ResolvedHingeNormalization, separable, pooled.Length, fit.DrawWeights,
-                        Surfaces(fit, data, inputs, pooled), a, data.Response.Locations, (points, chunk) =>
+                        Surfaces(fit, data, inputs, pooled, at), a, at?.Locations ?? data.Response.Locations, (points, chunk) =>
                         {
-                            BassGradient g = fit.Gradient(data, points.Cases, chunk);
+                            BassGradient g = GradientAt(fit, data, points, chunk, at, locations);
                             return b => Directional(g, b, a);
                         });
     }
 
+    // A direct fit's gradient readout at the shared points for a chunk of draws, at its training output locations or declared ones.
+    private static BassGradient GradientAt(BassFit fit, BassData data, PointSet points, int[] chunk, OutputInputs? at, IReadOnlyList<ContinuousColumn>? locations)
+        => at is null ? fit.Gradient(data, points.Cases, chunk)
+                      : BassGradients.Of(fit.ModelFor(data), fit.Terms, fit.Draws, fit.DrawWeights, points.Cases, chunk, locations!);
+
     // A basis fit's side: H = G·c over its joint draws, read through a_g; its gradient a_gᵀJ = (Gᵀa_g)ᵀJ_w, the components' gradients weighted.
-    private static Side BasisSide(BassBasisFit fit, IReadOnlyList<double>? output, string name)
+    private static Side BasisSide(BassBasisFit fit, IReadOnlyList<double>? output, IReadOnlyList<ContinuousColumn>? locations, string name, string locationsName)
     {
+        BasisLocations(locations, locationsName);
         double[] a = Functional(output ?? throw new ArgumentException($"A basis fit is read through an output functional: {name} is required.", name),
                                 fit.Decomposition.Locations, name);
         (BassInputs inputs, BassFit first, int degree) = BasisInputs(fit);
@@ -665,8 +676,9 @@ internal static partial class BassActiveSubspaces
                                     errors, Array.AsReadOnly(selF), Array.AsReadOnly(selG));
     }
 
-    // Two outputs of one functional fit, a_fᵀy and a_gᵀy; each draw pairs with itself. Two combinations of a fit's several named outputs
-    // are E34's pair, BassMultiOutput.CoActive, read by its implementation.
+    // Two outputs of one functional fit, a_fᵀy and a_gᵀy, each at the training output locations or its own declared ones (slice 8);
+    // each draw pairs with itself. Two combinations of a fit's several named outputs are E34's pair, BassMultiOutput.CoActive, read by
+    // its implementation.
     public static CoActiveAnalysis CoActive(BassFit fit, BassData data, CoActiveSpec spec)
     {
         ArgumentNullException.ThrowIfNull(spec);
@@ -675,8 +687,12 @@ internal static partial class BassActiveSubspaces
         if (data.Response is not FunctionalResponse)
             throw new ArgumentException("Two outputs of one fit need a functional response; this fit's is scalar: pair two fits instead.", nameof(data));
         if (spec.OtherDraws is not null) throw new ArgumentException("Two outputs of one fit pair each draw with itself; OtherDraws is for two fits.", nameof(spec));
-        int m = data.Response.Locations;
-        double[] a = OutputOf(spec.Output, data, "Output")!, c = OutputOf(spec.OtherOutput, data, "OtherOutput")!;
+        OutputInputs? atF = SideLocations(data, spec.OutputLocations, fit.Transform, "OutputLocations");
+        OutputInputs? atG = SideLocations(data, spec.OtherOutputLocations, fit.Transform, "OtherOutputLocations");
+        // At the training locations both outputs read one surface and one gradient, as before slice 8.
+        bool shared = atF is null && atG is null;
+        int m = Math.Max(atF?.Locations ?? data.Response.Locations, atG?.Locations ?? data.Response.Locations);
+        double[] a = OutputOf(spec.Output, data, "Output", atF)!, c = OutputOf(spec.OtherOutput, data, "OtherOutput", atG)!;
         BassInputs inputs = BassInputs.Prepare(data, fit.Transform);
         Frame frame = FrameOf(inputs, fit.Transform, fit.Config.Structure.Degree, fit.Config.Structure.ResolvedHingeNormalization, spec.Measures, spec.Sample,
                               spec.Metric, spec.Route, spec.Points, 1,
@@ -688,11 +704,12 @@ internal static partial class BassActiveSubspaces
         if (frame.Route == ActiveSubspaceRoute.Exact)
         {
             var moments = BassMoments.On(inputs, frame.Degree, frame.Measure!, frame.Hinges);
-            Func<int, Surface> surface = DirectFunctional(fit, data, inputs, pooled);
+            Func<int, Surface> surface = DirectFunctional(fit, data, inputs, pooled, atF);
+            Func<int, Surface> otherSurface = shared ? surface : DirectFunctional(fit, data, inputs, pooled, atG);
             for (int s = 0; s < pairs.Length; s++)
             {
-                Surface sf = surface(selected[s]);
-                pairs[s] = Pair(moments, frame, sf.Terms, Contract(a, sf.H), sf.Terms, Contract(c, sf.H));
+                Surface sf = surface(selected[s]), sg = shared ? sf : otherSurface(selected[s]);
+                pairs[s] = Pair(moments, frame, sf.Terms, Contract(a, sf.H), sg.Terms, Contract(c, sg.H));
             }
         }
         else
@@ -703,8 +720,10 @@ internal static partial class BassActiveSubspaces
             for (int start = 0; start < pairs.Length; start += batch)
             {
                 int end = Math.Min(pairs.Length, start + batch);
-                BassGradient g = fit.Gradient(data, points.Cases, selected[start..end]);
-                for (int s = 0; s < end - start; s++) (pairs[start + s], errors[start + s]) = SampledPair(frame, points, Directional(g, s, a), Directional(g, s, c));
+                int[] chunk = selected[start..end];
+                BassGradient g = GradientAt(fit, data, points, chunk, atF, spec.OutputLocations);
+                BassGradient h = shared ? g : GradientAt(fit, data, points, chunk, atG, spec.OtherOutputLocations);
+                for (int s = 0; s < end - start; s++) (pairs[start + s], errors[start + s]) = SampledPair(frame, points, Directional(g, s, a), Directional(h, s, c));
             }
         }
         return new CoActiveAnalysis(Array.AsReadOnly(frame.Names), Array.AsReadOnly(frame.Excluded), frame.Route, spec.Metric, frame.Map, frame.Measure,
@@ -718,6 +737,8 @@ internal static partial class BassActiveSubspaces
         ArgumentNullException.ThrowIfNull(fit);
         ArgumentNullException.ThrowIfNull(spec);
         if (spec.OtherDraws is not null) throw new ArgumentException("Two outputs of one fit pair each draw with itself; OtherDraws is for two fits.", nameof(spec));
+        BasisLocations(spec.OutputLocations, "OutputLocations");
+        BasisLocations(spec.OtherOutputLocations, "OtherOutputLocations");
         int m = fit.Decomposition.Locations;
         double[] a = Functional(spec.Output ?? throw new ArgumentException("A basis fit's co-active pair reads two outputs: Output is required.", nameof(spec)), m, "Output");
         double[] c = Functional(spec.OtherOutput ?? throw new ArgumentException("A basis fit's co-active pair reads two outputs: OtherOutput is required.", nameof(spec)), m, "OtherOutput");
@@ -829,8 +850,8 @@ internal static partial class BassActiveSubspaces
 
     // ── Draws as surfaces ─────────────────────────────────────────────────────────────────────────────────────────────
 
-    private static Func<int, Surface> Surfaces(BassFit fit, BassData data, BassInputs inputs, BassDraw[] pooled)
-        => data.Response is FunctionalResponse ? DirectFunctional(fit, data, inputs, pooled) : d => Scalar(fit, pooled[d]);
+    private static Func<int, Surface> Surfaces(BassFit fit, BassData data, BassInputs inputs, BassDraw[] pooled, OutputInputs? at = null)
+        => data.Response is FunctionalResponse ? DirectFunctional(fit, data, inputs, pooled, at) : d => Scalar(fit, pooled[d]);
 
     private static Surface Scalar(BassFit fit, BassDraw draw)
     {
@@ -1131,8 +1152,39 @@ internal static partial class BassActiveSubspaces
     // A declared output metric's locations through the output variables' scales (slice 6), refused outside their boxes, which a product
     // law's readout never reaches either; null keeps the training locations.
     private static OutputInputs? Locations(OutputMetric? metric, BassInputTransform transform)
+        => metric?.Locations is { } given ? Inside(given, transform, "the output metric's", nameof(metric)) : null;
+
+    // A co-active side's declared output locations (slice 8): a direct functional fit's, read as an output metric's are; refused for a
+    // fit without output locations; null keeps the training locations.
+    private static OutputInputs? SideLocations(BassData data, IReadOnlyList<ContinuousColumn>? given, BassInputTransform transform, string name)
     {
-        if (metric?.Locations is not { } given) return null;
+        if (given is null) return null;
+        if (data.Response is MultiOutputResponse)
+            throw new ArgumentException($"{name} places a functional fit's output functional; this fit's several named outputs have no locations.", name);
+        if (data.Response is not FunctionalResponse)
+            throw new ArgumentException($"{name} places a functional fit's output functional; this fit's response is scalar.", name);
+        return Inside(given, transform, $"{name}'", name);
+    }
+
+    // A basis exists only at its training output locations (slice 8, as TrainingLocationsOnly for the output metric).
+    private static void BasisLocations(IReadOnlyList<ContinuousColumn>? given, string name)
+    {
+        if (given is not null)
+            throw new ArgumentException($"A basis exists only at its training output locations; {name} applies to a direct fit.", name);
+    }
+
+    // Named outputs have no locations (slice 8): E34's pair of a fit's output combinations refuses them.
+    private static void NamedPairLocations(CoActiveSpec spec)
+    {
+        if (spec.OutputLocations is not null || spec.OtherOutputLocations is not null)
+            throw new ArgumentException("A fit of several named outputs is read through combinations of its outputs, which have no locations; "
+                                        + "OutputLocations and OtherOutputLocations apply to a direct functional fit.", nameof(spec));
+    }
+
+    // Declared locations through the output variables' scales, refused outside their boxes, which a product law's readout never
+    // reaches either.
+    private static OutputInputs Inside(IReadOnlyList<ContinuousColumn> given, BassInputTransform transform, string owner, string parameter)
+    {
         (OutputInputs at, _) = PredictionCases.PrepareLocations(transform, given);
         int beyond = 0;
         for (int l = 0; l < at.Locations; l++)
@@ -1146,7 +1198,7 @@ internal static partial class BassActiveSubspaces
             if (!inside) beyond++;
         }
         if (beyond > 0)
-            throw new ArgumentException($"{beyond} of the output metric's {at.Locations} locations lie outside the output variables' boxes.", nameof(metric));
+            throw new ArgumentException($"{beyond} of {owner} {at.Locations} locations lie outside the output variables' boxes.", parameter);
         return at;
     }
 
@@ -1228,20 +1280,21 @@ internal static partial class BassActiveSubspaces
                                : MatrixFunctions.FactorRows(e, kept, Math.Sqrt);
     }
 
-    // A fit's output functional: required for a functional response, one weight per training output location; refused for a scalar one.
-    private static double[]? OutputOf(IReadOnlyList<double>? declared, BassData data, string name)
+    // A fit's output functional: required for a functional response, one weight per training output location, or per declared one
+    // (slice 8); refused for a scalar one.
+    private static double[]? OutputOf(IReadOnlyList<double>? declared, BassData data, string name, OutputInputs? at = null)
     {
         if (data.Response is FunctionalResponse)
             return Functional(declared ?? throw new ArgumentException($"A functional fit is read through an output functional: {name} is required.", name),
-                              data.Response.Locations, name);
+                              at?.Locations ?? data.Response.Locations, name, at is null ? "training" : "declared");
         if (declared is not null) throw new ArgumentException($"{name} reads a functional fit's outputs; this fit's response is scalar.", name);
         return null;
     }
 
-    private static double[] Functional(IReadOnlyList<double> a, int m, string name)
+    private static double[] Functional(IReadOnlyList<double> a, int m, string name, string locations = "training")
     {
         ArgumentNullException.ThrowIfNull(a, name);
-        if (a.Count != m) throw new ArgumentException($"An output functional has one weight per training output location, {m}.", name);
+        if (a.Count != m) throw new ArgumentException($"An output functional has one weight per {locations} output location, {m}.", name);
         foreach (double x in a)
             if (!double.IsFinite(x)) throw new ArgumentException("An output functional's weights are finite.", name);
         return [.. a];

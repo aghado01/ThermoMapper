@@ -226,7 +226,9 @@ public sealed record BassFit(
     /// The co-active subspaces of this fit and <paramref name="other"/> (E8's slice 3; Rumsey et al., arXiv 2311.18146): per draw pair,
     /// C_f, C_g and C_fg = E_ρ[∇f∇gᵀ] under <paramref name="spec"/>'s law and metric, and their posterior. The two fits are on the same
     /// inputs (the same predictors, boxes and training values) at one hinge degree, and their draws pair by position; a functional fit is
-    /// read through the spec's output functional for its side, and a fit of several named outputs (E34) through a combination of them.
+    /// read through the spec's output functional for its side, at its training output locations or the side's declared ones
+    /// (<see cref="CoActiveSpec.OutputLocations"/>, <see cref="CoActiveSpec.OtherOutputLocations"/>), and a fit of several named
+    /// outputs (E34) through a combination of them.
     /// </summary>
     public CoActiveAnalysis CoActiveSubspace(BassData data, BassFit other, BassData otherData, CoActiveSpec? spec = null)
     {
@@ -250,7 +252,8 @@ public sealed record BassFit(
 
     /// <summary>
     /// The co-active subspaces of two outputs of this functional fit (E8's slice 3): f = a_fᵀy and g = a_gᵀy for the spec's output functionals
-    /// <see cref="CoActiveSpec.Output"/> and <see cref="CoActiveSpec.OtherOutput"/>, one weight per training output location; each draw
+    /// <see cref="CoActiveSpec.Output"/> and <see cref="CoActiveSpec.OtherOutput"/>, one weight per training output location, or per
+    /// location each declares (<see cref="CoActiveSpec.OutputLocations"/>, <see cref="CoActiveSpec.OtherOutputLocations"/>); each draw
     /// pairs with itself. For a fit of several named outputs (E34) they weigh its outputs, and the pair is
     /// <see cref="BassMultiOutput.CoActive"/>'s.
     /// </summary>
