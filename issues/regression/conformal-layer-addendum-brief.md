@@ -51,7 +51,7 @@ Opened 2026-11-14 at the user's word ("that brief was getting way too long, adde
     - *CUSUM's and Shiryaev–Roberts's guarantees in Lean* (Vovk 2021, Propositions 4.2 and 4.4; posed in the code, not proved). Decides whether those alarms report proved guarantees. Lean work, for the conformal-lean thread.
     - *Streams with known structure or under covariate shift,* which E35's brief leaves out: a score that removes a trend or season, or a test martingale weighted for the shift. Decides whether the monitor serves streams that are not exchangeable as they stand.
       - *Covariate shift: built and verified* (`d4c97d4`; its report below), scoped first by the user. Its guarantee is posed to the conformal Lean chip as a follow-up.
-      - *Open:* the Mondrian monitor for streams with known structure.
+      - *The Mondrian monitor, built and verified* (`c64ccc9`; its report below). Pool the strata for a change everywhere; watch each stratum for a change confined to one.
   - The pick among them is the user's.
 
 ## Working rules
@@ -73,6 +73,10 @@ Built at the user's pick (2026-11-15, "Mondrian monitor"). Every statistical gat
   - `Add(score)` is stratum 0, so the unstratified form is the one-stratum case.
 - `MondrianPValueTests` is a new class, seven cases.
 - *What changes for existing calls: nothing.* `SmoothedPValues.Count` still counts every arrival. `SmoothedPValue.Count` is the arrival's own stratum's count, which equals all arrivals in an unstratified stream. The inductive monitor's wrong-form message now names `Add(score, stratum)`.
+- *Verified by the main session on 2026-11-15,* from a clean archive of `5cb24ce` with zero skips: the Commit selection over `c64ccc9`'s files, 157 of 157 ([receipts](receipts/verify-conformal-mondrian-c64ccc9/)).
+  - Each gate's size, seed, level and rerun rule were fixed before the first reading, as asked.
+  - The pre-stated power gate for a change confined to one season failed: the pooled capital alarmed in 0.10 of streams, against at least 0.8, while the per-stratum watch reached 0.495. It is recorded as a finding about pooling, not a passed gate, and its test now pins those readings.
+  - The every-season gate was added after that reading, with its own level fixed before its first reading, and passed at 1.000.
 
 **The source.** Vovk, Gammerman and Shafer 2005:
 - §4.5, Mondrian conformal transducers: the taxonomy κ(n, z), each category a rectangle of positions by units, and each score ranked within its category;
