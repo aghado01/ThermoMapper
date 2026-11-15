@@ -114,7 +114,9 @@ Under "Reports" below, newest first, per slice: what landed by commit; the gates
 
 ## Reports
 
-### Slice 3: the ridge block — in progress (2026-11-15)
+### Slice 3: the ridge block (2026-11-15)
+
+The coordinating session let the design below stand and asked for four points to be stated and tested: what a draw reports, coincident knots, admission all or none, and the fit's degree. Each is answered below. This entry replaces the in-progress one.
 
 **The design.** The ridge block enters at the design boundary, so the structure chain stays slice 2's.
 - *A structure term* is slice 2's directional term (θ, t₀): the prior, E36's kernel, the moves, the counts and Geweke's test with the prior alone carry over unchanged. t₀'s prior is already eq. (UL), and the remaining knots are fixed given θ and t₀, so they add no density.
@@ -128,12 +130,146 @@ Under "Reports" below, newest first, per slice: what landed by commit; the gates
   - one term carrying K columns, which changes every readout's coefficient layout;
   - units of K terms in the structure layer, which changes every move and the prior.
 
-**The plan, one commit per concern:**
-1. the column terms, their kernel's value and derivative, and the knots, against eq. (spline_expansion) by hand;
-2. the design's K-column proposals and the expansion, with the configurations they do not serve refused with reasons;
-3. Geweke's test, the oracle's fixed-draw parity against the corrected ratios, and Friedman's function under a stated count prior (exploration, not validation).
+**Landed**, one commit per concern.
+- *The columns* (`332692b`).
+  - `RidgeColumn` is b_ℓ(θᵀz | t), ℓ = 1, …, K, of the paper's modified natural spline (eq. (spline_expansion)): b₁ = (u − t₀)₊ and b_ℓ = d_{ℓ−1} − d_K, with d_j = ((u − t_j)₊³ − (u − t_{K+1})₊³)/(t_{K+1} − t_j). Past t_{K+1} it takes its exact linear form (t_K − t_{ℓ−1})(3u − t_{ℓ−1} − t_K − t_{K+1}). The column carries its knots, so prediction needs no training data.
+  - `RidgeColumnKernel` (design kernel 4) reads it through the directional hinge's projection, now shared, unnormalized and with no separable factors, so the moment service refuses it.
+  - `DirectionalTermSpace.RidgeKnots` gives t₀ and the type-7 quantiles at (ℓ − 1)/K of the projected training cases above t₀, `BayesPPR`'s arrangement; null where a column is undefined.
+  - `BassTerm`'s ridge part takes the case side alone, its hash added only where present. A structure prior refuses a column term; `BassSensitivity.FromCoefficients` names it.
+- *The design's blocks* (`349ab81`).
+  - `DirectionalBasis.Columns` (K; 1, the default, is slice 2's hinge alone).
+  - `RidgeExpansion` (new) expands a structure term (θ, t₀) into its K column terms, cached beside the term; null when its knots are undefined. It also reads a column list back as its structure terms.
+  - `BassDesign` takes the expansion. `Terms` reads structure terms, `ColumnTerms` the columns. A birth, death or change proposes the whole structure, loaded strictly into a scratch design whose account is the proposal's; an acceptance loads it here the same way. A block's newest angle is the least over its columns.
+  - The count prior reads structure terms (`BassStructureFit.Units`). The design's column cap is K times M's cap.
+  - `BassResolved` floors n_active at K + 1 (`BayesPPR`'s floor) and bounds M's default cap at ⌊(N − 1)/K⌋.
+  - The config refuses what a ridge basis does not read (below).
+  - Every readout that counts terms counts ridges: `BassStructure.TermCount(K)`, `BassStructureSpec.ColumnsPerTerm`.
+- *The oracle and Friedman* (`10b290d`).
+  - `r/oracles/bppr_oracle.R`: `BayesPPR`'s own `get_mns_basis`, `get_qf_info` and `dwallenius`, from its namespace, with the standardization, the knots and the birth's ratios transcribed beside them.
+  - `BpprParityTests` (Oracle) and `BpprFriedmanTests` (Regression).
 
-**For this slice's report** (the coordinating session's point): the prior sampler rejects a whole draw when any of its terms has no knot range (`BassPriorSampler.DrawOn`: a null term redraws the collection). It therefore samples p(M)·P(range)^M on F, the same restriction the chain's target carries, unnormalized.
+**The coordinating session's points.**
+- *The prior sampler* rejects a whole draw when any of its terms has no knot range (`BassPriorSampler.DrawOn`: a null term redraws the collection). It therefore samples p(M)·P(range)^M on F, unnormalized, the same restriction the chain's target carries.
+  - Under a ridge basis, a block with undefined knots (below) is a term with no range in the same sense: the expansion gives none and the design refuses it for support.
+  - Geweke's test reads the two together: the prior sampler's acceptance is 0.999 there.
+- *What a draw reports.* A draw holds K column ids per ridge, since its coefficients are the columns'. Every readout that counts terms divides by K, and every readout that walks coefficients reads columns.
+  - *M's posterior:* `BassPosteriorSummary.Count` (`BassSummary.cs:73`) reads `TermCount(K)`.
+  - *Traces:* `BassTraces` (`BassTraces.cs:44`) reads `TermCount(K)`.
+  - *The structural monitors:*
+    - the chain's and the flat histogram's M functional read the structure state's count (`BassRun.cs:341`, `BassMulticanonical.cs:214`), whose terms are structure terms;
+    - SMC's M functional reads `TermCount(K)` (`BassSmcRun.cs:168`).
+  - *Mass at the cap* (`BassRun.cs:210`, `BassFlatHistogramRun.cs:236`, `BassSmcRun.cs:215`) compares `TermCount(K)` with M's cap, which counts ridges.
+  - *The projection comparison's mean size* (`BassProjectionComparison.cs:122`) reads `TermCount(K)`.
+  - *The count prior* reads `BassStructureFit.UnitCount`.
+  - *The order and variable counts:* the support tally (`BassDiagnostics.Support`) counts each candidate a birth or change proposes, the structure term, once at its a; E36's kernel's counts read the structure state's terms. E4's inclusion history, the one per-variable inclusion readout, is refused for a directional basis (slice 2).
+  - *Walking columns, as they should:* prediction, the gradient, E8, the multi-output coefficient checks, the monitored fitted values (`BassOutputFunctionals`), and the sensitivity's id table.
+  - *Tested on a K = 4 fit* under the chain, tempering and SMC:
+    - every draw holds whole blocks;
+    - the summary's mean M equals the draws' column count over K;
+    - the traces equal it draw by draw (chain and tempering; SMC keeps none);
+    - one inclusion count: the support tally's attempts equal the births' and changes' attempts with a term, not K times them, at orders 1 to 3 only.
+    - The prior chain's Geweke test asserts the same identity, with none at order 0.
+    - The log prior at M = 2 reads M = 2's, not M = 8's (−13.14 against −11.53).
+- *Coincident knots.* Two cases arise.
+  - *Coincident upper knots* (t_j = t_{K+1} for some j ≤ K) leave d_j's divisor zero. The knots are null, the expansion gives no block, and the term lies outside the support, as a range with no width does: a `Support` refusal, nothing renormalized.
+  - *Coincident interior knots* (t_j = t_{j+1} < t_{K+1}) divide by no zero, but they make two columns equal (d_j = d_{j+1}). D06's gate refuses the block: a `Numerical` refusal, outside F.
+  - Tested: on an input tied at 0.5 on every third case, +e₀'s knots from its range's lower end are −3.95, −2.15, −0.330003, −0.330003, 0.786, 1.89, and the block is refused `Numerical`; a top tie gives null knots and a `Support` refusal.
+- *Admission is all or none.* The design proposes the whole structure through its scratch load, so a block with one column refused is refused whole, and the design holds no partial block. Tested: a refused birth and a refused change leave the design's terms, columns, residual and fitted sums exactly as they were, with nothing pending to accept.
+- *The fit's degree.* At K ≥ 2 the column degrees are the paper's (one at t₀, three at the quantile knots), so `Structure.Degree` is not read, and the config refuses any value but 1, the default, rather than ignore it. At K = 1 it is the hinge's q, as in slice 2.
+  - K = 1 builds no expansion: each term is its own column, slice 2's hinge. At degree 2, its columns match slice 1's hand hinge to 3.3·10⁻¹⁶ relative.
+  - The config also refuses, at K ≥ 2, the column mass support rule, `HingeNormalization` and KHAOS's raw ridge form, which each read the columns' scale; the paper's columns are unnormalized.
+
+**Gates.**
+- *Concern 1* (`RidgeColumnTests`, 6 cases):
+  - knots against R's type-7 quantile by hand: 1.7·10⁻¹⁵;
+  - the columns and their derivatives against the paper's formulas in exact rational arithmetic, on the training cases and past the range: 3.2·10⁻¹⁵ relative to |d_{ℓ−1}| + |d_K|;
+  - a seeded sweep of 17,184 points: values 3.0·10⁻¹⁵, derivatives 5.1·10⁻¹⁶;
+  - derivatives against central differences through the basis: 8.1·10⁻¹¹;
+  - through a fit: prediction 2.3·10⁻¹⁵ and the gradient 2.5·10⁻¹⁵ against the hand sum; E8's C off its rank-one image 2.7·10⁻¹⁶; the moment service refuses.
+- *Concern 2* (`DirectionalRidgeTests`, 10 cases):
+  - each proposal is the proposed structure's strict load, bit for bit;
+  - the collapsed law over the blocks' columns against the dense marginal: 4.8·10⁻¹³ relative;
+  - each move's ratio (two births, their deaths, eight changes, four at a = 1) against a direct evaluation: 5.2·10⁻¹¹;
+  - Geweke's test with the prior alone (K = 4, M ≤ 3; 120,000 sweeps against 30,000 prior draws; 10 statistics): worst |z| 1.20, M at −0.09. Births 37% accepted, deaths all, changes all but 0.2%;
+  - a K = 4 fit on the single index (n = 300, noise sd 0.1) under the chain, tempering and SMC: the surface's RMSE 0.015, 0.010 and 0.0097 of a spread 0.596; E8's angle 0.0071, 0.0101 and 0.0081 rad. Mean M 2.00 under the chain against 1.00 under tempering and SMC; concern 3's Friedman readings say why;
+  - the coincident knots, admission, degree and K = 1 cases above, and the config's refusals.
+- *Concern 3:*
+  - `BpprParityTests` against `BayesPPR` 0.2.0 on fixed draws (two ridges and a proposed third, K = 4, n = 60, g = 60), read against the corrected ratios:
+    - the standardization 6.7·10⁻¹⁶; the knots 5.6·10⁻¹⁶; the basis columns 1.2·10⁻¹⁵;
+    - the birth's likelihood ratio, −n/2·(ln sse′ − ln sse) − K/2·ln(g + 1): Δ 5.1·10⁻¹³;
+    - the active count and variable set's ratio: Δ 1.4·10⁻¹⁵;
+    - the count ratio, the engine at h₁ = 10⁷, h₂ = 10⁶ against `BayesPPR`'s Poisson(10): Δ 8.0·10⁻⁷, the stated approximation.
+  - *Friedman's function* (exploration, not validation; `BpprFriedmanTests`): the paper's §3.1 setup at `BayesPPR`'s defaults in the engine's terms:
+    - K = 4, A = 3, ω₀ = υ₀ = 1, p₀ = 2/3, n_active = 20, κ = 1000;
+    - Zellner–Siow (τ = 1/g, τ ~ Gamma(½, rate n/2)), Jeffreys σ², the intercept inside the g-prior, M capped at 73 = min(150, ⌊n/K⌋ − 2);
+    - **the count prior** h₁ = 10⁷, h₂ = 10⁶, Poisson(10) to 8·10⁻⁷ in its ratios;
+    - 20,000 sweeps, the last 2,000 kept, 2,000 points out of sample.
+
+    `BayesPPR` ran on the same data at its defaults (`artifacts/chip-bppr/probes/friedman_bppr.R`):
+
+    | Seed | | RMSE y | RMSE f | cover y | cover f | M kept | wall clock |
+    | --- | --- | --- | --- | --- | --- | --- | --- |
+    | 3671 | engine | 1.114 | 0.506 | 95.2% | 85.3% | 6 | 8.3 s |
+    | | `BayesPPR` | 1.115 | 0.482 | 95.7% | 83.3% | 5 | 20.0 s |
+    | 3681 | engine | 1.066 | 0.435 | 95.2% | 82.9% | 4 | 4.0 s |
+    | | `BayesPPR` | 1.115 | 0.547 | 94.5% | 71.2% | 4 | 23.8 s |
+    | 3691 | engine | 1.105 | 0.487 | 94.4% | 76.8% | 5 | 5.2 s |
+    | | `BayesPPR` | 1.147 | 0.568 | 93.0% | 75.4% | 6 | 23.0 s |
+    | paper | one run | 1.05 | 0.38 | 94.9% | 91.1% | | |
+
+    The engine and `BayesPPR` read alike on the same data. Both fall short of the paper's f readings, which come from one run on one draw of the data. The test's bounds catch only a gross failure: RMSE f < 1, RMSE y < 1.5, y coverage in [0.85, 1], f coverage in [0.6, 1].
+  - *M does not move once settled, in either sampler.* Over the kept draws M is constant in all six runs; the engine accepted no birth and no death in 2,000 sweeps.
+    - The likelihood charges each block K/2·ln(1 + g), 11.4 nats at g ≈ n under Zellner–Siow and more at larger g. A birth must cut the residual sum of squares by about 7% to pay for it, where a block that fits only noise cuts about 4σ², 1.3%; a needed block's death costs far more than it saves.
+    - The ridge fit test's chain held M = 2 where tempering and SMC found 1.
+  - *A birth's `Numerical` refusals* (28%, 24% and 5% of births at M = 6, 5 and 4) are D06 refusing a ridge whose t₀ lies below every case.
+    - Such a ridge, 1 − p₀ = ⅓ of births, has b₁ affine over the data. Once the current ridges' affine b₁ and the intercept span the inputs a new one reads, its b₁ lies in their span.
+    - At a settled state of a chain on two seeds' data (probe `FriedmanRefusalProbe.cs`, 5,000 births each): of the births with t₀ below every case, 984 of 1,651 were refused at seed 3681 and 361 of 1,714 at 3671; of the others, 0 of 3,349 and 6 of 3,286.
+    - `BayesPPR`'s `get_qf_info` refuses such births too: its Cholesky fails on an exact span, or its diagonal ratio passes 1,000.
+- *Fitting untouched:* every test project test-select selects, read from disk, on snapshots of HEAD plus each concern's files:
+  - `332692b`: Oracle 21 of 39 classes, 105 of 105; Regression 247 of 339, 2,704 of 2,704.
+  - `349ab81`: Oracle 21 of 39, 105 of 105; Regression 248 of 343, 2,714 of 2,714. The gate ran before two test-side additions (the K = 4 fit's inclusion count, the newest angle in the bit-for-bit test) and a death's NaN angle; on a snapshot of `b5fac86` plus the commit's files, the five classes that read them (`DirectionalRidgeTests`, `RidgeColumnTests`, `DirectionalChainTests`, `DirectionalHingeTests`, `BassDesignTests`) pass 51 of 51.
+  - `10b290d`: Oracle 1 of 40 classes, 1 of 1; Regression 1 of 344 with the pinned tier, 45 of 45.
+  - The other 25 projects hold none of the files and select nothing.
+- *The cost row:* (indicative: wall clock, CostProfile's meter after a discarded warm-up pass; slice 2's single index on [0, 1]⁴, each chain burnt in 3,000 sweeps; high priority on cores 0 to 7, the machine at 24% load before; probe `artifacts/chip-bppr/probes/BpprBlockCostProbe.cs`):
+
+  | Median µs | birth | death | change | sweep | prediction per draw |
+  | --- | --- | --- | --- | --- | --- |
+  | n = 300, axis hinges (M 5) | 4.7 | 1.1 | 4.9 | 5.3 | 18 |
+  | n = 300, directional hinge (M 3) | 10.8 | 1.0 | 11.6 | 9.2 | 19 |
+  | n = 300, ridge K = 4 (M 1) | 76 | 7.5 | 52 | 54 | 27 |
+  | n = 1000, axis hinges (M 7) | 19.9 | 1.7 | 12.1 | 10.6 | 68 |
+  | n = 1000, directional hinge (M 5) | 33.9 | 1.7 | 33.7 | 20.7 | 74 |
+  | n = 1000, ridge K = 4 (M 1) | 222 | 6.7 | 157 | 122 | 75 |
+
+  A block's birth or change costs 4.5 to 7 times slice 2's hinge's, at one ridge against its three and five terms. The strict load evaluates and factors every block's columns, not the new block's alone, so the cost grows with M: Friedman's chains, at M 4 to 6 and n = 300, take about 4 to 8 s for 20,000 sweeps, 200 to 400 µs a sweep. The readout reads columns, one coefficient each.
+
+**Decisions taken beyond the brief.**
+- *Proposals by a strict scratch load*, not bordered rank-K updates. Each block proposal costs a structure's build, O(N(KM)²), but every mode the design serves is the strict build's, and a restore or a hand-over reproduces it bit for bit. Rank-K updates are the follow-up below.
+- *The support count reads b₁*, the block's reach; the late cubic columns are nonzero on only the top quarter of the cases above t₀. A ridge basis takes the count rule; the column mass rule is refused.
+- *`Structure.Degree`* is refused unless 1 at K ≥ 2, rather than ignored.
+- *n_active is floored at K + 1*, so the cases above U fill K + 1 knots, `BayesPPR`'s floor; it is logged as an auto-pick.
+- *M's default cap* is ⌊(N − 1)/K⌋, BASS's N − 1 columns read at K columns a ridge; Friedman sets `BayesPPR`'s 73.
+
+**Unbuilt.**
+- The labelled options, slice 4.
+- `BayesPPR`'s posterior run as a gate: read once, on Friedman, as exploration above.
+
+**Follow-ups.**
+- *Rank-K bordered updates for block proposals.* They would replace the strict build's O(N(KM)²) with a rank-K border. This changes only the cost row: a block birth or change against slice 2's hinge. Decide from the cost row.
+- *One projection per proposed direction* (slice 2's follow-up): a block reads one projection for its range, its knots and K columns. The same decision.
+- *Mixing over M under ridge blocks.* A chain holds M where its burn-in leaves it, and so does `BayesPPR`. This decides whether a ridge basis's default sampler is tempering, SMC or several chains, or whether to build a block split/merge move. The reading that decides it: M's spread across chains and seeds, against tempering's and SMC's, on Friedman. If tempering or SMC spread M where single chains hold it, the default changes or the move is built; if all of them hold it, M is identified on these data and nothing changes.
+- *Affine ridges.* A third of births propose a ridge whose b₁ is affine over the data, and at a settled state many of them are refused (60% and 21% at the probe's two states). Most current ridges are such ridges (4 of 5 and 4 of 6 there). This is the paper's prior (p₀), not a defect, and a labelled option for p₀ is slice 4's question if the user wants it.
+
+**Doc changes owed.**
+- `docs/Maths/Regression/BASS.md`: the ridge basis.
+  - the expansion at the design boundary; the columns and their knots;
+  - undefined knots outside the support and coincident interior knots outside F;
+  - admission all or none; the degree; the readouts that count ridges;
+  - the count prior's units; n_active's floor; M's cap; the config's refusals; the cost row.
+- `docs/Maths/Regression/Sources&Changes.md`:
+  - `BayesPPR`'s basis and the count prior's approximation of its Poisson;
+  - the Friedman readings beside the paper's and `BayesPPR`'s on the same data;
+  - M's mixing in both samplers.
 
 ### Slice 2 verified from a clean archive, its Oracle selection to follow (coordinating session, 2026-11-15)
 
