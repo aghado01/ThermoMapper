@@ -35,6 +35,28 @@ As in the archived brief: each slice is reported here, then waits for the main s
 
 Newest first.
 
+### 2026-11-14 — The confidence through BASS's group-units call
+
+Built as the coordinator approved: one optional parameter on `BassFit.GroupConformal`, committed on its own.
+
+**Landed** on `main`, nothing pushed:
+- `14fd05d`:
+  - `BassFit.GroupConformal` gains `double? confidence = null`, last in its parameter list, with its param tag. Nothing else in `BassFit.cs` changes.
+  - `BassCandidates.GroupUnits` passes it to `GroupConformal.Density`.
+  - `BassGroupConformalTests` gains one test.
+- *Existing calls* compile and read unchanged.
+
+**Gates.**
+- *The test* (the crossed fixture, twelve held-out readers each at schools L0 and L1, m 13, α 0.5). The same seams come through the case-level call, each case in its cell's stratum, then pooled, since the strata do not touch the values.
+  - *Without a confidence:* the call omitting it, the call passing null, and `GroupConformal.Density` on those seams give the same p-values bit for bit, at CB-1's k of 6.
+  - *At β 0.9:* the call matches `GroupConformal.Density` with the same confidence, in level and p-values. Its level is `TrainingConditional.Level(13, 0.5, 0.9)`, below 6, and each set's training-conditional miscoverage at 0.9 is at most α.
+- *The class's two earlier tests* pass unchanged.
+- *Per commit,* the selected classes and the pinned tier: Maths.Regression.Tests 236 of 327 classes, 2,637 of 2,637; Maths.Oracle.Tests 13 of 39 classes, 57 of 57; Maths.Samplers.Tests compiles none of these files.
+
+**Defects found: none.**
+
+**Doc changes owed:** the BASS conformal section's row for `BassFit.GroupConformal` gains its `confidence`.
+
 ### 2026-11-14 — Sets to the guarantee: the split forms' (α, β) level
 
 Built at the user's pick (2026-11-14, "Sets to the guarantee"), the first of the miscoverage bound's two follow-ups. Separately, `LossBound`'s docstrings now name the Lean's `gaffke_calibration` and `highProbability_risk` beside their Theorem 1 citations (`9cf0fd5`, comment only), as the conformal-lean thread offered (8594176).
