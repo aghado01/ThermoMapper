@@ -36,6 +36,57 @@ As in the archived brief: each slice is reported here, then waits for the main s
 
 Newest first.
 
+### 2026-11-14 — Slice 17's follow-up: RoBAS-Full, the horseshoe residual score
+
+Built at the user's pick (2026-11-14, "RoBAS-Full"), the first of slice 17's follow-ups. Sources read in TeX: RoBAS (arXiv 2607.04236v2), §3.2 with (8), Appendix's derivation of the RoBAS-Full score and its choice of a = b = ½, the marginal-likelihood lemma, and the plug-in σ̂² of the robustness theorem's extension.
+
+**Landed** on `main`, nothing pushed:
+- `942df9c`:
+  - `ResidualScore.Horseshoe`, read by `ResidualShrinkage.Prediction`;
+  - `ResidualShrinkage.LogKummer`, ln ₁F₁(1; 3/2; −x);
+  - `HorseshoeScoreTests`.
+- *Two existing tests now handle the new value.* `ScoresBeyondTheModelTests.TheResidualScores_AreTheirDefinitions` gains RoBAS-Full's two-pass definition, where its default branch would otherwise have read the new score as RoBAS-EB's. `ResidualIntervalTests` leave RoBAS-Full out, since the grid-free form refuses it.
+- *Existing scores read unchanged.*
+
+**What it computes.**
+- *The working model:* R | θ ~ N(θ, σ²), θ | τ² ~ N(0, σ²τ²/n), τ ~ C⁺(0, 1), the horseshoe.
+- *The score.* By their lemma, a unit's Bayes-assisted score ranks as the marginal likelihood of the other n: ln p(r₋ⱼ) = −n s²₋ⱼ/(2σ̂²) + ln ₁F₁(1; 3/2; −n r̄²₋ⱼ/(2σ̂²)), up to a constant every unit shares. σ̂² = Σ(r − r̄)²/n is taken over all n + 1 residuals, their plug-in, so it is shared by every unit at a candidate. The others' mean and spread come from the residuals centred at their overall mean, as RoBAS-EB reads them. Where all n + 1 residuals are equal, every unit ties.
+- *The function.* ₁F₁(1; 3/2; −x) = D(√x)/√x, D Dawson's integral (Kummer's transformation).
+  - Up to x = 36: e⁻ˣ Σ xᵏ/(k!(2k + 1)), every term positive.
+  - Past it: the asymptotic (1/z) Σ (2k − 1)!!/zᵏ with z = 2x, cut at its least term, about e⁻³⁶ at the seam.
+- *What it does.* Near zero the score shrinks as the horseshoe does. Under a large mean shift it ranks as distance to average (their robustness theorem).
+- *No interval theorem* is proved for it (theirs is RoBAS-EB's). So the grid form serves it, and `Intervals` refuses it, pointing there.
+
+**Gates.**
+- *The function against its integral.* Simpson on ∫₀¹ 2s·e^{−x s²(2 − s²)} ds, or past x = 100 on (1/(2x)) ∫₀⁶⁰ e^{−w}(1 − w/x)^{−1/2} dw, at nineteen x from 1e-12 to 1e12, across the seam at 36 and the reference's switch at 100. The largest difference in the log is 4.4e-13. D(1) = 0.53807950691 holds to 10 decimals.
+  - The first reference, Simpson on v directly, read 5.4e-11 off at x 99, its integrand piled at v = 1. The substitution v = 1 − s² spreads it.
+- *The closed form is the working model's marginal likelihood.* It was integrated directly over φ = atan τ, where the half-Cauchy is uniform, and over θ on its conditional's window, each integrand read from the model's own densities:
+
+  | n, shift | closed form | integrated |
+  |---|---|---|
+  | 5, 0 | −6.4296749457 | −6.4296749467 |
+  | 12, 2 | −20.6754508875 | −20.6754508875 |
+  | 30, −8 | −48.5478000179 | −48.5478000069 |
+
+  This checks their constant 2/π and the reduction to ₁F₁.
+- *The definitions:* 300 random residual vectors, some shifted by 1e4, each unit's score against its two-pass definition with the quadrature's ₁F₁.
+- *Coverage and width,* as slice 17's test (n 15, α 0.1, 2,000 replications, a grid of step 0.05; se 0.0067):
+
+  | shift | distance to origin | distance to average | RoBAS-EB | RoBAS-Full |
+  |---|---|---|---|---|
+  | 0 | 0.9370, 4.052 | 0.9385, 4.215 | 0.9355, 4.108 | 0.9370, 4.082 |
+  | 3 | 0.9435, 9.449 | 0.9380, 4.239 | 0.9385, 4.243 | 0.9400, 4.258 |
+
+  RoBAS-Full sits between the references, narrower than distance to average unshifted and than distance to origin shifted. The grid's coarseness keeps every score's coverage near 0.94.
+- *The robustness:* residuals N(40, 1), n 15, 200 replications on a grid of step 0.01. RoBAS-Full's sets match distance to average's to within 0.030 in width, and are identical in 25.
+- *Refused:* the grid-free form.
+- *Neighbours:* slice 17's classes and the grid-free intervals' pass.
+- *Per commit,* the selected classes and the pinned tier: HorseshoeScoreTests, ScoresBeyondTheModelTests and ResidualIntervalTests, the classes reading the files, with the pinned tier: Maths.Regression.Tests 56 of 56; Maths.Oracle.Tests compiles the source and selects no class; Maths.Samplers.Tests compiles none of the files.
+
+**Defects found: none.**
+
+**Doc changes owed:** the scores-beyond-the-model section: RoBAS-Full's working model, score, plug-in and function, why the grid form serves it, the gates' tables, and the API rows for `ResidualScore.Horseshoe`.
+
 ### 2026-11-14 — Slice 17's follow-up: grid-free intervals for the residual scores
 
 Built at the user's pick (2026-11-14, "the grid thing from slice 17"), the third of slice 17's follow-ups. Sources read in TeX: RoBAS (arXiv 2607.04236v2), §3.4 with Algorithm 1 and the interval theorem, and Appendix's complexity note.
