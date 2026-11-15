@@ -43,7 +43,7 @@ BAPS factors A(c) = Σₖ cₖSₖ at every sampler step, and a gate (`BapsAdmis
        - The certificate is w_j = 1 − s·j(j + 1)/2 for j ≤ N and w_{N+1} = ((ρ − 1)/(ρ + 1))·w_N, where s makes (Aw)_N = 0. Then (Aw)_{N+1} = 0, |Aw| ≤ 10 and w_N ≥ 1/2.
        - The dual bound at node N gives ‖E(c)⁻¹‖₁ ≥ (ρ + 1)·√(N + 1)/20 (`norm1_inv_pathFamily`). So T > C once √(N + 1) > 20C, and the instance takes N = r².
        - The checks verify the certificate in exact arithmetic at N = 1, 4, 16 and 64.
-       - The proved constant, 1/20, sits about 3.5 times below the readings, since ρ ≈ 2n² keeps w_N near 1/2.
+       - The proved floor sits below this instance's readings by 8.4 times at N = 1, falling to 2.9 times at N = 1024. There T/√n reads 0.146, and 0.173 at N = 64. ρ ≈ 2n² keeps w_N near 1/2.
 
 
 **Symbols.** n the order. Sₖ are n × n real symmetric positive semidefinite, for k in a nonempty finite index set. c and c′ are coefficient vectors with every entry positive, c′ the reference point (c_ref in the defects brief), and A(c) = Σₖ cₖSₖ. ρₖ = cₖ / c′ₖ, m = minₖ ρₖ and M = maxₖ ρₖ. λ_min and λ_max are the extreme eigenvalues of a symmetric matrix, and κ₂ = λ_max / λ_min where it is positive definite. ‖A‖₁ is the largest column absolute sum, and κ₁(A) = ‖A‖₁‖A⁻¹‖₁. E(c) = D^{-1/2}A(c)D^{-1/2} with D = diag A(c), the unit-diagonal scaling. q bounds the nonzeros in any row (equally, any column) of every A(c).

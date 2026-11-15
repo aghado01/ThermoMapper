@@ -159,7 +159,7 @@ At the user's request ("Formalize it"), after the disproof was verified (`9c4a20
   - A tridiagonal layer, `triMat`, with lemmas for its transpose, its product with a vector, its pattern and its positive semidefiniteness. `card_filter_banded_le_three` gives q = 3.
   - `unitScale_one` and `norm1_one` now hold for any index type; before, they were stated on Fin (r² + 1). `unitScale_diagonal` sits beside them.
 
-**What it means.** √n stays in the screen's factor for banded patterns. That is now proved, at M/m ≈ 2n², where before it was only read. The proved constant 1/20 sits about 3.5 times below the readings, about 0.19·√n.
+**What it means.** √n stays in the screen's factor for banded patterns. That is now proved, at M/m ≈ 2n², where before it was only read. The proved floor sits below this instance's readings by 8.4 times at N = 1, falling to 2.9 times at N = 1024. There T/√n reads 0.146, and 0.173 at N = 64. The 0.19·√n reading belongs to the earlier family, not this one.
 
 **Self-review.**
 - *Pass 1, the statement.* The first draft left out two of (d′)'s hypotheses, 0 < M and the column count q. Without 0 < M the existential claimed less than its docstring said. Both are now stated, with q = 3 from `card_filter_banded_le_three`. The pattern is stated per Sₖ, which gives the count for every A(c).
