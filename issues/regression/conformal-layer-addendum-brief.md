@@ -43,7 +43,7 @@ Opened 2026-11-14 at the user's word ("that brief was getting way too long, adde
     M-1 and M-2 are proved in Lean.
   - *Candidates,* each with the decision it would change:
     - *The full form, built and verified* (`b07fb8d`; its report below, with two follow-ups for the user: pruning draws by weight, and both forms' capitals combined, which first needs a reading of whether the average keeps Ville's guarantee). Each score is recomputed with the newest observation, through the add-one-in weights over the stream; E35's brief calls it valid by the same theorem. Decides whether the monitor tests the full step's own scores, not only a fixed fit's.
-    - *The Sleepy Jumper.* Decides whether the monitor's bet can rest between jumps. It is defined in two places on the shelf:
+    - *The Sleepy Jumper, built and verified* (`765795c`; its report below). Resting keeps the capital through 2,000 exchangeable arrivals, ln S −0.79 against the Simple Jumper's −7.98: the Simple Jumper's neutral bet does not hold its share, since its jumps keep moving capital into the betting bets. After a change, Ville alarms in a median of 14 arrivals against 55. Decides whether the monitor's bet can rest between jumps. It is defined in two places on the shelf:
       - Vovk, Nouretdinov and Gammerman 2003, "Testing exchangeability on-line": `supellex-private/PDFs/Bayesian/Vovk2003.pdf`, PDF page 6;
       - Vovk, Gammerman and Shafer 2005, *Algorithmic Learning in a Random World*, §7.1: the full book at `PDFs/textbooks/Vovk2005.pdf`, book pages 176–177. Chapter 7 is not among the chapter files in `PDFs/Vovk2005/`, which hold chapters 2, 6, 8, 9 and 10.
 
@@ -75,6 +75,7 @@ Built at the user's pick (2026-11-15, "The Sleepy Jumper").
   - the Sleepy Jumper in the change and cost readings.
 - `MartingaleAlarmTests` gains a Ville row and the Sleepy Jumper in the delay reading.
 - *What changes for existing calls: nothing.*
+- *Verified by the main session on 2026-11-15,* from a clean archive of `338c6ab` with zero skips: the Commit selection over `765795c`'s files, 104 of 104 ([receipts](receipts/verify-conformal-sleepy-765795c/)).
 
 **What it computes.**
 - *The sources.* Both define it alike: Vovk, Nouretdinov and Gammerman 2003, §6 (`Vovk2003.pdf`, PDF page 6), and Vovk, Gammerman and Shafer 2005, §7.1 (book pages 176–177).
