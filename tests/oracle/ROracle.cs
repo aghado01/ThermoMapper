@@ -27,11 +27,21 @@ internal static class ROracle
 
     public static bool IsAvailable => Toolchain is not null && File.Exists(Toolchain.Rscript);
 
+    /// <summary>The time an oracle is given unless it states its own.</summary>
+    public static readonly TimeSpan DefaultLimit = TimeSpan.FromSeconds(120);
+
     /// <summary>
     /// Runs <paramref name="oracleRelPath"/> (relative to r/) as <c>Rscript &lt;oracle&gt; &lt;fixture&gt;
     /// &lt;out.json&gt; [tail…]</c> and returns the parsed root element. The output path is managed here.
     /// </summary>
-    public static JsonElement Run(string oracleRelPath, string fixturePath, params string[] tailArgs)
+    public static JsonElement Run(string oracleRelPath, string fixturePath, params string[] tailArgs) =>
+        Run(DefaultLimit, oracleRelPath, fixturePath, tailArgs);
+
+    /// <summary>
+    /// <see cref="Run(string, string, string[])"/> under a limit of the oracle's own, for a reference whose own
+    /// computation takes longer than <see cref="DefaultLimit"/>; the caller states the reading behind it.
+    /// </summary>
+    public static JsonElement Run(TimeSpan limit, string oracleRelPath, string fixturePath, params string[] tailArgs)
     {
         string outPath = Path.Combine(Path.GetTempPath(), $"oracle_{Guid.NewGuid():N}.json");
         var psi = new ProcessStartInfo
@@ -71,11 +81,11 @@ internal static class ROracle
 
         var stdoutTask = proc.StandardOutput.ReadToEndAsync();
         var stderrTask = proc.StandardError.ReadToEndAsync();
-        if (!proc.WaitForExit(120_000))
+        if (!proc.WaitForExit(limit))
         {
             try { proc.Kill(entireProcessTree: true); }
             catch (InvalidOperationException) { }
-            throw new TimeoutException($"R oracle '{oracleRelPath}' timed out after 120 seconds.");
+            throw new TimeoutException($"R oracle '{oracleRelPath}' timed out after {limit.TotalSeconds:0} seconds.");
         }
 
         string stdout = stdoutTask.GetAwaiter().GetResult();

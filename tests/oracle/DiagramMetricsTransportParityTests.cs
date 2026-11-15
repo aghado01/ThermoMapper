@@ -23,6 +23,12 @@ public sealed class DiagramMetricsTransportParityTests
     private const int NumProjections = 20000;   // Monte Carlo on the R side; ~1% mean error
     private const int Seed = 73;
 
+    // The oracle's own limit. Its time is T4transport's swdist over the 20000 projections, each building two ecdfs and
+    // reading 1000 quantiles from each in R; R's start, the loads, lp.assign and sinkhornD come to under 8 s. Read on
+    // 2026-11-14, the oracle alone: 185 s at High, pinned to eight processors; 344 s (p = 1) and 320 s (p = 2) at
+    // BelowNormal, the class a test host gives R, with 15 to 16 of 18 cores busy. 900 s is about 2.6 times the slowest.
+    private static readonly TimeSpan OracleLimit = TimeSpan.FromSeconds(900);
+
     // Deterministic mixed-scale finite bars, unequal counts (n = 60 vs m = 40), s = 100 — large
     // enough that T4transport's quantile interpolation bias is small (see class doc).
     private static (double Birth, double Death)[] BarsA()
@@ -59,6 +65,7 @@ public sealed class DiagramMetricsTransportParityTests
         try
         {
             JsonElement r = ROracle.Run(
+                OracleLimit,
                 "oracles/transport_oracle.R",
                 csv,
                 p.ToString(CultureInfo.InvariantCulture),
