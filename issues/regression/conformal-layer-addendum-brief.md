@@ -13,13 +13,15 @@ Opened 2026-11-14 at the user's word ("that brief was getting way too long, adde
 - GBASS's two follow-ups (`5ce91b9`) are built and verified: `GroupConformal`, group-level units for new groups; and the cell rule, `Cells` on both seams with the layer's refusal.
 - BASS's opt-in group-units call (`b79840f`, the handoff's item 16, (b)) is built and verified: `BassFit.GroupConformal`.
 - Slice 15's precision rule reads at the calibration split's size (`591eace`), built and verified: `ScoreMixture.PrecisionAt`. Fitted at 1,000 and calibrated at 399, m goes from 500 to 45 and the whole-space sets from 13.4% to none.
+- Slice 18's follow-up, a set's own miscoverage bound (`0f4d48e`), is built and verified: `TrainingConditional.Miscoverage`, the β-quantile of Beta(k, m − k) (Vovk 2012), read out on the split sets.
 - Slice 12a's k̂ diagnostic stays opt-in, as the user settled on 2026-11-14. That is the code's default (`ConformalOptions.LeaveOneOutParetoK`, false).
 - The defects chip owns `PredictiveChecks.cs` and `Pointwise.cs`'s weight check; a change there is agreed with it first (the archived brief's coordination note).
 
 ## Open, each with the decision it would change
 
 - **Slice 17's three follow-ups** (its report): RoBAS-Full, the horseshoe score; CBMA's evidence from the engines' own fits; a grid-free interval for the residual scores.
-- **Slice 18's two remaining follow-ups** (its report): the Lean's calibration at n ≥ 2; a set's own miscoverage bound.
+- **Slice 18's Lean calibration at n ≥ 2,** with the conformal Lean chip at the user's word.
+- **The miscoverage bound's two follow-ups** (its report): the (α, β) level as a set rule; a tighter law for the asymmetric interval.
 - **Slice 15's alternation speed** along the factorization's flat directions. It decides the cost at large n.
 - **τ through richer features,** the ratio estimator's open follow-up. It decides whether the layer offers a nonparametric τ.
 
@@ -42,6 +44,9 @@ Built at the user's pick (2026-11-14, "miscoverage it is"). Slice 18's other fol
   - `TrainingConditionalMiscoverage(α, β)` on `ConformalDistribution` and `SplitPredictiveDistribution`;
   - `TrainingConditionalTests`.
 - *Nothing existing changes:* these are new readouts.
+- *Verified by the main session on 2026-11-14,* from a clean archive of `74d094b` with zero skips ([receipts](receipts/verify-conformal-s18fu3-0f4d48e/)):
+  - Maths.Regression.Tests' Commit selection, 2,633 of 2,633;
+  - Maths.Oracle.Tests', 57 of 57.
 
 **What it computes.**
 - *The law* (Vovk 2012, Proposition 2a; Bian and Barber 2023). A split set accepts a test unit whose conformity reaches S₍ₖ₎, the k-th smallest of the stratum's n calibration scores, k = ⌊αm⌋, m = n + 1. Given the calibration, its miscoverage over new units is F(S₍ₖ₎−). The probability integral transform puts that at or below U₍ₖ₎, the k-th of n uniforms, Beta(k, m − k): exactly that law with continuous scores, and conservative where scores tie.
