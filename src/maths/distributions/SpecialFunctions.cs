@@ -28,7 +28,12 @@ public static partial class SpecialFunctions
     public static double LogGamma(double x)
     {
         if (x < 0.5)
-            return Math.Log(Math.PI / Math.Sin(Math.PI * x)) - LogGamma(1.0 - x);
+        {
+            // Below about 5.6·10⁻³⁰⁹, π/sin(πx) ≈ 1/x overflows; there ln Γ(x) = −ln x − γx + O(x²) is −ln x to the last bit.
+            double reflection = Math.PI / Math.Sin(Math.PI * x);
+            if (double.IsPositiveInfinity(reflection) && x > 0.0) return -Math.Log(x);
+            return Math.Log(reflection) - LogGamma(1.0 - x);
+        }
 
         x -= 1.0;
         double a = LanczosG7[0];
