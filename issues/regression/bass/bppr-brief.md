@@ -114,6 +114,22 @@ Under "Reports" below, newest first, per slice: what landed by commit; the gates
 
 ## Reports
 
+### Slice 3 verified from a clean archive (coordinating session, 2026-11-15)
+
+- **Commits:** `332692b`, `349ab81` and `10b290d`, on a snapshot of `72d3941`, through `scripts/verify-csharp.ps1` over their 25 changed files, in the two projects that select.
+- **Result:** Regression 2,717 of 2,717 and Oracle 106 of 106 at commit scope. The slice's own classes are among them: `RidgeColumnTests` 6, `DirectionalRidgeTests` 10, `BpprFriedmanTests` 3 and `BpprParityTests` 1, the last against the pinned `BayesPPR` from the archive.
+- **Read.**
+  - *The columns* against the paper's eq. (spline_expansion), in its TeX: b₁, b_ℓ = d_{ℓ−1} − d_K and d's form. The linear form past t_{K+1}, (t_K − t_{ℓ−1})(3u − t_{ℓ−1} − t_K − t_{K+1}), rederived here from the two cubes, and it meets the cubic at t_{K+1}.
+  - *The divisors:* every t_{K+1} − t_j is positive by the constructor's order on the knots.
+  - *The knots:* type-7 quantiles at (ℓ − 1)/K of the projections strictly above t₀; none with fewer than two such cases or with t_K = t_{K+1}.
+  - *The report's answers* to the four points: counts by ridge, coincident knots, admission all or none, the degree.
+- **Not read line by line:** `BassDesign`'s scratch load and the sweep's block proposals. They rest on the slice's gates (each proposal the strict load bit for bit, the collapsed law against the dense marginal, the moves' ratios, Geweke's test at K = 4) and on the oracle's parity.
+- **For the user,** from the report's follow-ups:
+  - *M's mixing under ridge blocks.* On Friedman's function f's 95% intervals cover 77% to 85% in the engine and 71% to 83% in `BayesPPR`, with M fixed over the kept draws in all six runs. The reading the report names decides between tempering or SMC as a ridge basis's default sampler and a split/merge move for blocks.
+  - *Affine ridges* under p₀, a labelled option if wanted.
+  - *Rank-K updates* for block proposals, a question of cost alone.
+- **Receipts:** `artifacts/verify-bppr-s3-72d3941/`, with the changed list, the counters and the snapshot tracked in [receipts](../receipts/verify-bppr-s3-72d3941/).
+
 ### Slice 3: the ridge block (2026-11-15)
 
 The coordinating session let the design below stand and asked for four points to be stated and tested: what a draw reports, coincident knots, admission all or none, and the fit's degree. Each is answered below. This entry replaces the in-progress one.
