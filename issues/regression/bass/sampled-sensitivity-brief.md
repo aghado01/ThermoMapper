@@ -1,6 +1,6 @@
-# Sobol indices and effects for terms without factors: E25's first build (draft brief)
+# Sobol indices and effects for terms without factors: E25's first build
 
-Date: 2026-11-15. Status: draft for the user's review. Nothing is built until the user approves it, with the decisions marked **open** below. Drafted by the second coordinating session at the user's word that E36's dependencies come first, from [E25's entry](extensions-brief.md#sensitivity-under-dependent-inputs), the [lineage review](lineage-review.md#separability-is-what-the-closed-forms-rest-on)'s note on separability, [E36's brief](bppr-brief.md) (decision 10) and a reading of the sensitivity readouts' public surface. The estimators are cited from memory until slice 0 reads them. Reports go under "Reports" below, newest first.
+Date: 2026-11-15. Status: **approved by the user on 2026-11-15** at its recommendations ("Yes, start it", to starting a chip on this brief at its recommendations). Drafted by the second coordinating session at the user's word that E36's dependencies come first, from [E25's entry](extensions-brief.md#sensitivity-under-dependent-inputs), the [lineage review](lineage-review.md#separability-is-what-the-closed-forms-rest-on)'s note on separability, [E36's brief](bppr-brief.md) (decision 10) and a reading of the sensitivity readouts' public surface. The estimators are cited from memory until slice 0 reads them. Reports go under "Reports" below, newest first.
 
 ## Why
 
@@ -23,7 +23,7 @@ Date: 2026-11-15. Status: draft for the user's review. Nothing is built until th
 
 ## Decisions
 
-All **open**, each with a recommendation. Each lands on a page with its alternatives and trade-offs when built.
+Each was open with a recommendation, and the user approved the brief at its recommendations, so the recommended form is the one to build. The alternatives stay recorded for the page each decision lands on, with its trade-offs, when built.
 
 1. **The route.**
    - *Recommended:* `SensitivitySpec` gains a route as E8's spec has: `Auto`, `Exact`, `Sampled`. `Auto` is exact when every term has factors and sampled otherwise. `Exact` refuses a fit without them. `Sampled` runs on any fit, so a separable fit checks the estimator against the closed forms.
@@ -75,7 +75,7 @@ One commit per concern; tests with the code they test; each slice ends with its 
 
 ## Working rules
 
-As [E36's brief](bppr-brief.md#working-rules) has them, with `artifacts\chip-sensitivity\` for builds. Files: `src/maths/regression/spline/bass/sensitivity/**` and their tests. The BPPR chip writes in BASS's structure chain and has edited three of the active-subspace files; E8's chip owns them. A change inside either's files is agreed by message first.
+As [E36's brief](bppr-brief.md#working-rules) has them, with `artifacts\chip-sensitivity\` for builds. "The main session" is the second coordinating session, which verifies each slice from a clean archive. Files: `src/maths/regression/spline/bass/sensitivity/**` and their tests. The BPPR chip writes in BASS's structure chain and has edited three of the active-subspace files; E8's chip owns them. A change inside either's files is agreed by message first.
 
 ## Report
 
