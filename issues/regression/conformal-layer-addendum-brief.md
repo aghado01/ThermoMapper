@@ -14,13 +14,13 @@ Opened 2026-11-14 at the user's word ("that brief was getting way too long, adde
 - BASS's opt-in group-units call (`b79840f`, the handoff's item 16, (b)) is built and verified: `BassFit.GroupConformal`.
 - Slice 15's precision rule reads at the calibration split's size (`591eace`), built and verified: `ScoreMixture.PrecisionAt`. Fitted at 1,000 and calibrated at 399, m goes from 500 to 45 and the whole-space sets from 13.4% to none.
 - Slice 18's follow-up, a set's own miscoverage bound (`0f4d48e`), is built and verified: `TrainingConditional.Miscoverage`, the β-quantile of Beta(k, m − k) (Vovk 2012), read out on the split sets.
+- Slice 18's calibration at n units is proved in the Lean (`8594176`: `gaffke_calibration`, and `highProbability_risk`, what `HighProbability` reports) and verified from a clean archive. `LossBound`'s docstrings name both (`9cf0fd5`, comments only).
 - Slice 12a's k̂ diagnostic stays opt-in, as the user settled on 2026-11-14. That is the code's default (`ConformalOptions.LeaveOneOutParetoK`, false).
 - The defects chip owns `PredictiveChecks.cs` and `Pointwise.cs`'s weight check; a change there is agreed with it first (the archived brief's coordination note).
 
 ## Open, each with the decision it would change
 
 - **Slice 17's three follow-ups** (its report): RoBAS-Full, the horseshoe score; CBMA's evidence from the engines' own fits; a grid-free interval for the residual scores.
-- **Slice 18's Lean calibration at n ≥ 2,** with the conformal Lean chip at the user's word.
 - **The miscoverage bound's two follow-ups** (its report): the (α, β) level as a set rule; a tighter law for the asymmetric interval.
 - **Slice 15's alternation speed** along the factorization's flat directions. It decides the cost at large n.
 - **τ through richer features,** the ratio estimator's open follow-up. It decides whether the layer offers a nonparametric τ.

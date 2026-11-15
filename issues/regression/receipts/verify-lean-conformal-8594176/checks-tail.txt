@@ -1,0 +1,20 @@
+
+=== Slice 14 follow-up 2b: K-fold CV+ under weights ===
+Follow-up 2b: weighted K-fold CV+, (a) likelihood-ratio weights within one fold at most alpha W / (W_k + w_t) on 68 (data, fold) cases over every reordering of the fold and the test (largest share 1.000); (b) position weights on exchangeable data at most 2c on 48 cases over every ordering (largest share 0.284), equal weights giving slice 9's merged bound
+
+=== Slice 14 follow-up 3: CB-3's margin and inflated rule under weights ===
+Follow-up 3: the weighted fragile units carry every refusal the estimates add, the inflated rule keeps every exact acceptance, and the estimated band holds the fragile units, on 4000 random (scores, estimates, bounds, weights); over every ordering of 116 data sets the estimate refuses at most alpha + M and the inflated rule at most alpha, M at most any ordering's estimated band (largest excess over alpha 0.133)
+
+=== Slice 14 follow-up 2c: merged K-fold CV+ under position weights, the lemmas ===
+Follow-up 2c: the finite layer cake on 3000 random (levels, masses); averaging super-uniform weighted-rank p-values with fixed weights at most 2c on 300 cases (largest share 0.500)
+
+=== Slice 14 follow-up 2d: the tournament across folds under likelihood-ratio weights ===
+Follow-up 2d: refused weight at most 2 alpha W + W_max on 5000 random fold-structured comparisons (largest share 0.560); over every fold and slot permutation, weighted by the test unit's w, at most 2 alpha + W_max / W on 59 data sets (largest share 0.278)
+
+=== Slice 14 follow-up 2e: merged K-fold CV+ under likelihood-ratio weights ===
+Follow-up 2e: the weighted layer cake on 4000 random cases (largest share 0.789); the event inequality on 1288 refusals of 4000 random fold-structured cases at every theta and gamma; end to end over every ordering on 84 bags, within the refined bound (largest share 0.400) and 2c(w_max) (largest share 0.400), the Markov form at every theta in 0.1 steps, and equal weights giving slice 9's merged bound
+
+=== Slice 18 follow-up: the calibration at n units (Vlassis and Thomas's Theorem 1) ===
+Follow-up (Vlassis and Thomas): the race identity against the divided differences, and the same-sign identities, on 600 cases; the flux identities, the likelihood-ratio inequality and eta's sign on 1500 edges (eta negative on 647 unsorted ones); the local insertion's identity on 6079 insertions; the chain induction on 140 two-point systems at 2201 levels, the hybrid means never falling and the final chain within alpha; the two-point mixture on 373 laws; b*_beta calibrated at n <= 4 units with their own laws on 336 cases (least slack 0.1000); the high-probability rule meeting alpha at a risk above it within 1 - beta on 480 cases (worst 0.0000, 3413 unmet outcomes) and on 72 targeted cases where it fails (worst 0.3430)
+
+All assertions hold.
