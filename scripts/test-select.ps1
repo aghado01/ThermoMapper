@@ -30,6 +30,13 @@
     test host included, with xUnit capped at -Threads and MSBuild's build servers off, and leaves a trx beside its
     runsettings under <ArtifactsRoot>test-select\.
 
+    The trap. The runsettings set DOTNET_JitDisasm and DOTNET_JitStdOutFile for the test host alone, so the run keeps
+    PredictiveChecks.Rows' compiled code at each tier in jit-Rows.txt beside the trx; a run whose test host never
+    compiles Rows leaves no such file. If PredictiveChecks.Rows ever throws that a pass over the draw weights read
+    another count than the list's, keep the run's folder (the trx, jit-Rows.txt, the run's log), record the command,
+    the environment and what else was running, and tell the second coordinating session (the defects brief's slice
+    10, issues/regression/shared-code-defects-brief.md).
+
 .EXAMPLE
     scripts/test-select.ps1 -ListOnly
     scripts/test-select.ps1 -Scope Commit -Changed src/maths/regression/spline/bass/BassNoise.cs -ArtifactsRoot D:\aghado01\ThermoMapper\artifacts\chip-x\
@@ -328,9 +335,15 @@ $runDir = Join-Path $ArtifactsRoot "test-select\$stamp-$($Scope.ToLowerInvariant
 New-Item -ItemType Directory -Force -Path $runDir | Out-Null
 $settings = Join-Path $runDir 'filter.runsettings'
 $filterXml = if ($filter) { "<TestCaseFilter>$([Security.SecurityElement]::Escape($filter))</TestCaseFilter>" } else { '' }
+# The trap (slice 10): the test host alone keeps Rows' compiled code at each tier, in its own file beside the trx. One file per
+# run folder, read on release 10.0.5: the JIT appends to the file (two processes in turn left both listings), and processes
+# writing it at once lose listings (three left 7 of 9). The method is named in full: "Rows" alone lists every class's Rows.
+$jitFile = [Security.SecurityElement]::Escape((Join-Path $runDir 'jit-Rows.txt'))
+$trapXml = "<EnvironmentVariables><DOTNET_JitDisasm>Maths.Regression.PredictiveChecks:Rows</DOTNET_JitDisasm>" +
+           "<DOTNET_JitStdOutFile>$jitFile</DOTNET_JitStdOutFile></EnvironmentVariables>"
 Set-Content -LiteralPath $settings -Encoding utf8NoBOM -Value @"
 <RunSettings>
-  <RunConfiguration>$filterXml</RunConfiguration>
+  <RunConfiguration>$filterXml$trapXml</RunConfiguration>
   <xUnit><MaxParallelThreads>$Threads</MaxParallelThreads></xUnit>
 </RunSettings>
 "@

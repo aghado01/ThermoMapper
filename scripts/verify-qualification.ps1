@@ -6,7 +6,8 @@
 #
 # -Filter is dotnet test's filter: join several tests with |, and narrow a theory's rows with &DisplayName~<text>.
 # The snapshot is verify-csharp.ps1 -NoRun -Keep's. Receipts land in artifacts/verify-<Name>/: qual.log, qual.trx,
-# counters.txt and outputs.txt, each test's outcome with its written output, which is where measurements report.
+# counters.txt and outputs.txt, each test's outcome with its written output, which is where measurements report; and
+# results\jit-Rows.txt where the test host compiled PredictiveChecks.Rows (the trap, the defects brief's slice 10).
 # The snapshot and build in artifacts/verify-main/ are removed afterwards unless -Keep.
 # Runs below normal priority on two processors. VSTEST_CONNECTION_TIMEOUT is 600 s: under load the test host can take
 # longer than the default to connect before a long theory.
@@ -32,8 +33,12 @@ if (-not (Test-Path -LiteralPath (Join-Path $work 'snap'))) { throw "no snapshot
 try {
   $projectPath = Join-Path (Join-Path $work 'snap') $Project
   $results = Join-Path $out 'results'
+  # The trap (the defects brief's slice 10), as test-select sets it: the test host alone keeps PredictiveChecks.Rows' compiled
+  # code at each tier in results\jit-Rows.txt, in the kept folder; a run whose host never compiles Rows leaves no such file.
+  New-Item -ItemType Directory -Force -Path $results | Out-Null
   $sw = [Diagnostics.Stopwatch]::StartNew()
   & dotnet test $projectPath -c Release "-p:ArtifactsRoot=$work\bin\" --disable-build-servers --filter $Filter `
+    -e 'DOTNET_JitDisasm=Maths.Regression.PredictiveChecks:Rows' -e "DOTNET_JitStdOutFile=$results\jit-Rows.txt" `
     --logger 'trx;LogFileName=qual.trx' --results-directory $results *> (Join-Path $out 'qual.log')
   "exit $LASTEXITCODE in $([int]$sw.Elapsed.TotalSeconds) s" | Tee-Object -Append -FilePath (Join-Path $out 'qual.log')
 

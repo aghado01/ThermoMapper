@@ -3,7 +3,8 @@
 #   git diff --name-only <last verified commit>..HEAD -- src tests projects > changed.txt
 #   pwsh -NoProfile -File scripts/verify-csharp.ps1 -Name e8-s7d-<head> -ChangedFile changed.txt
 #
-# Receipts land in artifacts/verify-<Name>/ (commit.log, commit.trx, counters.txt). The snapshot and
+# Receipts land in artifacts/verify-<Name>/ (commit.log, commit.trx, counters.txt, and jit-Rows.txt where the test host
+# compiled PredictiveChecks.Rows: test-select's trap, the defects brief's slice 10). The snapshot and
 # build in artifacts/verify-main/ are removed afterwards unless -Keep. -NoRun stops after extracting
 # the snapshot; pair it with -Keep to look at the snapshot. A relative -ChangedFile is read from the
 # directory the script is called from.
@@ -70,6 +71,9 @@ if (-not $NoRun) {
             Sort-Object LastWriteTime | Select-Object -Last 1
         if ($trx) {
             Copy-Item -LiteralPath $trx.FullName -Destination (Join-Path $out "commit$suffix.trx")
+            # The trap's file (the defects brief's slice 10), jit-Rows.txt beside the trx, kept before verify-main is removed.
+            Get-ChildItem -LiteralPath $trx.DirectoryName -Filter 'jit-*.txt' -ErrorAction SilentlyContinue | Where-Object LastWriteTime -GE $started |
+                ForEach-Object { Copy-Item -LiteralPath $_.FullName -Destination (Join-Path $out "$($_.BaseName)$suffix$($_.Extension)") }
             $c = ([xml](Get-Content -LiteralPath $trx.FullName -Raw)).TestRun.ResultSummary.Counters
             "${label}total $($c.total) executed $($c.executed) passed $($c.passed) failed $($c.failed) notExecuted $($c.notExecuted)" |
                 Tee-Object -Append -FilePath $counters
