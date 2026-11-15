@@ -26,8 +26,9 @@
       Slice   the whole assembly
     The slow tier is the list beside the project, slow-tests.txt, which -WriteSlowList writes from a profile's trx.
 
-    A run builds and tests in Release into -ArtifactsRoot, at below-normal priority, with xUnit capped at -Threads
-    and MSBuild's build servers off, and leaves a trx beside its runsettings under <ArtifactsRoot>test-select\.
+    A run builds and tests in Release into -ArtifactsRoot, at below-normal priority, MSBuild's worker nodes and the
+    test host included, with xUnit capped at -Threads and MSBuild's build servers off, and leaves a trx beside its
+    runsettings under <ArtifactsRoot>test-select\.
 
 .EXAMPLE
     scripts/test-select.ps1 -ListOnly
@@ -336,14 +337,16 @@ Set-Content -LiteralPath $settings -Encoding utf8NoBOM -Value @"
 
 $psi = [Diagnostics.ProcessStartInfo]::new('dotnet')
 foreach ($a in @('test', $projectPath, '-c', 'Release', "-p:ArtifactsRoot=$ArtifactsRoot", '--disable-build-servers',
-                 '--settings', $settings, '--logger', "trx;LogFileName=$Scope.trx", '--results-directory', $runDir)) {
+                 '-lowPriority', '--settings', $settings, '--logger', "trx;LogFileName=$Scope.trx", '--results-directory', $runDir)) {
     $psi.ArgumentList.Add($a)
 }
 if ($NoBuild) { $psi.ArgumentList.Add('--no-build') }
 $psi.UseShellExecute = $false
 $psi.Environment['MSBUILDDISABLENODEREUSE'] = '1'
 
-# The child inherits the priority class it is created under: lower ours for the start, then restore it.
+# The child inherits the priority class it is created under: lower ours for the start, then restore it. MSBuild starts its
+# worker nodes with its own priority switch, and without -lowPriority a node raises itself to Normal, and with it the csc,
+# vstest.console and test host it starts; -lowPriority keeps them below normal.
 $self = Get-Process -Id $PID
 $prior = $self.PriorityClass
 $self.PriorityClass = 'BelowNormal'
