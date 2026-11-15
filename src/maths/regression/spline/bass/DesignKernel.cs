@@ -66,8 +66,14 @@ public interface IDesignKernel<in TPoints>
     double Scale(BassTerm term);
 
     /// <summary>The part's separable factors, each on one variable of <paramref name="measure"/>; one on a variable the
-    /// measure does not cover is left out.</summary>
+    /// measure does not cover is left out. A part that is not <see cref="Separable"/> refuses.</summary>
     IReadOnlyList<DesignFactor> Factors(BassTerm term, ProductMeasure measure);
+
+    /// <summary>Whether <paramref name="term"/>'s part of this type is a product of one-variable <see cref="Factors"/>, which the
+    /// moment service integrates under a product measure. A part that reads several variables through one projection, E36's
+    /// directional hinge, is not: its <see cref="Factors"/> refuses, and a readout that needs factors takes the sampled route. The
+    /// default is true, and a term without the part is separable in it.</summary>
+    bool Separable(BassTerm term) => true;
 }
 
 /// <summary>

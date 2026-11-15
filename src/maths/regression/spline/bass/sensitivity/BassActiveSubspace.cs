@@ -14,11 +14,12 @@ namespace Maths.Regression.Spline.Bass.Sensitivity;
 /// posterior's summaries and decision 6's checks; and the co-active pairs.
 /// <list type="bullet">
 /// <item><b>Exact</b> (decision 1): the moment service's derivative moments under the product law, for terms that have factors, which
-/// every term type built today has. <see cref="ActiveSubspaceRoute.Auto"/> takes it under a product law.</item>
+/// every term type has but E36's directional hinge. <see cref="ActiveSubspaceRoute.Auto"/> takes it under a product law when every term
+/// the fit holds has factors.</item>
 /// <item><b>Sampled:</b> the gradient readout (<see cref="BassFit.Gradient"/>) at N points shared by every draw, so the draws' spread is
 /// the posterior's and not the Monte Carlo error's (decision 5): drawn once from the product law, or a joint sample's own, weighted
 /// (slice 4). Each draw's subspace comes from the thin SVD of its gradient factor, not from C, and each entry of C carries its standard
-/// error. <see cref="ActiveSubspaceRoute.Auto"/> takes it under a joint sample.</item>
+/// error. <see cref="ActiveSubspaceRoute.Auto"/> takes it under a joint sample, and for a fit holding a directional hinge.</item>
 /// </list>
 /// A draw is read as its terms B_a and H, the coefficient of each term at each output location (one row for a scalar fit; c_a·h_a(ℓ)
 /// for a direct functional fit, h_a its output-side factors; G_ℓk·c_ka for a basis fit, G = diag(y_s)K; for a fit of several named
@@ -39,8 +40,13 @@ internal static partial class BassActiveSubspaces
     // L⁻¹ rides with L: the diagonal's reciprocals, or under whitening the inverse root from the covariance's own eigensystem (C5).
     private sealed record Frame(BassInputs Inputs, ProductMeasure? Measure, BassInputTransform Transform, int[] Variables, string[] Names,
                                 string[] Excluded, double[] Widths, double[,] L, bool Diagonal, ActiveSubspaceRoute Route, int Degree,
-                                HingeNormalization Hinges, PredictionCases? SampleCases, double[]? SampleWeights, double[,] LInverse)
+                                HingeNormalization Hinges, PredictionCases? SampleCases, double[]? SampleWeights, double[,] LInverse,
+                                bool Separable)
     {
+        // The moment service under the product law, for the exact route and decision 6's checks; none under a joint sample, which has no
+        // product law, or for terms without one-variable factors, which it cannot integrate (a directional hinge).
+        public BassMoments? Moments(BassInputs inputs, int degree) => Measure is null || !Separable ? null : BassMoments.On(inputs, degree, Measure, Hinges);
+
         public int P => Variables.Length;
 
         public double[,] Map => (double[,])L.Clone();
@@ -79,7 +85,8 @@ internal static partial class BassActiveSubspaces
         Fingerprint(fit, data);
         BassInputs inputs = BassInputs.Prepare(data, fit.Transform);
         Frame frame = FrameOf(inputs, fit.Transform, fit.Config.Structure.Degree, fit.Config.Structure.ResolvedHingeNormalization, spec.Measures, spec.Sample,
-                              spec.Metric, spec.Route, spec.Points, spec.Dimension);
+                              spec.Metric, spec.Route, spec.Points, spec.Dimension,
+                              Separable(inputs, fit.Config.Structure.Degree, fit.Config.Structure.ResolvedHingeNormalization, [fit.Terms]));
         bool functional = data.Response is FunctionalResponse, named = data.Response is MultiOutputResponse;
         if (!functional && !named && spec.OutputMetric is not null)
             throw new ArgumentException("An output metric weighs a functional fit's outputs or a fit's several named outputs; this fit's response is scalar.", nameof(spec));
@@ -96,7 +103,7 @@ internal static partial class BassActiveSubspaces
         Func<int, Surface> surface = functional ? DirectFunctional(fit, data, inputs, pooled, at)
                                    : named ? d => Named(fit, pooled[d])
                                    : d => Scalar(fit, pooled[d]);
-        BassMoments? moments = frame.Measure is null ? null : BassMoments.On(inputs, frame.Degree, frame.Measure, frame.Hinges);
+        BassMoments? moments = frame.Moments(inputs, frame.Degree);
 
         var cMetric = new double[selected.Length][,];
         var draws = new DrawSubspace[selected.Length];
@@ -172,13 +179,13 @@ internal static partial class BassActiveSubspaces
         TrainingLocationsOnly(spec.OutputMetric);
         (BassInputs inputs, BassFit first, int degree) = BasisInputs(fit);
         Frame frame = FrameOf(inputs, first.Transform, degree, BassBasisEffects.OneNormalization(fit), spec.Measures, spec.Sample, spec.Metric, spec.Route,
-                              spec.Points, spec.Dimension);
+                              spec.Points, spec.Dimension, Separable(inputs, degree, BassBasisEffects.OneNormalization(fit), fit.Components.Select(c => c.Terms)));
         int m = fit.Decomposition.Locations;
         Patterns(spec.OutputPatterns, true, m);
         MetricRoots w = Metric(spec.OutputMetric, m);
         double[,]? s0 = spec.OutputPatterns > 0 ? w.PsdRoot : null;
         (int[] selected, Func<int, Surface> surface) = BasisSurfaces(fit, spec.Draws, nameof(spec));
-        BassMoments? moments = frame.Measure is null ? null : BassMoments.On(inputs, degree, frame.Measure, frame.Hinges);
+        BassMoments? moments = frame.Moments(inputs, degree);
         var cMetric = new double[selected.Length][,];
         var draws = new DrawSubspace[selected.Length];
         double[][,]? factors = spec.OutputPatterns > 0 ? new double[selected.Length][,] : null;
@@ -569,8 +576,9 @@ internal static partial class BassActiveSubspaces
 
     // One side of a pair of fits (slice 6): its inputs, degree and hinge normalization, its pooled draws (a basis fit's joint draws) with
     // their weights, each draw as terms and H, the output functional it is read through (null for a scalar fit), its outputs per point for
-    // batching, and its gradient along the functional at shared points for a chunk of draws, per draw of the chunk.
-    private sealed record Side(BassInputTransform Transform, BassInputs Inputs, int Degree, HingeNormalization Hinges, int Count, IReadOnlyList<double>? Weights,
+    // batching, and its gradient along the functional at shared points for a chunk of draws, per draw of the chunk; and whether its terms
+    // all have one-variable factors, the exact route's condition.
+    private sealed record Side(BassInputTransform Transform, BassInputs Inputs, int Degree, HingeNormalization Hinges, bool Separable, int Count, IReadOnlyList<double>? Weights,
                                Func<int, Surface> Surface, double[]? Output, long Width,
                                Func<PointSet, int[], Func<int, Func<int, int, double>>> Gradient);
 
@@ -579,13 +587,14 @@ internal static partial class BassActiveSubspaces
         Fingerprint(fit, data);
         BassInputs inputs = BassInputs.Prepare(data, fit.Transform);
         BassDraw[] pooled = [.. fit.Draws.SelectMany(c => c)];
+        bool separable = Separable(inputs, fit.Config.Structure.Degree, fit.Config.Structure.ResolvedHingeNormalization, [fit.Terms]);
         if (data.Response is MultiOutputResponse)
         {
             // A fit of several outputs, through a combination of its named outputs: H from the output coefficients, the gradient E34's.
             double[] b = BassMultiOutput.Functional(data.Response.Outputs,
                                                     output ?? throw new ArgumentException($"A fit of several outputs is read through a combination of its outputs: {name} is required.", name),
                                                     name);
-            return new Side(fit.Transform, inputs, fit.Config.Structure.Degree, fit.Config.Structure.ResolvedHingeNormalization, pooled.Length, fit.DrawWeights,
+            return new Side(fit.Transform, inputs, fit.Config.Structure.Degree, fit.Config.Structure.ResolvedHingeNormalization, separable, pooled.Length, fit.DrawWeights,
                             d => Named(fit, pooled[d]), b, data.Response.Outputs, (points, chunk) =>
                             {
                                 BassGradient g = BassMultiOutput.Gradient(fit, data, points.Cases, chunk);
@@ -593,7 +602,7 @@ internal static partial class BassActiveSubspaces
                             });
         }
         double[]? a = OutputOf(output, data, name);
-        return new Side(fit.Transform, inputs, fit.Config.Structure.Degree, fit.Config.Structure.ResolvedHingeNormalization, pooled.Length, fit.DrawWeights,
+        return new Side(fit.Transform, inputs, fit.Config.Structure.Degree, fit.Config.Structure.ResolvedHingeNormalization, separable, pooled.Length, fit.DrawWeights,
                         Surfaces(fit, data, inputs, pooled), a, data.Response.Locations, (points, chunk) =>
                         {
                             BassGradient g = fit.Gradient(data, points.Cases, chunk);
@@ -609,7 +618,9 @@ internal static partial class BassActiveSubspaces
         (BassInputs inputs, BassFit first, int degree) = BasisInputs(fit);
         (_, Func<int, Surface> surface) = BasisSurfaces(fit, null, name);
         double[] alpha = ComponentFunctional(fit, a);
-        return new Side(first.Transform, inputs, degree, BassBasisEffects.OneNormalization(fit), fit.JointDraws.Count, null, surface, a, fit.Components.Count,
+        return new Side(first.Transform, inputs, degree, BassBasisEffects.OneNormalization(fit),
+                        Separable(inputs, degree, BassBasisEffects.OneNormalization(fit), fit.Components.Select(c => c.Terms)),
+                        fit.JointDraws.Count, null, surface, a, fit.Components.Count,
                         (points, chunk) =>
         {
             BassGradient[] g = ComponentGradients(fit, points, chunk);
@@ -625,7 +636,8 @@ internal static partial class BassActiveSubspaces
             throw new ArgumentException("The two fits' hinges have different degrees; the cross moments need one.", "other");
         if (g.Hinges != f.Hinges)
             throw new ArgumentException($"The two fits' hinges are normalized over {f.Hinges} and {g.Hinges}; the cross moments need one normalization.", "other");
-        Frame frame = FrameOf(f.Inputs, f.Transform, f.Degree, f.Hinges, spec.Measures, spec.Sample, spec.Metric, spec.Route, spec.Points, 1);
+        Frame frame = FrameOf(f.Inputs, f.Transform, f.Degree, f.Hinges, spec.Measures, spec.Sample, spec.Metric, spec.Route, spec.Points, 1,
+                              f.Separable && g.Separable);
         (int[] selF, double[] wF) = Draws3.Select(spec.Draws, f.Count, f.Weights, nameof(spec));
         (int[] selG, double[] wG) = Draws3.Select(spec.OtherDraws, g.Count, g.Weights, nameof(spec));
         if (selF.Length != selG.Length)
@@ -675,7 +687,8 @@ internal static partial class BassActiveSubspaces
         double[] a = OutputOf(spec.Output, data, "Output")!, c = OutputOf(spec.OtherOutput, data, "OtherOutput")!;
         BassInputs inputs = BassInputs.Prepare(data, fit.Transform);
         Frame frame = FrameOf(inputs, fit.Transform, fit.Config.Structure.Degree, fit.Config.Structure.ResolvedHingeNormalization, spec.Measures, spec.Sample,
-                              spec.Metric, spec.Route, spec.Points, 1);
+                              spec.Metric, spec.Route, spec.Points, 1,
+                              Separable(inputs, fit.Config.Structure.Degree, fit.Config.Structure.ResolvedHingeNormalization, [fit.Terms]));
         BassDraw[] pooled = [.. fit.Draws.SelectMany(x => x)];
         (int[] selected, double[] weights) = Draws3.Select(spec.Draws, pooled.Length, fit.DrawWeights, nameof(spec));
         var pairs = new CoActivePair[selected.Length];
@@ -718,7 +731,7 @@ internal static partial class BassActiveSubspaces
         double[] c = Functional(spec.OtherOutput ?? throw new ArgumentException("A basis fit's co-active pair reads two outputs: OtherOutput is required.", nameof(spec)), m, "OtherOutput");
         (BassInputs inputs, BassFit first, int degree) = BasisInputs(fit);
         Frame frame = FrameOf(inputs, first.Transform, degree, BassBasisEffects.OneNormalization(fit), spec.Measures, spec.Sample, spec.Metric, spec.Route,
-                              spec.Points, 1);
+                              spec.Points, 1, Separable(inputs, degree, BassBasisEffects.OneNormalization(fit), fit.Components.Select(c => c.Terms)));
         (int[] selected, Func<int, Surface> surface) = BasisSurfaces(fit, spec.Draws, nameof(spec));
         var pairs = new CoActivePair[selected.Length];
         CoActiveError[]? errors = null;
@@ -998,8 +1011,19 @@ internal static partial class BassActiveSubspaces
             throw new ArgumentException($"The fit was run on other data: its fingerprint is {fit.Identity.Fingerprint}, theirs {fingerprint}.", nameof(data));
     }
 
+    // Whether every term the tables hold has one-variable factors (DesignKernels.Separable), the exact route's condition: false once a
+    // directional hinge (E36) is among them.
+    private static bool Separable(BassInputs inputs, int degree, HingeNormalization hinges, IEnumerable<BassTermTable> tables)
+    {
+        var kernels = new DesignKernels(inputs, degree, hinges);
+        foreach (BassTermTable table in tables)
+            for (int id = 0; id < table.Count; id++)
+                if (!kernels.Separable(table[id])) return false;
+        return true;
+    }
+
     private static Frame FrameOf(BassInputs inputs, BassInputTransform transform, int degree, HingeNormalization hinges, IReadOnlyDictionary<string, InputMeasure>? measures,
-                                 JointSample? sample, InputMetric metric, ActiveSubspaceRoute route, int points, int dimension)
+                                 JointSample? sample, InputMetric metric, ActiveSubspaceRoute route, int points, int dimension, bool separable)
     {
         if (sample is not null && measures is not null)
             throw new ArgumentException("A joint sample is the law, and Measures declare a product law: give one of them.", nameof(sample));
@@ -1015,12 +1039,14 @@ internal static partial class BassActiveSubspaces
         double[] widths = [.. variables.Select(v => { var s = (RangeScale)transform.Predictors[v]; return s.Max - s.Min; })];
         ActiveSubspaceRoute resolved = route switch
         {
-            ActiveSubspaceRoute.Auto => sample is null ? ActiveSubspaceRoute.Exact : ActiveSubspaceRoute.Sampled,
+            ActiveSubspaceRoute.Auto => sample is null && separable ? ActiveSubspaceRoute.Exact : ActiveSubspaceRoute.Sampled,
             ActiveSubspaceRoute.Exact or ActiveSubspaceRoute.Sampled => route,
             _ => throw new ArgumentOutOfRangeException(nameof(route), $"No route {route}."),
         };
         if (sample is not null && resolved == ActiveSubspaceRoute.Exact)
             throw new ArgumentException("The exact route needs a product law; a joint sample runs on the sampled route.", nameof(route));
+        if (!separable && resolved == ActiveSubspaceRoute.Exact)
+            throw new ArgumentException("The exact route needs every term to have one-variable factors; a directional hinge's C reads on the sampled route.", nameof(route));
         (PredictionCases? cases, double[]? weights, double[][]? box) = sample is null ? (null, null, null) : SampleOf(sample, transform, inputs);
         double[,] l = new double[p, p];
         double[,]? lInverse = null;
@@ -1059,7 +1085,7 @@ internal static partial class BassActiveSubspaces
             for (int i = 0; i < p; i++) lInverse[i, i] = 1.0 / l[i, i];
         }
         return new Frame(inputs, sample is null ? measure : null, transform, variables, names, excluded, widths, l, diagonal, resolved, degree,
-                         hinges, cases, weights, lInverse);
+                         hinges, cases, weights, lInverse, separable);
     }
 
     // A joint sample's cases, its normalized weights and its continuous columns in box units. Refused: points outside the boxes (the

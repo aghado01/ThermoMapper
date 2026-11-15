@@ -17,7 +17,9 @@ namespace Maths.Regression.Tests;
 /// central difference returns, and a higher degree's is zero. The factor derivative that sensitivity reads
 /// (<see cref="BassMoments.FactorDerivative"/>) against the same differences.</item>
 /// <item>A categorical part has no derivative; a term without a variable is constant in it.</item>
-/// <item>A directional hinge, a kernel that reads several variables, implements the contract as it stands.</item>
+/// <item>The directional hinge (E36), a kernel that reads several variables through one projection, implements the contract as it
+/// stood, promoted from the test-side kernel this class held until E36's slice 1: its derivatives against differences, and its refusal
+/// of separable factors.</item>
 /// </list>
 /// </summary>
 public sealed class BassDesignKernelTests
@@ -355,43 +357,21 @@ public sealed class BassDesignKernelTests
         Assert.True(checkedTerms > 0 && withFunctional > 0, "the functional fit should hold terms with an output part");
     }
 
-    // (wᵀx − t)₊ on a case-side kernel: it reads several variables, so it is no product of one-variable factors and
-    // declares none, but the contract's column evaluation and its partial derivatives hold as they stand.
-    private sealed class DirectionalHinge(double[] w, double knot) : IDesignKernel<CaseInputs>
-    {
-        public bool Reads(BassTerm term) => true;
-        public bool Differentiable => true;
-        public void Validate(BassTerm term) { }
-
-        public void Multiply(BassTerm term, CaseInputs at, Span<double> column)
-        {
-            for (int i = 0; i < column.Length; i++) column[i] *= Math.Max(Projection(at, i) - knot, 0.0);
-        }
-
-        public void MultiplyDerivative(BassTerm term, int variable, CaseInputs at, Span<double> column)
-        {
-            for (int i = 0; i < column.Length; i++) column[i] *= Projection(at, i) - knot > 0.0 ? w[variable] : 0.0;
-        }
-
-        public double Scale(BassTerm term) => 1.0;
-
-        public IReadOnlyList<DesignFactor> Factors(BassTerm term, ProductMeasure measure) => [];
-
-        private double Projection(CaseInputs at, int i)
-        {
-            double sum = 0.0;
-            for (int v = 0; v < w.Length; v++) sum += w[v] * at.Continuous(v)[i];
-            return sum;
-        }
-    }
-
+    // (θᵀz − t)₊ on the case side: it reads several variables, so it is no product of one-variable factors and refuses to declare
+    // any, but the contract's column evaluation and its partial derivatives hold as they stand.
     [Fact]
     public void ADirectionalHinge_FitsTheContractAsItStands()
     {
-        (_, BassInputs inputs, _) = Setup(Scalar, 1);
-        IDesignKernel<CaseInputs> kernel = new DirectionalHinge([0.6, -0.8], 0.1);
+        (BassBasis basis, BassInputs inputs, ProductMeasure measure) = Setup(Scalar, 1);
+        IDesignKernel<CaseInputs> kernel = basis.Kernels.Case[3];
         CaseInputs at = Interior(inputs.Cases);
-        var term = new BassTerm([new HingeFactor(0, 1, 0)]);
+        var term = new BassTerm(directional: new DirectionalHinge(new ProjectionDirection([0, 1], [0.6, -0.8]), 0.1));
+        Assert.True(kernel.Reads(term) && kernel.Differentiable && kernel.ReadsVariable(term, 1));
+        Assert.False(kernel.Separable(term) || basis.Kernels.Separable(term));
+        Assert.True(basis.Kernels.Separable(ScalarTerms()[4]) && kernel.Separable(ScalarTerms()[4]) && !kernel.Reads(ScalarTerms()[4]));
+        Assert.Throws<NotSupportedException>(() => kernel.Factors(term, measure));
+        Assert.Empty(kernel.Factors(ScalarTerms()[4], measure));
+        Assert.Throws<ArgumentException>(() => basis.Validate(new BassTerm(directional: new DirectionalHinge(new ProjectionDirection([2], [1.0]), 0.0))));
         for (int v = 0; v < 2; v++)
         {
             var derivative = new double[at.Cases];

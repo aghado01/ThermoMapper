@@ -13,7 +13,8 @@ internal static partial class BassActiveSubspaces
         double[] a = BassMultiOutput.Functional(data.Response.Outputs, spec.Output ?? throw new ArgumentException("The first output functional is required.", nameof(spec)));
         double[] b = BassMultiOutput.Functional(data.Response.Outputs, spec.OtherOutput ?? throw new ArgumentException("The second output functional is required.", nameof(spec)));
         var inputs = BassInputs.Prepare(data, fit.Transform);
-        Frame frame = FrameOf(inputs, fit.Transform, fit.Config.Structure.Degree, fit.Config.Structure.ResolvedHingeNormalization, spec.Measures, spec.Sample, spec.Metric, spec.Route, spec.Points, 1);
+        Frame frame = FrameOf(inputs, fit.Transform, fit.Config.Structure.Degree, fit.Config.Structure.ResolvedHingeNormalization, spec.Measures, spec.Sample, spec.Metric, spec.Route, spec.Points, 1,
+                              Separable(inputs, fit.Config.Structure.Degree, fit.Config.Structure.ResolvedHingeNormalization, [fit.Terms]));
         var pooled = fit.Draws.SelectMany(c => c).ToArray();
         var (selected, weights) = Draws3.Select(spec.Draws, pooled.Length, fit.DrawWeights, nameof(spec));
         var pairs = new CoActivePair[selected.Length]; CoActiveError[]? errors = null;

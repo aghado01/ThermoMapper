@@ -258,7 +258,8 @@ public sealed record PoincareCheck(double[,] Total, double[,] Bound, double[,] R
 /// <param name="Points">The sampled route's points N, drawn or the joint sample's; 0 on the exact route.</param>
 /// <param name="Posterior">The draws' C, subspaces and summaries, in the metric.</param>
 /// <param name="MonteCarloError">The sampled route's standard error of each entry of each draw's C, in the metric; null on the exact route.</param>
-/// <param name="Poincare">The per-draw consistency checks; null under a joint sample, which has no marginal bound to check.</param>
+/// <param name="Poincare">The per-draw consistency checks; null under a joint sample, which has no marginal bound to check, and for a
+/// fit holding a directional hinge, whose totals the moment route cannot integrate.</param>
 /// <param name="DrawIndex">Each draw's index among the fit's pooled draws.</param>
 /// <param name="Ranks">Each draw at its own rank by the spec's rule (slice 5); null without a rule.</param>
 /// <param name="Outputs">G = E[J W_x Jᵀ]'s patterns (slice 5); null unless asked of a functional fit.</param>

@@ -90,8 +90,9 @@ public sealed class CategoricalFactor : IEquatable<CategoricalFactor>
 /// <summary>
 /// A BASS term (D01): a continuous part of hinge factors, a categorical part of subset indicators and, for a direct
 /// functional response, a functional part of hinge factors over the output variables; or, in a polynomial-chaos fit (E19), a
-/// Legendre part of standardized shifted Legendre factors over the continuous predictors. Each part holds distinct
-/// variables, and a term holds at least one factor; a part may be empty, which leaves it the constant 1.
+/// Legendre part of standardized shifted Legendre factors over the continuous predictors; or a directional hinge (E36), alone on
+/// the case side. Each part holds distinct variables, and a term holds at least one factor; a part may be empty, which leaves it
+/// the constant 1.
 /// <para>A term is held in canonical form, each part sorted by variable, so it does not depend on the order its
 /// factors were drawn in, and terms compare by value. That makes a model's collection of terms a set of distinct values,
 /// which D01's M! counting needs, and lets a <see cref="BassTermTable"/> intern them. The term knows indices only; a
@@ -102,11 +103,14 @@ public sealed class BassTerm : IEquatable<BassTerm>
     private readonly HingeFactor[] _continuous, _functional;
     private readonly CategoricalFactor[] _categorical;
     private readonly LegendreFactor[] _legendre;
+    private readonly DirectionalHinge? _directional;
     private readonly int _hash;
 
-    /// <summary>The term with these factors, in any order.</summary>
+    /// <summary>The term with these factors, in any order. A <paramref name="directional"/> hinge takes the case side alone: its
+    /// product with hinge, Legendre or categorical factors is no term type here (E36's decisions 6 and 7).</summary>
     public BassTerm(IEnumerable<HingeFactor>? continuous = null, IEnumerable<CategoricalFactor>? categorical = null,
-                    IEnumerable<HingeFactor>? functional = null, IEnumerable<LegendreFactor>? legendre = null)
+                    IEnumerable<HingeFactor>? functional = null, IEnumerable<LegendreFactor>? legendre = null,
+                    DirectionalHinge? directional = null)
     {
         _continuous = Hinges(continuous, "continuous");
         _functional = Hinges(functional, "functional");
@@ -118,7 +122,10 @@ public sealed class BassTerm : IEquatable<BassTerm>
         for (int k = 1; k < _categorical.Length; k++)
             if (_categorical[k].Variable == _categorical[k - 1].Variable)
                 throw new ArgumentException($"Categorical variable {_categorical[k].Variable} appears twice in one term.", nameof(categorical));
-        if (_continuous.Length + _categorical.Length + _functional.Length + _legendre.Length == 0)
+        _directional = directional;
+        if (directional is not null && _continuous.Length + _categorical.Length + _legendre.Length > 0)
+            throw new ArgumentException("A directional hinge takes the case side alone; its product with hinge, Legendre or categorical factors is no term type here.", nameof(directional));
+        if (_continuous.Length + _categorical.Length + _functional.Length + _legendre.Length == 0 && directional is null)
             throw new ArgumentException("A term needs a factor; the intercept is not a term.");
 
         var hash = new HashCode();
@@ -131,6 +138,11 @@ public sealed class BassTerm : IEquatable<BassTerm>
         {
             hash.Add(-3);
             foreach (LegendreFactor f in _legendre) hash.Add(f);
+        }
+        if (_directional is not null)   // added only here, so every other term's hash stays as it was
+        {
+            hash.Add(-4);
+            hash.Add(_directional);
         }
         _hash = hash.ToHashCode();
     }
@@ -175,6 +187,9 @@ public sealed class BassTerm : IEquatable<BassTerm>
     /// <summary>The Legendre part, by continuous variable: its count is the term's order q.</summary>
     public IReadOnlyList<LegendreFactor> Legendre => _legendre;
 
+    /// <summary>The directional hinge (E36), or null for a term without one.</summary>
+    public DirectionalHinge? Directional => _directional;
+
     /// <summary>The Legendre part's degree d, the sum of its factors' α; 0 for a term without one.</summary>
     public int LegendreDegree
     {
@@ -191,7 +206,7 @@ public sealed class BassTerm : IEquatable<BassTerm>
         => other is not null && (ReferenceEquals(this, other)
             || (_hash == other._hash && _continuous.AsSpan().SequenceEqual(other._continuous)
                 && _functional.AsSpan().SequenceEqual(other._functional) && _legendre.AsSpan().SequenceEqual(other._legendre)
-                && _categorical.SequenceEqual(other._categorical)));
+                && _categorical.SequenceEqual(other._categorical) && Equals(_directional, other._directional)));
 
     /// <inheritdoc/>
     public override bool Equals(object? obj) => Equals(obj as BassTerm);
@@ -205,6 +220,7 @@ public sealed class BassTerm : IEquatable<BassTerm>
         var parts = new List<string>();
         parts.AddRange(_continuous.Select(h => $"x{h.Variable}{(h.Sign > 0 ? '+' : '−')}k{h.Knot}"));
         parts.AddRange(_categorical.Select(c => c.ToString()));
+        if (_directional is not null) parts.Add(_directional.ToString());
         parts.AddRange(_functional.Select(h => $"t{h.Variable}{(h.Sign > 0 ? '+' : '−')}k{h.Knot}"));
         parts.AddRange(_legendre.Select(f => $"ψ{f.Degree}(x{f.Variable})"));
         return string.Join(" · ", parts);

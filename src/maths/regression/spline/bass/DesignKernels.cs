@@ -7,10 +7,10 @@ namespace Maths.Regression.Spline.Bass;
 
 /// <summary>
 /// BASS's term types behind the design-kernel contract (<see cref="IDesignKernel{TPoints}"/>), bound to a fit's inputs
-/// and hinge degree: on the case side the continuous hinge product, the categorical subsets and the Legendre product (E19), on
-/// the output side the functional hinge product. <see cref="BassBasis"/> composes a term's column from them in this order, and
-/// <see cref="BassMoments"/> its factors. A term without a part leaves the column as it is, so a hinge term's column is the
-/// same bits with the Legendre kernel present.
+/// and hinge degree: on the case side the continuous hinge product, the categorical subsets, the Legendre product (E19) and the
+/// directional hinge (E36), on the output side the functional hinge product. <see cref="BassBasis"/> composes a term's column from
+/// them in this order, and <see cref="BassMoments"/> its factors. A term without a part leaves the column as it is, so a hinge
+/// term's column is the same bits with the Legendre and directional kernels present.
 /// </summary>
 public sealed class DesignKernels
 {
@@ -28,12 +28,24 @@ public sealed class DesignKernels
             throw new ArgumentOutOfRangeException(nameof(normalization), $"No hinge normalization {normalization}.");
         Normalization = normalization;
         _continuous = new ContinuousHingeKernel(inputs, degree, normalization);
-        Case = [_continuous, new CategoricalSubsetKernel(inputs), new LegendreProductKernel(inputs)];
+        Case = [_continuous, new CategoricalSubsetKernel(inputs), new LegendreProductKernel(inputs), new DirectionalHingeKernel(inputs, degree, normalization)];
         Output = [new FunctionalHingeKernel(inputs, degree, normalization)];
     }
 
     /// <summary>The interval each hinge product is normalized over.</summary>
     public HingeNormalization Normalization { get; }
+
+    /// <summary>Whether every part of <paramref name="term"/> is a product of one-variable factors the moment service integrates
+    /// (<see cref="IDesignKernel{TPoints}.Separable"/>): false for a term holding a directional hinge.</summary>
+    public bool Separable(BassTerm term)
+    {
+        ArgumentNullException.ThrowIfNull(term);
+        foreach (IDesignKernel<CaseInputs> kernel in Case)
+            if (!kernel.Separable(term)) return false;
+        foreach (IDesignKernel<OutputInputs> kernel in Output)
+            if (!kernel.Separable(term)) return false;
+        return true;
+    }
 
     // The base of c for the term's continuous hinges, Πⱼ peakⱼ: what the prefix tables divide by, so their entries take the kernel's rule.
     internal double ContinuousPeak(BassTerm term) => _continuous.Peak(term.Continuous);
@@ -278,6 +290,113 @@ internal sealed class LegendreProductKernel(BassInputs inputs) : IDesignKernel<C
             factors.Add(new LegendreDesignFactor(measure.OfContinuous(f.Variable), f.Degree));
         }
         return factors;
+    }
+}
+
+// The directional hinge (θᵀz − t)₊^q / c on the case side (E36), z the standardized continuous predictors, each read from its scaled
+// value as z = a + b·u (BassInputs.Standardizing), so prediction's cases read as training's did. One projection per case reads every
+// variable of θ at once, so the part has no separable factors: Factors refuses, and the moment service with it. c is the hinge's
+// largest value over each variable's normalization interval, the box's or the training range's, as for BASS's hinges: θᵀz is linear
+// in u, so its largest value sits at the corner where each u_j is at its upper end for θ_j > 0 and at its lower end otherwise; where
+// the hinge is zero over the whole box, c stays 1, R's guard. A derivative in u_v is Hinge.Derivative's on the projection times
+// ∂(θᵀz)/∂u_v = θ_v·b_v, so at the knot at degree one it is the mean of the one-sided limits.
+internal sealed class DirectionalHingeKernel(BassInputs inputs, int degree, HingeNormalization normalization) : IDesignKernel<CaseInputs>
+{
+    public bool Reads(BassTerm term) => term.Directional is not null;
+
+    public bool Differentiable => true;
+
+    public bool Separable(BassTerm term) => term.Directional is null;
+
+    public bool ReadsVariable(BassTerm term, int variable) => term.Directional is { } d && d.Direction.WeightOn(variable) != 0.0;
+
+    public void Validate(BassTerm term)
+    {
+        if (term.Directional is not { } d) return;
+        foreach (int v in d.Direction.Variables)
+        {
+            if (v >= inputs.Cases.ContinuousCount) throw new ArgumentException($"Continuous variable {v} does not exist.", nameof(term));
+            if (inputs.Standardizing(v) is null)
+                throw new ArgumentException($"Continuous variable {v}'s scale carries no standardization, the metric a directional hinge reads; fit the transform from the data.", nameof(term));
+        }
+    }
+
+    public void Multiply(BassTerm term, CaseInputs at, Span<double> column)
+    {
+        if (term.Directional is not { } d) return;
+        double c = Hinge.Power(degree, Peak(d));
+        bool divide = c != 0.0;
+        double[] projection = Projection(d, at);
+        for (int i = 0; i < column.Length; i++)
+        {
+            double v = column[i] * Hinge.Value(degree, 1, d.Knot, projection[i]);
+            column[i] = divide ? v / c : v;
+        }
+    }
+
+    public void MultiplyDerivative(BassTerm term, int variable, CaseInputs at, Span<double> column)
+    {
+        if (variable < 0) throw new ArgumentOutOfRangeException(nameof(variable));
+        if (!ReadsVariable(term, variable))
+        {
+            column.Clear();
+            return;
+        }
+        DirectionalHinge d = term.Directional!;
+        double slope = d.Direction.WeightOn(variable) * inputs.Standardizing(variable)!.Value.Slope;
+        double c = Hinge.Power(degree, Peak(d));
+        bool divide = c != 0.0;
+        double[] projection = Projection(d, at);
+        for (int i = 0; i < column.Length; i++)
+        {
+            double v = column[i] * (Hinge.Derivative(degree, 1, d.Knot, projection[i]) * slope);
+            column[i] = divide ? v / c : v;
+        }
+    }
+
+    public double Scale(BassTerm term) => term.Directional is { } d ? Hinge.Normalizer(degree, Peak(d)) : 1.0;
+
+    public IReadOnlyList<DesignFactor> Factors(BassTerm term, ProductMeasure measure)
+        => term.Directional is null
+            ? []
+            : throw new NotSupportedException($"Term {term} holds a directional hinge, which reads several inputs through one projection and so has no "
+                                              + "one-variable factors: the moment service, which Sobol indices, effects and E8's exact route read, cannot "
+                                              + "integrate it. E8 reads its C on the sampled route.");
+
+    // The hinge's largest value at degree one over the normalization box, θᵀz at the maximizing corner less t; 0 where that is below 0,
+    // so that the power's guard leaves c at 1.
+    internal double Peak(DirectionalHinge d)
+    {
+        double top = 0.0;
+        IReadOnlyList<int> variables = d.Direction.Variables;
+        IReadOnlyList<double> weights = d.Direction.Weights;
+        for (int k = 0; k < variables.Count; k++)
+        {
+            int v = variables[k];
+            double w = weights[k];
+            (double a, double b) = inputs.Standardizing(v)!.Value;
+            ReadOnlySpan<double> knots = inputs.ContinuousKnots(v);
+            (double lower, double upper) = normalization == HingeNormalization.TrainingRange ? (knots[0], knots[^1]) : (0.0, 1.0);
+            top += w * (a + b * (w > 0.0 ? upper : lower));
+        }
+        return Math.Max(top - d.Knot, 0.0);
+    }
+
+    // θᵀz at each case, accumulated over 𝒥 in ascending order.
+    private double[] Projection(DirectionalHinge d, CaseInputs at)
+    {
+        var projection = new double[at.Cases];
+        IReadOnlyList<int> variables = d.Direction.Variables;
+        IReadOnlyList<double> weights = d.Direction.Weights;
+        for (int k = 0; k < variables.Count; k++)
+        {
+            int v = variables[k];
+            double w = weights[k];
+            (double a, double b) = inputs.Standardizing(v)!.Value;
+            ReadOnlySpan<double> u = at.Continuous(v);
+            for (int i = 0; i < projection.Length; i++) projection[i] += w * (a + b * u[i]);
+        }
+        return projection;
     }
 }
 
