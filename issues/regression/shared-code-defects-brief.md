@@ -126,6 +126,42 @@ The shape to find moves no pinned value and leaves no existing checkpoint withou
 
 **Files.** `src/maths/regression/spline/baps/**` and their tests.
 
+## Slice 8: three problems in the test tooling, found by BPPR's gates
+
+Added by the user on 2026-11-14, from the BPPR chip's [slice 0 report](bass/bppr-brief.md#slice-0-sources-references-and-the-power-spherical-law-2026-11-14), under "Not E36's, found by its gates". Three parts, one commit per concern, in this order. Each starts with a reading of what is true today, and the report states that reading before any change.
+
+**8a. Test runs keep the shared-machine rule.**
+- *The problem.* `scripts/test-select.ps1` lowers its own priority while it starts the harness (lines 346 to 350), so the harness is below normal. The BPPR chip read the chain during a regression run: testhost (Normal) ← dotnet (Normal) ← dotnet (Normal) ← the harness's dotnet (BelowNormal). So the processes that do the work run at normal priority, in every test-select run and every `scripts/verify-csharp.ps1` verification so far.
+- *First:* reproduce the reading, and find which process leaves below normal and why. The harness starts `dotnet test` from `src/test-harness/` (`FactRunner.cs`, `Program.cs`, `TestDiscovery.cs`). MSBuild has a low-priority switch; that is cited from memory, to be read before it is relied on.
+- *The fix to find:* a run's whole tree at below normal, build nodes and test host included, by the tools' own switches where they have them.
+- *Keep:* a block that times itself sets its own priority (High, pinned) and never runs below normal; that rule is the user's. Read which runs time blocks and how they set priority, and say in the report how each stands after the fix.
+- *Gates:*
+  - the chain's priority classes read during a run, before and after, through test-select and through verify-csharp;
+  - the thread and processor caps unchanged;
+  - one project's selection and counts the same before and after;
+  - `TestHarness.Runner.Tests` and every project the changed files select.
+
+**8b. The transport oracle's time against its limit.**
+- *The problem.* `tests/oracle/ROracle.cs` gives every R oracle 120 s (line 74). `oracles/transport_oracle.R`, under `DiagramMetricsTransportParityTests.DiagramDistances_MatchT4TransportAndLpAssign` at p = 1 and 2, takes about 115 s alone, so any load fails both. They failed in the clean-archive Oracle runs of slice 6 and of BPPR's slice 0.
+- *First:* where the 115 s go: R's start and its package loads, or the transport problem itself. Time each alone.
+- *Then,* by what the reading shows: remove time that is not the reference's (a load repeated, a problem solved twice), or give this oracle a stated limit of its own with the reading behind it.
+- *Keep:* the fixture, the reference values and the assertion's tolerance. A smaller or easier case is a removal, and the user's question.
+- *Gates:* the two cases pass alone and inside a full Oracle run under the load of the day, each time recorded; every other oracle's limit unchanged; Oracle 207 of 207 at commit scope.
+
+**8c. The Distributions case that runs 15 to 22 minutes.**
+- *The problem.* `GeneralizedBetaPrimeTests.TheIntegratedDensity_MeetsTheGeneralizedHyperbolicsClosedForm` at (−0.5, 0.09, 1.0, 1.2, 0.5) ran 22 min at commit scope and 15 min in the whole assembly in BPPR's gates. Its comment says its table took 20 s before the integral about its peak, so it should now take less. `Maths.Distributions.Tests` has no `slow-tests.txt`, so every scope runs it.
+- *First:* time the case alone.
+  - Seconds alone: the cause is contention, of which 8a may be part, and the report says so.
+  - Minutes alone: find where the time goes and since which commit. A path that no longer takes the integral about its peak is a defect to fix, with the test as it is.
+- *The slow tier.* If a method still reaches the slow tier's threshold after that, write Distributions' list by the tool's own route, `-WriteSlowList` from a profile of the whole assembly ([CONTRIBUTING](../../CONTRIBUTING.md#testing-standards)). Report what it lists, since commit scope then leaves those out.
+- *Gates:* the case's time alone, before and after; the assertion and its tolerance unchanged; Distributions whole; and, if code under `src/` moves, every project the changed files select, since `Maths.Distributions` is a hub.
+
+**Times under load.** The machine is shared and loaded. Read a time alone, at least twice and apart, with the load of the moment beside it. No limit is set from one reading.
+
+**Files.** `scripts/test-select.ps1`, `scripts/verify-csharp.ps1`, `src/test-harness/**`, `tests/oracle/ROracle.cs`, `r/oracles/transport_oracle.R`, the code under the generalized hyperbolic's integrated density, `tests/Maths.Distributions.Tests/slow-tests.txt`, and their tests.
+- The BPPR chip (`local_4d3c75b2`) writes in `src/maths/distributions/` (`GammaRatio.cs`, `PowerSpherical.cs`, `SpecialFunctions.cs`) and, from its slice 1, in BASS's core.
+- Both coordinating sessions run `verify-csharp.ps1` and `test-select.ps1`. Message the second coordinating session before the commit that changes either script, so that no verification is mid-run.
+
 ## Working rules
 
 - **Order.** Slice 1, then slice 2. They touch different code, so slice 2's reading starts when slice 1 lands. The coordinating session verifies each landed slice from a clean archive ([scripts/verify-csharp.ps1](../../scripts/verify-csharp.ps1)).
