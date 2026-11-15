@@ -389,27 +389,59 @@ public readonly record struct MartingaleStep(SmoothedPValue PValue, double LogBe
 /// (<see cref="BettingCapital"/>, M-2). Under exchangeability of the scored units the capital is a (super)martingale with expectation
 /// at most 1, so its value at any stopping time that reads only the past is an e-value (<see cref="EValue"/>), and growth is evidence
 /// against exchangeability. Alarms read the capital (<see cref="MartingaleAlarm"/>): Ville's, proved, and CUSUM and Shiryaev–Roberts, whose
-/// guarantees are posed. Not thread-safe: one per stream.
+/// guarantees are posed.
+/// <para>Two forms, fixed at construction. The inductive form, by the constructor, takes each unit's score from a fixed fit
+/// (<see cref="Add(double)"/>). The full form, by <see cref="Full"/>, takes each unit's terms under the fit's draws and recomputes every
+/// unit's score under the draws reweighted by the stream so far (<see cref="FullFormPValues"/>; <see cref="Add(ReadOnlySpan{double}, ReadOnlySpan{double})"/>).
+/// Both forms' p-values are i.i.d. uniform on exchangeable streams (M-1). Each refuses the other's input.</para>
+/// Not thread-safe: one per stream.
 /// </summary>
 public sealed class ConformalTestMartingale
 {
     private static readonly AlarmProcedure[] None = [];
-    private readonly SmoothedPValues _pValues;
+    private readonly SmoothedPValues? _pValues;
+    private readonly FullFormPValues? _full;
     private readonly BettingCapital _capital;
     private readonly List<double> _path = [];
     private readonly MartingaleAlarm[] _alarms;
 
+    /// <summary>The inductive form: each unit's score from a fixed fit.</summary>
     /// <param name="bet">The betting function, fresh for this stream.</param>
     /// <param name="seed">The tie-breaking draws' seed.</param>
     /// <param name="alarms">The alarms that read the capital, each fresh for this stream.</param>
     public ConformalTestMartingale(IBettingFunction bet, int seed, params MartingaleAlarm[] alarms)
+        : this(bet, new SmoothedPValues(seed), null, alarms)
+    {
+    }
+
+    private ConformalTestMartingale(IBettingFunction bet, SmoothedPValues? pValues, FullFormPValues? full, MartingaleAlarm[] alarms)
     {
         _capital = new BettingCapital(bet);
-        _pValues = new SmoothedPValues(seed);
+        _pValues = pValues;
+        _full = full;
         ArgumentNullException.ThrowIfNull(alarms);
         _alarms = [.. alarms];
         foreach (MartingaleAlarm alarm in _alarms) ArgumentNullException.ThrowIfNull(alarm, nameof(alarms));
     }
+
+    /// <summary>The full form (<see cref="FullFormPValues"/>): each unit's terms under the fit's draws, every unit rescored at every arrival
+    /// under the draws reweighted by the stream so far.</summary>
+    /// <param name="bet">The betting function, fresh for this stream.</param>
+    /// <param name="seed">The tie-breaking draws' seed.</param>
+    /// <param name="draws">The fit's draws S.</param>
+    /// <param name="drawWeights">The draws' own weights in row order; null for equal weights.</param>
+    /// <param name="score">The score recomputed at each arrival.</param>
+    /// <param name="alarms">The alarms that read the capital, each fresh for this stream.</param>
+    public static ConformalTestMartingale Full(IBettingFunction bet, int seed, int draws, IReadOnlyList<double>? drawWeights = null,
+                                               FullFormScore score = FullFormScore.Density, params MartingaleAlarm[] alarms)
+        => new(bet, null, new FullFormPValues(draws, seed, drawWeights, score), alarms);
+
+    /// <summary>Whether this monitor is in the full form.</summary>
+    public bool IsFullForm => _full is not null;
+
+    /// <summary>The full form's effective sample size of the draws reweighted by the stream so far
+    /// (<see cref="FullFormPValues.EffectiveSampleSize"/>); NaN in the inductive form.</summary>
+    public double EffectiveSampleSize => _full?.EffectiveSampleSize ?? double.NaN;
 
     /// <summary>The alarms, with their statistics, times and guarantees.</summary>
     public IReadOnlyList<MartingaleAlarm> Alarms => _alarms;
@@ -426,10 +458,35 @@ public sealed class ConformalTestMartingale
     /// <summary>ln S₁, …, ln Sₙ.</summary>
     public IReadOnlyList<double> LogPath => _path;
 
-    /// <summary>Ranks the arrival's <paramref name="score"/> (higher conforming better), bets on its p-value and gives the step.</summary>
+    /// <summary>The inductive form: ranks the arrival's <paramref name="score"/> (higher conforming better), bets on its p-value and gives
+    /// the step.</summary>
     public MartingaleStep Add(double score)
     {
-        SmoothedPValue p = _pValues.Add(score);
+        if (_pValues is null) throw new InvalidOperationException("This monitor is in the full form: it takes each unit's terms under the fit's draws, not a score.");
+        return Step(_pValues.Add(score));
+    }
+
+    /// <summary>The full form: takes the arrival's terms under the fit's draws, rescores every unit, ranks the newest, bets on its
+    /// p-value and gives the step (<see cref="FullFormPValues.Add"/>).</summary>
+    /// <param name="logDensity">Each draw's ln p(yₙ | xₙ, θ_s) at the unit, in row order.</param>
+    /// <param name="logCdf">Each draw's ln F(yₙ | xₙ, θ_s), read for the centrality.</param>
+    public MartingaleStep Add(ReadOnlySpan<double> logDensity, ReadOnlySpan<double> logCdf = default)
+    {
+        if (_full is null) throw new InvalidOperationException("This monitor is in the inductive form: it takes each unit's score from a fixed fit.");
+        return Step(_full.Add(logDensity, logCdf));
+    }
+
+    /// <summary>The full form: each unit of <paramref name="units"/> in turn, through the candidate seam (<see cref="FullFormPValues.AddRange"/>).</summary>
+    public MartingaleStep[] AddRange(CandidateLogDensity units)
+    {
+        if (_full is null) throw new InvalidOperationException("This monitor is in the inductive form: it takes each unit's score from a fixed fit.");
+        var steps = new List<MartingaleStep>();
+        foreach ((double[] density, double[]? cdf) in _full.Units(units)) steps.Add(Step(_full.Add(density, cdf)));
+        return [.. steps];
+    }
+
+    private MartingaleStep Step(SmoothedPValue p)
+    {
         CapitalStep step = _capital.Add(p.P);
         _path.Add(step.LogCapital);
         List<AlarmProcedure>? fired = null;

@@ -16,7 +16,8 @@ public readonly record struct SmoothedPValue(int Count, double Score, int Below,
 /// reads 0. A small p is a nonconforming newest unit.
 /// <para><b>The guarantee</b> (<c>seqRank_uniform</c>, <c>seqRank_law</c>): if the stream's units are exchangeable and each score is one
 /// fixed function of its unit, p₁, p₂, … are i.i.d. uniform. That is the inductive form, a fit made on a training set proper that
-/// is not in the stream (CB-2's conditioning; <see cref="StreamScores"/>). The exchangeability is the caller's premise; the rest the
+/// is not in the stream (CB-2's conditioning; <see cref="StreamScores"/>). The full form, every unit rescored at each arrival under the
+/// posterior given the stream so far, is <see cref="FullFormPValues"/>. The exchangeability is the caller's premise; the rest the
 /// type enforces:</para>
 /// <list type="bullet">
 /// <item>every score is ranked against the whole stream so far, never a fixed calibration set, whose p-values for several units are
