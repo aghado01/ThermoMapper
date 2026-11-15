@@ -31,6 +31,19 @@ Opened 2026-11-14 at the user's word ("that brief was getting way too long, adde
   - *Lean scope, the user's choice (2026-11-14, "A: bounds as hypotheses"):* everything else in Lean, with the four bounds as named hypotheses. They are stated on the module's own Dawson function, with constants from one source the checks certify. Being built.
 - **Slice 15's alternation speed** along the factorization's flat directions. It decides the cost at large n.
 - **τ through richer features,** the ratio estimator's open follow-up. It decides whether the layer offers a nonparametric τ.
+- **Conformal test martingales beyond E35's slice 6,** queued at the user's word (2026-11-15, "lets add conformal test martingales to the outstanding conformal work queue").
+  - *Already built,* in slice 6 on 2026-11-08 (`4dd1dfb`, `415c08c`, `206eca9`, `befb449`):
+    - a stream's smoothed p-values (M-1);
+    - the power, power-mixture, Simple Jumper and plug-in bets with the capital (M-2);
+    - Ville's, CUSUM and Shiryaev–Roberts alarms.
+
+    M-1 and M-2 are proved in Lean.
+  - *Candidates,* each with the decision it would change:
+    - *The full form.* Each score is recomputed with the newest observation, through the add-one-in weights over the stream; E35's brief calls it valid by the same theorem. Decides whether the monitor tests the full step's own scores, not only a fixed fit's.
+    - *The Sleepy Jumper* (Vovk, Gammerman and Shafer 2005, §7.1, not on the shelf), which the Simple Jumper simplifies (arXiv 2102.10439). Decides whether the monitor's bet can rest between jumps.
+    - *CUSUM's and Shiryaev–Roberts's guarantees in Lean* (Vovk 2021, Propositions 4.2 and 4.4; posed in the code, not proved). Decides whether those alarms report proved guarantees. Lean work, for the conformal-lean thread.
+    - *Streams with known structure or under covariate shift,* which E35's brief leaves out: a score that removes a trend or season, or a test martingale weighted for the shift. Decides whether the monitor serves streams that are not exchangeable as they stand.
+  - The pick among them is the user's.
 
 ## Working rules
 
