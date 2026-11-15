@@ -348,6 +348,23 @@ public sealed record BassResolved
             log.Add(new("MaxBasis", Text(maxBasis), perTerm == 1 ? "min(1000, N − 1): R's 1,000, with the intercept counting toward the dimension bound"
                                                                     : $"min(1000, ⌊(N − 1)/K⌋) at K = {Text(perTerm)} columns a term: R's 1,000, with the intercept counting toward the dimension bound"));
         }
+        if (s.Directional is { Directions: DirectionPrior.Determinant })
+        {
+            // The determinant direction prior (E36's slice 4): det(ΘᵀΘ) vanishes past M = p, so M's cap is p at most, and the count law's mass
+            // past p under the cap before it is the prior's tilt on M; c_M is the tilt the count law would take without its normalizer.
+            double past = CountMassPast(config.Count!, continuous, maxBasis);
+            if (maxBasis > continuous)
+            {
+                maxBasis = continuous;
+                log.Add(new("MaxBasis", Text(maxBasis), $"p = {Text(continuous)}: the determinant direction prior has no mass past M = p, where every M directions are dependent"));
+            }
+            int shown = Math.Min(maxBasis, 8);
+            string table = string.Join(", ", Enumerable.Range(1, shown).Select(m => $"c_{m} {Math.Exp(DirectionDeterminant.LogNormalizer(continuous, m)):G4}"))
+                         + (maxBasis > shown ? ", …" : "");
+            log.Add(new("Directions", "determinant", $"π(Θ | M) ∝ Π π(θ_m)·det(ΘᵀΘ)/c_M with c_M = p!/((p − M)!·p^M) at p = {Text(continuous)} ({table}), "
+                        + $"the tilt the count law would take with c_M left out, as gcbeck's code leaves it; stated, its tilt on M is the cut at p, "
+                        + $"the count law's mass past M = p, {past:G4}, lying outside F"));
+        }
 
         SupportRule rule = s.Support;
         // Weights that count rows count toward a scalar response's support, as the rows they stand for would.
@@ -715,6 +732,22 @@ public sealed record BassResolved
         double resolved = Math.Min(20.0, 0.1 * size);
         log.Add(new(setting, Text(resolved), $"min(20, 0.1·{sizeName}), R's default"));
         return resolved;
+    }
+
+    // The count law's mass past M = `past` among M = 0, …, `cap`: p(M) ∝ Γ(h₁ + M)/(M!(h₂ + 1)^M), λ integrated (D02), truncated at the cap.
+    private static double CountMassPast(BassCountPrior count, int past, int cap)
+    {
+        var log = new double[cap + 1];
+        for (int m = 0; m <= cap; m++)
+            log[m] = SpecialFunctions.LogGamma(count.Shape + m) - SpecialFunctions.LogGamma(m + 1.0) - m * Math.Log(count.Rate + 1.0);
+        double max = log.Max(), total = 0.0, tail = 0.0;
+        for (int m = 0; m <= cap; m++)
+        {
+            double w = Math.Exp(log[m] - max);
+            total += w;
+            if (m > past) tail += w;
+        }
+        return tail / total;
     }
 
     private static string Text(double value) => value.ToString("R", CultureInfo.InvariantCulture);

@@ -566,12 +566,7 @@ public sealed class BassStructureMoves
 
     private BassStructureFit Fit(BassTerm[] terms) => BassStructureFit.Of(_design, LogTermPrior(terms));
 
-    private double LogTermPrior(BassTerm[] terms)
-    {
-        double sum = 0.0;
-        foreach (BassTerm t in terms) sum += _model.Prior.LogPrior(t);
-        return sum;
-    }
+    private double LogTermPrior(BassTerm[] terms) => _model.Prior.LogTermsPrior(terms);
 
     // The candidate for a proposal the design has weighed, an attempt of its kind: admitted, it is pending until the chain
     // shows it; refused, by the design or the target, it is tallied and scored off the support.

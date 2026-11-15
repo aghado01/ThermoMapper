@@ -16,10 +16,12 @@ namespace Maths.Regression.Spline.Bass;
 /// <item><b>The proposal.</b> M from the count law with its orderings, p(M) ∝ Γ(h₁ + M)/(M!(h₂ + 1)^M) on
 /// {0, …, M_max}: the law of λ ~ Gamma(h₁, rate h₂), M | λ ~ Poisson(λ), which D02 integrates out, drawn by inversion
 /// and truncated at the cap, which F's cap rule would refuse anyway. Then M terms independently from D01's term measure
-/// (<see cref="BassStructurePrior.DrawTerm"/>), and τ from its prior when it is sampled.</item>
+/// (<see cref="BassStructurePrior.DrawTerm"/>), and τ from its prior when it is sampled. Under the determinant direction prior (E36's
+/// slice 4) M is drawn from p(M)/c_M instead, on M ≤ p, the cap the resolution sets (<see cref="DirectionDeterminant"/>).</item>
 /// <item><b>The acceptance.</b> The collection is kept only when it lies in F: no term the intercept (a draw whose
 /// parts are all empty), distinct terms, the support and D06's gates as the design admits them, and under the Jeffreys
-/// σ² prior no exact fit (<see cref="BassTarget.Refusal"/>). Anything else is drawn again.</item>
+/// σ² prior no exact fit (<see cref="BassTarget.Refusal"/>). Under the determinant it is kept with probability det(ΘᵀΘ) ≤ 1 first
+/// (Hadamard), so a kept draw has the law p(M)·Π π(θ_m)·det(ΘᵀΘ)/c_M on F. Anything else is drawn again.</item>
 /// </list>
 /// Its account (<see cref="Attempts"/>, <see cref="Accepted"/>, refusals by reason) is the share of the prior F holds.
 /// A draw refuses after <see cref="MaxAttempts"/> attempts. Not thread-safe: it keeps its own design, one per chain.
@@ -54,6 +56,11 @@ public sealed class BassPriorSampler : IReferenceSampler<BassState>
         for (int m = 0; m <= cap; m++)
         {
             log[m] = model.Prior.LogCollectionWeight(m) - SpecialFunctions.LogGamma(m + 1.0);
+            if (model.Prior.Directions == DirectionPrior.Determinant)
+            {
+                double logC = DirectionDeterminant.LogNormalizer(model.Prior.Directional!.Variables, m);
+                log[m] = double.IsNegativeInfinity(logC) ? double.NegativeInfinity : log[m] - logC;   // no mass past M = p
+            }
             max = Math.Max(max, log[m]);
         }
         _countCdf = new double[cap + 1];
@@ -87,8 +94,12 @@ public sealed class BassPriorSampler : IReferenceSampler<BassState>
     /// have them.</summary>
     public long InterceptTerms { get; private set; }
 
+    /// <summary>Collections the determinant direction prior's acceptance turned back, each with probability 1 − det(ΘᵀΘ); none under
+    /// independent directions.</summary>
+    public long DeterminantRejections { get; private set; }
+
     // The account's counters, for a ladder's restart state (BassLadder): the draws depend on the stream alone.
-    internal BassPriorSamplerCounts SaveCounts() => new(Attempts, Accepted, Refusals.Copy(), InterceptTerms);
+    internal BassPriorSamplerCounts SaveCounts() => new(Attempts, Accepted, Refusals.Copy(), InterceptTerms, DeterminantRejections);
 
     internal void RestoreCounts(BassPriorSamplerCounts counts)
     {
@@ -97,6 +108,7 @@ public sealed class BassPriorSampler : IReferenceSampler<BassState>
         Accepted = counts.Accepted;
         Refusals.Assign(counts.Refusals);
         InterceptTerms = counts.InterceptTerms;
+        DeterminantRejections = counts.DeterminantRejections;
     }
 
     /// <summary>One exact draw from the prior on F (<see cref="DrawPrior"/>), with its evaluation under the model's target.</summary>
@@ -165,6 +177,7 @@ public sealed class BassPriorSampler : IReferenceSampler<BassState>
                 InterceptTerms++;
                 continue;
             }
+            if (!Couple(rng, terms, ref logTermPrior)) continue;
             // On the model's working response, which a draw with latents (DrawPrior) may have moved this design off, or on a drawn scale's.
             if (_design.Load(terms, reading?.Invoke() ?? _model.Working) is { } refusal)
             {
@@ -217,6 +230,7 @@ public sealed class BassPriorSampler : IReferenceSampler<BassState>
                 InterceptTerms++;
                 continue;
             }
+            if (!Couple(rng, terms, ref logTermPrior)) continue;
             double logTau = DrawLogTau(rng), logRate = target.Sigma2Rate?.SampleLogRate(rng) ?? double.NaN;
             InverseGamma? sigma2Prior = target.Sigma2Rate is { } rate ? rate.PriorAt(logRate) : target.Sigma2;
             // Several outputs (E34's decisions 6 and 7): Huang and Wand's rates first, then, where the skew is drawn or U is a latent, one Σ from
@@ -284,6 +298,23 @@ public sealed class BassPriorSampler : IReferenceSampler<BassState>
             "support rule or the caps, or move the count prior towards fewer terms.");
     }
 
+    // The determinant direction prior's acceptance (E36's slice 4): the collection kept with probability det(ΘᵀΘ), its log prior gaining the
+    // coupling ln det − ln c_M; under independent directions it keeps every collection and draws nothing.
+    private bool Couple(Xoshiro256PlusPlus rng, BassTerm[] terms, ref double logTermPrior)
+    {
+        BassStructurePrior prior = _model.Prior;
+        if (prior.Directions != DirectionPrior.Determinant) return true;
+        double coupling = prior.LogCoupling(terms);
+        double logDet = coupling + DirectionDeterminant.LogNormalizer(prior.Directional!.Variables, terms.Length);
+        if (!(Math.Log(rng.NextDouble()) < logDet))
+        {
+            DeterminantRejections++;
+            return false;
+        }
+        logTermPrior += coupling;
+        return true;
+    }
+
     // M from the count law truncated at the cap, by inversion.
     private int DrawCount(Xoshiro256PlusPlus rng)
     {
@@ -310,4 +341,4 @@ public sealed class BassPriorSampler : IReferenceSampler<BassState>
 }
 
 /// <summary>A <see cref="BassPriorSampler"/>'s account: attempts, acceptances, refusals by reason and intercept terms.</summary>
-internal sealed record BassPriorSamplerCounts(long Attempts, long Accepted, Tally<BassRefusal> Refusals, long InterceptTerms);
+internal sealed record BassPriorSamplerCounts(long Attempts, long Accepted, Tally<BassRefusal> Refusals, long InterceptTerms, long DeterminantRejections = 0);

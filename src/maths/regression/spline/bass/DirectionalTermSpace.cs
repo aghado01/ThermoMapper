@@ -33,6 +33,10 @@ public sealed record DirectionalBasis
     /// (<see cref="RidgeColumn"/>, <see cref="RidgeExpansion"/>), whose degrees the paper fixes; 4 is the paper's default.</summary>
     public int Columns { get; init; } = 1;
 
+    /// <summary>The prior on the directions given M (E36's decision 2): <see cref="DirectionPrior.Independent"/>, the paper's, by default;
+    /// <see cref="DirectionPrior.Determinant"/>, their law reweighted by det(ΘᵀΘ)/c_M, which caps M at p (<see cref="DirectionDeterminant"/>).</summary>
+    public DirectionPrior Directions { get; init; } = DirectionPrior.Independent;
+
     /// <summary>The first setting out of range, as its name and the reason; null when every one holds.</summary>
     public (string Setting, string Reason)? Problem()
     {
@@ -42,6 +46,7 @@ public sealed record DirectionalBasis
             return (nameof(ActiveCases), "must be positive and finite, or null for min(20, n/10)");
         if (!(Concentration >= 0.0 && double.IsFinite(Concentration))) return (nameof(Concentration), "must be finite and not negative");
         if (Columns < 1) return (nameof(Columns), "must be at least 1: 1 is the directional hinge alone, K ≥ 2 the paper's ridge block");
+        if (!Enum.IsDefined(Directions)) return (nameof(Directions), "is not a known direction prior");
         return null;
     }
 }

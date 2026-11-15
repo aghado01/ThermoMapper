@@ -105,10 +105,13 @@ public sealed class BassStructurePrior
 
     /// <summary>
     /// A directional fit's prior (E36): the directional part alone, its term measure <paramref name="space"/>'s, with the count prior
-    /// <paramref name="count"/>. Bases that mix directional hinges with BASS's are an option the contract allows, not built (decision 6).
+    /// <paramref name="count"/>, and the directions independent given M or under <paramref name="directions"/>' determinant (slice 4). Bases
+    /// that mix directional hinges with BASS's are an option the contract allows, not built (decision 6).
     /// </summary>
-    public BassStructurePrior(DirectionalTermSpace space, BassCountPrior count)
+    public BassStructurePrior(DirectionalTermSpace space, BassCountPrior count, DirectionPrior directions = DirectionPrior.Independent)
     {
+        if (!Enum.IsDefined(directions)) throw new ArgumentOutOfRangeException(nameof(directions), "Not a known direction prior.");
+        Directions = directions;
         ArgumentNullException.ThrowIfNull(space);
         ArgumentNullException.ThrowIfNull(count);
         if (!(count.Shape > 0.0 && double.IsFinite(count.Shape))) throw new ArgumentOutOfRangeException(nameof(count), "h₁ must be positive and finite.");
@@ -131,7 +134,7 @@ public sealed class BassStructurePrior
         if (config.Structure.Directional is { } directional)
             return new(new DirectionalTermSpace(inputs, resolved.MaxInteraction,
                                                 resolved.KnotLevel ?? throw new ArgumentException("The resolution holds no knot level for the directional basis.", nameof(resolved)),
-                                                directional.LocalProbability), config.Count);
+                                                directional.LocalProbability), config.Count, directional.Directions);
         return new(inputs, resolved.MaxInteraction, resolved.MaxCategoricalInteraction, resolved.MaxFunctionalInteraction,
                    config.Structure.CategoricalSubsets, config.Count);
     }
@@ -159,6 +162,28 @@ public sealed class BassStructurePrior
 
     /// <summary>The directional term space of a directional fit (E36); null otherwise.</summary>
     public DirectionalTermSpace? Directional => _parts[(int)BassPart.Directional]?.Directions;
+
+    /// <summary>The prior on a directional fit's directions given M (E36's decision 2): independent, the default and every other fit's, or
+    /// the determinant (<see cref="DirectionDeterminant"/>).</summary>
+    public DirectionPrior Directions { get; } = DirectionPrior.Independent;
+
+    /// <summary>
+    /// ln of a structure's term prior: its terms' <see cref="LogPrior"/> summed in order, and under the determinant direction prior the
+    /// coupling ln det(ΘᵀΘ) − ln c_M over their directions (E36's slice 4), −∞ past M = p or on a dependence. A structure's log prior is this
+    /// plus <see cref="LogCollectionWeight"/>, on F.
+    /// </summary>
+    public double LogTermsPrior(IReadOnlyList<BassTerm> terms)
+    {
+        ArgumentNullException.ThrowIfNull(terms);
+        double sum = 0.0;
+        for (int j = 0; j < terms.Count; j++) sum += LogPrior(terms[j]);
+        return Directions == DirectionPrior.Determinant ? sum + LogCoupling(terms) : sum;
+    }
+
+    /// <summary>The coupling between a structure's terms beyond their own priors: ln det(ΘᵀΘ) − ln c_M under the determinant direction prior,
+    /// 0 under independent directions.</summary>
+    public double LogCoupling(IReadOnlyList<BassTerm> terms)
+        => Directions == DirectionPrior.Determinant ? DirectionDeterminant.LogCoupling(terms, Directional!.Variables) : 0.0;
 
     internal Part? this[BassPart part] => _parts[(int)part];
 

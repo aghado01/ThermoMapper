@@ -27,7 +27,7 @@ namespace Maths.Regression.Tests;
 /// </summary>
 public sealed class DirectionalChainTests(ITestOutputHelper output)
 {
-    private static readonly ProjectionDirection[] Directions =
+    internal static readonly ProjectionDirection[] Directions =
     [
         new([1], [1.0]),
         new([2], [-1.0]),
@@ -68,7 +68,7 @@ public sealed class DirectionalChainTests(ITestOutputHelper output)
     private static BassTerm Term(ProjectionDirection direction, double knot) => new(directional: new DirectionalHinge(direction, knot));
 
     // A knot at fraction `at` of its range from L.
-    private static BassTerm Within(DirectionalTermSpace space, ProjectionDirection direction, double at)
+    internal static BassTerm Within(DirectionalTermSpace space, ProjectionDirection direction, double at)
     {
         KnotRange r = space.KnotRangeOf(direction)!.Value;
         return Term(direction, r.Lower + at * r.Width);
@@ -258,7 +258,7 @@ public sealed class DirectionalChainTests(ITestOutputHelper output)
 
     // The order and variable laws' log probability by hand: q(a) = (w₁ + c_a)/(A·w₁ + M), q(𝒥 | a) = 1/p at a = 1, Wallenius' by quadrature
     // otherwise, with z_u = w₂ + (terms using u) less `shift` copies of the term's own.
-    private static double HandLogOrderAndVariables(BassTermCounts counts, int[] set, int shift, double w1 = 5.0, double w2 = 5.0)
+    internal static double HandLogOrderAndVariables(BassTermCounts counts, int[] set, int shift, double w1 = 5.0, double w2 = 5.0)
     {
         int a = set.Length, terms = counts.Terms - shift;
         double lq = Math.Log(w1 + counts.Order(BassPart.Directional, a) - shift) - Math.Log(3.0 * w1 + terms);
@@ -390,7 +390,7 @@ public sealed class DirectionalChainTests(ITestOutputHelper output)
         return inverse;
     }
 
-    private static double Dense(BassModel model, BassData data, IEnumerable<BassTerm> terms)
+    internal static double Dense(BassModel model, BassData data, IEnumerable<BassTerm> terms)
     {
         double[][] raw = DirectionalHingeTests.Raw(data);
         int degree = model.Config.Structure.Degree;
@@ -399,7 +399,7 @@ public sealed class DirectionalChainTests(ITestOutputHelper output)
         return DenseLogMarginal(y, columns, model.Target.HeldTau!.Value, 3.0, 2.0);
     }
 
-    private static BassEvaluation Evaluate(BassModel model, BassTerm[] terms)
+    internal static BassEvaluation Evaluate(BassModel model, BassTerm[] terms)
     {
         var chain = new BassChain(model, terms, Math.Log(model.Target.HeldTau!.Value), new Xoshiro256PlusPlus(1), new Xoshiro256PlusPlus(2));
         return model.Target.Evaluate(chain.Current);
@@ -486,11 +486,11 @@ public sealed class DirectionalChainTests(ITestOutputHelper output)
 
     // ---- Geweke's test with the prior alone ----------------------------------------------------------------------------------------
 
-    private static readonly string[] Statistics =
+    internal static readonly string[] Statistics =
         ["M", "a = 1", "a = 2", "a = 3", "uses x0", "uses x1", "uses x2", "uses x3", "θ mass x0", "θ mass x1", "θ mass x2", "θ mass x3",
          "θ₁ > 0", "knot position", "knot position²"];
 
-    private static double[] Functions(BassState state, DirectionalTermSpace space)
+    internal static double[] Functions(BassState state, DirectionalTermSpace space)
     {
         var f = new double[Statistics.Length];
         f[0] = state.Count;
@@ -512,7 +512,7 @@ public sealed class DirectionalChainTests(ITestOutputHelper output)
         return f;
     }
 
-    private static double BatchError(double[] x, int batches)
+    internal static double BatchError(double[] x, int batches)
     {
         int size = x.Length / batches;
         double[] means = [.. Enumerable.Range(0, batches).Select(b => x.Skip(b * size).Take(size).Average())];
