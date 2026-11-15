@@ -38,6 +38,36 @@ As in the archived brief: each slice is reported here, then waits for the main s
 
 Newest first.
 
+### 2026-11-14 — RoBAS-Full's intervals: not intervals at n 2 and 3; none found from n 4
+
+Probed at the user's pick (2026-11-14, "RoBAS-Full intervals"). The question was whether the grid-free form can serve RoBAS-Full.
+
+**Landed** on `main`, nothing pushed: `f400892`.
+- `ResidualScore.Horseshoe`'s docstring records the finding (comment only).
+- `HorseshoeScoreTests.ItsSets_AreNotAlwaysIntervals` reads both counterexamples through the grid form.
+- `Intervals` still refuses RoBAS-Full.
+
+**The finding.**
+- *Not intervals at n 2 and 3.* A seeded search counted each set's connected pieces on a sinh-spaced grid, fine near the residuals and reaching 60 spreads beyond them. RoBAS-Full's sets fall in two pieces: one about the prior's centre 0, one about the data. The horseshoe's spike at 0 lets a candidate there conform when the others are few.
+  - n 2: 34 of 4,539 random trials, e.g. residuals 18.02 and 19.33 at k 2 (α 0.9): [−8.03, 6.89] and [18.02, 19.32].
+  - n 3: 8 of the targeted sweep's n-3 configurations, at k 1 and 2, e.g. residuals 0.510, 0.653, 0.546 at k 1: [−0.198, 0.062] and [0.333, 0.668].
+- *None from n 4.* The targeted sweep covered n 4 to 10 at every level, about 9,900 configurations: tight clusters at shifts from 0.5 to 200 with spreads from 0.01 to 3, and an opposite-signed outlier, on a grid of 8,001. The random sweep reached n 50 with outliers, two clusters and heavy tails. Neither found a second piece.
+- *The control.* RoBAS-EB, whose theorem starts at n 4, read one piece in every trial at n ≥ 4, so the detector reads true.
+- *What it means.* RoBAS-Full has no unconditional interval property. Whether it is an interval from n 4, as RoBAS-EB is, is open: the search is evidence, not a proof. Until it is proved, the grid-free form refuses RoBAS-Full at every n. Its bracketed search would find only the piece holding its start and drop the other, which undercovers.
+
+**Gates.**
+- *The pinned counterexamples* read through the grid form:
+  - n 3 at k 1: accepted at 0, refused at 0.2, accepted at 0.5;
+  - n 2 at k 2: accepted at 0, refused at 12, accepted at 18.5;
+  - RoBAS-EB on the n-3 residuals reads no such gap.
+- *Per commit,* the selected classes and the pinned tier: `HorseshoeScoreTests`, `ScoresBeyondTheModelTests` and `ResidualIntervalTests`, 57 of 57 in `Maths.Regression.Tests`.
+
+**Defects found: none.** The refusal was already in place, and this records why it stands.
+
+**Open, for the user:** the conjecture that RoBAS-Full's sets are intervals for n ≥ 4. A proof would go through Bersson and Hoff's lemma, which RoBAS-EB's theorem uses: each unit's acceptance an interval, all sharing a point. It belongs to the conformal-lean thread if wanted. With it, the grid-free form could serve RoBAS-Full from n 4, as it serves RoBAS-EB.
+
+**Doc changes owed:** the scores-beyond-the-model section: RoBAS-Full's two-piece sets at n 2 and 3, the search's coverage, and the open conjecture from n 4.
+
 ### 2026-11-14 — Slice 17's follow-up: RoBAS-Full, the horseshoe residual score
 
 Built at the user's pick (2026-11-14, "RoBAS-Full"), the first of slice 17's follow-ups. Sources read in TeX: RoBAS (arXiv 2607.04236v2), §3.2 with (8), Appendix's derivation of the RoBAS-Full score and its choice of a = b = ½, the marginal-likelihood lemma, and the plug-in σ̂² of the robustness theorem's extension.
