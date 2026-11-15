@@ -346,6 +346,44 @@ Under "Reports" below, newest first, per slice: what landed by commit; the gates
 
 ## Reports
 
+### Slice 8a′: the Poincaré check for a scalar fit without factors, from sampled totals (2026-11-15)
+
+**Asked for:** the request under slice 8's coordination note, the sampled-sensitivity chip's decision 7, which the user approved. The coordinating session passed it on after 8a's verification (`e120042`). It starts from the verification note on `c5cea88` and `07f3c2a`.
+
+**Landed:** `PLACEHOLDER`, one commit, holding three of the BPPR chip's assertions as Regression expansion asked: with the behaviour and its assertions in separate commits, one of the two would not pass its own tests.
+
+**What was built:**
+- A scalar fit holding a term without one-variable factors (a directional hinge or a ridge block's column) under a product law now has decision 6's per-input check; until now `Poincare` was null for it.
+- total(v) per draw comes from `BassSensitivity.Of` on the sampled route:
+  - first order only, so a draw costs N(p + 2) surface evaluations;
+  - at the readout's N, over the readout's draws;
+  - at the seed `SeedTree.Derive(spec.Seed, 1)[0]`, apart from C's, so the two estimates are independent.
+- The bound is C_P(v)·C_vv, with C_P from `InputPoincareConstant.Of` (8a).
+- A violation is a total above the bound by more than 3·√(se_T² + (C_P·se_C)²), plus a numerical constant's relative-error allowance.
+- `PoincareCheck.TotalError` holds the totals' standard errors; it is null where the moment route gave them exactly.
+- Functional, basis and several-output fits holding such a term keep a null check until the sampled-sensitivity chip's slice 3 carries their totals.
+
+**Gates:**
+
+| Gate | Reading |
+| --- | --- |
+| The sampled-sensitivity chip's hand-built directional fit, degrees 1 and 2, N = 8192 | the check's totals and errors are Sobol's sampled route's at the derived seed, bit for bit; Bound/C_vv the uniform law's exact constant to rounding; largest ratio 0.816 and 0.742; no violation |
+| Draws asked as [1, 0, 1] | the repeated draw's rows the same bits; each row what the whole readout gives that draw |
+| Power: one draw of 16 single-variable directional hinges, the interpolant of cos(πu) on x1's box, the uniform law's extremal, N = 65,536 | ratio 1.0011 against three errors of 1.55% of the bound, so no violation; with the constant 5% short, 1.0537 against 1 + 1.61%, which would be counted; the other inputs' totals exactly 0 |
+| The BPPR chip's three assertions that `Poincare` is null (`DirectionalHingeTests`, `DirectionalRecoveryTests`, `RidgeColumnTests`, 9 cases) | each now reads a check with no violation and the totals' errors present |
+| The sampled-sensitivity chip's own reading of the rule | unchanged: 0.802 and 0.768, (total − bound)/error at most −11.2 and −7.5 |
+| The edit selection, six classes, before the three re-pins | 48 of 57; the 9 failing cases are exactly the re-pinned assertions, each reading a check with 0 violations |
+| The whole Regression assembly from HEAD `e120042` plus the commit's files | PLACEHOLDER |
+
+**Decisions beyond the request:**
+1. *The readout's draws pass to Sobol as its selection,* so the rows align whatever the request.
+2. *`TotalError` is a new property beside `Total`,* so a reader can tell sampled totals from exact ones.
+
+**Doc changes owed:**
+- `docs/Maths/Regression/ActiveSubspaces.md`:
+  - decision 6's check on a scalar fit without factors: the sampled totals, the derived seed and their independence, the rule in quadrature;
+  - which fits still read none.
+
 ### Slice 8a: co-active output locations and Poincaré constants for the remaining laws (2026-11-15)
 
 **Asked for:** slice 8's items A and B. The user commissioned slice 8 on 2026-11-14 ("ok lets do slice 8"), taking the brief's recommended options, all nine (a)s. For 8a those are: A1(a), two location properties beside the weights; B1(a), the numerical constant for mixtures and Student t laws; B2(a), slice 6's bound kept for a single truncated normal. The empirical law closes as a finding.
