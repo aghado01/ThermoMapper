@@ -16,13 +16,6 @@ namespace Maths.Regression.Tests;
 /// </summary>
 public sealed class PickFreezeTests(ITestOutputHelper output)
 {
-    public static TheoryData<string> Names()
-    {
-        var names = new TheoryData<string>();
-        foreach (SobolReference r in SobolReferences.All()) names.Add(r.Name);
-        return names;
-    }
-
     private static SobolReference Named(string name) => SobolReferences.All().Single(r => r.Name == name);
 
     // A and B, N rows each from the uniform law on the reference's box, one stream.
@@ -40,8 +33,16 @@ public sealed class PickFreezeTests(ITestOutputHelper output)
     }
 
     // Every pair of inputs, so each two-way main variance is read.
-    private static PickFreezeDesign Design(SobolReference f) =>
-        new(f.Dimension, [.. Enumerable.Range(0, f.Dimension).SelectMany(i => Enumerable.Range(i + 1, f.Dimension - i - 1).Select(j => new[] { i, j }))]);
+    private static PickFreezeDesign Design(SobolReference f, MainVarianceForm form = MainVarianceForm.Saltelli) =>
+        new(f.Dimension, [.. Enumerable.Range(0, f.Dimension).SelectMany(i => Enumerable.Range(i + 1, f.Dimension - i - 1).Select(j => new[] { i, j }))], form);
+
+    public static TheoryData<string, MainVarianceForm> NamesAndForms()
+    {
+        var cases = new TheoryData<string, MainVarianceForm>();
+        foreach (SobolReference r in SobolReferences.All())
+            foreach (MainVarianceForm form in new[] { MainVarianceForm.Saltelli, MainVarianceForm.TwoDifference }) cases.Add(r.Name, form);
+        return cases;
+    }
 
     internal sealed record Piece(string Name, double Truth, double Estimate, double Error);
 
@@ -67,12 +68,12 @@ public sealed class PickFreezeTests(ITestOutputHelper output)
     }
 
     [Theory]
-    [MemberData(nameof(Names))]
-    public void Pieces_AreUnbiasedWithinTheirStatedError(string name)
+    [MemberData(nameof(NamesAndForms))]
+    public void Pieces_AreUnbiasedWithinTheirStatedError(string name, MainVarianceForm form)
     {
         const int Replicates = 300, N = 2048;
         SobolReference f = Named(name);
-        PickFreezeDesign design = Design(f);
+        PickFreezeDesign design = Design(f, form);
         int[] seeds = SeedTree.Derive(20261115, Replicates);
         var runs = new List<List<Piece>>();
         foreach (int seed in seeds)
@@ -83,7 +84,7 @@ public sealed class PickFreezeTests(ITestOutputHelper output)
             runs.Add(Pieces(f, design, e));
         }
         Summary s = Summarize(runs, f.Variance);
-        output.WriteLine($"{name}: {s.Tested} pieces tested, {s.Exact} exact zeros; worst |bias| / its error {s.WorstBias:F2} ({s.WorstBiasPiece}); "
+        output.WriteLine($"{name}, {form}: {s.Tested} pieces tested, {s.Exact} exact zeros; worst |bias| / its error {s.WorstBias:F2} ({s.WorstBiasPiece}); "
                          + $"stated error / spread in [{s.LowestCalibration:F3}, {s.HighestCalibration:F3}] ({s.LowestPiece}, {s.HighestPiece})");
         foreach (string line in s.Lines) output.WriteLine(line);
         Assert.True(s.WorstBias <= 4.0, $"{name}: {s.WorstBiasPiece} is biased by {s.WorstBias:F2} of its error");
@@ -196,7 +197,7 @@ public sealed class PickFreezeTests(ITestOutputHelper output)
         SobolReference f = SobolReferences.Ishigami();
         PickFreezeDesign design = new(f.Dimension);
         double sd = Math.Sqrt(f.Variance);
-        const int N = 2048, Replicates = 200;
+        const int N = 2048;
         foreach (double shift in new[] { 10.0, 1e4, 1e8 })
         {
             double worst = 0.0;
@@ -218,30 +219,43 @@ public sealed class PickFreezeTests(ITestOutputHelper output)
             Assert.True(worst <= 1e-4, $"shift {shift:E0}: {worst:E2}");
         }
 
-        // The evidence for centring: the spread of V₁ over replicates, centred and uncentred, as the mean moves.
+        // The evidence for centring: the spread of V₁ over replicates, centred and uncentred, as the mean moves. The comparison is
+        // registered in ComparativeSweep with its seed.
         foreach (double shift in new[] { 0.0, 10.0, 100.0 })
         {
-            var centred = new List<double>();
-            var uncentred = new List<double>();
-            foreach (int seed in SeedTree.Derive(11, Replicates))
-            {
-                (double[,] a, double[,] b) = Bases(f, N, seed);
-                double F(ReadOnlySpan<double> x) => f.Value(x) + shift * sd;
-                PickFreezeEstimate e = PickFreeze.Estimate(design, F, a, b);
-                centred.Add(e.Main[0]);
-                double[,] h = design.Hybrid(a, b, 0);
-                double s = 0.0;
-                for (int j = 0; j < N; j++) s += F(Row(b, j)) * (F(Row(h, j)) - F(Row(a, j)));
-                uncentred.Add(s / N);
-            }
-            double ratio = Deviation([.. uncentred]) / Deviation([.. centred]);
-            output.WriteLine($"mean {shift} sd: spread of V₁ centred {Deviation([.. centred]):E3}, uncentred {Deviation([.. uncentred]):E3}, ratio {ratio:F2}");
-            if (shift >= 100.0) Assert.True(ratio > 20.0, $"the uncentred form's spread is only {ratio:F2} times the centred one's at {shift} sd");
+            (double centred, double uncentred) = CentringSpread(shift, 11);
+            output.WriteLine($"mean {shift} sd: spread of V₁ centred {centred:E3}, uncentred {uncentred:E3}, ratio {uncentred / centred:F2}");
+            if (shift >= 100.0) Assert.True(20.0 * centred < uncentred, $"the uncentred form's spread is only {uncentred / centred:F2} times the centred one's at {shift} sd");
         }
     }
 
-    [Fact]
-    public void SeededSweep_FarRanges()
+    // Ishigami's V₁ over 200 replicates at N = 2048, the function shifted by `shift` standard deviations: the spread of the centred
+    // estimate and of Saltelli's uncentred form, mean(f(B)(f(A_B^1) − f(A))), the replicates' seeds derived from `seed`.
+    internal static (double Centred, double Uncentred) CentringSpread(double shift, int seed)
+    {
+        const int N = 2048, Replicates = 200;
+        SobolReference f = SobolReferences.Ishigami();
+        PickFreezeDesign design = new(f.Dimension);
+        double sd = Math.Sqrt(f.Variance);
+        var centred = new List<double>();
+        var uncentred = new List<double>();
+        foreach (int replicate in SeedTree.Derive(seed, Replicates))
+        {
+            (double[,] a, double[,] b) = Bases(f, N, replicate);
+            double F(ReadOnlySpan<double> x) => f.Value(x) + shift * sd;
+            centred.Add(PickFreeze.Estimate(design, F, a, b).Main[0]);
+            double[,] h = design.Hybrid(a, b, 0);
+            double s = 0.0;
+            for (int j = 0; j < N; j++) s += F(Row(b, j)) * (F(Row(h, j)) - F(Row(a, j)));
+            uncentred.Add(s / N);
+        }
+        return (Deviation([.. centred]), Deviation([.. uncentred]));
+    }
+
+    [Theory]
+    [InlineData(MainVarianceForm.Saltelli)]
+    [InlineData(MainVarianceForm.TwoDifference)]
+    public void SeededSweep_FarRanges(MainVarianceForm form)
     {
         // 300 cases: g-functions with indices down to 10⁻⁸ of the variance, Ishigami's family, and exponential ridge sums on boxes from
         // 10⁻³ to 10³ wide and centred out to ±10³; each scaled by 10^±100 and shifted by up to 10⁹ standard deviations. One estimate
@@ -260,7 +274,7 @@ public sealed class PickFreezeTests(ITestOutputHelper output)
                 if (j >= i) j++;
                 pairs.Add([Math.Min(i, j), Math.Max(i, j)]);
             }
-            var design = new PickFreezeDesign(p, pairs);
+            var design = new PickFreezeDesign(p, pairs, form);
             (double[,] a, double[,] b) = Bases(f, 4096, (int)rng.NextUInt64());
             PickFreezeEstimate e = PickFreeze.Estimate(design, f.Value, a, b);
             Assert.True(e.Status == PickFreezeStatus.Defined || e.Status == PickFreezeStatus.BelowZeroBeyondError, $"case {c} ({f.Name}): {e.Status}");
@@ -279,7 +293,7 @@ public sealed class PickFreezeTests(ITestOutputHelper output)
         double mean = z.Average(t => t.Z), sd = Math.Sqrt(z.Sum(t => (t.Z - mean) * (t.Z - mean)) / (z.Count - 1));
         double beyond3 = z.Count(t => Math.Abs(t.Z) > 3.0) / (double)z.Count;
         var worst = z.MaxBy(t => Math.Abs(t.Z));
-        output.WriteLine($"{z.Count} z-scores over {cases} cases ({exact} exact zeros): mean {mean:F3}, sd {sd:F3}, beyond 3: {beyond3:P2}, worst {worst.Z:F2} at {worst.Where}");
+        output.WriteLine($"{form}: {z.Count} z-scores over {cases} cases ({exact} exact zeros): mean {mean:F3}, sd {sd:F3}, beyond 3: {beyond3:P2}, worst {worst.Z:F2} at {worst.Where}");
         Assert.True(Math.Abs(mean) <= 0.1, $"mean z {mean:F3}");
         Assert.True(sd >= 0.9 && sd <= 1.12, $"sd of z {sd:F3}");
         Assert.True(beyond3 <= 0.01, $"{beyond3:P2} beyond 3");
@@ -308,6 +322,39 @@ public sealed class PickFreezeTests(ITestOutputHelper output)
         Assert.Throws<ArgumentException>(() => PickFreeze.Estimate(new PickFreezeDesign(1), [1.0], [2.0], [[3.0]]));
         Assert.Throws<ArgumentException>(() => PickFreeze.Estimate(new PickFreezeDesign(1), two, two, [[3.0, double.NaN]]));
         Assert.Throws<ArgumentException>(() => PickFreeze.Estimate(new PickFreezeDesign(2), two, two, [two]));
+
+        // The two-difference form reads each block's reverse hybrid, B's rows with u's columns from A.
+        var reversed = new PickFreezeDesign(4, [[2, 0, 3], [1, 3]], MainVarianceForm.TwoDifference);
+        Assert.Equal(MainVarianceForm.TwoDifference, reversed.Form);
+        Assert.Equal(4096L * 20, reversed.Values(4096));
+        Assert.Equal(new double[,] { { 1, -2, -3, 4 }, { 5, -6, -7, 8 } }, reversed.Reverse(a, b, reversed.IndexOf([0, 3])));
+        var one = new PickFreezeDesign(1, form: MainVarianceForm.TwoDifference);
+        Assert.Throws<ArgumentException>(() => PickFreeze.Estimate(one, two, two, [two]));                // no reverse hybrids
+        Assert.Throws<ArgumentException>(() => PickFreeze.Estimate(one, two, two, [two], [[1.0]]));      // a short one
+        Assert.Throws<ArgumentException>(() => PickFreeze.Estimate(new PickFreezeDesign(1), two, two, [two], [two]));   // Saltelli's reads none
+        Assert.Throws<ArgumentOutOfRangeException>(() => new PickFreezeDesign(2, form: (MainVarianceForm)5));
+    }
+
+    [Fact]
+    public void TwoDifference_ReadsSmallIndicesToTheirOwnScale()
+    {
+        // The slice 0 probe's finding, kept as a gate: on the g-function's S = 7.2·10⁻⁵ input, the two-difference form's spread is a few
+        // percent of the piece (Saltelli's, printed beside it, is about three times the piece); both are unbiased (the theory above).
+        SobolReference f = SobolReferences.G();
+        const int N = 4096, Replicates = 100;
+        var spread = new Dictionary<MainVarianceForm, double>();
+        foreach (MainVarianceForm form in new[] { MainVarianceForm.Saltelli, MainVarianceForm.TwoDifference })
+        {
+            var design = new PickFreezeDesign(f.Dimension, null, form);
+            double[] v5 = [.. SeedTree.Derive(99, Replicates).Select(seed =>
+            {
+                (double[,] a, double[,] b) = Bases(f, N, seed);
+                return PickFreeze.Estimate(design, f.Value, a, b).Main[4];
+            })];
+            spread[form] = Deviation(v5) / f.MainVariance([4]);
+        }
+        output.WriteLine($"V_5 (S = 7.2e-5) at N = {N}: relative spread Saltelli {spread[MainVarianceForm.Saltelli]:F3}, two-difference {spread[MainVarianceForm.TwoDifference]:F4}");
+        Assert.True(spread[MainVarianceForm.TwoDifference] <= 0.06, $"{spread[MainVarianceForm.TwoDifference]:F4}");
     }
 
     [Fact]

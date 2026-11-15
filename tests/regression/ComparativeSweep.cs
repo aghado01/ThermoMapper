@@ -127,6 +127,11 @@ public sealed class ComparativeSweep
             var r = CoActiveSubspaceTests.SimpleExampleFromFits(d, c[0]);
             return [new("E[C₁₂]'s Frobenius distance from the closed form: n 1000 < n 200", r.Distances[1], r.Distances[0])];
         }),
+        new("PickFreezeTests.Estimates_AreShiftInvariant_AndTheUncentredFormIsNot", DataSeed: null, ChainSeeds: [11], (_, c) =>
+        {
+            var r = PickFreezeTests.CentringSpread(100.0, c[0]);
+            return [new("V₁'s spread at a mean of 100 sd: 20 × centred < uncentred", 20.0 * r.Centred, r.Uncentred)];
+        }),
     ];
 
     [Fact]

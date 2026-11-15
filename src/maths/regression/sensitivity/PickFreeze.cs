@@ -4,11 +4,25 @@ using System.Linq;
 
 namespace Maths.Regression.Sensitivity;
 
+/// <summary>How a pick-freeze design reads a main variance (the sampled-sensitivity brief, decision 3; its slice 0 follow-up).</summary>
+public enum MainVarianceForm
+{
+    /// <summary>Saltelli's 2010 form, centred: the covariance of f(B) with D_u = Σ_{v⊆u} (−1)^{|u|−|v|} f(A_B^v). N(p + 2) values for
+    /// first-order and total indices; its error scales as √(V·T_u), so a small index is read to a large relative error.</summary>
+    Saltelli,
+
+    /// <summary>The two-difference form after Owen 2013 (cited from memory): (−1)^{|u|}·mean(D^B_u·D^A_u)/2^{|u|}, D^B_u the same
+    /// alternating sum over the reverse hybrids B_A^v (B's rows with v's columns from A), B_A^∅ = B. N(2p + 2) values; its error scales
+    /// with the piece itself.</summary>
+    TwoDifference,
+}
+
 /// <summary>
 /// The pick-freeze design over p inputs (the sampled-sensitivity brief, decision 3): base sets A and B of N rows each, drawn
 /// independently from a product law, and for each block u the hybrid A_B^u, A's rows with the columns in u taken from B. The blocks
 /// are every input alone, for the first-order and total pieces, and every nonempty subset of each requested subset, for its main
-/// variance by Möbius inversion; first-order and total indices cost N(p + 2) values.
+/// variance by Möbius inversion; first-order and total indices cost N(p + 2) values. The two-difference form
+/// (<see cref="MainVarianceForm.TwoDifference"/>) reads each block's reverse hybrid B_A^u too, N(2p + 2) values.
 /// </summary>
 public sealed class PickFreezeDesign
 {
@@ -16,11 +30,13 @@ public sealed class PickFreezeDesign
     private readonly int[][] _terms, _signs;
 
     /// <summary>The design over <paramref name="inputs"/> inputs, reporting every input alone and each subset in
-    /// <paramref name="subsets"/> (input indices, any order, no repeats) with all of its own; refused above
-    /// <paramref name="budget"/> blocks.</summary>
-    public PickFreezeDesign(int inputs, IReadOnlyList<int[]>? subsets = null, int budget = 10_000)
+    /// <paramref name="subsets"/> (input indices, any order, no repeats) with all of its own, its main variances in
+    /// <paramref name="form"/>; refused above <paramref name="budget"/> blocks.</summary>
+    public PickFreezeDesign(int inputs, IReadOnlyList<int[]>? subsets = null, MainVarianceForm form = MainVarianceForm.Saltelli, int budget = 10_000)
     {
         if (inputs < 1) throw new ArgumentOutOfRangeException(nameof(inputs), "A design needs an input.");
+        if (form is not (MainVarianceForm.Saltelli or MainVarianceForm.TwoDifference)) throw new ArgumentOutOfRangeException(nameof(form), $"No main-variance form {form}.");
+        Form = form;
         if (budget < inputs) throw new ArgumentOutOfRangeException(nameof(budget), $"The budget must hold the {inputs} inputs alone.");
         var found = new HashSet<int[]>(Comparer.Instance);
         for (int i = 0; i < inputs; i++) found.Add([i]);
@@ -73,8 +89,15 @@ public sealed class PickFreezeDesign
     /// Each is also a reported subset.</summary>
     public IReadOnlyList<int[]> Blocks { get; }
 
-    /// <summary>The values one estimate reads at <paramref name="points"/> rows: A, B and each block's hybrid.</summary>
-    public long Values(int points) => (long)points * (Blocks.Count + 2);
+    /// <summary>How the main variances are read.</summary>
+    public MainVarianceForm Form { get; }
+
+    /// <summary>Whether the estimate reads each block's reverse hybrid B_A^u (the two-difference form).</summary>
+    public bool Reverses => Form == MainVarianceForm.TwoDifference;
+
+    /// <summary>The values one estimate reads at <paramref name="points"/> rows: A, B, each block's hybrid and, for the two-difference
+    /// form, each block's reverse hybrid.</summary>
+    public long Values(int points) => (long)points * ((Reverses ? 2 : 1) * Blocks.Count + 2);
 
     /// <summary>The index of block <paramref name="subset"/> (ascending input indices), or −1 where it is not a block.</summary>
     public int IndexOf(int[] subset) => _index.TryGetValue(subset, out int k) ? k : -1;
@@ -88,6 +111,14 @@ public sealed class PickFreezeDesign
         foreach (int v in Blocks[block])
             for (int r = 0; r < n; r++) hybrid[r, v] = b[r, v];
         return hybrid;
+    }
+
+    /// <summary>The reverse hybrid B_A^u of block <paramref name="block"/>: <paramref name="b"/>'s rows with u's columns from
+    /// <paramref name="a"/>, which the two-difference form reads.</summary>
+    public double[,] Reverse(double[,] a, double[,] b, int block)
+    {
+        CheckBases(a, b);
+        return Hybrid(b, a, block);
     }
 
     internal int CheckBases(double[,] a, double[,] b)
@@ -142,7 +173,7 @@ public enum PickFreezeStatus
 
 /// <summary>
 /// One function's Sobol pieces from a pick-freeze design (<see cref="PickFreeze.Estimate(PickFreezeDesign, ReadOnlySpan{double},
-/// ReadOnlySpan{double}, IReadOnlyList{double[]}, double, double)"/>), each with its Monte Carlo standard error: the mean and variance,
+/// ReadOnlySpan{double}, IReadOnlyList{double[]}, IReadOnlyList{double[]}?, double, double)"/>), each with its Monte Carlo standard error: the mean and variance,
 /// each block's main variance (the variance of the function's ANOVA component on it), each input's total variance, and their ratios
 /// to the variance, whose errors are the delta method's. Estimates are reported as they are, below zero included.
 /// </summary>
@@ -215,10 +246,11 @@ public sealed class PickFreezeEstimate
 /// Sobol pieces of any function by pick-freeze (the sampled-sensitivity brief, decision 3): it accumulates the function's values on
 /// the base sets A and B and on each block's hybrid A_B^u, and reduces them, row by row, to <see cref="PickFreezeEstimate"/>'s pieces.
 /// <list type="bullet">
-/// <item>A block's main variance is Saltelli's 2010 form by Möbius inversion: the sample covariance, over N − 1, of f(B) with
-/// D_u = Σ_{v⊆u} (−1)^{|u|−|v|} f(A_B^v), A_B^∅ = A. f(B) and f(A_B^v) share x_v, and E[D_u] = 0, so it is unbiased for the
-/// variance of the ANOVA component on u. Centring f(B) on its own mean makes it shift-invariant; the uncentred form's variance carries
-/// 2μ²·T_u, μ the function's mean.</item>
+/// <item>A block's main variance, in the design's <see cref="MainVarianceForm"/>: Saltelli's 2010 form by Möbius inversion, the
+/// sample covariance, over N − 1, of f(B) with D_u = Σ_{v⊆u} (−1)^{|u|−|v|} f(A_B^v), A_B^∅ = A. f(B) and f(A_B^v) share x_v, and
+/// E[D_u] = 0, so it is unbiased for the variance of the ANOVA component on u. Centring f(B) on its own mean makes it shift-invariant;
+/// the uncentred form's variance carries 2μ²·T_u, μ the function's mean. Or the two-difference form, (−1)^{|u|}·mean(D^B_u D^A_u)/2^{|u|}
+/// with D^B_u over the reverse hybrids: f(B_A^v) and f(A_B^w) share x on v Δ w, so E[D^B_u D^A_u] = 2^{|u|}(−1)^{|u|}·V_u, unbiased.</item>
 /// <item>An input's total variance is Jansen's 1999 form, Σ (f(A) − f(A_B^i))²/(2N), unbiased.</item>
 /// <item>The variance is the sample variance over A and B pooled, and each index is a ratio to it.</item>
 /// </list>
@@ -230,13 +262,15 @@ public static class PickFreeze
 {
     /// <summary>
     /// The pieces from the values of one function at <paramref name="design"/>'s points: <paramref name="a"/> on A,
-    /// <paramref name="b"/> on B, and <paramref name="hybrids"/>, one per block in its order, on the hybrids, each of N values, N ≥ 2.
+    /// <paramref name="b"/> on B, <paramref name="hybrids"/>, one per block in its order, on the hybrids, and for the two-difference form
+    /// <paramref name="reverses"/>, one per block, on the reverse hybrids; each of N values, N ≥ 2.
     /// The variance is zero when it is at most <paramref name="tolerance"/> times its rounding scale, the mean of |y|·|y − ȳ| over A and
     /// B, so a variation below about <paramref name="tolerance"/> times the mean's size is zero; a piece below zero by more than
     /// <paramref name="errorMultiple"/> standard errors and <paramref name="tolerance"/> times that scale is flagged.
     /// </summary>
     public static PickFreezeEstimate Estimate(PickFreezeDesign design, ReadOnlySpan<double> a, ReadOnlySpan<double> b,
-                                              IReadOnlyList<double[]> hybrids, double tolerance = 1e-10, double errorMultiple = 3.0)
+                                              IReadOnlyList<double[]> hybrids, IReadOnlyList<double[]>? reverses = null,
+                                              double tolerance = 1e-10, double errorMultiple = 3.0)
     {
         ArgumentNullException.ThrowIfNull(design);
         ArgumentNullException.ThrowIfNull(hybrids);
@@ -253,6 +287,17 @@ public static class PickFreeze
             if (hybrids[k] is null || hybrids[k].Length != n) throw new ArgumentException($"Hybrid {k} does not hold {n} values.", nameof(hybrids));
             Finite(hybrids[k], $"hybrid {k}");
         }
+        if (design.Reverses)
+        {
+            if (reverses is null || reverses.Count != blocks)
+                throw new ArgumentException($"The two-difference form reads {blocks} reverse hybrids.", nameof(reverses));
+            for (int k = 0; k < blocks; k++)
+            {
+                if (reverses[k] is null || reverses[k].Length != n) throw new ArgumentException($"Reverse hybrid {k} does not hold {n} values.", nameof(reverses));
+                Finite(reverses[k], $"reverse hybrid {k}");
+            }
+        }
+        else if (reverses is not null) throw new ArgumentException("Saltelli's form reads no reverse hybrids.", nameof(reverses));
 
         // The pooled mean and variance, by the corrected two-pass sums; each row's variance term ψ_j = ½((a_j − m)² + (b_j − m)²).
         double m = 0.0;
@@ -306,6 +351,22 @@ public static class PickFreeze
                 for (int t = 0; t < terms.Length; t++) s += signs[t] * (terms[t] < 0 ? a[j] : hybrids[terms[t]][j]);
                 d[j] = s;
             }
+            if (design.Reverses)
+            {
+                // (−1)^{|u|}·D^B·D^A/2^{|u|} per row: a mean of independent terms, no centring needed.
+                double scale = (design.Blocks[k].Length % 2 == 0 ? 1.0 : -1.0) / (1 << design.Blocks[k].Length), sum = 0.0;
+                for (int j = 0; j < n; j++)
+                {
+                    double r = 0.0;
+                    for (int t = 0; t < terms.Length; t++) r += signs[t] * (terms[t] < 0 ? b[j] : reverses![terms[t]][j]);
+                    term[j] = scale * r * d[j];
+                    sum += term[j];
+                }
+                main[k] = sum / n;
+                mainError[k] = Deviation(term) / Math.Sqrt(n);
+                (mainIndex[k], mainIndexError[k]) = Ratio(main[k], term, psi, variance, zero, g);
+                continue;
+            }
             double dm = Mean(d), dSum = 0.0, cross = 0.0;
             for (int j = 0; j < n; j++)
             {
@@ -345,8 +406,9 @@ public static class PickFreeze
 
     /// <summary>
     /// The pieces of <paramref name="f"/> at <paramref name="design"/>'s points, from base sets <paramref name="a"/> and
-    /// <paramref name="b"/> (N × p, rows drawn independently from the product law): f is read on A, B and each hybrid, the values given
-    /// to <see cref="Estimate(PickFreezeDesign, ReadOnlySpan{double}, ReadOnlySpan{double}, IReadOnlyList{double[]}, double, double)"/>.
+    /// <paramref name="b"/> (N × p, rows drawn independently from the product law): f is read on A, B, each hybrid and, for the
+    /// two-difference form, each reverse hybrid, the values given to <see cref="Estimate(PickFreezeDesign, ReadOnlySpan{double},
+    /// ReadOnlySpan{double}, IReadOnlyList{double[]}, IReadOnlyList{double[]}?, double, double)"/>.
     /// </summary>
     public static PickFreezeEstimate Estimate(PickFreezeDesign design, Func<ReadOnlySpan<double>, double> f, double[,] a, double[,] b,
                                               double tolerance = 1e-10, double errorMultiple = 3.0)
@@ -355,22 +417,28 @@ public static class PickFreeze
         ArgumentNullException.ThrowIfNull(f);
         int n = design.CheckBases(a, b), p = design.Inputs;
         var row = new double[p];
-        double[] Read(double[,] x, int[]? fromB)
+        double[] Read(double[,] x, double[,] other, int[]? fromOther)
         {
             var values = new double[n];
             for (int j = 0; j < n; j++)
             {
                 for (int v = 0; v < p; v++) row[v] = x[j, v];
-                if (fromB is not null)
-                    foreach (int v in fromB) row[v] = b[j, v];
+                if (fromOther is not null)
+                    foreach (int v in fromOther) row[v] = other[j, v];
                 values[j] = f(row);
             }
             return values;
         }
-        double[] fa = Read(a, null), fb = Read(b, null);
+        double[] fa = Read(a, b, null), fb = Read(b, a, null);
         var hybrids = new double[design.Blocks.Count][];
-        for (int k = 0; k < hybrids.Length; k++) hybrids[k] = Read(a, design.Blocks[k]);
-        return Estimate(design, fa, fb, hybrids, tolerance, errorMultiple);
+        for (int k = 0; k < hybrids.Length; k++) hybrids[k] = Read(a, b, design.Blocks[k]);
+        double[][]? reverses = null;
+        if (design.Reverses)
+        {
+            reverses = new double[design.Blocks.Count][];
+            for (int k = 0; k < reverses.Length; k++) reverses[k] = Read(b, a, design.Blocks[k]);
+        }
+        return Estimate(design, fa, fb, hybrids, reverses, tolerance, errorMultiple);
     }
 
     // A piece's ratio to the variance and its delta-method error: the deviation of term_j − r·ψ_j over √N·V.
