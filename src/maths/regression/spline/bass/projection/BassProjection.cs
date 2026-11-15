@@ -196,16 +196,27 @@ public sealed class BassProjection
     public BassData Project(BassData data)
     {
         ArgumentNullException.ThrowIfNull(data);
-        string[] continuous = [.. data.Predictors.OfType<ContinuousPredictor>().Select(c => c.Name)];
-        string[] categorical = [.. data.Predictors.OfType<CategoricalPredictor>().Select(c => c.Name)];
+        return new BassData(ProjectPredictors(data.Predictors), data.Response, data.Groupings, data.Weights);
+    }
+
+    /// <summary>
+    /// <paramref name="predictors"/> in the refit's inputs, as <see cref="Project(BassData)"/> takes a data set's: the active variables,
+    /// each with its bounding box as its declared domain, then the categorical predictors (slice 8c, for a basis fit's components, which
+    /// share them).
+    /// </summary>
+    public IReadOnlyList<BassPredictor> ProjectPredictors(IReadOnlyList<BassPredictor> predictors)
+    {
+        ArgumentNullException.ThrowIfNull(predictors);
+        string[] continuous = [.. predictors.OfType<ContinuousPredictor>().Select(c => c.Name)];
+        string[] categorical = [.. predictors.OfType<CategoricalPredictor>().Select(c => c.Name)];
         if (!continuous.SequenceEqual(Inputs) || !categorical.SequenceEqual(Categorical))
-            throw new ArgumentException("The data's predictors are not the projection's: its continuous and categorical predictors, in its order.", nameof(data));
-        double[][] columns = [.. data.Predictors.OfType<ContinuousPredictor>().Select(c => c.Values.ToArray())];
+            throw new ArgumentException("The data's predictors are not the projection's: its continuous and categorical predictors, in its order.", nameof(predictors));
+        double[][] columns = [.. predictors.OfType<ContinuousPredictor>().Select(c => c.Values.ToArray())];
         double[,] u = Apply(columns, columns[0].Length);
-        var predictors = new List<BassPredictor>();
-        for (int j = 0; j < Dimension; j++) predictors.Add(new ContinuousPredictor(Names[j], Column(u, j), Domains[j]));
-        predictors.AddRange(data.Predictors.OfType<CategoricalPredictor>());
-        return new BassData(predictors, data.Response, data.Groupings, data.Weights);
+        var projected = new List<BassPredictor>();
+        for (int j = 0; j < Dimension; j++) projected.Add(new ContinuousPredictor(Names[j], Column(u, j), Domains[j]));
+        projected.AddRange(predictors.OfType<CategoricalPredictor>());
+        return projected;
     }
 
     /// <summary>

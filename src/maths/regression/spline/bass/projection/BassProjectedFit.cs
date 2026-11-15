@@ -53,10 +53,14 @@ public sealed class BassProjectedFit
         ArgumentNullException.ThrowIfNull(data);
         ArgumentNullException.ThrowIfNull(config);
         BassData projected = projection.Project(data);
-        if (config.Structure is { Legendre: null, HingeNormalization: null } structure)
-            config = config with { Structure = structure with { HingeNormalization = HingeNormalization.TrainingRange } };
-        return new BassProjectedFit(projection, projected, Bass.Fit(config, projected, run));
+        return new BassProjectedFit(projection, projected, Bass.Fit(TrainingRange(config), projected, run));
     }
+
+    // Slice 7d's rule for projected fits: a hinge config that leaves the normalization unset takes the training range; a stated one is kept.
+    internal static BassConfig TrainingRange(BassConfig config)
+        => config.Structure is { Legendre: null, HingeNormalization: null } structure
+            ? config with { Structure = structure with { HingeNormalization = HingeNormalization.TrainingRange } }
+            : config;
 
     /// <summary>The refit's posterior at <paramref name="cases"/>, given in the original inputs' units.</summary>
     public BassPrediction Predict(PredictionCases cases, BassPredictOptions? options = null)
@@ -105,25 +109,35 @@ public sealed class BassProjectedFit
     public ProjectedActiveSubspace ActiveSubspace(ActiveSubspaceSpec? spec = null)
     {
         spec ??= new ActiveSubspaceSpec();
+        JointSample sample = Pushforward(Projection, spec);
+        ActiveSubspaceAnalysis active = Fit.ActiveSubspace(Data, spec with { Sample = sample, Route = ActiveSubspaceRoute.Sampled });
+        return ToInputs(Projection, active, spec);
+    }
+
+    // The readout's rules on a refit's spec and its pushforward joint sample, for a refit and a projected basis fit (slice 8c) alike.
+    internal static JointSample Pushforward(BassProjection projection, ActiveSubspaceSpec spec)
+    {
         if (spec.Measures is not null)
             throw new ArgumentException("The refit reads under the analysis's law pushed forward; a declared product law on the active variables is another law.", nameof(spec));
         if (spec.Metric != InputMetric.Box) throw new ArgumentException("The refit is read in its active variables' box; the original inputs' metric is the analysis's.", nameof(spec));
         if (spec.Route == ActiveSubspaceRoute.Exact) throw new ArgumentException("The pushforward is a joint sample, which the exact route does not take.", nameof(spec));
-        if (spec.Dimension > Projection.Dimension)
-            throw new ArgumentOutOfRangeException(nameof(spec), $"The refit has {Projection.Dimension} active variables, so k is at most that.");
-        JointSample sample = spec.Sample is { } given ? Projection.Pushforward(given) : Projection.Pushforward(spec.Points, spec.Seed);
-        ActiveSubspaceAnalysis active = Fit.ActiveSubspace(Data, spec with { Sample = sample, Route = ActiveSubspaceRoute.Sampled });
+        if (spec.Dimension > projection.Dimension)
+            throw new ArgumentOutOfRangeException(nameof(spec), $"The refit has {projection.Dimension} active variables, so k is at most that.");
+        return spec.Sample is { } given ? projection.Pushforward(given) : projection.Pushforward(spec.Points, spec.Seed);
+    }
 
-        // C = W₁D·C_u·DW₁ᵀ per draw, D = diag(1/width of u's box), u's box being its domain.
-        int p = Projection.Inputs.Count, d = Projection.Dimension;
-        double[,] frame = Projection.Frame;
+    // C = W₁D·C_u·DW₁ᵀ per draw, D = diag(1/width of u's box), u's box being its domain.
+    internal static ProjectedActiveSubspace ToInputs(BassProjection projection, ActiveSubspaceAnalysis active, ActiveSubspaceSpec spec)
+    {
+        int p = projection.Inputs.Count, d = projection.Dimension;
+        double[,] frame = projection.Frame;
         var b = new double[p, d];
         for (int i = 0; i < p; i++)
-            for (int j = 0; j < d; j++) b[i, j] = frame[i, j] / (Projection.Domains[j].Upper - Projection.Domains[j].Lower);
+            for (int j = 0; j < d; j++) b[i, j] = frame[i, j] / (projection.Domains[j].Upper - projection.Domains[j].Lower);
         var c = new double[active.Posterior.Draws.Count][,];
         for (int s = 0; s < c.Length; s++) c[s] = Sandwich(b, active.Posterior.Draws[s].C);
         SubspacePosterior inputs = SubspacePosterior.Of(c, active.Posterior.Weights, spec.Dimension);
-        return new ProjectedActiveSubspace(active, inputs, Projection.Inputs, Projection.Metric);
+        return new ProjectedActiveSubspace(active, inputs, projection.Inputs, projection.Metric);
     }
 
     /// <summary>

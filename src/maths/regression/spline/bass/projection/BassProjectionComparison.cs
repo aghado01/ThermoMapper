@@ -161,6 +161,52 @@ internal static class BassProjectionComparisons
         return new BassProjectionComparison(nativeSide, refitSide, Array.AsReadOnly(toFrame), spread, cross);
     }
 
+    // A projected basis fit beside its native basis fit (slice 8c): each side's basis functions per joint draw summed over the components,
+    // PSIS-LOO on the coefficients, and the reconstruction's held-out error; no evidence and no density (C1); the refit's subspace against
+    // the frame and the native draws' spread about it. Cross-fitting would decompose each fold's training outputs again (E2), which needs
+    // the decomposition's spec, and held-out weights have no meaning for a basis fit's components; both are refused.
+    public static BassProjectionComparison Of(BassProjectedBasisFit refit, BassBasisFit native, ActiveSubspaceAnalysis analysis, ProjectionComparisonSpec spec)
+    {
+        ArgumentNullException.ThrowIfNull(native);
+        ArgumentNullException.ThrowIfNull(analysis);
+        ArgumentNullException.ThrowIfNull(spec);
+        BassProjection projection = refit.Projection;
+        int p = projection.Inputs.Count, d = projection.Dimension;
+        for (int i = 0; i < p; i++)
+            for (int j = 0; j < d; j++)
+                if (analysis.Posterior.MeanCVectors[i, j] != projection.Frame[i, j])
+                    throw new ArgumentException("The analysis is not the one the projection's frame was read from.", nameof(analysis));
+        if ((spec.TestCases is null) != (spec.TestResponse is null))
+            throw new ArgumentException("Held-out cases and their responses come together.", nameof(spec));
+        if (spec.Folds != 0 || spec.FoldGrouping is not null)
+            throw new ArgumentException("Cross-fitting a basis fit would decompose each fold's training outputs again, which needs the decomposition's own spec; "
+                                        + "it is not built.", nameof(spec));
+        if (spec.TestWeights is not null) throw new ArgumentException("A basis fit's components carry no case weights, so a held-out case's would state nothing.", nameof(spec));
+        ProjectionFitReport nativeSide = BasisSide(native, spec.TestCases is null ? null : native.Predict(spec.TestCases).Mean(), spec.TestResponse);
+        ProjectionFitReport refitSide = BasisSide(refit.Fit, spec.TestCases is null ? null : refit.Predict(spec.TestCases).Mean(), spec.TestResponse);
+        ProjectedActiveSubspace read = refit.ActiveSubspace(new ActiveSubspaceSpec { Points = spec.Points, Seed = spec.Seed });
+        double[] toFrame = [.. Enumerable.Range(1, d).Select(k => SubspacePosterior.PrincipalAngles(Leading(read.InputSpace.MeanCVectors, k), Leading(projection.Frame, k)).Max())];
+        double[][] spread = [.. analysis.Posterior.Draws.Select(draw =>
+            SubspacePosterior.PrincipalAngles(Leading(draw.Vectors, Math.Min(d, draw.Vectors.GetLength(1))), projection.Frame))];
+        return new BassProjectionComparison(nativeSide, refitSide, Array.AsReadOnly(toFrame), spread, null);
+    }
+
+    // A basis fit's side: Σ_k of each joint draw's component draw's basis functions, averaged over the joint draws; PSIS-LOO on the
+    // coefficients (BassBasisFit.PointwiseLogDensity's default space); the reconstruction's held-out RMSE.
+    private static ProjectionFitReport BasisSide(BassBasisFit fit, double[,]? mean, double[,]? response)
+    {
+        BassDraw[][] pooled = [.. fit.Components.Select(c => c.Draws.SelectMany(chain => chain).ToArray())];
+        double terms = 0.0;
+        for (int b = 0; b < fit.JointDraws.Count; b++)
+            for (int k = 0; k < pooled.Length; k++)
+                terms += pooled[k][fit.JointDraws.Draw(k, b)].Structure.TermCount(fit.Components[k].Config.Structure.ColumnsPerTerm);
+        terms /= fit.JointDraws.Count;
+        PredictiveCheck loo = PredictiveChecks.PsisLoo(fit.PointwiseLogDensity());
+        double? rmse = null, explained = null;
+        if (mean is not null) (rmse, explained) = Score(mean, response!, null);
+        return new ProjectionFitReport(terms, loo, null, rmse, explained);
+    }
+
     // One fit's side; cases are the held-out cases in this fit's inputs, for the density.
     private static ProjectionFitReport Side(BassFit fit, BassData data, PredictionCases? cases, double[,]? mean, double[,]? response, double[]? weights)
     {
