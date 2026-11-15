@@ -236,8 +236,9 @@ public abstract class NormalVarianceMeanMixture : IContinuousDistribution
         double Level(double t) => density ? H(t) : G(t);
         bool Falling(double at, double inward) => density ? !(H(at) > H(inward)) : G(at) < G(inward);
 
-        // The scan out from g's mode: the best point seen, and on each side the span until the bound is Drop below it.
-        double start = _mode - origin, best = start, top = H(best), narrow = 0.0;
+        // The scan out from g's mode: the best point seen and the step that reached it, and on each side the span until the bound is Drop
+        // below it.
+        double start = _mode - origin, best = start, top = H(best), narrow = 0.0, spacing = 0.0;
         if (density && shared && front * front >= 400.0)
         {
             // Far out on the drift's side the density's peak is a width 2/|front| ≤ 0.1 about t = 0, too narrow for a scan or a golden
@@ -263,7 +264,7 @@ public abstract class NormalVarianceMeanMixture : IContinuousDistribution
             {
                 at += direction * step;
                 double h = H(at);
-                if (h > top) { top = h; best = at; }
+                if (h > top) { top = h; best = at; spacing = step; }
                 if (Level(at) < top - Drop && Falling(at, at - direction * step)) return at;
                 if (k >= 8) step *= 1.25;
             }
@@ -272,15 +273,21 @@ public abstract class NormalVarianceMeanMixture : IContinuousDistribution
         double right = Scan(1.0), left = Scan(-1.0);
         if (double.IsNegativeInfinity(top)) return double.NegativeInfinity;
 
-        // Golden section for the peak, then its width from the curvature: about the best point under a tail; over the whole span for the
-        // density, whose concave integrand has one peak there, so a peak the scan stepped over is found.
+        // Golden section for the peak, then its width from the curvature: about the best point under a tail, out to its neighbours in the
+        // scan (at most 1.25 of the step that reached it, and at least ½); over the whole span for the density, whose concave integrand has
+        // one peak there, so a peak the scan stepped over is found. Far out on the drift's side a tail's peak is 2/|front| wide or less, and
+        // the scan's steps there pass ½: a bracket of ½ about the best point could miss it, and a top below the integrand's own leaves the
+        // panels' tolerance under its rounding, so they halve to the depth limit.
         double peak, width;
         if (narrow > 0.0) (peak, width) = (best, Math.Min(narrow, 1.0));
         else
         {
-            double lo = density ? left : Math.Max(left, best - 0.5), hi = density ? right : Math.Min(right, best + 0.5);
+            double reach = Math.Max(0.5, 1.25 * spacing);
+            double lo = density ? left : Math.Max(left, best - reach), hi = density ? right : Math.Min(right, best + reach);
             const double golden = 0.6180339887498949;
-            for (int k = 0, sections = density ? 64 : 25; k < sections; k++)
+            // A wider bracket takes the sections that bring it to the ½-bracket's resolution.
+            int extra = density || reach <= 0.5 ? 0 : (int)Math.Ceiling(Math.Log(2.0 * reach) / -Math.Log(golden));
+            for (int k = 0, sections = (density ? 64 : 25) + extra; k < sections; k++)
             {
                 double c = hi - golden * (hi - lo), d = lo + golden * (hi - lo);
                 if (H(c) > H(d)) hi = d;

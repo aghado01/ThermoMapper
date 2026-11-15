@@ -324,6 +324,65 @@ public sealed class GeneralizedBetaPrimeTests(ITestOutputHelper output)
     }
 
     [Fact]
+    public void FarOnTheDriftsSide_TheTailIsTakenAboutItsPeak()
+    {
+        // Under a tail where x and m share a sign the integrand in t peaks 2/|front| wide or less, |front| = 2√(xm)/s, at
+        // t = −½·ln(1 + a·s²/m²) for the GH far out; past front² = 400 the scan's steps there pass ½, and a section of ½ about its best
+        // point missed the peak: the top sat ~10 below the integrand's own, the panels' tolerance under its rounding, and they halved to
+        // the depth limit (the first GH below built its table in 19 min). Against the closed form's density integrated over [x, ±∞),
+        // outside the integral over v.
+        var laws = new (string Name, GeneralizedHyperbolic Law)[]
+        {
+            ("GH(−0.5, 0.09, 1), m 1.2, s 0.5", GeneralizedHyperbolic.Of(-0.5, 0.09, 1.0, 1.2, 0.5)),
+            ("Normal-Wald, γ = 1.5, m 0.4, s 0.8", GeneralizedHyperbolic.Of(-0.5, 2.25, 1.0, 0.4, 0.8)),
+            ("skewed t, ν = 5, m −0.7, s 1", GeneralizedHyperbolic.Of(-2.5, 0.0, 5.0, -0.7, 1.0)),
+        };
+        foreach ((string name, GeneralizedHyperbolic law) in laws)
+        {
+            double m = law.Drift, s = law.Scale, worst = 0.0;
+            foreach (double front2 in new[] { 400.0, 1.4e3, 6e3, 3e4, 1e5 })
+            {
+                double x = Math.Sign(m) * front2 * s * s / (4.0 * Math.Abs(m));
+                double far = m > 0.0 ? law.IntegratedLogSurvival(x) : law.IntegratedLogCdf(x);
+                double reference = ClosedFormTail(law, x);
+                worst = Math.Max(worst, Math.Abs(far - reference) / Math.Max(1.0, Math.Abs(reference)));
+            }
+            output.WriteLine($"{name}: the far drift-side tail against the closed form's density integrated, worst {worst:G3}");
+            Assert.True(worst <= 1e-10, $"{name}: worst {worst:G3}");
+        }
+    }
+
+    // ln ∫ f over [x, ±∞) for x away from 0 on that side, f the closed form's density, taken in w = ln(y/x), where a power tail falls
+    // exponentially and an exponential one faster: Gauss–Kronrod 15 on 4096 fixed panels over [0, W], W doubled until the integrand
+    // f(x·eʷ)·|x|·eʷ has fallen 60 below its largest value.
+    private static double ClosedFormTail(GeneralizedHyperbolic law, double x)
+    {
+        double G(double w) => law.LogPdf(x * Math.Exp(w)) + Math.Log(Math.Abs(x)) + w;
+        double span = 0.25, top = G(0.0);
+        for (int k = 1; k <= 64; k++) top = Math.Max(top, G(span * k / 64.0));
+        while (G(span) > top - 60.0)
+        {
+            span *= 2.0;
+            for (int k = 33; k <= 64; k++) top = Math.Max(top, G(span * k / 64.0));
+        }
+        const int panels = 4096;
+        double width = span / panels, half = 0.5 * width, sum = 0.0;
+        double[] nodes = [0.991455371120812639, 0.949107912342758525, 0.864864423359769073, 0.741531185599394440,
+                          0.586087235467691130, 0.405845151377397167, 0.207784955007898468, 0.0];
+        double[] weights = [0.022935322010529225, 0.063092092629978553, 0.104790010322250184, 0.140653259715525919,
+                            0.169004726639267903, 0.190350578064785410, 0.204432940075298892, 0.209482141084727828];
+        for (int k = 0; k < panels; k++)
+        {
+            double centre = (k + 0.5) * width;
+            for (int i = 0; i < nodes.Length; i++)
+                sum += weights[i] * half * (nodes[i] == 0.0
+                    ? Math.Exp(G(centre) - top)
+                    : Math.Exp(G(centre - half * nodes[i]) - top) + Math.Exp(G(centre + half * nodes[i]) - top));
+        }
+        return top + Math.Log(sum);
+    }
+
+    [Fact]
     public void NearZero_UnderADrift_TheTableHoldsItsIntegral()
     {
         // Where v's density near 0 goes as v^(α−1), α finite, the mixture's density goes as |x|^(2α−1) at 0: a pole at α ≤ ½, a cusp or kink
