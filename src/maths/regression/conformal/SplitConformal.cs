@@ -404,7 +404,10 @@ public static class SplitConformal
     /// <summary>Asymmetric CQR (<c>cqrAsym_coverage_half</c>): calibrate y − q_lo and q_hi − y separately at α/2.
     /// Each tail's zero level gives an infinite end. The fit uses the training split, and calibration and test units must be
     /// exchangeable given that split. With <paramref name="confidence"/> β each tail takes the training-conditional level at α/2 and
-    /// confidence (1 + β)/2, so by their union the interval misses with chance at most α with chance at least β; not with weights.</summary>
+    /// confidence (1 + β)/2, so by their union the interval misses with chance at most α with chance at least β; not with weights. The
+    /// union is conservative, and no exact law replaces it where the band's width varies
+    /// (<see cref="AsymmetricConformalInterval.TrainingConditionalMiscoverage"/>); <see cref="Quantiles"/> and <see cref="Residuals"/> read
+    /// one score each, exactly.</summary>
     public static AsymmetricConformalIntervals AsymmetricQuantiles(QuantileReadings calibration, IReadOnlyList<double> response,
                                                                    QuantileReadings test, double alpha = 0.1, ShiftWeights? weights = null,
                                                                    double? confidence = null)
