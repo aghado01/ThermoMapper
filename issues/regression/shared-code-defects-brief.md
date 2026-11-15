@@ -239,6 +239,18 @@ Decided by the user on 2026-11-15 ("Guard and trap"), on the [report of the one-
 
 Newest first. Each gives the commits, the gates' results, defects found, decisions for the user and "Doc changes owed".
 
+### 2026-11-15 — Slice 10 verified from a clean archive (coordinating session)
+
+- **Commits:** `17abf21` (the guard) and `1dd5974` (the trap), on a snapshot of `753858f`, through `scripts/verify-csharp.ps1` as it now stands, over the guard's two changed files, in the two projects that select.
+- **Result:** Regression 2,826 of 2,826 and Oracle 68 of 68 at commit scope, `WeightReaderTests`' 24 cases among them.
+- **The trap, read in this run and in one apart from the chip's.**
+  - This run kept `jit-Rows-regression.txt` (68.6 KB) and `jit-Rows-oracle.txt` (25.1 KB) in `artifacts/verify-defects-s10-753858f/` after `verify-main` was removed. Regression's holds `Rows(IReadOnlyList<double>, int)` at instrumented tier 0 twice, at tier-1 OSR and at tier 1; Oracle's holds it to tier-1 OSR.
+  - The first coordinating session's conformal verification (`274f69d`) kept its own, 60 KB, the first under the trap.
+- **The guard, read.** The first pass and the scaled pass each count their rows and throw on a count other than the list's, with the method, the pass, both counts, the weights' runtime type and the instruction in the text. It adds counters only, so no result moves; the scaled pass summing nothing, the one-off's symptom, now throws.
+- **What stays as it was,** by the user's choice: the loop is not rewritten, and no hunt is run. The fault is unreproduced.
+- **Not covered by the trap:** `fact-harness` and a bare `dotnet test`, as the report's table says. The guard covers both.
+- **Receipts:** `artifacts/verify-defects-s10-753858f/`, with the changed list, the counters and the snapshot tracked in [receipts](receipts/verify-defects-s10-753858f/).
+
 ### 2026-11-15 — Slice 10: a guard in the weight reader and a trap for its compiled code
 
 **Commits.**
