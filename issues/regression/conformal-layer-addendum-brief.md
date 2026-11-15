@@ -40,6 +40,65 @@ As in the archived brief: each slice is reported here, then waits for the main s
 
 Newest first.
 
+### 2026-11-14 — Slice 17's follow-up: CBMA's evidence from the engines' fits
+
+Built at the user's pick (2026-11-14, "CBMA evidence from the engines' fits"). The engines' side was settled with the coordinator (its answers to Q1 and Q2):
+- Ownership: both adapters are new members only, on `BassEvidence` and on `BarsEvidence`. Neither engine folder has an active owner, and the BPPR chip's BASS-core files are untouched.
+- Scale: conditions (a) to (d), answered below.
+
+**Landed** on `main`, nothing pushed:
+- `3e3b7f2`:
+  - the seam `ModelEvidence` (`src/maths/regression`): ln p(y), its Monte Carlo error, the engine's flags, what the value depends on beyond the data (`Priors`), and the key of what it was read on (`KeyOf`: the response as the engine read it, its weights, and how they are read);
+  - `AveragedModel`, `EvidenceReading`, and a second `ModelAveraging.FullStep` overload taking models with their evidence;
+  - `BassEvidence.ForAveraging(BassData)` and `BarsEvidence.ForAveraging(double[])`;
+  - `ModelEvidenceTests` and `EngineEvidenceTests`.
+- The log-weight `FullStep` and the new overload share one core. It reads each model's scores and predictive density once per candidate, then mixes them under every weight vector. The log-weight form runs exactly its old arithmetic.
+- `ScoresBeyondTheModelTests`' three fixture helpers are now `internal`, for reuse.
+
+**What it computes.**
+- *The overload.*
+  - Each model's log posterior probability given the n units is its log prior plus its log evidence. Models whose evidences carry different keys are refused.
+  - `EvidenceReading` gives p(M_k | Z₁:ₙ), its least and greatest over the evidences' tilts, each case's set moving under a tilt or not, the engines' flags led by each model's index, and each model's priors.
+  - A tilt moves one model's log evidence by the error multiple (2 by default) of its Monte Carlo error, up and down, and the others' the other way by theirs. For up to three models that is every vertex of the errors' box. The scores do not depend on the weights, so a tilt costs a re-mix, not a re-score. The readout is indicative, as the full step's margin is.
+- *The adapters.*
+  - BASS: its flags as text (saturated, the ladder at its budget, SMC overdispersion). The key is its data's response as laid out, with its case weights and their meaning (precision or replication); a functional or several-output response is keyed as BASS lays it out.
+  - BARS: a run that reports an evidence reads no case weights, so the key reads the response alone.
+- *The conditions.*
+  - (a) Constants: pinned for both engines, without Monte Carlo, against the g-prior's marginal written from its definition, a dense multivariate t with every constant (the gates below). BASS's collapsed marginal (`GPriorMarginal.LogMarginal`) carries −(ν/2) ln 2π, and under precision weights ½ Σ ln wᵢ. BARS's block, through `BandedGPrior`, carries −(m/2) ln 2π. Both read the response as given, so engines mix.
+  - (b) Priors read the response: each engine's priors description rides through the seam into `EvidenceReading.Priors`. On symmetry: both engines set their centre and σ² prior from the n training responses, never the candidate's. The full step on these fits already accepts that: its draws come from a fit under that prior, so its score is not exactly symmetric in the n + 1 units. The evidences read the same n responses and enter only the model weights, so CBMA adds no asymmetry of its own; it inherits the full step's. Exact symmetry would need the draws and the evidences re-read with the candidate.
+  - (c) Response key: built from what the engine read, weights and their meaning included, so a mismatch is refused.
+  - (d) The evidences' Monte Carlo errors and flags pass as given, beside the tilt readout.
+
+**Gates.**
+- *The constants, against the definition* (the dense t: y | σ² ~ N(Zμ₀, σ²(W⁻¹ + Z G⁻¹ Zᵀ/τ)), G = ZᵀWZ, σ² ~ IG(a, b)):
+
+  | engine, configuration | engine | definition |
+  |---|---|---|
+  | BARS, no knots, n 60 (τ = 1/m, centre the median projected, σ² as resolved) | −17.1690934545 | −17.1690934545 |
+  | BASS's enumeration over 37 structures (g-prior, τ held at 0.7, IG(3, 2), centre 0, n 20) | −23.6317698380 | −23.6317698380 |
+  | the same under precision weights | −24.1801277051 | −24.1801277051 |
+
+  BASS's design holds its columns whitened under weights, W^½z. A first run read them as raw columns and missed by 0.07. A probe settled it: the intercept-only structure matched to 0, and each one-term structure matched to 1e-14 once its column was read back as (W^½z)/√wᵢ.
+- *A fitted BASS evidence,* tempered to its reference rung: −26.7583 ± 0.0012, against the definition's −26.7590.
+- *On shared data* (n 60, sin plus noise):
+  - BASS reads −5.118 ± 0.264 and BARS −6.697 ± 0.026. They share a key and differ by 1.6 nats, far inside the (n/2) ln 2π = 55 nats either would drop.
+  - CBMA averages their full-step seams: P(BASS | Z) 0.829, from 0.731 to 0.896 over ±2 errors; one of the two cases' sets moves under the tilts.
+  - BARS keyed on a shifted response is refused.
+- *The overload, with exact evidences* (the σ 1 and σ 1.5 laws, 8 units, α 0.3 so k is 2):
+  - Against the log-weight form, sets and weights are identical bit for bit, the posterior is the exact one, and no case is fragile.
+  - Errors of ±0.5 and ±3 nats widen P(y = βx | Z) from 0.936 to [0.843, 0.975] and [0.035, 1.000]. Every case's set moves at both on two models apart in their mean, and none at a multiple of 0.
+  - The first fixture's two noise laws moved no set even at ±3 nats (a noise scale barely moves a set, slice 17). At α 0.1 on 8 units every set was the whole line. Both are fixed in the fixture.
+- *Keys and refusals:* the weights and their meaning enter the key; malformed evidences and priors are refused.
+- *Neighbours:* `ScoresBeyondTheModelTests` and `BarsEvidenceTests` pass unchanged.
+- *Per commit,* the selected classes and the pinned tier: Maths.Regression.Tests 278 of 334 classes, 2,822 of 2,822; Maths.Oracle.Tests 23 of 39 classes, 104 of 108, the four misses R oracles timing out at 120 s under load (GBASS's readouts twice, the transport oracle twice), the two GBASS classes then passing alone (55 s and 1 min 55 s); Maths.Samplers.Tests compiles none of these files.
+
+**Defects found: none.** The engines' evidences are complete densities of the response as given.
+
+**Doc changes owed:**
+- the scores-beyond-the-model section's CBMA part: the evidence seam, the overload, the tilt readout, conditions (a) to (d) with the symmetry note, and the gates' tables;
+- the API rows for `ModelEvidence`, `AveragedModel`, `EvidenceReading` and the two adapters;
+- in each engine's evidence section, a line on `ForAveraging`.
+
 ### 2026-11-14 — RoBAS-Full's intervals: not intervals at n 2 and 3; none found from n 4
 
 Probed at the user's pick (2026-11-14, "RoBAS-Full intervals"). The question was whether the grid-free form can serve RoBAS-Full.
