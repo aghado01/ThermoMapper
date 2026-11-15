@@ -536,7 +536,8 @@ public enum MonitorForm
 /// guarantees are posed.
 /// <para>Three forms, fixed at construction (<see cref="Form"/>).
 /// <list type="bullet">
-/// <item>The inductive form, by the constructor, takes each unit's score from a fixed fit (<see cref="Add(double)"/>).</item>
+/// <item>The inductive form, by the constructor, takes each unit's score from a fixed fit (<see cref="Add(double)"/>), and with a stratum
+/// the Mondrian form, each score ranked within its stratum (<see cref="Add(double, int)"/>; <see cref="SmoothedPValues"/>).</item>
 /// <item>The full form, by <see cref="Full"/>, takes each unit's terms under the fit's draws and recomputes every unit's score under the
 /// draws reweighted by the stream so far (<see cref="FullFormPValues"/>; <see cref="Add(ReadOnlySpan{double}, ReadOnlySpan{double})"/>).</item>
 /// <item>The covariate-shift form, by <see cref="CovariateShift"/>, takes a reference sample and then each stream unit's score with its
@@ -634,6 +635,16 @@ public sealed class ConformalTestMartingale
         return Step(_pValues.Add(score));
     }
 
+    /// <summary>The inductive form with strata, the Mondrian form: ranks the arrival's <paramref name="score"/> among its
+    /// <paramref name="stratum"/>'s scores so far (<see cref="SmoothedPValues.Add(double, int)"/>), bets on its p-value and gives the step.
+    /// The strata's p-values bet into one capital, valid when the units are exchangeable within each stratum, whatever the strata's
+    /// laws.</summary>
+    public MartingaleStep Add(double score, int stratum)
+    {
+        if (_pValues is null) throw WrongForm();
+        return Step(_pValues.Add(score, stratum));
+    }
+
     /// <summary>The full form: takes the arrival's terms under the fit's draws, rescores every unit, ranks the newest, bets on its
     /// p-value and gives the step (<see cref="FullFormPValues.Add"/>).</summary>
     /// <param name="logDensity">Each draw's ln p(yₙ | xₙ, θ_s) at the unit, in row order.</param>
@@ -683,6 +694,6 @@ public sealed class ConformalTestMartingale
     {
         MonitorForm.Full => "This monitor is in the full form: it takes each unit's terms under the fit's draws, Add(logDensity, logCdf).",
         MonitorForm.CovariateShift => "This monitor is in the covariate-shift form: it takes each stream unit's score and likelihood ratio, Add(score, weight).",
-        _ => "This monitor is in the inductive form: it takes each unit's score from a fixed fit, Add(score).",
+        _ => "This monitor is in the inductive form: it takes each unit's score from a fixed fit, Add(score) or Add(score, stratum).",
     });
 }

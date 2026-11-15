@@ -6,7 +6,8 @@ namespace Maths.Regression.Conformal;
 
 /// <summary>One arrival's smoothed p-value (E35, M-1): its conformity <see cref="Score"/>, the scores so far strictly below it
 /// (<see cref="Below"/>) and equal to it with itself (<see cref="Tied"/>), the tie-breaking draw θ, and p = (Below + θ·Tied)/n with n the
-/// arrivals so far, itself included (<see cref="Count"/>).</summary>
+/// arrivals so far, itself included (<see cref="Count"/>). In a stratified stream every count is within the arrival's stratum
+/// (<see cref="SmoothedPValues.Add(double, int)"/>).</summary>
 public readonly record struct SmoothedPValue(int Count, double Score, int Below, int Tied, double Theta, double P);
 
 /// <summary>
@@ -26,32 +27,56 @@ public readonly record struct SmoothedPValue(int Count, double Score, int Below,
 /// counts ties for the unit and is not uniform;</item>
 /// <item>each score is taken once and never revised, so no score kept from an earlier fit mixes with later ones.</item>
 /// </list>
-/// Each arrival costs O(log n) (<see cref="OrderStatisticTree{T}"/>). Not thread-safe: one per stream.
+/// <para><b>Strata, the Mondrian form</b> (Vovk, Gammerman and Shafer 2005, §4.5; <see cref="Add(double, int)"/>).
+/// <list type="bullet">
+/// <item><i>The taxonomy.</i> Each arrival carries a stratum, fixed in advance and read from its position and its own unit, each
+/// separately: a phase of the position (a season), a category of the unit, or a pair of both. It is never read from other units, so
+/// each stratum is a rectangle of positions by units, as the book's taxonomies are.</item>
+/// <item><i>The p-value.</i> Each score is ranked among its own stratum's scores only, with the counts its stratum's.</item>
+/// <item><i>The guarantee</i> (their Proposition 4.10, a case of Theorem 8.2). If the units are exchangeable within each stratum, the
+/// p-values are i.i.d. uniform given the strata, whatever the strata's laws and the order in which they come. So a stream whose
+/// laws differ by season, exchangeable within each season, is monitored as one stream, the strata's evidence in one capital.</item>
+/// </list>
+/// The unstratified form is one stratum: <see cref="Add(double)"/> is stratum 0.</para>
+/// Each arrival costs O(log n) in its stratum (<see cref="OrderStatisticTree{T}"/>). Not thread-safe: one per stream.
 /// </summary>
 public sealed class SmoothedPValues
 {
-    private readonly OrderStatisticTree<double> _scores = new();
+    private readonly Dictionary<int, OrderStatisticTree<double>> _strata = [];
     private readonly Xoshiro256PlusPlus _theta;
 
     /// <param name="seed">The tie-breaking draws' seed; the draws are independent of the scores by construction.</param>
     public SmoothedPValues(int seed) => _theta = new Xoshiro256PlusPlus(seed);
 
-    /// <summary>The arrivals so far.</summary>
-    public int Count => _scores.Count;
+    /// <summary>The arrivals so far, over every stratum.</summary>
+    public int Count { get; private set; }
 
-    /// <summary>Ranks <paramref name="score"/> among every score so far, itself included, and gives its smoothed p-value.</summary>
+    /// <summary>The arrivals so far in <paramref name="stratum"/>.</summary>
+    public int CountIn(int stratum) => _strata.TryGetValue(stratum, out OrderStatisticTree<double>? tree) ? tree.Count : 0;
+
+    /// <summary>Ranks <paramref name="score"/> among every score so far, itself included, and gives its smoothed p-value: stratum 0 of
+    /// <see cref="Add(double, int)"/>.</summary>
     /// <param name="score">The newest unit's conformity score: finite or ±∞, never NaN.</param>
-    public SmoothedPValue Add(double score)
+    public SmoothedPValue Add(double score) => Add(score, 0);
+
+    /// <summary>Ranks <paramref name="score"/> among its stratum's scores so far, itself included, and gives its smoothed p-value, the
+    /// Mondrian form.</summary>
+    /// <param name="score">The newest unit's conformity score: finite or ±∞, never NaN.</param>
+    /// <param name="stratum">Its stratum, fixed in advance from its position and its own unit; 0 or more.</param>
+    public SmoothedPValue Add(double score, int stratum)
     {
         if (double.IsNaN(score)) throw new ArgumentException("A conformity score is NaN; a NaN does not order.", nameof(score));
-        (int below, int tied) = _scores.Add(score);
+        ArgumentOutOfRangeException.ThrowIfNegative(stratum);
+        if (!_strata.TryGetValue(stratum, out OrderStatisticTree<double>? tree)) _strata[stratum] = tree = new OrderStatisticTree<double>();
+        (int below, int tied) = tree.Add(score);
         tied++;
-        int n = _scores.Count;
+        int n = tree.Count;
+        Count++;
         double theta = 1.0 - _theta.NextDouble();
         return new SmoothedPValue(n, score, below, tied, theta, (below + theta * tied) / n);
     }
 
-    /// <summary>Each of <paramref name="scores"/> in turn (<see cref="Add"/>).</summary>
+    /// <summary>Each of <paramref name="scores"/> in turn (<see cref="Add(double)"/>).</summary>
     public SmoothedPValue[] AddRange(IEnumerable<double> scores)
     {
         ArgumentNullException.ThrowIfNull(scores);
