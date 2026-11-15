@@ -56,6 +56,47 @@ As in the archived brief: each slice is reported here, then waits for the main s
 
 Newest first.
 
+### 2026-11-15 — Slice 15's alternation speed: safeguarded extrapolation of γ
+
+Built at the user's pick (2026-11-15, "slice 15's alternation speed then τ through richer features, then we'll return to the vovk items").
+
+**Landed** on `main`, nothing pushed:
+- `192ee84`: `ScoreMixture`'s factorization extrapolates γ's step, its least-squares update moved into `SolveProfiles`. `Factor` gains `extrapolate` (on by default; internal), and `ScoreMixtureCost` counts pushes and pushes kept.
+- `ScoreMixtureTests` gains a test.
+- *What changes for existing calls.* A fit's γ, π and R² now come from the extrapolated alternation, which stops at a slightly different point within the same 10⁻⁷ rule and 300-pass cap. Downstream readings move with it, by amounts within the fit's own tolerance. In the existing classes:
+  - the unequal-split test's mean ESS at 399 units went from 100.0 to 100.2, and the training's from 107.2 to 108.2;
+  - its whole-space share at the training's m went from 13.4% to 13.5%, and its marginal coverage at the calibration's from 0.9155 to 0.9145, m staying 45;
+  - the end-to-end test's width went from 1.035 to 1.036.
+
+  Every class passes.
+
+**What it computes.**
+- *The step.* Each pass after the first pushes γ past its least-squares update, γ + (1 + β)(γ_LS − γ), and re-projects π. It keeps the push only where the residual falls below the pass before, otherwise taking γ_LS (safeguarded extrapolation, Ang and Gillis 2019, for nonnegative factorizations). So no pass ends above the plain step's residual from the same π.
+- *β's schedule.* β starts at ½ and grows by 5% on a kept push, up to its cap; a refused push sets the cap to β and divides β by 1.5. The cap grows by 1% per kept push.
+- *The cap's ceiling.* Theirs stops at 1. A probe read ceilings of 1, 4, 16 and 64: from 4 up every run was identical, β settling between 1 and 4 as π's projection refuses larger pushes. So the ceiling is 4.
+
+**Gates.**
+- *The probe* (stage only; the true two-cluster τ, five restarts per J; passes summed over the restarts, 1,500 the cap):
+
+  | n, τ | J | plain passes | extrapolated passes | time |
+  |---|---|---|---|---|
+  | 1,000, exact | 2, 3, 4 | 1,360, 1,400, 1,217 | 477, 458, 457 | 0.40 → 0.15 s at J 2 |
+  | 1,000, noise 0.01 | 2, 3, 4 | 1,500 each | 690, 1,155, 743 | 1.27 → 0.60 s at J 4 |
+  | 10,000, noise 0.01 | 2, 3, 4 | 1,500 each | 890, 1,260, 1,458 | 5.7 → 2.9 s at J 2; equal at J 3 and 4 |
+
+  1 − R² was never above the plain alternation's: equal to about five significant digits on noisy τ, and lower on exact τ.
+- *The test:* on the probe's fixture at n 1,000, exact and noisy, J 2 to 4, the extrapolated residual is not above the plain one's (within 10⁻⁴ relative) and takes no more passes. Every case read lower and fewer.
+- *Existing classes* `ScoreMixtureTests` and `PosteriorConformalTests` pass.
+- *Per commit,* the selected classes and the pinned tier: ScoreMixtureTests with the pinned tier, Maths.Regression.Tests 50 of 50; PosteriorConformalTests run beside it, 5 of 5.
+
+**Defects found: none.**
+
+**The finding the decision rests on.** On noisy τ at J ≥ 3 the 300-pass cap still binds, extrapolated or not. It binds after R² has settled to about five digits: the passes crawl along the flat directions a J above the cluster count leaves, which move nothing the fit uses. Extrapolation buys up to about twice at J 2 and little at J 3 and 4 there. So the cost at large n is linear in n and bounded by the cap: 300 × 5 restarts × the J's the rule reads.
+
+**Follow-up, the user's to decide:** a stop that reads what the fit uses instead of the residual's last 10⁻⁷, such as R² settled to its rule's resolution, or a lower cap. It would cut the factorization's cost severalfold at large n, and move γ, π and R² by about the amounts above.
+
+**Doc changes owed:** the posterior-conformal section's factorization: the safeguarded extrapolation, its schedule and ceiling, the probe's table, and the finding on the cap.
+
 ### 2026-11-15 — RoBAS-Full's grid-free intervals from n 4
 
 Built at the user's word (2026-11-15, "Wire it now"), on the conformal-lean thread's proof (700c718). `robasFull_interval`: RoBAS-Full's sets are intervals for n ≥ 4 when the calibration residuals are not all equal, granted `RobasDawsonBounds`, four bounds on Dawson's function that the checks certify and that go into Lean next. `robas_common_point`: a point where the p-value is 1. The user chose to wire it before the bounds land in Lean.
