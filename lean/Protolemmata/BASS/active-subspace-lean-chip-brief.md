@@ -123,6 +123,25 @@ Hand-over state between turns is an "In progress" entry here.
 
 ## Reports
 
+### 2026-11-14 — the banded disproof verified from a clean archive, and rebuilt apart (coordinating session)
+
+- **Commit:** `6f6bb27`, through `scripts/verify-lean.ps1` with `-Module Enthymemata.PenalizedAdmission` and the BAPS checks.
+- **Result:** 28 of 28 checks; 2,634 jobs with no warnings and no errors; meta-ci PASS, with `PenalizedAdmission.lean` `PROOF-CLOSED` at 129 declarations. Under the machine's load the checks took 1,251 s and the build 1,551 s.
+- **Axioms:** every theorem of the module, 111 in all, and the five new definitions print `propext`, `Classical.choice` and `Quot.sound` only.
+- **The statement, read.** `inverse_part_unbounded_tridiagonal` is an existence whose witness the proof builds: the path on r² + 2 nodes, r = ⌈20C⌉ + 1.
+  - It states each hypothesis of `cond1_unitScale_le_sharp` at m = 1: the terms positive semidefinite, 0 < M, the bracket both ways, A(c′) positive definite, and at most three nonzeros in each column of A(c).
+  - A(c′) = 2·diag(deg) is diagonal, so E(c′) = I and the right side is C·M.
+- **Rebuilt apart from the chip's proof and checks,** from the Lean definitions, in 50-digit arithmetic by tridiagonal solves. A double-precision dense inverse agrees to 4·10⁻¹¹ or better.
+  - ‖E(c)⁻¹‖₁ reads 5.92, 32.9, 505.3, 11,877, 329,253 and 9,819,995 at N = 1, 4, 16, 64, 256 and 1024.
+  - Each lies above the proved floor (ρ + 1)·√(N + 1)/20, by 8.4, 5.7, 4.2, 3.5, 3.1 and 2.9 times.
+  - T reads 0.66, 0.65, 0.87, 1.41, 2.49 and 4.67. T/√n falls from 0.38 to 0.146 and is still falling slowly.
+  - κ₁(E(c)) sits at 0.34 to 0.21 of the proved ceiling 3·((1 + √n)/2)·(M/m)·‖E(c′)⁻¹‖₁, so the sharp bound is within a factor of five on this family.
+  - The largest column is node N's at every size, where the certificate reads.
+- **One wording point in the chip's report.** "About 3.5 times below the readings, about 0.19·√n": the 0.19 is the earlier family's reading (hub in the middle, M/m far past n²). On this instance the margin over 1/20 is the second line above, 3.5 at N = 64 and 2.9 at N = 1024. Nothing proved depends on it.
+- **What it changes.** The √n in the screen's factor now stands for banded patterns by proof, where before it was a numeric reading. The screen's constant is unchanged.
+- **What it does not say.** S₁ = L and S₂ = |L| with one heavy edge are not a spline Gram and a difference penalty. Whether BAPS's own pairs can realize the growth is still open, as are the chip's follow-ups.
+- **Receipts:** `artifacts/verify-lean-6f6bb27/`, with the axioms file, the summary and the rebuild's script and output tracked in [receipts](../../../issues/regression/receipts/verify-lean-6f6bb27/).
+
 ### 2026-11-14 — the penalized admission's banded disproof formalized
 
 At the user's request ("Formalize it"), after the disproof was verified (`9c4a20c`). Until now finding 6's tridiagonal family was a numerical reading only.

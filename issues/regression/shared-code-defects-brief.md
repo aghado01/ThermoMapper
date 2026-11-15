@@ -153,7 +153,7 @@ Newest first. Each gives the commits, the gates' results, defects found, decisio
 - **Not run here:** the whole regression assembly, 3,458 of 3,458 on the chip's own run.
 - **Slice 6's open question, settled since.** Slice 6's report left open whether a smaller factor holds for every family. It does not.
   - The Lean chip proved that no constant bounds the inverse part over every family (`inverse_part_unbounded`, `fc793df`, verified at `95c3500`), on a dense family.
-  - A tridiagonal family grows like √n as well, once max ρ / min ρ passes the pattern's spectral gap: 0.90, 2.07 and 3.09 at n = 256 for ratios of 10², 10⁴ and 10⁶. That one is numeric, rebuilt by the coordinating session in 50-digit arithmetic.
+  - A tridiagonal family grows like √n as well, once max ρ / min ρ passes the pattern's spectral gap: 0.90, 2.07 and 3.09 at n = 256 for ratios of 10², 10⁴ and 10⁶. That one is numeric, rebuilt by the coordinating session in 50-digit arithmetic. The banded case is proved in Lean since (`inverse_part_unbounded_tridiagonal`, verified at `6f6bb27`), on a path family with three nonzeros a column.
   - So the screen's m·(1 + √ν) is the right order, and the gap between the proved factor and the sweep's slack is how far BAPS's own systems sit from the worst case.
 - **Receipts:** `artifacts/verify-defects-s7-1441600/`, with the counters, snapshot, changed files and the sweep tracked in [receipts](receipts/verify-defects-s7-1441600/).
 
