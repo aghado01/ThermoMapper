@@ -62,6 +62,40 @@ As in the archived brief: each slice is reported here, then waits for the main s
 
 Newest first.
 
+### 2026-11-15 — Conformal test martingales: CUSUM's and Shiryaev–Roberts's guarantees marked proved
+
+The conformal-lean thread proved both (`4c832df`) and reported it here. This brings the C# into line, as was done when RoBAS-Full's intervals were proved.
+
+**Landed** on `main`, nothing pushed:
+- `ad78359`:
+  - `MartingaleAlarm.Guarantee` now marks CUSUM and Shiryaev–Roberts `Proved`, with the proved wording;
+  - the `AlarmProcedure` and `ConformalTestMartingale` docstrings now say proved, not posed;
+  - `MartingaleAlarmTests` assert the proved flags and wording, and the false-alarm theory drops `_Posed` from its name.
+- *What changes for existing calls:* `Guarantee.Proved` reads true for CUSUM and Shiryaev–Roberts, and the statement changes to:
+
+  > The mean time to a false alarm is at least c, and the expected number of false alarms among the first N arrivals is at most N/c, for bets that integrate to at most 1.
+
+  CUSUM's adds that it alarms no more often than Shiryaev–Roberts.
+
+**Checked before marking.**
+- The Lean's runs are `MartingaleAlarm`'s recursions:
+  - Shiryaev–Roberts: Rₙ = fₙ(Rₙ₋₁ + 1);
+  - CUSUM: γₙ = fₙ·max(γₙ₋₁, 1);
+  - each restarted at 0 after an alarm, with the bet chosen from all earlier p-values.
+- The hypotheses are satisfiable, and every bet here meets them:
+  - measurable bets that read only the past and integrate to at most 1, so the plug-in is covered too;
+  - p-values i.i.d. with law μ at every horizon.
+- The theorems: `cusum_meanRunLength`, `sr_meanRunLength`, `alarms_stream_le`, `sr_alarms_le` and `cusum_count_le`, in `lean/Enthymemata/ConformalValidity.lean`.
+- *What stays unproved,* as the docstrings now say: Vovk's almost-sure form, a long-run frequency of false alarms at most 1/c. The proved form is the expectation at every N.
+
+**Gates.**
+- `MartingaleAlarmTests` pass 21 of 21. The measured mean times and long-stream frequencies are unchanged.
+- *Per commit,* the selected classes and the pinned tier across every test project: 120 of 120 in the 5 classes selected in Maths.Regression.Tests. Maths.Oracle.Tests compiles the source file and selects no class.
+
+**Defects found: none.**
+
+**Doc changes owed:** the conformal test martingales section: CUSUM's and Shiryaev–Roberts's guarantees, proved, in the expectation form; the almost-sure form not proved.
+
 ### 2026-11-15 — Conformal test martingales: the Mondrian monitor, for streams with known structure
 
 Built at the user's pick (2026-11-15, "Mondrian monitor"). Every statistical gate's size, seed and level, and the uniformity test's rerun rule, were fixed in the tests before their first reading, as the coordinator asked after the covariate-shift item.
