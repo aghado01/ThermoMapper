@@ -135,8 +135,9 @@ public sealed record BassFit(
     /// <param name="unseenLevels">What a level no training case took does: refused by default, so a new group's level asks for
     /// <see cref="UnseenLevel.OutsideEverySubset"/>, unless its column is left out.</param>
     /// <param name="quadrature">Takes a noise whose new-group density is an integral over the latent (<see cref="BassWidenedMixture"/>).</param>
-    /// <param name="confidence">β: the level the training-conditional rule's over the held-out groups (<see cref="Conformal.SplitCalibration.Confidence"/>),
-    /// so a new group's units miss with chance at most α with chance at least β over them; null, the default, for CB-1's.</param>
+    /// <param name="confidence">β, the confidence for the training-conditional level over the held-out groups
+    /// (<see cref="Conformal.SplitCalibration.Confidence"/>): the sets miss with chance at most α with chance at least β over them; null, the
+    /// default, for CB-1's level.</param>
     public Conformal.ConformalPrediction GroupConformal(BassData data, PredictionCases heldOut, IReadOnlyList<double> responses, PredictionCases cases,
                                               IReadOnlyList<double[]> grids, IReadOnlyList<int>? groupOf = null, string? grouping = null,
                                               double alpha = 0.1, Conformal.GroupScore score = Conformal.GroupScore.WorstCase, int seed = 0,

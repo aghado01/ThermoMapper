@@ -41,8 +41,9 @@ public static class GroupConformal
     /// <param name="alpha">α.</param>
     /// <param name="score">How each group is scored (<see cref="GroupScore"/>).</param>
     /// <param name="seed">The draws' seed under <see cref="GroupScore.OneCase"/>.</param>
-    /// <param name="confidence">β: the level the training-conditional rule's over the groups (<see cref="SplitCalibration.Confidence"/>), so
-    /// a new group's units miss with chance at most α with chance at least β over the held-out groups; null for CB-1's.</param>
+    /// <param name="confidence">β, the confidence for the training-conditional level over the held-out groups
+    /// (<see cref="SplitCalibration.Confidence"/>): the sets miss with chance at most α with chance at least β over them; null, the default,
+    /// for CB-1's level.</param>
     public static ConformalPrediction Density(CandidateLogDensity calibration, IReadOnlyList<int> groupOf, CandidateLogDensity candidates,
                                               double alpha = 0.1, GroupScore score = GroupScore.WorstCase, int seed = 0, double? confidence = null)
     {
