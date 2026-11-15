@@ -211,9 +211,19 @@ Decided by the user on 2026-11-14, as a distributions change of its own. It come
 
 Newest first. Each gives the commits, the gates' results, defects found, decisions for the user and "Doc changes owed".
 
-### 2026-11-15 — Slice 9: in progress, the qualification
+### 2026-11-15 — Slice 9: `LogBeta` through `LogGammaRatio`, with R's arrangement for large shapes
 
-**The reference: ln B(a, b) to 400 digits, outside the engine.** No code has changed.
+**Commits.**
+- `208e55f`: the In-progress entry, with the qualification and the decision it waited on.
+- `de7d0eb`: before the rest of slice 9, at the coordinating session's word, ROracle's default limit read at BelowNormal (8a's follow-up; below).
+- `4f32555`: `LogGamma` below 5.6·10⁻³⁰⁹.
+- `b8418c4`: `LogBeta`, option 2.
+- `2a6bb6b`: the two pins the change explains.
+- This report.
+
+#### The qualification, the decision, and what was built
+
+**The qualification, read before any code changed** (`208e55f`). The reference is ln B(a, b) to 400 digits, outside the engine.
 - It runs in Python's `decimal`:
   - ln Γ by the upward recurrence to x ≥ 40, then Stirling's series with exact Bernoulli numbers (`fractions`);
   - π by Machin's formula;
@@ -258,19 +268,96 @@ Newest first. Each gives the commits, the gates' results, defects found, decisio
 **Another finding: `LogGamma` below 5.6·10⁻³⁰⁹.**
 - For x < ½, `LogGamma` takes ln(π/sin(πx)) − ln Γ(1 − x), and π/sin(πx) ≈ 1/x overflows below about 5.6·10⁻³⁰⁹. So `LogGamma` is +∞ there.
 - So ln B(5·10⁻³²⁴, 1) is +∞ in every form, where its value is 744.44.
-- It is outside this slice's change and its files.
+- Fixed in this slice at the coordinating session's word, a commit of its own (`4f32555`, below).
 
-**The decision before building.** The user's order says a regime where the ratio form loses digits goes back with the form that would hold them, so the build waits.
-1. **The ratio form alone, as decided.**
-   - It fixes every unequal case.
-   - In balanced large shapes it stays within 1.2·10⁻¹³, where today's form reaches 2.8·10⁻¹³.
-2. **The ratio form below 10, and R's arrangement where both shapes are ≥ 10.**
-   - It holds 2.8·10⁻¹⁶ there too.
-   - It changes `LogBeta` in the last bits at every pair of shapes both ≥ 10, so more pins may move.
-   - It needs a Stirling correction μ in `SpecialFunctions.cs` beside `LogBeta`.
-- In both, `GammaRatio.cs` is untouched.
+**After the qualification.**
+- *A second reference.* mpmath 1.3.0 at 400 digits, a second check apart from the decimal one, agrees with it at all 228 sampled rows to the double's rounding. ln B(1, 1) = 0 is the only gap: 2.3·10⁻⁹⁵, the decimal series' floor.
+- *The decision:* option 2, by the coordinating session's word, the user told.
+  - The ratio form alone was worse than today's at 133 points, balanced and past 10¹⁵. A change that loses digits where today's form holds them is not the upgrade asked for.
+  - So `LogBeta` is ln Γ(s) − `LogGammaRatio`(l, s) while the smaller shape is under 10. Where both are at least 10 it is R's `lbeta` arrangement, with a private eight-term Stirling correction μ.
+  - Shapes that are not finite and positive take today's three-term form, as before.
+  - Where s + l overflows, near the double's end, the weight is 1/(1 + l/s).
+- *The code as built, through the qualification again:* at all 2428 points, within 1.7·10⁻¹⁵ of max(1, |ln B|). The chosen cases are finite now, worst 1.4·10⁻¹⁵, since `4f32555` removed the +∞ at subnormals.
 
-**Next.** The decision; then the existing pins run before any expectation changes.
+| Regime | Today's | Option 2, as built |
+|---|---|---|
+| balanced, 10⁻¹² to 1 | 1.9e-15 | 1.5e-15 |
+| balanced, 1 to 10³ | 3.1e-15 | 1.7e-15 |
+| balanced, 10³ to 10¹⁵ | 2.3e-14 | 2.8e-16 |
+| balanced, 10¹⁵ to 10³⁰⁰ | 2.8e-13 | 2.5e-16 |
+| both small | 5.0e-16 | 3.7e-16 |
+| unequal, s < 1 | 1 (returns 0) | 1.2e-15 |
+| unequal, s 1 to 10³, l/s 10 to 10⁶ | 5.0e-10 | 3.3e-16 |
+| unequal, s 1 to 10⁶, l 10¹⁰ to 10³⁰⁰ | 1 (returns 0) | 3.6e-16 |
+| chosen | ∞ at (5·10⁻³²⁴, 1) | 1.4e-15 |
+
+**Shapes both under 10,** stated plainly, for the user to judge whether a third regime would be worth having: today's three-term sum for small shapes. It is not built.
+- Over the 699 such points away from ln B = 0, compared in ulps of ln B:
+  - the ratio form is closer by more than an ulp at 116;
+  - today's form is closer by more than an ulp at 26.
+- Each form's worst falls at the same point, (1.007, 0.971), where ln B = 0.0226 and an ulp is small: today's 316 ulps, the ratio form's 127. Both are about 4·10⁻¹⁵ absolute.
+- At ln B(1, 1) = 0: today's 1.8·10⁻¹⁵, the ratio form's 1.4·10⁻¹⁵, both absolute.
+- **At (½, ½) the new value is 3 ulps low where today's was 1 ulp low:**
+  - 1.1447298858493995 against 1.1447298858494, where ln π rounds to 1.1447298858494002.
+  - Within the stated bound, but not better at that point. The skewed horseshoe pin below moved on it.
+
+**`LogGamma` below 5.6·10⁻³⁰⁹ (`4f32555`).**
+- The reflection's π/sin(πx) ≈ 1/x overflowed there, so ln Γ was +∞ across the subnormals.
+- Where that overflow happens at x > 0, it now returns −ln x, which is ln Γ(x) − γx + O(x²) and exact to the last bit there. So it moves only results that were +∞, as the `Log1p` fix did; x = 0 stays the pole.
+- `LogGammaTests`: seven points from 5·10⁻³²⁴ to 2.2·10⁻³⁰⁸ against mpmath, within 2.3·10⁻¹⁶. Above the overflow the reflection holds bit for bit.
+- Gates: Distributions whole, 452/452. The pinned tier unmoved: Regression 42/42, Geometry 1/1, VizCore 1/1.
+
+#### The pins
+
+**Read before any expectation moved.** The pinned tier ran under three builds: `LogGamma` alone, option 1 and option 2. That covers Regression, Geometry and VizCore, every project whose closure has `SpecialFunctions.cs` and holds a pinned test.
+- `LogGamma` alone: nothing moved.
+- Options 1 and 2: the same single pin moved, to the same hash.
+- So no pin moves under option 2 that would not under option 1. The same holds for the non-tier pin below: it reads only shapes under 10, where the two options are the same code.
+
+**The pins that moved, each a density value and no decision.**
+1. `RandomEffectsNoiseTests.ANoiseFitWithoutABlock_KeepsItsDraws("skewed horseshoe")`, E21's, the GBASS chip's. The coordinating sessions were told before the re-pin.
+   - The hash went from `f5855f7382b9826b` to `ffb3bdc1f3cc86df`.
+   - GBP(1, ½, ½)'s normalizer reads ln B(½, ½), which moved by 2 ulps.
+   - The fit, dumped under old and new:
+     - the same terms in all 300 draws, so no birth, death or change decision flipped;
+     - the same move accounts;
+     - every value within 1.5·10⁻¹¹ to 1.8·10⁻⁷ of the old, carried through the continuous latent updates as at the pin's last re-pin.
+2. `LogConcaveEnvelopeTests.Draws_ArePinned` in Distributions. It is not in the pinned tier, and the Distributions selection found it.
+   - The hash went from `624f8b056215181a` to `b3ac20e6837559c3`.
+   - 84 of its 1,311 cases moved, all of them families that read ln B: 48 of 58 Beta, 23 of 30 Student t, 13 of 25 mixtures.
+   - Each draw is within 1.1·10⁻⁸ of the old, so a value and no decision moved. A flipped rejection would draw a different point.
+   - No GIG, modified half-normal, gamma, inverse gamma, half-Cauchy, normal or Weibull case moved.
+- **Re-pinned only these two** (`2a6bb6b`), each with its old and new hash and its cause beside it.
+- **BARS' locality kernel** reads the beta log density in its Hastings correction. No BARS pin moved: no BARS test is in the pinned tier, and the Regression selection (below) passed.
+
+#### Gates
+
+Over `de7d0eb`, option 2, its test and the two re-pins: the Commit selections of every project `SpecialFunctions.cs` selects, among the 27 on disk.
+- *The Commit selections:*
+  - Regression 3237/3237 (333 of 338 classes; the slow tier's 71 methods out, the pinned tier in);
+  - Oracle 207/207 (36 of 39);
+  - VizCore 384/386 with 2 skipped (50 of 85);
+  - Samplers 259/259 (26 of 31);
+  - DimReduction 83/83 (8 of 8);
+  - Synthetic 29/29 (6 of 8);
+  - CumulativeField 15/15 (3 of 3);
+  - Geometry 4/4 (1 of 9);
+  - Mapper 1/1 (1 of 10);
+  - Ph 1/1 (1 of 43).
+- *Distributions* (22 of 23 selected): the selection first ran before the envelope pin's re-pin and failed on that pin alone.
+- *The whole assemblies at the end:* Distributions 491/491 in 1 m 15 s, the slow tier and both re-pins included; Regression 3554/3554 in 25 m 3 s, the slow tier's 71 methods and the re-pin included.
+- The other 16 test projects select no class.
+
+#### Findings and follow-ups
+
+- **A third regime for small shapes:** whether today's three-term sum should return for both shapes under 10. The ratio form wins 116 of the 699 points there by more than an ulp, today's 26, and at (½, ½) today's is 2 ulps closer. The user's decision; not built.
+- **8a's effect on the oracles,** closed by `de7d0eb`: every R oracle near 120 s was exposed once R ran below normal. The default limit is now 500 s, from two whole-run readings at BelowNormal. Past 120 s in the first reading: khaos_readouts 202 s, gbass_readouts 153 s, khaos_defects 149 s, khaos_primitives 146 s, bass_enumeration 126 s.
+
+**Doc changes owed.**
+- `docs/Maths/ProbabilityAndInformation.md`, the special functions:
+  - `LogBeta`'s three regimes and their qualification;
+  - `LogGamma` at subnormals.
+- The oracle docs: ROracle's default limit and the reading behind it.
 
 ### 2026-11-14 — Slice 8: three problems in the test tooling
 
