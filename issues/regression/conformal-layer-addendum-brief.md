@@ -35,6 +35,23 @@ As in the archived brief: each slice is reported here, then waits for the main s
 
 Newest first.
 
+### 2026-11-14 — Closed: an exact law for the asymmetric interval
+
+Closed at the user's word (2026-11-14, "close it and record the finding and point the docstring"). The miscoverage bound's second follow-up is not built.
+
+**Landed** on `main`, nothing pushed: `b8cd947`, docstrings only. `AsymmetricConformalInterval.TrainingConditionalMiscoverage` and `SplitConformal.AsymmetricQuantiles` carry the finding and point to the one-score forms.
+
+**The finding.**
+- *No exact law in general.* The tails' scores, A = y − q_lo(x) and B = q_hi(x) − y, sum to the band's width q_hi − q_lo. Given the calibration the miss is G_A(a₍ₖ₎) + G_B(b₍ₖ₎), two Beta(k, m − k) terms.
+- *Where the width varies* (CQR's purpose), the two scores order the units differently, and the terms' dependence follows the width's law. Given only their laws, the worst case of the sum is the union (Makarov 1981), so the union is what holds without assumptions on the width. Whether CQR's structure reaches that worst case is not settled here.
+- *Where the width is constant,* B is −A shifted, one ordering serves both tails, and the miss is exactly Beta(k_lo + k_hi, m − k_lo − k_hi). That is the residual interval's case, and the earlier gate's fixture (0.85% passing the union against 10%).
+- *Why not build the narrow case.* Detecting it would rest on floating-point equality of a model's quantiles. It fires almost only on synthetic data, and where it fires the interval is the residual interval.
+- *For an exact bound,* or sets to the guarantee without the union's price, take a one-score form: `Residuals`, `Quantiles` (symmetric CQR), or the predictive distribution's equi-tailed set.
+
+**Gates:** docstrings only. The build is clean, and `TrainingConditionalTests` pass 8 of 8.
+
+**Doc changes owed:** the guarantee-read-out section records why the asymmetric interval keeps the union, and names the one-score forms.
+
 ### 2026-11-14 — The confidence through BASS's group-units call
 
 Built as the coordinator approved: one optional parameter on `BassFit.GroupConformal`, committed on its own.
