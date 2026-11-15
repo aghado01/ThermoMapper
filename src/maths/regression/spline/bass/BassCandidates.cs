@@ -221,7 +221,8 @@ internal static class BassCandidates
     internal static ConformalPrediction GroupUnits(BassModel model, BassTermTable terms, IReadOnlyList<IReadOnlyList<BassDraw>> draws,
                                                    IReadOnlyList<double>? weights, PredictionCases heldOut, IReadOnlyList<double> responses,
                                                    PredictionCases cases, IReadOnlyList<double[]> grids, IReadOnlyList<int>? groupOf, string? grouping,
-                                                   double alpha, GroupScore score, int seed, UnseenLevel unseenLevels, bool quadrature)
+                                                   double alpha, GroupScore score, int seed, UnseenLevel unseenLevels, bool quadrature,
+                                                   double? confidence = null)
     {
         ArgumentNullException.ThrowIfNull(heldOut);
         ArgumentNullException.ThrowIfNull(responses);
@@ -242,7 +243,7 @@ internal static class BassCandidates
         int[] labels = groupOf is not null ? [.. groupOf]
             : grouping is not null ? Named(block, heldOut, cases, grouping, unseenLevels)
             : ByCells(block, heldOut, calibration);
-        return GroupConformal.Density(calibration, labels, test, alpha, score, seed);
+        return GroupConformal.Density(calibration, labels, test, alpha, score, seed, confidence);
     }
 
     // Each held-out case's level of the named grouping, numbered by first appearance; every case's level of it, held out or test, a new one.

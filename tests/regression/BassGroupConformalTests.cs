@@ -99,4 +99,43 @@ public sealed class BassGroupConformalTests
         Assert.Contains("cell of its own", Assert.Throws<ArgumentException>(
             () => fit.GroupConformal(data, HeldOut(schools: false, readers: false), Responses, ReaderTest, [Grid, Grid], alpha: 0.5, unseenLevels: New)).Message);
     }
+
+    [Fact]
+    public void TheConfidence_PassesThroughToTheGroupForm()
+    {
+        // Twelve held-out readers, each at schools L0 and L1: m 13, α 0.5, so CB-1's k is 6 and the (α, 0.9) level is smaller.
+        var (fit, data) = Crossed(readerOnly: false);
+        const int groups = 12;
+        var heldOut = new PredictionCases([new ContinuousColumn("x", [.. Enumerable.Range(0, 2 * groups).Select(i => (i % 9 + 0.5) / 9.0)]),
+            new CategoricalColumn("school", [.. Enumerable.Range(0, 2 * groups).Select(i => i % 2 == 0 ? "L0" : "L1")]),
+            new CategoricalColumn("reader", [.. Enumerable.Range(0, 2 * groups).Select(i => $"R{i / 2}")])]);
+        double[] responses = [.. Enumerable.Range(0, 2 * groups).Select(i => 0.6 + 0.4 * Math.Sin(1.3 * i))];
+        int[] labels = [.. Enumerable.Range(0, 2 * groups).Select(i => i / 2)];
+
+        // The same seams through the case-level call, each case in its cell's stratum, then pooled: the strata do not touch the values.
+        static CandidateLogDensity Pooled(CandidateLogDensity c)
+            => new(c.Values, c.Grids, c.Latents, null, c.ChainLengths) { NewGroup = c.NewGroup, Forms = c.Forms, FormsReason = c.FormsReason };
+        CandidateLogDensity calibration = Pooled(fit.CandidateLogDensity(data, heldOut, [.. responses.Select(y => new[] { y })],
+                                                                         fit.GroupCells(data, heldOut, New).Candidates, New));
+        CandidateLogDensity test = Pooled(fit.CandidateLogDensity(data, Test, [Grid, Grid], fit.GroupCells(data, Test, New).Candidates, New));
+
+        ConformalPrediction omitted = fit.GroupConformal(data, heldOut, responses, Test, [Grid, Grid], labels, alpha: 0.5, unseenLevels: New);
+        ConformalPrediction none = fit.GroupConformal(data, heldOut, responses, Test, [Grid, Grid], labels, alpha: 0.5, unseenLevels: New, confidence: null);
+        ConformalPrediction direct = GroupConformal.Density(calibration, labels, test, 0.5);
+        ConformalPrediction built = fit.GroupConformal(data, heldOut, responses, Test, [Grid, Grid], labels, alpha: 0.5, unseenLevels: New, confidence: 0.9);
+        ConformalPrediction builtDirect = GroupConformal.Density(calibration, labels, test, 0.5, confidence: 0.9);
+        Assert.Null(omitted.Confidence);
+        Assert.Equal(0.9, built.Confidence);
+        for (int t = 0; t < 2; t++)
+        {
+            Assert.Equal((13, 6), (omitted.Sets[t].Units, omitted.Sets[t].Level));
+            Assert.Equal(omitted.Sets[t].PValues, none.Sets[t].PValues);
+            Assert.Equal(direct.Sets[t].PValues, omitted.Sets[t].PValues);
+            Assert.Equal(TrainingConditional.Level(13, 0.5, 0.9), built.Sets[t].Level);
+            Assert.True(built.Sets[t].Level < omitted.Sets[t].Level);
+            Assert.Equal(builtDirect.Sets[t].Level, built.Sets[t].Level);
+            Assert.Equal(builtDirect.Sets[t].PValues, built.Sets[t].PValues);
+            Assert.True(built.Sets[t].TrainingConditionalMiscoverage(0.9) <= 0.5);
+        }
+    }
 }
