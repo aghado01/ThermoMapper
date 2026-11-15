@@ -1,0 +1,10 @@
+src/maths/regression/ModelEvidence.cs
+src/maths/regression/conformal/ModelAveraging.cs
+src/maths/regression/conformal/ResidualShrinkage.cs
+src/maths/regression/spline/bars/BarsEnsemble.cs
+src/maths/regression/spline/bass/BassEvidence.cs
+tests/regression/EngineEvidenceTests.cs
+tests/regression/HorseshoeScoreTests.cs
+tests/regression/ModelEvidenceTests.cs
+tests/regression/ResidualIntervalTests.cs
+tests/regression/ScoresBeyondTheModelTests.cs
