@@ -140,4 +140,20 @@ public sealed class HorseshoeScoreTests(ITestOutputHelper output)
         Assert.Contains("interval theorem", Assert.Throws<ArgumentException>(
             () => ResidualShrinkage.Intervals([.. Enumerable.Range(0, 20).Select(i => 0.1 * i)], [0.0], ResidualScore.Horseshoe)).Message);
     }
+
+    [Fact]
+    public void ItsSets_AreNotAlwaysIntervals()
+    {
+        // The seeded search's counterexamples, read on the grid form: accepted about the prior's centre 0, refused between, accepted about
+        // the data. n 3 at k 1 (α 0.3): pieces [−0.198, 0.062] and [0.333, 0.668]. n 2 at k 2 (α 0.9): [−8.03, 6.89] and [18.02, 19.32].
+        ConformalSet three = ResidualShrinkage.Prediction([0.510312, 0.652786, 0.545799], [0.0], [[0.0, 0.2, 0.5]], ResidualScore.Horseshoe, 0.3).Sets[0];
+        Assert.Equal(1, three.Level);
+        Assert.Equal([true, false, true], [three.Accepts(0), three.Accepts(1), three.Accepts(2)]);
+        ConformalSet two = ResidualShrinkage.Prediction([18.0184, 19.3278], [0.0], [[0.0, 12.0, 18.5]], ResidualScore.Horseshoe, 0.9).Sets[0];
+        Assert.Equal(2, two.Level);
+        Assert.Equal([true, false, true], [two.Accepts(0), two.Accepts(1), two.Accepts(2)]);
+        // RoBAS-EB on the n 3 residuals at the same level: one piece through the same three values.
+        ConformalSet eb = ResidualShrinkage.Prediction([0.510312, 0.652786, 0.545799], [0.0], [[0.0, 0.2, 0.5]], ResidualScore.Shrinkage, 0.3).Sets[0];
+        Assert.False(eb.Accepts(0) && !eb.Accepts(1) && eb.Accepts(2));
+    }
 }

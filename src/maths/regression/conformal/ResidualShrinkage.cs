@@ -22,8 +22,11 @@ public enum ResidualScore
     /// θ | τ² ~ N(0, σ²τ²/n), τ ~ C⁺(0, 1). By their marginal-likelihood lemma a unit's score is the marginal likelihood of the other n,
     /// ln p(r₋ⱼ) = −n s²₋ⱼ/(2σ̂²) + ln ₁F₁(1; 3/2; −n r̄²₋ⱼ/(2σ̂²)) up to a constant every unit shares, s²₋ⱼ and r̄₋ⱼ the others' spread
     /// and mean and σ̂² = Σ(r − r̄)²/n over all n + 1 residuals (their plug-in). Near zero it shrinks as the horseshoe does; under a large
-    /// mean shift it ranks as distance to average (their asymptotic robustness theorem). No interval theorem is proved for it, so the grid
-    /// form serves it (<see cref="ResidualShrinkage.Prediction"/>).
+    /// mean shift it ranks as distance to average (their asymptotic robustness theorem). No interval theorem is proved for it, and its sets
+    /// are not always intervals: a seeded search found sets in two pieces at n 2 and 3, one about the prior's centre 0 and one about the
+    /// data (residuals 0.510, 0.653, 0.546 at k 1: [−0.198, 0.062] and [0.333, 0.668]), and none from n 4 to 10 among about 9,900 tight,
+    /// shifted and outlying configurations at every level, as RoBAS-EB's theorem starts at n 4. So the grid form serves it
+    /// (<see cref="ResidualShrinkage.Prediction"/>).
     /// </summary>
     Horseshoe,
 }
