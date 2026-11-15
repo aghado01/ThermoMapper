@@ -211,6 +211,83 @@ Decided by the user on 2026-11-14, as a distributions change of its own. It come
 
 Newest first. Each gives the commits, the gates' results, defects found, decisions for the user and "Doc changes owed".
 
+### 2026-11-15 — The weight reader's one-off wrong values: a fault in compiled code, not reproduced
+
+At the coordinating session's word: a read only, docs only. No code changed; the indexed loop, the check and any hunt wait on the user.
+
+**The event.** E8's whole Regression run of 06:29 to 06:46: 418638a plus E8's five 8c files, 3687 tests, 13 failed.
+- *Where:* `artifacts/chip-e8/results/s8c-reg-all/s8c-reg-all.trx`. It passed on a rerun, alone, and on clean 418638a.
+- *Twelve weight-reader failures,* between 06:44:14.539 and 06:44:15.102. The normalized log weights read +∞ (U+221E, no minus sign) at:
+  - the overflowing sums [10³⁰⁸, 10³⁰⁸] and three of the largest double;
+  - [1, 5·10⁻³²⁴], [3, 5·10⁻³²⁴] and [largest, 5·10⁻³²⁴];
+  - [10³⁰⁰, 10⁻³⁰⁰] and [0, 10³⁰⁰, 0, 10⁻³⁰⁰, 0];
+  - a sweep row.
+  - Also: NaN pairs in `AnOverflowingSumReadsAsItsRatios`, −∞ in `TheTinyRowEntersTheWeightedPredictiveUnderATilt`, and 0 in `TheTinyRowEntersTheCarriedCdfError` and `APositiveRescalingLeavesTheLogWeights`.
+- *One conformal failure,* `ConformalCdfMarginTests.SubnormalWeightedTurnsNormalizeCombinedLogsBeforeComputingCarriedErrors` at 06:40:32.914: 0 against 0.4947.
+- *The run's environment, from E8:*
+  - .NET 10.0.5, 64-bit; SDK 10.0.201; xUnit VSTest adapter 3.1.5.
+  - No `DOTNET_` or `COMPlus_` switch beyond the defaults' paths, so tiering, PGO and the GC were at their defaults.
+  - `-- xUnit.MaxParallelThreads=6` with no processor cap, BelowNormal, no affinity. So `Rows` was called from several threads while it was being instrumented and tiered up. The engine's own runs cap that: `verify-csharp.ps1` sets `DOTNET_PROCESSOR_COUNT=2`, and test-select caps the threads.
+
+**Reading 1, a stale or mixed build: ruled out.**
+- *The same build read the same input both ways.* `TheParkedInputsKeepTheirRowsAndValues` passed at 06:44:15.096, between failures at .079 and .096. It calls `Rows([1e300, 1e-300])` and `Rows([1e308, 1e308])`, the inputs `ExtremeWeightsReadTheirExactNormalizedLogs` failed on at 14.550 and 14.574, in the same process.
+- *No committed version of the reader gives these values.*
+  - The form before `f50753f`, ln(w / Σw), gives −∞ at an overflowing sum and −744.44 at [1, 5·10⁻³²⁴], not +∞.
+  - `f50753f` and `c9f9a84` give today's values.
+- *Older Distributions code doesn't give them either.* 418638a's `WeightReaderTests` and `ConformalCdfMarginTests` (42 tests), built into fresh build folders (`artifacts/chip-defects/stale-check/`):
+  - 42/42 as they stand;
+  - 42/42 with `SpecialFunctions.cs` from before `4f32555`;
+  - 42/42 with `SpecialFunctions.cs` alone from before `63b5a63`.
+  - The whole Distributions folder from before `63b5a63` does not compile under 418638a, which uses `PowerSpherical` and `IntervalPoincare`.
+  - `Rows` calls only `Math.Log`, `Math.ILogB` and `Math.ScaleB`, never `SpecialFunctions`.
+- *Not tested:* an older `Maths.Regression.dll` under newer tests.
+
+**Reading 3, the thread's floating-point state: ruled out.**
+- Nothing in the Regression test process calls native code that touches the floating-point control state. The only P/Invokes are kernel32's `GetCurrentThread`, `QueryThreadCycleTime` and `GlobalMemoryStatusEx`; `SetErrorMode` is in Oracle.
+- *Tested directly* (`artifacts/chip-defects/weights-probe/`): `Rows` at all seven failing inputs on a thread set by `_controlfp_s`. No mode gives +∞:
+
+  | Mode | What `Rows` reads |
+  |---|---|
+  | FTZ+DAZ, or DAZ alone | 5·10⁻³²⁴ becomes a zero row, which drops out |
+  | FTZ alone | nothing changes |
+  | round to zero, up, down | only the last bits move |
+
+**What the evidence leaves: a fault in compiled code in `Rows`' scaled branch.**
+- *What the values say.* Every failing value is what `Rows`' scaled branch gives when its second `foreach` over the `IReadOnlyList<double>` sums nothing, so the scaled total stays 0. That gives:
+  - +∞ as ln(w·2⁻ᵉ / 0) or as − ln 0;
+  - NaN as a ratio of two such sums;
+  - −∞, or a 0 error, where a tiny row's weight is read.
+- *Who failed and who passed.*
+  - Every failure in the window takes that branch with a `double[]`; the conformal failure takes it with [1, `double.Epsilon`].
+  - The tests that passed in the window either never enter the branch (ordinary and zero weights) or pass a collection expression, a different runtime type (`TheParkedInputs`).
+- *Not program state.* `Rows` holds no state: no `stackalloc`, `SkipLocalsInit`, pool or static cache. `WeightScale` is pure.
+- *The suspect:* type-dependent tier-1 code for that `foreach`. That is .NET 10's de-abstraction of array enumeration under dynamic PGO (dotnet/runtime #108913), which can also stack-allocate the enumerator.
+  - One correctness report exists against that feature (#133648), where `DOTNET_JitObjectStackAllocation=0` restores the expected behavior. That knob, like `DOTNET_TieredPGO=0`, is untested here.
+  - The coordinating session found no known issue that matches a skipped `foreach`.
+- *Not reproduced:* about 66 million calls on .NET 10.0.5 in four fresh processes, every one single-threaded:
+  - `double[]` only;
+  - on-stack replacement through a 2-million-entry array;
+  - a `List<double>` and collection-expression profile first;
+  - quick tier-up (`DOTNET_TC_CallCountingDelayMs=0`).
+
+**The call mix `Rows` was tiered under** (the run's order to 06:40:33: `artifacts/chip-e8/results/s8c-reg-all/test-order-to-0640.tsv`, 2510 rows).
+- Of its 24 PredictiveChecks, WeightReader and ConformalCdfMargin tests:
+  - *The seven `PredictiveChecksTests`* at 06:39:49 are unweighted. They reach `Rows` with null weights, which returns before either loop, or don't call it at all.
+  - *The first `ConformalCdfMarginTests` case to run is the one that failed:* [1, `double.Epsilon`], a `double[]`, through the scaled branch.
+  - *The 16 cases after it* pass ordinary `double[]` weights, which stay in the normal branch.
+- So the profile was shaped by the roughly 2480 earlier tests in other classes, on six threads. A replay is the cheapest first attempt if the user chooses a hunt, and it should replay that whole order, multi-threaded, not these 24.
+
+**Options for the user, neither built.**
+- *Keeping `Rows`' compiled code at each tier.* Release .NET 10 honors `DOTNET_JitDisasm` and `DOTNET_JitStdOutFile` for one method.
+  - Read here: `DOTNET_JitDisasm=Rows` (the bare name; the class-qualified pattern listed nothing) wrote `Rows` at instrumented tier 0, twice, and at tier 1 with PGO, about 1700 lines.
+  - The tier-1 code holds the array enumerator de-abstracted under a type guard, with interface calls as the fallback.
+  - `DOTNET_JitDisasmSummary=1` adds every method's tier.
+  - In a whole-assembly run, the cost is one file and the listing of one method.
+- *A check inside `Rows` that throws when the second pass reads fewer rows than the first:* count the scaled `foreach`'s elements and compare with `weights.Count`.
+  - The cost is one integer increment per weight, inside a branch taken at most once per call and only when a ratio leaves the normal range. Ordinary weights never enter it.
+  - It would turn the observed fault into an exception naming the call.
+- *The indexed loop in place of the second `foreach`.* It takes the enumerator out of the path; a workaround, not a diagnosis.
+
 ### 2026-11-15 — Slices 8b, 8c and 9 verified from a clean archive (coordinating session)
 
 - **Commits, in one pass** on a snapshot of `b5fac86`: `ca56277` and `5e1ce65` (the transport oracle's limit, 1,200 s), `de7d0eb` (ROracle's default, 500 s), `141db20` (the mixture's tail integral), `bd2daab` (Distributions' slow tier), `4f32555` (`LogGamma` at subnormals), `b8418c4` (`LogBeta`) and `2a6bb6b` (the two re-pins). BPPR's slice 2 files rode the same pass for their Oracle selection.
