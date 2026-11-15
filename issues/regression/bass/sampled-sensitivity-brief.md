@@ -83,6 +83,90 @@ Under "Reports" below, newest first, per slice: what landed by commit; the gates
 
 ## Reports
 
+### Slice 3: basis fits, functional forms and several outputs (2026-11-15)
+
+**Landed** in `986814d`, which carries its tests. Decision 8 carries the route and the error rows through each readout. The main-variance form stays the one choice in `PickFreezeDesign`, Saltelli's by default, and the gates read both.
+- *Several outputs (E34):*
+  - `BassMultiOutput.Sensitivity` takes the route as `BassSensitivity.Of` does. The declared output functional rides `Setup`'s projected coefficients, so the sampled route reads the projected surface as it reads a scalar fit's.
+  - E34 has no effects readout, so there is nothing more to carry.
+  - The chain fits a directional basis on several outputs (37 directional term reads in the gate's fit), and its Sobol route resolves sampled.
+- *Basis fits (D07): Sobol.* `BassBasisSensitivity.Of` resolves the route over the components' held terms; `Exact` refuses the term it meets.
+  - *A location's view:* the components' surfaces are read at the shared points, and each location's reconstructed surface Σₖ g_ℓk·wₖ is reduced by `PickFreeze`. The pieces are bilinear in the components, so this is the exact route's view read at the points, with exact errors.
+  - *The integrated form:* the location is one more input, drawn uniformly over the training locations beside each row from a stream apart from the points' (`SeedTree.Derive(seed, 1)`), and y_m(ℓ) + Σₖ g_ℓk(wₖ + aₖ₀) is read at each row's own location. It is unbiased with exact errors, at some variance over integrating ℓ exactly.
+  - *What changed in the record:* `BasisSobolAnalysis` gains a sampled constructor, `Route` and `Points`, and `BasisSobolSummary` gains `Route` and `Points`.
+  - *What the sampled route refuses:* the ℓ-free component covariances (`ComponentCovariance`, `ComponentMainCovariance`, `ComponentTotalCovariance`, `ComponentMeans`) are the exact route's and refuse with their reason there.
+- *Basis fits: effects.* The components are evaluated together at the pinned points, so each view Σₖ gₖ·eₖ carries its exact error √(gᵀΣg). Σ is the components' cell estimates' covariance, their per-row alternating sums' sample covariance over 2N.
+  - *The core:* `EffectCore` serves r components; the direct route is its r = 1 case, and slice 2's tables read the same.
+  - *The views:* `ComponentEffects`, `AtLocation` and `Integrated` (with the location's main effect and each input's two-way effect with the location) all carry errors. `BasisEffectAnalysis` gains `Route` and `Points`.
+- *A direct functional fit's forms,* Sobol and effects. The integrated form draws the output variables with the points, from a stream apart (`SeedTree.Derive(seed, 2)`), and the blocks swap and pin them as they swap and pin inputs. The conditioned form holds them, or those `ConditionOn` names, at each coordinate, a decomposition or a set of effects per coordinate.
+  - *A row's value:* Σⱼ aⱼ·Bⱼ(x_r)·hⱼ(t_r) at the row's own output location, each term's case and output factors read once per surface.
+  - *Its use:* a direct functional response refuses a directional basis (E36), so on these forms the sampled route serves as a check on the exact route.
+- *Shared across the readouts:*
+  - a term's variables through the kernel contract (`TermVariablesOf`), so the default subsets and pairs come from a directional term's or a ridge column's active coordinates;
+  - the effect request (`EffectRequest`) taking the measure and transform, not a direct fit's setup;
+  - the decomposition tables (`SampledTables`).
+- *Two of my own tests* asserted the slice-1 refusal of a functional fit on the sampled route. They now read its sampled analysis and form.
+
+**Gates.** From a snapshot of `HEAD` (`418638a`) with the nine files. The bias cut is `BiasCut` (Bonferroni, 10⁻³); the pooled spread's band is [0.85, 1.15]; at most 1% may lie beyond 3.
+
+| Readout | Fit, truth | Seeds, N | Cells (exact zeros) | Worst √R·\|mean z\| | Pooled sd | Per-cell sd | Beyond 3 | Worst z |
+| --- | --- | --- | --- | --- | --- | --- | --- | --- |
+| Several outputs, Saltelli | E34's `Fixed()`, two functionals, exact | 24, 2048 | 880 (0) | 2.85 | 1.009 | 0.64 to 1.34 | 0.30% | −3.48 |
+| Several outputs, two-difference | the same | 24, 2048 | 880 (0) | 1.94 | 1.043 | 0.63 to 1.44 | 0.35% | −3.81 |
+| Basis Sobol, Saltelli | D07's `FitOf()` (2 components), 5 locations and integrated, exact | 80, 1024 | 1,520 (0) | 3.46 | 0.999 | 0.86 to 1.17 | 0.32% | −3.66 |
+| Basis Sobol, two-difference | the same | 80, 1024 | 1,520 (0) | 3.46 | 1.001 | 0.78 to 1.17 | 0.48% | −4.16 |
+| Basis Sobol | directional components from the chain, 4 locations and integrated, quadrature of the predicted output | 30, 2048 | 195 (0) | 1.89 | 0.918 | 0.68 to 1.14 | 0.05% | −3.52 |
+| Basis effects | `FitOf()`, components, 3 locations and integrated, exact | 24, 1024 | 9,060 (720) | 1.84 | 0.882 | 0.71 to 1.02 | 0.00% | 2.60 |
+| Basis effects | directional components, 4 locations, quadrature | 30, 2048 | 432 (0) | 3.08 | 0.985 | 0.83 to 1.08 | 0.00% | −2.77 |
+| Functional Sobol, Saltelli | integrated, conditioned on t (7 coordinates), and two outputs conditioned on t₀ with t₁ integrated, exact | 24, 1024 | 3,200 (40) | 3.28 | 1.030 | 0.60 to 1.32 | 0.77% | −3.79 |
+| Functional Sobol, two-difference | the same | 24, 1024 | 3,200 (40) | 3.33 | 1.044 | 0.74 to 1.46 | 0.24% | 3.44 |
+| Functional effects | the same three forms, 5-point grids, exact | 24, 1024 | 9,640 (0) | 2.96 | 0.943 | 0.58 to 1.39 | 0.07% | 3.74 |
+
+- *The several-output identity, bit for bit.* On the directional fit from the chain and on `Fixed()`, the sampled analysis on a declared functional equals the scalar fit's whose draws carry the projected coefficients, at the same seed: main and total variances and their errors.
+- *The basis Sobol gate's seed count.*
+  - At 24 seeds and N = 2048, the two-difference form read a pooled sd of 1.134 with 1.09% beyond 3. A probe over the same views per piece kind found the location pair pieces at spread / RMS stated error 1.197.
+  - Over 120 fresh seeds the same cells read 1.024, sd of z 1.026 and 0% beyond 3 (probe `artifacts/chip-sensitivity/probes/BasisCalibrationProbe.cs`).
+  - The views are bilinear in two components, so their cells move together and the pooled statistics have about the seeds' few degrees of freedom. The gate reads 80 seeds on the same master.
+  - The basis effects' pooled sd of 0.882, on the band's low side, has the same structure.
+- *The quadrature's own error:* halving the panels moves the directional basis fit's integrated variance by 2.0·10⁻⁵ of itself.
+- *The routes:* `Auto` on a separable basis fit is the exact route, bit for bit, for Sobol and effects, with null errors; a directional basis fit resolves sampled; `Exact` refuses its term, naming it.
+- *The cost row* (the machine at 5 to 18% load, so indicative; probe `artifacts/chip-sensitivity/probes/OutputsCostProbe.cs`, not committed):
+
+  | Per draw | Exact | Sampled, N = 4096 |
+  | --- | --- | --- |
+  | Basis Sobol, 2 components, every one of 15 locations' views | 0.116 ms | 13.3 ms, 2.6 MB |
+  | Basis effects on 25 points, every location | 0.242 ms | 126 ms, 65 MB |
+  | Functional Sobol, integrated | 0.055 ms | 1.42 ms, 0.35 MB |
+  | Functional Sobol, conditioned on 7 coordinates | 0.016 ms | 5.32 ms, 1.69 MB |
+
+- *Fitting untouched:*
+  - *Selected at commit scope:* test-select over the nine files, per test project from disk, selects Regression 255 of 350 classes and Oracle 13 of 40. No other project holds them.
+  - *Regression at commit scope (with the pinned tier):* 2,779 of 2,779.
+  - *Oracle at commit scope:* 57 of 57.
+  - *The whole assembly:* Regression 3,695 of 3,695, in 19 minutes at below-normal priority. `HEAD` did not move between the snapshot and the commit, and `output/BassComponents.cs`, which E8's slice 8c will edit, is unchanged.
+
+**Decisions taken beyond the brief.**
+- *The basis integrated form samples the location* beside each row, rather than integrating it exactly over an estimated component state. It is simpler and unbiased with exact errors; the alternative is the follow-up below.
+- *The sampled basis analysis keeps no component covariances.* The views read the reconstructed surfaces directly, and the component accessors refuse there with their reason.
+- *Basis effects evaluate the components together,* so their views' errors are exact rather than bounded. `EffectCore` serves r components, and the direct route is r = 1.
+- *Separate streams for the integrated output variables and the basis locations,* derived from the spec's seed by `SeedTree`.
+- *The basis Sobol gate at 80 seeds,* for the reason above.
+
+**Unbuilt.**
+- *The sampled route's component covariances for a basis fit.* They are estimable as symmetrized cross pick-freeze pieces, at r(r + 1)/2 pieces per block.
+- *An effects readout for several outputs (E34),* which the engine does not have on either route.
+- *Slice 4 (the split f_sep + f_ns),* which waits on mixed bases (E28) and is not this chip's to start.
+
+**Follow-ups.**
+- *The basis integrated form, exact in ℓ.* A family estimator could weigh every location at every row, taking the per-row terms of each location's pieces, at about m times the reduction. Decision: whether the variance that sampling ℓ adds matters. The gate's cells show no bias; a variance comparison at equal cost would decide.
+- *Basis effects' cost* (126 ms per draw at 25 points, N = 4096). Reusing the stacked cases across batches and chunks would cut its allocation churn. Decide against the cost row if long basis posteriors' effects are read often.
+
+**Doc changes owed.**
+- `docs/Maths/Regression/Sensitivity.md`:
+  - decision 8 per readout: the projected functional, the basis views and their bilinearity, the integrated form's sampled location, the basis effects' √(gᵀΣg), and the functional forms' row evaluation and output-variable draws;
+  - the streams derived from the seed.
+- `docs/Maths/Regression/BASS.md` (basis fits): the component accessors exact-route only.
+
 ### Slice 2 verified from a clean archive (coordinating session, 2026-11-15)
 
 - **Commit:** `9d96c34`, on a snapshot of `84fa2e6`, through `scripts/verify-csharp.ps1` over its five changed files, in the two projects that select.
