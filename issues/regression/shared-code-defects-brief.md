@@ -162,6 +162,37 @@ Added by the user on 2026-11-14, from the BPPR chip's [slice 0 report](bass/bppr
 - The BPPR chip (`local_4d3c75b2`) writes in `src/maths/distributions/` (`GammaRatio.cs`, `PowerSpherical.cs`, `SpecialFunctions.cs`) and, from its slice 1, in BASS's core.
 - Both coordinating sessions run `verify-csharp.ps1` and `test-select.ps1`. Message the second coordinating session before the commit that changes either script, so that no verification is mid-run.
 
+## Slice 9: `LogBeta` through `LogGammaRatio`
+
+Decided by the user on 2026-11-14, as a distributions change of its own. It comes from the BPPR chip's slice 0 follow-up and the user's own check of the current functions.
+
+**The defect.** `SpecialFunctions.LogBeta(a, b)` is `LogGamma(a) + LogGamma(b) − LogGamma(a + b)` (`SpecialFunctions.cs`, line 80). Where one shape is large, two large ln Γ cancel. The user's check, against ln B(x, 1) = −ln x:
+- at x = 10⁵ the absolute error falls from 7.75·10⁻¹¹ to 1.78·10⁻¹⁵ through `LogGammaRatio`;
+- at x = 10¹⁶ `LogBeta` returns 0, and the ratio form returns −36.841361487904734, which is −`Math.Log(x)`.
+
+**The change.** ln B(a, b) = ln Γ(s) − `LogGammaRatio`(l, s), with l the larger shape and s the smaller (`GammaRatio.cs`, as fixed in `117230e`).
+
+**The order of work,** the user's:
+1. *Qualify first:* balanced and unequal shapes against a high-precision reference from outside the engine, far ranges included, by chosen cases and a seeded sweep. State where each form holds its digits. If the ratio form loses digits in some regime, report it with the form that would hold them before building further.
+2. *Then run the existing pins,* before any expectation is updated.
+3. *Report which pins move,* and for each whether a density value changed or an accept/reject decision changed. BARS's locality kernel reads the beta log density in its Hastings correction (`bars/KnotKernels.cs`, `LogDensity`), so a last-bit change can reach a trajectory. The count of affected pins is not known.
+4. *Re-pin where the numerical change explains the difference,* and only there. A pin whose movement the change does not explain is a finding: report it and leave it.
+
+**Read as well.**
+- `LogBeta`'s callers under `src/` (`Beta.cs`, `GeneralizedBetaPrime.cs`, `StudentT.cs` and `SpecialFunctions.cs` itself) and what reads them: beta densities and quantiles, the incomplete beta, the conformal layer's Beta levels.
+- A run resumed across the change: say in the report what a checkpoint written before it does after it.
+
+**Gates.**
+- The qualification's table: the worst error by regime, before and after, against the outside reference.
+- Every test project the changed files select, named with its count, since `SpecialFunctions` is a hub. The pinned tier at each commit; the whole Distributions and Regression assemblies at the end.
+- The list of pins that moved, each with its cause, and a statement of those that did not.
+
+**Sequence.** After 8a, so that its gate runs keep the machine rule. BPPR's slice 2 does not wait on it.
+- The BPPR chip (`local_4d3c75b2`) owns `GammaRatio.cs`; a change inside `LogGammaRatio` is agreed with it by message first.
+- The first coordinating session's chips hold pins that read beta laws (the conformal layer). Tell the second coordinating session which of those move before updating any.
+
+**Files.** `src/maths/distributions/SpecialFunctions.cs` (`LogBeta`), its tests, and the pinned expectations that step 4 allows.
+
 ## Working rules
 
 - **Order.** Slice 1, then slice 2. They touch different code, so slice 2's reading starts when slice 1 lands. The coordinating session verifies each landed slice from a clean archive ([scripts/verify-csharp.ps1](../../scripts/verify-csharp.ps1)).
