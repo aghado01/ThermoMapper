@@ -73,6 +73,27 @@ public sealed record BassEvidence(BassEvidenceEstimate? SteppingStone, BassEvide
     public bool Saturated => MaxPairRejection > RejectionThreshold;
 
     /// <summary>
+    /// This evidence as the conformal layer's model averaging reads it (<see cref="ModelEvidence"/>; CBMA's evidence from the engines' fits):
+    /// <see cref="LogEvidence"/> and its <see cref="MonteCarloError"/> as given, its flags as text (<see cref="Saturated"/>,
+    /// <see cref="AtMaxLevels"/>, <see cref="Overdispersed"/>), <see cref="Priors"/> as what the value depends on beyond the data (its centre
+    /// and σ² prior read the training response), and the key of what the fit read: <paramref name="data"/>'s response as laid out, its case
+    /// weights and their meaning. The value is ln p(y) of the response as given: the collapsed marginal carries −(ν/2) ln 2π and, under
+    /// precision weights, ½ Σ ln wᵢ (<see cref="GPrior.GPriorMarginal.LogMarginal(InverseGamma?)"/>). <paramref name="data"/> must be the
+    /// data the fit was run on.
+    /// </summary>
+    public ModelEvidence ForAveraging(BassData data)
+    {
+        ArgumentNullException.ThrowIfNull(data);
+        var flags = new List<string>();
+        if (Saturated) flags.Add($"saturated: a pair rejected {MaxPairRejection:F2}, past {RejectionThreshold}");
+        if (AtMaxLevels) flags.Add("the self-sizing ladder reached its level budget");
+        if (Overdispersed == true) flags.Add("the SMC replicates disagree beyond their own errors");
+        CaseWeights? weights = data.Weights;
+        string key = ModelEvidence.KeyOf(data.Response.Values.ToArray(), weights is null ? null : weights.Values.ToArray(), weights?.Meaning.ToString());
+        return new ModelEvidence(LogEvidence, MonteCarloError, key, flags, $"BASS: {Priors}");
+    }
+
+    /// <summary>
     /// An SMC fit's: whether its replicates' ln Ẑ disagree beyond their own errors, the between-to-within ratio above
     /// <see cref="OverdispersionThreshold"/>. <see cref="MonteCarloError"/> is then the replicates' spread, the larger of the two
     /// by the pooling rule, and the replicates' own errors are not to be read. Null where it cannot be read: an SMC fit of one

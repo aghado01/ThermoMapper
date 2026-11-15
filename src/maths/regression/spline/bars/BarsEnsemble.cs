@@ -87,6 +87,19 @@ public sealed record BarsEvidence(BarsEvidenceEstimate SteppingStone, BarsEviden
 
     /// <summary>Its Monte Carlo error.</summary>
     public double MonteCarloError => SteppingStone.MonteCarloError;
+
+    /// <summary>
+    /// This evidence as the conformal layer's model averaging reads it (<see cref="ModelEvidence"/>; CBMA's evidence from the engines' fits):
+    /// <see cref="LogEvidence"/> and its <see cref="MonteCarloError"/> as given, <see cref="Priors"/> as what the value depends on beyond the
+    /// data (its centre and σ² prior read the training response), and the key of the response the run read, <paramref name="y"/>. A run
+    /// that reports an evidence reads no case weights, so the key reads the response alone. The value is ln p(y) of the response as given:
+    /// the collapsed marginal carries −(m/2) ln 2π (<see cref="WeightedNormalModel.LogMarginalLikelihood"/>).
+    /// </summary>
+    public ModelEvidence ForAveraging(double[] y)
+    {
+        ArgumentNullException.ThrowIfNull(y);
+        return new ModelEvidence(LogEvidence, MonteCarloError, ModelEvidence.KeyOf(y), [], $"BARS: {Priors}");
+    }
 }
 
 /// <summary>

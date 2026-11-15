@@ -22,13 +22,13 @@ public sealed class ScoresBeyondTheModelTests(ITestOutputHelper output)
     // ---- CBMA across noise laws ----
 
     // y = βx + N(0, σ²), β ~ N(0, 1): exact posterior draws and the exact log evidence.
-    private static double[] Draws(double[] x, double[] y, double sigma, int s, Xoshiro256PlusPlus rng)
+    internal static double[] Draws(double[] x, double[] y, double sigma, int s, Xoshiro256PlusPlus rng)
     {
         double sxx = x.Sum(v => v * v), sxy = x.Zip(y, (a, b) => a * b).Sum(), v = 1.0 / (1.0 + sxx / (sigma * sigma)), m = v * sxy / (sigma * sigma);
         return [.. Enumerable.Range(0, s).Select(_ => m + Math.Sqrt(v) * Gaussian(rng))];
     }
 
-    private static double LogEvidence(double[] x, double[] y, double sigma)
+    internal static double LogEvidence(double[] x, double[] y, double sigma)
     {
         int n = x.Length;
         double s2 = sigma * sigma, sxx = x.Sum(v => v * v), sxy = x.Zip(y, (a, b) => a * b).Sum(), syy = y.Sum(v => v * v);
@@ -48,7 +48,7 @@ public sealed class ScoresBeyondTheModelTests(ITestOutputHelper output)
         return values;
     }
 
-    private static (PointwiseLogDensity Training, CandidateLogDensity Candidates) Seams(double[] x, double[] y, double[] beta, double sigma,
+    internal static (PointwiseLogDensity Training, CandidateLogDensity Candidates) Seams(double[] x, double[] y, double[] beta, double sigma,
                                                                                          double[] cases, double[] grid)
     {
         int s = beta.Length, n = x.Length;
