@@ -19,14 +19,14 @@ Opened 2026-11-14 at the user's word ("that brief was getting way too long, adde
 - `BassFit.GroupConformal` takes the optional confidence (`14fd05d`), built and verified.
 - Slice 17's grid-free intervals for the residual scores (`28993bb`, `ResidualShrinkage.Intervals`) are built and verified.
 - The asymmetric interval's exact law is closed (`b8cd947`, docstrings only). Where the band's width varies, the union of the two tails is Makarov's worst case given their Beta laws. Beta(k_lo + k_hi, m − k_lo − k_hi) holds only at constant width, the residual interval.
-- Slice 17's RoBAS-Full (`942df9c`, `ResidualScore.Horseshoe`) is built and verified. It is served by `Prediction`, the grid form.
+- Slice 17's RoBAS-Full (`942df9c`, `ResidualScore.Horseshoe`) is built and verified. It is served by `Prediction`, the grid form. Its sets are not always intervals: two pieces at n 2 and 3 (`f400892`, probed and verified), so `Intervals` refuses it at every n.
 - Slice 12a's k̂ diagnostic stays opt-in, as the user settled on 2026-11-14. That is the code's default (`ConformalOptions.LeaveOneOutParetoK`, false).
 - The defects chip owns `PredictiveChecks.cs` and `Pointwise.cs`'s weight check; a change there is agreed with it first (the archived brief's coordination note).
 
 ## Open, each with the decision it would change
 
 - **Slice 17's remaining follow-up** (its report): CBMA's evidence from the engines' own fits.
-- **RoBAS-Full's intervals:** `Intervals` refuses the horseshoe score, since no interval theorem is proved for it. It decides whether the grid-free ends extend to it.
+- **RoBAS-Full's sets as intervals for n ≥ 4,** a conjecture (the probe's report). At n 2 and 3 they can fall in two pieces, one about the prior's centre and one about the data. From n 4 to 50 none was found. A proof would go by Bersson and Hoff's lemma, as Lean work for the conformal Lean chip if the user wants it. It decides whether `Intervals` serves RoBAS-Full from n 4.
 - **Slice 15's alternation speed** along the factorization's flat directions. It decides the cost at large n.
 - **τ through richer features,** the ratio estimator's open follow-up. It decides whether the layer offers a nonparametric τ.
 
@@ -46,6 +46,7 @@ Probed at the user's pick (2026-11-14, "RoBAS-Full intervals"). The question was
 - `ResidualScore.Horseshoe`'s docstring records the finding (comment only).
 - `HorseshoeScoreTests.ItsSets_AreNotAlwaysIntervals` reads both counterexamples through the grid form.
 - `Intervals` still refuses RoBAS-Full.
+- *Verified by the main session on 2026-11-14,* from a clean archive of `5473adc` with zero skips: the Commit selection over `f400892`'s files, 57 of 57 ([receipts](receipts/verify-conformal-robasprobe-f400892/)). The source change is doc comments only.
 
 **The finding.**
 - *Not intervals at n 2 and 3.* A seeded search counted each set's connected pieces on a sinh-spaced grid, fine near the residuals and reaching 60 spreads beyond them. RoBAS-Full's sets fall in two pieces: one about the prior's centre 0, one about the data. The horseshoe's spike at 0 lets a candidate there conform when the others are few.
