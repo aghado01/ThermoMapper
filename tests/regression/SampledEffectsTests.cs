@@ -349,9 +349,11 @@ public sealed class SampledEffectsTests(ITestOutputHelper output)
         Assert.Throws<ArgumentOutOfRangeException>(() => hand.Effects(data, new SensitivitySpec { Points = 1 }));
         ArgumentException budget = Assert.Throws<ArgumentException>(() => hand.Effects(data, effects: new EffectSpec { EvaluationBudget = 1_000_000 }));
         Assert.Contains("term values", budget.Message);
-        ArgumentException later = Assert.Throws<ArgumentException>(() =>
-            BassSensitivity.Effects(SensitivityFixture.FitFunctional(), SensitivityFixture.Functional(), new SensitivitySpec { Route = SensitivityRoute.Sampled }));
-        Assert.Contains("slice 3", later.Message);
+        // A functional fit's effects read on the sampled route too (slice 3), one set per coordinate in the conditioned form.
+        EffectAnalysis functional = BassSensitivity.Effects(SensitivityFixture.FitFunctional(), SensitivityFixture.Functional(),
+            new SensitivitySpec { Route = SensitivityRoute.Sampled, Functional = FunctionalForm.Condition, Points = 64 }, new EffectSpec { GridPoints = 3 });
+        Assert.Equal(SensitivityRoute.Sampled, functional.Route);
+        Assert.Equal(functional.Coordinates!.Count, functional.At.Count);
     }
 
     // An effect's cells' pinned values, the last input fastest.

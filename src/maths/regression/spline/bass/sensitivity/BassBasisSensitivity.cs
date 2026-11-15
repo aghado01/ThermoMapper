@@ -14,17 +14,21 @@ namespace Maths.Regression.Spline.Bass.Sensitivity;
 /// free of ℓ and are kept per draw; each form weighs them by g_ℓk = y_s(ℓ)·K_ℓk, so variances are in output units. The
 /// truncation residual and the noise are outside the decomposition, as observation noise is for direct fits.
 /// </summary>
-public static class BassBasisSensitivity
+public static partial class BassBasisSensitivity
 {
     /// <summary>
-    /// The decomposition of <paramref name="fit"/>'s joint draws under <paramref name="spec"/>. The spec's measures, order,
+    /// The decomposition of <paramref name="fit"/>'s joint draws under <paramref name="spec"/>, by the route the spec resolves to: the
+    /// component covariances in closed form, or on the sampled route each location's and the integrated form's decomposition read at
+    /// shared points with its error rows (<see cref="BasisSobolAnalysis.Route"/>). The spec's measures, order,
     /// budget and tolerance apply as for direct fits; the order counts variables, the location as one in the integrated form,
     /// whose default order is therefore one more. <see cref="SensitivitySpec.Functional"/> is ignored, since both forms are
     /// views of one analysis. Refused, with its reason: output coordinates or output-variable measures (the basis exists
     /// only at its training locations, which are integrated equally weighted), components fitted at different hinge degrees,
     /// and the spec's own refusals.
     /// </summary>
-    public static BasisSobolAnalysis Of(BassBasisFit fit, SensitivitySpec? spec = null)
+    public static BasisSobolAnalysis Of(BassBasisFit fit, SensitivitySpec? spec = null) => OfCore(fit, spec, null);
+
+    private static BasisSobolAnalysis OfCore(BassBasisFit fit, SensitivitySpec? spec, Maths.Regression.Sensitivity.MainVarianceForm? form)
     {
         ArgumentNullException.ThrowIfNull(fit);
         spec ??= new SensitivitySpec();
@@ -59,6 +63,10 @@ public static class BassBasisSensitivity
         for (int k = 0; k < r; k++)
             foreach (int j in selected)
                 foreach (int id in pooled[k][joint.Draw(k, j)].Structure.TermIds) held.Add(fit.Components[k].Terms[id]);
+        (int[] chains, int[] within) = ChainOrder(joint);
+        var kernels = new DesignKernels(inputs, degree, hinges);
+        if (Resolve(spec, held, kernels) == SensitivityRoute.Sampled)
+            return Sampled(fit, spec, inputs, measure, moments, kernels, joint, selected, pooled, held, chains, within, form);
         int largest = held.Select(t => moments.Variables(t).Count).DefaultIfEmpty(0).Max();
         int maxOrder = spec.MaxOrder ?? Math.Max(1, largest);
         int integratedOrder = spec.MaxOrder ?? largest + 1;
@@ -123,6 +131,14 @@ public static class BassBasisSensitivity
                 }
         }
 
+        return new BasisSobolAnalysis(fit.Decomposition.Map, measure, maxOrder, integratedOrder, subsets, state,
+                                      [.. selected.Select(j => chains[j])], [.. selected.Select(j => within[j])],
+                                      spec.RoundingTolerance, moments.LargestError);
+    }
+
+    // Each joint draw's chain and index within it.
+    private static (int[] Chains, int[] Within) ChainOrder(BassJointDraws joint)
+    {
         var chains = new int[joint.Count];
         var within = new int[joint.Count];
         if (joint.ChainLengths is { } lengths)
@@ -137,9 +153,7 @@ public static class BassBasisSensitivity
         }
         else
             for (int j = 0; j < within.Length; j++) within[j] = j;
-        return new BasisSobolAnalysis(fit.Decomposition.Map, measure, maxOrder, integratedOrder, subsets, state,
-                                      [.. selected.Select(j => chains[j])], [.. selected.Select(j => within[j])],
-                                      spec.RoundingTolerance, moments.LargestError);
+        return (chains, within);
     }
 
     // A term pair's cached contributions: its covariance, its moment magnitude, and its shares by subset index and input.
@@ -211,11 +225,13 @@ public sealed class BasisSobolAnalysis
     public const string LocationInput = "location";
 
     private readonly LinearReconstruction _map;
-    private readonly BasisState _state;
+    private readonly BasisState? _state;
+    private readonly SobolDecomposition[]? _locations;
     private readonly int[][] _subsets;
     private readonly int[] _chains;
     private readonly int[] _draws;
     private readonly double _tolerance;
+    private readonly int _count;
 
     internal BasisSobolAnalysis(LinearReconstruction map, ProductMeasure measure, int maxOrder, int integratedOrder, int[][] subsets,
                                 BasisState state, int[] chains, int[] draws, double tolerance, double momentError)
@@ -226,6 +242,7 @@ public sealed class BasisSobolAnalysis
         _chains = chains;
         _draws = draws;
         _tolerance = tolerance;
+        _count = state.Covariance.GetLength(0);
         Measure = measure;
         MaxOrder = maxOrder;
         IntegratedMaxOrder = integratedOrder;
@@ -233,6 +250,33 @@ public sealed class BasisSobolAnalysis
         MomentError = momentError;
         Integrated = BuildIntegrated();
     }
+
+    // The sampled route's analysis (the sampled-sensitivity brief, slice 3): each location's decomposition and the integrated form, read
+    // from the reconstructed surfaces at shared points, each with its error rows.
+    internal BasisSobolAnalysis(LinearReconstruction map, ProductMeasure measure, int maxOrder, int integratedOrder, int[][] subsets,
+                                SobolDecomposition[] locations, SobolDecomposition integrated, int[] chains, int[] draws, double tolerance, int points)
+    {
+        _map = map;
+        _locations = locations;
+        _subsets = subsets;
+        _chains = chains;
+        _draws = draws;
+        _tolerance = tolerance;
+        _count = integrated.Count;
+        Measure = measure;
+        MaxOrder = maxOrder;
+        IntegratedMaxOrder = integratedOrder;
+        Subsets = Array.AsReadOnly(subsets);
+        Integrated = integrated;
+        Route = SensitivityRoute.Sampled;
+        Points = points;
+    }
+
+    /// <summary>The route that ran (the sampled-sensitivity brief, decision 1).</summary>
+    public SensitivityRoute Route { get; } = SensitivityRoute.Exact;
+
+    /// <summary>The sampled route's rows N in each base set; 0 on the exact route.</summary>
+    public int Points { get; }
 
     /// <summary>The product measure, as declared with defaults filled in and resolved.</summary>
     public ProductMeasure Measure { get; }
@@ -253,7 +297,7 @@ public sealed class BasisSobolAnalysis
     public int Components => _map.Coefficients;
 
     /// <summary>The joint draws.</summary>
-    public int Count => _state.Covariance.GetLength(0);
+    public int Count => _count;
 
     /// <summary>The largest quadrature error estimate among the one-variable moments (0 unless a Student component was
     /// integrated).</summary>
@@ -266,6 +310,8 @@ public sealed class BasisSobolAnalysis
     public SobolDecomposition AtLocation(int location)
     {
         if ((uint)location >= (uint)Locations) throw new ArgumentOutOfRangeException(nameof(location), $"The basis has {Locations} locations.");
+        if (_locations is { } sampled) return sampled[location];
+        BasisState state = State();
         int r = Components;
         var g = new double[r];
         for (int k = 0; k < r; k++) g[k] = _map.Scales[location] * _map.Basis(location, k);
@@ -278,10 +324,10 @@ public sealed class BasisSobolAnalysis
         var status = new DecompositionStatus[n];
         for (int d = 0; d < n; d++)
         {
-            variance[d] = Dot(weight, _state.Covariance, d);
-            for (int u = 0; u < _subsets.Length; u++) main[d, u] = Dot(weight, _state.Main, d, u);
-            for (int v = 0; v < inputs; v++) total[d, v] = Dot(weight, _state.Total, d, v);
-            status[d] = BassSensitivity.Status(variance[d], Dot(magnitude, _state.Size, d), _tolerance, main, total, d);
+            variance[d] = Dot(weight, state.Covariance, d);
+            for (int u = 0; u < _subsets.Length; u++) main[d, u] = Dot(weight, state.Main, d, u);
+            for (int v = 0; v < inputs; v++) total[d, v] = Dot(weight, state.Total, d, v);
+            status[d] = BassSensitivity.Status(variance[d], Dot(magnitude, state.Size, d), _tolerance, main, total, d);
         }
         return new SobolDecomposition(Measure.Names, _subsets, main, total, variance, status, _tolerance, _chains, _draws, null);
     }
@@ -290,21 +336,26 @@ public sealed class BasisSobolAnalysis
     public IReadOnlyList<SobolDecomposition> PerLocation() => [.. Enumerable.Range(0, Locations).Select(AtLocation)];
 
     /// <summary>Draw <paramref name="draw"/>'s Cov(wₖ, wₖ′), r × r, in the coefficient responses' units.</summary>
-    public double[,] ComponentCovariance(int draw) => Matrix(p => _state.Covariance[draw, p]);
+    public double[,] ComponentCovariance(int draw) { BasisState state = State(); return Matrix(p => state.Covariance[draw, p]); }
 
     /// <summary>Draw <paramref name="draw"/>'s Cov(wₖ,u, wₖ′,u) on <see cref="Subsets"/>[<paramref name="subset"/>], r × r.</summary>
-    public double[,] ComponentMainCovariance(int draw, int subset) => Matrix(p => _state.Main[draw, subset, p]);
+    public double[,] ComponentMainCovariance(int draw, int subset) { BasisState state = State(); return Matrix(p => state.Main[draw, subset, p]); }
 
     /// <summary>Draw <paramref name="draw"/>'s total-effect covariances for input <paramref name="input"/>, r × r.</summary>
-    public double[,] ComponentTotalCovariance(int draw, int input) => Matrix(p => _state.Total[draw, input, p]);
+    public double[,] ComponentTotalCovariance(int draw, int input) { BasisState state = State(); return Matrix(p => state.Total[draw, input, p]); }
 
     /// <summary>Draw <paramref name="draw"/>'s E[wₖ] under the measure.</summary>
-    public double[] ComponentMeans(int draw) => [.. Enumerable.Range(0, Components).Select(k => _state.Means[draw, k])];
+    public double[] ComponentMeans(int draw) { BasisState state = State(); return [.. Enumerable.Range(0, Components).Select(k => state.Means[draw, k])]; }
+
+    // The exact route's ℓ-free state; the sampled route reads each location's surface instead, and keeps no component covariances.
+    private BasisState State() => _state ?? throw new InvalidOperationException(
+        "The sampled route reads each location's reconstructed surface and keeps no component covariances; take the exact route for them.");
 
     // The integrated form: the inputs' subsets, the location alone, and the inputs' subsets with the location, up to the
     // integrated order, smaller first, then lexicographic with the location last.
     private SobolDecomposition BuildIntegrated()
     {
+        BasisState state = State();
         int r = Components, m = Locations, p = Measure.Count, n = Count;
         var g = new double[m, r];
         var mean = new double[r];
@@ -348,8 +399,8 @@ public sealed class BasisSobolAnalysis
                 double deviation = _map.Offsets[l] - offset, size = Math.Abs(_map.Offsets[l]);
                 for (int k = 0; k < r; k++)
                 {
-                    deviation += (g[l, k] - mean[k]) * _state.Means[d, k];
-                    size += Math.Abs(g[l, k]) * _state.MeanSize[d, k];
+                    deviation += (g[l, k] - mean[k]) * state.Means[d, k];
+                    size += Math.Abs(g[l, k]) * state.MeanSize[d, k];
                 }
                 location += deviation * deviation / m;
                 size2 += size * size / m;
@@ -357,13 +408,13 @@ public sealed class BasisSobolAnalysis
             for (int s = 0; s < kinds.Count; s++)
             {
                 (_, int u, bool withLocation) = kinds[s];
-                main[d, s] = u < 0 ? location : Dot(withLocation ? spread : averaged, _state.Main, d, u);
+                main[d, s] = u < 0 ? location : Dot(withLocation ? spread : averaged, state.Main, d, u);
             }
-            for (int v = 0; v < p; v++) total[d, v] = Dot(second, _state.Total, d, v);
-            double across = Dot(spread, _state.Covariance, d);
+            for (int v = 0; v < p; v++) total[d, v] = Dot(second, state.Total, d, v);
+            double across = Dot(spread, state.Covariance, d);
             total[d, p] = location + across;
-            variance[d] = Dot(averaged, _state.Covariance, d) + across + location;
-            status[d] = BassSensitivity.Status(variance[d], Dot(magnitude, _state.Size, d) + _tolerance * size2, _tolerance, main, total, d);
+            variance[d] = Dot(averaged, state.Covariance, d) + across + location;
+            status[d] = BassSensitivity.Status(variance[d], Dot(magnitude, state.Size, d) + _tolerance * size2, _tolerance, main, total, d);
         }
         string[] names = [.. Measure.Names, LocationInput];
         return new SobolDecomposition(names, [.. kinds.Select(x => x.Subset)], main, total, variance, status, _tolerance, _chains, _draws, null);
@@ -375,7 +426,7 @@ public sealed class BasisSobolAnalysis
         int r = Components;
         var w = new double[r * (r + 1) / 2];
         for (int k = 0; k < r; k++)
-            for (int k2 = k; k2 < r; k2++) w[_state.Pair(k, k2)] = f(k, k2) * (k == k2 ? 1.0 : 2.0);
+            for (int k2 = k; k2 < r; k2++) w[State().Pair(k, k2)] = f(k, k2) * (k == k2 ? 1.0 : 2.0);
         return w;
     }
 
@@ -398,7 +449,7 @@ public sealed class BasisSobolAnalysis
         int r = Components;
         var c = new double[r, r];
         for (int k = 0; k < r; k++)
-            for (int k2 = 0; k2 < r; k2++) c[k, k2] = packed(_state.Pair(k, k2));
+            for (int k2 = 0; k2 < r; k2++) c[k, k2] = packed(State().Pair(k, k2));
         return c;
     }
 

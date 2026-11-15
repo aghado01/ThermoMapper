@@ -33,7 +33,7 @@ public static partial class BassSensitivity
     {
         spec ??= new SensitivitySpec();
         Setup s = Setup.Of(fit, data, spec, output);
-        if (Resolve(fit, spec, s) == SensitivityRoute.Sampled) return Sampled(fit, spec, s, output is not null, form);
+        if (Resolve(fit, spec, s) == SensitivityRoute.Sampled) return Sampled(fit, spec, s, form);
         int maxOrder = spec.MaxOrder ?? Math.Max(1, s.TermIds.Select(id => s.Moments.Variables(fit.Terms[id]).Count).DefaultIfEmpty(0).Max());
         int[][] subsets = Subsets(s.TermIds.Select(id => s.Moments.Variables(fit.Terms[id])), maxOrder, spec.SubsetBudget);
         var index = new Dictionary<int[], int>(subsets.Length, SubsetComparer.Instance);
@@ -178,7 +178,8 @@ public static partial class BassSensitivity
         Setup s = Setup.Of(fit, data, spec);
         if (Resolve(fit, spec, s) == SensitivityRoute.Sampled) return SampledEffects(fit, spec, effects, s);
         ProductMeasure measure = s.Moments.Measure;
-        (int[][] chosen, double[][] scaled, EffectGrid[] grids) = EffectRequest(fit, s, effects, id => s.Moments.Variables(fit.Terms[id]));
+        (int[][] chosen, double[][] scaled, EffectGrid[] grids) = EffectRequest(measure, fit.Transform, s.TermIds.Select(id => s.Moments.Variables(fit.Terms[id])),
+                                                                                 s.Draws.Length, s.Surfaces, effects);
 
         // Per term: its centred factor values on each of its variables' grids, and κ·Π E φ over the variables outside an effect.
         var centred = new Dictionary<int, double[][]>();

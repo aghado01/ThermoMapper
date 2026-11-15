@@ -328,9 +328,10 @@ public sealed class SampledSensitivityTests(ITestOutputHelper output)
         Assert.Throws<ArgumentOutOfRangeException>(() => fit.Sensitivity(data, new SensitivitySpec { Points = 1 }));
         Assert.Throws<ArgumentOutOfRangeException>(() => fit.Sensitivity(data, new SensitivitySpec { Route = (SensitivityRoute)7 }));
 
-        BassFit functional = SensitivityFixture.FitFunctional();
-        ArgumentException later = Assert.Throws<ArgumentException>(() => BassSensitivity.Of(functional, SensitivityFixture.Functional(), new SensitivitySpec { Route = SensitivityRoute.Sampled }));
-        Assert.Contains("slice 3", later.Message);
+        // A functional fit reads on the sampled route too (slice 3), its form carried through.
+        SobolAnalysis functional = BassSensitivity.Of(SensitivityFixture.FitFunctional(), SensitivityFixture.Functional(), new SensitivitySpec { Route = SensitivityRoute.Sampled, Points = 64 });
+        Assert.Equal(SensitivityRoute.Sampled, functional.Route);
+        Assert.Equal(FunctionalForm.Integrate, functional.Form);
     }
 
     [Fact]

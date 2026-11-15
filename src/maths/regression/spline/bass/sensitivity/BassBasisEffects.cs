@@ -25,8 +25,9 @@ public static class BassBasisEffects
 
     /// <summary>
     /// The effects of <paramref name="fit"/>'s joint draws under <paramref name="spec"/>'s measure and each component's
-    /// degree. With no subsets named, every input's main effect and the two-way effect of every pair a term of some joint
-    /// draw holds, in any component. Refused, with its reason: output coordinates and output-variable measures (as basis
+    /// degree, by the route the spec resolves to: in closed form per component, or on the sampled route with the components
+    /// evaluated together at shared points, each view carrying its exact error. With no subsets named, every input's main effect
+    /// and the two-way effect of every pair a term of some joint draw holds, in any component. Refused, with its reason: output coordinates and output-variable measures (as basis
     /// sensitivity refuses them), more values than <see cref="EffectSpec.CellBudget"/> over the components and joint draws,
     /// and the direct path's own refusals.
     /// </summary>
@@ -48,6 +49,7 @@ public static class BassBasisEffects
         BassFit first = fit.Components[0];
         BassInputs inputs = BassInputs.Prepare(fit.ComponentData(0), first.Transform);
         ProductMeasure measure = ProductMeasure.Resolve(first.Transform, inputs, spec.Measures);
+        if (Sampled(fit, spec, effects, inputs, measure, joint, selected) is { } sampled) return sampled;
 
         // The effects, by name, so that every component computes the same set.
         string[][] named;
@@ -107,6 +109,56 @@ public static class BassBasisEffects
         }
         return new BasisEffectAnalysis(fit.Decomposition.Map, measure, [.. layout!.Select(x => (x.Inputs, x.Grids))], state, means, effects.CellBudget);
     }
+
+    // The sampled route (the sampled-sensitivity brief, slice 3): the components evaluated together at shared points (EffectCore), so each
+    // view's error is exact; null when the route resolves exact. Decision 1 as for direct fits: exact when every term the components'
+    // selected draws hold has one-variable factors.
+    private static BasisEffectAnalysis? Sampled(BassBasisFit fit, SensitivitySpec spec, EffectSpec effects, BassInputs inputs, ProductMeasure measure,
+                                                BassJointDraws joint, int[] selected)
+    {
+        int r = fit.Components.Count, n = selected.Length;
+        BassFit first = fit.Components[0];
+        int degree = first.Config.Structure.Degree;
+        HingeNormalization hinges = OneNormalization(fit);
+        var pooled = new List<BassDraw>[r];
+        for (int k = 0; k < r; k++) pooled[k] = BassDrawFit.Pool(fit.Components[k].Draws, fit.Components[k].Terms, false, nameof(fit)).Pooled;
+        var held = new HashSet<BassTerm>();
+        for (int k = 0; k < r; k++)
+            foreach (int j in selected)
+                foreach (int id in pooled[k][joint.Draw(k, j)].Structure.TermIds) held.Add(fit.Components[k].Terms[id]);
+        var kernels = new DesignKernels(inputs, degree, hinges);
+        BassTerm? without = held.FirstOrDefault(t => !kernels.Separable(t));
+        bool sampled = spec.Route switch
+        {
+            SensitivityRoute.Auto => without is not null,
+            SensitivityRoute.Exact when without is not null => throw new ArgumentException(
+                $"Term {without} is not a product of one-variable factors, so the exact route cannot integrate it; take the sampled route "
+                + "(Route = Sampled, or Auto).", nameof(spec)),
+            SensitivityRoute.Exact => false,
+            SensitivityRoute.Sampled => true,
+            _ => throw new ArgumentOutOfRangeException(nameof(spec), $"No sensitivity route {spec.Route}."),
+        };
+        if (!sampled) return null;
+        if (spec.Points < 2) throw new ArgumentOutOfRangeException(nameof(spec), "The sampled route needs two rows in each base set.");
+
+        BassMoments moments = BassMoments.On(inputs, degree, measure, hinges);
+        Func<BassTerm, int[]> variables = BassSensitivity.TermVariablesOf(moments, kernels);
+        (int[][] chosen, double[][] scaled, EffectGrid[] grids) =
+            BassSensitivity.EffectRequest(measure, first.Transform, held.Select(t => (IReadOnlyList<int>)variables(t)), n, r, effects);
+        int maxTerms = Enumerable.Range(0, r).Max(k => selected.Select(j => pooled[k][joint.Draw(k, j)].Structure.TermIds.Length).DefaultIfEmpty(0).Max());
+        var b = new double[maxTerms + 1];
+        BassSensitivity.EffectState state = BassSensitivity.EffectCore(new BassBasis(inputs, degree, hinges), first.Transform, inputs, measure,
+            [.. fit.Components.Select(c => c.Terms)], n,
+            (k, d) =>
+            {
+                BassDraw draw = pooled[k][joint.Draw(k, selected[d])];
+                Array.Copy(draw.Coefficients, b, draw.Structure.TermIds.Length + 1);
+                return (draw.Structure.TermIds, b);
+            },
+            chosen, scaled, grids, spec, effects);
+        return new BasisEffectAnalysis(fit.Decomposition.Map, measure, [.. chosen.Select(u => (u, (IReadOnlyList<EffectGrid>)[.. u.Select(v => grids[v])]))],
+                                       state, effects.CellBudget, spec.Points);
+    }
 }
 
 /// <summary>
@@ -128,6 +180,7 @@ public sealed class BasisEffectAnalysis
     private readonly double[][][,] _state;   // [component][effect] → joint draws × cells
     private readonly double[,] _means;       // joint draws × components: E[wₖ]
     private readonly long _budget;
+    private readonly BassSensitivity.EffectState? _errors;   // the sampled route's estimates' covariances
 
     internal BasisEffectAnalysis(LinearReconstruction map, ProductMeasure measure, (int[] Inputs, IReadOnlyList<EffectGrid> Grids)[] layout,
                                  double[][][,] state, double[,] means, long budget)
@@ -139,6 +192,23 @@ public sealed class BasisEffectAnalysis
         _budget = budget;
         Measure = measure;
     }
+
+    // The sampled route's analysis (the sampled-sensitivity brief, slice 3): the components' estimates with their covariances, so each
+    // view Σₖ gₖ·eₖ carries its error √(gᵀΣg).
+    internal BasisEffectAnalysis(LinearReconstruction map, ProductMeasure measure, (int[] Inputs, IReadOnlyList<EffectGrid> Grids)[] layout,
+                                 BassSensitivity.EffectState state, long budget, int points)
+        : this(map, measure, layout, state.Values, state.Means, budget)
+    {
+        _errors = state;
+        Route = SensitivityRoute.Sampled;
+        Points = points;
+    }
+
+    /// <summary>The route that ran (the sampled-sensitivity brief, decision 1).</summary>
+    public SensitivityRoute Route { get; } = SensitivityRoute.Exact;
+
+    /// <summary>The sampled route's rows N in each base set, the effects averaging over both; 0 on the exact route.</summary>
+    public int Points { get; }
 
     /// <summary>The integrated form's name for the location input.</summary>
     public const string LocationInput = BasisSobolAnalysis.LocationInput;
@@ -209,7 +279,18 @@ public sealed class BasisEffectAnalysis
                 main[d, l] = f - averaged.Mean[d];
             }
         }
-        effects.Add(new Effect([p], [location], main));
+        double[,]? mainError = null;
+        if (_errors is { } means)
+        {
+            mainError = new double[n, m];
+            for (int l = 0; l < m; l++)
+            {
+                double[] g = G(l), deviation = [.. g.Select((x, k) => x - mean[k])];
+                double[] e = means.MeanError(deviation);
+                for (int d = 0; d < n; d++) mainError[d, l] = e[d];
+            }
+        }
+        effects.Add(new Effect([p], [location], main) { Errors = mainError });
         for (int e = 0; e < _layout.Length; e++)
         {
             if (_layout[e].Inputs.Length != 1) continue;
@@ -227,9 +308,21 @@ public sealed class BasisEffectAnalysis
                         for (int c = 0; c < width; c++) values[d, c * m + l] += weight * source[d, c];
                 }
             }
-            effects.Add(new Effect([_layout[e].Inputs[0], p], [_layout[e].Grids[0], location], values));
+            double[,]? errors = null;
+            if (_errors is { } covariances)
+            {
+                errors = new double[n, width * m];
+                for (int l = 0; l < m; l++)
+                {
+                    double[] g = G(l), deviation = [.. g.Select((x, k) => x - mean[k])];
+                    double[,] at = covariances.Error(e, deviation);
+                    for (int d = 0; d < n; d++)
+                        for (int c = 0; c < width; c++) errors[d, c * m + l] = at[d, c];
+                }
+            }
+            effects.Add(new Effect([_layout[e].Inputs[0], p], [_layout[e].Grids[0], location], values) { Errors = errors });
         }
-        return new EffectFunctions([.. Measure.Names, LocationInput], effects, averaged.Mean);
+        return new EffectFunctions([.. Measure.Names, LocationInput], effects, averaged.Mean) { MeanError = averaged.MeanError };
     }
 
     // g_ℓ = y_s(ℓ)·K_ℓ.
@@ -258,7 +351,7 @@ public sealed class BasisEffectAnalysis
                 for (int d = 0; d < n; d++)
                     for (int c = 0; c < width; c++) values[d, c] += g[k] * source[d, c];
             }
-            effects[e] = new Effect(_layout[e].Inputs, _layout[e].Grids, values);
+            effects[e] = new Effect(_layout[e].Inputs, _layout[e].Grids, values) { Errors = _errors?.Error(e, g) };
         }
         var mean = new double[n];
         for (int d = 0; d < n; d++)
@@ -267,6 +360,6 @@ public sealed class BasisEffectAnalysis
             for (int k = 0; k < r; k++) f += g[k] * _means[d, k];
             mean[d] = f;
         }
-        return new EffectFunctions(Measure.Names, effects, mean);
+        return new EffectFunctions(Measure.Names, effects, mean) { MeanError = _errors?.MeanError(g) };
     }
 }

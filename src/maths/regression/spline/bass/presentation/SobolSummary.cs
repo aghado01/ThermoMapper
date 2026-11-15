@@ -155,6 +155,12 @@ public sealed record BasisSobolSummary(
     ProductMeasure Measure, int MaxOrder, int IntegratedMaxOrder, IReadOnlyList<SobolSummary> PerLocation, SobolSummary Integrated,
     double MomentError)
 {
+    /// <summary>The route that ran.</summary>
+    public SensitivityRoute Route { get; init; } = SensitivityRoute.Exact;
+
+    /// <summary>The sampled route's rows N in each base set; 0 on the exact route.</summary>
+    public int Points { get; init; }
+
     /// <summary>The summary of <paramref name="analysis"/> at <paramref name="probabilities"/>
     /// (<see cref="PosteriorSummary.DefaultProbabilities"/> when null), each location's decomposition built in turn.</summary>
     public static BasisSobolSummary Of(BasisSobolAnalysis analysis, IReadOnlyList<double>? probabilities = null)
@@ -164,6 +170,6 @@ public sealed record BasisSobolSummary(
         var perLocation = new SobolSummary[analysis.Locations];
         for (int l = 0; l < perLocation.Length; l++) perLocation[l] = SobolSummary.Over(analysis.AtLocation(l), p);
         return new BasisSobolSummary(analysis.Measure, analysis.MaxOrder, analysis.IntegratedMaxOrder, Array.AsReadOnly(perLocation),
-                                     SobolSummary.Over(analysis.Integrated, p), analysis.MomentError);
+                                     SobolSummary.Over(analysis.Integrated, p), analysis.MomentError) { Route = analysis.Route, Points = analysis.Points };
     }
 }
