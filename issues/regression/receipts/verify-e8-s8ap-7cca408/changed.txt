@@ -1,0 +1,6 @@
+src/maths/regression/spline/bass/sensitivity/ActiveSubspaces.cs
+src/maths/regression/spline/bass/sensitivity/BassActiveSubspace.cs
+tests/regression/DirectionalHingeTests.cs
+tests/regression/DirectionalRecoveryTests.cs
+tests/regression/RidgeColumnTests.cs
+tests/regression/SampledPoincareCheckTests.cs

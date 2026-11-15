@@ -351,6 +351,7 @@ Under "Reports" below, newest first, per slice: what landed by commit; the gates
 **Asked for:** the request under slice 8's coordination note, the sampled-sensitivity chip's decision 7, which the user approved. The coordinating session passed it on after 8a's verification (`e120042`). It starts from the verification note on `c5cea88` and `07f3c2a`.
 
 **Landed:** `7cca408`, one commit, holding three of the BPPR chip's assertions as Regression expansion asked: with the behaviour and its assertions in separate commits, one of the two would not pass its own tests.
+- *Verified by the main session on 2026-11-15,* from a clean archive of `8236e0f` with zero skips, over the commit's files ([receipts](../receipts/verify-e8-s8ap-7cca408/)): Maths.Regression.Tests' Commit selection, 2,749 of 2,749, and Maths.Oracle.Tests', 57 of 57. The violation rule was read in the code. It is the requested one, with the two errors in quadrature from independently seeded estimates, plus an allowance for the constant's own relative error.
 
 **What was built:**
 - A scalar fit holding a term without one-variable factors (a directional hinge or a ridge block's column) under a product law now has decision 6's per-input check; until now `Poincare` was null for it.
