@@ -1,0 +1,9 @@
+src/maths/regression/conformal/AsymmetricConformalInterval.cs
+src/maths/regression/conformal/ConformalBayes.cs
+src/maths/regression/conformal/ConformalDistribution.cs
+src/maths/regression/conformal/GroupConformal.cs
+src/maths/regression/conformal/LossBound.cs
+src/maths/regression/conformal/SplitConformal.cs
+src/maths/regression/conformal/SplitPitCalibration.cs
+src/maths/regression/conformal/TrainingConditional.cs
+tests/regression/TrainingConditionalTests.cs

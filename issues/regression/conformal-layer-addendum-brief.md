@@ -15,13 +15,15 @@ Opened 2026-11-14 at the user's word ("that brief was getting way too long, adde
 - Slice 15's precision rule reads at the calibration split's size (`591eace`), built and verified: `ScoreMixture.PrecisionAt`. Fitted at 1,000 and calibrated at 399, m goes from 500 to 45 and the whole-space sets from 13.4% to none.
 - Slice 18's follow-up, a set's own miscoverage bound (`0f4d48e`), is built and verified: `TrainingConditional.Miscoverage`, the β-quantile of Beta(k, m − k) (Vovk 2012), read out on the split sets.
 - Slice 18's calibration at n units is proved in the Lean (`8594176`: `gaffke_calibration`, and `highProbability_risk`, what `HighProbability` reports) and verified from a clean archive. `LossBound`'s docstrings name both (`9cf0fd5`, comments only).
+- Sets built to the training-conditional guarantee (`621370c`) are built and verified: `TrainingConditional.Level(m, α, β)`, with an optional confidence on the split forms and the group form. At β 0.9 the share of calibrations whose sets miss above α falls from 0.46 to 0.0975 (residual), 0.0035 (asymmetric) and 0.0495 (equi-tailed).
 - Slice 12a's k̂ diagnostic stays opt-in, as the user settled on 2026-11-14. That is the code's default (`ConformalOptions.LeaveOneOutParetoK`, false).
 - The defects chip owns `PredictiveChecks.cs` and `Pointwise.cs`'s weight check; a change there is agreed with it first (the archived brief's coordination note).
 
 ## Open, each with the decision it would change
 
 - **Slice 17's three follow-ups** (its report): RoBAS-Full, the horseshoe score; CBMA's evidence from the engines' own fits; a grid-free interval for the residual scores.
-- **The miscoverage bound's two follow-ups** (its report): the (α, β) level as a set rule; a tighter law for the asymmetric interval.
+- **The miscoverage bound's remaining follow-up** (its report): a tighter law for the asymmetric interval.
+- **`BassFit.GroupConformal`'s confidence pass-through,** approved and being built; it waits for verification.
 - **Slice 15's alternation speed** along the factorization's flat directions. It decides the cost at large n.
 - **τ through richer features,** the ratio estimator's open follow-up. It decides whether the layer offers a nonparametric τ.
 
@@ -44,6 +46,10 @@ Built at the user's pick (2026-11-14, "Sets to the guarantee"), the first of the
   - `SplitCalibration.Confidence`, `SplitPitCalibration.Confidence`, and `Confidence` on `ConformalPrediction`, `AsymmetricConformalIntervals`, `ConformalDistribution` and `SplitPredictiveDistribution`;
   - three tests in `TrainingConditionalTests`.
 - *Nothing existing changes.* Without a confidence every level is ⌊αm⌋ (⌊αm/2⌋ per tail) as before; the existing classes pass unchanged.
+- *Verified by the main session on 2026-11-14,* from a clean archive of `2390b27` with zero skips ([receipts](receipts/verify-conformal-guarantee-621370c/)):
+  - Maths.Regression.Tests' Commit selection, 2,636 of 2,636;
+  - Maths.Oracle.Tests', 57 of 57.
+  - The changed files include `9cf0fd5`'s `LossBound.cs`, whose diff is doc comments only.
 
 **What it computes.**
 - *The level.* The largest k at most ⌊αm⌋ whose Beta(k, m − k) β-quantile is at most α (Vovk 2012's (ε, δ)-validity), by bisection, the quantile rising in k. With chance at least β over the calibration units, the stratum's sets miss a new unit with chance at most α. The cap keeps the marginal guarantee 1 − k/m ≥ 1 − α beside it. It is 0, the whole space, where even k = 1 passes α: at α 0.1 and β 0.9 that is m up to 22, where 1 − 0.1^(1/(m − 1)) passes 0.1.
@@ -84,7 +90,7 @@ Built at the user's pick (2026-11-14, "Sets to the guarantee"), the first of the
 
 **Defects found: none.**
 
-**Not wired:** `BassFit.GroupConformal`, GBASS's file, takes no confidence yet. It would be one parameter passed through to `BassCandidates.GroupUnits`, left for GBASS or the coordinator to approve.
+**Not wired:** `BassFit.GroupConformal`, GBASS's file, takes no confidence yet. It would be one parameter passed through to `BassCandidates.GroupUnits`, left for GBASS or the coordinator to approve. *Approved by the coordinator on 2026-11-14:* one optional nullable β at the end of the parameter list, default null. No other change to `BassFit.cs`. A test pins it: at null it matches the current call bit for bit, and at 0.9 it matches `GroupConformal.Density`.
 
 **Doc changes owed:**
 - the guarantee-read-out section: building sets to (α, β), the level rule and its cap, the two-tail rule, the per-form table above, and the k table;
