@@ -56,7 +56,7 @@ Those marked **settled** are the user's; the rest are **open**, each with a reco
      - *No further 1/(M + 1):* with it the chain targets λ^M/(M!)² (`double_count_ratio`).
      - *The paper's slip:* its eq. (mhb) divides by W_{a\*} at a\* = 1, where its Algorithm 2 draws 𝒥 uniformly. The engine codes the corrected ratio, and a parity read against `BayesPPR` is made against the corrected ratio too.
      - *The moves balance as measures* (`mh_flux_symm`, `birth_death_flux`), and inserting a ridge preserves measure (`measurePreserving_piFinSuccAbove`). The code takes prior and proposal densities against one base measure, which slice 2's Geweke gate exercises.
-     - *Not on disk:* the paper's supplement, which holds its own change ratio. The derived ratio stands either way.
+     - *The paper's supplement* (`supplemental_materials.tex` beside `main.tex`, read in slice 0) gives the same change ratio: the collapsed likelihood ratio alone.
 6. **A basis mixing ridges with BASS's hinge terms, open.**
    - *Recommended:* ridges only first. The contract allows mixing; the moment service has no exact route for a ridge, so a mixed fit's Sobol reads by sampling.
    - *Alternative:* mixed from the start.
@@ -112,6 +112,32 @@ One commit per concern; tests with the code they test; each slice ends with its 
 Under "Reports" below, newest first, per slice: what landed by commit; the gates' numbers; decisions taken beyond this brief; what was left unbuilt and why; follow-ups with the decision each would change; the doc changes owed.
 
 ## Reports
+
+### Slice 0 verified from a clean archive (coordinating session, 2026-11-14)
+
+- **Commit:** `e31e894`, through `scripts/verify-csharp.ps1` over the slice's eight changed files, in each of the eleven projects that select.
+- **Result,** selected classes at commit scope:
+  - Distributions 416 of 416; Regression 3,201 of 3,201; Samplers 259 of 259; Synthetic 29 of 29; DimReduction 83 of 83; Mapper 1 of 1; Ph 1 of 1; Geometry 4 of 4; VizCore 384 of 386, the two left by their own `Skip`; CumulativeField 15 of 15.
+  - Oracle 205 of 207. The two failures are `transport_oracle.R`'s 120 s timeouts in `DiagramMetricsTransportParityTests` (p = 1 and 2), the standing ones. `gbass_readouts_oracle.R` passed here.
+  - The build's warnings are the standing ones; none is in the slice's files.
+- **Read.**
+  - *The law:* N follows from the surface integral; the cosine is Beta(α, β); the draw is two gammas and a uniform tangent; each branch of the reflection carries e₁ to μ with ‖u‖² ≥ 2; S⁰ is right at κ = 0 and at κ > 0.
+  - *`LogGammaRatio`:* the recurrence, Stirling's coefficients and their difference.
+  - *`Log1p`:* the new branch is taken only where the old value was +∞, which no finite x > −1 has, so no finite result moves. "Fitting untouched" rests on that, with `LogGammaRatio` and the law new and called by no fit.
+  - *Friedman's C:* its three expectations by hand.
+- **Checked from outside the engine** ([script and output](../receipts/verify-bppr-s0-e31e894/)):
+  - N's formula against quadrature of the surface integral, 20 cases: within 7·10⁻⁶⁰.
+  - `LogGammaRatio`'s algorithm, transcribed into doubles, against mpmath: at s ≥ 10⁻³ the error is under 10⁻¹⁵ of its largest term.
+  - Cin(2π) = 2.4376533930572244, and Friedman's three expectations against two-dimensional quadrature to 10⁻²⁶.
+- **One finding, fixed.** `LogGammaRatio` subtracted two rounded Stirling remainders, so its relative error grew as s fell: 4·10⁻¹² at s = 10⁻⁶, 4·10⁻⁹ at 10⁻⁹ and 4·10⁻⁶ at 10⁻¹².
+  - The tests' floor of 10⁻¹⁴ absolute could not see it. The law's own calls, s ≥ ½, were unaffected.
+  - The chip differenced the series power by power (`117230e`), with a small-step test against polygammas from outside the function. It is read here and verified with slice 1, whose gates it rides.
+- **One figure in the report, measured.** At κ = 10⁵ the gain in ln N over two ln Γ calls is 3.4·10⁻¹⁰ to 1.8·10⁻¹¹ absolute, not five digits: (α + β)·ln 2 itself rounds at 1.5·10⁻¹¹. The log density near the mode carries about κ·10⁻¹⁶ either way, and the symmetric proposal never evaluates it.
+- **For the user,** from the report's follow-ups:
+  - the change move at a = 1: the fair coin on the sign (the chip's recommendation, `BayesPPR`'s form) or the kept sign; it binds at slice 2;
+  - `LogBeta` onto `LogGammaRatio`, which would change the bits of fits that read beta densities;
+  - three problems outside E36: the 15 to 22 minute Distributions case with no slow list, test-select's test host at normal priority, and the transport oracle 5 s inside its timeout.
+- **Receipts:** `artifacts/verify-bppr-s0-e31e894/`, with the changed list, the counters and the outside checks tracked in [receipts](../receipts/verify-bppr-s0-e31e894/).
 
 ### Slice 0: sources, references and the power spherical law (2026-11-14)
 

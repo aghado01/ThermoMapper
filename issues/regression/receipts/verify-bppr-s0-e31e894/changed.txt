@@ -1,0 +1,8 @@
+src/maths/distributions/GammaRatio.cs
+src/maths/distributions/PowerSpherical.cs
+src/maths/distributions/SpecialFunctions.cs
+tests/distributions/Log1pTests.cs
+tests/distributions/LogGammaRatioTests.cs
+tests/distributions/PowerSphericalTests.cs
+tests/regression/ProjectionPursuitReferenceTests.cs
+tests/regression/ProjectionPursuitReferences.cs

@@ -1,0 +1,11 @@
+distributions total 416 executed 416 passed 416 failed 0 notExecuted 0
+regression    total 3201 executed 3201 passed 3201 failed 0 notExecuted 0
+samplers      total 259 executed 259 passed 259 failed 0 notExecuted 0
+synthetic     total 29 executed 29 passed 29 failed 0 notExecuted 0
+tda.dimreductiontotal 83 executed 83 passed 83 failed 0 notExecuted 0
+tda.mapper    total 1 executed 1 passed 1 failed 0 notExecuted 0
+tda.ph        total 1 executed 1 passed 1 failed 0 notExecuted 0
+geometry      total 4 executed 4 passed 4 failed 0 notExecuted 0
+vizcore       total 386 executed 384 passed 384 failed 0 notExecuted 0
+clustering.graphical.cumulativefieldtotal 15 executed 15 passed 15 failed 0 notExecuted 0
+oracle        total 207 executed 207 passed 205 failed 2 notExecuted 0

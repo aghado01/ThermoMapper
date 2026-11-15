@@ -1,0 +1,26 @@
+1. normalizer formula against quadrature of the surface integral
+   20 cases, d in 2..16, kappa in 0..30: worst |ln N - ln quadrature| = 7.47e-60
+2a. LogGammaRatio's algorithm in doubles against loggamma, by the size of s (400 x in [1e-6, 1e9] each)
+    'scaled' is the error over the largest term the algorithm adds; 'rel' is over the result, away from its zeros
+          s  worst abs    scaled  rel, as built  rel, differenced
+      1e-12   2.58e-18  9.22e-07       4.06e-06          3.24e-15
+      1e-09   1.59e-18  5.80e-10       3.65e-09          2.24e-15
+      1e-06   2.79e-16  8.43e-13       3.65e-12          2.40e-15
+      1e-03   3.90e-15  8.56e-16       6.61e-15          2.23e-15
+      5e-01   7.33e-15  6.25e-16       2.46e-15          2.46e-15
+      1e+00   5.84e-15  5.69e-16       2.67e-15          2.67e-15
+      8e+00   3.38e-14  5.45e-16       4.47e-15          4.47e-15
+      1e+03   4.54e-12  2.42e-16       2.30e-16          2.30e-16
+      1e+06   3.71e-09  2.08e-16       1.99e-16          1.99e-16
+    finding: as built, the two remainders are subtracted as rounded values, so the error floors near 2e-18
+    and the relative error grows as s falls below 1e-3; differenced term by term it holds at every s.
+2b. ln N through that algorithm, d = 2..40: absolute error, as built and by two lgamma calls
+   kappa        0: as built 1.18e-14, two lgamma 1.34e-14
+   kappa      0.5: as built 1.23e-14, two lgamma 1.70e-14
+   kappa       30: as built 2.30e-14, two lgamma 4.08e-14
+   kappa     1000: as built 1.61e-13, two lgamma 1.40e-12
+   kappa   100000: as built 1.77e-11, two lgamma 3.40e-10
+3. Cin(2 pi) and Friedman's expectations
+   Cin(2 pi) = 2.4376533930572244 (the report: 2.437653393057224)
+   E[x2 c] - 2/pi^2 = 3.2e-27; E[x2^2 c^2] - (1/6 - 1/(8 pi^2)) = 3.2e-27; E[x1 x2 c^2] - (1/8 - Cin/(8 pi^2)) = 0.0
+all consistent
