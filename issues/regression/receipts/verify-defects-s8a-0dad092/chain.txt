@@ -1,0 +1,13 @@
+run exit 0
+process, tag, priority class: samples seen
+depth 1  dotnet.exe  [dotnet test -lowPriority]  BelowNormal: 63
+depth 1  tar.exe  []  BelowNormal: 3
+depth 2  csc.exe  []  BelowNormal: 10
+depth 2  dotnet.exe  [node /low:true]  BelowNormal: 61
+depth 3  conhost.exe  []  BelowNormal: 10
+depth 3  csc.exe  []  BelowNormal: 19
+depth 3  dotnet.exe  [vstest.console]  BelowNormal: 5
+depth 4  conhost.exe  []  BelowNormal: 19
+depth 4  testhost.exe  [testhost]  BelowNormal: 4
+depth 5  conhost.exe  []  BelowNormal: 4
+total 116 executed 116 passed 116 failed 0 notExecuted 0

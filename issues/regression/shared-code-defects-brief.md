@@ -211,6 +211,17 @@ Decided by the user on 2026-11-14, as a distributions change of its own. It come
 
 Newest first. Each gives the commits, the gates' results, defects found, decisions for the user and "Doc changes owed".
 
+### 2026-11-14 — Slice 8a verified (coordinating session)
+
+- **Commit:** `0dad092`, `scripts/test-select.ps1` alone: `-lowPriority` on the `dotnet test` it starts, and two comments.
+- **Read apart from the chip's reading:** a LinAlg run through `scripts/verify-csharp.ps1` on a snapshot of `14a77f9`, with every process in the run's tree sampled each 1.5 s for its priority class.
+  - Every process was BelowNormal in every sample: `dotnet test -lowPriority`, the worker node with `/low:true`, csc under both, `vstest.console`, testhost, and their console hosts.
+  - 116 of 116, as the chip read before and after.
+- **Tests:** this entry covers the diff and the chain. The chip's report names what the changed file selects.
+- **Open, for the chip's report:** `scripts/fact-harness.ps1` starts `dotnet test` through `src/test-harness`, a separate entry point. Its chain has not been read under a project that starts a worker node.
+- **What follows from it.** Every test-select run and every clean-archive verification before `0dad092` did its building and testing at normal priority. Their results stand; their load on the machine was above what the rule allows.
+- **Receipts:** [verify-defects-s8a-0dad092](receipts/verify-defects-s8a-0dad092/), with the sampled chain.
+
 ### 2026-11-14 — Slice 8: in progress
 
 **8a, the reading before any change.** Every process under the run, read from `Win32_Process` every 0.5 s, from `2ded631` staged.
