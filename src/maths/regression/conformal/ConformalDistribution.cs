@@ -129,6 +129,15 @@ public sealed record ConformalDistribution(int Case, int Stratum, int Units, dou
     /// <summary>1 − 2k/m, the equi-tailed set's coverage; 1 − α where weighed.</summary>
     public double Coverage(double alpha) => Weighted is null ? 1.0 - 2.0 * Level(alpha) / Units : 1.0 - Checked(alpha);
 
+    /// <summary>
+    /// The equi-tailed set's own miscoverage bound at α under the split form (<see cref="TrainingConditional"/>). Both tails read one
+    /// score, the PIT, so given the calibration a miss is the chance mass of 2k of the m spacings its PITs cut, Beta(2k, m − 2k), that law
+    /// exactly where the PITs are continuous and conservative where they tie: with chance at least <paramref name="beta"/> over the
+    /// calibration units the set's miscoverage is at most its β-quantile. Null for the full step, a weighed case and the inflated set.
+    /// </summary>
+    public double? TrainingConditionalMiscoverage(double alpha, double beta)
+        => Form == ConformalForm.Split && Weighted is null && !Inflated ? TrainingConditional.Miscoverage(Units, 2 * Level(alpha), beta) : null;
+
     /// <summary>Whether the set at α is the whole line: m below ⌈2/α⌉ leaves each tail no level. A weighed case judges each grid value
     /// by its shares, so it is never the whole line by its count.</summary>
     public bool WholeSpace(double alpha) => Level(alpha) == 0 && Weighted is null;

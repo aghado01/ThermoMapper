@@ -264,6 +264,14 @@ public sealed class SplitPredictiveDistribution
         return 0.5 * (lower + upper);
     }
 
+    /// <summary>The equi-tailed set's own miscoverage bound at α (<see cref="ConformalDistribution.TrainingConditionalMiscoverage"/>):
+    /// Beta(2k, m − 2k)'s β-quantile, k = ⌊αm/2⌋; null where weighed.</summary>
+    public double? TrainingConditionalMiscoverage(double alpha, double beta)
+    {
+        SplitConformal.CheckAlpha(alpha);
+        return _running is null ? TrainingConditional.Miscoverage(Units, 2 * (int)Math.Floor(0.5 * alpha * Units), beta) : null;
+    }
+
     /// <summary>Closed equi-tailed ends. With k = ⌊αm/2⌋, the fitted CDF must reach PIT k and stay at or below PIT m − k
     /// (one-based). Round both ends outward by at most the response tolerance, including when the two PITs tie.</summary>
     public GridInterval Interval(double alpha)

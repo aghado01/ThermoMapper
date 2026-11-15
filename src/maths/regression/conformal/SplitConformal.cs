@@ -88,6 +88,10 @@ public sealed class SplitCalibration
         return k == 0 ? double.NegativeInfinity : _sorted[stratum][k - 1];
     }
 
+    /// <summary>The stratum's own miscoverage bound (<see cref="TrainingConditional"/>): with chance at least <paramref name="beta"/> over
+    /// its calibration units, the sets this calibration gives a new test unit of the stratum miss it with chance at most this.</summary>
+    public double TrainingConditionalMiscoverage(int stratum, double beta) => TrainingConditional.Miscoverage(Units(stratum), Level(stratum), beta);
+
     /// <summary>The stratum's calibration units scoring strictly below <paramref name="score"/>, and those equal to it.</summary>
     public (int Below, int Tied) Rank(int stratum, double score)
     {
@@ -170,6 +174,11 @@ public sealed record ConformalInterval(int Case, int Stratum, int Units, int Lev
 
     /// <summary>Whether <paramref name="y"/> is in the set.</summary>
     public bool Contains(double y) => y >= Lower && y <= Upper;
+
+    /// <summary>The interval's own miscoverage bound (<see cref="TrainingConditional"/>): with chance at least <paramref name="beta"/> over
+    /// the calibration units, the intervals this stratum's calibration gives miss a new test unit with chance at most this; null under the
+    /// weighted rule.</summary>
+    public double? TrainingConditionalMiscoverage(double beta) => WeightedAlpha is null ? TrainingConditional.Miscoverage(Units, Level, beta) : null;
 }
 
 /// <summary>The split form's intervals, one per test case in the readings' order, at miscoverage <paramref name="Alpha"/>, with

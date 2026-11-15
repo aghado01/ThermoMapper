@@ -412,6 +412,13 @@ public sealed record ConformalSet(int Case, int Stratum, int Units, int Level, d
     public double Coverage => WeightedAlpha is double a ? (Form == ConformalForm.CrossFitted ? Math.Max(0.0, 1.0 - 2.0 * a) : 1.0 - a)
         : Form == ConformalForm.CrossFitted ? CrossConformal.Coverage(Units, Level) : 1.0 - (double)Level / Units;
 
+    /// <summary>The set's own miscoverage bound under the split form (<see cref="TrainingConditional"/>): with chance at least
+    /// <paramref name="beta"/> over the calibration units, the sets this stratum's calibration gives miss a new test unit with chance at most
+    /// this; under the group-level form a unit is a group (<see cref="GroupConformal"/>). Null for the full step, the cross-fitted forms
+    /// and the weighted rule, which carry no such law.</summary>
+    public double? TrainingConditionalMiscoverage(double beta)
+        => Form == ConformalForm.Split && WeightedAlpha is null ? TrainingConditional.Miscoverage(Units, Level, beta) : null;
+
     /// <summary>
     /// The coverage the set keeps under its scores' Monte Carlo error, indicative since the bounds are not sure ones:
     /// 1 − (k + m̂)/m − ν for the plain rule (<c>coverage_close</c> with <c>card_fragile_le_estimated</c>), NaN when the margin was
