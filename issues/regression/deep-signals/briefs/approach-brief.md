@@ -30,16 +30,16 @@ The user's standing direction for the thread: the data is human conversation; ar
 - A tiling moves information between magnitude and phase. The right one puts what matters in magnitudes or in atom parameters.
 
 **Supervision without labels,** of three kinds:
-- *Consistency.* An overcomplete representation must reproduce itself under its atoms' Gram matrix; views at different window lengths are related by a known blur; speaker and channel are constant across turns.
+- *Consistency.* Complex frame coefficients must reproduce themselves under synthesis with a dual frame followed by analysis. The Gram matrix itself is this consistency map for a Parseval frame. For a stationary signal, each window smooths the expected power spectrum by its own spectral kernel. Individual magnitude views can lose the phase needed to predict another view. For example, (1, 1) and (1, −1) have identical length-one magnitudes, while their unit-energy length-two rectangular DC powers are 2 and 0. Speaker identity across that speaker's turns and a stable recording channel are additional modelling assumptions.
 - *A teacher.* A solver, or the engine's posterior, wherever the guarantees hold.
 - *Synthesis.* The prior's own samples carry exact labels for an encoder.
 
 The recovery theorems do not perform these. They certify the tasks: they say when a lossy view determines the latent, which is when the encoder's target is well defined.
 
 **Conformal-Bayes.**
-- A held-back view is its own label, so calibration data is free and every consistency loss can carry a finite-sample coverage statement.
-- Coverage is on observables. A latent gets it only on synthetic data, and weighted conformal carries that to real audio.
-- The exchangeable unit is the conversation or the speaker.
+- A held-back view supplies its own label. A fixed consistency score can be calibrated on held-out exchangeable units to give marginal coverage for the corresponding observable on a new unit.
+- Synthetic data also supplies the true latent. Transferring its coverage to real audio by covariate-shift weighting requires common support in the direction of transfer, the same conditional law of the latent given the view, and the target-to-source view density ratio for the exact weighted guarantee. Whether the simulator and real speech meet those assumptions is open. [Tibshirani et al., *Conformal Prediction Under Covariate Shift*](https://arxiv.org/abs/1904.06019)
+- Choose the exchangeable unit to match deployment. For inference about a new speaker, split by speaker and account for speakers shared across conversations.
 - Turn-taking is a risk-control problem: start speaking before the other has finished at most α of the time.
 - Test martingales give change detection with false-alarm control.
 
@@ -105,8 +105,8 @@ These theorems are the certificate the whole approach leans on, and so far the w
 
 **Why they matter here.**
 - The measurement budget follows the code's dimension, with an efficient algorithm and not only an existence claim.
-- Local methods suffice, which is what makes a solver a trustworthy teacher.
-- The two conditions are design constraints: a decoder that expands with well-spread weights, and views that are near-isometric on the signal manifold. The second is the global form of the whitened metric pulled back through the decoder.
+- Under the papers' hypotheses, descent with the prescribed sign check can supply a recovered code as a teacher target. Transfer to a learned speech decoder and structured measurements is open.
+- The two conditions suggest design constraints on the decoder weights and on pairs of secants of its range. A local pullback metric measures infinitesimal changes. The range-restricted isometry condition also compares differences between distant signals.
 
 **What the work has used.**
 - The deterministic half of the amplitude-flow convergence, as the contraction result in Lean.
@@ -117,12 +117,18 @@ These theorems are the certificate the whole approach leans on, and so far the w
 - No ReLU generator has been run. The papers' regime has not been reproduced, and the engine's inversion has not been tried on their object.
 - The weight condition has not been measured for anything of ours, such as a layer of directional hinges under its prior, which has sparse directions and thresholds.
 - The isometry condition has not been measured for spectrogram rows or magnitudes on any signal manifold, whitened or not.
-- The k/n noise reduction has not been read from the pilot's receipts.
+- The pilot's held-back log-power reconstruction error can be read against k/m. The rank-k projection identity concerns expected squared error in the coordinates carrying white noise. Here the pilot added white noise to the waveform before taking log power.
 
 **Posable next.**
 - *In Lean:* Q_{x,y} as the Gaussian expectation; the angle map it induces, cos θ′ = ((π − θ)·cos θ + sin θ)/π, with θ′ < θ on (0, π]; that the isometry condition bounds the compressed objective's inner products by the uncompressed ones; the one-layer landscape in expectation.
 - *Numerically:* success against m/k for the papers' algorithm on random expansive networks; the same inverse problem through the calibration stack with G behind the emulator contract, reading threshold, coverage and the impostor; the weight condition's residual against width, for Gaussian layers and for directional-hinge layers; the isometry constant for structured views on the synthesizer's range.
 - *What they would decide:* whether a gradient-informed move on the code is justified, which the benign landscape suggests; how wide a decoder must be; whether our views are isometric enough; and how the engine's inversion scales in k against descent.
+
+### Analytical controls for the generative-prior probes
+
+- **Stationary points (G1).** From the two papers' formulas, the predicted negative multiple at depth two has radius 1/π for linear observations and approximately 0.669152 for magnitudes. In the phaseless formula put θ = arccos(1/π), giving 2 sin(θ)/π + (1 − 2θ/π)/π. The frequency with which random starts reach either neighborhood is a separate empirical question. [Linear landscape](https://arxiv.org/abs/1705.07576) · [Phaseless landscape](https://arxiv.org/abs/2008.10579)
+- **A sparse-direction witness (G3).** Take the threshold-free independent direction prior on k ≥ 3 coordinates with active count a uniform on {1, 2, 3}. Scale n independent unit rows by √(k/n), so the expected full Gram is I. For x = y = e₁ the WDC target is I/2. Coordinate 2 contributes to the gated diagonal only if both coordinates are active and the first weight is positive. Conditional on a, that diagonal has expectation k × a(a−1)/(k(k−1)) × 1/(2a) = (a−1)/(2(k−1)). Averaging over a gives 1/(2(k−1)). The population operator-norm gap is therefore at least (k−2)/(2(k−1)), already 3/7 at k = 8. This gives a direction and a quantitative prediction before the width sweep. Thresholded gates depend on the input radius as well. [Engine direction law](../../../../src/maths/regression/spline/bass/DirectionalTermSpace.cs)
+- **Measurement units (G4).** Count real measurement rows and report their rank. Test the inner product of two normalized secants, including the same-secant case. A finite search gives a lower bound on the uniform worst case. For real linear rows B, whitening with the positive square root of the pseudoinverse of BBᵀ gives a squared norm equal to the energy projected onto the row space of B. This supplies a check even with redundant rows. The pilot's kept log powers are nonlinear observables and require their own measurement-space interpretation. [Pilot transform](../../receipts/latent-recovery/probe/Synthesizer.cs)
 
 ## What is missing, in build order
 
@@ -175,7 +181,7 @@ Stated for any application. The order follows the pilot's main finding: generato
 - The Q extension's seven decisions, each at a recommendation in its preparation brief.
 - Promotion of the noise-law modules; the first nine are promoted.
 - Theorem 4.61 at order 2, left unattempted, which would make the rank result unconditional for degree-1 splines.
-- Which reading leads: fitting the spectrogram's surface, or fitting the waveform with atoms. Whitening the first collapses it into the second.
+- Which reading leads, fitting the spectrogram's surface or fitting the waveform with atoms? For a linear transform with full column rank, Gram whitening preserves the waveform's squared residual norm. A fit to magnitudes or log powers still has its own observation model.
 - Two source notes from the numerical chip: a suspected misprint at the opening of Schumaker § 4.8, unverified, and a conversion defect at Lemma 10.16.
 
 ## Records
