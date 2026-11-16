@@ -261,7 +261,7 @@ The user chose these as E36's next work, decision 7's and decision 6's later ste
 | `BassBasis.cs`, `DesignKernels.cs` | product of kernels; one kernel per variable for derivatives | nothing | nothing under 6a's recommendation |
 | `DirectionDeterminant.cs`, `BassPriorSampler.cs` | every term's direction | direction-bearing terms alone | both directional widths; correlated kind draws, determinant rejection, knots, then whole-collection admission |
 | `BassSweep.cs`, `BassTarget.cs` | the terms' prior; the count prior on structure terms | — | existing calls read integrated shares through `LogTermsPrior`; count law stays on all structural units |
-| `BassDiagnostics.cs` | the support tally by part and order | the categorical part's orders too | the `WidthChange` move tally; retained per-kind counts read from the terms |
+| `BassDiagnostics.cs`, `BassState.cs` | the support tally by part and order; retained structures | the categorical part's orders too | the public `WidthChange` move tally; `BassStructure.DirectionalTermCounts(fit.Terms)` reads each retained draw's block/hinge/categorical counts |
 | `BassResidualBirth.cs`, `BassBirthMixture.cs`, `BassPriorPrecision.cs` | refused for a directional basis | refused | refused in a mixed fit |
 | `calibration/BassEmulators.cs` | drops a direction on a categorical split (unreachable) | keeps it (the defect above) | — |
 | `sensitivity/BassSensitivity.cs`, `BassActiveSubspace.cs`, `BassSampledSensitivity.cs` | refuse a ridge on the exact routes; the sampled routes read any fit | — | the split's f_sep and f_ns (its slice 4) |
@@ -290,7 +290,7 @@ The measurement the sampler decision owed (`a83db0c`'s entry below), complete: 1
     - Declared SMC: the linear form, 500 particles, 12 mutations.
   - *Each fit:* four starts at 18,000 + 2,000 sweeps per chain.
   - *The intervals:* f's from the weighted latent draws; y's from the exact predictive mixture.
-  - *Receipts:* `build-s6b/runs/20261115_222520-coverage/coverage.trx` and `coverage-output.txt`.
+  - *Receipts:* `build-s6b/runs/20261115_222520-coverage/coverage.trx` and `coverage-output.txt`. The original snapshot is `artifacts/chip-bppr/snap-s6b`; the run exited 0 without a restart or fallback. These are pure-block measurements, not combined-main verification or a matched-budget comparison with the mixed Friedman probe. Machine-readable extraction and validation are in `artifacts/chip-bppr-mixed/pure-followup/`: `original-output.json`, `original-rows.json`/`.csv`, `original-summary.json` and `read-receipt.ps1`.
 
 | Sampler | M across starts | R̂(M) | f, pooled (MC sd) | f, one start: mean (range) | y, pooled / one start | RMSE f | Fit s | Sweep-equivalents |
 | --- | --- | --- | --- | --- | --- | --- | --- | --- |
@@ -311,7 +311,7 @@ What it reads:
   - *Their RMSE is the worst:* 0.484, with 0.812 in one fit.
 - **The default moves M within each chain and matches SMC.** Single-run f coverage is 87.3% under both; RMSE is 0.420 against 0.423.
   - *Its cost* is about 40× the plain chain's wall time and about a ninth of SMC's.
-  - *SMC's pooled coverage is the most reproducible:* MC sd 0.9 points.
+  - *SMC's pooled coverage is the most reproducible:* MC sd 0.9 points. All 24 independent replicates reached β = 1, with no jumped replicate; reaching β = 1 does not prove exploration.
 - **No sampler reaches nominal f coverage at this budget:** 83–87% for one start, 89–93% pooled. That leaves the coverage decision noted in slice 6's report open, for pure blocks too.
 - **y coverage reads 94.2–96.2% pooled and 93.3–96.2% for one start,** and does not separate the samplers.
 
@@ -331,8 +331,8 @@ A reading, at the coordinating session's request; nothing built.
   - *The birth's ratio is the mixed kernel's own:* the kind weight 1/K, the kind's adaptive law under its own counts, and the reverse death 1/(M + 1) over all terms. The death mirrors it. Component kernels serve only the ordinary change.
   - *The width change keeps θ, t₀ and the cells,* with a proposal ratio of 0. The draft's "kind weights" in its acceptance belong to the fixed-shares alternative alone.
   - *The prior sampler is exact.* Kinds come by Polya's urn. The determinant rejection redraws directions alone with kinds and cells held, since E[det]/c_{M_θ} = 1 at each M_θ.
-- **Left out, recorded, not built.**
-  - The per-kind count readout and the `WidthChange` tally in `BassDiagnostics`, which this brief's file table lists; the probes compute per-kind counts from the draws.
+- **Readouts and remaining work.**
+  - The per-kind retained count readout was left to probes at `17522a6`; the public `WidthChange` tally was already present. `Diagnostics.MoveKinds[BassMoveKind.WidthChange]` pools ordinary-chain sampling moves, PT cold-replica sampling moves, or SMC particle mutations across stages. Per-start accounts are `Diagnostics.Chains[].MoveKinds` for chains/PT and `Diagnostics.Smc.Replicates[].Account.Kinds` for SMC. The independent archived-DLL check (`artifacts/verify-bass-mixed-sobol-supervision/width-diagnostics/result.txt`) found attempts/accepted 101/2 (plain), 98/0 (PT) and 6,939/841 (SMC), with pooled counts matching both accounts. The retained-count follow-up is recorded with the implementation report below.
   - A sensitivity split; the whole-surface sampled route reads mixed fits.
   - The BASS-hinge alternative.
 - **The default caps differ.**
@@ -393,31 +393,19 @@ A reading, at the coordinating session's request; nothing built.
   - BASS's config reference: `Sampling.Sampler`, the ridge-basis default and its resolution, the caution, the declared and resolved configs, and the checkpoint rule.
   - The sampler page: tempering by default for ridge bases.
 
-### Pure-block Friedman follow-up: completed original run (2026-11-16)
+### Retained kind-count and width-tally follow-up: completed at a942b78 (2026-11-16)
 
-**Receipt and scope.** The original `SamplerCoverageProbe.cs` run finished successfully: **18/18 passed**, exit 0, no skipped cases; `artifacts/chip-bppr/build-s6b/runs/20261115_222520-coverage/coverage.trx`. The original host and runners exited. No restart, duplicate fit, hotpatch or fallback was used. This is the original pure K = 4 snapshot `artifacts/chip-bppr/snap-s6b`, separate from mixed-width implementation `17522a6` and report `b82b8f3`; it does not certify subsequent main changes. The tests produce descriptive measurements and impose no nominal-coverage assertion.
+The public `WidthChange` tally already works for plain, PT and SMC fits, with the sampler semantics and archived-DLL receipt noted in the review above. The new read-only `BassStructure.DirectionalTermCounts(fit.Terms)` returns `(Blocks, Hinges, CategoricalOnly)` for each retained draw, counting an expanded K4 block once, a categorical gate as part of its direction-bearing term, and a categorical-only term once wherever represented. It also reads pure directional bases and accepts empty structures; incompatible hinge-product, Legendre and functional-only terms are refused. Term IDs cannot distinguish an ordinary fit's categorical-only or empty draw from a directional fit's. It neither aggregates nor reweights the retained draws: callers keep `fit.Draws`' chain/replicate boundaries and `fit.DrawWeights`' pooled particle weights. No sampler state, RNG or trajectory is touched.
 
-**Unchanged design.** Friedman's fixture, n = 300, p = 6, noise sd 1, 2,000 held-out points; data seeds 3671/3681/3691 and sampler seed `dataSeed + 1000 * (rep + 1) + 7`, rep = 0/1. Four independent starts per chain fit, 18,000 burn-in + 2,000 retained draws, Thin = 1; SMC has four replicates, 500 particles each, twelve mutation steps and the linear form. Priors are the original zero-centred intercept inside the g-prior, Jeffreys σ², Zellner–Siow Gamma(1/2, n/2), and count Gamma(10⁷, 10⁶), with MaxBasis = 73 and MaxInteraction = 3. The original predictive-quantile coverage readout also stayed unchanged. These budgets, seeds and data grid differ from the mixed Friedman probe below, so their results are not a matched-budget pure-versus-mixed comparison.
+**Source and gates.** Owned paths are `BassState.cs`, the `BassMoveTally` docstring in `BassDiagnostics.cs`, `MixedWidthTests.cs` and this brief. Source/test implementation is committed at `a942b78`; no sampling path or existing tally implementation changed. Qualification uses isolated archives of `4a7c123ab90cf394b5f5f8f9696b649913ec271d` plus the three owned source/test edits, under `artifacts/chip-bppr-mixed/retained-counts/`:
 
-Coverage is the average of the two pooled-start fits, in percent, for nominal 95% pointwise intervals; ± is the estimated standard error of that average from the two sampler seeds, `abs(c₀ − c₁)/2`, in percentage points. It is a fragile two-run Monte Carlo reading, excludes training-dataset uncertainty, and a printed zero does not establish negligible Monte Carlo error. RMSE is the average latent posterior-mean RMSE. Raw precision and all per-start M/coverage and sampler flags are preserved under `artifacts/chip-bppr-mixed/pure-followup/` in `original-output.json`, `original-rows.json`/`.csv` and `original-summary.json`; `read-receipt.ps1` validates the 18 unique expected keys and coverage bounds against the trx.
+- Initial mixed gate **17/17**, no skips/failures: `results/mixed-counts.trx`.
+- Whole Regression assembly, slow tier included, **3,808/3,808**, no skips/failures: `build/test-select/20261116_122734-slice/Slice.trx`. This frozen `source/` snapshot precedes only the final wording clarification in the API comment and its incompatible-term refusal message; `wording-only.patch` records that exact difference.
+- Final mixed gate **17/17**, no skips/failures: `results-final/mixed-counts-final.trx`, built from `source-final/`, whose three owned file hashes match committed `a942b78` (`final-source-hashes.json`). `gate-summary.json`, `final.patch` and the retained snapshots bound the receipts' source scope. Build warnings include existing documentation/analyzer warnings and NU1900 package-audit access warnings; builds and tests exited 0.
 
-| Sampler | Data seed | f coverage ± SE (%) | y coverage ± SE (%) | RMSE f |
-| --- | ---: | ---: | ---: | ---: |
-| Default PT | 3671 | 88.78 ± 2.57 | 95.97 ± 0.18 | 0.458 |
-| Default PT | 3681 | 89.90 ± 1.50 | 95.78 ± 0.18 | 0.414 |
-| Default PT | 3691 | 94.52 ± 0.63 | 95.15 ± 0.20 | 0.387 |
-| Plain | 3671 | 89.83 ± 2.37 | 95.85 ± 0.10 | 0.457 |
-| Plain | 3681 | 95.25 ± 2.80 | 96.08 ± 0.08 | 0.373 |
-| Plain | 3691 | 93.17 ± 1.82 | 95.00 ± 0.15 | 0.624 |
-| SMC | 3671 | 85.70 ± 0.00 | 95.92 ± 0.03 | 0.471 |
-| SMC | 3681 | 88.80 ± 0.20 | 95.70 ± 0.05 | 0.407 |
-| SMC | 3691 | 92.90 ± 1.10 | 94.50 ± 0.25 | 0.390 |
+The new actual-fit cases cover plain, automatic PT and two-replicate SMC; they compare counts with structural block read-back, check weighted totals, preserve the table and weights, and reconcile every width-tally field with its two public start/replicate accounts. Actual width attempts/accepted are **19/1 plain, 27/3 PT and 650/52 SMC**, respectively. The hand structure contains one K4 block, one directional hinge and one categorical-only term: six columns, three terms and `(1, 1, 1)` kinds. Empty structures and incompatible-term refusal are checked. The existing exact checkpoint-continuation gate also passes. These are readout-contract checks, not mixing/calibration assertions.
 
-**Independent starts and cost.** PT's pooled M means for the two sampler seeds are 4.00/4.20, 4.33/4.07 and 5.04/4.93 on the three datasets; individual-start means range 4.00–5.22. M R̂ ranges 1.002–1.360. Self-sizing resolves 14–18 levels and hot end 1/300; round trips per scan print 0.0000 in five fits and 0.0001 in one, with maximum pair rejection 0.74–0.97. Individual-start f coverage spans 78.75–93.45%. Fit time is 204–420 s and cost 1.22–1.34 million sweep-equivalents. The absence of a sampler caution is not a convergence result.
-
-Plain's individual-start M means range 4.00–6.00, often constant at different integers. Four of six M R̂ readings are `frozen` (no within-split-chain variance with different values between them), and the other two are 7.011 and 4.958. Individual-start f coverage spans 70.00–93.95%; pooled near-95% coverage can hide disagreement. Fit time is 4.8–13.4 s and cost 80,000 sweep-equivalents; every fit retains the explicit-plain caution. SMC's pooled M means are 4.01/4.00, 4.02/4.01 and 4.93/4.97; individual-replicate means range 4.00–5.00, and individual-replicate f coverage spans 81.20–94.15%. All 24 replicates reached the posterior, none jumped, with 109–119 stages; fit time is 2,069–4,030 s and cost 2.66–2.84 million sweep-equivalents. SMC has no chain R̂, and reaching the posterior does not prove exploration. Fit times exclude prediction/readout; total original probe wall time was 10.8235 h under shared machine load.
-
-**Disposition.** The requested original-run follow-up is closed, with no external code dependency or tuning change. The results retain the qualification limit: y coverage near 95% does not establish f calibration, several f readings remain low, and neither PT nor SMC supplies a convergence proof. Three training datasets and two sampler seeds per dataset do not establish general fitted coverage. `original-run.json` and `original-stdout-final.txt` retain the technical completion record. **Doc changes owed:** carry this distinct pure-block coverage/mixing limit into the offline sampler documentation batch alongside the mixed report.
+The supervisor owns the separate combined-source Oracle selection and cross-feature probe. The hybrid sensitivity split and alternate BASS-hinge proposal remain separate. **Doc changes owed:** the public per-draw count call and its supported terms, preservation of draw/weight indexing, and the width tally's chain/PT/SMC accounting scope; `docs/` stays for the offline batch. No push.
 
 ### Slice 6: mixed directional widths, implemented and qualified (2026-11-15–16)
 
@@ -479,7 +467,7 @@ On this one dataset, the two sampler seeds give mean f coverage 92.70%, 94.38% a
 
 The pool conceals substantial disagreement. The eight individual plain-chain f coverages range 73.8–88.75%, despite pooled coverage of 90.4–98.35%; their M means range 5.36–7.80, and R̂(M) is 2.096 / 2.089. Automatic PT gives individual-chain f coverage 77.6–94.75%, M means 4.82–6.36 and R̂(M) 1.518 / 1.217. Both default fits resolve the hot end to 1/300 because Jeffreys σ² refuses the integrated form's exact reference rung. They have 17–20 levels, zero complete round trips and maximum pair rejection 0.99 / 0.96. Plain fits carry the requested caution. Declared SMC runs the linear form, reaches the posterior in all eight replicates with no jumped replicate, and has individual-replicate f coverage 79.7–89.2%; its weighted M means range 4.87–6.86. This measurement does not request evidence, so null evidence flags are not evidence that its estimator is healthy.
 
-The sampler resolution and continuation contracts pass; adequate f coverage and complete mixing are **not established at this budget**. In particular, neither the high plain pooled coverage nor the improved PT R̂ proves convergence, and good y coverage is insufficient. The implementation retains the user's sampler choice; these measurements are a qualification limit and a basis for a subsequent mixing/coverage decision, not a silent tuning change. Full per-start rows are `friedman-output.json`; the raw numeric coverage/cost rows are in `friedman-s5/`. The older pure-block plain-chain readings earlier in this brief remain their own qualification; the longer pure-block probe's separately scoped completion readout is above.
+The sampler resolution and continuation contracts pass; adequate f coverage and complete mixing are **not established at this budget**. In particular, neither the high plain pooled coverage nor the improved PT R̂ proves convergence, and good y coverage is insufficient. The implementation retains the user's sampler choice; these measurements are a qualification limit and a basis for a subsequent mixing/coverage decision, not a silent tuning change. Full per-start rows are `friedman-output.json`; the raw numeric coverage/cost rows are in `friedman-s5/`. The older pure-block plain-chain readings earlier in this brief remain their own qualification; the longer pure-block probe's canonical completion readout is "Pure-block Friedman coverage under three samplers" above.
 
 **Handoff.** Implementation is committed at `17522a6`; all owned source/test changes are committed, all own runs are finished, and the final qualification report is a separate documentation concern. There is no code dependency on either other session and no push. The remaining uncertainties are measured ones: fitted f coverage and mixing at larger budgets/across more datasets, and the independent evidence-error investigation. The original longer pure-block coverage run was left running at this mixed handoff; its completed follow-up is recorded separately above. Subsequent combined-main verification must include the sensitivity/evidence sessions' changes; the gates above certify the isolated slice snapshot. The directional basis still requires at least one continuous predictor; all-categorical data retain the ordinary BASS route.
 
