@@ -50,11 +50,11 @@ h/‖x₀‖ = −2^{−d}·(Π_{i<d} (π − θ̄ᵢ)/π)·x̂₀ + 2^{−d}·[
 
 **S21. A k-dimensional prior keeps k/n of white noise.** For an orthogonal projection P of rank k on ℝⁿ and a vector η with second moments E[ηηᵀ] = σ²·I, E‖Pη‖² = σ²·k, against E‖η‖² = σ²·n. State it on second moments.
 
-**S22, optional and last. Sign patterns.** n hyperplanes through the origin of ℝᵏ cut it into at most 2·Σ_{j<k} C(n − 1, j) regions. This is the count behind the log(n₁⋯n_d) in the sample complexity: a bias-free ReLU layer is linear on each region.
+**S22. Sign patterns (required).** For n ≥ 1 proper hyperplanes through the origin of ℝᵏ, k ≥ 1, the complement has at most 2·Σ_{j<k} C(n − 1, j) regions. Each region has a realized strict sign pattern, and a bias-free ReLU layer is linear on it. The bound allows repeated hyperplanes and other failures of general position. State the empty-arrangement case separately. Distinguish the full-dimensional regions counted here from sign patterns attained only on a boundary. This is the count behind the log(n₁⋯n_d) term in the sample complexity.
 
 ## Scope and order
 
-- **Order:** S19, S21, S17, S20 first; then S18; S22 last.
+- **Order:** S19, S21, S17 and S20 first, followed by S18 and S22. All six are required.
 - **A witness for every statement** and `#print axioms` for every closed result. A named premise gets an instance that meets it wherever one is cheap.
 - **Placement** in the harness's stages as before; name modules by what they state.
 - **Left to the numerical chip:** every concentration claim, and whether anything of ours meets either condition.
@@ -74,7 +74,7 @@ h/‖x₀‖ = −2^{−d}·(Π_{i<d} (π − θ̄ᵢ)/π)·x̂₀ + 2^{−d}·[
 
 ## Round 1 report — 2026-11-16
 
-S19 and S21 are proof-closed in `Enthymemata` for semantic review. S17, S20, S18 and optional S22 remain queued in that order. The S20 posing above now identifies the deterministic comparison field and locates the −1 in the leading term at angle zero.
+S19 and S21 are proof-closed in `Enthymemata` for semantic review. S17, S20, S18 and S22 remain queued in that order. The S20 posing above now identifies the deterministic comparison field and locates the −1 in the leading term at angle zero.
 
 ### S19 — generator secants
 
@@ -151,7 +151,7 @@ pwsh -NoProfile -File scripts/meta-ci.ps1 -NoBuild
 
 ### Doc changes owed
 
-Record the exact angular range, the antipodal two-step bound, and the hypothesis on per-layer errors alongside their use in the comparison field. S20, S18 and optional S22 remain queued.
+Record the exact angular range, the antipodal two-step bound, and the hypothesis on per-layer errors alongside their use in the comparison field. S20, S18 and S22 remain queued.
 
 ### Methods
 
@@ -191,7 +191,7 @@ pwsh -NoProfile -File scripts/meta-ci.ps1 -NoBuild
 
 ### Doc changes owed
 
-Record the exact two-point zero set and the finite-sum identity for its radius alongside the deterministic field. S18 and optional S22 remain queued.
+Record the exact two-point zero set and the finite-sum identity for its radius alongside the deterministic field. S18 and S22 remain queued.
 
 ### Methods
 
