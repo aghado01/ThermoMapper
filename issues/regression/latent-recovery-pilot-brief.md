@@ -76,7 +76,12 @@ This is exploration on probes. The engine stays as it is: a gap found here is a 
 
 ### In progress
 
-- 2026-11-16: probe project at `artifacts/latent-recovery/probe/` against a source snapshot of `be979dd` (`git archive` into `artifacts/latent-recovery/source/`), so other sessions' uncommitted edits never reach a reading. B1 and B2 run and read (below). Stage 1's gate written below before any emulator was fitted; its runs next, k = 1 to 5, one process per k. Stage 2's gate follows before its first fit.
+- 2026-11-16, stopped at a usage limit. Probe at `artifacts/latent-recovery/probe/` against a `be979dd` snapshot (`artifacts/latent-recovery/source/`); build `artifacts/latent-recovery/build/`. **Done:** B1 and B2 run and read (below); the Stage 1 and Stage 2 gates committed before their first readings. **Running when stopped:** a background loop running `s1-run` for k = 1…5 and then `s1-gate` into `artifacts/latent-recovery/results/stage1/` (logs in `logs/s1-k*.log`, `logs/s1-gate.log`). k = 1–3 had finished and k = 4 was mid-grid. If the loop died, rerun `s1-run 4`, `s1-run 5` and `s1-gate`; the seeds make the rows reproducible. **Not yet written:** Stage 1's readings. **Next:** run `s2-run 2`, `s2-run 3` and `s2-gate` (into `results/stage2/`, after Stage 1, since the machine is loaded); then the outcome table, the primitives, the unread and unrun items, **Doc changes owed**, and receipts for stage1/stage2 under `receipts/latent-recovery/results/`.
+- *Unread, provisional notes from k = 1–4, not readings against the gate:*
+  - **Fits:** held-out R² was 0.995, 0.988, 0.986 and 0.919 for k = 1–4 (RMSE 0.15, 0.25, 0.28 and 0.57 nepers); each fit took 3–12 s. Residuals are correlated along ln f, with lag-1 r 0.70–0.81 against −0.016 for independent noise.
+  - **k = 1:** R1 and R2 pass at both low noise levels, and the coverage is conservative (30/30 in most cells). The posterior σ is dominated by the IG(2, 0.3) prior at small m.
+  - **Declared discrepancy:** at ratio ≤ 4 it fails to converge in 50–73% of replicates, and its error is 3–7 times the error without it.
+  - **Reconstruction:** at the held-back bins it is set by emulator error, 0.16 against 0.01 for the reference at the lowest noise.
 
 ### Gates as pre-stated
 
