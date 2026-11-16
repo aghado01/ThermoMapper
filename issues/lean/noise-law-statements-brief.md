@@ -64,7 +64,7 @@ The user has said additive engine work is acceptable so long as it is coherent. 
 - S10a, S12, S13, S14 and S15 proved without `sorry`; S10b, S10c and S11 proved or compiling with their premises named.
 - Part B's eligibility table, with promotions made where allowed.
 - The preparation brief written, self-reviewed and committed.
-- A report appended to this brief in the earlier briefs' form.
+- A report appended to this brief: per statement, its module, status, axioms and each change from the posed form, then a **Methods** section that documents the logic of the proofs concisely, with exposition and the mathematical key points, like a dense methods paper. It takes the place of a "Doc changes owed" heading (the user's guidance of 2026-11-16, for every report on this work).
 
 ## Working rules
 
