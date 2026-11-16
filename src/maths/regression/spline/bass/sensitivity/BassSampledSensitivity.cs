@@ -150,9 +150,10 @@ public static partial class BassSensitivity
         return id => of(fit.Terms[id]);
     }
 
-    // A term's variables in the measure's numbering: the moment service's for a separable term; otherwise the continuous variables a
-    // case kernel reading the term says it reads (a projection's active coordinates), through the design-kernel contract, and the variables
-    // of its categorical factors, which gate a direction (E36's slice 5) and would otherwise go unvaried.
+    // A term's variables in the measure's numbering: every variable the term's value depends on, since an input no held term reads has its
+    // block skipped and reads zero. For a separable term, the moment service's; otherwise the continuous variables a case kernel reading the
+    // term says it reads (a projection's active coordinates), through the design-kernel contract, and the term's categorical factors, which
+    // that contract does not cover (ReadsVariable answers for continuous variables only).
     internal static Func<BassTerm, int[]> TermVariablesOf(BassMoments moments, DesignKernels kernels)
     {
         var variables = new Dictionary<BassTerm, int[]>();
