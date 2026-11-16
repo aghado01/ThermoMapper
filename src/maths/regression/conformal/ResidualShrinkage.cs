@@ -23,10 +23,11 @@ public enum ResidualScore
     /// ln p(r₋ⱼ) = −n s²₋ⱼ/(2σ̂²) + ln ₁F₁(1; 3/2; −n r̄²₋ⱼ/(2σ̂²)) up to a constant every unit shares, s²₋ⱼ and r̄₋ⱼ the others' spread
     /// and mean and σ̂² = Σ(r − r̄)²/n over all n + 1 residuals (their plug-in). Near zero it shrinks as the horseshoe does; under a large
     /// mean shift it ranks as distance to average (their asymptotic robustness theorem). Its sets are intervals from n 4 when the
-    /// calibration residuals are not all equal (the Lean's <c>robasFull_interval</c>, granted four bounds on Dawson's function that the
-    /// checks certify), so the grid-free form serves it there (<see cref="ResidualShrinkage.Intervals"/>). Below n 4 they are not always:
-    /// a seeded search found sets in two pieces at n 2 and 3, one about the prior's centre 0 and one about the data (residuals 0.510,
-    /// 0.653, 0.546 at k 1: [−0.198, 0.062] and [0.333, 0.668]), and there the grid form serves it (<see cref="ResidualShrinkage.Prediction"/>).
+    /// calibration residuals are not all equal (the Lean's <c>robasFull_ordConnected</c>, with no hypothesis left: the four bounds on
+    /// Dawson's function it rests on are proved), so the grid-free form serves it there (<see cref="ResidualShrinkage.Intervals"/>). Below
+    /// n 4 they are not always: a seeded search found sets in two pieces at n 2 and 3, one about the prior's centre 0 and one about the
+    /// data (residuals 0.510, 0.653, 0.546 at k 1: [−0.198, 0.062] and [0.333, 0.668]), and there the grid form serves it
+    /// (<see cref="ResidualShrinkage.Prediction"/>).
     /// </summary>
     Horseshoe,
 }
@@ -131,12 +132,12 @@ public static class ResidualShrinkage
     /// calibration residuals <paramref name="residuals"/>, each end within <paramref name="tolerance"/> in the response's units and rounded
     /// outward, so each interval holds the exact set. Each score's set is an interval: distance to origin's and distance to average's at every
     /// n, each unit's acceptance an interval about one shared point; RoBAS-EB's for n ≥ 4 (their interval theorem); RoBAS-Full's for n ≥ 4
-    /// with the calibration residuals not all equal (the Lean's <c>robasFull_interval</c>, granted four bounds on Dawson's function that the
-    /// checks certify). Below those, a level above 0 is refused. Their search starts from an approximate maximiser of the p-value; here it
-    /// starts from a candidate every unit's score reaches, so the p-value is 1: the residual whose own score is 0, â·r̄ over the calibration
-    /// residuals (0 for distance to origin, r̄ for distance to average), the candidate's ties counting for it; for RoBAS-Full the common
-    /// point (<c>robas_common_point</c>). From there each side doubles a step until a candidate is refused, which happens since the
-    /// candidate's score outgrows the others', then bisects.
+    /// with the calibration residuals not all equal (the Lean's <c>robasFull_ordConnected</c>, with no hypothesis left: the four bounds on
+    /// Dawson's function it rests on are proved). Below those, a level above 0 is refused. Their search starts from an approximate
+    /// maximiser of the p-value; here it starts from a candidate every unit's score reaches, so the p-value is 1: the residual whose own
+    /// score is 0, â·r̄ over the calibration residuals (0 for distance to origin, r̄ for distance to average), the candidate's ties
+    /// counting for it; for RoBAS-Full the common point (<c>robas_common_point</c>). From there each side doubles a step until a candidate
+    /// is refused, which happens since the candidate's score outgrows the others', then bisects.
     /// </summary>
     public static ResidualIntervals Intervals(IReadOnlyList<double> residuals, IReadOnlyList<double> centres, ResidualScore score = ResidualScore.Shrinkage,
                                               double alpha = 0.1, double tolerance = 1e-8)

@@ -136,8 +136,8 @@ public sealed class HorseshoeScoreTests(ITestOutputHelper output)
         output.WriteLine($"shift 40: identical sets in {same} of 200; largest width difference {gap:F3}");
         Assert.True(gap <= 0.05, $"width difference {gap}");
 
-        // The grid-free form serves it from n 4 (robasFull_interval), and refuses it below, where its sets are not always intervals, and
-        // on residuals all equal, outside the theorem.
+        // The grid-free form serves it from n 4 (robasFull_ordConnected, unconditional since the Lean's 7d98281), and refuses it below,
+        // where its sets are not always intervals, and on residuals all equal, outside the theorem.
         Assert.False(ResidualShrinkage.Intervals([.. Enumerable.Range(0, 20).Select(i => 0.1 * i)], [0.0], ResidualScore.Horseshoe).Intervals[0].WholeSpace);
         Assert.Contains("below n 4", Assert.Throws<ArgumentException>(
             () => ResidualShrinkage.Intervals([0.510312, 0.652786, 0.545799], [0.0], ResidualScore.Horseshoe, 0.3)).Message);
