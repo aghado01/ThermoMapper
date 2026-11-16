@@ -118,3 +118,43 @@ At the next documentation pass, state the secant hypothesis alongside the object
 For S19, use the same secant u in both slots of RRIC and replace each self-inner-product by a squared norm. Splitting the absolute value yields both bounds. If Au vanishes and ε < 1, the positive factor 1 − ε forces u = 0. Linearity identifies Au with the difference of the measured outputs. Choosing the reference code as the second endpoint and dividing both inequalities by two gives the objective bounds.
 
 For S21, expand ηᵀMη as a finite sum of Mᵢⱼηᵢηⱼ. Product integrability justifies moving the integral through both sums. Substituting the given moments removes the off-diagonal terms and leaves σ² tr(M). For M = I this trace is n. Symmetry and idempotence give PᵀP = P, so the projected energy is the quadratic form for M = P. The harness's existing `ActiveSubspace.IsOrthProj.rank_eq_trace` identifies its trace with k.
+
+## Round 2 report — S17
+
+S17 is proved in [AngleMap.lean](../../../../lean/Enthymemata/GenerativePrior/AngleMap.lean), commit `0b3ced3` on main. In namespace `GenerativePrior`, `reluAngleCos` is the argument of arccos and `reluAngle` is the angle map g. The depth-n comparison angle for S20 is `reluAngle^[n] θ`, with depth zero equal to the starting angle.
+
+| Statement | Declarations |
+| --- | --- |
+| The argument decreases strictly from 1 to 0 on [0, π], and cos(g(θ)) equals that argument. | `hasDerivAt_reluAngleCos`, `strictAntiOn_reluAngleCos`, `reluAngleCos_zero`, `reluAngleCos_pi`, `reluAngleCos_mem`, `cos_reluAngle` |
+| g is continuous and strictly increasing, with g(0) = 0, g(π) = π/2 and exact image [0, π/2]. | `continuous_reluAngle`, `strictMonoOn_reluAngle`, `reluAngle_zero`, `reluAngle_pi`, `reluAngle_mem`, `reluAngle_mapsTo`, `reluAngle_image` |
+| θ cos θ < sin θ and g(θ) < θ throughout (0, π]. Every allowed orbit decreases weakly to 0, strictly for a positive start. Each positive-depth angle is in [0, π/2]. | `mul_cos_lt_sin`, `reluAngle_lt`, `reluAngle_iterate_antitone`, `reluAngle_iterate_strictAnti`, `reluAngle_iterate_tendsto_zero`, `reluAngle_iterate_succ_mem` |
+| On (0, π), g has derivative in [0, 1]. Its Lipschitz constant on the closed interval is at most 1. Step errors bounded by δ accumulate to at most nδ. | `hasDerivAt_reluAngle`, `deriv_reluAngle_mem`, `lipschitzOnWith_reluAngle`, `reluAngle_iterate_error` |
+| The antipodal witness follows π ↦ π/2 ↦ arccos(1/π). It attains the common upper bound for all orbits of depth at least two. | `reluAngle_iterate_two_pi`, `reluAngle_iterate_le_arccos_inv_pi` |
+
+**Source coverage.** In `deep_cs_arxiv.tex`, the angle-contraction section (lines 546–624) uses monotonicity and comparison with the identity. Its layer lemma, `lemma:control-thetatwo`, bounds the one-step angular error by 4√ε under the weight distribution condition with 0 < ε < 0.1. The next section (lines 707–720) uses nonexpansiveness to propagate this error and uses the two-step angular bound. The Lean error theorem accepts measured angles in [0, π] and the one-step error as hypotheses. Substitution of δ = 4√ε yields the paper's d-layer estimate. The derivative theorem is stated on the open interval, while the finite-difference theorem includes both endpoints. The WDC-to-layer estimate and the separate reciprocal rate bounds in the later zero-set analysis (line 1136) are outside this proof.
+
+### Replay
+
+The module, its import module and the `Enthymemata` aggregate built successfully. The aggregate replayed the existing warnings listed in round 1. Direct elaboration printed exactly `propext`, `Classical.choice` and `Quot.sound` for all 25 theorems, including the antipodal witness. The taxonomy check passed and marked the module proof-closed. Its declaration counter reported 23 of the 27 declarations (25 theorems and two definitions). The matcher at `lean/scripts/meta-ci.ps1` line 168 skips the four theorem lines beginning with `@[simp]`.
+
+With the portable Elan launcher on PATH, run from the repository root in PowerShell.
+
+```powershell
+(Get-Process -Id $PID).PriorityClass = 'BelowNormal'
+$env:LEAN_NUM_THREADS = '2'
+$env:ELAN_HOME = Split-Path -Parent (Split-Path -Parent (Get-Command lake.exe).Source)
+Set-Location -LiteralPath lean
+lake build +Enthymemata.GenerativePrior.AngleMap +Enthymemata.GenerativePrior +Enthymemata
+lake env lean Enthymemata/GenerativePrior/AngleMap.lean
+pwsh -NoProfile -File scripts/meta-ci.ps1 -NoBuild
+```
+
+### Doc changes owed
+
+Record the exact angular range, the antipodal two-step bound, and the hypothesis on per-layer errors alongside their use in the comparison field. S20, S18 and optional S22 remain queued.
+
+### Methods
+
+Write q for the arccos argument. Its derivative −(π − θ) sin θ / π is negative on (0, π). The endpoint values bound q, and the two order reversals in arccos ∘ q make g strictly increasing. The derivative of sin θ − θ cos θ is θ sin θ, positive in the interior. Comparison with its value at zero gives q(θ) > cos θ for 0 < θ ≤ π, hence g(θ) < θ. Each orbit is bounded below by zero. Continuity makes its limit a fixed point, and strict decrease excludes every positive fixed point.
+
+For the Lipschitz bound, put a = (π − θ)/π and b = sin θ/π. Both are nonnegative and a + b ≤ 1 because sin θ ≤ θ. Since q = a cos θ + b, expansion gives q² + (a sin θ)² ≤ (a + b)² ≤ 1. On the interior this bounds g′ = a sin θ / √(1 − q²) by 1. The mean value theorem and continuity at the endpoints give the closed-interval estimate. The triangle inequality adds at most δ per layer. Monotonicity makes the antipodal start maximal at depth two, and each subsequent step can only decrease the angle.
