@@ -27,6 +27,10 @@ Opened 2026-11-14 at the user's word ("that brief was getting way too long, adde
   - *A caveat from the BPPR chip's pure-basis probe* (`d963a2f`, bppr-brief.md, unverified, through Regression expansion, 2026-11-15). On structure-moving fits, ln Z by SMC and by stepping-stone disagreed beyond their stated errors: by 3.2 on an unflagged fit, and by 7.0 on one SMC flagged. So differences under about 8 nats were indicative only.
   - CBMA's ±2-error fragility readout takes the engines' errors as given, so it may understate how fragile its weights are on such fits.
   - The evidence machinery itself is with the user, as Regression expansion's follow-up. Nothing here changes until that settles.
+  - *Read before relying on CBMA's weights:* the evidence brief's "Fixed-score conformal propagation" (`f9d8199`, 2026-11-16). It carries 61 frozen evidence vectors through `ModelAveraging.FullStep` at α 0.1.
+    - Where the evidence gap is small (axis against directional hinges), the central weight's reported range runs from about 0.002 to 0.7, and 3 to 5 of 8 cases are fragile.
+    - Where the gap is large (the mixed function), no case is fragile.
+    - The defects chip is comparing that report with its own readings.
 - Slice 15's alternation speed (`192ee84`, verified): safeguarded extrapolation of γ, 1.3–3× fewer passes at n 1,000 to 10,000. It is on by default and moves existing results within the fit's tolerance (report).
 - τ through richer features (`274f69d`, verified): `DensityRatio.Spline`, additive cubic B-splines with the ridge chosen by 5-fold cross-validated log loss, opt-in through `ScoreMixtureOptions.Knots`.
 - Slice 12a's k̂ diagnostic stays opt-in, as the user settled on 2026-11-14. That is the code's default (`ConformalOptions.LeaveOneOutParetoK`, false).
