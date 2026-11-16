@@ -110,7 +110,7 @@ One commit per concern; tests with the code they test; each slice ends with its 
 
 ## Slices 5 and 6: categorical inputs and mixed bases (slice 5 approved; slice 6 a draft for the user)
 
-**Slice 5 was approved by the user on 2026-11-15** at its recommendations ("Yes, start slice 5"): 5a, 5b and 5c are settled as recommended, and the slice is building. **Slice 6 is still a draft:** its four decisions are open, and nothing of it is built until the user approves it. The coordinating session raised three points on it with the user:
+**Slice 5 was approved by the user on 2026-11-15** and has since been verified. **Slice 6 design review (2026-11-15).** Decision 6a selects kinds by width within the directional basis. The sampler choice is recorded below. The mixed fit is pending implementation. The coordinating session's earlier review raised three points:
 - *6c* holds for a one-column hinge. With K = 4 a ridge at a = 1 is a spline curve in one input, not a duplicate of an axis hinge, so the least active count could be a setting with 2 as its default.
 - *6d and decision 2.* Decision 2 said E21's ridge blocks handle collinearity on the coefficient side. Scale-sensitive forms are refused for unnormalized ridge columns, so that is not met today, and D06 alone handles near-duplicates. Meeting it needs a per-kernel column scale, a decision of its own.
 - *Order.* One fit per basis compared by evidence, and the reading of M's mixing, come before a mixed chain is built.
@@ -168,7 +168,7 @@ The user chose these as E36's next work, decision 7's and decision 6's later ste
   - the sampled sensitivity on a gated fit against a closed form.
 - *Fitting untouched.*
 
-### Slice 6: mixed bases (a draft, revised after the pure-basis readings: kinds by width recommended, ridges beside BASS's hinges the alternative)
+### Slice 6: mixed bases (kinds by width selected after the pure-basis readings)
 
 **Refused today.**
 - `BassConfig.cs:181` refuses a directional basis beside `Structure.Legendre`.
@@ -181,8 +181,8 @@ The user chose these as E36's next work, decision 7's and decision 6's later ste
 - *Plain chains under ridge blocks hold M where they start* (R̂(M) 8.3 and 5.2 over four starts), where tempering's chains and SMC's replicates agree.
 
 **The design** (E28's questions, answered).
-- **6a, the kinds, open.**
-  - *Recommended, after the readings: the kinds by width, inside the directional basis.* A term is a K = 4 block (smooth: the paper's ridge), a K = 1 directional hinge (kinked; at a = 1 an axis hinge with a continuous knot), or categorical factors alone. Each direction-bearing term takes slice 5's gates.
+- **6a, the kinds, decided 2026-11-15.**
+  - *Use kinds by width inside the directional basis.* A term is a smooth K = 4 ridge block, a K = 1 directional hinge, or categorical factors alone. A one-coordinate directional hinge supplies an axis kink with a continuous knot. Each direction-bearing term can also take slice 5's categorical gates. BASS's axis-hinge products remain available through the ordinary BASS basis.
     - *What carries over:* one term measure, (θ, t₀) with its subsets, serves both widths, so E36's moves, the determinant, the cells and the fair coin carry over. Slice 5's blocks of varying width already expand and read them back.
     - *What it answers:* the question the readings put, kinked or smooth. The axis-or-oblique question is answered inside the direction prior.
     - *What it lacks:* BASS's hinge products, interactions as products rather than as sums of ridges. On Friedman's function these read no better than directional hinges (−538.1 against −537.4).
@@ -191,7 +191,7 @@ The user chose these as E36's next work, decision 7's and decision 6's later ste
   - *Per part within a term* (a hinge on x₃ times a ridge on x₁, x₂): not recommended. The derivative's product rule assumes one kernel reads each variable, and no source proposes it.
   - *One fit per basis, compared by evidence:* now read. On functions of one structure the pure bases separate by 8 to 69 nats, and a single basis chosen by evidence serves. A mixed basis is for a function holding both a smooth and a kinked structure, which no pure basis reads well.
 - **Who owns a term of categorical factors alone** (the user's review; it applies to either design).
-  - *Recommended: its own kind,* with one explicitly weighted place in the prior. Each kind's law is conditioned on what makes it that kind, so the laws' supports are disjoint and a term's kind is read from the term itself:
+  - *Selected with 6a.* A categorical-only term gets one explicitly weighted place in the prior. Each kind's law is conditioned on what makes it that kind, so the laws' supports are disjoint and a term's kind is read from the term itself:
     - a direction (a ≥ 1) in a block of K columns or in one column;
     - under the draft's design, at least one continuous hinge;
     - at least one subset and nothing else.
