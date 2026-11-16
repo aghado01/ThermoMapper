@@ -69,3 +69,13 @@ Each is the coordinating session's posing. Sharpen hypotheses and conventions as
 - `lake build` runs at below-normal priority with capped threads; the machine is shared.
 - Each step ends with a fresh-eyes review of its own output, fixed before it is reported.
 - Messages to the coordinating session or the numerical chip are terse events; results travel in the report.
+
+## Report
+
+### In progress
+
+*Updated 2026-11-16.*
+- **Landed:** S1, S2, S3 and S6 are proved in `lean/Enthymemata/TimeFrequency/`. Each has a witness, and every closed result prints only `propext`, `Classical.choice` and `Quot.sound`. The candidate note is [time-frequency-lemmas.md](../../lean/Protolemmata/TimeFrequency/time-frequency-lemmas.md).
+- **Next:** S5, then S4, beside the regression-family modules.
+- **Uncommitted:** nothing.
+- **Numerical chip:** not messaged. S2 keeps the energy normalization Σⱼ|gⱼ|² = 1, and nothing posed proved false.
