@@ -41,7 +41,9 @@ public enum BassPart
 /// terms each holds, not uniformly. The count prior is the same.</para>
 /// <para>A directional fit (E36) has the directional part alone, whose term measure is a density (<see cref="DirectionalTermSpace"/>): the
 /// active count a uniform on {1, …, A}, 𝒥 uniform among the C(p, a) subsets, θ_𝒥 uniform on S^(a−1) against surface measure, and the knot
-/// uniform on its range given θ. A term whose direction's range has no width lies outside the support. The count prior is the same.</para>
+/// uniform on its range given θ. A term whose direction's range has no width lies outside the support. The count prior is the same. Beside
+/// categorical predictors (E36's slice 5) it holds BASS's categorical part too, each part's order uniform from 0, so a term holds a direction,
+/// subsets gating it, or subsets alone, and the knot's range is read over the term's cells.</para>
 /// <para><see cref="LogPrior"/> scores the term measure and <see cref="DrawTerm"/> draws from it. Immutable, so one
 /// serves every chain of a fit.</para>
 /// </summary>
@@ -104,11 +106,15 @@ public sealed class BassStructurePrior
     }
 
     /// <summary>
-    /// A directional fit's prior (E36): the directional part alone, its term measure <paramref name="space"/>'s, with the count prior
-    /// <paramref name="count"/>, and the directions independent given M or under <paramref name="directions"/>' determinant (slice 4). Bases
-    /// that mix directional hinges with BASS's are an option the contract allows, not built (decision 6).
+    /// A directional fit's prior (E36): the directional part, its term measure <paramref name="space"/>'s, with the count prior
+    /// <paramref name="count"/>, and the directions independent given M or under <paramref name="directions"/>' determinant (slice 4). With
+    /// categorical predictors of <paramref name="levels"/> levels and a cap <paramref name="maxCategoricalInteraction"/> &gt; 0 it holds
+    /// BASS's categorical part beside the direction (slice 5, decision 7): each part's order uniform from 0, a draw with both empty the
+    /// intercept, outside F, and the subsets from <paramref name="subsets"/>. Bases that mix directional hinges with BASS's are an option the
+    /// contract allows, not built (decision 6).
     /// </summary>
-    public BassStructurePrior(DirectionalTermSpace space, BassCountPrior count, DirectionPrior directions = DirectionPrior.Independent)
+    public BassStructurePrior(DirectionalTermSpace space, BassCountPrior count, DirectionPrior directions = DirectionPrior.Independent,
+                              int[]? levels = null, int maxCategoricalInteraction = 0, CategoricalSubsetMeasure subsets = CategoricalSubsetMeasure.SizeUniform)
     {
         if (!Enum.IsDefined(directions)) throw new ArgumentOutOfRangeException(nameof(directions), "Not a known direction prior.");
         Directions = directions;
@@ -116,10 +122,14 @@ public sealed class BassStructurePrior
         ArgumentNullException.ThrowIfNull(count);
         if (!(count.Shape > 0.0 && double.IsFinite(count.Shape))) throw new ArgumentOutOfRangeException(nameof(count), "h₁ must be positive and finite.");
         if (!(count.Rate > 0.0 && double.IsFinite(count.Rate))) throw new ArgumentOutOfRangeException(nameof(count), "h₂ must be positive and finite.");
+        if (subsets is not (CategoricalSubsetMeasure.SizeUniform or CategoricalSubsetMeasure.Uniform)) throw new ArgumentOutOfRangeException(nameof(subsets));
         Count = count;
-        Subsets = CategoricalSubsetMeasure.SizeUniform;
+        Subsets = subsets;
         _collectionWeight = CollectionWeightTable(count);
-        _parts[(int)BassPart.Directional] = Part.Directional(space);
+        bool gated = maxCategoricalInteraction > 0;
+        _parts[(int)BassPart.Directional] = Part.Directional(space, gated ? 0 : 1);
+        if (gated)
+            _parts[(int)BassPart.Categorical] = Part.Indicators(levels ?? throw new ArgumentNullException(nameof(levels)), maxCategoricalInteraction, 0, subsets);
     }
 
     /// <summary>The prior <paramref name="config"/> sets, with the caps <paramref name="resolved"/> holds: over a Legendre term
@@ -132,9 +142,13 @@ public sealed class BassStructurePrior
         if (config.Structure.Legendre is { } legendre)
             return new(new LegendreTermSpace(inputs.Cases.ContinuousCount, legendre.MaxDegree, resolved.MaxInteraction), config.Count);
         if (config.Structure.Directional is { } directional)
+        {
+            int[] levels = [.. Enumerable.Range(0, inputs.Cases.CategoricalCount).Select(inputs.LevelCount)];
             return new(new DirectionalTermSpace(inputs, resolved.MaxInteraction,
                                                 resolved.KnotLevel ?? throw new ArgumentException("The resolution holds no knot level for the directional basis.", nameof(resolved)),
-                                                directional.LocalProbability), config.Count, directional.Directions);
+                                                directional.LocalProbability, resolved.ActiveCases), config.Count, directional.Directions,
+                       levels, resolved.MaxCategoricalInteraction, config.Structure.CategoricalSubsets);
+        }
         return new(inputs, resolved.MaxInteraction, resolved.MaxCategoricalInteraction, resolved.MaxFunctionalInteraction,
                    config.Structure.CategoricalSubsets, config.Count);
     }
@@ -213,21 +227,15 @@ public sealed class BassStructurePrior
     /// A term drawn from the term measure, the law <see cref="LogPrior"/> scores: each part's order uniform, its
     /// variables a uniform subset of that size, each hinge's sign and knot uniform, each subset from the declared
     /// measure. Null is the intercept, the draw whose parts all came out empty; it has mass only when the fit has several
-    /// parts, and it lies outside F. A directional fit's draw is a, 𝒥, θ and the knot from theirs (<see cref="DirectionalTermSpace"/>); it is
-    /// null where the drawn direction's knot range has no width, a term outside the support.
+    /// parts, and it lies outside F. A directional fit's draw is a, 𝒥, θ and the knot from theirs (<see cref="DirectionalTermSpace"/>), beside a
+    /// categorical part both parts' orders from 0, then the subsets, and the knot over the term's cells; it is null where the knot has no
+    /// range, a term outside the support.
     /// </summary>
     public BassTerm? DrawTerm(Xoshiro256PlusPlus rng)
     {
         ArgumentNullException.ThrowIfNull(rng);
         if (Legendre is { } space) return space.Draw(rng);
-        if (Directional is { } directions)
-        {
-            int active = 1 + BassDraws.Below(rng, directions.MaxActive);
-            ProjectionDirection direction = directions.DrawDirection(rng, UniformSubset(rng, directions.Variables, active));
-            return directions.KnotRangeOf(direction) is { } range
-                ? new BassTerm(directional: new DirectionalHinge(direction, DirectionalTermSpace.DrawKnot(rng, range)))
-                : null;
-        }
+        if (Directional is not null) return DrawParts(rng) is var (direction, cells) ? WithKnot(rng, direction, cells) : null;
         Span<int> orders = stackalloc int[3];
         bool empty = true;
         for (int index = 0; index < 3; index++)
@@ -260,6 +268,45 @@ public sealed class BassStructurePrior
         }
         return new BassTerm(continuous, categorical, functional);
     }
+
+    // A directional fit's term drawn in two steps (slice 5), the first its parts: each part's order uniform (the direction's from 1 without a
+    // categorical part, from 0 beside one), then the direction's 𝒥 and θ, then the categorical variables and their subsets. Null for the
+    // intercept, both parts empty. Without a categorical part the draws are slice 2's, in its order.
+    internal (ProjectionDirection? Direction, CategoricalFactor[] Cells)? DrawParts(Xoshiro256PlusPlus rng)
+    {
+        Part d = _parts[(int)BassPart.Directional]!;
+        Part? c = _parts[(int)BassPart.Categorical];
+        int active = d.MinimumOrder + BassDraws.Below(rng, d.OrderCount);
+        int k = c is null ? 0 : c.MinimumOrder + BassDraws.Below(rng, c.OrderCount);
+        if (active == 0 && k == 0) return null;
+        ProjectionDirection? direction = active > 0 ? DrawDirectionPart(rng, active) : null;
+        var cells = new CategoricalFactor[k];
+        if (k > 0)
+        {
+            int[] variables = UniformSubset(rng, c!.Sizes.Length, k);
+            for (int f = 0; f < k; f++) cells[f] = c.DrawSubset(rng, variables[f], Subsets);
+        }
+        return (direction, cells);
+    }
+
+    // A direction of `active` = a ≥ 1 coordinates, 𝒥 uniform and θ_𝒥 uniform on its subsphere; a ≥ 1 drawn uniformly where `active` is 0.
+    internal ProjectionDirection DrawDirectionPart(Xoshiro256PlusPlus rng, int active = 0)
+    {
+        DirectionalTermSpace directions = Directional!;
+        if (active == 0) active = 1 + BassDraws.Below(rng, directions.MaxActive);
+        return directions.DrawDirection(rng, UniformSubset(rng, directions.Variables, active));
+    }
+
+    // The second step: the term with its knot drawn from its range over the cells; null where there is none, a term outside the support.
+    internal static BassTerm? WithKnot(Xoshiro256PlusPlus rng, DirectionalTermSpace directions, ProjectionDirection? direction, CategoricalFactor[] cells)
+    {
+        if (direction is null) return new BassTerm(categorical: cells);
+        return directions.KnotRangeOf(direction, cells) is { } range
+            ? new BassTerm(categorical: cells, directional: new DirectionalHinge(direction, DirectionalTermSpace.DrawKnot(rng, range)))
+            : null;
+    }
+
+    private BassTerm? WithKnot(Xoshiro256PlusPlus rng, ProjectionDirection? direction, CategoricalFactor[] cells) => WithKnot(rng, Directional!, direction, cells);
 
     // k of the p variables, uniformly among the C(p, k) subsets: a partial Fisher–Yates shuffle.
     private static int[] UniformSubset(Xoshiro256PlusPlus rng, int p, int k)
@@ -320,6 +367,8 @@ public sealed class BassStructurePrior
         if (Directional is { } directions)
         {
             directions.Validate(term);
+            if (_parts[(int)BassPart.Categorical] is { } gate) ValidateSubsets(term, gate);
+            else if (term.Categorical.Count > 0) throw new ArgumentException("The fit has no categorical part.", nameof(term));
             return;
         }
         if (term.Directional is not null || term.Ridge is not null) throw new ArgumentException("The fit has no directional part.", nameof(term));
@@ -342,13 +391,7 @@ public sealed class BassStructurePrior
             if (k > p.Cap) throw new ArgumentException($"The term's {Name(kind)} order {k} exceeds the cap {p.Cap}.", nameof(term));
             if (kind == BassPart.Categorical)
             {
-                foreach (CategoricalFactor c in term.Categorical)
-                {
-                    if (c.Variable >= p.Sizes.Length) throw new ArgumentException($"Categorical variable {c.Variable} does not exist.", nameof(term));
-                    int levels = p.Sizes[c.Variable];
-                    if (c.Levels[^1] >= levels) throw new ArgumentException($"Categorical variable {c.Variable} has {levels} levels.", nameof(term));
-                    if (c.Levels.Count >= levels) throw new ArgumentException($"A subset of categorical variable {c.Variable} must leave a level out.", nameof(term));
-                }
+                ValidateSubsets(term, p);
                 continue;
             }
             foreach (HingeFactor h in Hinges(term, kind))
@@ -356,6 +399,20 @@ public sealed class BassStructurePrior
                 if (h.Variable >= p.Sizes.Length) throw new ArgumentException($"The {Name(kind)} variable {h.Variable} does not exist.", nameof(term));
                 if (h.Knot >= p.Sizes[h.Variable]) throw new ArgumentException($"Knot {h.Knot} of {Name(kind)} variable {h.Variable} does not exist.", nameof(term));
             }
+        }
+    }
+
+    // The term's categorical factors against the categorical part: its order within the cap, each variable and level within the inputs', each
+    // subset proper.
+    private static void ValidateSubsets(BassTerm term, Part p)
+    {
+        if (term.Categorical.Count > p.Cap) throw new ArgumentException($"The term's categorical order {term.Categorical.Count} exceeds the cap {p.Cap}.", nameof(term));
+        foreach (CategoricalFactor c in term.Categorical)
+        {
+            if (c.Variable >= p.Sizes.Length) throw new ArgumentException($"Categorical variable {c.Variable} does not exist.", nameof(term));
+            int levels = p.Sizes[c.Variable];
+            if (c.Levels[^1] >= levels) throw new ArgumentException($"Categorical variable {c.Variable} has {levels} levels.", nameof(term));
+            if (c.Levels.Count >= levels) throw new ArgumentException($"A subset of categorical variable {c.Variable} must leave a level out.", nameof(term));
         }
     }
 
@@ -430,9 +487,10 @@ public sealed class BassStructurePrior
             => new(BassPart.Legendre, new int[space.Variables], space.MaxOrder, 1) { Space = space };
 
         /// <summary>The directional part over <paramref name="space"/>: its variables, its order cap A, its smallest order 1, so the order is
-        /// uniform on {1, …, A} and the variable set uniform among the C(p, a) subsets, as the paper's a and 𝒥 are.</summary>
-        public static Part Directional(DirectionalTermSpace space)
-            => new(BassPart.Directional, new int[space.Variables], space.MaxActive, 1) { Directions = space };
+        /// uniform on {1, …, A} and the variable set uniform among the C(p, a) subsets, as the paper's a and 𝒥 are; 0 beside a categorical part,
+        /// where a term may hold its categorical factors alone (slice 5).</summary>
+        public static Part Directional(DirectionalTermSpace space, int minimum = 1)
+            => new(BassPart.Directional, new int[space.Variables], space.MaxActive, minimum) { Directions = space };
 
         public static Part? Hinges(BassPart kind, int[] knots, int cap, int minimum, string capName)
         {
@@ -469,7 +527,7 @@ public sealed class BassStructurePrior
             if (Directions is { } directions)
             {
                 DirectionalHinge hinge = term.Directional!;
-                return directions.LogDirection(hinge.Direction.Count) + directions.LogKnot(hinge);
+                return directions.LogDirection(hinge.Direction.Count) + directions.LogKnot(hinge, term.Categorical);
             }
             double lp = 0.0;
             if (LogSubset is { } subset)

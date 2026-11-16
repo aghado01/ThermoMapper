@@ -46,6 +46,10 @@ public sealed record BassResolved
     /// directional basis.</summary>
     public double? KnotLevel { get; init; }
 
+    /// <summary>n_active, the training cases a directional knot's upper end leaves above it (after a ridge block's floor), which a gated
+    /// term's cells read (E36's slice 5); null without a directional basis.</summary>
+    public double? ActiveCases { get; init; }
+
     /// <summary>The support threshold on a term's design part.</summary>
     public required double SupportMinimum { get; init; }
 
@@ -307,13 +311,12 @@ public sealed record BassResolved
                 + (data.Predictors.OfType<ContinuousPredictor>().Any(c => c.Domain is null)
                     ? "; a predictor without a declared domain takes its training range as the box the basis is orthonormal on, which moves with the sample" : "")));
         }
-        double? knotLevel = null;
+        double? knotLevel = null, activeCases = null;
         if (s.Directional is { } directional)
         {
-            // A directional fit (E36's slice 2): directional hinges over the continuous predictors alone, A the continuous cap; mixed term
-            // types are not built (decision 6), and categorical inputs are refused in the first slices (decision 7).
-            if (categorical > 0)
-                throw new ArgumentException($"A directional basis reads continuous predictors alone (E36's decision 7), and the data hold {categorical} categorical ones.", nameof(data));
+            // A directional fit (E36's slice 2): directional hinges over the continuous predictors, A the continuous cap; mixed term types are
+            // not built (decision 6). Categorical predictors enter as BASS's subset factors gating a direction, or alone (slice 5, decision 7),
+            // under the categorical cap.
             if (functional)
                 throw new ArgumentException("A directional basis serves a response without an output part; a direct functional response's terms carry an output hinge product beside the case side, which a directional basis does not build.", nameof(data));
             if (maxInteraction < 1) throw new ArgumentException("A directional basis needs a continuous predictor.", nameof(data));
@@ -325,7 +328,8 @@ public sealed record BassResolved
             if (!(active < cases))
                 throw new ArgumentException($"Structure.Directional.ActiveCases is {Text(active)}, which leaves no training case below the knot's upper end among the {Text(cases)}.", "config");
             knotLevel = 1.0 - active / cases;
-            maxCategorical = maxFunctional = 0;
+            activeCases = active;
+            maxFunctional = 0;
             log.Add(new("Directional", $"A {Text(maxInteraction)}, q {Text(knotLevel.Value)}, p₀ {Text(directional.LocalProbability)}" + (perBlock >= 2 ? $", K {Text(perBlock)}" : ""),
                         (floored ? $"K + 1 = {Text(active)}, BayesPPR's floor for a ridge block's knots," : directional.ActiveCases is null
                             ? $"the knot's upper end leaves min(20, n/10) = {Text(active)}" : $"the declared ActiveCases, {Text(active)},")
@@ -350,20 +354,25 @@ public sealed record BassResolved
         }
         if (s.Directional is { Directions: DirectionPrior.Determinant })
         {
-            // The determinant direction prior (E36's slice 4): det(ΘᵀΘ) vanishes past M = p, so M's cap is p at most, and the count law's mass
-            // past p under the cap before it is the prior's tilt on M; c_M is the tilt the count law would take without its normalizer.
-            double past = CountMassPast(config.Count!, continuous, maxBasis);
-            if (maxBasis > continuous)
+            // The determinant direction prior (E36's slice 4): det(ΘᵀΘ) vanishes past M_θ = p direction-bearing terms. Without a categorical
+            // part every term bears one, so M's cap is p at most, and the count law's mass past p under the cap before it is the prior's tilt
+            // on M; c_M is the tilt the count law would take without its normalizer. Beside a categorical part (slice 5) terms without a
+            // direction take no part in det, so M keeps its cap and M_θ ≤ p holds through det alone.
+            bool gated = maxCategorical > 0;
+            int directed = gated ? Math.Min(maxBasis, continuous) : maxBasis;
+            double past = gated ? 0.0 : CountMassPast(config.Count!, continuous, maxBasis);
+            if (!gated && maxBasis > continuous)
             {
-                maxBasis = continuous;
+                maxBasis = directed = continuous;
                 log.Add(new("MaxBasis", Text(maxBasis), $"p = {Text(continuous)}: the determinant direction prior has no mass past M = p, where every M directions are dependent"));
             }
-            int shown = Math.Min(maxBasis, 8);
+            int shown = Math.Min(directed, 8);
             string table = string.Join(", ", Enumerable.Range(1, shown).Select(m => $"c_{m} {Math.Exp(DirectionDeterminant.LogNormalizer(continuous, m)):G4}"))
-                         + (maxBasis > shown ? ", …" : "");
-            log.Add(new("Directions", "determinant", $"π(Θ | M) ∝ Π π(θ_m)·det(ΘᵀΘ)/c_M with c_M = p!/((p − M)!·p^M) at p = {Text(continuous)} ({table}), "
-                        + $"the tilt the count law would take with c_M left out, as gcbeck's code leaves it; stated, its tilt on M is the cut at p, "
-                        + $"the count law's mass past M = p, {past:G4}, lying outside F"));
+                         + (directed > shown ? ", …" : "");
+            log.Add(new("Directions", "determinant", $"π(Θ | M) ∝ Π π(θ_m)·det(ΘᵀΘ)/c_(M_θ) over the M_θ direction-bearing terms, with c_M = p!/((p − M)!·p^M) at p = {Text(continuous)} ({table}), "
+                        + "the tilt the count law would take with c_M left out, as gcbeck's code leaves it; "
+                        + (gated ? $"stated, the count law on M is untilted and M_θ ≤ p = {Text(continuous)} holds through det, terms without a direction taking no part"
+                                 : $"stated, its tilt on M is the cut at p, the count law's mass past M = p, {past:G4}, lying outside F")));
         }
 
         SupportRule rule = s.Support;
@@ -484,6 +493,7 @@ public sealed record BassResolved
         {
             Cases = cases, Locations = locations, Observations = n, MaxBasis = maxBasis,
             MaxInteraction = maxInteraction, MaxCategoricalInteraction = maxCategorical, MaxFunctionalInteraction = maxFunctional, KnotLevel = knotLevel,
+            ActiveCases = activeCases,
             SupportMinimum = support, SupportMinimumFunctional = supportFunctional,
             MonitoredPoints = points, ResponseMean = mean, CentreLevel = level, PriorLevel = priorLevel, CoefficientConstant = coefficientConstant,
             ResponseMeanSquare = meanSquare, WeightedMeanSquare = weightedMeanSquare,

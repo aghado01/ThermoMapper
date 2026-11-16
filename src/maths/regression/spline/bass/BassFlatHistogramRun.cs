@@ -233,7 +233,7 @@ internal static class BassFlatHistogramFit
             {
                 double w = weights[c * perChain + s];
                 mass += w;
-                if (stores[c][s].Structure.TermCount(model.Config.Structure.ColumnsPerTerm) == model.MaxBasis) atCap += w;
+                if (stores[c][s].Structure.TermCount(terms) == model.MaxBasis) atCap += w;
             }
             massAtCap += atCap;
             accounts[c] = new BassChainAccount(run.Start, counted, structure.Kinds.Copy(), structure.Refusals.Copy(), structure.EmptyBirths,

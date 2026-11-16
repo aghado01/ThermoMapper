@@ -9,7 +9,9 @@ namespace Maths.Regression.Spline.Bass;
 /// b₁, …, b_K over θ's projection, with the knots t₁, …, t_{K+1} the projected training cases above t₀ give
 /// (<see cref="DirectionalTermSpace.RidgeKnots"/>), carried by every column (<see cref="RidgeColumn"/>). The design expands the structure it
 /// holds and reads it back from the columns, so the chain, the prior and the proposals see structure terms and the fit sees columns. A
-/// term's block is computed once and kept beside it, a pure cache. Immutable otherwise, so one serves every chain of a fit.
+/// term's categorical factors (slice 5) gate every column of its block, and its knots are read over its cells; a term of categorical factors
+/// alone is one column, itself, so blocks vary in width and the read-back walks them term by term. A term's block is computed once and kept
+/// beside it, a pure cache. Immutable otherwise, so one serves every chain of a fit.
 /// </summary>
 public sealed class RidgeExpansion
 {
@@ -28,35 +30,57 @@ public sealed class RidgeExpansion
     /// <summary>K, a block's columns.</summary>
     public int Columns { get; }
 
-    /// <summary>The block of structure term <paramref name="unit"/>, a directional term, as K column terms in order ℓ = 1, …, K; null where its
-    /// knots leave a column undefined, a term outside the support.</summary>
+    /// <summary>The block of structure term <paramref name="unit"/>: a directional term (θ, t₀), with any categorical factors gating it, as K
+    /// column terms in order ℓ = 1, …, K, each holding those factors; a term of categorical factors alone as itself. Null where the knots leave
+    /// a column undefined, a term outside the support.</summary>
     public IReadOnlyList<BassTerm>? Expand(BassTerm unit)
     {
         ArgumentNullException.ThrowIfNull(unit);
-        if (unit.Directional is not { } hinge) throw new ArgumentException("A ridge basis expands directional terms (θ, t₀).", nameof(unit));
-        return _blocks.GetValue(unit, u => new StrongBox<BassTerm[]?>(Block(hinge))).Value;
+        if (unit.Ridge is not null) throw new ArgumentException("A ridge basis expands structure terms, not columns.", nameof(unit));
+        if (unit.Directional is null)
+        {
+            if (unit.Categorical.Count == 0) throw new ArgumentException("A ridge basis expands directional terms (θ, t₀) and categorical ones.", nameof(unit));
+            return [unit];
+        }
+        return _blocks.GetValue(unit, u => new StrongBox<BassTerm[]?>(Block(u))).Value;
     }
 
-    private BassTerm[]? Block(DirectionalHinge hinge)
+    private BassTerm[]? Block(BassTerm unit)
     {
-        if (_space.RidgeKnots(hinge, Columns) is not { } knots) return null;
+        DirectionalHinge hinge = unit.Directional!;
+        if (_space.RidgeKnots(hinge, unit.Categorical, Columns) is not { } knots) return null;
         var block = new BassTerm[Columns];
-        for (int l = 1; l <= Columns; l++) block[l - 1] = new BassTerm(ridge: new RidgeColumn(hinge.Direction, knots, l));
+        for (int l = 1; l <= Columns; l++) block[l - 1] = new BassTerm(categorical: unit.Categorical, ridge: new RidgeColumn(hinge.Direction, knots, l));
         return block;
     }
 
-    /// <summary>The structure terms of <paramref name="columns"/>, blocks of K in order, read back from each block's first column: (θ, t₀).</summary>
+    /// <summary>The structure terms of <paramref name="columns"/>, whole blocks in order, read back term by term: a block of K from its first
+    /// column, (θ, t₀) with its categorical factors; a column without a ridge, a term of categorical factors alone, as itself.</summary>
     public IReadOnlyList<BassTerm> Units(IReadOnlyList<BassTerm> columns)
     {
         ArgumentNullException.ThrowIfNull(columns);
-        if (columns.Count % Columns != 0) throw new ArgumentException($"{columns.Count} columns are not blocks of {Columns}.", nameof(columns));
-        var units = new BassTerm[columns.Count / Columns];
-        for (int b = 0; b < units.Length; b++)
+        var units = new List<BassTerm>(columns.Count / Columns + 1);
+        for (int j = 0; j < columns.Count;)
         {
-            RidgeColumn first = columns[b * Columns].Ridge ?? throw new ArgumentException("A ridge basis's columns are ridge columns.", nameof(columns));
-            if (first.Column != 1 || first.Columns != Columns) throw new ArgumentException("The columns are not whole blocks in order.", nameof(columns));
-            units[b] = new BassTerm(directional: new DirectionalHinge(first.Direction, first.Knots[0]));
+            BassTerm column = columns[j];
+            if (column.Ridge is not { } first)
+            {
+                if (column.Directional is not null) throw new ArgumentException("A ridge basis's columns are ridge columns or categorical terms.", nameof(columns));
+                units.Add(column);
+                j++;
+                continue;
+            }
+            if (first.Column != 1 || first.Columns != Columns || j + Columns > columns.Count)
+                throw new ArgumentException("The columns are not whole blocks in order.", nameof(columns));
+            for (int l = 1; l < Columns; l++)
+                if (columns[j + l].Ridge is not { } next || next.Column != l + 1 || !ReferenceEquals(next.Direction, first.Direction) && !next.Direction.Equals(first.Direction))
+                    throw new ArgumentException("The columns are not whole blocks in order.", nameof(columns));
+            units.Add(new BassTerm(categorical: column.Categorical, directional: new DirectionalHinge(first.Direction, first.Knots[0])));
+            j += Columns;
         }
         return units;
     }
+
+    /// <summary>The columns structure term <paramref name="unit"/> expands into: K for a direction, 1 for categorical factors alone.</summary>
+    public int Width(BassTerm unit) => unit.Directional is null ? 1 : Columns;
 }

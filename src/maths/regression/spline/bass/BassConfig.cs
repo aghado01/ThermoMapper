@@ -540,8 +540,9 @@ public sealed record BassStructureSpec
     [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
     public HingeNormalization? HingeNormalization { get; init; }
 
-    /// <summary>The columns a structure term holds: K under a ridge basis (<see cref="DirectionalBasis.Columns"/>), else 1. A draw's ids are its
-    /// columns, so a summary that counts terms divides by it (<see cref="BassStructure.TermCount"/>).</summary>
+    /// <summary>The columns a directional structure term holds: K under a ridge basis (<see cref="DirectionalBasis.Columns"/>), else 1; a term of
+    /// categorical factors alone holds one (slice 5). The design's column cap is K times M's; a summary counts terms through the draws' table
+    /// (<see cref="BassStructure.TermCount"/>).</summary>
     [JsonIgnore]
     public int ColumnsPerTerm => Directional?.Columns ?? 1;
 

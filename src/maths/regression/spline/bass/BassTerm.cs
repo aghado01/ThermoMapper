@@ -108,8 +108,8 @@ public sealed class BassTerm : IEquatable<BassTerm>
     private readonly int _hash;
 
     /// <summary>The term with these factors, in any order. A <paramref name="directional"/> hinge, or a ridge block's column
-    /// <paramref name="ridge"/>, takes the case side alone: its product with hinge, Legendre or categorical factors, or with the other, is no
-    /// term type here (E36's decisions 6 and 7).</summary>
+    /// <paramref name="ridge"/>, takes categorical factors beside it, which gate it to their cells (E36's slice 5, decision 7); its product with
+    /// hinge or Legendre factors, or with the other, is no term type here (decision 6).</summary>
     public BassTerm(IEnumerable<HingeFactor>? continuous = null, IEnumerable<CategoricalFactor>? categorical = null,
                     IEnumerable<HingeFactor>? functional = null, IEnumerable<LegendreFactor>? legendre = null,
                     DirectionalHinge? directional = null, RidgeColumn? ridge = null)
@@ -125,11 +125,11 @@ public sealed class BassTerm : IEquatable<BassTerm>
             if (_categorical[k].Variable == _categorical[k - 1].Variable)
                 throw new ArgumentException($"Categorical variable {_categorical[k].Variable} appears twice in one term.", nameof(categorical));
         _directional = directional;
-        if (directional is not null && _continuous.Length + _categorical.Length + _legendre.Length > 0)
-            throw new ArgumentException("A directional hinge takes the case side alone; its product with hinge, Legendre or categorical factors is no term type here.", nameof(directional));
+        if (directional is not null && _continuous.Length + _legendre.Length > 0)
+            throw new ArgumentException("A directional hinge takes categorical factors beside it alone; its product with hinge or Legendre factors is no term type here.", nameof(directional));
         _ridge = ridge;
-        if (ridge is not null && (_continuous.Length + _categorical.Length + _legendre.Length > 0 || directional is not null))
-            throw new ArgumentException("A ridge block's column takes the case side alone; its product with any other case-side factor is no term type here.", nameof(ridge));
+        if (ridge is not null && (_continuous.Length + _legendre.Length > 0 || directional is not null))
+            throw new ArgumentException("A ridge block's column takes categorical factors beside it alone; its product with any other case-side factor is no term type here.", nameof(ridge));
         if (_continuous.Length + _categorical.Length + _functional.Length + _legendre.Length == 0 && directional is null && ridge is null)
             throw new ArgumentException("A term needs a factor; the intercept is not a term.");
 

@@ -693,6 +693,8 @@ public sealed class BassDesign
     private DesignProposal ProposeUnits(IReadOnlyList<BassTerm> units, bool death = false)
     {
         _pending = null;
+        // M's cap on structure terms, apart from the columns' K·M_max: terms of categorical factors alone are one column each (slice 5).
+        if (units.Count > _rules.MaxBasis / _expansion!.Columns) return DesignProposal.Refused(BassRefusal.Cap);
         _scratch ??= new BassDesign(_basis, _data, _rules, _ridge, _response.Working, _intercept, _precision, _expansion);
         if (_scratch.Load(units, _response.Working) is { } refusal) return DesignProposal.Refused(refusal);
         DesignProposal account = _scratch.Account();
@@ -705,7 +707,8 @@ public sealed class BassDesign
     private DesignProposal Account()
     {
         double newest = double.PositiveInfinity;
-        for (int j = Math.Max(0, _terms.Count - (_expansion?.Columns ?? 1)); j < _terms.Count; j++) newest = Math.Min(newest, _factor.LeaveOneOutPivot(j));
+        int last = _terms.Count == 0 ? 0 : _terms[^1].Ridge is { } ridge ? ridge.Columns : 1;   // the last structure term's columns
+        for (int j = Math.Max(0, _terms.Count - last); j < _terms.Count; j++) newest = Math.Min(newest, _factor.LeaveOneOutPivot(j));
         if (_terms.Count == 0) newest = double.NaN;
         return _outputs is null
             ? new DesignProposal(null, _terms.Count, ResidualSquares, FittedSquares, MinAngle, newest, PriorTerms)
@@ -895,10 +898,11 @@ public sealed class BassDesign
         _pending = null;
         BassDesignResponse response = working is null || ReferenceEquals(working, _response.Working) ? _response : Read(working, Reweights(working) ? null : _response);
         bool reread = _outputs is not null && !ReferenceEquals(response, _response);   // several outputs read on a new reading (E34's slice 4)
-        if (_expansion is not null && !(terms.Count > 0 && terms[0].Ridge is not null))
+        if (_expansion is not null && !terms.Any(t => t.Ridge is not null))
         {
             // A ridge basis loads structure terms as their blocks of columns (E36's slice 3); a block whose knots leave a column undefined
-            // lies outside the support. A draw's terms are its columns already, whole blocks in order, and load as they are.
+            // lies outside the support. A draw's terms are its columns already, whole blocks in order, and load as they are; a list holding no
+            // ridge column (a term of categorical factors alone is its own column, slice 5) expands to itself.
             var expanded = new List<BassTerm>(terms.Count * _expansion.Columns);
             foreach (BassTerm unit in terms)
             {

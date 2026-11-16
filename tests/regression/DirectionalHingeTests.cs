@@ -12,7 +12,8 @@ namespace Maths.Regression.Tests;
 /// <summary>
 /// E36's slice 1 gates on the directional hinge (θᵀz − t)₊^q, BASS's fourth case-side term type (the BPPR brief):
 /// <list type="bullet">
-/// <item>the direction and the term refuse what is not one, and a directional hinge takes the case side alone (decisions 6 and 7);</item>
+/// <item>the direction and the term refuse what is not one, and a directional hinge takes categorical factors beside it alone (decision 6;
+/// slice 5's gate, decision 7);</item>
 /// <item>columns against a hand computation from the raw inputs, its own mean and deviation (decision 3's metric), and c at the box's
 /// maximizing corner; and a seeded sweep of directions, knots, degrees and normalizations, far points included;</item>
 /// <item>derivatives against central differences, and at the knot at degree one the mean of the one-sided limits;</item>
@@ -147,10 +148,12 @@ public sealed class DirectionalHingeTests(ITestOutputHelper output)
         Assert.Equal("(0.8·z0 − 0.6·z2 − 0.25)₊", Term(Pair, 0.25).ToString());
         Assert.Equal("(−1·z1 + 0.5)₊", Term(new ProjectionDirection([1], [-1.0]), -0.5).ToString());
 
-        // Alone on the case side; an output side is its own.
+        // Beside categorical factors alone on the case side, which gate it (slice 5); an output side is its own.
         var hinge = new DirectionalHinge(Single, 0.0);
         Assert.Throws<ArgumentException>(() => new BassTerm([new HingeFactor(0, 1, 3)], directional: hinge));
-        Assert.Throws<ArgumentException>(() => new BassTerm(categorical: [new CategoricalFactor(0, [1])], directional: hinge));
+        BassTerm gated = new(categorical: [new CategoricalFactor(0, [1])], directional: hinge);
+        Assert.Equal(hinge, gated.Directional);
+        Assert.Equal([new CategoricalFactor(0, [1])], gated.Categorical);
         Assert.Throws<ArgumentException>(() => new BassTerm(legendre: [new LegendreFactor(0, 2)], directional: hinge));
         Assert.Equal(hinge, new BassTerm(functional: [new HingeFactor(0, 1, 2)], directional: hinge).Directional);
     }

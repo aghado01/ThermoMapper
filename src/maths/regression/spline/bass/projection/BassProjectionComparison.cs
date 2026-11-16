@@ -199,7 +199,7 @@ internal static class BassProjectionComparisons
         double terms = 0.0;
         for (int b = 0; b < fit.JointDraws.Count; b++)
             for (int k = 0; k < pooled.Length; k++)
-                terms += pooled[k][fit.JointDraws.Draw(k, b)].Structure.TermCount(fit.Components[k].Config.Structure.ColumnsPerTerm);
+                terms += pooled[k][fit.JointDraws.Draw(k, b)].Structure.TermCount(fit.Components[k].Terms);
         terms /= fit.JointDraws.Count;
         PredictiveCheck loo = PredictiveChecks.PsisLoo(fit.PointwiseLogDensity());
         double? rmse = null, explained = null;
@@ -215,8 +215,7 @@ internal static class BassProjectionComparisons
         int exponent = WeightScale.Exponent(w);
         double Weight(int s) => w is null ? 1.0 : WeightScale.Scaled(w[s], exponent);
         double total = w is null ? pooled.Length : Enumerable.Range(0, pooled.Length).Sum(Weight);
-        int perTerm = fit.Config.Structure.ColumnsPerTerm;
-        double terms = Enumerable.Range(0, pooled.Length).Sum(s => Weight(s) * pooled[s].Structure.TermCount(perTerm)) / total;
+        double terms = Enumerable.Range(0, pooled.Length).Sum(s => Weight(s) * pooled[s].Structure.TermCount(fit.Terms)) / total;
         PredictiveCheck loo = PredictiveChecks.PsisLoo(fit.PointwiseLogDensity(data));
         double? rmse = null, explained = null, density = null;
         if (mean is not null)

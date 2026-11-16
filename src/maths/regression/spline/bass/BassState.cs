@@ -78,9 +78,17 @@ public sealed class BassState
 /// (D01).</summary>
 public readonly record struct BassStructure(int[] TermIds)
 {
-    /// <summary>M, the structure's terms: one per id, or under a ridge basis of <paramref name="columnsPerTerm"/> = K columns a term (E36's
-    /// slice 3), whose ids are its blocks' columns, one per K (<see cref="BassStructureSpec.ColumnsPerTerm"/>).</summary>
-    public int TermCount(int columnsPerTerm = 1) => TermIds.Length / columnsPerTerm;
+    /// <summary>M, the structure's terms, read through <paramref name="terms"/>, the table its ids index: one per id but a ridge block's later
+    /// columns (E36's slices 3 and 5), so a block of K columns counts once and a term of categorical factors alone beside it, one column,
+    /// counts once too.</summary>
+    public int TermCount(BassTermTable terms)
+    {
+        ArgumentNullException.ThrowIfNull(terms);
+        int count = 0;
+        foreach (int id in TermIds)
+            if (terms[id].Ridge is not { Column: > 1 }) count++;
+        return count;
+    }
 }
 
 /// <summary>

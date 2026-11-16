@@ -81,13 +81,13 @@ public sealed class BpprFriedmanTests(ITestOutputHelper output)
         double coverY = (double)coveredY / held, coverF = (double)coveredF / held;
         BassDraw[] kept = [.. fit.Draws.SelectMany(c => c)];
         double sigma = kept.Average(d => Math.Sqrt(d.Sigma2));
-        double meanM = kept.Average(d => d.Structure.TermCount(4));
+        double meanM = kept.Average(d => d.Structure.TermCount(fit.Terms));
         output.WriteLine($"seed {seed}: Friedman, n = {n}, 20,000 sweeps in {seconds:F1} s; mean M {meanM:F1} ridges; posterior mean σ {sigma:F3} (paper's 1.05)");
         output.WriteLine($"out of sample, {held} points: RMSE for y {rmseY:F3} (paper's 1.05), for f {rmseF:F3} (paper's 0.38)");
         output.WriteLine($"95% intervals: prediction intervals cover {coverY:P1} of y (paper's 94.9%), credible intervals {coverF:P1} of f (paper's 91.1%)");
         output.WriteLine($"moves: {string.Join(", ", fit.Diagnostics.MoveKinds.Entries.Where(e => e.Attempts > 0).Select(e => $"{e.Kind} {e.Accepted}/{e.Attempts} (refused {e.Refused})"))}; "
                          + $"refusals {string.Join(", ", fit.Diagnostics.Refusals.Entries.Select(e => $"{e.Category} {e.Count}"))}; M's R̂-free range over the kept draws "
-                         + $"{kept.Min(d => d.Structure.TermCount(4))} to {kept.Max(d => d.Structure.TermCount(4))}");
+                         + $"{kept.Min(d => d.Structure.TermCount(fit.Terms))} to {kept.Max(d => d.Structure.TermCount(fit.Terms))}");
         Assert.True(rmseF < 1.0, $"RMSE for f {rmseF:F3}");
         Assert.True(rmseY < 1.5, $"RMSE for y {rmseY:F3}");
         Assert.InRange(coverY, 0.85, 1.0);

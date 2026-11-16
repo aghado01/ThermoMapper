@@ -207,7 +207,7 @@ internal sealed class BassEnsemble : IEnsembleModel<BassState>
 
             long chainAtCap = 0;
             foreach (BassDraw d in run.Draws)
-                if (d.Structure.TermCount(_model.Config.Structure.ColumnsPerTerm) == _model.MaxBasis) chainAtCap++;
+                if (d.Structure.TermCount(run.Terms) == _model.MaxBasis) chainAtCap++;
             atCap += chainAtCap;
             retained += run.Draws.Count;
             IReadOnlyList<MoveStat>? blocks = null;

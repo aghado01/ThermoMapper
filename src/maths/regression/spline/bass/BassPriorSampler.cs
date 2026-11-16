@@ -17,11 +17,13 @@ namespace Maths.Regression.Spline.Bass;
 /// {0, …, M_max}: the law of λ ~ Gamma(h₁, rate h₂), M | λ ~ Poisson(λ), which D02 integrates out, drawn by inversion
 /// and truncated at the cap, which F's cap rule would refuse anyway. Then M terms independently from D01's term measure
 /// (<see cref="BassStructurePrior.DrawTerm"/>), and τ from its prior when it is sampled. Under the determinant direction prior (E36's
-/// slice 4) M is drawn from p(M)/c_M instead, on M ≤ p, the cap the resolution sets (<see cref="DirectionDeterminant"/>).</item>
+/// slices 4 and 5; <see cref="DirectionDeterminant"/>) each term's parts are drawn first, then the directions of its M_θ direction-bearing
+/// terms are redrawn together until kept with probability det(ΘᵀΘ) ≤ 1 (Hadamard), and then the knots: the count law and which terms bear
+/// a direction stay the term measure's, and the directions given them have the law π(θ)·det/c_(M_θ).</item>
 /// <item><b>The acceptance.</b> The collection is kept only when it lies in F: no term the intercept (a draw whose
 /// parts are all empty), distinct terms, the support and D06's gates as the design admits them, and under the Jeffreys
-/// σ² prior no exact fit (<see cref="BassTarget.Refusal"/>). Under the determinant it is kept with probability det(ΘᵀΘ) ≤ 1 first
-/// (Hadamard), so a kept draw has the law p(M)·Π π(θ_m)·det(ΘᵀΘ)/c_M on F. Anything else is drawn again.</item>
+/// σ² prior no exact fit (<see cref="BassTarget.Refusal"/>). A missing knot range is met after the determinant's rejection, so a kept
+/// draw has the law p(M)·Π π(term)·det(Θ)/c_(M_θ) on F. Anything else is drawn again.</item>
 /// </list>
 /// Its account (<see cref="Attempts"/>, <see cref="Accepted"/>, refusals by reason) is the share of the prior F holds.
 /// A draw refuses after <see cref="MaxAttempts"/> attempts. Not thread-safe: it keeps its own design, one per chain.
@@ -56,11 +58,6 @@ public sealed class BassPriorSampler : IReferenceSampler<BassState>
         for (int m = 0; m <= cap; m++)
         {
             log[m] = model.Prior.LogCollectionWeight(m) - SpecialFunctions.LogGamma(m + 1.0);
-            if (model.Prior.Directions == DirectionPrior.Determinant)
-            {
-                double logC = DirectionDeterminant.LogNormalizer(model.Prior.Directional!.Variables, m);
-                log[m] = double.IsNegativeInfinity(logC) ? double.NegativeInfinity : log[m] - logC;   // no mass past M = p
-            }
             max = Math.Max(max, log[m]);
         }
         _countCdf = new double[cap + 1];
@@ -160,24 +157,8 @@ public sealed class BassPriorSampler : IReferenceSampler<BassState>
         for (long attempt = 0; attempt < MaxAttempts; attempt++)
         {
             Attempts++;
-            var terms = new BassTerm[DrawCount(rng)];
-            double logTermPrior = 0.0;
-            bool intercept = false;
-            for (int j = 0; j < terms.Length && !intercept; j++)
-            {
-                if (prior.DrawTerm(rng) is not { } term) intercept = true;
-                else
-                {
-                    terms[j] = term;
-                    logTermPrior += prior.LogPrior(term);
-                }
-            }
-            if (intercept)
-            {
-                InterceptTerms++;
-                continue;
-            }
-            if (!Couple(rng, terms, ref logTermPrior)) continue;
+            if (DrawCollection(rng) is not { } drawn) continue;
+            (BassTerm[] terms, double logTermPrior) = drawn;
             // On the model's working response, which a draw with latents (DrawPrior) may have moved this design off, or on a drawn scale's.
             if (_design.Load(terms, reading?.Invoke() ?? _model.Working) is { } refusal)
             {
@@ -213,24 +194,8 @@ public sealed class BassPriorSampler : IReferenceSampler<BassState>
         for (long attempt = 0; attempt < MaxAttempts; attempt++)
         {
             Attempts++;
-            var terms = new BassTerm[DrawCount(rng)];
-            double logTermPrior = 0.0;
-            bool intercept = false;
-            for (int j = 0; j < terms.Length && !intercept; j++)
-            {
-                if (prior.DrawTerm(rng) is not { } term) intercept = true;
-                else
-                {
-                    terms[j] = term;
-                    logTermPrior += prior.LogPrior(term);
-                }
-            }
-            if (intercept)
-            {
-                InterceptTerms++;
-                continue;
-            }
-            if (!Couple(rng, terms, ref logTermPrior)) continue;
+            if (DrawCollection(rng) is not { } drawn) continue;
+            (BassTerm[] terms, double logTermPrior) = drawn;
             double logTau = DrawLogTau(rng), logRate = target.Sigma2Rate?.SampleLogRate(rng) ?? double.NaN;
             InverseGamma? sigma2Prior = target.Sigma2Rate is { } rate ? rate.PriorAt(logRate) : target.Sigma2;
             // Several outputs (E34's decisions 6 and 7): Huang and Wand's rates first, then, where the skew is drawn or U is a latent, one Σ from
@@ -298,21 +263,70 @@ public sealed class BassPriorSampler : IReferenceSampler<BassState>
             "support rule or the caps, or move the count prior towards fewer terms.");
     }
 
-    // The determinant direction prior's acceptance (E36's slice 4): the collection kept with probability det(ΘᵀΘ), its log prior gaining the
-    // coupling ln det − ln c_M; under independent directions it keeps every collection and draws nothing.
-    private bool Couple(Xoshiro256PlusPlus rng, BassTerm[] terms, ref double logTermPrior)
+    // One attempt's collection: M from the count law, its terms from the term measure, and their log prior. Under the determinant direction
+    // prior (E36's slices 4 and 5) each term's parts come first (BassStructurePrior.DrawParts), then the M_θ directions are redrawn together,
+    // each redraw an attempt, until kept with probability det(ΘᵀΘ), and only then the knots, so a missing range, outside F, is met after the
+    // rejection, as F is: a range checked inside it would tilt the parts' law. Null where the attempt lies outside the support, counted: an
+    // intercept term or a missing range (InterceptTerms), M_θ past p or the redraws' budget spent (DeterminantRejections).
+    private (BassTerm[] Terms, double LogTermPrior)? DrawCollection(Xoshiro256PlusPlus rng)
     {
         BassStructurePrior prior = _model.Prior;
-        if (prior.Directions != DirectionPrior.Determinant) return true;
-        double coupling = prior.LogCoupling(terms);
-        double logDet = coupling + DirectionDeterminant.LogNormalizer(prior.Directional!.Variables, terms.Length);
-        if (!(Math.Log(rng.NextDouble()) < logDet))
+        var terms = new BassTerm[DrawCount(rng)];
+        if (prior.Directions != DirectionPrior.Determinant)
+        {
+            double logTermPrior = 0.0;
+            for (int j = 0; j < terms.Length; j++)
+            {
+                if (prior.DrawTerm(rng) is not { } term)
+                {
+                    InterceptTerms++;
+                    return null;
+                }
+                terms[j] = term;
+                logTermPrior += prior.LogPrior(term);
+            }
+            return (terms, logTermPrior);
+        }
+        var parts = new (ProjectionDirection? Direction, CategoricalFactor[] Cells)[terms.Length];
+        int directed = 0;
+        for (int j = 0; j < terms.Length; j++)
+        {
+            if (prior.DrawParts(rng) is not { } drawn)
+            {
+                InterceptTerms++;
+                return null;
+            }
+            parts[j] = drawn;
+            if (drawn.Direction is not null) directed++;
+        }
+        DirectionalTermSpace space = prior.Directional!;
+        if (directed > space.Variables)
         {
             DeterminantRejections++;
-            return false;
+            return null;
         }
-        logTermPrior += coupling;
-        return true;
+        var directions = new ProjectionDirection[directed];
+        for (long tries = 0; ; tries++)
+        {
+            for (int j = 0, d = 0; j < parts.Length; j++)
+                if (parts[j].Direction is { } direction) directions[d++] = direction;
+            if (Math.Log(rng.NextDouble()) < DirectionDeterminant.LogDeterminant(directions)) break;
+            DeterminantRejections++;
+            if (tries + 1 >= MaxAttempts) return null;
+            Attempts++;
+            for (int j = 0; j < parts.Length; j++)
+                if (parts[j].Direction is not null) parts[j].Direction = prior.DrawDirectionPart(rng);
+        }
+        for (int j = 0; j < terms.Length; j++)
+        {
+            if (BassStructurePrior.WithKnot(rng, space, parts[j].Direction, parts[j].Cells) is not { } term)
+            {
+                InterceptTerms++;
+                return null;
+            }
+            terms[j] = term;
+        }
+        return (terms, prior.LogTermsPrior(terms));
     }
 
     // M from the count law truncated at the cap, by inversion.

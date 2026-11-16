@@ -32,13 +32,15 @@ public static class DirectionDeterminant
     private const double PivotFloor = 1e-13;
 
     /// <summary>ln c_M = ln p! − ln (p − M)! − M ln p for <paramref name="count"/> = M directions in <paramref name="variables"/> = p
-    /// dimensions; −∞ past M = p, where every M directions are dependent.</summary>
+    /// dimensions, summed as Σ_(j &lt; M) ln(1 − j/p), exact at M ≤ 1; −∞ past M = p, where every M directions are dependent.</summary>
     public static double LogNormalizer(int variables, int count)
     {
         if (variables < 1) throw new ArgumentOutOfRangeException(nameof(variables), "p is at least 1.");
         if (count < 0) throw new ArgumentOutOfRangeException(nameof(count), "M is not negative.");
         if (count > variables) return double.NegativeInfinity;
-        return SpecialFunctions.LogGamma(variables + 1.0) - SpecialFunctions.LogGamma(variables - count + 1.0) - count * Math.Log(variables);
+        double sum = 0.0;
+        for (int j = 1; j < count; j++) sum += SpecialFunctions.Log1p(-(double)j / variables);
+        return sum;
     }
 
     /// <summary>ln det(ΘᵀΘ) for <paramref name="directions"/>' Gram, 0 for none; −∞ where they are linearly dependent.</summary>
@@ -65,18 +67,19 @@ public static class DirectionDeterminant
         return logDet;
     }
 
-    /// <summary>ln det(ΘᵀΘ) − ln c_M over the directions of <paramref name="terms"/>, structure terms each holding one directional hinge, in
-    /// <paramref name="variables"/> = p dimensions: the determinant prior's coupling beside the terms' own priors; −∞ past M = p or on a
-    /// dependence.</summary>
+    /// <summary>ln det(ΘᵀΘ) − ln c_(M_θ) over the directions of <paramref name="terms"/>' M_θ direction-bearing structure terms, in
+    /// <paramref name="variables"/> = p dimensions: the determinant prior's coupling beside the terms' own priors; −∞ past M_θ = p or on a
+    /// dependence. A term without a direction (a categorical part alone, E36's slice 5) takes no part in it, and c is read at M_θ, so the
+    /// prior on which terms bear a direction stays the term measure's and only their directions are reweighted.</summary>
     public static double LogCoupling(IReadOnlyList<BassTerm> terms, int variables)
     {
         ArgumentNullException.ThrowIfNull(terms);
-        if (terms.Count > variables) return double.NegativeInfinity;
-        var directions = new ProjectionDirection[terms.Count];
-        for (int m = 0; m < directions.Length; m++)
-            directions[m] = terms[m].Directional?.Direction ?? throw new ArgumentException($"Term {m} holds no direction.", nameof(terms));
+        var directions = new List<ProjectionDirection>(terms.Count);
+        foreach (BassTerm term in terms)
+            if (term.Directional is { } hinge) directions.Add(hinge.Direction);
+        if (directions.Count > variables) return double.NegativeInfinity;
         double logDet = LogDeterminant(directions);
-        return double.IsNegativeInfinity(logDet) ? logDet : logDet - LogNormalizer(variables, terms.Count);
+        return double.IsNegativeInfinity(logDet) ? logDet : logDet - LogNormalizer(variables, directions.Count);
     }
 
     // θᵀθ′ over the two directions' active variables, each ascending.

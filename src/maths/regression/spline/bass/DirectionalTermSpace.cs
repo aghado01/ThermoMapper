@@ -1,5 +1,7 @@
 using System;
 using System.Buffers;
+using System.Collections.Concurrent;
+using System.Collections.Generic;
 using System.Linq;
 using System.Runtime.CompilerServices;
 using Maths.Distributions;
@@ -68,6 +70,10 @@ public readonly record struct KnotRange(double Lower, double Upper)
 /// and L = U − (U − Q₀)/p₀ with Q₀ the least projection, the paper's eq. (UL). The range moves with θ, so a change draws its knot given the
 /// proposed direction. Where U = Q₀, as ties can make it, the range has no width and the direction no knot: such a term lies outside the
 /// support, as a structure outside F does, and the measure is not renormalized for it.</item>
+/// <item><b>Gated terms</b> (E36's slice 5, decision 7 and the user's 5a): a term with categorical factors reaches only its cells, the
+/// cases whose levels each factor holds, so its knot's range and a ridge block's knots are read from those cases' projections, U at
+/// 1 − n_active/n_S over their n_S. A cell with no case, or with n_S ≤ n_active, or whose projections leave the range no width, gives no
+/// range: the term lies outside the support, as above; nothing is redrawn and nothing renormalized.</item>
 /// </list>
 /// Each direction's range is computed once and kept beside it, a pure cache: the value is the same computation whether read from it or not.
 /// Immutable otherwise, so one serves every chain of a fit.
@@ -79,11 +85,13 @@ public sealed class DirectionalTermSpace
     private readonly BassInputs _inputs;
     private readonly double[] _logDirection;
     private readonly ConditionalWeakTable<ProjectionDirection, StrongBox<KnotRange?>> _ranges = new();
+    private readonly ConditionalWeakTable<ProjectionDirection, ConcurrentDictionary<string, StrongBox<KnotRange?>>> _cellRanges = new();
 
     /// <summary>The space over <paramref name="inputs"/>' continuous predictors, each carrying its standardization, with the active cap
     /// <paramref name="maxActive"/> (1 ≤ A ≤ p), the knot's upper quantile level <paramref name="knotLevel"/> in (0, 1) and p₀ =
-    /// <paramref name="localProbability"/> in (0, 1].</summary>
-    public DirectionalTermSpace(BassInputs inputs, int maxActive, double knotLevel, double localProbability)
+    /// <paramref name="localProbability"/> in (0, 1], and n_active = <paramref name="activeCases"/>, the cases U leaves above it, which a
+    /// gated term's cells read (null takes (1 − q)·n).</summary>
+    public DirectionalTermSpace(BassInputs inputs, int maxActive, double knotLevel, double localProbability, double? activeCases = null)
     {
         ArgumentNullException.ThrowIfNull(inputs);
         int p = inputs.Cases.ContinuousCount;
@@ -95,9 +103,11 @@ public sealed class DirectionalTermSpace
         if (maxActive < 1 || maxActive > p) throw new ArgumentOutOfRangeException(nameof(maxActive), $"A lies in [1, {p}].");
         if (!(knotLevel > 0.0 && knotLevel < 1.0)) throw new ArgumentOutOfRangeException(nameof(knotLevel), "The knot's upper quantile level lies in (0, 1).");
         if (!(localProbability > 0.0 && localProbability <= 1.0)) throw new ArgumentOutOfRangeException(nameof(localProbability), "p₀ lies in (0, 1].");
+        if (activeCases is { } given && !(given > 0.0 && double.IsFinite(given))) throw new ArgumentOutOfRangeException(nameof(activeCases), "n_active is positive and finite.");
         _inputs = inputs;
         Variables = p;
         MaxActive = maxActive;
+        ActiveCases = activeCases ?? (1.0 - knotLevel) * inputs.Cases.Cases;
         KnotLevel = knotLevel;
         LocalProbability = localProbability;
         _logDirection = new double[maxActive + 1];
@@ -117,6 +127,10 @@ public sealed class DirectionalTermSpace
     /// <summary>p₀, the prior probability that the knot lies above the least projected training case.</summary>
     public double LocalProbability { get; }
 
+    /// <summary>n_active, the cases the knot's upper end U leaves above it: over all training cases q = 1 − n_active/n, over a gated term's n_S
+    /// cases 1 − n_active/n_S.</summary>
+    public double ActiveCases { get; }
+
     /// <summary>ln of θ_𝒥's uniform density on S^(a−1) at <paramref name="active"/> = a: −ln|S^(a−1)| = ln Γ(a/2) − ln 2 − (a/2) ln π.</summary>
     public double LogDirection(int active)
         => active >= 1 && active <= MaxActive ? _logDirection[active] : throw new ArgumentOutOfRangeException(nameof(active), $"a lies in [1, {MaxActive}].");
@@ -128,21 +142,39 @@ public sealed class DirectionalTermSpace
         return _ranges.GetValue(direction, d => new StrongBox<KnotRange?>(Compute(d))).Value;
     }
 
+    /// <summary>The knot's range along <paramref name="direction"/> over the cells of <paramref name="cells"/>, a gated term's categorical factors
+    /// (slice 5): the cases whose levels every factor holds. With none it is <see cref="KnotRangeOf(ProjectionDirection)"/>. Null where the cells
+    /// hold no case, n_S ≤ n_active, or the range has no width.</summary>
+    public KnotRange? KnotRangeOf(ProjectionDirection direction, IReadOnlyList<CategoricalFactor> cells)
+    {
+        ArgumentNullException.ThrowIfNull(direction);
+        ArgumentNullException.ThrowIfNull(cells);
+        if (cells.Count == 0) return KnotRangeOf(direction);
+        ConcurrentDictionary<string, StrongBox<KnotRange?>> byCells = _cellRanges.GetValue(direction, _ => new ConcurrentDictionary<string, StrongBox<KnotRange?>>());
+        return byCells.GetOrAdd(CellKey(cells), _ => new StrongBox<KnotRange?>(ComputeOver(direction, cells))).Value;
+    }
+
     /// <summary>ln π(t | θ) for <paramref name="hinge"/>: −ln(U − L) with its knot in [L, U], −∞ outside it or where the range has no width.</summary>
-    public double LogKnot(DirectionalHinge hinge)
+    public double LogKnot(DirectionalHinge hinge) => LogKnot(hinge, []);
+
+    /// <summary>ln π(t | θ, cells) for <paramref name="hinge"/> gated by <paramref name="cells"/>: −ln(U − L) over the cells' range, −∞ outside
+    /// it or where there is none.</summary>
+    public double LogKnot(DirectionalHinge hinge, IReadOnlyList<CategoricalFactor> cells)
     {
         ArgumentNullException.ThrowIfNull(hinge);
-        if (KnotRangeOf(hinge.Direction) is not { } range) return double.NegativeInfinity;
+        if (KnotRangeOf(hinge.Direction, cells) is not { } range) return double.NegativeInfinity;
         return hinge.Knot >= range.Lower && hinge.Knot <= range.Upper ? -Math.Log(range.Width) : double.NegativeInfinity;
     }
 
-    /// <summary>Refuses a term outside the space: one holding any part but a directional hinge, a direction with more than A active variables,
-    /// or a variable beyond p.</summary>
+    /// <summary>Refuses a term outside the space: one holding a hinge, Legendre or functional factor or a ridge column, a direction with more
+    /// than A active variables, or a variable beyond p. Categorical factors beside a direction, or alone, are the structure prior's to check
+    /// (slice 5).</summary>
     public void Validate(BassTerm term)
     {
         ArgumentNullException.ThrowIfNull(term);
-        if (term.Directional is not { } hinge || term.Continuous.Count + term.Categorical.Count + term.Functional.Count + term.Legendre.Count > 0)
-            throw new ArgumentException("A directional fit's terms hold one directional hinge alone.", nameof(term));
+        if (term.Continuous.Count + term.Functional.Count + term.Legendre.Count > 0 || term.Ridge is not null)
+            throw new ArgumentException("A directional fit's terms hold a directional hinge, categorical factors gating it, or both.", nameof(term));
+        if (term.Directional is not { } hinge) return;
         ProjectionDirection d = hinge.Direction;
         if (d.Count > MaxActive) throw new ArgumentException($"The direction's {d.Count} active variables exceed the cap A = {MaxActive}.", nameof(term));
         if (d.Variables[^1] >= Variables) throw new ArgumentException($"Continuous variable {d.Variables[^1]} does not exist.", nameof(term));
@@ -190,15 +222,21 @@ public sealed class DirectionalTermSpace
     /// eq. (eta_-0) as <c>BayesPPR</c> reads it (<c>quantile(proj[proj &gt; knot0], seq(0, 1, length.out = K + 1))</c>). Null where they
     /// leave a column undefined: fewer than two cases above t₀, or t_K = t_{K+1} with K ≥ 2.
     /// </summary>
-    public double[]? RidgeKnots(DirectionalHinge hinge, int columns)
+    public double[]? RidgeKnots(DirectionalHinge hinge, int columns) => RidgeKnots(hinge, [], columns);
+
+    /// <summary>The ridge block's knots (<see cref="RidgeKnots(DirectionalHinge, int)"/>) over the cells of <paramref name="cells"/>, a gated
+    /// term's categorical factors (slice 5): the projected cases above t₀ among those the cells hold.</summary>
+    public double[]? RidgeKnots(DirectionalHinge hinge, IReadOnlyList<CategoricalFactor> cells, int columns)
     {
         ArgumentNullException.ThrowIfNull(hinge);
+        ArgumentNullException.ThrowIfNull(cells);
         if (columns < 1) throw new ArgumentOutOfRangeException(nameof(columns), "K is at least 1.");
         CaseInputs cases = _inputs.Cases;
         var projection = new double[cases.Cases];
         DirectionalHingeKernel.Project(hinge.Direction, _inputs, cases, projection);
         double t0 = hinge.Knot;
-        double[] above = [.. projection.Where(p => p > t0)];
+        double[]? mask = Mask(cells);
+        double[] above = [.. projection.Where((p, i) => p > t0 && (mask is null || mask[i] != 0.0))];
         if (above.Length < 2) return null;
         Array.Sort(above);
         var knots = new double[columns + 2];
@@ -215,6 +253,45 @@ public sealed class DirectionalTermSpace
             knots[l + 1] = h > 0.0 && above[lo] != atLo ? (1.0 - h) * atLo + h * above[lo] : atLo;
         }
         return columns >= 2 && !(knots[columns] < knots[columns + 1]) ? null : knots;
+    }
+
+    // The cells of `cells` as a 0/1 mask over the training cases; null for none, every case.
+    private double[]? Mask(IReadOnlyList<CategoricalFactor> cells)
+    {
+        if (cells.Count == 0) return null;
+        CaseInputs cases = _inputs.Cases;
+        var mask = new double[cases.Cases];
+        Array.Fill(mask, 1.0);
+        foreach (CategoricalFactor c in cells) c.ZeroOutside(cases.Categorical(c.Variable), mask);
+        return mask;
+    }
+
+    private static string CellKey(IReadOnlyList<CategoricalFactor> cells)
+        => string.Join(";", cells.Select(c => $"{c.Variable}:{string.Join(",", c.Levels)}"));
+
+    // The range over the cells' n_S cases: U the type-7 quantile at 1 − n_active/n_S of their projections, Q₀ their least, as Compute reads
+    // the whole data's, by a sort.
+    private KnotRange? ComputeOver(ProjectionDirection direction, IReadOnlyList<CategoricalFactor> cells)
+    {
+        CaseInputs cases = _inputs.Cases;
+        var projection = new double[cases.Cases];
+        DirectionalHingeKernel.Project(direction, _inputs, cases, projection);
+        double[] mask = Mask(cells)!;
+        double[] reached = [.. projection.Where((_, i) => mask[i] != 0.0)];
+        int n = reached.Length;
+        if (!(ActiveCases < n)) return null;
+        Array.Sort(reached);
+        double level = 1.0 - ActiveCases / n;
+        double index = 1.0 + (n - 1) * level;
+        double floor = Math.Floor(index);
+        int lo = (int)floor;
+        double h = index - floor;
+        double atLo = reached[lo - 1], atHi = h > 0.0 ? reached[lo] : atLo;
+        double upper = h > 0.0 && atHi != atLo ? (1.0 - h) * atLo + h * atHi : atLo;
+        double width = (upper - reached[0]) / LocalProbability;
+        if (!(width > 0.0)) return null;
+        double lower = upper - width;
+        return lower < upper ? new KnotRange(lower, upper) : null;
     }
 
     // U as R's type-7 quantile at q, index 1 + (n − 1)q, lo its floor and h its fraction: (1 − h)·x₍lo₎ + h·x₍lo+1₎ where h > 0 and the two

@@ -75,7 +75,7 @@ public sealed class DirectionalChainTests(ITestOutputHelper output)
     }
 
     // θᵀz at the training cases, z from the raw values by the compensated mean and sample deviation.
-    private static double[] Projections(BassData data, ProjectionDirection d)
+    internal static double[] Projections(BassData data, ProjectionDirection d)
     {
         double[][] raw = DirectionalHingeTests.Raw(data);
         (double Mean, double Deviation)[] m = DirectionalHingeTests.Moments(data);
@@ -232,7 +232,7 @@ public sealed class DirectionalChainTests(ITestOutputHelper output)
 
     // Wallenius' probability that weighted sampling without replacement draws the set `set`, by quadrature of its integral
     // ∫₀¹ Π_{j∈set}(1 − t^{ω_j/D}) dt, D the weight left out, under t = s^m so that the integrand is smooth: apart from the engine's.
-    private static double WalleniusByQuadrature(double[] weights, int[] set)
+    internal static double WalleniusByQuadrature(double[] weights, int[] set)
     {
         double left = weights.Where((_, u) => !set.Contains(u)).Sum();
         double[] c = [.. set.Select(j => weights[j] / left)];
@@ -576,7 +576,7 @@ public sealed class DirectionalChainTests(ITestOutputHelper output)
 
         // Data a directional basis does not serve, ActiveCases that leave no case below U, KHAOS's modified g-prior.
         BassData categorical = new([new ContinuousPredictor("x", [0, 0.5, 1, 0.2]), new CategoricalPredictor("z", [0, 1, 0, 1], ["a", "b"])], new ScalarResponse([1, 2, 3, 2.5]));
-        Assert.Contains("decision 7", Assert.Throws<ArgumentException>(() => BassModel.Create(good, categorical)).Message);
+        Assert.Equal(1, BassModel.Create(good, categorical).Resolved.MaxCategoricalInteraction);   // categorical factors gate directions (slice 5)
         Assert.Throws<ArgumentException>(() => BassModel.Create(good with { Structure = s with { Directional = new DirectionalBasis { ActiveCases = 120.0 } } }, Data()));
         Assert.Throws<ArgumentException>(() => BassModel.Create(good with { Coefficients = BassCoefficientPrior.ModifiedG(TauPrior.Held()) }, Data()));
 
