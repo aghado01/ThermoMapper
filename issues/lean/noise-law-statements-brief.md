@@ -81,5 +81,6 @@ Those of the [first brief](time-frequency-statements-brief.md#working-rules).
   - S10c and S11 are proved from their named premises, each met by an instance.
   - S13 holds with the tight bracket 1.25 < u⋆ < 1.26.
 - **Part B landed:** the nine modules of the first two briefs pass the README's checks and are promoted to `lean/Lemmas/` (`TimeFrequency/`, `Spline/`, `BassWhitenedMarginal`, `BamrsKroneckerGram`), namespaces unchanged; meta-CI PASS.
-- **Next:** Part C (the preparation brief), then S16.
+- **Part C landed:** `issues/regression/bass/output-inner-product-brief.md`, prepared and not built.
+- **Next:** the report; S16 is optional.
 - **Uncommitted:** nothing.
