@@ -143,7 +143,7 @@ Those of the BASS slice briefs:
 - builds below normal priority with capped threads;
 - `scripts/test-select.ps1` with an `-ArtifactsRoot` set inline;
 - a fresh-eyes review before each report;
-- `docs/` updated offline, owed in the report.
+- each report ends in an Exposition section the user can splice into docs later; it carries no pointers into `docs/`, and `docs/` is not opened.
 
 ## Report
 

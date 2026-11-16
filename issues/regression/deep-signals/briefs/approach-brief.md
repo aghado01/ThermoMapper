@@ -47,7 +47,7 @@ The recovery theorems do not perform these. They certify the tasks: they say whe
 
 How far each row was checked is in the last column. "Elaborated" means the coordinating session re-elaborated the statements and printed their axioms; "gates checked" means it diffed the pre-stated gates against their final text and matched headline numbers to receipts; "chip's report" means neither was done.
 
-**Proved in Lean** (`lean/Enthymemata/`, no `sorry`, standard axioms).
+**Proved in Lean** (no `sorry`, standard axioms). The first nine modules were promoted to `lean/Lemmas/` on 2026-11-16 (`f0cc4e2`); the noise-law modules are in `lean/Enthymemata/TimeFrequency/`. Paths below are relative to the stage.
 
 | Result | Module | Checked |
 |---|---|---|
@@ -60,7 +60,10 @@ How far each row was checked is in the last column. "Elaborated" means the coord
 | A design's full column rank is equivalent to a greedy ordered matching of sites to supports, given Theorem 4.61 as a premise (met at order 1) | `Spline/DesignRank.lean` | Chip's report |
 | The order-2 trigonometric B-spline is positive while its support is under half the carrier's period, and the condition is sharp; the damped oscillator's Green's function gives a one-sided basis | `Spline/TrigonometricBSpline.lean` | Chip's report |
 | Free knots approximate any monotone f by steps within (f(b) − f(a))/(2(k + 1)); uniform knots leave some f at ½ for every k | `Spline/FreeKnotSteps.lean` | Chip's report |
-| The noise laws and the links left assumed (S10 to S15) | commit `5b08d17` | Unread; the chip's report was in progress |
+| The covariance of log powers is Σκⁿ/n², from the Laguerre coefficients −1/n of the logarithm, with the bivariate expansion as a named premise | `TimeFrequency/LogPowerCovariance.lean` | Chip's report |
+| Cov(\|a\|², \|b\|²) = \|E[a·conj b]\|² + \|E[a·b]\|², and Var(xᵀHx) = 2·tr((HΣ)²), each with the Gaussian pairing rule as a named premise | `TimeFrequency/LogPowerCovariance.lean`, `TimeFrequency/QuadraticFormVariance.lean` | Chip's report |
+| ∫₀^∞ (1 − (1 − e^{−x})ⁿ) dx = H_n; the rectangular window's turnover is the root of eᵘ = 1 + 2u, between 1.25 and 1.26 | `TimeFrequency/PeakOfExponentials.lean`, `TimeFrequency/WindowTurnover.lean` | Chip's report |
+| The response's second moments under the g-prior on the whitened Gram are the covariance the whitened marginal reads | `BassWhitenedMarginal.lean` | Chip's report |
 
 **Measured,** under gates written before their readings (`issues/regression/receipts/latent-recovery/` and `receipts/spline-space/`).
 
@@ -104,7 +107,7 @@ Stated for any application. The order follows the pilot's main finding: generato
 
 | Piece | Why | Specification or evidence | State |
 |---|---|---|---|
-| The output inner product Q in BASS's core | Residuals correlated along the output index are counted as independent today | S4, the Khatri–Rao Gram, the level under Q; the Li₂ table needs no data | Preparation brief commissioned from the Lean chip; it stops for the user's approval before any build |
+| The output inner product Q in BASS's core | Residuals correlated along the output index are counted as independent today | S4, the Khatri–Rao Gram, the level under Q; the Li₂ table needs no data | Prepared, not built: `issues/regression/bass/output-inner-product-brief.md`, seven decisions and five slices, awaiting the user's approval |
 | An emulator's error covariance across outputs, from held-out residual vectors | A functional emulator's residuals read lag-1 r of 0.70–0.83 while its draws carry σ²·I | The pilot's Stage 1 | Proposed |
 | A noise law for log power | Its noise is skewed with known shape; the Gaussian core is biased on it | The dilogarithm results; the Whittle model exists in BARS only | Not posed |
 
@@ -135,8 +138,9 @@ Stated for any application. The order follows the pilot's main finding: generato
 
 - Does the oscillatory term family earn its own brief?
 - Does the mass gate give way to "one site per support, in order", or stay as a declared prior beside it?
-- The Q extension's decisions, when its preparation brief lands.
-- Promotion of the closed Lean modules.
+- The Q extension's seven decisions, each at a recommendation in its preparation brief.
+- Promotion of the noise-law modules; the first nine are promoted.
+- Theorem 4.61 at order 2, left unattempted, which would make the rank result unconditional for degree-1 splines.
 - Which reading leads: fitting the spectrogram's surface, or fitting the waveform with atoms. Whitening the first collapses it into the second.
 - Two source notes from the numerical chip: a suspected misprint at the opening of Schumaker § 4.8, unverified, and a conversion defect at Lemma 10.16.
 
