@@ -158,3 +158,43 @@ Record the exact angular range, the antipodal two-step bound, and the hypothesis
 Write q for the arccos argument. Its derivative −(π − θ) sin θ / π is negative on (0, π). The endpoint values bound q, and the two order reversals in arccos ∘ q make g strictly increasing. The derivative of sin θ − θ cos θ is θ sin θ, positive in the interior. Comparison with its value at zero gives q(θ) > cos θ for 0 < θ ≤ π, hence g(θ) < θ. Each orbit is bounded below by zero. Continuity makes its limit a fixed point, and strict decrease excludes every positive fixed point.
 
 For the Lipschitz bound, put a = (π − θ)/π and b = sin θ/π. Both are nonnegative and a + b ≤ 1 because sin θ ≤ θ. Since q = a cos θ + b, expansion gives q² + (a sin θ)² ≤ (a + b)² ≤ 1. On the interior this bounds g′ = a sin θ / √(1 − q²) by 1. The mean value theorem and continuity at the endpoints give the closed-interval estimate. The triangle inequality adds at most δ per layer. Monotonicity makes the antipodal start maximal at depth two, and each subsequent step can only decrease the angle.
+
+## Round 3 report — S20
+
+For any nonzero reference x★ in a real inner-product space and any depth d ≥ 2, exactly two nonzero inputs satisfy h(x) = 0. They are **x★ and −ρ_d x★**. The opposite-ray point is nonzero and distinct from x★ because ρ_d > 0. The finite-sum radius satisfies ρ₂ = 1/π and tends to 1. Proof commit `5a32888` on main. [ComparisonField.lean](../../../../lean/Enthymemata/GenerativePrior/ComparisonField.lean)
+
+**Source and scope.** `deep_cs_arxiv.tex` gives the field in the proof sketch (lines 529–533) and in unit directions in Lemma `lemma:Seps` (lines 1083–1092). `comparisonField d x y` takes the reference as its last argument and carries the factor 2⁻ᵈ. `comparisonField_normalized` proves the second formula for nonzero x and y. The zero-set equivalence needs neither WDC nor RRIC. The paper separately bounds the location of points where the field norm is small at positive ε. S20 covers exact zeros.
+
+| Result | Declarations in `GenerativePrior` |
+| --- | --- |
+| Paper's coefficients and expansion at any θ ∈ [0, π], including depth zero. | `angleWeight`, `angleProduct`, `angleSum`, `angleSum_succ`, `cos_iterate_eq_angleProduct_add_angleSum` |
+| At θ = 0 all iterates are zero, ξ = 1 and ζ = 0. The product ξ is positive for θ ∈ [0, π) and vanishes at π for d ≥ 1. | `reluAngle_iterate_zero`, `angleProduct_at_zero`, `angleSum_at_zero`, `angleProduct_pos`, `angleProduct_at_pi` |
+| ρ_d is the antipodal sum. Its cosine identity starts at d = 1, and its strict positivity starts at d = 2. | `antipodalRadius`, `antipodalRadius_eq_cos`, `antipodalRadius_two`, `antipodalRadius_pos`, `antipodalRadius_tendsto_one` |
+| Original field, normalized identity, coefficient balance, the two ray criteria, exclusion of interior angles, and the full equivalence. | `comparisonField`, `comparisonField_normalized`, `comparisonField_zero_iff_balance`, `comparisonField_zero_iff_of_angle_zero`, `comparisonField_zero_iff_of_neg_smul`, `comparisonField_ne_zero_of_interior`, `comparisonField_zero_iff` |
+| At d = 2 and x★ = 1 on the real line, 1 and −1/π both give zero. In the plane the orthogonal unit coordinate vectors give a nonzero field at the same depth. | `comparisonField_two_roots_witness`, `comparisonField_orthogonal_witness` |
+
+### Replay
+
+The statement module, its import module and the `Enthymemata` aggregate built successfully. Direct elaboration of the committed source gave exactly `propext`, `Classical.choice` and `Quot.sound` for each of its 19 theorem declarations. The taxonomy check passed and counted five definitions, 19 theorems and zero proof holes. The aggregate replayed the existing warnings recorded in round 1.
+
+With the portable Elan launcher on PATH, run from the repository root in PowerShell.
+
+```powershell
+(Get-Process -Id $PID).PriorityClass = 'BelowNormal'
+$env:LEAN_NUM_THREADS = '2'
+$env:ELAN_HOME = Split-Path -Parent (Split-Path -Parent (Get-Command lake.exe).Source)
+Set-Location -LiteralPath lean
+lake build +Enthymemata.GenerativePrior.ComparisonField +Enthymemata.GenerativePrior +Enthymemata
+lake env lean Enthymemata/GenerativePrior/ComparisonField.lean
+pwsh -NoProfile -File scripts/meta-ci.ps1 -NoBuild
+```
+
+### Doc changes owed
+
+Record the exact two-point zero set and the finite-sum identity for its radius alongside the deterministic field. S18 and optional S22 remain queued.
+
+### Methods
+
+Write θᵢ for the angle after i layers, aᵢ = (π − θᵢ)/π and bᵢ = sin(θᵢ)/π. Appending one layer to ζ multiplies every existing term by a_d and adds b_d with an empty tail product. Induction in the S17 cosine recurrence gives cos θ_d = ξ_d cos θ + ζ_d, where ξ_d is the product of the first d multipliers. At θ = π the first multiplier vanishes, so ζ_d = cos θ_d for d ≥ 1. At depth two this equals 1/π. The angles decrease within [0, π], so their cosines at later depths are at least 1/π. S17 gives θ_d → 0 and continuity gives ρ_d → 1.
+
+After canceling the common nonzero scale, a zero requires c x = ξ x★, where c = 1 − ζ ‖x★‖/‖x‖. For an interior angle ξ > 0. Balance would make c nonzero and force x★ onto one of the two rays through x, contradicting the interior angle. At angle zero the field reduces to 2⁻ᵈ(x − x★). In the normalized formula the bracket is ‖x‖/‖x★‖ and the leading term supplies the −1. At angle π, write x = r x★ with r < 0. Here ξ = 0, ζ = ρ_d and the norm ratio ‖x★‖/‖x‖ is 1/(−r), so balance is equivalent to r = −ρ_d. Both ray calculations are equivalences.
