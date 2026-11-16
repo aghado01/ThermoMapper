@@ -64,6 +64,32 @@ As in the archived brief: each slice is reported here, then waits for the main s
 
 Newest first.
 
+### 2026-11-15 — Streams under covariate shift: the guarantee proved, the docstring follows
+
+The conformal-lean thread proved the guarantee I posed for `CovariateShiftPValues` (`deaf0da`) and reported it here.
+
+**Landed** on `main`, nothing pushed: `0fede4d`, a docstring only.
+- The guarantee's paragraph now reads "proved (`shift_law`, and `newestShare_eq_esymm` for these shares, up to the continuous lift as for M-1)" in place of "posed here, checked by enumeration, not yet in Lean".
+- It also says the ratio must be the true one.
+- *What changes for existing calls: nothing.*
+
+**Checked before citing.**
+- `shift_law` is the finite core over a finite unit space: weights w ≥ 0, a symmetric g, and the weighted law normalized. It concludes the stream's joint uniformity, E[Π 1(pₜ ≤ uₜ)] = Π uₜ. The hypotheses are satisfiable.
+- `newestShare_eq_esymm` shows the newest-position share is wⱼ e_k(w₋ⱼ)/((k + 1) e_(k+1)(w)), which is `StreamShares`' πⱼ/k.
+- The file holds no `sorry`, axiom or `native_decide`.
+- The Lean thread reports that the C# needs no new condition:
+  - only w ≥ 0, which the class checks;
+  - a stream unit with w = 0 has probability 0, so refusing it costs nothing;
+  - the 5e-324 floor on p is harmless.
+
+**Gates.**
+- `CovariateShiftPValueTests` 9 of 9.
+- *Per commit:* 120 of 120 in the 5 classes selected in Maths.Regression.Tests.
+
+**Defects found: none.**
+
+**Doc changes owed:** the conformal test martingales section: the covariate-shift guarantee, proved.
+
 ### 2026-11-15 — RoBAS-Full's intervals, unconditional: the docstrings follow the Lean
 
 The RoBAS-Full Dawson bounds session proved the four Dawson bounds (`7d98281`, `ConformalDawson.lean`) and reported it here. This is the follow-up the RoBAS-Full intervals item left open: drop "granted four bounds … the checks certify".
