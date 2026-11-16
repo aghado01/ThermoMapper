@@ -79,3 +79,48 @@ The approach leans on theorems that say a code of dimension k is recoverable fro
 **Gates.** Reproduce the observed 30/30 count. Score every repetition including iteration-limit stops. Independently check both sign objectives and the gradient at the selected initial sign using scalar forward sums and the fixed-mask directional derivative along each coordinate. Require absolute discrepancies ≤ 10⁻¹⁰ × max(1, |reference|) per scalar. Repeat the objective and gradient checks at each returned code. Require finite readings and zero exactly zero layer preactivations on the selected gradients for the claim about equivalence on this run. Count sign flips, the two stop reasons and exact zeros separately from recovery.
 
 **Rerun rule.** A 29/30 outcome is marginal. Replay the same 30 seeded problems once and inspect the failed endpoint, stopping gradient, sign choices and objective checks. For a larger discrepancy or any numerical check failure, diagnose implementation, sources and failed rows first. Retain the original count and gate. A replay tests reproducibility and adds no independent trials. No new seeds or parameter tuning in this checkpoint.
+
+### Readings and decision
+
+**Passed the preregistered 30/30 recovery gate.** All 30 final codes were within 9.24 × 10⁻¹⁶ relative Euclidean error of their independently drawn generating code. The paper's k = 10 point is reproduced with fresh matrices, codes and initializations. [Primary summary](../../../../artifacts/generative-prior/g1-k10-primary/results/summary.json) · [Primary per-repetition rows](../../../../artifacts/generative-prior/g1-k10-primary/results/trials.jsonl)
+
+| Reading | Observed |
+| --- | ---: |
+| Successful final codes at error < 10⁻³ | 30/30 |
+| Relative code error, min / median / max | 2.5074 × 10⁻¹⁶ / 5.7276 × 10⁻¹⁶ / 9.2344 × 10⁻¹⁶ |
+| Gradient stops | 29, after 189–417 updates |
+| Update-limit stops | 1, at 50,000 updates |
+| Median updates, including the capped run | 291 |
+| Strict sign flips / comparisons | 17 / 58,659 |
+| Exact zero preactivations at selected signs | 0 |
+| Largest scaled discrepancy in the objective and gradient checks | 7.7716 × 10⁻¹⁶ (gate 10⁻¹⁰) |
+
+All 17 sign changes occurred at the first comparison, in distinct repetitions. Every selected sign was inside a differentiable region of the generator, so Algorithm 2 took the direction specified by Algorithm 1 throughout this cohort. The effect of the sign check on recovery remains an open experimental question.
+
+**Repetition 13 reached the update limit.** Its seed was −1738237470, its relative code error was 6.8430 × 10⁻¹⁶ and its final objective was 5.7565 × 10⁻³¹. The final gradient norm was 2.617852353400183 × 10⁻¹⁶, or 1.179 times the stopping threshold. Regenerating its network and observation from the recorded streams and applying one signed update to the returned code reproduced all ten coordinate bit patterns. The update had rounded to a fixed point. This repetition counts as a recovery under the original gate.
+
+**Checks.** A separate calculation from the recorded endpoint vectors confirmed all 30 relative errors and success flags. The stored first-step sign decisions agreed with the two signed objectives, each gradient stop satisfied the strict norm bound, and all 150 component seeds were distinct. A fresh build and replay from the pin produced byte-identical primary and replay summaries and trial rows on this machine. [Replay summary](../../../../artifacts/generative-prior/g1-k10-replay/results/summary.json) · [Replay trial rows](../../../../artifacts/generative-prior/g1-k10-replay/results/trials.jsonl)
+
+### Replay
+
+The protocol landed in `dfb8db4`. The code, settings and engine used for both runs are pinned at `3842563b259d32ca9a997af6890151d0aac15526`. Run the following from the repository root in PowerShell with the .NET 10 SDK. Use a fresh run label on each invocation.
+
+```powershell
+./issues/regression/receipts/generative-prior/replay.ps1 -Revision 3842563b259d32ca9a997af6890151d0aac15526 -RunName g1-k10-review
+```
+
+The command archives the pinned sources under `artifacts/generative-prior/g1-k10-review/source/`, builds in Release and writes `results/summary.json` and `results/trials.jsonl` under that run. The numerical loop is serial and runs below normal priority with one logical processor exposed to .NET. The observed runtime was .NET 10.0.5, x64. Each trial row contains its seeds in registered order, truth, start, estimate, sign-flip iterations (one-based), stopping reason and check readings. The tracked copies use repository line endings. [Settings](../../receipts/generative-prior/settings/g1-k10.json) · [Tracked summary](../../receipts/generative-prior/results/g1-k10/summary.json) · [Tracked trial rows](../../receipts/generative-prior/results/g1-k10/trials.jsonl)
+
+### Review boundary
+
+This supplies the first linear baseline at m/k = 15. The remaining k and m/k values, depth three, sign ablation, magnitude objective and G2–G5 are queued. For the future negative-ray comparison at depth two, the linear prediction is ρ₂ = 1/π ≈ 0.31831. In the magnitude paper's `dpr.tex`, lines 623–625, the angles starting at π give θ₁ = π/2 and θ₂ = arccos(1/π). Substitution gives ρ₂ = 2 sin(θ₂)/π + (π − 2θ₂)/π² ≈ 0.6691522942. This signed linear run did not measure either negative-ray location. No engine primitive was needed for this checkpoint.
+
+### Doc changes owed
+
+The numerical baseline, stopping-rule observation and distinction between the linear and magnitude radii are available for the next documentation batch.
+
+## Exposition
+
+In noiseless recovery through a bias-free Gaussian ReLU generator of widths 10 → 250 → 600, 150 Gaussian measurements sufficed to recover the generating code in all 30 independent repetitions of the signed descent experiment. At each iteration the method evaluated the quadratic measurement loss at both signs and took a unit gradient step from the lower-loss sign. Seventeen starts changed sign, all on the first comparison. No selected iterate had an exactly zero layer preactivation, so the practical gradient agreed with the paper's subgradient algorithm throughout these runs.
+
+Recovery and numerical termination are separate measurements. All relative code errors were below 9.24 × 10⁻¹⁶. In one run the signed update rounded back to the same binary64 vector while the gradient norm remained above the spacing at one. That run satisfied the experimental recovery criterion at the 50,000-update limit.
