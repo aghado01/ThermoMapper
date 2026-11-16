@@ -76,7 +76,7 @@ This is exploration on probes. The engine stays as it is: a gap found here is a 
 
 ### In progress
 
-- Closed on 2026-11-16 against the done criteria: every sweep and stage ran and is read below. One post-gate refit (Stage 2, K = 4 ridge blocks) was still fitting at close; its reading replaces the marked line in the Stage 2 readings when it lands. The probe is at `artifacts/latent-recovery/probe/`, built against a `be979dd` snapshot in `artifacts/latent-recovery/source/`; its sources, settings and summaries are tracked in `receipts/latent-recovery/`. Post-gate checks (`b2-supplement`, `s1-mixing`, `s1-capacity`, `s2-capacity`) are labelled as such where they are read and changed no gate. The interim notes written at the usage-limit stop are folded into the readings; one of their figures was wrong (the discrepancy's error ratio reads 1.0–3.3, not 3–7).
+- Closed on 2026-11-16 against the done criteria: every sweep and stage ran and is read below. One post-gate refit (Stage 2, K = 4 ridge blocks) was stopped unfinished after about 75 minutes; nothing is left running. The probe is at `artifacts/latent-recovery/probe/`, built against a `be979dd` snapshot in `artifacts/latent-recovery/source/`; its sources, settings and summaries are tracked in `receipts/latent-recovery/`. Post-gate checks (`b2-supplement`, `s1-mixing`, `s1-capacity`, `s2-capacity`) are labelled as such where they are read and changed no gate. The interim notes written at the usage-limit stop are folded into the readings; one of their figures was wrong (the discrepancy's error ratio reads 1.0–3.3, not 3–7).
 
 ### Gates as pre-stated
 
@@ -173,7 +173,7 @@ Each gate was written here before the first reading of its stage or sweep. A gat
 
 - *Emulators:* held-out R² 0.04 for the functional layout (k = 2 and 3) and 0.09 and 0.13 for the directional one, with RMSE 1.89–1.99 nepers against a response sd of 1.97. Both predict roughly the envelope and miss the comb, so neither serves. A post-gate refit at k = 2 (`s2-capacity`) tried more capacity:
   - With MaxBasis 400 and a 32 000-scan burn-in, the functional layout stays at 0.04 and the directional one rises to 0.34 (47 s).
-  - K = 4 ridge blocks (MaxBasis 120, 32 000 scans) were still fitting when this was committed; the reading follows when it lands.
+  - K = 4 ridge blocks (MaxBasis 120, 32 000 scans) did not finish: the fit was stopped after about 75 minutes, unread.
 
   Axis-aligned hinge products cannot see the comb at any capacity tried; directions see part of it and gain with capacity. The held-out residuals' lag-1 r is 0.31–0.35, lower than Stage 1's because the misfit is the comb itself, alternating harmonic by harmonic.
 - *Inversions through the emulators:* f₀'s posterior stays near the prior. The median sd is 0.23–0.28 of the box (a uniform's is 0.29), f₀ coverage 0.85–1.00, f₀ error 0.07–0.23, and the mass within a semitone of f₀* 0.09–0.32. The directional layout reads a little of f₀ at ratio 16 (error 0.073; mass at the truth 0.26 and 0.32 at k = 2 and 3).
@@ -229,7 +229,7 @@ Stated for any application and not built. Each is to be checked by rerunning thi
   - R2's band at k = 1 cannot see over-coverage.
   - The mixing check covered one cell at each of k = 4 and 5.
   - The larger post-gate fits were not carried through a calibration grid.
-- *Stage 2:* the modality subset ran at k = 2 only; the capacity refits ran at k = 2 only and were not calibrated through; no octave-jump move was tried.
+- *Stage 2:* the modality subset ran at k = 2 only; the capacity refits ran at k = 2 only and were not calibrated through; the K = 4 ridge-block refit was stopped unfinished; no octave-jump move was tried.
 - *Lean chip:* no reading contradicted a posed statement, so no message went to it.
 
 ### Doc changes owed
