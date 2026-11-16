@@ -1,0 +1,20 @@
+notice: BassSensitivity.lean is proof-closed ΓÇö review it for promotion to Lemmas/.
+notice: BassStructureChain.lean is proof-closed ΓÇö review it for promotion to Lemmas/.
+notice: BgpCovering.lean is proof-closed ΓÇö review it for promotion to Lemmas/.
+notice: BgpGaussianKL.lean is proof-closed ΓÇö review it for promotion to Lemmas/.
+notice: BgpGaussianTails.lean is proof-closed ΓÇö review it for promotion to Lemmas/.
+notice: BgpUnknownVariance.lean is proof-closed ΓÇö review it for promotion to Lemmas/.
+notice: Bifiltration.lean is proof-closed ΓÇö review it for promotion to Lemmas/.
+notice: ConformalDawson.lean is proof-closed ΓÇö review it for promotion to Lemmas/.
+notice: ConformalValidity.lean is proof-closed ΓÇö review it for promotion to Lemmas/.
+notice: GuardedEstimator.lean is proof-closed ΓÇö review it for promotion to Lemmas/.
+notice: PenalizedAdmission.lean is proof-closed ΓÇö review it for promotion to Lemmas/.
+notice: PottsPK.lean has no statements yet ΓÇö still a protolemma in costume.
+notice: ContinuousPoincare.lean is proof-closed ΓÇö review it for promotion to Lemmas/.
+notice: DirectionMoves.lean is proof-closed ΓÇö review it for promotion to Lemmas/.
+notice: MatrixPoincare.lean is proof-closed ΓÇö review it for promotion to Lemmas/.
+notice: ProductVariance.lean is proof-closed ΓÇö review it for promotion to Lemmas/.
+notice: ProjectionMean.lean is proof-closed ΓÇö review it for promotion to Lemmas/.
+notice: Refit.lean is proof-closed ΓÇö review it for promotion to Lemmas/.
+notice: WeightedPoincare.lean is proof-closed ΓÇö review it for promotion to Lemmas/.
+meta-ci: PASS ΓÇö lemmas and theorems prove; enthymemata may apologize.

@@ -1,0 +1,8 @@
+'Conformal.sum_smoothCdf' depends on axioms: [propext, Classical.choice, Quot.sound]
+'Conformal.streamTotal_succ' depends on axioms: [propext, Classical.choice, Quot.sound]
+'Conformal.sum_newest_eq' depends on axioms: [propext, Classical.choice, Quot.sound]
+'Conformal.shift_uniform' depends on axioms: [propext, Classical.choice, Quot.sound]
+'Conformal.shift_law' depends on axioms: [propext, Classical.choice, Quot.sound]
+'Conformal.sum_mul_esymmOn_erase' depends on axioms: [propext, Classical.choice, Quot.sound]
+'Conformal.streamTotal_esymm' depends on axioms: [propext, Classical.choice, Quot.sound]
+'Conformal.newestShare_eq_esymm' depends on axioms: [propext, Classical.choice, Quot.sound]
