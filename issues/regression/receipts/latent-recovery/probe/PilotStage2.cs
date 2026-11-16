@@ -24,6 +24,26 @@ public static partial class Pilot
             case "s2-peek": Peek(new HarmonicSynthesizer(3), Stage2, dir, "s2"); return true;
             case "s2-run": Run(Stage2, k => new HarmonicSynthesizer(k), int.Parse(args[0]), dir, args.Contains("rerun"), args.Contains("fit-only")); return true;
             case "s1-fit-only": Run(Stage1, k => new ResonanceSynthesizer(k), int.Parse(args[0]), dir, false, true); return true;
+            case "s2-capacity":
+                // Post-gate: the Stage 2 design refitted with more capacity, each layout; held-out accuracy only.
+                foreach ((string name, string layout, int maxBasis, int burn, int columns) in new[]
+                         { ("fn-mb400-b32k", "functional", 400, 32000, 1), ("dir-mb400-b32k", "scalar-directional", 400, 32000, 1),
+                           ("ridge4-mb120-b32k", "scalar-directional", 120, 32000, 4) })
+                    Run(Stage2 with { Stage = "s2cap-" + name, Layouts = [layout], MaxBasis = maxBasis, FitBurnIn = burn, DirectionalColumns = columns },
+                        k => new HarmonicSynthesizer(k), int.Parse(args[0]), dir, false, true);
+                return true;
+            case "s1-capacity":
+                // Post-gate: the same design refitted with more basis functions and a longer burn-in; held-out accuracy only.
+                foreach ((string name, int maxBasis, int burn) in new[] { ("mb200-b8k", 200, 8000), ("mb200-b32k", 200, 32000), ("mb400-b32k", 400, 32000) })
+                    Run(Stage1 with { Stage = "s1cap-" + name, MaxBasis = maxBasis, FitBurnIn = burn }, k => new ResonanceSynthesizer(k), int.Parse(args[0]), dir, false, true);
+                return true;
+            case "s1-mixing":
+                // Post-gate: the first 10 replicates at the middle noise level and ratio 4, both emulators, at the gate's
+                // budget and at four times it, with the chains' spread recorded: slow mixing or separated modes.
+                foreach ((string stage, int budget) in new[] { ("s1mix2000", 2000), ("s1mix8000", 8000) })
+                    Run(Stage1 with { Stage = stage, MaxSamples = budget, ModalityKs = [] }, k => new ResonanceSynthesizer(k), int.Parse(args[0]), dir, false, false,
+                        j => j.Rep < 10 && j.Noise == 1 && j.Ratio == 4 && !j.Discrepancy);
+                return true;
             case "s2-gate": File.WriteAllText(Path.Combine(dir, "s2-readings.txt"), Stage2Readings(dir)); Console.Write(File.ReadAllText(Path.Combine(dir, "s2-readings.txt"))); return true;
             default: return false;
         }

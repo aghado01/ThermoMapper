@@ -1,0 +1,61 @@
+{
+  "Stage": "s1",
+  "MasterSeed": 2026111601,
+  "Replicates": 30,
+  "NoiseVariances": [
+    1E-06,
+    1E-05,
+    0.0001
+  ],
+  "Ratios": [
+    1,
+    2,
+    4,
+    8
+  ],
+  "TrainingBase": 80,
+  "TrainingPerK": 80,
+  "TestRuns": 100,
+  "Layouts": [
+    "functional"
+  ],
+  "MaxBasis": 80,
+  "MaxInteraction": 3,
+  "FitChains": 2,
+  "FitBurnIn": 8000,
+  "FitSamples": 500,
+  "FitThin": 4,
+  "CalBurnIn": 1000,
+  "CalDecorrelation": 100,
+  "OuterDraws": 8,
+  "CalChains": 3,
+  "MaxSamples": 2000,
+  "BatchSize": 250,
+  "RHat": 1.05,
+  "MinEss": 50,
+  "PriorDf": 2,
+  "PriorSd": 0.3,
+  "DiscrepancyScale": 1,
+  "DiscrepancyNoise": 1,
+  "Ladder": [
+    1,
+    0.6,
+    0.35,
+    0.2,
+    0.1,
+    0.05
+  ],
+  "SmcParticles": 400,
+  "ModalityKs": [
+    2,
+    5
+  ],
+  "ModalityRatios": [
+    1,
+    4
+  ],
+  "ModalityNoise": 1,
+  "ModalityReplicates": 10,
+  "ReconstructionDraws": 200,
+  "Threads": 6
+}

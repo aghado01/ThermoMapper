@@ -1,0 +1,25 @@
+ResonanceSynthesizer: frame 512, fs 8000, floor 0.0001, L 64, f 150..3600
+theta 6.397;4.787;0.000;7.625;5.075: energy 7.237, feature min -9.09 max -1.51 (ln floor -9.21); SNR dB at noise levels: 41.5, 31.5, 21.5
+   noise 1E-06: noisy − clean mean 0.008 rms 0.033 max 0.09
+   noise 1E-05: noisy − clean mean 0.025 rms 0.103 max 0.41
+   noise 0.0001: noisy − clean mean 0.051 rms 0.321 max 1.07
+theta 6.865;4.186;0.167;7.686;4.548: energy 16.86, feature min -9.06 max 0.12 (ln floor -9.21); SNR dB at noise levels: 45.2, 35.2, 25.2
+   noise 1E-06: noisy − clean mean 0.003 rms 0.028 max 0.09
+   noise 1E-05: noisy − clean mean 0.004 rms 0.054 max 0.13
+   noise 0.0001: noisy − clean mean -0.019 rms 0.240 max 0.49
+theta 6.447;5.203;-0.361;7.820;5.083: energy 3.613, feature min -9.14 max -3.11 (ln floor -9.21); SNR dB at noise levels: 38.5, 28.5, 18.5
+   noise 1E-06: noisy − clean mean -0.004 rms 0.031 max 0.08
+   noise 1E-05: noisy − clean mean 0.004 rms 0.083 max 0.22
+   noise 0.0001: noisy − clean mean 0.032 rms 0.339 max 1.51
+theta 5.793;4.661;0.510;7.747;5.641: energy 17.39, feature min -9.13 max -0.17 (ln floor -9.21); SNR dB at noise levels: 45.3, 35.3, 25.3
+   noise 1E-06: noisy − clean mean -0.005 rms 0.041 max 0.15
+   noise 1E-05: noisy − clean mean -0.000 rms 0.087 max 0.31
+   noise 0.0001: noisy − clean mean 0.079 rms 0.311 max 1.09
+theta 6.608;4.133;-0.408;7.311;5.052: energy 6.594, feature min -8.74 max -0.97 (ln floor -9.21); SNR dB at noise levels: 41.1, 31.1, 21.1
+   noise 1E-06: noisy − clean mean 0.000 rms 0.020 max 0.05
+   noise 1E-05: noisy − clean mean 0.007 rms 0.088 max 0.24
+   noise 0.0001: noisy − clean mean 0.025 rms 0.340 max 1.36
+theta 5.957;4.781;-0.403;7.589;5.494: energy 3.626, feature min -9.11 max -2.28 (ln floor -9.21); SNR dB at noise levels: 38.5, 28.5, 18.5
+   noise 1E-06: noisy − clean mean 0.004 rms 0.041 max 0.13
+   noise 1E-05: noisy − clean mean -0.006 rms 0.118 max 0.31
+   noise 0.0001: noisy − clean mean 0.079 rms 0.327 max 1.43

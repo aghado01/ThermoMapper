@@ -27,7 +27,7 @@ public static partial class Pilot
         string[] Layouts, int MaxBasis, int MaxInteraction, int FitChains, int FitBurnIn, int FitSamples, int FitThin,
         int CalBurnIn, int CalDecorrelation, int OuterDraws, int CalChains, int MaxSamples, int BatchSize, double RHat, double MinEss,
         double PriorDf, double PriorSd, double DiscrepancyScale, int DiscrepancyNoise, double[] Ladder, int SmcParticles, int[] ModalityKs,
-        int[] ModalityRatios, int ModalityNoise, int ModalityReplicates, int ReconstructionDraws, int Threads);
+        int[] ModalityRatios, int ModalityNoise, int ModalityReplicates, int ReconstructionDraws, int Threads, int DirectionalColumns = 1);
 
     public static Settings Stage1 => new(
         Stage: "s1", MasterSeed: 2026111601, Replicates: 30, NoiseVariances: [1e-6, 1e-5, 1e-4], Ratios: [1, 2, 4, 8],
@@ -119,7 +119,7 @@ public static partial class Pilot
     private static BassConfig FitConfig(Settings s, string layout, int seed) => new()
     {
         Structure = layout == "scalar-directional"
-            ? new BassStructureSpec { MaxInteraction = s.MaxInteraction, MaxBasis = s.MaxBasis, Directional = new DirectionalBasis() }
+            ? new BassStructureSpec { MaxInteraction = s.MaxInteraction, MaxBasis = s.MaxBasis, Directional = new DirectionalBasis { Columns = s.DirectionalColumns } }
             : new BassStructureSpec { MaxInteraction = s.MaxInteraction, MaxBasis = s.MaxBasis },
         Sampling = new BassSampling { Chains = s.FitChains, MasterSeed = seed, BurnIn = s.FitBurnIn, Samples = s.FitSamples, Thin = s.FitThin },
     };
@@ -215,7 +215,7 @@ public static partial class Pilot
     public sealed record Job(int Rep, string Emulator, string Mode, int Noise, int Ratio, bool Discrepancy);
 
     /// <summary>Stage 1 (and Stage 2's shell): fit, held-out check, then the replicate grid and the modality subset.</summary>
-    public static void Run(Settings s, Func<int, Synthesizer> make, int k, string dir, bool rerun, bool fitOnly)
+    public static void Run(Settings s, Func<int, Synthesizer> make, int k, string dir, bool rerun, bool fitOnly, Func<Job, bool>? filter = null)
     {
         ThreadPool.SetMaxThreads(s.Threads, s.Threads);
         File.WriteAllText(Path.Combine(dir, $"{s.Stage}-settings.json"), JsonSerializer.Serialize(s, new JsonSerializerOptions { WriteIndented = true }));
@@ -270,6 +270,7 @@ public static partial class Pilot
                     foreach (string e in emulators)
                         foreach (string mode in new[] { "tempered", "smc" })
                             jobs.Add(new Job(r, e, mode, s.ModalityNoise, ratio, false));
+        if (filter is not null) jobs = jobs.Where(filter).ToList();
         int[] jobSeeds = SeedTree.Derive(seeds[6 + off], jobs.Count);
 
         // The discrepancy basis over all bins: 1 and the standardized ln f.
@@ -279,7 +280,7 @@ public static partial class Pilot
         string file = Path.Combine(dir, $"{s.Stage}-k{k}-replicates{(rerun ? "-rerun" : "")}.csv");
         var lines = new ConcurrentBag<(int, string)>();
         string header = "stage,k,rep,emulator,mode,noise,ratio,m,disc,seed,snr_db,truth_unit,mean_unit,q05_unit,q95_unit,sd_unit,err_rms,covered," +
-                        "converged,runs,sigma_post,recon_truth_held,recon_obs_held,fit_obs_kept,mass_truth,mass_double,mass_half,seconds";
+                        "converged,runs,sigma_post,recon_truth_held,recon_obs_held,fit_obs_kept,mass_truth,mass_double,mass_half,seconds,chain_spread";
         var emulatorCache = new ConcurrentDictionary<(string, int, int), ICalibrationEmulator>();
         int done = 0;
         var clock = Stopwatch.StartNew();
@@ -310,6 +311,7 @@ public static partial class Pilot
             IReadOnlyList<CalibrationDraw> draws;
             double[] weights;
             int converged, runs;
+            double spread = double.NaN;
             if (job.Mode == "smc")
             {
                 CutSmcCalibration smc = CutSmcSampler.Run(model, 1);
@@ -322,6 +324,17 @@ public static partial class Pilot
                 (draws, weights) = nested.Pooled(includeNotConverged: true);
                 converged = nested.Runs.Count(x => x.Converged);
                 runs = nested.Runs.Count;
+                // The chains' disagreement: per inner run and coordinate, the range of the chains' means over the pooled sd.
+                spread = 0;
+                foreach (InnerRun run in nested.Runs)
+                    for (int j = 0; j < k; j++)
+                    {
+                        double[][] chainValues = run.Chains.Select(c => c.Select(d => d.Theta[j]).ToArray()).ToArray();
+                        double[] all = chainValues.SelectMany(v => v).ToArray();
+                        double mean = all.Average(), sdAll = Math.Sqrt(all.Average(v => (v - mean) * (v - mean)));
+                        double[] means = chainValues.Select(v => v.Average()).ToArray();
+                        if (sdAll > 0) spread = Math.Max(spread, (means.Max() - means.Min()) / sdAll);
+                    }
             }
             double seconds = sw.Elapsed.TotalSeconds;
             double[] truthUnit = Enumerable.Range(0, k).Select(j => (truths[job.Rep][j] - synth.Lower[j]) / (synth.Upper[j] - synth.Lower[j])).ToArray();
@@ -379,7 +392,7 @@ public static partial class Pilot
             string line = string.Join(",", s.Stage, k, job.Rep, job.Emulator, job.Mode, F(s.NoiseVariances[job.Noise]), job.Ratio, m, job.Discrepancy ? 1 : 0, jobSeeds[ji], F(snr, "F2"),
                 J(truthUnit), J(meanU), J(q05), J(q95), J(sdU), F(errRms, "F5"), covered, converged, runs, F(sigmaPost, "F4"),
                 F(Rmse(held, clean[job.Rep]), "F4"), F(Rmse(held, observed[job.Rep][job.Noise]), "F4"), F(Rmse(kept, observed[job.Rep][job.Noise]), "F4"),
-                F(massTruth, "F3"), F(massDouble, "F3"), F(massHalf, "F3"), F(seconds, "F2"));
+                F(massTruth, "F3"), F(massDouble, "F3"), F(massHalf, "F3"), F(seconds, "F2"), F(spread, "F3"));
             lines.Add((ji, line));
             int now = System.Threading.Interlocked.Increment(ref done);
             if (now % 50 == 0 || now == jobs.Count)

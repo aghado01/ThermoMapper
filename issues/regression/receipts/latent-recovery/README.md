@@ -13,5 +13,7 @@ Tracked copies of the pilot's probe sources, settings and result summaries
   `b2-gate`, `b2-supplement`, `s1-peek`, `s1-run <k>`, `s1-gate`, `s2-peek`, `s2-run <k>`, `s2-gate`;
   `rerun` after `<k>` runs a cell's fresh replicates. Every seed derives from the settings' master seed
   by `SeedTree`, so a rerun on the pinned snapshot reproduces the rows.
-- **What stays local.** Console logs and the build; the replicate rows of each stage are tracked here
-  because they are small.
+- **What stays local.** Console logs, the build and the replicate rows (`*-replicates.csv`, 1.2 MB for
+  Stage 1). The gate summaries (`s1-gate.txt`, `s2-readings.txt`) hold every cell; rerunning a stage with
+  the tracked settings on the pinned snapshot reproduces the rows. `results/mixing/s1-mixing-summary.csv`
+  keeps the post-gate mixing check's per-replicate convergence and chain spread.
