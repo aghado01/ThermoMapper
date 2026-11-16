@@ -69,3 +69,16 @@ The user has said additive engine work is acceptable so long as it is coherent. 
 ## Working rules
 
 Those of the [first brief](time-frequency-statements-brief.md#working-rules).
+
+## Report
+
+### In progress
+
+*Updated 2026-11-16.*
+- **Landed:** Part A's S10 to S15, each with a witness and standard axioms only.
+  - S10a, S10b, S12, S13, S14 and S15 are proved.
+  - S10b needs no premise: Γ′(k + 1) = k!(H_k − γ) comes from Mathlib, and integrability from its Mellin derivative.
+  - S10c and S11 are proved from their named premises, each met by an instance.
+  - S13 holds with the tight bracket 1.25 < u⋆ < 1.26.
+- **Next:** Part B (promotion review), Part C (the preparation brief), then S16.
+- **Uncommitted:** nothing.

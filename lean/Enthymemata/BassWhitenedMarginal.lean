@@ -1,12 +1,18 @@
 import Mathlib.Analysis.SpecialFunctions.Log.Basic
 import Mathlib.Analysis.SpecialFunctions.Pow.Real
+import Mathlib.Data.Matrix.Block
+import Mathlib.Data.Matrix.ColumnRowPartitioned
 import Mathlib.LinearAlgebra.Matrix.Hadamard
 import Mathlib.LinearAlgebra.Matrix.Kronecker
 import Mathlib.LinearAlgebra.Matrix.NonsingularInverse
 import Mathlib.LinearAlgebra.Matrix.Notation
 import Mathlib.LinearAlgebra.Matrix.SchurComplement
+import Mathlib.MeasureTheory.Integral.Bochner.Basic
+import Mathlib.MeasureTheory.Integral.Bochner.SumMeasure
+import Mathlib.MeasureTheory.Measure.Count
 import Mathlib.Tactic.FieldSimp
 import Mathlib.Tactic.FinCases
+import Mathlib.Tactic.Module
 import Mathlib.Tactic.NormNum
 import Mathlib.Tactic.Positivity
 import Mathlib.Tactic.Ring
@@ -37,10 +43,13 @@ The specification for letting BASS's Gaussian core serve an output inner product
 
 That `y`'s marginal under the linear-Gaussian model is `N(0, σ²(Ω + τ⁻¹·Z(ZᵀΩ⁻¹Z)⁻¹Zᵀ))` is the
 Gaussian convolution, stated here as the covariance and not derived from an integral.
-`gaussLogDensity` is the density's formula, with `log` of the determinant.
+`gaussLogDensity` is the density's formula, with `log` of the determinant. S14
+(`marginal_covariance`) proves that covariance on second moments: `β` with second moments
+`σ²τ⁻¹(ZᵀΩ⁻¹Z)⁻¹`, `ε` with `σ²Ω`, uncorrelated, give `y = Zβ + ε` exactly that matrix. That the sum
+is Gaussian stays a premise.
 -/
 
-open Matrix
+open Matrix MeasureTheory
 open scoped Kronecker
 
 namespace BASS
@@ -225,6 +234,83 @@ theorem gPrior_logMarginal_whiten (L : Matrix ι ι ℝ) (hL : L.det ≠ 0) (Z :
     exact mul_ne_zero (pow_ne_zero _ hσ.ne') (pow_ne_zero _ (by positivity))
   rw [hcov, gaussLogDensity_congr L _ hL hM, mulVec_zero, gaussLogDensity_gPrior _ h hσ hτ]
 
+/-! ### The marginal covariance (S14) -/
+
+/-- A linear image's second moments: `E[X_a·X_b] = M a b` gives
+`E[(AX)_i·(AX)_j] = (A·M·Aᵀ)_{ij}`. -/
+theorem integral_mulVec_mul_mulVec {m p Ω : Type*} [Fintype p] [MeasurableSpace Ω]
+    (μ : Measure Ω) (A : Matrix m p ℝ) (X : Ω → p → ℝ) (M : Matrix p p ℝ)
+    (h : ∀ a b, Integrable (fun w => X w a * X w b) μ ∧ ∫ w, X w a * X w b ∂μ = M a b)
+    (i j : m) : ∫ w, (A *ᵥ X w) i * (A *ᵥ X w) j ∂μ = (A * M * Aᵀ) i j := by
+  have hpt : ∀ w, (A *ᵥ X w) i * (A *ᵥ X w) j =
+      ∑ a, ∑ b, A i a * A j b * (X w a * X w b) := by
+    intro w
+    simp only [mulVec, dotProduct, Finset.sum_mul, Finset.mul_sum]
+    conv_lhs => rw [Finset.sum_comm]
+    refine Finset.sum_congr rfl fun a _ => Finset.sum_congr rfl fun b _ => ?_
+    ring
+  have hL : ∫ w, (A *ᵥ X w) i * (A *ᵥ X w) j ∂μ = ∑ a, ∑ b, A i a * A j b * M a b := by
+    simp_rw [hpt]
+    rw [integral_finsetSum _ fun a _ => integrable_finsetSum _ fun b _ => (h a b).1.const_mul _]
+    refine Finset.sum_congr rfl fun a _ => ?_
+    rw [integral_finsetSum _ fun b _ => (h a b).1.const_mul _]
+    refine Finset.sum_congr rfl fun b _ => ?_
+    rw [integral_const_mul, (h a b).2]
+  rw [hL]
+  simp only [Matrix.mul_apply, transpose_apply, Finset.sum_mul]
+  rw [Finset.sum_comm]
+  refine Finset.sum_congr rfl fun b _ => Finset.sum_congr rfl fun a _ => ?_
+  ring
+
+omit [DecidableEq ι] [DecidableEq κ] in
+-- The statement needs no finiteness of `ι`; the proof stacks `(β, ε)` over `κ ⊕ ι`.
+set_option linter.unusedFintypeInType false in
+/-- **S14, on second moments.** With `E[ββᵀ] = Σ_β`, `E[εεᵀ] = Σ_ε` and `E[βεᵀ] = 0`, the response
+`y = Zβ + ε` has `E[yyᵀ] = Z·Σ_β·Zᵀ + Σ_ε`. With zero means these are covariances. -/
+theorem integral_secondMoment_response {Ω : Type*} [MeasurableSpace Ω] (μ : Measure Ω)
+    (Z : Matrix ι κ ℝ) (β : Ω → κ → ℝ) (ε : Ω → ι → ℝ) (Sβ : Matrix κ κ ℝ) (Sε : Matrix ι ι ℝ)
+    (hββ : ∀ a b, Integrable (fun w => β w a * β w b) μ ∧ ∫ w, β w a * β w b ∂μ = Sβ a b)
+    (hεε : ∀ i j, Integrable (fun w => ε w i * ε w j) μ ∧ ∫ w, ε w i * ε w j ∂μ = Sε i j)
+    (hβε : ∀ a i, Integrable (fun w => β w a * ε w i) μ ∧ ∫ w, β w a * ε w i ∂μ = 0)
+    (i j : ι) :
+    ∫ w, (Z *ᵥ β w + ε w) i * (Z *ᵥ β w + ε w) j ∂μ = (Z * Sβ * Zᵀ + Sε) i j := by
+  classical
+  set X : Ω → κ ⊕ ι → ℝ := fun w => Sum.elim (β w) (ε w) with hX_def
+  have hX : ∀ w, Z *ᵥ β w + ε w = fromCols Z 1 *ᵥ X w := fun w => by
+    rw [fromCols_mulVec, one_mulVec]
+    rfl
+  have hM : ∀ a b, Integrable (fun w => X w a * X w b) μ ∧
+      ∫ w, X w a * X w b ∂μ = fromBlocks Sβ 0 0 Sε a b := by
+    rintro (a | a) (b | b)
+    · simpa [hX_def] using hββ a b
+    · simpa [hX_def] using hβε a b
+    · have hc : (fun w => ε w a * β w b) = fun w => β w b * ε w a :=
+        funext fun w => mul_comm _ _
+      simp only [hX_def, Sum.elim_inl, Sum.elim_inr, fromBlocks_apply₂₁, Matrix.zero_apply, hc]
+      exact hβε b a
+    · simpa [hX_def] using hεε a b
+  simp_rw [hX]
+  rw [integral_mulVec_mul_mulVec μ _ X _ hM, transpose_fromCols, fromCols_mul_fromBlocks,
+    fromCols_mul_fromRows]
+  simp
+
+/-- **S14.** With `Σ_β = σ²τ⁻¹(ZᵀΩ⁻¹Z)⁻¹` and `Σ_ε = σ²Ω`, uncorrelated, the response's second
+moments are `σ²(Ω + τ⁻¹Z(ZᵀΩ⁻¹Z)⁻¹Zᵀ)`, the covariance `gPrior_logMarginal_whiten` reads. -/
+theorem marginal_covariance {Ω : Type*} [MeasurableSpace Ω] (μ : Measure Ω) (Z : Matrix ι κ ℝ)
+    (Om : Matrix ι ι ℝ) {σ2 τ : ℝ} (β : Ω → κ → ℝ) (ε : Ω → ι → ℝ)
+    (hββ : ∀ a b, Integrable (fun w => β w a * β w b) μ ∧
+      ∫ w, β w a * β w b ∂μ = ((σ2 * τ⁻¹) • (Zᵀ * Om⁻¹ * Z)⁻¹) a b)
+    (hεε : ∀ i j, Integrable (fun w => ε w i * ε w j) μ ∧ ∫ w, ε w i * ε w j ∂μ = (σ2 • Om) i j)
+    (hβε : ∀ a i, Integrable (fun w => β w a * ε w i) μ ∧ ∫ w, β w a * ε w i ∂μ = 0)
+    (i j : ι) :
+    ∫ w, (Z *ᵥ β w + ε w) i * (Z *ᵥ β w + ε w) j ∂μ =
+      (σ2 • (Om + τ⁻¹ • (Z * (Zᵀ * Om⁻¹ * Z)⁻¹ * Zᵀ))) i j := by
+  rw [integral_secondMoment_response μ Z β ε _ _ hββ hεε hβε]
+  suffices hmat : Z * ((σ2 * τ⁻¹) • (Zᵀ * Om⁻¹ * Z)⁻¹) * Zᵀ + σ2 • Om =
+      σ2 • (Om + τ⁻¹ • (Z * (Zᵀ * Om⁻¹ * Z)⁻¹ * Zᵀ)) by rw [hmat]
+  rw [Matrix.mul_smul, Matrix.smul_mul]
+  module
+
 /-! ### The output inner product `Ω = I_n ⊗ R` -/
 
 variable {c o : Type*} [Fintype c] [DecidableEq c] [Fintype o] [DecidableEq o]
@@ -352,6 +438,28 @@ theorem level_eq_mean (Q : Matrix o o ℝ) {lam : ℝ} (hQ : (fun _ => (1 : ℝ)
   field_simp
 
 /-! ### Witnesses -/
+
+/-- S14's hypotheses on a concrete space: four outcomes under the counting measure, one
+coefficient and one observation, `Z = Ω = σ² = τ = 1`, `β = ½(1, 1, −1, −1)` and
+`ε = ½(1, −1, 1, −1)`, uncorrelated with unit second moments. -/
+example := marginal_covariance (Measure.count : Measure (Fin 4)) (1 : Matrix (Fin 1) (Fin 1) ℝ) 1
+  (σ2 := 1) (τ := 1)
+  (fun w _ => if w.val < 2 then (1 / 2 : ℝ) else -1 / 2)
+  (fun w _ => if w.val % 2 = 0 then (1 / 2 : ℝ) else -1 / 2)
+  (fun a b => ⟨Integrable.of_finite, by
+    rw [integral_fintype Integrable.of_finite]
+    fin_cases a; fin_cases b
+    simp [Fin.sum_univ_succ, Measure.real]
+    norm_num⟩)
+  (fun a b => ⟨Integrable.of_finite, by
+    rw [integral_fintype Integrable.of_finite]
+    fin_cases a; fin_cases b
+    simp [Fin.sum_univ_succ, Measure.real]
+    norm_num⟩)
+  (fun a b => ⟨Integrable.of_finite, by
+    rw [integral_fintype Integrable.of_finite]
+    simp [Fin.sum_univ_succ, Measure.real]
+    norm_num⟩)
 
 /-- The engine-terms statement's hypotheses hold on a correlated pair: `L = [[1, 0], [1, 1]]`,
 so `Ω = [[1, 1], [1, 2]]`, the design `Z = (1, 1)ᵀ`, `σ² = 1` and `τ = 1`. -/
