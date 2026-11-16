@@ -66,6 +66,13 @@ public sealed class MixedWidthTests(ITestOutputHelper output)
         Assert.Equal(units, restored.Terms);
         Assert.NotEqual(units[0], new BassTerm(directional: new DirectionalHinge(Pair, units[0].Directional!.Knot)));
         Assert.Equal(3, new HashSet<BassTerm>(units).Count);
+        var table = new BassTermTable();
+        var structure = new BassStructure([.. columns.Select(table.Intern)]);
+        Assert.Equal((1, 1, 1), structure.DirectionalTermCounts(table));
+        Assert.Equal(3, structure.TermCount(table));
+        Assert.Equal((0, 0, 0), new BassStructure([]).DirectionalTermCounts(table));
+        int ordinary = table.Intern(new BassTerm(continuous: [new HingeFactor(0, 1, 0)]));
+        Assert.Throws<ArgumentException>(() => new BassStructure([ordinary]).DirectionalTermCounts(table));
     }
 
     [Fact]
@@ -369,5 +376,53 @@ public sealed class MixedWidthTests(ITestOutputHelper output)
         BassConfig legacy = config with { Structure = config.Structure with { Directional = new DirectionalBasis { Columns = 4 } } };
         Assert.DoesNotContain("MixedWidths", legacy.ToJson());
         Assert.Equal(legacy.ToJson(), BassConfig.FromJson(legacy.ToJson()).ToJson());
+    }
+
+    [Theory]
+    [InlineData("plain")]
+    [InlineData("pt")]
+    [InlineData("smc")]
+    public void RetainedKindCountsAndWidthTally_ReadActualMixedFits(string sampler)
+    {
+        BassConfig config = Config(4) with { Sampling = Config().Sampling with
+            { Chains = 2, BurnIn = 120, Samples = 80, MasterSeed = 3818 } };
+        if (sampler == "plain") config = config with { Sampling = config.Sampling with { Sampler = BassSamplerChoice.PlainChains } };
+        if (sampler == "smc") config = config with { Sampling = config.Sampling with
+            { Chains = 1, Smc = new SmcSpec { Particles = 32, Replicates = 2, MutationSteps = 2 } } };
+        BassData data = CategoricalRidgeTests.Data(80);
+        BassModel model = BassModel.Create(config, data);
+        BassFit fit = Bass.Fit(config, data, new BassRunOptions { MaxDegreeOfParallelism = 1 });
+        double[]? originalWeights = fit.DrawWeights?.ToArray();
+        int tableSize = fit.Terms.Count, pooledIndex = 0;
+        double weightedKinds = 0, weightedM = 0;
+        foreach (IReadOnlyList<BassDraw> start in fit.Draws)
+            foreach (BassDraw draw in start)
+            {
+                var actual = draw.Structure.DirectionalTermCounts(fit.Terms);
+                IReadOnlyList<BassTerm> units = model.Expansion!.Units([.. draw.Structure.TermIds.Select(id => fit.Terms[id])]);
+                Assert.Equal(units.Count(t => t.Directional?.Columns == 4), actual.Blocks);
+                Assert.Equal(units.Count(t => t.Directional?.Columns == 1), actual.Hinges);
+                Assert.Equal(units.Count(t => t.Directional is null), actual.CategoricalOnly);
+                int total = actual.Blocks + actual.Hinges + actual.CategoricalOnly;
+                Assert.Equal(draw.Structure.TermCount(fit.Terms), total);
+                Assert.Equal(4 * actual.Blocks + actual.Hinges + actual.CategoricalOnly, draw.Structure.TermIds.Length);
+                double weight = fit.DrawWeights?[pooledIndex++] ?? 1.0;
+                weightedKinds += weight * total;
+                weightedM += weight * units.Count;
+            }
+        Assert.Equal(weightedM, weightedKinds);
+        Assert.Equal(tableSize, fit.Terms.Count);
+        if (originalWeights is not null) Assert.Equal(originalWeights, fit.DrawWeights);
+        BassKindCount width = fit.Diagnostics.MoveKinds[BassMoveKind.WidthChange];
+        Assert.True(width.Attempts > 0);
+        BassKindCount[] accounts = fit.Diagnostics.Smc is { } smc
+            ? [.. smc.Replicates.Select(r => r.Account.Kinds[BassMoveKind.WidthChange])]
+            : [.. fit.Diagnostics.Chains.Select(c => c.MoveKinds[BassMoveKind.WidthChange])];
+        Assert.Equal(2, accounts.Length);
+        Assert.Equal(width.Attempts, accounts.Sum(c => c.Attempts));
+        Assert.Equal(width.Accepted, accounts.Sum(c => c.Accepted));
+        Assert.Equal(width.Null, accounts.Sum(c => c.Null));
+        Assert.Equal(width.Refused, accounts.Sum(c => c.Refused));
+        output.WriteLine($"{sampler}: width attempts {width.Attempts}, accepted {width.Accepted}; weighted M {weightedM:R}");
     }
 }

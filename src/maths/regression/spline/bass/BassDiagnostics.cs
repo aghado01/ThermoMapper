@@ -482,7 +482,8 @@ public readonly record struct BassKindCount(BassMoveKind Kind, long Attempts, lo
 
 /// <summary>
 /// The structure moves by kind (F-M2's Phase 1): D01's birth, death and redraw, lever 2's local step and toggle, and the
-/// fixed-M family's prune, grow and variable change, each with its attempts, acceptances, null moves and refusals.
+/// fixed-M family's prune, grow and variable change, and E36's mixed width change, each with its attempts, acceptances,
+/// null moves and refusals.
 /// <list type="bullet">
 /// <item>An attempt is a proposal the chain weighs: a birth whose draw came out the intercept is no attempt
 /// (<see cref="BassStructureMoves.EmptyBirths"/>), nor is a change with no term to pick.</item>

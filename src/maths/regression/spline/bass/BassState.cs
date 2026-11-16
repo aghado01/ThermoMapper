@@ -89,6 +89,31 @@ public readonly record struct BassStructure(int[] TermIds)
             if (terms[id].Ridge is not { Column: > 1 }) count++;
         return count;
     }
+
+    /// <summary>The directional basis's retained structural counts, including mixed widths: a ridge block counts once,
+    /// a directional hinge once, and a term of categorical factors alone once. Gating factors do not add a term.
+    /// Read each draw with its fit's <see cref="BassTermTable"/>; chain order and particle weights remain those of
+    /// <see cref="BassFit.Draws"/> and <see cref="BassFit.DrawWeights"/>. Categorical-only terms count wherever represented;
+    /// incompatible hinge-product, Legendre and functional-only terms are refused.</summary>
+    public (int Blocks, int Hinges, int CategoricalOnly) DirectionalTermCounts(BassTermTable terms)
+    {
+        ArgumentNullException.ThrowIfNull(terms);
+        int blocks = 0, hinges = 0, categorical = 0;
+        foreach (int id in TermIds)
+        {
+            BassTerm term = terms[id];
+            if (term.Ridge is { } ridge) { if (ridge.Column == 1) blocks++; }
+            else if (term.Directional is { } direction)
+            {
+                if (direction.Columns > 1) blocks++;
+                else hinges++;
+            }
+            else if (term.Categorical.Count > 0 && term.Continuous.Count == 0 && term.Legendre.Count == 0 && term.Functional.Count == 0)
+                categorical++;
+            else throw new ArgumentException("Directional counts read ridge blocks, directional hinges and categorical-only terms.", nameof(terms));
+        }
+        return (blocks, hinges, categorical);
+    }
 }
 
 /// <summary>
