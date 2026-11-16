@@ -108,9 +108,14 @@ One commit per concern; tests with the code they test; each slice ends with its 
 - A commit that touches shared code names in its report every test project that `scripts/test-select.ps1` selects for it, read from disk, with each one's count.
 - After each slice, report to the main session and wait for its verification note before starting the next. For this chip "the main session" is the second coordinating session (the [handoff](../coordination-handoff-2026-11-11.md#sessions)'s Sessions table), which verifies each slice from a clean archive. `artifacts/verify-main` is the coordinators' workspace; leave it alone.
 
-## Slices 5 and 6: categorical inputs and mixed bases (draft for the user)
+## Slices 5 and 6: categorical inputs and mixed bases (slice 5 approved; slice 6 a draft for the user)
 
-The user chose these as E36's next work, decision 7's and decision 6's later steps. This is a design for review, and nothing is built until it is approved. Decisions marked **open** go at their recommendation unless the user turns them. Each line says what the other outcome would change.
+**Slice 5 was approved by the user on 2026-11-15** at its recommendations ("Yes, start slice 5"): 5a, 5b and 5c are settled as recommended, and the slice is building. **Slice 6 is still a draft:** its four decisions are open, and nothing of it is built until the user approves it. The coordinating session raised three points on it with the user:
+- *6c* holds for a one-column hinge. With K = 4 a ridge at a = 1 is a spline curve in one input, not a duplicate of an axis hinge, so the least active count could be a setting with 2 as its default.
+- *6d and decision 2.* Decision 2 said E21's ridge blocks handle collinearity on the coefficient side. Scale-sensitive forms are refused for unnormalized ridge columns, so that is not met today, and D06 alone handles near-duplicates. Meeting it needs a per-kernel column scale, a decision of its own.
+- *Order.* One fit per basis compared by evidence, and the reading of M's mixing, come before a mixed chain is built.
+
+The user chose these as E36's next work, decision 7's and decision 6's later steps. This was written as a design for review. Decisions marked **open** go at their recommendation unless the user turns them. Each line says what the other outcome would change.
 
 ### Slice 5: categorical inputs, BASS's subset factors multiplying a ridge
 
@@ -135,13 +140,13 @@ The user chose these as E36's next work, decision 7's and decision 6's later ste
   - *What subsets give instead:* separability in the category, BASS's validated subset law, and a pure categorical term (an empty direction) that equals the paper's indicator ridge for one variable.
 
 **Decisions for the user.**
-- **5a, the knot's range under a subset, open.**
+- **5a, the knot's range under a subset, settled** (the user, 2026-11-15, as recommended).
   - *Recommended:* t₀'s range and the ridge's quantile knots are read from the projections of the cases the term reaches (its cells), so about n_active of its own cases lie above U, and K + 1 knots exist where it is nonzero. The range is cached per (θ, subsets). A categorical change redraws the knot from its prior given the new cells, so the move still accepts on the likelihood ratio alone.
   - *Alternative:* the range over all cases, BASS's own convention for a hinge beside a categorical factor. The knot's prior then ignores the subsets, and a categorical change keeps the knot. But a small subset leaves few of its cases above U, so the support count refuses many of its draws.
-- **5b, pure categorical terms, open.**
+- **5b, pure categorical terms, settled** (the user, 2026-11-15, as recommended).
   - *Recommended:* allowed (the direction's order may be 0), as BASS allows a categorical main effect. Under a ridge basis such a term is one column. Without it, a level's shift needs a ridge.
   - *Alternative:* every term holds a direction, and categories only gate ridges.
-- **5c, the determinant prior beside categories, open.**
+- **5c, the determinant prior beside categories, settled** (the user, 2026-11-15, as recommended).
   - *Recommended:* it reads directions alone, so one direction gated by two subsets has det 0 and no mass under the option. That is the option's stated belief, many distinct directions, which the report states.
   - *Alternative:* a determinant within each set of terms sharing a cell, which no source proposes and which costs a cell bookkeeping.
 
