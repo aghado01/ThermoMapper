@@ -216,7 +216,8 @@ The user chose these as E36's next work, decision 7's and decision 6's later ste
   - *Recommended:* the g-form's default and E21's normalized `RidgeForm`, whose precision reads diag(G)/N, so rescaling one column cancels. That is tested by rescaling one admitted ridge column and checking the marginal likelihood and predictions.
   - *Kept:* `RawRidgeForm` stays refused at K ≥ 2.
   - *Not taken:* a penalty tuned apart for a whole block is a further model choice.
-- **The sampler, recommended:** tempering to the reference rung (which also gives the evidence) or SMC by default; a plain chain is refused with its reason. A term changes kind only by a death and a birth, which settled ridge chains do not make. Under the width design a fourth move helps: a width change, θ, t₀ and the subsets kept, between K = 1 and K = 4, which needs no Jacobian and accepts on the likelihood ratio, the shares' ratio and the kind weights.
+- **Sampler decision (2026-11-15, pending implementation).** For a new pure ridge-block fit (K ≥ 2), or a mixed fit whose basis admits such blocks, resolve an omitted sampler to self-sizing parallel tempering. Use the exact reference rung when the declared priors and tempered form admit it. Otherwise use an admissible positive hot end and record why. Explicit sampler choices win, including SMC. An explicitly requested plain chain runs and carries a fit-level diagnostic that ridge counts can remain at their starts and intervals for f can be too narrow. Distinguish automatic selection from an explicit plain chain in the config, log the resolved sampler, and resume a checkpoint with the sampler that produced it. The rule applies to the configured basis even if the current draw contains zero blocks.
+- Under the width design a fourth move helps: a width change, θ, t₀ and the subsets kept, between K = 1 and K = 4, which needs no Jacobian and accepts on the likelihood ratio, the shares' ratio and the kind weights.
 - **The moves.** A birth draws the kind, then its law. A death is uniform over all terms. A change keeps the kind: E36's or slice 5's change for a direction-bearing term, slice 5's subset redraw for a categorical term, and D01's redraw for a BASS hinge term under the draft's design. Local steps, the fixed-M family, and E4's history and residual births stay refused.
 - **Mixing and identifiability.** f's functionals do not care which representation is drawn. The per-kind counts and inclusion readouts say less the freer the mix.
 
@@ -224,6 +225,7 @@ The user chose these as E36's next work, decision 7's and decision 6's later ste
 - *The prior:* the shares' collection weight by hand, the conditioned kinds' laws, and draws against them.
 - *Moves and Geweke:* each move's ratio across kinds, the width change included, against a direct evaluation. Geweke's test with the prior alone, with M per kind.
 - *Blocks:* K = 4 blocks beside one-column terms; slice 5 built and gated the expansion.
+- *Sampler resolution and coverage.* Exercise the pure-block and mixed defaults, an explicit plain chain with its diagnostic, an explicit SMC fit, the one-column hinge control and checkpoint continuation. Compare M across independent starts and nominal 95% pointwise interval coverage for f and y separately on the Friedman fixture. Report cost and Monte Carlo uncertainty. The evidence comparison has its [own follow-up](evidence-estimator-disagreement-brief.md).
 - *Recovery from outside the model:* a smooth oblique ridge plus an axis kink, for example exp(0.6x₀ + 0.8x₁) + 3(x₂ − 0.4)₊. The mixed fit against each pure basis, with their evidence, under tempering and SMC.
 - *Fitting untouched.*
 
@@ -347,7 +349,7 @@ The coordinating session asked, as the user's review directs, for the pure-basis
 
 **For slice 6** (its revised draft holds the decisions):
 - *The useful mixture is kinked beside smooth,* not axis beside oblique. The smooth functions go to the cubic blocks and the kinked ones to degree-1 hinges, by 8 to 46 nats over the other smoothness. At matched degree the axis-or-oblique question is answered within the direction prior, a = 1 being an axis hinge.
-- *A mixed fit cannot take plain chains:* its kinds change only by deaths and births, which a settled ridge chain does not make. Tempering or SMC is the default.
+- *Sampler implication from this probe.* Settled ridge chains rarely accept births or deaths, which led to the initial recommendation to refuse a plain chain for a mixed fit. The sampler decision above keeps it available by explicit request with a diagnostic.
 - *A function holding both a smooth and a kinked structure* is where a mixed basis would beat both pure ones; it is slice 6's recovery gate, since no pure basis can read it.
 
 **Doc changes owed.**
