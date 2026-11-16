@@ -1,7 +1,11 @@
 # From any checkout containing this launcher. Each label gets a fresh snapshot and result directory.
 param(
     [Parameter(Mandatory)][string]$Revision,
-    [Parameter(Mandatory)][ValidatePattern('^[a-zA-Z0-9_-]+$')][string]$RunName
+    [Parameter(Mandatory)][ValidatePattern('^[a-zA-Z0-9_-]+$')][string]$RunName,
+    [ValidateSet('checkpoint','linear')][string]$Experiment = 'checkpoint',
+    [string]$Cells = 'all',
+    [string]$TrialIndices = 'all',
+    [switch]$FullIterations
 )
 $ErrorActionPreference = 'Stop'
 $PSNativeCommandUseErrorActionPreference = $true
@@ -25,4 +29,9 @@ $env:DOTNET_CLI_TELEMETRY_OPTOUT = '1'
 $probe = Join-Path $source $receipts
 dotnet build (Join-Path $probe 'probe/GenerativePrior.csproj') -c Release "-p:ArtifactsRoot=$build/" --disable-build-servers -m:1 -p:UseSharedCompilation=false
 $assembly = Join-Path $build 'bin/GenerativePrior/Release/net10.0/GenerativePrior.dll'
-dotnet $assembly (Join-Path $probe 'settings/g1-k10.json') $results $pin
+if ($Experiment -eq 'linear') {
+    $mode = if ($FullIterations) { 'full' } else { 'accelerated' }
+    dotnet $assembly (Join-Path $probe 'settings/g1-linear-curve.json') $results $pin $Cells $TrialIndices $mode
+} else {
+    dotnet $assembly (Join-Path $probe 'settings/g1-k10.json') $results $pin
+}

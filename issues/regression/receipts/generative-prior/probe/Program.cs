@@ -10,13 +10,18 @@ namespace GenerativePrior;
 
 internal sealed record Settings(int CodeDimension, int HiddenWidth, int OutputWidth, int Measurements,
     int Repetitions, int MasterSeed, double Step, double GradientTolerance, int MaxUpdates,
-    double SuccessTolerance, double ReferenceTolerance);
+    double SuccessTolerance, double ReferenceTolerance, bool SignCheck = true, bool FastForward = false,
+    bool RequireAllRecovered = true);
 
 internal sealed record Trial(int Repetition, int Seed, int[] ChildSeeds, double[] Truth, double[] Start,
     double[] Estimate, int Updates, string Stop, int SignChecks, int[] FlipIterations,
     long SelectedPreactivationZeros, double InitialObjectivePlus, double InitialObjectiveMinus,
     double FinalObjective, double FinalGradientNorm, double RelativeCodeError, bool Success,
-    double MaxReferenceDiscrepancy);
+    double MaxReferenceDiscrepancy, int EvaluatedUpdates, int SkippedUpdates, int CycleLength,
+    double CosineToTruth, double? NegativeAngleDegrees, double RadiusRatio, double AxialProjection,
+    double PopulationRadiusDeviation, bool NegativeOrientation, bool PopulationRadiusMatch,
+    string EndpointClass, bool FlatNegativeRay, double RayInnerProduct, double RaySquaredNorm,
+    double? RayOptimalRadius, double? FiniteRayRadiusDeviation);
 
 internal static class Program
 {
@@ -29,7 +34,17 @@ internal static class Program
     }
 
     private sealed record Endpoint(double[] X, int Updates, int Checks, string Stop, int[] Flips, long Zeros,
-        double InitialPlus, double InitialMinus, double Objective, double GradientNorm, double Discrepancy);
+        double InitialPlus, double InitialMinus, double Objective, double GradientNorm, double Discrepancy,
+        int SkippedUpdates, int CycleLength);
+
+    private sealed record State(double[] X, int Updates, long Zeros, int Flips);
+
+    private static bool SameBits(double[] a, double[] b)
+    {
+        for (int i = 0; i < a.Length; i++)
+            if (BitConverter.DoubleToInt64Bits(a[i]) != BitConverter.DoubleToInt64Bits(b[i])) return false;
+        return true;
+    }
 
     private static Endpoint Recover(Settings s, Network net, double[] y, double[] start)
     {
@@ -39,19 +54,26 @@ internal static class Program
         var plus = new Forward(s);
         var minus = new Forward(s);
         var flips = new List<int>();
+        var history = new Queue<State>();
         int checks = 0, updates = 0;
+        int skipped = 0, cycleLength = 0;
         long zeros = 0;
         double discrepancy = 0, initialPlus = 0, initialMinus = 0;
         string stop = "update-limit";
 
         while (updates < s.MaxUpdates)
         {
+            if (s.FastForward)
+            {
+                if (history.Count == 128) history.Dequeue();
+                history.Enqueue(new((double[])x.Clone(), updates, zeros, flips.Count));
+            }
             for (int i = 0; i < x.Length; i++) negative[i] = -x[i];
             net.Evaluate(x, y, plus);
             net.Evaluate(negative, y, minus);
             if (!double.IsFinite(plus.Objective) || !double.IsFinite(minus.Objective))
                 throw new ArithmeticException("Nonfinite signed objective.");
-            bool flip = minus.Objective < plus.Objective;
+            bool flip = s.SignCheck && minus.Objective < plus.Objective;
             checks++;
             if (flip) flips.Add(checks);
             var z = flip ? negative : x;
@@ -78,6 +100,30 @@ internal static class Program
 
             for (int j = 0; j < x.Length; j++) x[j] = z[j] - s.Step * gradient[j];
             updates++;
+
+            if (s.FastForward)
+            {
+                State? repeated = history.LastOrDefault(state => SameBits(state.X, x));
+                if (repeated is not null)
+                {
+                    int period = updates - repeated.Updates;
+                    int copies = (s.MaxUpdates - updates) / period;
+                    if (copies > 0)
+                    {
+                        long cycleZeros = zeros - repeated.Zeros;
+                        int[] cycleFlips = flips.Skip(repeated.Flips).Select(i => i - repeated.Updates).ToArray();
+                        for (int copy = 0; copy < copies; copy++)
+                            foreach (int offset in cycleFlips) flips.Add(updates + copy * period + offset);
+                        int count = copies * period;
+                        zeros += copies * cycleZeros;
+                        updates += count;
+                        checks += count;
+                        skipped += count;
+                        cycleLength = period;
+                        history.Clear();
+                    }
+                }
+            }
         }
 
         net.Evaluate(x, y, plus);
@@ -87,7 +133,7 @@ internal static class Program
         discrepancy = Math.Max(discrepancy, Reference.Check(net, x, y, plus.Objective, gradient));
         discrepancy = Math.Max(discrepancy, Reference.Check(net, negative, y, minus.Objective));
         return new(x, updates, checks, stop, flips.ToArray(), zeros, initialPlus, initialMinus,
-            plus.Objective, Norm(gradient), discrepancy);
+            plus.Objective, Norm(gradient), discrepancy, skipped, cycleLength);
     }
 
     private static Trial Run(Settings s, int repetition, int seed)
@@ -99,31 +145,58 @@ internal static class Program
         if (Norm(start) == 0 || Norm(truth) == 0) throw new ArithmeticException("Zero code.");
         var observation = new Forward(s);
         net.Predict(truth, observation);
+        var oppositeTruth = truth.Select(v => -v).ToArray();
+        var ray = new Forward(s);
+        net.Predict(oppositeTruth, ray);
+        double rayNorm = PairwiseSum.Dot(ray.Residual, ray.Residual);
+        double inner = PairwiseSum.Dot(ray.Residual, observation.Residual);
+        double? rayRadius = rayNorm == 0 ? null : Math.Max(0, inner / rayNorm);
         Endpoint end = Recover(s, net, observation.Residual, start);
         double error = Norm(end.X.Zip(truth, (a, b) => a - b).ToArray()) / Norm(truth);
+        double truthNorm = Norm(truth), endpointNorm = Norm(end.X);
+        double cosine = endpointNorm == 0 ? 0 : Math.Clamp(PairwiseSum.Dot(end.X, truth) / (endpointNorm * truthNorm), -1, 1);
+        double? angle = endpointNorm == 0 ? null : Math.Acos(-cosine) * 180 / Math.PI;
+        double radius = endpointNorm / truthNorm, rho = 1 / Math.PI;
+        bool orientation = angle.HasValue && angle.Value <= 20;
+        bool radiusMatch = Math.Abs(radius - rho) <= rho / 4;
+        string classification = error < s.SuccessTolerance ? "recovered" :
+            orientation && radiusMatch ? "negative-neighbourhood" : "elsewhere";
         return new(repetition, seed, children, truth, start, end.X, end.Updates, end.Stop, end.Checks,
             end.Flips, end.Zeros, end.InitialPlus, end.InitialMinus, end.Objective, end.GradientNorm,
-            error, error < s.SuccessTolerance, end.Discrepancy);
+            error, error < s.SuccessTolerance, end.Discrepancy, end.Updates - end.SkippedUpdates,
+            end.SkippedUpdates, end.CycleLength, cosine, angle, radius,
+            PairwiseSum.Dot(end.X, truth) / (truthNorm * truthNorm), radius - rho,
+            orientation, radiusMatch, classification, rayNorm == 0, inner, rayNorm,
+            rayRadius, rayRadius.HasValue ? radius - rayRadius.Value : null);
     }
 
     public static int Main(string[] args)
     {
-        if (args.Length != 3) throw new ArgumentException("Expected settings.json, output directory, source revision.");
+        if (args.Length < 3) throw new ArgumentException("Expected settings.json, output directory, source revision, optional trial indices.");
         using var process = Process.GetCurrentProcess();
         process.PriorityClass = ProcessPriorityClass.BelowNormal;
         if (process.PriorityClass != ProcessPriorityClass.BelowNormal || Environment.ProcessorCount != 1)
             throw new InvalidOperationException("Run at below-normal priority with DOTNET_PROCESSOR_COUNT=1.");
 
         byte[] settingsBytes = File.ReadAllBytes(args[0]);
+        if (JsonDocument.Parse(settingsBytes).RootElement.TryGetProperty("Cells", out _))
+            return Curve.Run(args, settingsBytes);
         var settings = JsonSerializer.Deserialize<Settings>(settingsBytes)!;
-        string results = args[1];
+        return Execute(settings, settingsBytes, args[1], args[2], args.Length == 4 ? args[3] : null);
+    }
+
+    internal static int Execute(Settings settings, byte[] settingsBytes, string results, string revision, string? selected)
+    {
+        using var process = Process.GetCurrentProcess();
         Directory.CreateDirectory(results);
         int[] seeds = SeedTree.Derive(settings.MasterSeed, settings.Repetitions);
+        int[] indices = selected is not null ? selected.Split(',').Select(int.Parse).Select(i => i - 1).ToArray() :
+            Enumerable.Range(0, seeds.Length).ToArray();
         var trials = new List<Trial>(seeds.Length);
         using (var rows = new StreamWriter(Path.Combine(results, "trials.jsonl")))
         {
             rows.AutoFlush = true;
-            for (int i = 0; i < seeds.Length; i++)
+            foreach (int i in indices)
             {
                 Trial trial = Run(settings, i + 1, seeds[i]);
                 trials.Add(trial);
@@ -135,19 +208,24 @@ internal static class Program
         int successes = trials.Count(t => t.Success);
         long zeros = trials.Sum(t => t.SelectedPreactivationZeros);
         double maxDiscrepancy = trials.Max(t => t.MaxReferenceDiscrepancy);
-        bool gate = successes == trials.Count && zeros == 0 && maxDiscrepancy <= settings.ReferenceTolerance;
+        bool gate = zeros == 0 && maxDiscrepancy <= settings.ReferenceTolerance &&
+            (!settings.RequireAllRecovered || successes == trials.Count);
         var summary = new
         {
-            SourceRevision = args[2], SettingsSha256 = Convert.ToHexStringLower(SHA256.HashData(settingsBytes)),
+            SourceRevision = revision, SettingsSha256 = Convert.ToHexStringLower(SHA256.HashData(settingsBytes)),
             Runtime = RuntimeInformation.FrameworkDescription, Architecture = RuntimeInformation.ProcessArchitecture.ToString(),
             Priority = process.PriorityClass.ToString(), ProcessorCount = Environment.ProcessorCount,
-            Repetitions = seeds.Length, Successes = successes, GradientStops = trials.Count(t => t.Stop == "gradient"),
+            settings.CodeDimension, settings.SignCheck, settings.FastForward,
+            Repetitions = trials.Count, Successes = successes, GradientStops = trials.Count(t => t.Stop == "gradient"),
             UpdateLimitStops = trials.Count(t => t.Stop == "update-limit"),
             MinUpdates = trials.Min(t => t.Updates), MaxUpdates = trials.Max(t => t.Updates),
             SignChecks = trials.Sum(t => t.SignChecks), Flips = trials.Sum(t => t.FlipIterations.Length),
             RepetitionsWithFlips = trials.Count(t => t.FlipIterations.Length > 0),
             SelectedPreactivationZeros = zeros, MinRelativeCodeError = trials.Min(t => t.RelativeCodeError),
             MaxRelativeCodeError = trials.Max(t => t.RelativeCodeError), MaxReferenceDiscrepancy = maxDiscrepancy,
+            EvaluatedUpdates = trials.Sum(t => t.EvaluatedUpdates), SkippedUpdates = trials.Sum(t => t.SkippedUpdates),
+            CycleLengths = trials.Where(t => t.CycleLength > 0).Select(t => t.CycleLength).Distinct().Order().ToArray(),
+            EndpointClasses = trials.GroupBy(t => t.EndpointClass).ToDictionary(g => g.Key, g => g.Count()),
             GatePassed = gate
         };
         File.WriteAllText(Path.Combine(results, "summary.json"),

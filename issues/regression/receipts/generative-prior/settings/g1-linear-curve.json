@@ -1,0 +1,29 @@
+{
+  "NewMasterSeed": 181204177,
+  "Repetitions": 30,
+  "HiddenWidth": 250,
+  "OutputWidth": 600,
+  "Measurements": 150,
+  "Step": 1,
+  "GradientTolerance": 2.220446049250313e-16,
+  "MaxUpdates": 50000,
+  "SuccessTolerance": 0.001,
+  "ReferenceTolerance": 1e-10,
+  "Cells": [
+    { "K": 10, "MasterIndex": null, "Paired": true, "PaperSuccesses": 30 },
+    { "K": 15, "MasterIndex": 0, "Paired": false, "PaperSuccesses": 30 },
+    { "K": 20, "MasterIndex": 1, "Paired": false, "PaperSuccesses": 30 },
+    { "K": 25, "MasterIndex": 2, "Paired": false, "PaperSuccesses": 30 },
+    { "K": 30, "MasterIndex": 3, "Paired": false, "PaperSuccesses": 30 },
+    { "K": 35, "MasterIndex": 4, "Paired": false, "PaperSuccesses": 30 },
+    { "K": 40, "MasterIndex": 5, "Paired": false, "PaperSuccesses": 30 },
+    { "K": 45, "MasterIndex": 6, "Paired": false, "PaperSuccesses": 30 },
+    { "K": 50, "MasterIndex": 7, "Paired": false, "PaperSuccesses": 30 },
+    { "K": 55, "MasterIndex": 8, "Paired": false, "PaperSuccesses": 28 },
+    { "K": 60, "MasterIndex": 9, "Paired": false, "PaperSuccesses": 28 },
+    { "K": 70, "MasterIndex": 10, "Paired": false, "PaperSuccesses": 25 },
+    { "K": 80, "MasterIndex": 11, "Paired": true, "PaperSuccesses": 17 },
+    { "K": 90, "MasterIndex": 12, "Paired": false, "PaperSuccesses": 7 },
+    { "K": 100, "MasterIndex": 13, "Paired": true, "PaperSuccesses": 4 }
+  ]
+}
