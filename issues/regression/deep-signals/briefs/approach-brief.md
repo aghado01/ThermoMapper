@@ -184,6 +184,10 @@ Stated for any application. The order follows the pilot's main finding: generato
 - Event tokens with continuous attributes in place of a fixed frame grid.
 - Conformal guarantees on consistency losses, and risk control on turn-taking.
 
+**TorchSharp as a candidate for the learned generator.** The first concrete use would be training a decoder on batches of signals, then freezing its weights and differentiating the measurement loss with respect to the latent code during recovery. A decoder-specific .NET assembly could own the tensors, optimiser and checkpoints. A fixed checkpoint can supply one draw to `ICalibrationEmulator`, with its prediction in physical units and an explicit emulator-error model. The existing contract supports concurrent single-code predictions. Its `PredictLevels` operation enumerates categorical levels for one continuous code. Training batches and latent gradients belong with the decoder. [Calibration contract](../../../../src/maths/regression/spline/bass/calibration/CalibrationEmulator.cs) · [TorchSharp training example](https://github.com/dotnet/TorchSharp#torchsharp)
+
+For a first comparison, load identical G1 weights, measurements and initial codes into TorchSharp. Check forward outputs, signed losses and latent gradients in float64 against the C# reference before timing. Measure end-to-end recovery for one code and for the intended batch size, including transfers and peak native memory. Lower precision needs its own stopping tolerance and recovery check. Production adoption would depend on those measurements and a deployment test with the pinned CPU or CUDA LibTorch runtime on the intended host. [G1 probe](../../receipts/generative-prior/probe/Network.cs) · [Native runtime dependencies](https://www.nuget.org/packages/TorchSharp/0.107.0) · [Tensor lifetime management](https://github.com/dotnet/TorchSharp/blob/main/docfx/articles/memory.md)
+
 ## Open questions for the user
 
 - Does the oscillatory term family earn its own brief?
