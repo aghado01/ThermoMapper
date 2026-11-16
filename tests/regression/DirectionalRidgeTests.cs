@@ -420,11 +420,14 @@ public sealed class DirectionalRidgeTests(ITestOutputHelper output)
         };
         config = sampler switch
         {
+            // The plain chain, declared: a ridge basis's default is now tempering (E36's sampler decision), and this case reads the chain.
+            "chain" => config with { Sampling = config.Sampling with { Sampler = BassSamplerChoice.PlainChains } },
             "tempering" => config with { Sampling = config.Sampling with { Tempering = new TemperingSpec { InverseTemperatures = [1.0, 0.5, 0.25, 0.1] } } },
             "smc" => config with { Sampling = config.Sampling with { Smc = new SmcSpec { Particles = 200, Replicates = 2, MutationSteps = 12, TargetConditionalEss = 0.9 } } },
             _ => config,
         };
         BassFit fit = Bass.Fit(config, data);
+        Assert.Equal(sampler == "chain", fit.Diagnostics.SamplerCaution is not null);   // declared plain chains on a ridge basis carry it
         foreach (BassDraw draw in fit.Draws.SelectMany(c => c))
         {
             BassTerm[] terms = [.. draw.Structure.TermIds.Select(id => fit.Terms[id])];

@@ -52,7 +52,8 @@ public static class Bass
         if (options.RungWorkers is 0 or < -1)
             throw new ArgumentOutOfRangeException(nameof(run), "RungWorkers is −1, what the chains leave, or at least 1.");
         if (options.ProgressInterval < 1) throw new ArgumentOutOfRangeException(nameof(run), "ProgressInterval must be at least 1.");
-        BassModel model = BassModel.Create(config, data);
+        // A resumed checkpoint keeps the sampler that produced it, tempered or plain, whatever a ridge basis's rule now resolves.
+        BassModel model = BassModel.Create(config, data, null, resumeFrom is null ? null : BassEnsemble.Tempered(resumeFrom));
         BassSampling sampling = config.Sampling;
 
         string fingerprint = Fingerprint(config, data);

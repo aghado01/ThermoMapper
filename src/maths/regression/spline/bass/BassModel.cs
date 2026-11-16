@@ -39,18 +39,25 @@ public sealed class BassModel
     /// the config's (<see cref="TemperingSpec.Form"/> or <see cref="SmcSpec.Form"/>), the integrated form when it declares
     /// none. The noise is the config's: <see cref="VarianceMeanMixture"/> for a declared <see cref="BassConfig.Noise"/>, Gaussian
     /// otherwise.</summary>
-    public static BassModel Create(BassConfig config, BassData data, TemperedForm? form = null)
+    public static BassModel Create(BassConfig config, BassData data, TemperedForm? form = null) => Create(config, data, form, null);
+
+    // As above, for a run resuming a checkpoint whose chains ran tempered (true) or plain (false), which the sampler's resolution keeps
+    // (BassSamplerDefault); null for a fresh run.
+    internal static BassModel Create(BassConfig config, BassData data, TemperedForm? form, bool? resumedTempered)
     {
         ArgumentNullException.ThrowIfNull(config);
         return Create(config, data, config.Noise is { } noise
             ? new VarianceMeanMixture(noise, config.Sigma2, recordsSigma2: config.HasRandomEffects, outputs: data?.Response is MultiOutputResponse several ? several.Outputs : 0)
-            : GaussianObservation.Instance, form);
+            : GaussianObservation.Instance, form, resumedTempered);
     }
 
     /// <summary><see cref="Create(BassConfig, BassData, TemperedForm?)"/> with <paramref name="observation"/> as the noise
     /// the Gaussian core fits (F-X1), for a config that declares none; Gaussian BASS is the overload above. The data's case
     /// weights (<see cref="BassData.Weights"/>) are the working response's, under Gaussian noise alone.</summary>
     public static BassModel Create(BassConfig config, BassData data, IBassObservationModel observation, TemperedForm? form = null)
+        => Create(config, data, observation, form, null);
+
+    private static BassModel Create(BassConfig config, BassData data, IBassObservationModel observation, TemperedForm? form, bool? resumedTempered)
     {
         ArgumentNullException.ThrowIfNull(config);
         ArgumentNullException.ThrowIfNull(data);
@@ -101,7 +108,12 @@ public sealed class BassModel
             }
             else working = block.Rewhiten(baseReading);
         }
+        // The sampler a ridge basis takes when none is declared (the user's decision, E36): the run takes the resolved config, the fit
+        // keeps the declared one, whose fingerprint a checkpoint and a readout read.
+        BassConfig asDeclared = config;
+        (config, BassAutoPick? samplerPick, string? caution) = BassSamplerDefault.Resolve(config, data, working, form, resumedTempered);
         BassResolved resolved = BassResolved.Resolve(config, data, working);
+        if (samplerPick is not null) resolved = resolved with { AutoPicks = [samplerPick, .. resolved.AutoPicks] };
         BassInputTransform transform = BassInputTransform.Fit(data);
         BassInputs inputs = BassInputs.Prepare(data, transform);
         var basis = new BassBasis(inputs, config.Structure.Degree, config.Structure.ResolvedHingeNormalization);
@@ -113,7 +125,11 @@ public sealed class BassModel
             : new LegendreTermProposal(prior, config.Structure.Legendre!);
         var target = new BassTarget(config, resolved, prior, form ?? config.Sampling.Tempering?.Form ?? config.Sampling.Smc?.Form ?? TemperedForm.Integrated, working);
         RidgeExpansion? expansion = config.Structure.Directional is { Columns: >= 2 } ridge ? new RidgeExpansion(prior.Directional!, ridge.Columns) : null;
-        return new(config, data, resolved, transform, inputs, basis, admission, prior, proposal, kernel, target, observation, working, baseReading, block, expansion);
+        return new(config, data, resolved, transform, inputs, basis, admission, prior, proposal, kernel, target, observation, working, baseReading, block, expansion)
+        {
+            Declared = asDeclared,
+            SamplerCaution = caution,
+        };
     }
 
     // Several outputs' noise by row (E34's decision 6): one v per case shared by its outputs, a skew γ | Σ ~ N(0, s²Σ) at zero mean, the priors
@@ -156,8 +172,17 @@ public sealed class BassModel
     internal RandomEffectsBlock? BlockAt(BassDraw draw) => RandomEffects is { } block
         ? block.At(draw.Groups ?? throw new ArgumentException("A random-intercept draw carries its named groups.", nameof(draw))) : null;
 
-    /// <summary>The config.</summary>
+    /// <summary>The config the run takes: the declared one, with a ridge basis's sampler resolved when none is declared
+    /// (<see cref="BassSampling.Sampler"/>).</summary>
     public BassConfig Config { get; }
+
+    /// <summary>The config as declared, which a fit carries and its fingerprint reads; <see cref="Config"/> where nothing was resolved.</summary>
+    public BassConfig Declared { get => _declared ?? Config; private init => _declared = value; }
+
+    private readonly BassConfig? _declared;
+
+    /// <summary>The caution plain chains carry on a ridge basis (<see cref="BassDiagnostics.SamplerCaution"/>); null otherwise.</summary>
+    public string? SamplerCaution { get; private init; }
 
     /// <summary>The data.</summary>
     public BassData Data { get; }

@@ -47,7 +47,8 @@ public sealed class BpprFriedmanTests(ITestOutputHelper output)
             Sigma2 = Sigma2Prior.Jeffreys,
             Coefficients = BassCoefficientPrior.G(TauPrior.Gamma(0.5, 0.5 * n)),
             Count = new BassCountPrior(1e7, 1e6),
-            Sampling = new BassSampling { Chains = 1, MasterSeed = seed, BurnIn = 18_000, Samples = 2_000, Thin = 1 },
+            // One plain chain, declared, as the paper and BayesPPR run it; a ridge basis's default is now tempering (E36's sampler decision).
+            Sampling = new BassSampling { Chains = 1, MasterSeed = seed, BurnIn = 18_000, Samples = 2_000, Thin = 1, Sampler = BassSamplerChoice.PlainChains },
         };
         var clock = System.Diagnostics.Stopwatch.StartNew();
         BassFit fit = Bass.Fit(config, data);

@@ -42,6 +42,8 @@ namespace Maths.Regression.Spline.Bass;
 /// convergence diagnostics and the verdict read π_w's functionals over production, D10's rules on the chains' own
 /// target. <see cref="ModeSeparation"/> reads the chains' reweighted means at b = 1, <see cref="MassAtCap"/> the weighted
 /// share at M_max, and <see cref="SamplesUsed"/> production's draws per chain; the accounts cover production.</item>
+/// <item><b>The sampler's caution</b> (E36's sampler decision). <see cref="SamplerCaution"/> is set where plain chains run on a ridge basis,
+/// declared or resumed: their M can stay where it started, and f's intervals can then be too narrow. Null otherwise.</item>
 /// </list>
 /// The totals are the chains' sums, and <see cref="Chains"/> keeps each chain's own, with its start.
 /// </summary>
@@ -65,7 +67,8 @@ public sealed record BassDiagnostics(
     IReadOnlyList<BassChainAccount> Chains,
     BassTemperingReadout? Tempering,
     BassSmcReadout? Smc = null,
-    BassFlatHistogramReadout? FlatHistogram = null)
+    BassFlatHistogramReadout? FlatHistogram = null,
+    string? SamplerCaution = null)
 {
     /// <summary>The predictive group: σ² and the fitted values. Do the chains predict the same surface and noise?</summary>
     public const string PredictiveGroup = "predictive";

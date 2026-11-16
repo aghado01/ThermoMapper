@@ -74,8 +74,14 @@ public sealed class CategoricalReadoutTests(ITestOutputHelper output)
             Structure = new BassStructureSpec { MaxInteraction = 2, MaxBasis = 10, Directional = new DirectionalBasis { Columns = columns } },
             Sampling = new BassSampling { Chains = 2, MasterSeed = 3732, BurnIn = 6000, Samples = 300, Thin = 2 },
         };
-        if (sampler == "smc")
-            config = config with { Sampling = config.Sampling with { Smc = new SmcSpec { Particles = 200, Replicates = 2, MutationSteps = 12, TargetConditionalEss = 0.9 } } };
+        // The chain cases declare plain chains: these read the readouts, whose sampler is incidental, and a ridge basis's default is now
+        // tempering (E36's sampler decision).
+        config = config with
+        {
+            Sampling = sampler == "smc"
+                ? config.Sampling with { Smc = new SmcSpec { Particles = 200, Replicates = 2, MutationSteps = 12, TargetConditionalEss = 0.9 } }
+                : config.Sampling with { Sampler = BassSamplerChoice.PlainChains },
+        };
         BassFit fit = Bass.Fit(config, data);
         BassModel model = BassModel.Create(config, data);
 

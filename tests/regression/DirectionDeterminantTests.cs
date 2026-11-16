@@ -402,8 +402,14 @@ public sealed class DirectionDeterminantTests(ITestOutputHelper output)
             Structure = new BassStructureSpec { MaxInteraction = 3, Directional = new DirectionalBasis { Directions = DirectionPrior.Determinant, Columns = columns } },
             Sampling = new BassSampling { Chains = 2, MasterSeed = 3711, BurnIn = 4000, Samples = 400, Thin = 2 },
         };
-        if (sampler == "smc")
-            config = config with { Sampling = config.Sampling with { Smc = new SmcSpec { Particles = 200, Replicates = 2, MutationSteps = 12, TargetConditionalEss = 0.9 } } };
+        // The chain cases declare plain chains, which this test reads beside SMC; a ridge basis's default is now tempering (E36's sampler
+        // decision).
+        config = config with
+        {
+            Sampling = sampler == "smc"
+                ? config.Sampling with { Smc = new SmcSpec { Particles = 200, Replicates = 2, MutationSteps = 12, TargetConditionalEss = 0.9 } }
+                : config.Sampling with { Sampler = BassSamplerChoice.PlainChains },
+        };
         BassFit fit = Bass.Fit(config, data);
         Assert.Equal(4, BassModel.Create(config, data).MaxBasis);   // the default cap, min(1000, N − 1), cut at p
         int most = 0;

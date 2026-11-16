@@ -330,6 +330,9 @@ public sealed record BassConfig
             if (run.Births?.Residual is not null)
                 throw Bad("Sampling.Births.Residual", "grows continuous hinge factors onto parent terms; a directional basis has neither");
         }
+        if (!Enum.IsDefined(run.Sampler)) throw Bad("Sampling.Sampler", "is not a known choice");
+        if (run.Sampler == BassSamplerChoice.PlainChains && (run.Tempering is not null || run.Smc is not null || run.FlatHistogram is not null))
+            throw Bad("Sampling.Sampler", "is PlainChains, while the config declares Sampling.Tempering, Sampling.Smc or Sampling.FlatHistogram; declare one sampler");
         if (run.Smc is { } smc)
         {
             if (!scale.IsProper) throw Bad("Coefficients.Scale", $"is {scale}, improper, which SMC cannot start from (D05); take a > 2");
@@ -582,6 +585,18 @@ public enum SupportKind
     ColumnMass,
 }
 
+/// <summary>How a fit's sampler is chosen when the config declares none (<see cref="BassSampling.Sampler"/>; E36, the user's decision of
+/// 2026-11-15).</summary>
+public enum BassSamplerChoice
+{
+    /// <summary>Plain chains on every basis but one that admits ridge blocks, which takes self-sizing parallel tempering.</summary>
+    Automatic,
+
+    /// <summary>Plain chains, declared: on a ridge basis they run with a caution that M can stay where it started and f's intervals can be
+    /// too narrow.</summary>
+    PlainChains,
+}
+
 /// <summary>
 /// The groups of monitored quantities an R̂ stop waits on (D10): every group by default, or the predictive group alone.
 /// The verdict reports every group either way (<see cref="BassDiagnostics.Verdict"/>).
@@ -767,8 +782,22 @@ public sealed record BassSampling
     [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingDefault)]
     public bool InterweaveGroupScales { get; init; }
 
-    /// <summary>Parallel tempering within each chain; null, the default, runs untempered (D05).</summary>
+    /// <summary>Parallel tempering within each chain; null, the default, runs untempered (D05), or under a ridge basis resolves as
+    /// <see cref="Sampler"/> says.</summary>
     public TemperingSpec? Tempering { get; init; }
+
+    /// <summary>
+    /// How the sampler is chosen when the config declares none of <see cref="Tempering"/>, <see cref="Smc"/> and <see cref="FlatHistogram"/>
+    /// (the user's decision of 2026-11-15, E36): <see cref="BassSamplerChoice.Automatic"/>, the default, runs plain chains on every basis but
+    /// one that admits ridge blocks (<see cref="DirectionalBasis.Columns"/> ≥ 2), which takes self-sizing parallel tempering, with the exact
+    /// reference rung where the priors and the tempered form admit it and an auto-picked hot end with its reason otherwise; settled from the
+    /// configured basis, whatever the draws hold. <see cref="BassSamplerChoice.PlainChains"/> runs plain chains on any basis and, on a ridge
+    /// basis, carries a caution (<see cref="BassDiagnostics.SamplerCaution"/>). A declared sampler always wins. The resolution is logged
+    /// (<see cref="BassResolved.AutoPicks"/>, "Sampler"). Left out of the serialized form at its default, so every existing config keeps its
+    /// form and fingerprint.
+    /// </summary>
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingDefault)]
+    public BassSamplerChoice Sampler { get; init; }
 
     /// <summary>
     /// Fitting by SMC from the prior to the posterior (stage 8, D05) in place of MCMC; null, the default, runs MCMC. It

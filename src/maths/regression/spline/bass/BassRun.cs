@@ -129,6 +129,14 @@ internal sealed class BassEnsemble : IEnsembleModel<BassState>
                                 new BassStart(start.Terms, _model.Target.HeldTau ?? start.Tau, sampler.Attempts));
     }
 
+    /// <summary>Whether <paramref name="checkpoint"/>'s chains ran tempered: true for ladders, false for plain chains, null for a checkpoint
+    /// that holds no BASS chain's restart state (an SMC or a flat-histogram run's).</summary>
+    internal static bool? Tempered(EnsembleCheckpoint checkpoint)
+    {
+        ArgumentNullException.ThrowIfNull(checkpoint);
+        return checkpoint.Chains.Count > 0 && checkpoint.Chains[0].Engine is BassChainState s ? s.Ladder is not null : null;
+    }
+
     /// <summary>Rebuilds a chain from the restart state its run saved (<see cref="BassChainState"/>).</summary>
     public IChainRun<BassState> RestoreChain(IChainState state)
     {
@@ -175,7 +183,7 @@ internal sealed class BassEnsemble : IEnsembleModel<BassState>
             foreach (BassDraw d in runs[c].Draws) draws[c].Add(Remap(d, map));
         }
 
-        BassConfig config = _model.Config;
+        BassConfig config = _model.Declared;   // the declared config, whose fingerprint the fit's identity reads
         BassLadder[]? ladders = _tempering is null ? null : Array.ConvertAll(runs, r => r.Ladder!);
         BassDiagnostics diagnostics = Diagnostics(summary, runs, ladders);
         return new BassFit(config, _model.Resolved, _model.Transform,
@@ -239,7 +247,7 @@ internal sealed class BassEnsemble : IEnsembleModel<BassState>
         return new BassDiagnostics(count, tau, logPosterior, sigma2, fitted, moves!, summary.AcceptanceRate, kinds, refusals, emptyBirths,
                                    support, (double)atCap / retained, summary.SamplesUsed, summary.SamplesUsed < _plannedDraws,
                                    summary.Verdict, Separation(summary.Traces, level, first), accounts,
-                                   ladders is null ? null : BassTemperingReadout.Of(ladders));
+                                   ladders is null ? null : BassTemperingReadout.Of(ladders), SamplerCaution: _model.SamplerCaution);
     }
 
     // The mode-separation readings from each chain's trace: its mean log posterior (functional `level`), and its mean fitted
