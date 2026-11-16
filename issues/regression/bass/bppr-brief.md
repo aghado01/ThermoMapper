@@ -257,6 +257,16 @@ Under "Reports" below, newest first, per slice: what landed by commit; the gates
 
 ## Reports
 
+### Slice 5 verified from a clean archive (coordinating session, 2026-11-15)
+
+- **Commits:** `7d0d1e2` and `f11c8cc`, on a snapshot of `37812fd`, through `scripts/verify-csharp.ps1` over their 24 changed files, in the two projects that select.
+- **Result:** Regression 2,844 of 2,844 and Oracle 106 of 106 at commit scope. Among them: `CategoricalRidgeTests` 7 and `CategoricalReadoutTests` 5; slice 4's `DirectionDeterminantTests` 10 and slice 2's `DirectionalChainTests` 13 under the restructured prior sampler; and the sampled-sensitivity chip's `SampledSensitivityTests` 18 and `SampledEffectsTests` 11 under the two-line change to its file.
+- **Read: the prior sampler under the determinant.** A redraw redraws each direction whole, its active count, its variables and its weights (`DrawDirectionPart` at `active = 0`), and not the weights under held variables. So the kept directions have the law Π π(direction)·det/c at M_θ, whose normalizer reads M_θ alone, and with M and each term's parts from the base law the kept draw has the stated target. Redrawing weights alone would have left the variables' law untilted, which is another law.
+- **Read: the user's review at the slice 6 section's head** (`6dc2384`). It corrects this session's second point there: the normalized `RidgeForm` reads diag(G)/N, so it is scale-free on mixed columns, and only `RawRidgeForm` is refused at K ≥ 2.
+- **Two changes in other chips' files,** each with a test that reaches it: the calibration emulator's split keeps a gated direction (`BassEmulators.cs`), and the sampled route varies a category that enters only as a gate (`BassSampledSensitivity.TermVariablesOf`). The sampled-sensitivity chip is told of the second.
+- **Next, by the user's review:** the pure-basis readings on matched data, and the categorical label's definition for 6a, before a mixed chain. Slice 6 stays a draft.
+- **Receipts:** `artifacts/verify-bppr-s5-37812fd/`, with the changed list, the counters and the snapshot tracked in [receipts](../receipts/verify-bppr-s5-37812fd/).
+
 ### Slice 5: categorical inputs (2026-11-15)
 
 The user approved slice 5 at its recommendations (5a, 5b, 5c) and reviewed the plan before the build. The review's three slice 5 points are built here: blocks of varying width, the determinant counting direction-bearing terms, and a gate-only Sobol fixture with what an empty, small or tied cell does. Its slice 6 points are recorded at that section's head (6dc2384).

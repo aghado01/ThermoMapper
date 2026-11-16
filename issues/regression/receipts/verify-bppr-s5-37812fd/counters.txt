@@ -1,0 +1,2 @@
+regression    total 2844 executed 2844 passed 2844 failed 0 notExecuted 0
+oracle        total 106 executed 106 passed 106 failed 0 notExecuted 0
