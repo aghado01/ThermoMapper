@@ -1,6 +1,6 @@
 # BAMRS: free-knot tensor-product spline surfaces (preparation brief)
 
-Date: 2026-11-12. Status: preparation; nothing is built. This is E3 of the [extensions checklist](../../bass/extensions-checklist.md), queued by the user on 2026-11-08. It replaces the design notes under E3 in the [extensions brief](../../bass/extensions-brief.md#free-knot-tensor-product-surfaces-abmrs) as the working document. Written by the main session at the user's request, after a re-read of the sources and a survey of the engine. Its decisions are proposals until the user takes them.
+Date: 2026-11-12. Status: preparation; nothing is built. This is E3 of the [extensions checklist](../../bass/extensions-checklist.md), queued by the user on 2026-11-08. It replaces the design notes under E3 in the [extensions brief](../../bass/extensions-brief.md#free-knot-tensor-product-surfaces-abmrs) as the working document. Written by the main session at the user's request, after a re-read of the sources and a survey of the engine. Its decisions are proposals until the user takes them. Revised 2026-11-15 after an external review the user relayed: [the record](#review-of-2026-11-15) lists what changed.
 
 ## Why
 
@@ -9,7 +9,7 @@ BAMRS fits a surface over two or three inputs with a tensor-product B-spline who
 What it adds to the family:
 
 - **Smooth surfaces with exact per-draw geometry.** BASS's hinges default to degree 1, and BAPS's tensor splines keep fixed knots. A cubic tensor spline with free knots has exact derivatives, restrictions and extrema for each posterior draw, with the knot uncertainty carried.
-- **Discontinuities along an axis,** from knots that cluster within the data's resolution.
+- **Jump-like transitions along an axis,** from knots that cluster within the data's resolution. Each draw stays continuous, and its change across a gap in the data is free. A literal jump needs more ([item 4](#what-the-product-structure-changes)).
 - **Scope.** Low dimension: d = 2 for cubics, and d = 3 at degree 1 or with many observations (the support gate, below). The engine is application-agnostic.
 
 **The name.** BAMRS is Bayesian Adaptive Multivariate Regression Splines, the source's ABMRS in the family's word order. [BAMRS.md](../../../../docs/Maths/Regression/BAMRS.md) and [Regression.md](../../../../docs/Maths/Regression/Regression.md) expand it as "Multiresolution", which is a correction owed. A multiresolution engine is a different model and a separate candidate ([its section](#multiresolution-a-separate-candidate)).
@@ -17,12 +17,13 @@ What it adds to the family:
 ## Sources
 
 - **The preprint:** He, Yang and Kang, arXiv 2405.13353v1 (May 2024), where the method is called EBARS. Markdown at [papers/HYK2024.md](../papers/HYK2024.md); the source is held under `codex-scientiae/supellex-private/gauntlet/bayesian/2405.13353v1`. arXiv has no later version (checked 2026-11-12).
-- **The article:** *Biometrics* 82(3), 2026, ujag121, doi 10.1093/biomtc/ujag121. **The main text is not held** and the journal page refuses automated fetch. Every statement here about the published version is inferred from its open supplement.
+- **The article:** *Biometrics* 82(3), 2026, ujag121, doi 10.1093/biomtc/ujag121. Its title is *Adaptive Bayesian multivariate spline knot inference with prior specifications on model complexity*. **The main text is not held** and the journal page refuses automated fetch. Crossref holds the publisher's abstract and reference list for the DOI (`api.crossref.org/works/10.1093/biomtc/ujag121`, read 2026-11-15). Every statement here about the published version rests on that record or on the open supplement.
 - **The supplement:** [ABMRS_Revision_V2_Supplementary_Materials](../ABMRS_Revision_V2_Supplementary_Materials), with the web appendix as [text](../ABMRS_Revision_V2_Supplementary_Materials/web_appendix_extracted.txt). Web Appendix A proves Lemma 1 and Lemma 3 only, with the preprint's statements, which implies the article carries no theorem needing a proof beyond the preprint's lemmas.
 - **The author's repositories,** cloned at `D:\aghado01\packages\bayesian-related`: `ABMRS` (its `src` and `R` are identical to the supplement's copy) and `exampleABMRS`, the scripts behind the article's simulations and its real-data example.
 - **Chen and Chen (2008),** *Extended Bayesian information criteria for model selection with large model spaces*, Biometrika. Not held. Its consistency condition is quoted below from memory and wants checking against the paper before it enters `docs/`.
-- **Checked earlier:** the report half of [abmrs-verification-questions.md](../../discussion/abmrs-verification-questions.md), which holds against the supplement.
-- **Unreliable, and not to be cited:** [HYK-2024-2026-differences.md](../../discussion/HYK-2024-2026-differences.md) and [HYK-2024-2026-clarifications.md](../../discussion/HYK-2024-2026-clarifications.md). They are external summaries with invented content (a knot-multiplicity kernel, a gradient and Hessian peak finder, a changed death formula, fMRI and cardiac applications). [argon-abmrs-verification-debrief.md](../../discussion/argon-abmrs-verification-debrief.md) retracts part of it.
+- **Checked earlier:** the report half of [abmrs-verification-questions.md](../discussion/abmrs-verification-questions.md), which holds against the supplement.
+- **Unreliable, and not to be cited:** [HYK-2024-2026-differences.md](../discussion/HYK-2024-2026-differences.md) and [HYK-2024-2026-clarifications.md](../discussion/HYK-2024-2026-clarifications.md). They are external summaries, and their detail is unverified. The earlier pass found three of their claims without a counterpart in the supplement's code: a knot-multiplicity kernel, a gradient and Hessian peak finder, and a changed death formula. [argon-abmrs-verification-debrief.md](../discussion/argon-abmrs-verification-debrief.md) retracts part of it.
+  - *Withdrawn 2026-11-15.* This brief first listed their fMRI and cardiac applications as invented. The published abstract names an analysis of functional MRI data from the Human Connectome Project, so that application is real. The cardiac one is unverified: the reference list cites a cardiopulmonary-bypass study (De Somer and co-authors 2011), and nothing held says how the article uses it. What the summaries say of either application's detail still waits for the main text.
 
 ## The source's theory, re-derived
 
@@ -36,7 +37,7 @@ Notation is the module's (BARS.md): m observations, d axes indexed by a, degree 
 - **Lemma 2** is the BIC-type approximation: p̂ ∝ m^(−(ν+1)/2)·(σ̂²)^(−m/2)·τ^(−γ), with σ̂² the maximum-likelihood variance.
 - **Lemma 3** holds for every γ ≥ 0. The schedule is b_k = c·min(1, ((C−k)/(k+1))^(1−γ)) and d_k = c·min(1, (k/(C−k+1))^(1−γ)). One of the two minima is always 1, so b_k/d_(k+1) = π(k+1)/π(k) exactly, the structure prior and the proposal cancel, and the acceptance is the marginal-likelihood ratio alone. It holds per axis because the count law factorizes and the axis is picked uniformly.
 - **Where [0.5, 2] likely comes from.** This is my derivation; their reasoning is unread. Chen and Chen's condition is γ > 1 − 1/(2κ) when the candidates number O(m^κ). Their runs set C = 2m or 3m, so κ = 1 and γ > ½. γ > 1 lies outside Chen and Chen's range, and the supplement runs it (1.2, 1.5).
-- **What the article adds to the preprint,** as far as the supplement shows: γ past 1, c = 0.3, the column filter, coefficient draws with prediction intervals, a peak-detection simulation, and a real-data example (triceps skinfold). The preprint's manifold-denoising application has no trace in `exampleABMRS`.
+- **What the article adds to the preprint,** as far as the supplement shows: γ past 1, c = 0.3, the column filter, coefficient draws with prediction intervals, a peak-detection simulation, and a real-data example (triceps skinfold). The abstract adds a second real-data example, functional MRI data from the Human Connectome Project, and names three tasks: fitting discontinuous multivariate functions, detecting univariate change points, and locating peaks in multivariate regression. `exampleABMRS` holds no code for the fMRI analysis. The preprint's manifold-denoising application has no trace in `exampleABMRS`.
 
 ## Corrections to the source
 
@@ -62,9 +63,11 @@ Rows 2–5 are in BAMRS.md today. The rest are new from this pass.
 Every form below is settled for BARS and carries over. The product structure is the only new part.
 
 - **Carrier.** One `KnotConfig` per axis: continuous knots on the open ordered simplex.
-- **Structure prior.** Independent across axes. Its log density is Σₐ [ln p(kₐ) + ln kₐ!], the count law times the order-statistics density, restricted to the admissible set. Any `IComplexityPrior` serves an axis. `EbicPrior(γ, Cₐ)` reproduces the source's law, since a uniform draw of kₐ sites from a grid tends to the order statistics of kₐ uniforms as the grid refines; C stays as a nominal count.
+- **Structure prior.** A product across axes, restricted to the admissible set. Its log density there is Σₐ [ln p(kₐ) + ln kₐ!], the count law times the order-statistics density. The restriction couples the axes, so their counts are not independent under the prior (item 6 of the next section). Any `IComplexityPrior` serves an axis. `EbicPrior(γ, Cₐ)` reproduces the source's law, since a uniform draw of kₐ sites from a grid tends to the order statistics of kₐ uniforms as the grid refines; C stays as a nominal count.
 - **Coefficients and noise.** The centred collapsed g-prior block, with the σ² priors BARS has (`Sigma2Prior`). Under the Jeffreys prior its marginal is Lemma 1 on ỹ = y − c.
-- **Admission.** The support gate on product columns, then factor admission (`DesignAdmission`), then m > ν. A refused configuration scores −∞. Truncating the prior to the admissible set keeps every acceptance ratio valid, since an inadmissible proposal is simply rejected.
+- **Admission.** In order of cost: the simplex and the count priors; the size bound m > ν, read from the counts alone, with ν = Πₐ νₐ computed under overflow protection; the support gate on product columns; then factor admission (`DesignAdmission`). No design is allocated before the size bound passes (item 6 of the next section has the arithmetic). A refused configuration scores −∞. Truncating the prior to the admissible set keeps every acceptance ratio valid, since an inadmissible proposal is simply rejected.
+  - The order leaves the admitted set as it was. It changes the reason a doubly refused configuration is tallied under: BARS's models refuse `TooFewObservations` after the design is built. The one-axis path keeps BARS's order wherever a pinned tally reads the reason.
+  - The gate needs no dense design. A product column's mass Σᵢ Πₐ Bₐ(xᵢₐ) accumulates from each row's Πₐ (pₐ + 1) nonzero entries. B-spline values lie in [0, 1], so that mass is at most each factor column's own mass, and an axis column below the minimum refuses before any product is formed.
 - **Moves.** Birth, death and relocation on one axis at a time, with the chain owning the selection ratio. Constant weights are BARS's default and the prior-cancelling schedule its option (`DmgkSchedule`); the source's schedule is that option at c = 0.3 on the EBIC law.
 
 ## What the product structure changes
@@ -75,15 +78,29 @@ These follow from the model. None is in the source.
    - At m = 500 with 8 columns on the other axis, that is 25 nats: the knot must cut the residual sum by about 9.5% to break even. In one dimension it is 3.1 nats, about 1.2%.
    - At d = 3 with 6 columns on each other axis it is 112 nats.
    - *Consequence.* Per-axis count posteriors will be sharp and count changes rarely accepted, so relocation carries the mixing. BARS found that tempering rarely pays (BARS.md, "When to temper"); that finding was for one dimension and may not hold here.
-   - *The measurement and its decision.* Start chains at different per-axis counts and read R̂ of each kₐ. If they disagree after the burn-in BARS uses, a ladder or the flat-histogram sampler over counts becomes BAMRS's default. If they agree, tempering stays optional as in BARS.
+   - *The measurement and its decision.* Chains can agree on each axis's count and still hold different count pairs or knot sites. So a screen comes first, and two readings decide. The screen: start chains at different count vectors and read R̂ of each kₐ. Disagreement after the burn-in BARS uses shows the plain chain failing. Agreement settles nothing.
+     - *The small case, for correctness.* With `EbicPrior(γ, 1)` on each axis the support is the four count vectors of [Validation](#validation)'s quadrature. The plain chain, a ladder and the flat-histogram sampler over counts are each read against it: the joint count occupancy, and the posterior mean of a surface functional (the fit at a point, or an integral over part of the box).
+     - *The benchmark, for efficiency.* From the dispersed starts, compare the three samplers on effective samples per unit time, for the count-vector indicators and for a surface functional, and on whether the starts reach the same joint occupancy.
+     - *Decision.* A tempered sampler becomes BAMRS's default where it reproduces the small case and, on the benchmark, either the plain chain's starts disagree or the tempered sampler gives more effective samples per unit time. Otherwise tempering stays optional as in BARS. The default is stated for the surfaces and sizes measured.
 2. **The support gate bites at the corners.** A clamped boundary B-spline of degree p on a first interval of width h has integral h/(p+1). For inputs roughly uniform on the box, a corner column's mass is about m·Πₐ hₐ/(pₐ+1).
    - Under the default of one point's worth, cubics at d = 2 need h₁h₂ ≥ 16/m at each corner: at m = 500, first knots at 0.1 on both axes are refused (mass 0.31), and 0.2 by 0.4 is admitted (2.5).
    - At d = 3 the divisor is 64 for cubics and 8 for degree 1. Cubics with m = 1000 and intervals of 0.3 are refused (0.42).
    - The source's filter is harsher in count and silent in effect: it drops those columns and keeps the knots.
    - *The measurement and its decision* is under Decision 2.
-3. **Size.** ν grows as a product and the block needs m > ν. In lexicographic order the Gram's half-bandwidth is about p·ν_inner + p, so the axis with fewer columns goes innermost. That choice is a pure function of the state, so it does not disturb bit-for-bit resumption.
-4. **A discontinuity spans the box.** p + 1 knots clustered inside one gap in the data make a jump, and every column keeps its support: no B-spline has all p + 2 of its knots inside a cluster of p + 1, so each reaches data on one side. I argued this from B-spline support and did not run it against the gate. In a tensor product the jump is a whole line (or plane) across the box. A discontinuity confined to part of the domain has no compact representation in this model.
+3. **Size.** ν grows as a product and the block needs m > ν. In lexicographic order the Gram's half-bandwidth is about p·ν_inner + p, so the factor is cheapest with the axis of fewer columns innermost. That choice is a pure function of the state, so it does not disturb bit-for-bit resumption.
+   - *Axis identity.* A birth can change which axis has fewer columns, so the cheapest order flips during a run. BAPS flattens coefficients as j·ν_y + k, and `TensorPenalty` strides by ν_y (`TensorPenalty.cs:101`–`105`). Its caller fixes the order once, which fixed knots allow. A flip that reached the coefficients would swap the axes under every consumer, with no error raised.
+   - *Recommended.* The coefficient order every consumer sees is fixed: the first axis outermost and the last fastest, whatever the counts. The band's order is the builder's own, carried as an explicit layout (the axis permutation and its strides). Whatever writes into the band, the Gram or a penalty, takes its strides from the layout, and a solve permutes on the way in and out. Retained draws, restrictions and prediction see the fixed order only, so draws from different states pool without a permutation for each.
+   - *Its test.* A rectangular design (ν₁ ≠ ν₂) with different penalties on the two axes, against dense Kronecker algebra, in both size orders so that the layout flips between them.
+4. **A steep transition's columns span the box.** On this carrier the knots are distinct, so every draw is continuous with p − 1 continuous derivatives, and f(c⁺) − f(c⁻) = 0 at every c however tightly the knots cluster. What p + 1 knots inside one gap in the data give is a free change across the gap: the polynomial pieces on its two sides no longer constrain each other, and no observation sits in the transition. To the data that is a jump. Every column keeps its support: no B-spline has all p + 2 of its knots inside a cluster of p + 1, so each reaches data on one side. I argued this from B-spline support and did not run it against the gate.
+   - *What spans the box is the cost.* The cluster's knots lie on a whole line (or plane) across the box, and each costs a slice of columns (item 1). The contrast across the gap, f(g⁺, θ) − f(g⁻, θ), is itself a spline in θ on the other axis's knots. Its amplitude can vary along the line and vanish on part of it. So a transition confined to part of the domain is representable, and it is paid for across the whole box.
+   - *A literal jump* needs a discontinuous basis on that axis or a knot of multiplicity p + 1. `StepBasis` is a discontinuous basis the product already admits, piecewise constant along its axis. Multiplicity lies outside the open simplex and would be a new carrier. The source stands in the same place: its sampler draws distinct sites from an even grid (`mebars.cpp:22`–`33`, `:142`), while two of its test surfaces carry fourfold knots (`exampleABMRS/scripts/surface_fitting.r:61`, `:68`).
 5. **Expect the mean function's intervals to under-cover.** The supplement reports 66–96% coverage at a nominal 95% (Web Tables 2c and 3), below 90% in most cells, against 93–95% for prediction intervals. My hypothesis is that sharp count posteriors (item 1) leave approximation bias outside the band, with their plug-in σ̂ a smaller part. It is a hypothesis; BAMRS's own coverage is a reported number, not a gate.
+6. **Admission couples the axes' counts.** The prior is a product across axes only before admission. Under a constant likelihood the mass of a count vector k is ∝ Πₐ pₐ(kₐ)·Pr(admitted | k), where the second factor is the share of knot placements (uniform order statistics on each axis) that the target admits. It depends on all the counts at once, through m > Πₐ νₐ and through the product columns' masses.
+   - *Size alone shows it.* At m = 500 with bicubics and `EbicPrior(1, 1000)` on each axis, 1,359 of the 1,002,001 count pairs satisfy (k₁ + 4)(k₂ + 4) < 500, by enumeration. Each kₐ is flat before admission. After it, an axis's count carries mass in proportion to its admissible partners: 121 of the 1,359 pairs at kₐ = 0, and 17 at kₐ = 20. "γ = 1 is flat in k" does not survive the product, and the location gates bend the law further.
+   - *Qualification reads the joint law.* The chain and the reference sampler are tested on the law of the count vector, against the quadrature oracle of [Validation](#validation). A test of each axis's marginal against pₐ would fail a correct sampler.
+   - *The reference sampler rejects whole states.* It draws every axis, then keeps or discards the state as one. Redrawing only a refused axis would sample a different law. The count law follows the tempering path, as in BARS (`SplineTarget.Reference`): Poisson(1) on each axis on the powered path, whose b = 0 member is the base measure; each axis's configured count prior on the likelihood path. Both take uniform order statistics for the sites.
+   - *Size first, in the sampler too.* On the likelihood path the flat law above fails the size bound 99.86% of the time, and a draw at (1000, 1000) would ask for a 500 × 1,008,016 dense design, 3.76 GiB. The sampler tabulates the count vectors that pass the size bound and draws k from the product law restricted to them. That is exact, since the bound is a function of k alone and every admitted state passes it. The location gates then act by whole-state rejection.
+   - *Lemma 3 is untouched.* The schedule cancels the ratio of pₐ, and admission enters each acceptance as an indicator.
 
 ## What is already built
 
@@ -92,12 +109,12 @@ Read from the source on 2026-11-12. "As is" means by reading, not by running.
 | Piece | Where | Use for BAMRS |
 |---|---|---|
 | Per-axis carrier and basis | `KnotConfig`, `SplineBasis`, `BSpline`, `StepBasis`, `IBasis` | As is, one per axis. `IBasis` needs no change: the product is taken over the axes' own designs, so axes may mix bases (a step axis with a cubic axis) |
-| Tensor design | `Baps.TensorProductDesign` | Upgrade: it is bivariate and takes `SplineBasis`. Lift it to d axes over `IBasis`, and BAPS's `AnisotropicTensorSpline` and BAMRS share one builder |
+| Tensor design | `Baps.TensorProductDesign` | Upgrade: it is bivariate and takes `SplineBasis`. Lift it to d axes over `IBasis`, and BAPS's `AnisotropicTensorSpline` and BAMRS share one builder, with item 3's fixed coefficient order and explicit band layout. Today its caller picks the order ("put the smaller dimension as y") |
 | Face-splitting contraction (N-X1) | `KhatriRao.FaceSplittingGram`, `FaceSplittingCrossProducts`, `FaceSplittingHalfBandwidth`, `KroneckerGram`, `FaceSplittingRow` | As is. Built for this; only tests call it |
 | Wide-band factor (N-X2) | `WideBandCholesky`, `SpdFactors.ForBand` | As is. Built for this; nothing selects it |
 | Observation models | `IObservationModel`: `WeightedNormalModel`, `PoissonModel`, `WhittleModel`, `GibbsLossModel` | As is in correctness: each takes a dense design and knows nothing of the basis. `BandedDesign` reads each row's first and last nonzero column, so a tensor row's span is p·ν_inner + p wide and the accumulation costs O(m·bw²). At the source's benchmark sizes (m ≤ 1000, ν ≲ 150) that is small. The upgrade, when sizes ask for it, is accumulation by `FaceSplittingRow` and a factor from `SpdFactors.ForBand` |
 | Collapsed block | `CollapsedGPrior`, `BandedGPrior`, `GPriorCentre`, `Sigma2Prior` | As is: any `ISpdFactor`, the centre conventions, tempered marginals, leave-out densities |
-| Target | `SplineTarget` | New beside it, same composition: per-axis count priors, the gate on product columns, the model's marginal, and a reference sampler that draws each axis independently |
+| Target | `SplineTarget` | New beside it, same composition: per-axis count priors, the size bound ahead of any design, the gate on product columns, the model's marginal, and a reference sampler that draws every axis and rejects the whole state (item 6) |
 | Moves | `KnotBirthMove`, `KnotDeathMove`, `KnotRelocateMove`, `KnotBirthDensity`, the kernels, `DmgkSchedule`, `ScheduledMove` | Lift: an adaptor applies an `IRjMove<KnotConfig>` to one axis of the product carrier. The chain normalizes selection over the 3d moves, and a null proposal at kₐ = 0 stays put, which is the balance row 5 asks for |
 | Chains and ensembles | `ReversibleJumpChain<TState>`, `ParallelTempering<TState>`, `TemperingLadder`, `ChainEnsemble`, `IEnsembleModel<TState>`, `LadderEvidence` | As is: generic in the state |
 | Other samplers | `SmcRun`, `MulticanonicalRun` and the flat-histogram family | Candidates for item 1's count barriers. Their contracts are unread |
@@ -120,9 +137,9 @@ Each is the main session's recommendation, with its alternatives. The user may t
    - *Open until slice 0:* how much of `BarsEnsemble` depends on the carrier. I read its surface, not its body.
 2. **Thin product columns: the g-prior with the gate, and a ridge option only on evidence.**
    - *Recommended.* Keep the g-prior and the gate, the source's model in its corrected form, as the default.
-   - *The measurement and its decision.* On the source's benchmark surfaces at d = 2, count the share of evaluations refused as `ThinSupport` and compare the admitted counts with the counts the source reports. If the gate removes configurations the posterior would hold, add a declared ridge or penalty prior through `PriorPencil`, under which thin columns are regularized and the gate can relax. If it does not, the option waits for a caller.
+   - *The measurement and its decision.* The question is how much posterior mass the gate excludes. The share of evaluations refused as `ThinSupport` does not answer it, since that share follows where the proposals go. So on the source's benchmark surfaces at d = 2, run the same g-prior model with the gate off and factor admission kept, and record each retained draw's least product-column mass. The posterior share of draws below the default minimum is the mass the gate removes, and the record answers for every other minimum too. If that share is material, add a declared ridge or penalty prior through `PriorPencil`, under which thin columns are regularized and the gate can relax. If it is not, the option waits for a caller. The refusal share and the counts the source reports stay as context. What share counts as material is fixed in the slice brief before the first reading, with the run's size and seeds.
    - *Alternative: lower the gate's default with d.* It trades refusals for coefficients the g-prior leaves almost unconstrained.
-3. **The count law's default is open.** `EbicPrior(1, 2m)` matches the source's runs and gives comparable tables. BARS's `PoissonPrior(5)` per axis implies about 81 columns a priori for a bicubic. Take the default after the benchmark, not before.
+3. **The count law's default is open.** `EbicPrior(1, 2m)` matches the source's runs and gives comparable tables. BARS's `PoissonPrior(5)` per axis implies about 81 columns a priori for a bicubic. Both figures are before admission, which makes the counts' prior joint (item 6). Take the default after the benchmark, not before.
 4. **Fixed per-axis counts are a mode.** A relocation-only palette at given counts. The article's knot intervals and its peak simulation both use it, and it is cheap.
 5. **Readouts arrive in tiers** (next section): affine and restriction readouts first, degree-1 lattice extrema second, joint cubic extrema last.
 6. **The full-grid shortcut is its own slice.** On a complete grid Z = Z₁ ⊗ Z₂ and ỹᵀP ỹ = ‖Q₁ᵀ Ỹ Q₂‖²_F, so a move on one axis is a one-dimensional refit. Missing cells and robust weights that do not factor across axes both break it, and the scattered path then serves.
@@ -133,14 +150,16 @@ Each is the main session's recommendation, with its alternatives. The user may t
 **What BARS has.** Each retained draw holds its knots and one joint draw of (β, σ²). `SplineExtrema` reduces that draw exactly: the candidate set is the endpoints, the knots and each span's derivative roots, in closed form for degree ≤ 3. Peaks pass a prominence gate, and each peak's span is the level crossing at a drop fraction of its prominence, again as a closed-form root. The pooled views are λ(T), π(T) and `PeakModes`. This is a cubic method, and it is a method for one variable.
 
 **What carries over unchanged.**
-- The rule: readouts affine in the surface use the conditional mean, and nonlinear ones use the joint draw.
+- The rule: the posterior mean of a readout affine in the surface pools each draw's conditional mean, and nonlinear readouts use the joint draw.
 - The order: reduce each draw exactly, then pool. MP-2 and SP-3 are statements about averaging and do not depend on the dimension.
-- The affine readouts: the fit, `FitSd`, partial derivatives, integrals over an axis, and the Sobol moments.
+- The affine readouts: the fit, partial derivatives and integrals over an axis.
+- *Spread needs the coefficients.* `FitSd` is not affine. BARS takes it from the law of total variance: the variance over draws of the conditional mean, plus the mean over draws of the conditional variance (`BarsEnsemble.cs:573`–`577`). The spread of every affine readout has the same two terms. A fixed-knot fixture isolates the second: every draw has the same conditional mean, and the fit's posterior spread is still positive.
+- *Sobol outputs are functionals of a draw.* A variance component is quadratic in the coefficients, and an index is a ratio of two. Neither is a functional of the conditional mean. Each is computed on the draw's joint (β, σ²) and summarized over draws, as BASS does (`SobolDecomposition`). A variance component βᵀQβ also has a closed-form conditional expectation, β̄ᵀQβ̄ + tr(Q·Cov(β | ξ)); an index has none. The decomposition of the posterior mean surface is a different quantity, which leaves out the posterior spread, and it takes its own name if it is ever reported.
 
 **Tier 1: restrictions reuse the curve engine as it stands.** Fix every axis but one. f(·, θ) is a spline in T on axis 1's knots, with coefficients cⱼ(θ) = Σₗ βⱼₗ Bₗ(θ). `SplineExtrema` applies to it unchanged, so each draw gives the ridge T*(θ), its height, its significant peaks and their spans along T, exactly, at any θ. Pooled over a θ grid these are λ(T | θ) and π(T | θ), and a posterior band for the ridge.
 - *One upgrade that serves both engines.* `SplineExtrema` takes (`KnotConfig`, coefficients, `SplineBasis`), though inside it needs only breakpoints, an evaluator and a degree. Opening it to a piecewise-polynomial input lets it read restrictions, derivative splines (below) and oblique lines. Along an oblique line a bicubic restricts to a piecewise polynomial of degree 6, which the general-degree path already handles.
 - *The ridge is a peak set at each θ.* T*(θ) jumps where two ridges exchange dominance. So the pooled readout is the peak set along T at each θ, λ(T | θ), and the argmax is one view of it.
-- *Ridge births and ends belong to this tier.* They are roots of one polynomial in θ (see the fold on a surface, below).
+- *Ridge births and ends belong to this tier.* The interior ones are found among the roots of one polynomial in θ, and the rest are a branch leaving the box (see the fold on a surface, below).
 
 **Tier 2: degree-1 surfaces have a closed form.** On each cell a degree-1 tensor spline is affine in each coordinate. A function affine in each coordinate attains its maximum over a box at a vertex, so every strict local extremum of the surface sits on the knot lattice, the boundary lattice included. A weak extremum can fill a line, as a ridge of constant height along a cell edge does. A bilinear cell's one interior critical point is a saddle. So at degree 1 peak inference is knot inference, which is the source's simulation, here with coefficient draws and the boundary.
 
@@ -170,8 +189,8 @@ This answers the user's wish to characterize more kinds of feature. It is a prop
 - **Plateaus** are level crossings of f′ at ±ε: the span arithmetic on the derivative spline.
 - **Inflection width.** The distance between the two inflections flanking a peak needs no baseline. The half-prominence span does, and O3 records that its level is a convention.
 - **Apex curvature** f″(x*) and **left and right half-widths** (already in `PeakSpan`) give sharpness and asymmetry. The area above the drop level is a closed-form integral.
-- **Monotonicity on [a, b]** has a posterior probability: the share of draws with no interior critical point there.
-- **Jumps and kinks.** A cluster of p + 1 knots inside one data gap is a jump, with size f(c⁺) − f(c⁻) per draw. At degree 1 each knot is a slope change, which is the quantity the source's triceps tests address by plug-in.
+- **Monotonicity on [a, b]** has a posterior probability for each direction: the share of draws with f′ ≥ 0 throughout [a, b], and likewise with f′ ≤ 0. The test is the sign of f′'s least (or greatest) value on the interval, from the curve engine on the derivative spline. Counting critical points is the wrong test: (T − ½)³ is strictly increasing through an interior stationary point.
+- **Transitions and kinks.** With distinct knots f(c⁺) − f(c⁻) = 0 on every draw, so a cluster of p + 1 knots inside one data gap has no jump size to read. Its readout is the contrast across a named interval, f(g⁺) − f(g⁻), with [g⁻, g⁺] a gap in the data or a window the caller gives. The contrast is affine in the coefficients, so its mean and spread follow the fit's. On a surface it is a spline along the other axis ([item 4](#what-the-product-structure-changes)). The steepest-slope readout above finds where to place the interval. At degree 1 each knot is a slope change, which is the quantity the source's triceps tests address by plug-in.
 - **The topological summary** is the curve's 0-dimensional persistence diagram, exact from the candidate set. Prominence is persistence under the elder rule, up to the boundary convention of O1, and `Stability.lean` already pushes a sup-norm band forward to it.
 
 **Shoulders and the fold.** A shoulder is a local minimum of |f′| at a nonzero value: a root of f″ where f′ keeps its sign. On a cubic span with f′(u) = Au² + Bu + C and discriminant Δ = B² − 4AC, taken where the inflection u* = −B/(2A) lies inside the span:
@@ -181,7 +200,12 @@ This answers the user's wish to characterize more kinds of feature. It is a prop
 
 So one closed-form scalar per span orders a strong peak-and-valley pair, a marginal pair, a shoulder and a plain monotone stretch. Its zero set is the fold in MP-3's catastrophe set ("a critical pair annihilates: the per-span quadratic discriminant crosses 0"). A shoulder and a marginal peak are the two sides of that fold. The newborn pair's prominence is the height difference above, which starts at zero, so a positive prominence gate is passed beyond the fold, where Δ^(3/2)/(6A²) reaches the gate. One feature then has two posterior probabilities: that the pair exists (Δ > 0), and that its peak is significant (the gate is passed). The fold moves the raw count and leaves the gated count alone. In general, where a pair straddles a knot, the definition goes through the derivative spline and not the per-span discriminant.
 
-**On a surface the fold becomes a point.** In a family f(T, θ), a ridge is born or ends where ∂_T f = 0 and ∂²_T f = 0 together: the parameter value at which a shoulder becomes a peak. On a bicubic cell ∂_T f is a quadratic in the span coordinate whose coefficients A(θ), B(θ) and C(θ) are cubics in θ. So the ridge branches are the quadratic formula in θ, and the fold points are the roots of Δ(θ) = B(θ)² − 4A(θ)C(θ), one polynomial of degree at most 6, kept where the inflection lies inside the span. The root finder behind `SplineExtrema`'s general-degree path covers that degree, so ridge births and ends are a Tier 1 readout.
+**On a surface the fold becomes a point.** In a family f(T, θ), a ridge is born or ends where ∂_T f = 0 and ∂²_T f = 0 together: the parameter value at which a shoulder becomes a peak. On a bicubic cell ∂_T f is a quadratic in the span coordinate whose coefficients A(θ), B(θ) and C(θ) are cubics in θ. So the ridge branches are the quadratic formula in θ, and the roots of Δ(θ) = B(θ)² − 4A(θ)C(θ), one polynomial of degree at most 6, are the candidate folds.
+- *A root is a fold where Δ changes sign,* with A ≠ 0 and the double root u* = −B/(2A) inside the span. A pair of branches then exists on the side where Δ > 0 and on no other. At the double root Δ′ = −4A·∂_θ∂_T f, so a simple root of Δ is the transversal fold, the generic case.
+- *A root of even order is no birth.* ∂_T f = (T − ½)² − (θ − ½)² has Δ = 4(θ − ½)², which vanishes at θ = ½, and it has two stationary points on both sides. The branches cross there.
+- *A cell's branch count also changes with no fold,* when a root passes through the span's end into the next span or out of the box. A ridge's ends are its folds and its exits from the box.
+
+The root finder behind `SplineExtrema`'s general-degree path covers degree 6, so ridge births and ends are a Tier 1 readout.
 
 ## Lean
 
@@ -219,10 +243,12 @@ Everything here is at the protolemma stage: candidate statements, none compiled.
 - *The derivative ladder is by instantiation.* MP-1 and SP-1 hold for any polynomial, so steepest slopes and inflections are those statements at `derivative p`. What is owed is that the carrier is closed under differentiation. O2 already takes every knot as a candidate, which covers the lower smoothness of f′ and f″. An inflection is a sign change of f″, and a span with f″ ≡ 0 is the degenerate case, as the flat span is for peaks.
 - *The fold on a cubic span.* For f′(u) = Au² + Bu + C with A ≠ 0: a critical pair exists exactly when Δ > 0; its two values differ by Δ^(3/2)/(6A²); and for Δ < 0 the least |f′| is |Δ|/(4|A|). Mathlib's `discrim` and `quadratic_eq_zero_iff` carry the first part.
 - *The fold leaves the gated count alone.* The newborn pair's prominence is that difference of values, which starts at zero. So the pair fails any positive gate until Δ^(3/2)/(6A²) reaches it. MP-3's event (a) is then a jump of the raw count, and the gated count jumps only on the threshold set. In general this is the thresholded-count stability that the revisions note places downstream of `Stability.lean`; here it has a closed form. Read against `SignificantPeaks` and `ValleyFloor`, it holds for a pair born on a monotone stretch. Peaks of equal height are a tie convention there.
+- *Monotone is a sign condition.* f′ ≥ 0 on [a, b] gives a nondecreasing f, by Mathlib's `monotoneOn_of_deriv_nonneg`. (T − ½)³ witnesses that having no interior critical point is sufficient and not necessary.
 
 **Surfaces.**
 - *Restriction.* Σⱼ Σₗ βⱼₗ Bⱼ(x) Cₗ(θ) = Σⱼ (Σₗ βⱼₗ Cₗ(θ)) Bⱼ(x) for any two families of functions. It is an exchange of sums and needs no spline theory. It reduces Tier 1's exactness to O1 and O2.
-- *The ridge in closed form.* On a bicubic cell ∂_T f = A(θ)u² + B(θ)u + C(θ) with cubic coefficients. The ridge branches are the quadratic formula in θ, and the folds are the roots of Δ(θ), of degree at most 6. Where Δ > 0 the ridge's slope is −∂_θ∂_T f / ∂²_T f. The regularity that slope needs is Δ ≠ 0, the fold's own predicate.
+- *The ridge in closed form.* On a bicubic cell ∂_T f = A(θ)u² + B(θ)u + C(θ) with cubic coefficients. The ridge branches are the quadratic formula in θ, and the candidate folds are the roots of Δ(θ), of degree at most 6. Where Δ > 0 the ridge's slope is −∂_θ∂_T f / ∂²_T f. The regularity that slope needs is Δ ≠ 0.
+- *Which roots are folds.* With A ≠ 0 and Δ = 0, Δ′ = −4A·∂_θ∂_T f at the double root: an identity in A, B, C and their derivatives. So a simple root of Δ is a transversal fold, and the pair exists on exactly the side where Δ > 0. The witness that a root need not be a fold is (T − ½)² − (θ − ½)²: its Δ = 4(θ − ½)² has a double root, and two stationary points stand on both sides of it.
 - *The bilinear saddle.* The interior critical point of a + bx + cy + dxy with d ≠ 0 is a saddle.
 - *The convex-hull bound.* Nonnegative weights that sum to one keep a combination between its least and its greatest coefficient. It has two uses:
   - With Mathlib's `bernstein_nonneg` and `bernstein.probability` it is the exclusion certificate for statement 3.
@@ -244,7 +270,7 @@ Everything here is at the protolemma stage: candidate statements, none compiled.
 
 The docs' mistaken expansion points at a real successor. A multiresolution spline refines locally: hierarchical B-splines and their truncated form, locally refined splines, T-splines, and multilevel B-spline approximation. I name these from memory (Forsey and Bartels 1988; Giannelli, Jüttler and Speleers 2012; Dokken and co-authors 2013; Sederberg and co-authors 2003; Lee, Wolberg and Shin 1997). None is held, and a Bayesian free-refinement version wants a prior-work survey before any design.
 
-- **What it would fix.** Three of the five items above: a refinement adds a few columns where the data ask, not a slice (item 1); refinement stays where the data are, which eases the corner rule (item 2); and a discontinuity can be local (item 4). The preprint's own closing remark points the same way: the domain must be a box, and "a flexible multivariate spline" in place of the tensor product is its suggested remedy.
+- **What it would fix.** Three of the items above: a refinement adds a few columns where the data ask, not a slice (item 1); refinement stays where the data are, which eases the corner rule (item 2); and a steep transition is paid for where it is, not across the box (item 4). The preprint's own closing remark points the same way: the domain must be a box, and "a flexible multivariate spline" in place of the tensor product is its suggested remedy.
 - **What it would reuse.** Each basis function is still a product of one-variable B-splines, so the face-splitting rows, the collapsed block, the reversible-jump chain and the readouts all serve. Its moves refine and coarsen cells, closer to BASS's term births and deaths than to knot moves.
 - **What it would cost.** The Gram loses its band, the basis needs a linear-independence rule (truncation supplies one), and the structure prior becomes a prior over refinement trees.
 - **A one-variable member exists too:** nested dyadic knots on a curve.
@@ -255,8 +281,8 @@ The docs' mistaken expansion points at a real successor. A multiresolution splin
 Proposed order; engine first, with no consumer wired in.
 
 0. **Read and measure.** Read `BarsEnsemble`'s body for Decision 1. Run a bicubic design through `WeightedNormalModel` as it stands, and check the marginal against dense algebra.
-1. **Carrier, design, target, moves.** The product carrier, the d-axis design builder, the tensor target and the axis adaptor. Qualify on the generic chain: each axis's count law under a constant likelihood, kₐ = 0 included, and the reference sampler.
-2. **The gate's measurement** (Decision 2) and **the count-mixing measurement** (item 1), with their decisions.
+1. **Carrier, design, target, moves.** The product carrier, the d-axis design builder with its fixed coefficient order (item 3), the tensor target and the axis adaptor. Qualify on the generic chain under a constant likelihood: the joint count law after admission (item 6), kₐ = 0 included, for the chain and for the reference sampler on both tempering paths, against the quadrature oracle.
+2. **The gate's measurement** (Decision 2) and **the count-mixing measurement** (item 1), with their decisions. Each reading's size, seeds and rerun rule are fixed in the slice brief before it is taken.
 3. **The ensemble** (Decision 1), with BARS's pinned tier as the acceptance.
 4. **Tier 1 readouts,** with `SplineExtrema` opened to piecewise polynomials, the order-2 curve features, and ridge births and ends.
 5. **Fixed counts and Tier 2.**
@@ -270,13 +296,20 @@ Proposed order; engine first, with no consumer wired in.
 Ground truth comes from outside the estimator, and the source's code is a sanity band, never a parity target.
 
 - **Dense algebra** for the marginal, the centre and the conditional draws on small tensor designs.
-- **Quadrature** for the posterior over counts when each axis holds at most one knot: the evidence of (0, 0), (1, 0), (0, 1) and (1, 1) is an integral over at most two knot positions.
+- **Quadrature** when each axis holds at most one knot. Each of the count vectors (0, 0), (1, 0), (0, 1) and (1, 1) needs an integral over at most two knot positions.
+  - *With the data* the integrand is the marginal likelihood. It gives the posterior over the four and the posterior mean of a surface functional. With `EbicPrior(γ, 1)` on each axis the four are the whole support.
+  - *Under a constant likelihood* the integrand is the admission indicator, and the integral is Pr(admitted | k). The law of k, given that it is one of the four, is Πₐ pₐ(kₐ)·Pr(admitted | k) normalized over the four. That holds under any count law, so it checks the chain and the reference sampler on the powered path (Poisson(1) counts) and on the likelihood path (the configured law). The indicator is discontinuous, so the rule locates the admitted region's edge and does not integrate across it.
 - **The one-axis case equals BARS** bit for bit.
 - **A full grid by both paths:** the Kronecker shortcut and the scattered path agree to rounding.
 - **Axis exchange:** transposing the inputs leaves every posterior summary unchanged.
 - **A Geweke joint test** of the lifted moves, as E34's.
 - **Seeded random sweeps** of the numerical primitives: the design builder, the Bernstein conversion and the subdivision solver.
-- **External bands:** the RMSEs of Web Table 2, and the surfaces in `exampleABMRS/scripts/surface_fitting.r`, whose functions are recoverable from the script.
+- **Column order:** a rectangular design with different penalties on its two axes, against dense Kronecker algebra, in both size orders (item 3).
+- **A fixed-knot fixture** for the spread: with the knots held, every draw's conditional mean is the same, and `FitSd` equals the closed-form posterior sd of the fit.
+- **External bands:** Web Table 2, pinned to its script and units.
+  - *The script* is `exampleABMRS/scripts/surface_fitting_appendix.r`: five smooth cases (`g1` to `g5`, lines 54–75), m = 250 and 1000, noise sds 0.25, 0.22, 0.22, 0.25 and 0.25. By the appendix's text the runs are cubic, with γ ∈ {0.8, 1, 1.2} and 50 replicates.
+  - *The units.* The script stores each replicate's MSE against the noise-free function at m fresh uniform test points (line 163). `summary_output.qmd` takes the square root of each replicate's value (line 298) and reports the mean and sd over replicates (line 282). The table prints those in units of 10⁻¹. So the comparable number is a per-replicate RMSE, averaged.
+  - *`surface_fitting.r` is a different experiment:* three cases at m = 500 and 1000 with noise sds 0.8, 2 and 2, two of them tensor splines with fourfold knots. By Web Table 3's three surfaces at m = 500 it is the main text's surface study. Web Table 3 holds its coverage, and its RMSE table is in the main text, which is not held. Its functions are recoverable from the script and serve as fixtures without a published band.
 - **Coverage** of the mean function is reported, with the source's 66–96% as context.
 
 ## Not read, not verified
@@ -286,12 +319,40 @@ Ground truth comes from outside the estimator, and the source's code is a sanity
 - Chen and Chen's condition, quoted from memory.
 - The references under Multiresolution, and the contour-tree literature for bilinear cells.
 - Nothing in the Lean section was compiled. Its Mathlib names were checked for existence in the local checkout, and the fold's effect on the gated count was read against `SignificantPeaks` and `ValleyFloor`, not tested.
-- Nothing here was run. The numbers under "What the product structure changes" are arithmetic.
+- Nothing here was run. The numbers under "What the product structure changes" are arithmetic, and item 6's count pairs are an enumeration.
+- The fMRI analysis, and the article's use of the cardiopulmonary-bypass reference, are known from the abstract and the reference list alone.
+- The 2026-11-15 revision ran no sampler. The fold identity Δ′ = −4A·∂_θ∂_T f was derived by hand and checked on two examples. That p + 1 knots free the two sides of a gap is a dimension count, not a run.
 
 ## Doc changes owed
 
 - **BAMRS.md:** the expansion to "Multivariate Regression"; the overview's "multi-scale hierarchical spline bases"; row 1's "exact marginal" to name the centred block; rows 1, 6, 7, 10 and 11 of the table above.
 - **Regression.md,** line 14: the expansion and its gloss.
 - **Sources&Changes.md,** the He, Yang and Kang row: the same new rows.
-- **The two HYK-2024-2026 discussion files:** a header line marking them retracted.
+- **The two HYK-2024-2026 discussion files:** a header line marking them unverified and not to be cited, and noting that the fMRI application they mention is real.
 - **The extensions brief's E3 entry:** superseded by this brief for design; its queue line stays.
+
+## Review of 2026-11-15
+
+An external read-only review, relayed by the user. Its main finding is that admission couples the axes, while the reference sampler and its acceptance test were written for independent counts. Each point was checked against the source before it was taken; all nine held.
+
+| # | The review's point | Checked against | Where it changed this brief |
+|---|---|---|---|
+| 1 | The count law after admission is joint. The test and the reference sampler assumed independent counts, and the tempering path was unstated | `SplineTarget.cs:85`–`106`, `:148`–`207` | Item 6; the structure prior; the Target row; slice 1; Validation's quadrature |
+| 2 | The tensor dimension is checked before any design is allocated | The enumeration: 1,359 of 1,002,001 pairs, and 3.76 GiB at (1000, 1000) | Admission's order; item 6 |
+| 3 | A refusal share and a per-axis R̂ do not answer the gate's and the mixing question | A point of method | Decision 2; item 1 |
+| 4 | A storage order that flips with the counts swaps the axes silently | `TensorPenalty.cs:101`–`105`; `TensorProductDesign.cs:13`–`17` | Item 3; the Tensor design row; Validation |
+| 5 | Distinct knots give a continuous transition, so a jump has no size; the feature is a contrast across a gap, and its amplitude varies along the other axis | `mebars.cpp:22`–`33`, `:142`; `surface_fitting.r:61`, `:68` | Why; item 4; "Transitions and kinks"; Multiresolution |
+| 6 | `FitSd` and the Sobol outputs need coefficient uncertainty | `BarsEnsemble.cs:573`–`577`; `SobolDecomposition` | "What carries over unchanged"; Validation |
+| 7 | A discriminant root is a candidate fold, and monotonicity is a sign test | Both counterexamples by hand | "On a surface the fold becomes a point"; Monotonicity; Lean |
+| 8 | The fMRI application is real, and four links resolved one directory too high | Crossref's record for the DOI; the folder listing | Sources |
+| 9 | Web Table 2 belongs to `surface_fitting_appendix.r`, which stores MSE where the table reports RMSE | Both scripts; `summary_output.qmd:282`, `:298` | Validation's external bands |
+
+Added in the same pass, beyond the review's text:
+- An axis's marginal count mass after the size bound (121 pairs against 17), as the concrete form of point 1.
+- The gate without a dense design, and the per-axis mass as a bound on the product column's.
+- The tally label a reordered admission can change on the one-axis path.
+- For point 4, the choice between the review's two remedies: a fixed coefficient order, with the permutation confined to the band.
+- For point 5, that the source's own sampler draws distinct sites while its test surfaces carry fourfold knots, and that `StepBasis` is the discontinuous basis already at hand.
+- For point 7, the identity Δ′ = −4A·∂_θ∂_T f, which makes "simple root" and "transversal fold" one condition.
+- For point 8, the cardiopulmonary-bypass reference, which leaves the cardiac application unverified where the brief had called it invented.
+- For point 9, the aggregation in `summary_output.qmd`: a square root per replicate, then the mean and sd.
