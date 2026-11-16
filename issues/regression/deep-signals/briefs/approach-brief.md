@@ -47,7 +47,7 @@ The recovery theorems do not perform these. They certify the tasks: they say whe
 
 How far each row was checked is in the last column. "Elaborated" means the coordinating session re-elaborated the statements and printed their axioms; "gates checked" means it diffed the pre-stated gates against their final text and matched headline numbers to receipts; "chip's report" means neither was done.
 
-**Proved in Lean** (no `sorry`, standard axioms). The first nine modules were promoted to `lean/Lemmas/` on 2026-11-16 (`f0cc4e2`); the noise-law modules are in `lean/Enthymemata/TimeFrequency/`. Paths below are relative to the stage.
+**Proved in Lean** (no `sorry`, standard axioms). The first nine modules were promoted to `lean/Lemmas/` on 2026-11-16 (`f0cc4e2`). The noise-law and generative-prior modules are in `lean/Enthymemata/`. Paths below are relative to the stage.
 
 | Result | Module | Checked |
 |---|---|---|
@@ -64,8 +64,10 @@ How far each row was checked is in the last column. "Elaborated" means the coord
 | Cov(\|a\|², \|b\|²) = \|E[a·conj b]\|² + \|E[a·b]\|², and Var(xᵀHx) = 2·tr((HΣ)²), each with the Gaussian pairing rule as a named premise | `TimeFrequency/LogPowerCovariance.lean`, `TimeFrequency/QuadraticFormVariance.lean` | Chip's report |
 | ∫₀^∞ (1 − (1 − e^{−x})ⁿ) dx = H_n; the rectangular window's turnover is the root of eᵘ = 1 + 2u, between 1.25 and 1.26 | `TimeFrequency/PeakOfExponentials.lean`, `TimeFrequency/WindowTurnover.lean` | Chip's report |
 | The response's second moments under the g-prior on the whitened Gram are the covariance the whitened marginal reads | `BassWhitenedMarginal.lean` | Chip's report |
+| A range-restricted isometry bounds the squared norm of every generator secant and the compressed objective. At ε < 1 it preserves injectivity on each set where the generator is injective | `GenerativePrior/IsometryCondition.lean` | Elaborated |
+| For isotropic raw second moments σ²I, the expected squared norm after a fixed rank-k orthogonal projection is σ²k, against σ²n in the ambient space | `GenerativePrior/IsotropicProjection.lean` | Elaborated |
 
-**Measured,** under gates written before their readings (`issues/regression/receipts/latent-recovery/` and `receipts/spline-space/`).
+**Measured,** under gates written before their readings. The receipts are under `issues/regression/receipts/` in `latent-recovery/`, `spline-space/` and `generative-prior/`.
 
 | Finding | Checked |
 |---|---|
@@ -76,6 +78,7 @@ How far each row was checked is in the last column. "Elaborated" means the coord
 | For a harmonic source the pitch posterior is multimodal with octave traps; tempering and cut SMC recover it in 10 of 10 replicates where the nested sampler's chains stay trapped | Chip's report |
 | The built support gate admits no singular spline design and refuses 78% of the exactly full-rank ones that have more sites than columns, nearly all well conditioned. The ordered matching read rank exactly on 23 400 designs | Chip's report |
 | A one-sided Green's-function basis fits a sum of decaying resonances with about two knots per resonance, twenty to eighty times fewer than cubic pieces at lower error | Chip's report |
+| Noiseless two-layer Gaussian ReLU generator, widths 250 and 600, k = 10, m = 150. Descent with a sign check recovered 30/30 codes at relative error < 10⁻³. One reached the 50,000-update cap with relative error 6.84 × 10⁻¹⁶ | Gate checked, endpoint errors recomputed and replay receipts matched |
 
 ## What was corrected
 
@@ -90,9 +93,11 @@ Each of these was claimed in the discussion and then turned by a proof or a read
 - **"The whitener is fixed by the windows."** For noise-like cells away from DC and Nyquist. A cell with a strong deterministic component has log-power variance about 2/SNR.
 - **"Measurements scale linearly with k."** Consistent with the pilot, on thin evidence: k ≤ 5, four ratios, the same model generating and inverting, a Gaussian likelihood on log power.
 
-## The compressed-sensing guarantees: used by analogy, not yet tested
+<a id="the-compressed-sensing-guarantees-used-by-analogy-not-yet-tested"></a>
 
-These theorems are the certificate the whole approach leans on, and so far the work has touched them only at the edges. Statements are from the papers' LaTeX (`1705.07576v3`, `1812.04176v1`, `1807.04261v1`, `2008.10579v1`, `1805.08855v2`, `2006.07953v2`).
+## The compressed-sensing guarantees
+
+The first coordinated round established two deterministic results and reproduced the k = 10 point of the published linear recovery experiment. The guarantees for learned decoders and audio measurements remain open. Statements below are from the papers' LaTeX (`1705.07576v3`, `1812.04176v1`, `1807.04261v1`, `2008.10579v1`, `1805.08855v2`, `2006.07953v2`). [Lean report](generative-prior-statements-brief.md#round-1-report--2026-11-16) · [Numerical report](generative-prior-probes-brief.md#readings-and-decision)
 
 **What they say.**
 - *The setting.* A generator G : ℝᵏ → ℝⁿ, d ReLU layers with no bias, and a signal y₀ = G(x₀). Observe Ay₀ with m ≪ n rows and minimize f(x) = ½‖AG(x) − Ay₀‖².
@@ -114,13 +119,13 @@ These theorems are the certificate the whole approach leans on, and so far the w
 - The Bayesian analogue on a parametric synthesizer: a code recovered from 2k to 4k bins, and octave traps standing in for the impostor at −ρ_d·x₀.
 
 **What is untested.**
-- No ReLU generator has been run. The papers' regime has not been reproduced, and the engine's inversion has not been tried on their object.
+- The rest of the recovery curve, depth three, descent without the sign check, phaseless recovery, and the calibration stack on a ReLU generator remain open.
 - The weight condition has not been measured for anything of ours, such as a layer of directional hinges under its prior, which has sparse directions and thresholds.
 - The isometry condition has not been measured for spectrogram rows or magnitudes on any signal manifold, whitened or not.
 - The pilot's held-back log-power reconstruction error can be read against k/m. The rank-k projection identity concerns expected squared error in the coordinates carrying white noise. Here the pilot added white noise to the waveform before taking log power.
 
-**Posable next.**
-- *In Lean:* Q_{x,y} as the Gaussian expectation; the angle map it induces, cos θ′ = ((π − θ)·cos θ + sin θ)/π, with θ′ < θ on (0, π]; that the isometry condition bounds the compressed objective's inner products by the uncompressed ones; the one-layer landscape in expectation.
+**Remaining work in the two briefs.**
+- The Lean brief next treats the angle map, the zero set of the deterministic comparison field, and the angular integral for Q. The Gaussian factorization may enter as a named premise.
 - *Numerically:* success against m/k for the papers' algorithm on random expansive networks; the same inverse problem through the calibration stack with G behind the emulator contract, reading threshold, coverage and the impostor; the weight condition's residual against width, for Gaussian layers and for directional-hinge layers; the isometry constant for structured views on the synthesizer's range.
 - *What they would decide:* whether a gradient-informed move on the code is justified, which the benign landscape suggests; how wide a decoder must be; whether our views are isometric enough; and how the engine's inversion scales in k against descent.
 

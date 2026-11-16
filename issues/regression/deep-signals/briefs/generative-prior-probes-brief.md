@@ -34,14 +34,16 @@ The approach leans on theorems that say a code of dimension k is recoverable fro
 **G3. The weight condition's residual.**
 - For a layer of n rows on ℝᵏ, the largest spectral gap between Σᵢ 1{wᵢ·x > 0}·1{wᵢ·y > 0}·wᵢwᵢᵀ and Q_{x,y} over many sampled pairs across angles, against n/k.
 - Layers: Gaussian rows; rows uniform on a sphere; rows drawn from the engine's direction prior (sparse unit directions, at most three active coordinates), without and with thresholds. Scale each so that Σᵢ wᵢwᵢᵀ is near the identity.
+- Include x = y = e₁ and read the second diagonal alongside the sampled maximum. Under the threshold-free sparse prior the population gap is at least 3/7 at k = 8. For thresholds, declare the input radii and training design used to draw knots. [Derivation and assumptions](approach-brief.md#analytical-controls-for-the-generative-prior-probes)
 - *Decisions:* how wide a layer must be for a given ε; whether a layer of directional hinges under its prior is near enough to angle-preserving for an inversion through it to inherit the benign landscape, and where its residual floors.
 
 **G4. The isometry constant for structured views.**
 - On the pilot's resonance manifold and on G1's generator range, sample secant pairs and estimate the smallest ε for which each measurement map satisfies the isometry condition, after its best global scale, against m.
 - Maps: Gaussian rows; rows of a linear short-time transform at one window length, as real and imaginary parts; the same across three window lengths; each of those whitened by its atoms' Gram; the pilot's kept-bin subsets.
+- Count real rows and rank. For each pair of secants normalize the inner-product distortion by the two original norms, and record how the global scale was chosen. Check linear Gram whitening against the row-space projector. For kept log powers, take the difference of the two transformed signals and report the nonlinear distortion separately. A finite sample maximum bounds the uniform worst case from below.
 - *Decisions:* whether structured views are near-isometric on these manifolds at the m where recovery worked; whether whitening lowers ε; how far they sit from Gaussian rows.
 
-**G5. The noise reduction, from receipts already held.** In the pilot's reference inversions, reconstruction error at the held-back bins against the noise level and k/m. No new runs. *Decision:* whether the k/m rate shows at these sizes.
+**G5. The noise reduction, from receipts already held.** In the pilot's reference inversions, examine squared reconstruction error against the clean held-back log powers by k/m and waveform noise level. S21 gives k/n for a fixed projector under isotropic noise in the same coordinates. The pilot adds noise to the waveform and scores log powers. No new runs. *Decision:* whether the receipts support a k/m trend in this prediction task.
 
 ## Scope
 
