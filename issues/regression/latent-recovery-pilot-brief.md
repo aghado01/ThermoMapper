@@ -71,3 +71,31 @@ This is exploration on probes. The engine stays as it is: a gap found here is a 
 - Builds set `ArtifactsRoot` inline on each command. Heavy runs go at below-normal priority with capped threads; the machine is shared.
 - Each step ends with a fresh-eyes review of its own output, fixed before it is reported.
 - Messages to the coordinating session or the Lean chip are terse events; results travel in the report.
+
+## Report (the numerical chip, from 2026-11-16)
+
+### In progress
+
+- 2026-11-16: probe project at `artifacts/latent-recovery/probe/` against a source snapshot of `be979dd` (`git archive` into `artifacts/latent-recovery/source/`), so other sessions' uncommitted edits never reach a reading. B1 and B2 gates written below; their runs next. Stage 1's gate follows once the synthesizer is fixed and before any emulator is fitted.
+
+### Gates as pre-stated
+
+Each gate was written here before the first reading of its stage or sweep. A gate changed after a failure is recorded below it as a change, with the reason.
+
+**B1, the covariance of log powers.** Written before its first reading.
+
+- *Pairs.* κ ∈ {0, 0.01, 0.05, 0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.7, 0.8, 0.9, 0.95, 0.99, 1}; a = z₁, b = √κ·e^{iφ}·z₁ + √(1 − κ)·z₂ with z₁, z₂ independent circular standard complex normals (E|z|² = 1) and φ = 1 rad. 4×10⁶ pairs per κ in 200 batches of 2×10⁴; the estimate is the mean of the batches' unbiased sample covariances of (ln|a|², ln|b|²), its standard error the batches' sd/√200. Seeds: `SeedTree.Derive(1116001, 34)`, child i for κᵢ, child 15 + i its rerun seed, children 30 and 31 the complex and real noise of the cells below, 32 and 33 their rerun seeds.
+- *Pass:* |z| ≤ 4 at every κ, z = (estimate − Li₂(κ))/SE. *Marginal:* exactly one κ with 4 < |z| ≤ 5 and none above: rerun that κ on its rerun seed, pass if the rerun reads |z| ≤ 4. *Fail:* any |z| > 5, two or more marginal κ, or a failed rerun. Recorded beside each row: z against the linear alternative κ·π²/6.
+- *Spectrogram cells.* Periodic Hann windows of length w ∈ {64, 128, 256} at unit energy (Σg² = 1); a 1024-sample signal; the reference cell centred at sample 512 at f = 0.25 cycles/sample; comparison cells at Δt ∈ {0, w/8, w/4, 3w/8, w/2, 3w/4, w} samples × Δf ∈ {0, 0.5, 1, 2}/w (the pair Δt = Δf = 0 left out); cross-length pairs (w₁, w₂) ∈ {(64, 128), (128, 256), (64, 256)} with the reference at w₁, the other cell at w₂, Δt ∈ {0, w₁/2}, Δf ∈ {0, 1/w₂}. Unit-variance complex circular and real white noise, 2×10⁵ realizations per kind in 100 batches (batch seeds `SeedTree.Derive` of the kind's seed). The estimate is the pooled sample correlation of the two cells' ln|X|², its SE the batches' correlations' sd/10. The prediction is Li₂(κ)/Li₂(1) with κ = |Σₙ conj(a₁ₙ)·a₂ₙ|², the two unit-energy atoms' Gram entry. For real noise only, a near-DC family as well: reference at f = 1/w, Δf ∈ {−1, 0, 0.5, 1, 2}/w.
+- *Pass:* |z| ≤ 4 for every complex-noise pair and for every real-noise pair in the mid-band and cross-length families. *Marginal,* per noise kind: at most two pairs in (4, 5] and none above: rerun that kind on its rerun seed, pass if those pairs read |z| ≤ 4. The real-noise near-DC family is a reading, not a pass condition: it is expected to depart where the pseudo-Gram entry Σ conj(a₁)·conj(a₂) is not small, and its departures are recorded against that entry.
+- *Decision:* a fixed whitener can be tabulated from the windows if the complex family and the real mid-band and cross-length families pass. The near-DC reading says where the pseudo-Gram entry must join the Gram entry in the table.
+
+**B2, window scaling.** Written before its first reading. S2's normalization throughout: Σ g² = 1, power |Σ g_j·x_j·e^{−2πi f j}|².
+
+- *Windows and lengths.* Rectangular and periodic Hann; even w on the quarter-octave grid 2·round(2·2^{j/4}), j = 0…40 (4 to 4096, repeats dropped). Slopes are least-squares slopes of ln P on ln w.
+- *Tone,* x_j = e^{2πi f₀ j}, f₀ = 0.1234567: the DFT at f₀ equals |Σg|² within 10⁻⁹ relative at every w; the peak of a 16-times zero-padded FFT does not exceed it by more than 10⁻⁹ relative; slope over the whole grid 1 ± 0.01.
+- *Impulse,* amplitude 1, best placement in the window: P = max g²; slope −1 ± 0.01.
+- *White noise,* σ² = 1, complex circular and real: 4000 frames per (window, w, kind); P is the mean over frames and over the bins of the FFT zero-padded to the next power of two. Pass: |P − 1| ≤ 4·SE at every w (SE from the frames' means), and slope 0 ± 0.01. Marginal: one w per (window, kind) in (4, 5] SE: rerun that w on its rerun seed (seeds `SeedTree.Derive(1116002, 4·lengths)`, the second half the reruns). Recorded as a reading, not a pass condition: the mean of each frame's largest bin, which grows with the number of bins and is not w⁰.
+- *Decaying resonance,* x_n = e^{−n/τ}·e^{2πi f₀ n} for n ≥ 0, τ ∈ {64, 128, 256} samples (amplitude decay time). g·envelope is non-negative, so the peak over f sits at f₀ and equals (Σ_j g_j·e^{−(s+j)/τ})², maximized over the window's start s. Pass, for each window: the turnover w* (the grid's argmax) has w*/τ ∈ [0.5, 4] at each τ; w*/τ across the three τ spans at most one grid step (ratio ≤ 1.25); slope over w ∈ [4, τ/8] ≥ 0.85; slope over w ∈ [8τ, 4096] ≤ −0.9. Recorded beside: the rectangular window's closed form at onset alignment, (Σ_{j<w} e^{−j/τ})²/w, whose continuum argmax is w ≈ 1.2564·τ.
+- *Linear chirp,* x_j = e^{iπ c j²}, c ∈ {10⁻⁴, 2.5×10⁻⁴, 6.25×10⁻⁴}, the window centred at j = 0, w ≤ 0.8/c so the instantaneous frequency stays in band; P is the 16-times padded FFT's peak. Pass, for each window: w*·√c ∈ [0.5, 2] at each c; w*·√c across the three c spans at most one grid step; slope over w ≤ 1/(4√c) ≥ 0.9; slope over w ≥ 8/√c ≤ −0.8.
+- *Decision:* the window-length axis classifies content as claimed if tone, impulse and noise pass and both turnovers sit at their scales in proportion to them. These sweeps are deterministic but for the noise, so the rerun rule applies to the noise alone.
