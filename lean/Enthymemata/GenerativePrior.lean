@@ -1,1 +1,2 @@
 import Enthymemata.GenerativePrior.IsometryCondition
+import Enthymemata.GenerativePrior.IsotropicProjection
