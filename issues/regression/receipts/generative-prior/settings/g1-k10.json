@@ -1,0 +1,13 @@
+{
+  "CodeDimension": 10,
+  "HiddenWidth": 250,
+  "OutputWidth": 600,
+  "Measurements": 150,
+  "Repetitions": 30,
+  "MasterSeed": 181204176,
+  "Step": 1.0,
+  "GradientTolerance": 2.220446049250313e-16,
+  "MaxUpdates": 50000,
+  "SuccessTolerance": 0.001,
+  "ReferenceTolerance": 1e-10
+}

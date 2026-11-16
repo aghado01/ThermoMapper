@@ -1,0 +1,11 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <ServerGarbageCollection>false</ServerGarbageCollection>
+  </PropertyGroup>
+  <ItemGroup>
+    <ProjectReference Include="$(RepositoryRoot)projects/Maths.Distributions/Maths.Distributions.csproj" />
+    <ProjectReference Include="$(RepositoryRoot)projects/Maths.LinAlg/Maths.LinAlg.csproj" />
+  </ItemGroup>
+</Project>
