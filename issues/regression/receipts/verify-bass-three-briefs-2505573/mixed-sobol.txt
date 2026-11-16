@@ -1,0 +1,4 @@
+mixed-sobol.trx Both widths in 916 of 2000 draws. Read draw indices 0, 1999.
+The default and explicit TwoDifference matched on 14 main variance entries. Jansen totals matched Saltelli on 6 entries.
+mixed-sobol-after-cleanup.trx Both widths in 916 of 2000 draws. Read draw indices 0, 1999.
+The default and explicit TwoDifference matched on 14 main variance entries. Jansen totals matched Saltelli on 6 entries.

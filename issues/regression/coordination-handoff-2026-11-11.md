@@ -203,6 +203,16 @@ Each slice is verified from a clean archive before the next one starts on the sa
   - `-Module Enthymemata` builds the barrel. `-NoChecks` skips the checks script, to rerun a build that failed for a reason outside the commit, as a transient Mathlib read did once on 2026-11-13.
 - A slice counts as verified when every test in its selection passes with zero skips. Gated qualification classes run with `BASS_QUALIFICATION=1` where a report names them.
 
+### Mixed-width BPPR and the public Sobol default, 2026-11-16
+
+The combined engine at `2505573` passed **2,889 Regression and 106 Oracle tests**, with zero failures or skips. The selection covered 29 changed paths from `71ca5f2`, including the pure-block sampler default, the mixed-width kernel and the public Sobol setting. It reached 265 of 360 Regression classes and 22 of 40 Oracle classes. Both projects ran on the same clean source archive. [Changed files, snapshot and counters](receipts/verify-bass-three-briefs-2505573/)
+
+An independent fit of the oblique exponential plus axis kink held K = 4 blocks and K = 1 hinges together in 916 of 2,000 draws. On mixed draws 0 and 1,999 the public `Auto` readout matched explicit sampled `TwoDifference` bit for bit on all 14 main variances and their errors. Explicit Saltelli gave different main estimates and the same six Jansen totals. The probe passed on `17522a6` and after the override cleanup at `2505573`. [Cross-feature receipt](receipts/verify-bass-three-briefs-2505573/mixed-sobol.txt)
+
+The BPPR implementation and mixed-fit qualification are recorded at `17522a6` and `b82b8f3`. The public Sobol change, cleanup and qualification are `e6fa16b`, `2505573` and `359f613`. The longer pure-block Friedman measurement and the remaining high-budget evidence comparisons are tracked in their originating briefs. [BPPR report](bass/bppr-brief.md#reports) · [Sobol report](bass/sampled-sensitivity-brief.md#reports) · [Evidence investigation](bass/evidence-estimator-disagreement-brief.md)
+
+**Verification tooling.** The first `verify-csharp.ps1` invocation returned exit 0 after both child runs exited 1 and produced no TRX. The wrapper records a missing TRX in its counters and reaches the end without propagating the failure. The successful repeat built each project with one MSBuild node, ran the same selection with `-NoBuild`, and checked each child exit and TRX counter. Both attempts' logs are under `artifacts/verify-bass-three-briefs-2505573/`. The passing results are `verified-Regression.trx` and `verified-Oracle.trx`.
+
 ## Resources
 
 - **Oracle pins, read-only clones, and the BPPR and E34 papers:** listed under Resources in the [2026-11-09 handoff](coordination-handoff-2026-11-09.md#resources).
