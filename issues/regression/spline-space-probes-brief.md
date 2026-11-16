@@ -51,7 +51,7 @@ Those of the [pilot brief](latent-recovery-pilot-brief.md#working-rules).
 
 ### In progress
 
-- 2026-11-16: started after the pilot closed (`9128238`). The probe is at `artifacts/spline-space/probe/`, built against the same `be979dd` snapshot as the pilot (`artifacts/latent-recovery/source/`). The gates for P1, P2 and P3 are below, written before any probe code ran. Runs next, P1 first.
+- 2026-11-16: started after the pilot closed (`9128238`). The probe is at `artifacts/spline-space/probe/`, built against the same `be979dd` snapshot as the pilot (`artifacts/latent-recovery/source/`). The gates below were written before any probe code ran. P1 and the P3 spacing sweep are run and read. Running in the background: the P3 BARS fits, then P2 (`artifacts/spline-space/logs/p3.log`, `p2.log`), whose summaries `p3-summary` and `p2-summary` print into `results/`. Next: their readings, the primitives and the closing sections.
 
 ### Gates as pre-stated
 
@@ -109,3 +109,38 @@ Each gate was written here before the first reading of its probe. A gate changed
 
   *S8 agrees* if Q's sup norm diverges at y₂ − y₀ = π/ω (at hω/π = 0.5, at least 10⁶ times its value at 0.25) and Q takes negative values for y₂ − y₀ beyond π/ω. The conditioning rows are readings.
 - *Seeds:* `SeedTree.Derive(2026111703, 4)`: signals, noise, BARS, spare.
+
+### Readings
+
+**P1: the theorem's necessity half holds on every design. The engine admits nothing singular, but its support gate refuses most exactly full-rank designs, nearly all of them well conditioned.** Rows and summary in `receipts/spline-space/results/p1-summary.md`.
+
+- *The probe's basis matches the engine's:* the largest |difference| between the probe's Cox–de Boor design and `SplineBasis.Design` over all 23 400 designs is 5.6×10⁻¹⁶.
+- *(i) passes.* The matching fails on 19 083 designs, and every one is singular to rounding: max ρ = 2.2×10⁻¹⁷, so the recheck was never needed. The greedy matching reads full column rank exactly in this sweep.
+- *(ii), read:* 4317 designs match. Their ρ has median 0.034 and 1st percentile 5×10⁻⁸. Six fall below 10⁻¹⁰ and two below 10⁻¹², all cubic with a site barely inside a support: exactly full rank, numerically singular. A matching cannot stand in for the condition check.
+- *The engine against the matching:*
+
+  | matching | engine verdict | designs | with N > n |
+  |---|---|---|---|
+  | false | ThinSupport | 19 083 | 10 531 |
+  | true | admitted | 787 | 787 |
+  | true | ThinSupport | 3530 | 2722 |
+
+  The engine admitted no unmatched design; its support gate caught every one before a factorization. Of the 3509 matched designs with N > n, it refused 2722 (78%), all at the support gate (column mass Σᵢ Bⱼ(xᵢ) ≥ 1). 2669 of those have ρ ≥ 10⁻⁶ and 49 have ρ between 10⁻¹⁰ and 10⁻⁶. The refusals spread over every degree and both knot laws, and over every site law (uniform 1167, clustered 418, gapped 1137).
+- *Decisions:*
+  - The built rule refuses designs that are exactly full rank, and well conditioned ones at that: a column needs a full point's worth of mass, where the rank needs only one site per support, in order. It admits none that is not full rank.
+  - The matching test can stand in front of the factorization as an exact, O(N + n) rank test, but not in place of the condition check behind it.
+  - Whether the mass gate should give way to the matching is a modelling question (the gate is a declared prior restriction, not a rank test), raised below as a primitive and not decided here.
+- *Products, 6000 scattered designs, cubic on both axes:*
+  - Per-axis matching is necessary (no full-rank design fails it) and far from sufficient (3040 of the 4211 designs that match on both axes are rank-deficient).
+  - A bipartite matching of sites to product supports is also necessary (no full-rank design lacks one).
+  - It is sufficient on every uniform design (681 of 681), but not on sites along a line: 374 of 374 exact-diagonal designs with a matching are rank-deficient, as are 3 near the diagonal and 1 clustered.
+
+  The kept counterexamples are the diagonal ones: on the curve y = x the product space restricts to univariate splines of higher degree with merged knots, so its rank there falls below n_x·n_y whatever the matching says. The scattered case needs what the one-dimensional theorem cannot give: a genericity condition on the sites' joint position, beyond any matching.
+
+**P3, the spacing sweep: S8 agrees as posed, but its degeneracy is the local element's, not the design's.** Rows in `receipts/spline-space/results/p3-sweep.csv`.
+
+- *S8's element:* Q's sup norm is 1.0 at hω/π = 0.25 and 8.2×10¹⁵ at 0.5, where y₂ − y₀ = π/ω (7.4×10¹⁵ with γ = 8). Q takes negative values at every spacing beyond, from 0.505 to 1.2, with or without damping. That is the gate's agreement: the normalized, positive local element exists exactly while y₂ − y₀ < π/ω, half the carrier's period. A second divergence sits at hω/π = 1 (sup 3×10³¹), where one interval spans half a period.
+- *The design's conditioning has no feature at 0.5:*
+  - The one-sided basis's equilibrated condition number falls smoothly as the knots spread: 7.6×10⁵ at hω/π = 0.05, 3.1×10³ at 0.5 and 1.3×10³ at 0.7 undamped; with γ = 8, 4.9×10⁵, 2.1×10² and 51. Its one bump is at hω/π = 1 (4.2×10³ undamped, 91 damped), where a knot's g and its neighbour's cancel beyond the second knot.
+  - S8's elements written unnormalized (its numerators) stay at κ ≈ 3–4.5 through 0.5 and rise only toward 1 (680 at 1.0).
+- *Decision, for the spacing question:* an oscillatory term built on the one-sided basis needs no admission rule on spacing, only the usual guard against crowded knots (its conditioning grows as h → 0). A term built on local, positive elements needs the rule y₂ − y₀ < π/ω, and it must avoid h = π/ω. The knot-count question waits on the BARS runs below.

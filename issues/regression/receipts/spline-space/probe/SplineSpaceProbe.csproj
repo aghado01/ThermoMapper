@@ -1,0 +1,13 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <!-- The spline-space probes (P1-P3). They call the engine as built from the latent-recovery pilot's source snapshot
+       (git archive of be979dd under ../../latent-recovery/source), never the shared working tree. -->
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <AssemblyName>SplineSpaceProbe</AssemblyName>
+    <RootNamespace>SplineSpaceProbe</RootNamespace>
+    <TieredPGO>true</TieredPGO>
+  </PropertyGroup>
+  <ItemGroup>
+    <ProjectReference Include="../../latent-recovery/source/projects/Maths.Regression/Maths.Regression.csproj" />
+  </ItemGroup>
+</Project>
