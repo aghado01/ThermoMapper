@@ -24,6 +24,9 @@ Opened 2026-11-14 at the user's word ("that brief was getting way too long, adde
   - Verified from a clean archive on 2026-11-15 ([receipts](receipts/verify-lean-conformal-7d98281/)): checks 425 s, the barrel built (3,191 jobs), the 23 named results on the standard three axioms, meta-ci PASS.
   - `Intervals` serves RoBAS-Full there (`c3539b7`, verified) and refuses it below n 4. Its docstrings cite the unconditional theorem (`bb2fd78`; comments only, read).
 - CBMA reads each model's evidence from its BASS or BARS fit (`3e3b7f2`, verified): the `ModelEvidence` seam and the two engines' `ForAveraging` adapters, with both engines' constants pinned against the closed form.
+  - *A caveat from the BPPR chip's pure-basis probe* (`d963a2f`, bppr-brief.md, unverified, through Regression expansion, 2026-11-15). On structure-moving fits, ln Z by SMC and by stepping-stone disagreed beyond their stated errors: by 3.2 on an unflagged fit, and by 7.0 on one SMC flagged. So differences under about 8 nats were indicative only.
+  - CBMA's ±2-error fragility readout takes the engines' errors as given, so it may understate how fragile its weights are on such fits.
+  - The evidence machinery itself is with the user, as Regression expansion's follow-up. Nothing here changes until that settles.
 - Slice 15's alternation speed (`192ee84`, verified): safeguarded extrapolation of γ, 1.3–3× fewer passes at n 1,000 to 10,000. It is on by default and moves existing results within the fit's tolerance (report).
 - τ through richer features (`274f69d`, verified): `DensityRatio.Spline`, additive cubic B-splines with the ridge chosen by 5-fold cross-validated log loss, opt-in through `ScoreMixtureOptions.Knots`.
 - Slice 12a's k̂ diagnostic stays opt-in, as the user settled on 2026-11-14. That is the code's default (`ConformalOptions.LeaveOneOutParetoK`, false).
