@@ -4,7 +4,7 @@ Candidate statements for [the Lean chip's brief](../../../issues/lean/time-frequ
 
 ## S1. Phase propagation on a connected graph
 
-**Status:** proved, `Enthymemata/TimeFrequency/PhasePropagation.lean`.
+**Status:** proved; promoted 2026-11-16 to `Lemmas/TimeFrequency/PhasePropagation.lean`.
 
 - *Posing.* `x, y : V → ℂ`, `x` nowhere zero, `G` a simple graph on `V`. On every edge `y u · conj (y v) = x u · conj (x v)`.
   - From one vertex: if `G` is preconnected and `‖y v₀‖ = ‖x v₀‖` at one vertex, then `y = c · x` with `‖c‖ = 1` (`exists_phase_of_vertex`). As posed, with every magnitude and `G` connected (`exists_phase`).
@@ -15,7 +15,7 @@ Candidate statements for [the Lean chip's brief](../../../issues/lean/time-frequ
 
 ## S2. Window scaling
 
-**Status:** proved, `Enthymemata/TimeFrequency/WindowScaling.lean`.
+**Status:** proved; promoted 2026-11-16 to `Lemmas/TimeFrequency/WindowScaling.lean`.
 
 - *Posing.* Sample `j` at time `tⱼ`, `X(ω) = Σⱼ gⱼ·xⱼ·e^{−iωtⱼ}`. Times are arbitrary, so a hop offset changes nothing.
   - Tone `xⱼ = A·e^{iωtⱼ}` at its own frequency: `|X|² = |A|²·|Σⱼ gⱼ|²`.
@@ -26,7 +26,7 @@ Candidate statements for [the Lean chip's brief](../../../issues/lean/time-frequ
 
 ## S3. The flatness bound
 
-**Status:** proved, `Enthymemata/TimeFrequency/FlatnessBound.lean`.
+**Status:** proved; promoted 2026-11-16 to `Lemmas/TimeFrequency/FlatnessBound.lean`.
 
 - *Posing.* `‖B‖²_F = Σᵢⱼ Bᵢⱼ²` (`frobSq`).
   - Real symmetric 2×2 `B`: `‖B‖²_F ≥ 2·|det B|`. Equality holds exactly when `B` is a multiple of `I` or has trace zero.
@@ -40,7 +40,7 @@ Candidate statements for [the Lean chip's brief](../../../issues/lean/time-frequ
 
 ## S6. Contraction from a regularity inequality
 
-**Status:** proved, `Enthymemata/TimeFrequency/Contraction.lean`.
+**Status:** proved; promoted 2026-11-16 to `Lemmas/TimeFrequency/Contraction.lean`.
 
 - *Posing.* Real normed space, `0 ≤ α ≤ 1`, `4η ≤ r`. On the ball `‖x − x⋆‖ ≤ r`, `‖v x − (x − x⋆)‖ ≤ ½‖x − x⋆‖ + 2η`.
   - Sharpened: from `‖x₀ − x⋆‖ ≤ r`, every iterate stays in the ball, and `‖x_t − x⋆‖ ≤ ρᵗ‖x₀ − x⋆‖ + 4η(1 − ρᵗ)` with `ρ = 1 − α/2`.
@@ -49,11 +49,11 @@ Candidate statements for [the Lean chip's brief](../../../issues/lean/time-frequ
 
 ## S5. The Kronecker Gram
 
-**Status:** proved, `Enthymemata/BamrsKroneckerGram.lean`. The Gram and projection factor with no invertibility hypothesis. The energy is `‖P_A·Y·P_B‖²_F` for `y (i, j) = Y i j`; Mathlib's column-major `vec Y` pairs with `P_B ⊗ P_A`.
+**Status:** proved; promoted 2026-11-16 to `Lemmas/BamrsKroneckerGram.lean`. The Gram and projection factor with no invertibility hypothesis. The energy is `‖P_A·Y·P_B‖²_F` for `y (i, j) = Y i j`; Mathlib's column-major `vec Y` pairs with `P_B ⊗ P_A`.
 
 ## S4. The whitened marginal
 
-**Status:** proved, `Enthymemata/BassWhitenedMarginal.lean`.
+**Status:** proved; promoted 2026-11-16 to `Lemmas/BassWhitenedMarginal.lean`.
 - The residual and density identities need only `Ω = L·Lᵀ`, with `det L ≠ 0` for the density.
 - The collapsed marginal under the whitened-Gram prior is the unit-noise closed form on `(ỹ, Z̃)` less `½·log det Ω`.
 - Under `I ⊗ R` the terms are `n·log det R` and `Σᵢ yᵢᵀQyᵢ`, and the functional design's Gram is `(AᵀA)∘(HᵀQH)`.

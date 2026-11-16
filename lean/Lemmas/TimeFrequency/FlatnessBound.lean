@@ -17,8 +17,9 @@ import Mathlib.Tactic.Ring
 # The flatness bound (S3)
 
 How flat a quadratic `xᵀHx` can be made over a time–frequency cell of fixed area. For
-`x ~ N(0, Σ)`, `Var(xᵀHx) = 2·tr((HΣ)²)`, and for any factor `Σ = S·Sᵀ` that trace is
-`‖SᵀHS‖²_F` (`trace_sq_eq_frobSq`). In two dimensions:
+`x ~ N(0, Σ)`, `Var(xᵀHx) = 2·tr((HΣ)²)` (S15, `TimeFrequency.variance_quadForm`, under the
+pairing rule), and for any factor `Σ = S·Sᵀ` that trace is `‖SᵀHS‖²_F` (`trace_sq_eq_frobSq`). In
+two dimensions:
 
 * `two_mul_abs_det_le_frobSq`: a real symmetric 2×2 `B` has `‖B‖²_F ≥ 2·|det B|`, with equality
   exactly when `B` is a multiple of the identity or has trace zero

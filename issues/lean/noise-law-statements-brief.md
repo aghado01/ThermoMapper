@@ -80,5 +80,6 @@ Those of the [first brief](time-frequency-statements-brief.md#working-rules).
   - S10b needs no premise: Γ′(k + 1) = k!(H_k − γ) comes from Mathlib, and integrability from its Mellin derivative.
   - S10c and S11 are proved from their named premises, each met by an instance.
   - S13 holds with the tight bracket 1.25 < u⋆ < 1.26.
-- **Next:** Part B (promotion review), Part C (the preparation brief), then S16.
+- **Part B landed:** the nine modules of the first two briefs pass the README's checks and are promoted to `lean/Lemmas/` (`TimeFrequency/`, `Spline/`, `BassWhitenedMarginal`, `BamrsKroneckerGram`), namespaces unchanged; meta-CI PASS.
+- **Next:** Part C (the preparation brief), then S16.
 - **Uncommitted:** nothing.
