@@ -11,7 +11,7 @@ Date: 2026-11-15. Status: **approved by the user on 2026-11-15** at its recommen
 ## Sources
 
 - **In the repository:** E25's entry and [G4](lineage-gaps-register.md#g4-one-moment-service-across-dependent-inputs); E8's [build brief](active-subspace-brief.md), for the two routes, the shared points and the error rows; E36's brief and its slice 0 and slice 1 reports.
-- **The estimators, cited from memory and not known to be on disk:** Sobol' 2001 and Saltelli et al. 2010 for the pick-freeze forms; Jansen 1999 for the total index; Janon et al. 2014 for their asymptotic variances; Owen 2013 for small indices; Sobol' and Kucherenko 2009 for the derivative bound on a total index. Slice 0 reads those the user supplies and marks the rest.
+- **The estimators, read on 2026-11-15** (the report "The estimator papers, read against slices 0 to 3" below): Sobol' 2001 and Saltelli et al. 2010 for the pick-freeze forms; Jansen 1999 for the total index; Janon et al. 2014 for their asymptotic variances; Owen 2013 for small indices; Sobol' and Kucherenko 2009 for the derivative bound on a total index.
 - **Oracles.** R's `BASS` gives Sobol indices for separable fits only, which the exact route already meets. Whether `BayesPPR` 0.2.0 has a sensitivity readout is for slice 0 to read from the pinned package.
 
 ## What is already built
@@ -82,6 +82,62 @@ As [E36's brief](bppr-brief.md#working-rules) has them, with `artifacts\chip-sen
 Under "Reports" below, newest first, per slice: what landed by commit; the gates' numbers; decisions taken beyond this brief; what was left unbuilt and why; follow-ups with the decision each would change; the doc changes owed.
 
 ## Reports
+
+### The estimator papers, read against slices 0 to 3 (2026-11-15)
+
+The user supplied the six papers the brief cited from memory: Jansen 1999, Sobol' 2001, Sobol' and Kucherenko 2009 and Saltelli et al. 2010 in `supellex-private/PDFs/sensitivity/` (by DOI), and Owen 2013 (`1204.4763v1`) and Janon et al. (`1303.6451v1`, the preprint of the 2014 paper) in `supellex-private/gauntlet/stats/`. Each is read for its forms, their credits and their variances. Every form the engine computes is as the reports state it, and no code changes. Two credits are corrected below, and the remaining citations are now read.
+
+**What the papers state, against the reports.**
+- *Saltelli et al. 2010, Table 2.*
+  - Formula (b), the paper's own, is mean(f(B)(f(A_B^(i)) − f(A))) on the triplet A, B, A_B^(i), where A_B^(i) is A with column i from B, as the engine's hybrid. This is the reports' "Saltelli's 2010 form".
+  - Formula (f), credited to Jansen 1999, is ½·mean((f(A) − f(A_B^(i)))²), its best practice for a total. Together they cost N(k + 2), as decision 3 has them.
+- *Jansen 1999, the alternating design.* The all-effects variance (the total) is estimated without bias by the mean of ½(Y_{i,1} − Y_{i,2})², the two values differing only in the group's draws. The engine's total is this form. Jansen's consecutive terms are correlated, so he estimates their mean's variance as a moving average's; the engine's rows are independent, so sd/√N stands.
+- *Sobol' 2001.*
+  - The total as half the mean squared difference (its (8)). Its Theorem 4 orders the variances: for a total the squared-difference form's is the smaller, for a main variance the product form's.
+  - Its remark 3 (p. 277): the variances lose accuracy when f₀ is large, so subtract a crude c₀ ≈ f₀, after its reference [12].
+- *Owen 2013.*
+  - "Correlation 1", f(x)(f(x_u:y_−u) − f(y)), is credited to Saltelli 2002 and Mauntz 2002 and called correlated sampling by Sobol' and Myshetskaya 2007. It is Saltelli 2010's (b) with x = B and y = A.
+  - Sobol' and Myshetskaya 2007 (read through Owen) found its variance grows with μ, and replaced f(x) by f(x) − c with c near μ: Owen's "Oracle 1" at c = μ.
+  - "Correlation 2", (f(x) − f(z_u:x_−u))(f(x_u:y_−u) − f(y)), takes a third independent vector z. Its expectation is the closed variance τ_u (Owen's τ²_u), at four values per sample. On the g-function its efficiency over Correlation 1 is largest on the smallest index (4,256 in his Table 2).
+- *Janon et al. 2014.*
+  - S_N = Cov(Y, Y^X)/Var(Y) on one pick-freeze pair (after Homma and Saltelli 1996); T_N pools the mean and variance over Y and Y^X (after Monod et al. 2006).
+  - Both are asymptotically normal when E Y⁴ < ∞ (their Proposition 2.2), with σ²_T = Var((Y − μ)(Y^X − μ) − ½S((Y − μ)² + (Y^X − μ)²))/V².
+  - σ_T ≤ σ_S, with equality only at S = 0 or 1, and T_N is efficient among regular estimators that are functions of the pairs.
+- *Sobol' and Kucherenko 2009.*
+  - Theorem 2: S_i^T ≤ ν_i/(π²D), with ν_i the mean of (∂f/∂x_i)², for inputs uniform on the unit cube.
+  - Theorem 3: σ_i²c²/D ≤ S_i^T ≤ σ_i²C²/D when c ≤ |∂f/∂x_i| ≤ C, under any law of variance σ_i².
+  - For a normal input, S_i^T ≤ σ_i²ν_i/D.
+
+**Corrections and precisions.**
+- *The centring is credited, not new.* Slice 0 called the centred form "a correction, not an option".
+  - The decision stands, but the idea is Sobol' 2001's c₀ and Sobol' and Myshetskaya 2007's c near μ. Saltelli 2010's (b) as printed is uncentred.
+  - What the engine adds is f(B)'s sample mean in c's place, with the covariance over N − 1, which keeps the estimate exactly unbiased with no oracle.
+  - The growth's closed form, 2μ²T_u/N, and its evidence (95 times the spread at a mean of 100 sd) stay as reported.
+- *The two-difference form, precisely.* The reports' "after Owen 2013" reads: Owen's Correlation 2 with z's u-columns taken from A, so it needs no third base set.
+  - In ½·mean((f(B) − f(B_A^u))(f(A_B^u) − f(A))), the cross term f(B_A^u)·f(A) shares a_u, so it adds τ_u where Correlation 2's f(z_u:x_−u)·f(y) adds nothing. The expectation is 2τ_u, hence the ½.
+  - The cost is the same: N(2p + 2) for every input alone.
+  - On an additive piece the per-row term is ½(g_i(b_i) − g_i(a_i))². For a normal piece of variance σ², its variance is 2σ⁴, against Correlation 2's 5σ⁴, so at equal cost the two-difference form is 2.5 times as efficient there. This is derived here and checked by Monte Carlo over 10⁶ rows (2.005 and 5.016). The two are not compared on interaction pieces.
+  - Owen's family (his Theorem 1) needs z independent of y, so the form lies outside it. The form for |u| > 1, the product of the two Möbius differences over 2^|u|, estimates the main variance V_u and is the engine's own; Owen's forms estimate the closed τ_u.
+  - Owen's Table 2 agrees in direction with slice 0's probe, the gain largest on the smallest index. The numbers do not compare: the g-functions and the baselines differ.
+- *The index errors* are Janon et al.'s delta method in σ²_T's form: the piece's per-row term less S times the pooled per-row term ψ.
+  - Two differences: ψ pools over A and B, which are independent, not over one pick-freeze pair; and the numerator is Cov(y^B, D_u), with f(A) in it. So Janon's efficiency result does not cover the engine's estimator, and the reports claim none.
+  - The condition E f⁴ < ∞ holds for every law the engine takes: uniform laws, truncated mixtures and empirical laws on a bounded box, where a fit's surface is bounded.
+- *Decision 7's bound.* Roustant et al.'s constant C(μ_i), 1/π² on [0, 1] and σ² for a normal input, is Sobol' and Kucherenko's Theorem 2 and their normal case; on [a, b], (b − a)²/π² by scaling.
+- *The g-function's closed forms* are Saltelli 2010's Appendix A: V_i = (1/3)/(1 + a_i)², a closed variance Π_{j∈u}(1 + V_j) − 1, a total V_i·Π_{j≠i}(1 + V_j). The reference's values, checked against quadrature in slice 0, are these forms.
+- *Ishigami's function.* Janon et al. state it with a = 7 and b = 0.1 on [−π, π]³, the reference's parameters, and its indices S₁ = 0.3139, S₂ = 0.4424 and S₃ = 0. None of the six states its variance. The form from memory, a²/8 + bπ⁴/5 + b²π⁸/18 + ½ = 13.845, gives their indices to four places (V₁ = 4.346, V₂ = 6.125), beside slice 0's quadrature check to 10⁻¹⁴.
+
+**Candidate readings, recorded, not queued.**
+- *Correlation 2 on interaction pieces.* It would enter decision 3's choice only by beating the two-difference form there by more than its 2.5 times loss on additive pieces. Not proposed.
+- *The variance pooled over every block,* as T_N pools over its pair: each hybrid's values are draws of f under the law. The decision is the variance's estimator: adopt it if the indices' errors fall at the same N on the references; otherwise nothing changes.
+
+**Doc changes owed** (refining slice 0's):
+- `docs/Maths/Regression/Sensitivity.md`:
+  - the forms' credits as read: Saltelli 2010's (b), and Jansen 1999's total, which Saltelli 2010 lists as (f);
+  - the centring credited to Sobol' 2001 and to Sobol' and Myshetskaya 2007, with the engine's sample-mean form;
+  - the two-difference form as Correlation 2 with z's u-columns from A, its 2τ_u, and 2σ⁴ against 5σ⁴ on an additive piece;
+  - the index errors as Janon et al.'s σ²_T form pooled over A and B, and E f⁴ < ∞ on a bounded box.
+- `docs/Maths/Regression/Sources&Changes.md`: the six papers read, with their paths, in place of slice 0's "cited from memory"; Saltelli 2010's (b) as printed, centred after Sobol' 2001 and Sobol' and Myshetskaya 2007, in place of "a source corrected".
+- `docs/Maths/Regression/ActiveSubspaces.md`: decision 7's bound credited to Sobol' and Kucherenko 2009 (Theorem 2 and the normal case) beside Roustant et al.
 
 ### Slice 3 verified from a clean archive; slices 0 to 3 are all landed (coordinating session, 2026-11-15)
 
