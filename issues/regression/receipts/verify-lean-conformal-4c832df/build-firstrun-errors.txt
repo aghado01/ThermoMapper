@@ -1,0 +1,3 @@
+7:error: Lean exited with code 3221226505
+12:error: Lean exited with code 3221226505
+45:error: build failed

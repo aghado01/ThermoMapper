@@ -48,7 +48,8 @@ Opened 2026-11-14 at the user's word ("that brief was getting way too long, adde
       - Vovk, Gammerman and Shafer 2005, *Algorithmic Learning in a Random World*, §7.1: the full book at `PDFs/textbooks/Vovk2005.pdf`, book pages 176–177. Chapter 7 is not among the chapter files in `PDFs/Vovk2005/`, which hold chapters 2, 6, 8, 9 and 10.
 
       The Simple Jumper, already built, simplifies it, per Vovk, Petej, Nouretdinov, Ahlberg, Carlsson and Gammerman 2021, "Retrain or not retrain", Algorithm 1: `PDFs/Bayesian/vovk21b.pdf` (COPA 2021), the same paper as arXiv 2102.10439 in `gauntlet/conformal-bayes`. No source on the shelf defines a "Composite Jumper".
-    - *CUSUM's and Shiryaev–Roberts's guarantees in Lean* (Vovk 2021, Propositions 4.2 and 4.4; posed in the code, not proved). Decides whether those alarms report proved guarantees. Lean work, for the conformal-lean thread.
+    - *CUSUM's and Shiryaev–Roberts's guarantees in Lean, proved and verified* (Vovk 2021, Propositions 4.2 and 4.4; the Lean `4c832df`, the C# `ad78359`; its report below). The almost-sure lim sup is not formalized.
+    - *Open, the user's word:* M-1 under covariate shift, posed in the Lean ledger for `d4c97d4`'s monitor.
     - *Streams with known structure or under covariate shift,* which E35's brief leaves out: a score that removes a trend or season, or a test martingale weighted for the shift. Decides whether the monitor serves streams that are not exchangeable as they stand.
       - *Covariate shift: built and verified* (`d4c97d4`; its report below), scoped first by the user. Its guarantee is posed to the conformal Lean chip as a follow-up.
       - *The Mondrian monitor, built and verified* (`c64ccc9`; its report below). Pool the strata for a change everywhere; watch each stratum for a change confined to one.
@@ -71,6 +72,10 @@ The conformal-lean thread proved both (`4c832df`) and reported it here. This bri
   - `MartingaleAlarm.Guarantee` now marks CUSUM and Shiryaev–Roberts `Proved`, with the proved wording;
   - the `AlarmProcedure` and `ConformalTestMartingale` docstrings now say proved, not posed;
   - `MartingaleAlarmTests` assert the proved flags and wording, and the false-alarm theory drops `_Posed` from its name.
+- *Verified by the main session on 2026-11-15,* from clean archives with zero skips:
+  - the C#, the Commit selection over `ad78359`'s files at `66922ed`: 120 of 120 ([receipts](receipts/verify-conformal-alarmproved-ad78359/));
+  - the Lean it rests on, `4c832df` ([receipts](receipts/verify-lean-conformal-4c832df/)). The checks passed in 785 s, and the 12 named results rest on the standard three axioms only. meta-ci passed. The barrel built on its second run, 3,190 jobs: the first run's build stopped when two unrelated modules, `ProjectionMean` and `RandomCluster`, crashed with Lean exit 0xC0000409 under load.
+  - The hypotheses were read: measurable bets integrating to at most 1, and p-values independent with law μ. M-1's uniform p-values meet them.
 - *What changes for existing calls:* `Guarantee.Proved` reads true for CUSUM and Shiryaev–Roberts, and the statement changes to:
 
   > The mean time to a false alarm is at least c, and the expected number of false alarms among the first N arrivals is at most N/c, for bets that integrate to at most 1.
