@@ -63,6 +63,30 @@ As in the archived brief: each slice is reported here, then waits for the main s
 
 Newest first.
 
+### 2026-11-15 — RoBAS-Full's intervals, unconditional: the docstrings follow the Lean
+
+The RoBAS-Full Dawson bounds session proved the four Dawson bounds (`7d98281`, `ConformalDawson.lean`) and reported it here. This is the follow-up the RoBAS-Full intervals item left open: drop "granted four bounds … the checks certify".
+
+**Landed** on `main`, nothing pushed:
+- `bb2fd78`, docstrings and one test comment only:
+  - `ResidualScore.Horseshoe` and `ResidualShrinkage.Intervals` now cite `robasFull_ordConnected`, with no hypothesis left;
+  - `HorseshoeScoreTests`' comment cites the same.
+- *What changes for existing calls: nothing.* `Intervals` has served RoBAS-Full from n 4 since `c3539b7`.
+
+**Checked before citing.**
+- `robasFull_ordConnected` is `robasFull_interval` applied to the proved `robasDawsonBounds`.
+- Its hypotheses are n ≥ 4 and residuals not all equal, both satisfiable, and its conclusion holds at every α.
+- `ConformalDawson.lean` holds no `sorry`, axiom or `native_decide`. The Lean record reports that `#print axioms` shows only the standard three.
+
+**Gates.**
+- `HorseshoeScoreTests` 6 of 6 and `ResidualIntervalTests` 4 of 4, on the final text.
+- *Per commit:* 61 of 61 in the 4 classes selected in Maths.Regression.Tests, on the text before the docstrings were rewrapped. The rewrap changed comments only, and the two classes were rerun on it.
+- No new XML-doc warning. The build's two are in `BarsEnsemble.cs` and `CostProfile.cs`.
+
+**Defects found: none.**
+
+**Doc changes owed:** the residual-scores section: RoBAS-Full's intervals from n 4 now rest on a proof with no hypothesis.
+
 ### 2026-11-15 — Conformal test martingales: CUSUM's and Shiryaev–Roberts's guarantees marked proved
 
 The conformal-lean thread proved both (`4c832df`) and reported it here. This brings the C# into line, as was done when RoBAS-Full's intervals were proved.
