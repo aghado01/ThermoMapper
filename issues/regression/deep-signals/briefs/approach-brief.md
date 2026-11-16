@@ -66,6 +66,7 @@ How far each row was checked is in the last column. "Elaborated" means the coord
 | The response's second moments under the g-prior on the whitened Gram are the covariance the whitened marginal reads | `BassWhitenedMarginal.lean` | Chip's report |
 | A range-restricted isometry bounds the squared norm of every generator secant and the compressed objective. At ε < 1 it preserves injectivity on each set where the generator is injective | `GenerativePrior/IsometryCondition.lean` | Elaborated |
 | For isotropic raw second moments σ²I, the expected squared norm after a fixed rank-k orthogonal projection is σ²k, against σ²n in the ambient space | `GenerativePrior/IsotropicProjection.lean` | Elaborated |
+| The exact ReLU angle map is strictly increasing and 1-Lipschitz on [0, π]. Its iterates decrease to zero from every positive starting angle and stay at zero when started there. A one-step angular error at most δ accumulates to at most dδ after d layers | `GenerativePrior/AngleMap.lean` | Elaborated, all 25 axiom prints checked |
 
 **Measured,** under gates written before their readings. The receipts are under `issues/regression/receipts/` in `latent-recovery/`, `spline-space/` and `generative-prior/`.
 
@@ -79,6 +80,8 @@ How far each row was checked is in the last column. "Elaborated" means the coord
 | The built support gate admits no singular spline design and refuses 78% of the exactly full-rank ones that have more sites than columns, nearly all well conditioned. The ordered matching read rank exactly on 23 400 designs | Chip's report |
 | A one-sided Green's-function basis fits a sum of decaying resonances with about two knots per resonance, twenty to eighty times fewer than cubic pieces at lower error | Chip's report |
 | Noiseless two-layer Gaussian ReLU generator, widths 250 and 600, k = 10, m = 150. Descent with a sign check recovered 30/30 codes at relative error < 10⁻³. One reached the 50,000-update cap with relative error 6.84 × 10⁻¹⁶ | Gate checked, endpoint errors recomputed and replay receipts matched |
+| At fixed m = 150 and widths 250/600, the signed recovery curve passed its preregistered comparison with all 15 published counts. At k = 80, 90, 100 it recovered 20, 9 and 1 out of 30, against 17, 7 and 4 in the paper | Recomputed the 450 signed outcomes and all 15 exact comparisons |
+| Across matched sign-on and sign-off runs at k = 10, 80 and 100, only k = 80 showed discordant pairs (six on-only, two off-only). Across all 540 signed and unsigned endpoints, all 105 missed recoveries reached the 50,000-update cap at angles of 105°–171° from the negative truth direction | Recomputed all endpoint classes and the three paired tests |
 
 ## What was corrected
 
@@ -97,7 +100,7 @@ Each of these was claimed in the discussion and then turned by a proof or a read
 
 ## The compressed-sensing guarantees
 
-The first coordinated round established two deterministic results and reproduced the k = 10 point of the published linear recovery experiment. The guarantees for learned decoders and audio measurements remain open. Statements below are from the papers' LaTeX (`1705.07576v3`, `1812.04176v1`, `1807.04261v1`, `2008.10579v1`, `1805.08855v2`, `2006.07953v2`). [Lean report](generative-prior-statements-brief.md#round-1-report--2026-11-16) · [Numerical report](generative-prior-probes-brief.md#readings-and-decision)
+The coordinated work established the scalar angle map, the secant bounds and the projection identity. It reproduced the decline in signed recovery across the published noiseless depth-two linear experiment and compared the sign check on matched problems at three dimensions. The guarantees for learned decoders and audio measurements remain open. Statements below are from the papers' LaTeX (`1705.07576v3`, `1812.04176v1`, `1807.04261v1`, `2008.10579v1`, `1805.08855v2`, `2006.07953v2`). [S19 and S21](generative-prior-statements-brief.md#round-1-report--2026-11-16) · [S17](generative-prior-statements-brief.md#round-2-report--s17) · [G1 linear results](generative-prior-probes-brief.md#g1-report--linear-curve-and-paired-sign-comparison)
 
 **What they say.**
 - *The setting.* A generator G : ℝᵏ → ℝⁿ, d ReLU layers with no bias, and a signal y₀ = G(x₀). Observe Ay₀ with m ≪ n rows and minimize f(x) = ½‖AG(x) − Ay₀‖².
@@ -119,13 +122,13 @@ The first coordinated round established two deterministic results and reproduced
 - The Bayesian analogue on a parametric synthesizer: a code recovered from 2k to 4k bins, and octave traps standing in for the impostor at −ρ_d·x₀.
 
 **What is untested.**
-- The rest of the recovery curve, depth three, descent without the sign check, phaseless recovery, and the calibration stack on a ReLU generator remain open.
+- The published sweep changes both measurements per code dimension (150/k) and first-layer expansion (250/k). Varying m at fixed k and widths would isolate measurement count. Depth three, magnitudes and the calibration stack on a ReLU generator remain open.
 - The weight condition has not been measured for anything of ours, such as a layer of directional hinges under its prior, which has sparse directions and thresholds.
 - The isometry condition has not been measured for spectrogram rows or magnitudes on any signal manifold, whitened or not.
 - The pilot's held-back log-power reconstruction error can be read against k/m. The rank-k projection identity concerns expected squared error in the coordinates carrying white noise. Here the pilot added white noise to the waveform before taking log power.
 
 **Remaining work in the two briefs.**
-- The Lean brief next treats the angle map, the zero set of the deterministic comparison field, and the angular integral for Q. The Gaussian factorization may enter as a named premise.
+- The Lean brief next treats the zero set of the deterministic comparison field (S20) and the angular integral for Q (S18). The Gaussian factorization may enter as a named premise. The scalar angle map needed by both is proved in S17.
 - *Numerically:* success against m/k for the papers' algorithm on random expansive networks; the same inverse problem through the calibration stack with G behind the emulator contract, reading threshold, coverage and the impostor; the weight condition's residual against width, for Gaussian layers and for directional-hinge layers; the isometry constant for structured views on the synthesizer's range.
 - *What they would decide:* whether a gradient-informed move on the code is justified, which the benign landscape suggests; how wide a decoder must be; whether our views are isometric enough; and how the engine's inversion scales in k against descent.
 
