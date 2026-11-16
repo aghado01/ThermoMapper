@@ -1,0 +1,14 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <!-- The latent-recovery pilot's probe: B1 and B2 sweeps, the synthesizer and the calibration pilot. It calls the engine
+       as built from a source snapshot (git archive of be979dd under ../source), never the shared working tree. -->
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <AssemblyName>LatentRecoveryProbe</AssemblyName>
+    <RootNamespace>LatentRecoveryProbe</RootNamespace>
+    <ServerGarbageCollection>false</ServerGarbageCollection>
+    <TieredPGO>true</TieredPGO>
+  </PropertyGroup>
+  <ItemGroup>
+    <ProjectReference Include="../source/projects/Maths.Regression/Maths.Regression.csproj" />
+  </ItemGroup>
+</Project>

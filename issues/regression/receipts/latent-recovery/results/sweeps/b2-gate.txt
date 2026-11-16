@@ -1,0 +1,25 @@
+B2 verdict: FAIL (see rows)
+  [pass] rect tone: max rel dev from |Σg|² 4.4E-016, grid peak over f0 by -9.1E-005, slope 1.0000
+  [pass] rect impulse: slope -1.0000, w·P at 4096 = 1.0000
+  [pass] rect noise complex: max |z| 2.32 (marginal 0), slope 0.0004; frame-peak reading slope 0.190, peak/mean at w=4096 8.877282151765147
+  [pass] rect noise real: max |z| 2.42 (marginal 0), slope -0.0006; frame-peak reading slope 0.193, peak/mean at w=4096 8.228480808969783
+  [pass] hann tone: max rel dev from |Σg|² 5.6E-016, grid peak over f0 by -3.6E-005, slope 1.0000
+  [pass] hann impulse: slope -1.0000, w·P at 4096 = 2.6667
+  [pass] hann noise complex: max |z| 2.76 (marginal 0), slope -0.0004; frame-peak reading slope 0.209, peak/mean at w=4096 8.852260471463069
+  [pass] hann noise real: max |z| 2.23 (marginal 0), slope 0.0005; frame-peak reading slope 0.217, peak/mean at w=4096 8.130122243755347
+  [pass] rect resonance τ=64: w* = 76 (w*/τ = 1.188), slope small 0.912 (3 pts), large -1.000 (13 pts), grid peak over f0 by -7.6E-007, closed form max rel dev 1.9E-014
+  [pass] rect resonance τ=128: w* = 152 (w*/τ = 1.188), slope small 0.934 (7 pts), large -1.000 (9 pts), grid peak over f0 by -3.0E-006, closed form max rel dev 5.6E-015
+  [pass] rect resonance τ=256: w* = 304 (w*/τ = 1.188), slope small 0.949 (11 pts), large -0.999 (5 pts), grid peak over f0 by -1.2E-005, closed form max rel dev 1.9E-014
+  [pass] rect resonance: w*/τ spread 1.000
+  [pass] rect chirp c=0.0001: w* = 152 (w*·√c = 1.520), slope small 1.000 (9 pts), large -1.013 (10 pts)
+  [pass] rect chirp c=0.00025: w* = 90 (w*·√c = 1.423), slope small 1.000 (6 pts), large -1.011 (11 pts)
+  [pass] rect chirp c=0.000625: w* = 54 (w*·√c = 1.350), slope small 1.000 (4 pts), large -1.004 (8 pts)
+  [pass] rect chirp: w*·√c spread 1.126
+  [pass] hann resonance τ=64: w* = 152 (w*/τ = 2.375), slope small 0.911 (3 pts), large -0.903 (13 pts), grid peak over f0 by -7.2E-007
+  [FAIL] hann resonance τ=128: w* = 304 (w*/τ = 2.375), slope small 0.936 (7 pts), large -0.854 (9 pts), grid peak over f0 by -2.5E-006
+  [FAIL] hann resonance τ=256: w* = 608 (w*/τ = 2.375), slope small 0.953 (11 pts), large -0.772 (5 pts), grid peak over f0 by -6.8E-006
+  [pass] hann resonance: w*/τ spread 1.000
+  [FAIL] hann chirp c=0.0001: w* = 216 (w*·√c = 2.160), slope small 1.000 (9 pts), large -1.000 (10 pts)
+  [FAIL] hann chirp c=0.00025: w* = 128 (w*·√c = 2.024), slope small 1.000 (6 pts), large -1.000 (11 pts)
+  [FAIL] hann chirp c=0.000625: w* = 90 (w*·√c = 2.250), slope small 1.000 (4 pts), large -1.000 (8 pts)
+  [pass] hann chirp: w*·√c spread 1.112

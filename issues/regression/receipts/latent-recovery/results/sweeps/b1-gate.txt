@@ -1,0 +1,19 @@
+B1 pairs: 15 kappas, max |z| = 1.56, marginal 0, over 5: 0; min |z| against the linear alternative = 7
+  verdict: PASS
+B1 cells complex/mid: 81 pairs, max |z| = 2.44, in (4,5]: 0, over 5: 0, max |est − pred| = 0.0049, chi2/df = 0.97
+B1 cells complex/cross-w: 12 pairs, max |z| = 2.84, in (4,5]: 0, over 5: 0, max |est − pred| = 0.0053, chi2/df = 1.58
+  complex gated families verdict: PASS
+B1 cells real/mid: 81 pairs, max |z| = 3.26, in (4,5]: 0, over 5: 0, max |est − pred| = 0.0059, chi2/df = 1.35
+B1 cells real/near-dc: 102 pairs, max |z| = 38.51, in (4,5]: 3, over 5: 23, max |est − pred| = 0.0763, chi2/df = 107.49
+B1 cells real/cross-w: 12 pairs, max |z| = 2.19, in (4,5]: 0, over 5: 0, max |est − pred| = 0.0042, chi2/df = 1.18
+  real gated families verdict: PASS
+  near-DC reading, |est − pred| against the pseudo entries (|pseudo(ref,other)|, |pseudo(ref,ref)|):
+    w 256 dt 0 df·w -1.0: est 0.3845 pred 0.3082 z 38.5 pseudo 0.667 self 0.167
+    w 128 dt 0 df·w -1.0: est 0.3841 pred 0.3082 z 38.3 pseudo 0.667 self 0.167
+    w 64 dt 0 df·w -1.0: est 0.3828 pred 0.3082 z 36.1 pseudo 0.667 self 0.167
+    w 256 dt 32 df·w -1.0: est 0.3229 pred 0.2575 z 35.1 pseudo 0.616 self 0.167
+    w 64 dt 8 df·w -1.0: est 0.3224 pred 0.2575 z 34.0 pseudo 0.616 self 0.167
+    w 128 dt 16 df·w -1.0: est 0.3214 pred 0.2575 z 30.7 pseudo 0.616 self 0.167
+    w 256 dt 64 df·w -1.0: est 0.1882 pred 0.1482 z 18.1 pseudo 0.479 self 0.167
+    w 128 dt 32 df·w -1.0: est 0.1849 pred 0.1482 z 15.5 pseudo 0.479 self 0.167
+    near-DC pairs with both pseudo entries < 0.05 and |z| > 4: 0 of 0
