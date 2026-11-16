@@ -1,3 +1,4 @@
 import Enthymemata.GenerativePrior.AngleMap
+import Enthymemata.GenerativePrior.ComparisonField
 import Enthymemata.GenerativePrior.IsometryCondition
 import Enthymemata.GenerativePrior.IsotropicProjection
