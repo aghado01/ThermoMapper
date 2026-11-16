@@ -58,9 +58,7 @@ Those marked **settled** are the user's; the rest are **open**, each with a reco
      - *The moves balance as measures* (`mh_flux_symm`, `birth_death_flux`), and inserting a ridge preserves measure (`measurePreserving_piFinSuccAbove`). The code takes prior and proposal densities against one base measure, which slice 2's Geweke gate exercises.
      - *The paper's supplement* (`supplemental_materials.tex` beside `main.tex`, read in slice 0) gives the same change ratio: the collapsed likelihood ratio alone.
    - **The change move at a = 1, settled** (the user, 2026-11-14, relayed by the coordinating session): the fair coin. In the user's words: "Use the fair coin at slice 2. For a one-coordinate ridge, redraw the sign uniformly from −1 and +1, then draw the knot from its prior conditional on the proposed sign. That last detail matters because reversing the direction changes the projected knot interval. The ridge can switch ends in one change move, and the acceptance probability still uses only the collapsed likelihood ratio."
-6. **A basis mixing ridges with BASS's hinge terms, open.**
-   - *Recommended:* ridges only first. The contract allows mixing; the moment service has no exact route for a ridge, so a mixed fit's Sobol reads by sampling.
-   - *Alternative:* mixed from the start.
+6. **Mixed directional widths, selected 2026-11-15.** Three disjoint kinds: smooth K = 4 blocks, K = 1 directional hinges, and categorical factors alone when available. This supersedes the earlier alternative of BASS hinge products beside ridges. Whole-surface sampled sensitivity reads a mixed fit.
 7. **Categorical inputs, open.**
    - *Recommended:* refused in the first slices, then BASS's subset factors multiplying a ridge, separable in the category.
    - *Alternative:* the paper's dummy coding with its "in at least one category" indicator ridges.
@@ -108,9 +106,9 @@ One commit per concern; tests with the code they test; each slice ends with its 
 - A commit that touches shared code names in its report every test project that `scripts/test-select.ps1` selects for it, read from disk, with each one's count.
 - After each slice, report to the main session and wait for its verification note before starting the next. For this chip "the main session" is the second coordinating session (the [handoff](../coordination-handoff-2026-11-11.md#sessions)'s Sessions table), which verifies each slice from a clean archive. `artifacts/verify-main` is the coordinators' workspace; leave it alone.
 
-## Slices 5 and 6: categorical inputs and mixed bases (slice 5 approved; slice 6 a draft for the user)
+## Slices 5 and 6: categorical inputs and mixed directional widths
 
-**Slice 5 was approved by the user on 2026-11-15** and has since been verified. **Slice 6 design review (2026-11-15).** Decision 6a selects kinds by width within the directional basis. The sampler choice is recorded below. The mixed fit is pending implementation. The coordinating session's earlier review raised three points:
+**Slice 5 was approved by the user on 2026-11-15** and has since been verified. **Slice 6 implementation authorized 2026-11-15.** Decision 6a selects kinds by width within the directional basis; the remaining recommendations stand. The coordinating session's earlier review raised three points:
 - *6c* holds for a one-column hinge. With K = 4 a ridge at a = 1 is a spline curve in one input, not a duplicate of an axis hinge, so the least active count could be a setting with 2 as its default.
 - *6d and decision 2.* Decision 2 said E21's ridge blocks handle collinearity on the coefficient side. Scale-sensitive forms are refused for unnormalized ridge columns, so that is not met today, and D06 alone handles near-duplicates. Meeting it needs a per-kernel column scale, a decision of its own.
 - *Order.* One fit per basis compared by evidence, and the reading of M's mixing, come before a mixed chain is built.
@@ -126,7 +124,7 @@ The user chose these as E36's next work, decision 7's and decision 6's later ste
 
 ### Slice 5: categorical inputs, BASS's subset factors multiplying a ridge
 
-**Refused today.**
+**Baseline before slice 6.**
 - `BassResolved.cs:316` refuses categorical predictors in a directional fit (decision 7).
 - `BassTerm`'s constructor (`BassTerm.cs:129`, `:132`) refuses a directional hinge or a ridge column beside any other case-side factor.
 - `DirectionalTermSpace.Validate` refuses any part but a direction.
@@ -189,7 +187,7 @@ The user chose these as E36's next work, decision 7's and decision 6's later ste
   - *The draft's: ridges beside BASS's hinge terms.* Two term measures and a kernel combining D01's and E36's laws. It keeps BASS's product interactions and data-located knots.
   - *Per variable,* E28's middle: each continuous variable is labelled for one kind, declared or drawn. A declared label is cheap; a drawn one moves every term on its variable at once.
   - *Per part within a term* (a hinge on x₃ times a ridge on x₁, x₂): not recommended. The derivative's product rule assumes one kernel reads each variable, and no source proposes it.
-  - *One fit per basis, compared by evidence:* now read. On functions of one structure the pure bases separate by 8 to 69 nats, and a single basis chosen by evidence serves. A mixed basis is for a function holding both a smooth and a kinked structure, which no pure basis reads well.
+  - *One fit per basis, compared by evidence:* now read, with the estimators' disagreement qualified in its report. A mixed basis can express smooth and kinked components directly. Pure K = 4 already contains b₁, a hinge, and pure K = 1 can approximate a smooth curve with several terms; whether mixing improves recovery or cost is measured, not assumed.
 - **Who owns a term of categorical factors alone** (the user's review; it applies to either design).
   - *Selected with 6a.* A categorical-only term gets one explicitly weighted place in the prior. Each kind's law is conditioned on what makes it that kind, so the laws' supports are disjoint and a term's kind is read from the term itself:
     - a direction (a ≥ 1) in a block of K columns or in one column;
@@ -204,20 +202,21 @@ The user chose these as E36's next work, decision 7's and decision 6's later ste
   - *The mixture integrated, no label:* a categorical term's prior is ρ_r π_r(t) + ρ_h π_h(t).
     - A collection's prior then sums over the ambiguous terms' labels, a polynomial in the shares that takes O(A²) to integrate for A ambiguous terms.
     - The reverse birth reads both kinds' laws, mixed by their proposal weights, and M_r and M_h are undefined for those terms.
-- **6b, the shares, open.**
+- **6b, the shares, recommendation selected for implementation.**
   - *Recommended:* Dirichlet(1, 1, 1) over the three kinds, integrated as λ is. The collection weight gains Γ(3)·Π_k Γ(1 + M_k)/Γ(3 + M), uniform over the split at every M, and sits in the terms' prior beside the determinant.
   - *The birth's ratio:* the birth draws a kind with a fixed weight (⅓ each) and then its law. Its ratio carries that weight, the Dirichlet factor's ratio, the kind's law under its own counts, and the reverse death's 1/(M + 1) over all terms.
   - *Computed by the mixed kernel itself:* E36's and D01's kernels take the death's denominator from the counts they are handed, so delegating the whole ratio to them with per-kind counts would be wrong (the user's review).
   - *Alternative:* fixed shares, a multinomial on the split, firmer as M grows.
-- **6c, the least active count, open.**
+  - *Available kinds:* continuous-only data have two kinds, K = 4 and K = 1, each proposed with probability ½ and shares integrated under Dirichlet(1, 1). With an enabled categorical part there are three, each proposed with probability ⅓ under Dirichlet(1, 1, 1). A direction-bearing kind has a uniform active count on 1..A and categorical order on 0..C; the categorical-only kind has order on 1..C. Categories therefore allow both gated directional widths and one separately weighted categorical-only kind, without a hidden label or empty term. Shares are not left on an unavailable kind.
+- **6c, the least active count, recommendation selected for implementation.**
   - *Recommended, under the width design:* none is needed. A K = 1 hinge at a = 1 is the only axis hinge in the basis, so no two kinds duplicate one column, and a block at a = 1 is a univariate spline curve.
   - *Under the draft's design,* the user's review: 2 by default for a one-column directional hinge, 1 allowed for a block, and an explicit 2 kept for fits meant to be oblique.
-- **6d, the coefficient prior, open.**
+- **6d, the coefficient prior, recommendation selected for implementation.**
   - *Recommended:* the g-form's default and E21's normalized `RidgeForm`, whose precision reads diag(G)/N, so rescaling one column cancels. That is tested by rescaling one admitted ridge column and checking the marginal likelihood and predictions.
   - *Kept:* `RawRidgeForm` stays refused at K ≥ 2.
   - *Not taken:* a penalty tuned apart for a whole block is a further model choice.
-- **Sampler decision (2026-11-15, pending implementation).** For a new pure ridge-block fit (K ≥ 2), or a mixed fit whose basis admits such blocks, resolve an omitted sampler to self-sizing parallel tempering. Use the exact reference rung when the declared priors and tempered form admit it. Otherwise use an admissible positive hot end and record why. Explicit sampler choices win, including SMC. An explicitly requested plain chain runs and carries a fit-level diagnostic that ridge counts can remain at their starts and intervals for f can be too narrow. Distinguish automatic selection from an explicit plain chain in the config, log the resolved sampler, and resume a checkpoint with the sampler that produced it. The rule applies to the configured basis even if the current draw contains zero blocks.
-- Under the width design a fourth move helps: a width change, θ, t₀ and the subsets kept, between K = 1 and K = 4, which needs no Jacobian and accepts on the likelihood ratio, the shares' ratio and the kind weights.
+- **Sampler decision (2026-11-15; pure-block default implemented at `a83db0c`, retained for mixed widths).** For a new pure ridge-block fit (K ≥ 2), or a mixed fit whose basis admits such blocks, resolve an omitted sampler to self-sizing parallel tempering. Use the exact reference rung when the declared priors and tempered form admit it. Otherwise use an admissible positive hot end and record why. Explicit sampler choices win, including SMC. An explicitly requested plain chain runs and carries a fit-level diagnostic that ridge counts can remain at their starts and intervals for f can be too narrow. Distinguish automatic selection from an explicit plain chain in the config, log the resolved sampler, and resume a checkpoint with the sampler that produced it. The rule applies to the configured basis even if the current draw contains zero blocks.
+- A width change keeps θ, t₀ and the subsets between K = 1 and K = 4. It occupies half the change slot on a direction-bearing term; the ordinary direction/subset change occupies the other half. Forward and reverse probabilities are equal, with no Jacobian; the target supplies the likelihood and integrated shares' ratios. Birth/death/change scheduling and boundary menu corrections remain the structure chain's. Categorical-only terms use the subset change alone.
 - **The moves.** A birth draws the kind, then its law. A death is uniform over all terms. A change keeps the kind: E36's or slice 5's change for a direction-bearing term, slice 5's subset redraw for a categorical term, and D01's redraw for a BASS hinge term under the draft's design. Local steps, the fixed-M family, and E4's history and residual births stay refused.
 - **Mixing and identifiability.** f's functionals do not care which representation is drawn. The per-kind counts and inclusion readouts say less the freer the mix.
 
@@ -229,21 +228,20 @@ The user chose these as E36's next work, decision 7's and decision 6's later ste
 - *Recovery from outside the model:* a smooth oblique ridge plus an axis kink, for example exp(0.6x₀ + 0.8x₁) + 3(x₂ − 0.4)₊. The mixed fit against each pure basis, with their evidence, under tempering and SMC.
 - *Fitting untouched.*
 
-### How both meet what is built
+### How the selected widths meet what is built
 
 - **K-column ridge blocks.**
-  - `RidgeExpansion` expands every structure term today. Under slice 6 it expands ridge terms alone, and its read-back groups each ridge's K columns, leaving a hinge column as its own term.
-  - `BassDesign.Load` tells a draw's columns from structure terms by its first term's kind; that becomes per term.
-  - The column cap: K·M_max today; M_max on structure terms and N − 1 on columns, apart, under a mixed basis.
-  - Slice 3's refusal of `Structure.Degree` ≠ 1 at K ≥ 2 lifts in a mixed fit, where the hinges read it.
-- **The determinant prior.** It reads ridges' directions alone, with c at M_r. The cut of M's cap at p becomes the coupling's −∞ past M_r = p, since hinge terms are not capped by p. The prior sampler draws the kinds first, then M_r from its law over c.
-- **The fair coin** is unchanged, and under 6c's recommendation it never fires in a mixed fit.
+  - `RidgeExpansion` expands smooth structure terms into four columns and leaves each directional hinge and categorical-only term as its own column. Read-back walks all three cases term by term and restores the width.
+  - A mixed design has a structural cap M_max and an independent actual-column cap N − 1. A width-up change is refused when its three extra columns cross that bound.
+  - `Structure.Degree = 1` remains required: this slice's K = 1 kind is a directional hinge, and its K = 4 kind has the paper's fixed linear/cubic columns.
+- **The determinant prior.** Both K = 4 and K = 1 bear directions and count in M_θ; categorical-only terms do not. The normalizer is c_(M_θ), and the coupling is −∞ beyond M_θ = p or on dependence. Without categories every term bears a direction and M's cap can still be cut at p. The prior sampler first draws kinds by their integrated shares, holds kinds and categorical parts fixed during determinant rejection, then draws knots; admission rejects the whole collection afterward.
+- **The fair coin** remains active at a = 1 in either directional width's ordinary change: sign uniform on ±1, then knot redrawn conditional on that sign and its cells.
 - **Admission.** D06 reads every column of both kinds; the support count reads a gated ridge's b₁ over its cells.
 - **The readouts.**
   - *Prediction, the pointwise density and the conformal layer* read columns through the kernels, so they need nothing.
   - *The gradient* holds by the one-kernel-per-variable rule, under 5's design and 6a's recommendation.
   - *E8* takes its sampled route, since a ridge is not separable; its product law already carries categorical marginals.
-  - *The sampled sensitivity's whole-surface route* reads any fit. Its slice 4 split takes f_sep as the hinge terms and the pure categorical terms, exact from the moment service, and f_ns as the ridge terms. A gated ridge is separable between its categories and its direction, so its categorical sums can be exact inside the sampled part.
+  - *The sampled sensitivity's whole-surface route* reads all three kinds, and is the route used for slice 6's mixed-fit readings. No split estimator is needed here. Any future exact/sampled split must inspect separability: a K = 1 directional hinge with several active coordinates is not a BASS axis-hinge product.
   - `BassSensitivity.FromCoefficients` keeps refusing ridges.
 - **One defect slice 5 must fix.** The calibration emulator's split on categorical calibration parameters (`BassEmulators.cs:457`) rebuilds a term from its hinge, Legendre and functional parts, which would drop a gated ridge's direction. Slice 2 found it unreachable because a direction held no categorical factor; slice 5 makes it reachable.
 
@@ -252,18 +250,18 @@ The user chose these as E36's next work, decision 7's and decision 6's later ste
 | File | Today | Slice 5 | Slice 6 |
 | --- | --- | --- | --- |
 | `BassTerm.cs` | refuses a direction or ridge column beside another case-side part | allows categorical factors beside them | still refuses hinge × ridge in one term |
-| `BassConfig.cs` | refuses a directional basis beside Legendre; refuses local steps, the fixed-M family, history and residual births | — | declares a mixed basis; refuses scale-sensitive forms there; lifts the degree refusal at K ≥ 2 |
-| `BassResolved.cs` | refuses categorical predictors | resolves the categorical cap for a directional fit | caps per kind; the determinant's cut moves to the coupling |
-| `BassStructurePrior.cs` | the directional part alone | the categorical part beside it | both kinds, ρ's weight, the coupling over ridges |
+| `BassConfig.cs`, `DirectionalTermSpace.cs` | refuses a directional basis beside Legendre; refuses local steps, the fixed-M family, history and residual births | — | declares `MixedWidths` at K = 4, keeps degree 1 and the block admission/refusal rules |
+| `BassResolved.cs` | refuses categorical predictors | resolves the categorical cap for a directional fit | separates structural and actual column caps; determinant counts both directional widths |
+| `BassStructurePrior.cs` | the directional part alone | the categorical part beside it | three disjoint conditioned kinds, integrated shares, coupling over both directional widths |
 | `DirectionalTermSpace.cs` | refuses any other part; ranges per direction | ranges and knots per (θ, cells) | — |
-| `DirectionalTermProposal.cs` | directional births, deaths, changes | categorical draws and redraws | one kind of a mixed kernel |
-| `BassTermProposal.cs` | refuses a directional config | — | the hinge kind of the mixed kernel |
+| `DirectionalTermProposal.cs`, `MixedWidthProposal.cs` | directional births, deaths, changes | categorical draws and redraws | mixed kernel owns conditioned per-kind births, global deaths and width flips; reuses direction/subset changes |
+| `BassTermProposal.cs` | refuses a directional config | — | remains the ordinary BASS kernel; the new tally kind is `WidthChange` |
 | `BassModel.cs` | E36's kernel for a directional config | — | the mixed kernel; the expansion over ridges |
 | `RidgeExpansion.cs`, `BassDesign.cs` | every unit expanded; draw or units by the first term | the categorical factor on every column; b₁'s support over the cells | ridge units alone; per-term read-back; two caps |
 | `BassBasis.cs`, `DesignKernels.cs` | product of kernels; one kernel per variable for derivatives | nothing | nothing under 6a's recommendation |
-| `DirectionDeterminant.cs`, `BassPriorSampler.cs` | every term's direction; M from p(M)/c_M | — | ridges alone; kinds, then M_r |
-| `BassSweep.cs`, `BassTarget.cs` | the terms' prior; the count prior on structure terms | — | per-kind units; the label factor in the terms' prior |
-| `BassDiagnostics.cs` | the support tally by part and order | the categorical part's orders too | per kind |
+| `DirectionDeterminant.cs`, `BassPriorSampler.cs` | every term's direction | direction-bearing terms alone | both directional widths; correlated kind draws, determinant rejection, knots, then whole-collection admission |
+| `BassSweep.cs`, `BassTarget.cs` | the terms' prior; the count prior on structure terms | — | existing calls read integrated shares through `LogTermsPrior`; count law stays on all structural units |
+| `BassDiagnostics.cs` | the support tally by part and order | the categorical part's orders too | the `WidthChange` move tally; retained per-kind counts read from the terms |
 | `BassResidualBirth.cs`, `BassBirthMixture.cs`, `BassPriorPrecision.cs` | refused for a directional basis | refused | refused in a mixed fit |
 | `calibration/BassEmulators.cs` | drops a direction on a categorical split (unreachable) | keeps it (the defect above) | — |
 | `sensitivity/BassSensitivity.cs`, `BassActiveSubspace.cs`, `BassSampledSensitivity.cs` | refuse a ridge on the exact routes; the sampled routes read any fit | — | the split's f_sep and f_ns (its slice 4) |
@@ -280,6 +278,72 @@ The user chose these as E36's next work, decision 7's and decision 6's later ste
 Under "Reports" below, newest first, per slice: what landed by commit; the gates' numbers; decisions taken beyond this brief; what was left unbuilt and why; follow-ups with the decision each would change; the doc changes owed.
 
 ## Reports
+
+### Slice 6: mixed directional widths, implemented and qualified (2026-11-15–16)
+
+**Ownership and base.** Started on local `main` at `a83db0c`, with the unrelated document moves preserved. Only the BPPR structure/sampler files, `MixedWidthTests.cs` and this brief belong to this slice. Independent sensitivity and evidence changes stay outside the snapshots and commits. No subagents, no push. Snapshots are `a83db0c` plus the explicit file lists under `artifacts/chip-bppr-mixed/`; each has its own build root. Runs use `DOTNET_PROCESSOR_COUNT=2`, below-normal launches and bounded parallelism.
+
+**Implemented at `17522a6`, on local main.** `DirectionalBasis { Columns = 4, MixedWidths = true }` admits smooth blocks, directional hinges and an available categorical-only kind. A directional structure term carries its width in `DirectionalHinge.Columns`; equality, interning, column expansion/read-back and checkpoint state retain it. Pure structure terms retain the unmarked representation and pure priors reject mixed markers. `MixedWidths = false` is omitted from canonical JSON. The mixed proposal owns conditioned births, own-kind adaptive order/variable counts, global uniform deaths and symmetric width flips. Existing directional changes preserve width, including the a = 1 sign coin. Shares are Dirichlet(1,1) without categories, Dirichlet(1,1,1) with them; determinant coupling counts both directional widths. The exact prior sampler draws correlated kinds by Polya's urn, holds their categorical parts during determinant rejection, then draws knots and rejects whole collections on admission failure.
+
+**Targeted gates.** The initial 10 tests passed (`build-s2/runs/20261115_232305-mixed-s2/mixed-s2.trx`). Expanded gates passed 13/13 (`build-s3/runs/20261115_233159-mixed-s3/mixed-s3.trx`), then final targeted gates 14/14 (`build-s4/runs/20261115_233516-mixed-s4/mixed-s4.trx`). They include the hand shares and conditioned laws; own-kind birth probabilities including a Wallenius check by quadrature; global reverse deaths; actual structure move menus at M = 0, interior and the cap; symmetric width flips; prior-only per-kind counts against independent restricted-prior draws with and without categories and with the determinant; mixed-column restore and exact checkpoint continuation; automatic tempering, explicit plain/SMC controls; and the separate term and column bounds, including a refused width-up change. A rejected removal is checked to preserve counts before a valid death.
+
+The prior-only gate compares 16,000 independent restricted-prior draws with 100,000 chain sweeps after 3,000 burn-in, using batch errors on six statistics: total M, each kind's M, total active count and positive-sign count. Worst |z| is 1.45. Prior acceptance is 0.9944 without categories, 0.9719 with categories, and 0.8265 with categories and the determinant; the latter records 2,937 determinant rejections. Width-change attempts are 10,737, 7,279 and 7,241 respectively. The conditional kind laws precede admission; admission can tilt their split, which both sides of this check retain.
+
+**6d's mixed path.** The rescaling check first admits one four-column block beside one directional hinge and one categorical-only term through the mixed model's expansion/design. It takes those actual six columns into the same collapsed g-form and normalized `RidgeSpectrum` coefficient paths the model uses, verifies the unscaled marginal against the mixed target, then rescales one cubic block column by 0.001, −7 and 1000. It compares marginal likelihoods and posterior mean predictions at three τ values. Dense marginal checks and `RawRidgeForm` refusal are included; these are not only the older generic ridge test.
+
+**Prechange configuration and continuation.** `probes/LegacyProbe.cs` ran against the prechange `chip-bppr/build-s6c` assemblies and the new isolated assemblies. New code reads the saved old canonical JSON. K = 1 and K = 4, each automatic and explicit plain: canonical JSON, fingerprint, and SHA256 over the resumed draws (coefficients, scale/noise/count draws and terms) all match. Each resumed run also matches its own uninterrupted run. Receipts: `legacy-old/`, `legacy-new/`, `invoke-legacy-old2/`, `invoke-legacy-new/` beneath the slice's artifact root. Checkpoints here are the engine's in-memory checkpoint objects; this does not claim a disk checkpoint serializer.
+
+The compatibility probe was repeated against the final `build-s4` engine after the validation fixes: all four cases again match (`legacy-final/`, `invoke-legacy-final/`). `source-hashes.json` records that the eleven committed source/test files match the qualification snapshot byte for byte. Other sessions' later commits on main and uncommitted sensitivity work were excluded from this isolated source snapshot; this is not a combined-main verification claim.
+
+**Measurement provenance.** `probes/MixedRecoveryProbe.cs` measured the external surface exp(0.6x₀ + 0.8x₁) + 3(x₂ − 0.4)₊ on two data seeds, all three bases and tempering/SMC, with proper matched priors. The replay in `recovery-s3/` adds weighted per-start counts and coverage errors and uses the equivalent predictive CDF interval test; the earlier quantile-inversion receipts in `recovery-s2/` are preserved. Eight cases completed before the earlier readout run was stopped to add those uncertainties; this was a measurement revision, not a test failure. `probes/MixedFriedmanCoverageProbe.cs` reuses the existing Friedman fixture and readout, at its stated smaller mixed-fit budget, with f and y separate. The pre-existing pure-block coverage run (`chip-bppr/build-s6b/runs/20261115_222520-coverage/`, `SamplerCoverageProbe.cs`) has not been restarted or claimed complete; its results are qualified separately when available. No dependency on the evidence session's owned code: the evidence readings below carry the currently available uncertainties and flags and the standing estimator-disagreement caveat.
+
+**Fitting untouched, final gates passed.** Regression commit scope: 2,866/2,866, selected 264/359 classes with the pinned tier and the existing slow tier omitted; receipt `build-s4/test-select/20261115_233723-commit/Commit.trx`. Whole Regression assembly, slow tier included: **3,782/3,782**, no skips or failures; receipt `build-s4/test-select/20261116_000547-slice/Slice.trx`. Selected Oracle checks: **106/106**, no skips or failures; receipt `build-oracle-s4/test-select/20261115_234403-commit/Commit.trx`. The implementation commit contains only its eleven source/test paths. No source outside this slice is needed.
+
+**Recovery completed: twelve matched fits.** `build-s3/runs/20261115_233737-recovery-s3/recovery-s3.trx`: 12/12 passed; machine-readable rows are in `recovery-s3/` and `recovery-summary.csv`. Each data seed supplies n = 200 independent uniform points on [0,1]³, noise sd 0.1 and 400 held-out points. The count prior is the default Gamma(10,10) mixture, coefficient scale Zellner–Siow Gamma(½,100), g-form, mean intercept and the default proper scaled σ² prior, all matched across bases. Tempering has two independent starts, exact reference rung and 4,000 burn-in + 1,000 retained sweeps; SMC has three replicates, 256 particles and eight mutations per stage. All use the same explicit structural cap 12. The effect of the widths is not confounded by giving the mixed fit a larger term cap.
+
+| Data | Basis | RMSE f, PT / SMC | 95% f coverage, PT / SMC | 95% y coverage, PT / SMC |
+| --- | --- | --- | --- | --- |
+| 0 | K = 4 | 0.0434 / 0.0382 | 84.5% / 89.5% | 96.75% / 97.25% |
+| 0 | K = 1 | 0.0416 / 0.0398 | 80.25% / 83.0% | 96.25% / 97.0% |
+| 0 | mixed | 0.0363 / 0.0344 | 88.0% / 92.25% | 96.75% / 97.25% |
+| 1 | K = 4 | 0.0172 / 0.0173 | 99.5% / 99.5% | 96.5% / 96.5% |
+| 1 | K = 1 | 0.0321 / 0.0329 | 84.75% / 86.0% | 96.75% / 96.25% |
+| 1 | mixed | 0.0157 / 0.0171 | 100% / 100% | 96.5% / 96.75% |
+
+The mixed fit has lower RMSE here, with a practically tied pure-block control on data 1 under SMC. This is two datasets, not a population-risk dominance claim. Good y coverage does not repair the f undercoverage on data 0. The mixed f coverage's between-start standard errors are 3.63 and 4.00 percentage points on data 0 (PT/SMC), zero on data 1 where every held-out point is covered; the latter is a saturated statistic, not zero posterior Monte Carlo uncertainty. Mixed y coverage's between-start errors are at most 0.15 points. The held-out conditional binomial standard error is up to 2.0 points for these f proportions and about 0.9 points for y, separately from variability across training data; two datasets do not estimate that variability precisely.
+
+| Data / sampler | Mean (M_K4, M_K1) | Probability both widths | Fit seconds |
+| --- | --- | --- | --- |
+| 0 / PT | (0.458, 2.917) | 45.8% | 10.9 |
+| 0 / SMC | (0.428, 2.411) | 42.7% | 67.0 |
+| 1 / PT | (0.852, 1.463) | 84.9% | 13.8 |
+| 1 / SMC | (0.721, 1.902) | 72.0% | 65.8 |
+
+SMC summaries use their draw weights within each replicate and in the pool. The pure-block controls fit two blocks; the pure-hinge controls average about 3.5 terms. Pure-control fit times span 1.8–21.3 s for PT and 16.2–74.9 s for SMC under the shared machine's load. These are descriptive cost rows, not isolated timing claims. Both widths are explored; a mixed draw need not retain both, even when the generating function contains both structures.
+
+**Evidence, with the available errors and flags.** Mixed minus pure-hinge ln Z is −3.05 ± 1.07 and −1.62 ± 0.82 for PT on data 0/1; SMC gives −1.05 ± 0.61 and −0.66 ± 0.49. Mixed minus pure-block is +3.76 ± 1.35 and +8.04 ± 1.25 for PT; SMC gives +4.74 ± 1.17 and +6.49 ± 0.56. Errors here are quadrature combinations of the estimators' reported Monte Carlo errors, not an independently calibrated uncertainty for a difference. SMC reaches the posterior in every replicate, with no overdispersion flag; no fit is saturated or at its ladder-level cap. PT has no observed complete round trips in these 5,000-sweep runs. Therefore the evidence favors the cheaper hinge representation here despite the mixed fits' prediction gain, and several small differences remain weak under the stated errors. The standing estimator-disagreement investigation still applies; these readings do not certify its error estimates or select a new default basis.
+
+**Whole-surface sensitivity.** Every fit was read with the existing sampled `BassSensitivity.Of` route: 80 selected draws, 2,048 base points, order at most 2. Mixed total Sobol indices on data 0 are about (0.186–0.187, 0.320–0.321, 0.502–0.504), and on data 1 about (0.194–0.195, 0.330, 0.485–0.487), agreeing descriptively across samplers and with the pure controls. These are sampled summaries over selected draws, not exact integrals or an assertion of calibrated Sobol uncertainty; no sensitivity code was changed.
+
+**Measurement cost finding.** For continuous predictive mixtures, membership of a central 95% y interval is equivalent to its CDF at y lying in [0.025,0.975]. The eight saved old quantile-inversion cases and their replay have exactly the same RMSE, f coverage and y coverage. Their readout times fall from 17–74 s to 0.6–1.7 s, including the extra per-start summaries. This is a probe improvement only. The existing longer pure-block coverage run was left alone.
+
+**Mixed Friedman coverage: six runs, separately qualified.** `build-s5/runs/20261115_233914-friedman-s5/friedman-s5.trx`: 6/6 passed as descriptive measurements, not assertions of nominal coverage. `probes/MixedFriedmanCoverageProbe.cs` reuses the existing fixture/readout (n = 300, six uniform inputs, noise sd 1, 2,000 held-out points) and the same priors: zero-centre g-form, Jeffreys σ², Zellner–Siow Gamma(½,150), near-Poisson(10) count prior Gamma(10⁷,10⁶). Here the basis is mixed. The data seed is 3671, with two sampler seeds derived by `SeedTree`: −1111815509 and −1769123746, and four independent starts or SMC replicates each. This probe's budget is 6,000 burn-in + 1,000 retained sweeps per chain, versus the pre-existing pure-block probe's 18,000 + 2,000; SMC here has 300 particles and eight mutations per stage, versus its 500 and twelve. These are separate qualifications, not a matched-budget claim against the longer pure-block run, which remains active without a completed receipt at its existing path.
+
+| Sampler | Pooled f coverage, seeds 0 / 1 | Pooled y coverage, seeds 0 / 1 | RMSE f, seeds 0 / 1 | Fit seconds | Approx. sweep-equivalents |
+| --- | --- | --- | --- | --- | --- |
+| automatic PT | 90.25% / 95.15% | 96.0% / 96.35% | 0.446 / 0.417 | 102 / 139 | 525k / 546k |
+| explicit plain | 98.35% / 90.4% | 97.0% / 96.1% | 0.351 / 0.443 | 5.4 / 4.7 | 28k / 28k |
+| explicit SMC | 89.7% / 85.5% | 95.85% / 96.05% | 0.410 / 0.462 | 553 / 544 | 1,085k / 1,022k |
+
+On this one dataset, the two sampler seeds give mean f coverage 92.70%, 94.38% and 87.60%, with standard errors of those two-run means 2.45, 3.98 and 2.10 percentage points (PT/plain/SMC). Mean y coverage is 96.18%, 96.55%, 95.95%, with corresponding errors 0.18, 0.45 and 0.10 points. These very small replication counts do not calibrate confidence intervals; conditional held-out binomial errors and uncertainty across training datasets are distinct. The latter is not measured by this one-data-seed check.
+
+The pool conceals substantial disagreement. The eight individual plain-chain f coverages range 73.8–88.75%, despite pooled coverage of 90.4–98.35%; their M means range 5.36–7.80, and R̂(M) is 2.096 / 2.089. Automatic PT gives individual-chain f coverage 77.6–94.75%, M means 4.82–6.36 and R̂(M) 1.518 / 1.217. Both default fits resolve the hot end to 1/300 because Jeffreys σ² refuses the integrated form's exact reference rung. They have 17–20 levels, zero complete round trips and maximum pair rejection 0.99 / 0.96. Plain fits carry the requested caution. Declared SMC runs the linear form, reaches the posterior in all eight replicates with no jumped replicate, and has individual-replicate f coverage 79.7–89.2%; its weighted M means range 4.87–6.86. This measurement does not request evidence, so null evidence flags are not evidence that its estimator is healthy.
+
+The sampler resolution and continuation contracts pass; adequate f coverage and complete mixing are **not established at this budget**. In particular, neither the high plain pooled coverage nor the improved PT R̂ proves convergence, and good y coverage is insufficient. The implementation retains the user's sampler choice; these measurements are a qualification limit and a basis for a subsequent mixing/coverage decision, not a silent tuning change. Full per-start rows are `friedman-output.json`; the raw numeric coverage/cost rows are in `friedman-s5/`. The older pure-block plain-chain readings earlier in this brief remain their own qualification, as does the still-running longer pure-block probe.
+
+**Handoff.** Implementation is committed at `17522a6`; all owned source/test changes are committed, all own runs are finished, and the final qualification report is a separate documentation concern. There is no code dependency on either other session and no push. The remaining uncertainties are measured ones: fitted f coverage and mixing at larger budgets/across more datasets, the independent evidence-error investigation, and the original longer pure-block coverage run's final results. That original run is not owned by this slice and was left running. Subsequent combined-main verification must include the sensitivity/evidence sessions' changes; the gates above certify the isolated slice snapshot. The directional basis still requires at least one continuous predictor; all-categorical data retain the ordinary BASS route.
+
+**Doc changes owed.** BASS's basis/config and prior descriptions, the mixed move law and available-kind shares, the separate column cap, sampler defaults/caution, and sampled whole-surface readouts. `docs/` remains for the offline batch.
 
 ### Pure-basis readings before slice 6 (2026-11-15)
 
