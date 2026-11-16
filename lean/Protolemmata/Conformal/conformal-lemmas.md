@@ -2,7 +2,7 @@
 
 Pins the contract of the engine's conformal layer, one layer over retained draws and pointwise densities for every model with a pointwise density ([E16](../../../issues/regression/bass/extensions-brief.md#conformal-bayes-the-consumer)). The layer owns coverage and the score owns width. These are the finite statements of that split. They are the sibling of [GuardedEstimator](../BASS/guarded-estimator-lemmas.md): there, means valid whatever the emulator does; here, prediction sets valid whatever the model does. Written from the [chip brief](conformal-chip-brief.md).
 
-**Status (2026-11-15).** Proved in `lean/Enthymemata/ConformalValidity.lean`, namespace `Conformal`, with no apologies (PROOF-CLOSED, 668 declarations counting E35's M-1 and M-2 and slices 9, 10, 12, 13, 14, 15, 16 and 18, slice 14's follow-ups 1, 2 and 3, slice 18's follow-up, RoBAS-Full's intervals, and E35's CUSUM and Shiryaev–Roberts guarantees at the end of this page; `#print axioms` shows `propext`, `Classical.choice`, `Quot.sound` only):
+**Status (2026-11-15).** Proved in `lean/Enthymemata/ConformalValidity.lean`, namespace `Conformal`, with no apologies (PROOF-CLOSED, 668 declarations counting E35's M-1 and M-2 and slices 9, 10, 12, 13, 14, 15, 16 and 18, slice 14's follow-ups 1, 2 and 3, slice 18's follow-up, RoBAS-Full's intervals, and E35's CUSUM and Shiryaev–Roberts guarantees at the end of this page; RoBAS-Full's Dawson bounds in `lean/Enthymemata/ConformalDawson.lean`, 151 declarations; `#print axioms` shows `propext`, `Classical.choice`, `Quot.sound` only):
 - CB-1: `card_rankLe_le`, `coverage_orderings`, `coverage_orderings_eq`, `coverage_strict_le`, `coverage_orderings_le`, `rank_uniform`, `coverage_tieBreak`, `coverage_given`, `coverage_law`, `coverage_stratum`;
 - CB-2: `split_coverage`, `exchangeable_given_training`, `cqr_ordConnected`;
 - CB-4: `sum_jointU`, `post_addOneIn`, `integratedScore_equivariant`, `latentScore_equivariant`, `latentScore_eq`, `sum_jointU_addOneIn`, `integratedScore_le_latentScore`, `accepts_latent_of_mixed`, `mixed_counterexample`;
@@ -1301,6 +1301,25 @@ Proved on 2026-11-14 in `ConformalValidity.lean`, section `RobasFull` (59 declar
 - *The score identity.* Against the C#'s score form, on 1,689 units, worst 4.8e-15.
 - *The pinned n = 3 residuals.* They split unit 1's set.
 - *Direct grids at n = 4 to 7.* One piece on 218 sets, over every k.
+
+**Scope B: the four bounds, proved in Lean** (2026-11-15, file `ConformalDawson.lean`).
+- *The result.* `robasDawsonBounds : RobasDawsonBounds`. With it, `robasFull_ordConnected` drops the bounds hypothesis: for n ≥ 4 and calibration residuals not all equal, {z : p(z) > α} is an interval. The constants are unchanged.
+- *Φ's ODE.* 2xΦ′ + (1 + 2x)Φ = 1 and (2xg + 1)Φ = 1, from the moment ODE (`kummerHalf_ode`, `robasG_kummerHalf`). A comparison principle: (√x eˣ D)′ = eˣ(2xD′ + (1 + 2x)D)/(2√x), so a nonnegative start stays nonnegative (`nonneg_of_ode_ge`).
+- *A rational bracket on x ∈ [0, 16].*
+  - P = N/M, of degree (5, 6) in t = x/16, with N(0) = M(0) = 1 and P′(0) = Φ′(0).
+  - The bounds are (1 − δt)P ≤ Φ ≤ (1 + δt)P with δ = 1/50000, as sub- and supersolutions (`rfPhi_ge_lo`, `rfPhi_le_hi`).
+  - Then g ≥ Â/(32B), with B = (1 + δt)N and Â = (M − B)/t (`rf_g_lo`).
+- *The tail, x ≥ 16.* (2x + 1)/(4x²) ≤ Φ ≤ (2x² + x + 2)/(4x³), as sub- and supersolution from x = 16 (`rf_tail_lo`, `rf_tail_hi`).
+- *The bounds from the bracket.*
+  - ω: squared, through C5.
+  - ω′: through C6 and C7, with ε = 32gB − Â ≥ 0.
+  - c: through C8 (k decreases in g) and C10, the envelope k ≤ e(t). Then c ≤ y·e gives c ≤ c̄ and c ≤ 3 through 32t·e² (C9e, C12e).
+  - c ≥ 0: 1 − 3g + 2xg(1 − g) = 2x(K₂/K₀ − g²), with Cauchy–Schwarz.
+  - The windows: κ is even and nondecreasing on [0, ∞), and κ(y) − E(y²/32) is nonincreasing on y² ≤ 32. Then C13 bounds E((a + L)²/32) − E(a²/32) for a ≤ 4, and c ≤ 3 covers a > 4.
+- *The certificates.*
+  - 11 polynomial inequalities on intervals, 44 pieces in all, degree ≤ 22.
+  - Each piece has positive Bernstein coefficients. Lean checks a Taylor shift and a homogeneous identity in free u, v by `ring`, then `positivity`.
+  - Python generates the polynomials and coefficients exactly in rationals (`artifacts/chip-conformal-lean/rfb/gen4.py`, `gen_lean3.py`).
 
 ## E35's follow-up — CUSUM's and Shiryaev–Roberts's guarantees
 

@@ -12,6 +12,7 @@ import Enthymemata.BgpGaussianTails
 import Enthymemata.BgpUnknownVariance
 import Enthymemata.BgpUnknownVarianceTheorem
 import Enthymemata.ConformalValidity
+import Enthymemata.ConformalDawson
 import Enthymemata.CumulativeField
 import Enthymemata.GuardedEstimator
 import Enthymemata.PenalizedAdmission

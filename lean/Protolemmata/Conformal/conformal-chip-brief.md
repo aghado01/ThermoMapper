@@ -9,7 +9,7 @@ Status: commissioned 2026-11-13 by the user ("Lean first, 15 meanwhile", in the 
 - weighted K-fold CV+, by one fold under likelihood ratios and by merging under position weights;
 - under likelihood ratios, the tournament across folds (7e2b905) and the merged bound (follow-up 2e, which also corrects the averaging lemmas' hypotheses);
 - the β-bound's calibration at n units, by Vlassis and Thomas's chain-measure induction, and what `HighProbability` reports (slice 18's follow-up);
-- RoBAS-Full's conformal sets as intervals from n = 4, granted four bounds on Dawson's function that the checks certify (scope A, the C# chip's commission of 2026-11-14).
+- RoBAS-Full's conformal sets as intervals from n = 4, granted four bounds on Dawson's function that the checks certify (scope A, the C# chip's commission of 2026-11-14); the bounds then proved in Lean (scope B, 2026-11-15).
 
 **Why now.** Slice 14's C# (`c19ce98`; its [report](../../../issues/regression/archive/bass-gbass-khaos-activespaces/briefs/conformal-layer-brief.md#2026-11-13--slice-14-the-weighted-rule-under-shift)) lists follow-ups that each need a guarantee before their C# (decision 7 on the layer plan). The C# chip builds the ratio estimator and slice 15 meanwhile, then these three as their Lean lands.
 
@@ -232,6 +232,36 @@ The user asked for this on 2026-11-08 ("Yes, start it"), relayed by the BASS ext
 ## Reports
 
 Newest first.
+
+### 2026-11-15 — RoBAS-Full's Dawson bounds proved in Lean (scope B)
+
+Asked 2026-11-14 by the user ("Full Lean, bounds too"), after scope A (700c718). `RobasDawsonBounds` is now a theorem, so RoBAS-Full's interval result needs no hypothesis on Dawson's function. The new declarations are PROOF-CLOSED, with the standard three axioms only. The statements are in the ledger, under "RoBAS-Full's intervals at n ≥ 4", "Scope B".
+
+- *Proved.*
+  - `robasDawsonBounds : RobasDawsonBounds`, with A's constants unchanged.
+  - `robasFull_ordConnected`: for n ≥ 4, calibration residuals not all equal, and every α, `{z | α < robasPValue r z}` is `Set.OrdConnected`.
+- *The route.*
+  - Φ solves 2xΦ′ + (1 + 2x)Φ = 1, and a comparison principle holds with the weight √x eˣ.
+  - On x ∈ [0, 16], Φ is bracketed by (1 ∓ δt)·N/M (t = x/16, degree (5, 6), δ = 1/50000), as sub- and supersolutions.
+  - Past 16, it is bracketed by (2x + 1)/(4x²) and (2x² + x + 2)/(4x³).
+  - The four bounds follow through 11 polynomial certificates, 44 Bernstein pieces in all. Lean checks each by `ring` and `positivity`.
+  - The windows go through an envelope e ≥ c/y, whose antiderivative bounds κ's increments.
+- *Changed.*
+  - A new file, `lean/Enthymemata/ConformalDawson.lean` (151 declarations), which imports `ConformalValidity`.
+  - Its line in the barrel, which the top session granted. It is a separate file because `ConformalValidity.lean` has another session's uncommitted edits.
+  - The ledger and this brief.
+  - The checks are unchanged: they still certify the bounds, now redundantly.
+- *Build time.* ConformalDawson compiles in about 4 min.
+- *Gates.* all pass: the module builds (2,736 jobs, ConformalDawson in 295 s, no warnings); the axioms probe, 34 results, standard three only; the barrel (3,204 jobs); meta-ci; the full checks (519 s). D: has 30.2 GB free.
+- *Hypotheses read.*
+  - `robasFull_ordConnected` keeps only n ≥ 4 and residuals not all equal, both met by any ordinary calibration set.
+  - Every certificate is stated on a closed interval its pieces cover.
+- *For the `#print axioms` file:*
+  - `robasDawsonBounds`, `robasFull_ordConnected`;
+  - `kummerHalf_ode`, `robasG_kummerHalf`, `nonneg_of_ode_ge`;
+  - `rfPhi_le_hi`, `rfPhi_ge_lo`, `rf_g_lo`, `rf_tail_lo`, `rf_tail_hi`;
+  - `robas_k_nonneg`, `robasKappa_window`;
+  - `rfCertC1`, `rfCertC2`, `rfCertC5`, `rfCertC6`, `rfCertC7`, `rfCertC8`, `rfCertC10`, `rfCertC9e`, `rfCertC12e`, `rfCertC13L`, `rfCertC13S`.
 
 ### 2026-11-15 — E35's follow-up: CUSUM's and Shiryaev–Roberts's guarantees, proved
 
