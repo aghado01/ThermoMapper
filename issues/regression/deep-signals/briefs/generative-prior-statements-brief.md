@@ -63,6 +63,7 @@ h/‖x₀‖ = −2^{−d}·(Π_{i<d} (π − θ̄ᵢ)/π)·x̂₀ + 2^{−d}·[
 ## Done
 
 - S17, S19, S20 and S21 proved without `sorry`, each with its witness. S18's angular identity proved, its Gaussian form proved or compiling with its premise named.
+- S22's central-arrangement bound proved without `sorry` for arbitrary proper central hyperplanes, with a witness and axiom audit. State how realized strict signs identify regions, including coincident hyperplanes and the empty arrangement.
 - A report appended to this brief: per statement, the module, status, axioms and each change from the posed form. It ends in a **Methods** section that documents the logic of the proofs concisely, with exposition and the key mathematical points, like a dense methods paper. It carries no pointers into `docs/`.
 
 ## Working rules
