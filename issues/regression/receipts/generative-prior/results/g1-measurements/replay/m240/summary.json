@@ -1,0 +1,33 @@
+{
+  "SourceRevision": "c8912cc9009cbf638836a12428aed623b8d9d855",
+  "SettingsSha256": "dfed8b5c4ece0fd9fed8e791462c268dd2d61ad45ed1f4e715ff6b3007c5339d",
+  "Runtime": ".NET 10.0.5",
+  "Architecture": "X64",
+  "Priority": "BelowNormal",
+  "ProcessorCount": 1,
+  "CodeDimension": 80,
+  "Measurements": 240,
+  "MasterSeed": 1600914390,
+  "SignCheck": true,
+  "FastForward": true,
+  "Repetitions": 1,
+  "Successes": 1,
+  "GradientStops": 1,
+  "UpdateLimitStops": 0,
+  "MinUpdates": 13046,
+  "MaxUpdates": 13046,
+  "SignChecks": 13047,
+  "Flips": 1,
+  "RepetitionsWithFlips": 1,
+  "SelectedPreactivationZeros": 0,
+  "MinRelativeCodeError": 5.294781330880496E-16,
+  "MaxRelativeCodeError": 5.294781330880496E-16,
+  "MaxReferenceDiscrepancy": 7.953696849213272E-16,
+  "EvaluatedUpdates": 13046,
+  "SkippedUpdates": 0,
+  "CycleLengths": [],
+  "EndpointClasses": {
+    "recovered": 1
+  },
+  "GatePassed": true
+}

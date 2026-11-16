@@ -59,7 +59,7 @@ def main():
         for old, row in zip(baseline, rows):
             for key in ("Seed", "ChildSeeds", "Truth", "Start"):
                 assert old[key] == row[key], (m, row["Repetition"], key)
-    pairs, reversals = [], []
+    pairs, reversals, error_increases = [], [], []
     for lower, higher in itertools.combinations(counts, 2):
         a, b = rows_by_m[lower], rows_by_m[higher]
         both = [i for i, (x, y) in enumerate(zip(a, b), 1) if x["Success"] and y["Success"]]
@@ -75,6 +75,13 @@ def main():
             "difference": (len(gained) - len(lost)) / 30, "mcnemar_p": p,
             "primary": (lower, higher) == (80, 240),
         })
+        for i, (x, y) in enumerate(zip(a, b), 1):
+            if y["RelativeCodeError"] > x["RelativeCodeError"]:
+                error_increases.append({
+                    "lower_m": lower, "higher_m": higher, "repetition": i,
+                    "lower_error": x["RelativeCodeError"], "higher_error": y["RelativeCodeError"],
+                    "both_recovered": x["Success"] and y["Success"],
+                })
         for i in lost:
             diagnostics = ("RelativeCodeError", "EndpointClass", "FinalObjective", "FinalGradientNorm",
                            "Stop", "Updates", "NegativeAngleDegrees", "RadiusRatio", "RayOptimalRadius")
@@ -94,6 +101,7 @@ def main():
         "data_and_numerical_gates_passed": True, "baseline_fields_and_bits_preserved": True,
         "primary_increase_supported": primary["difference"] > 0 and primary["mcnemar_p"] < 0.05,
         "cells": cells, "pairs": pairs, "success_patterns": patterns, "reversals": reversals,
+        "descriptive_error_increases": error_increases,
     }
     args.output.mkdir(parents=True, exist_ok=True)
     (args.output / "analysis.json").write_text(json.dumps(audit, indent=2) + "\n", encoding="utf-8")

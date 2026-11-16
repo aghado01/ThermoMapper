@@ -1,0 +1,105 @@
+{
+  "NumericalSourceRevision": "c8912cc9009cbf638836a12428aed623b8d9d855",
+  "ProtocolRevision": "f61f907",
+  "AuditBaseRevision": "3968003",
+  "AuditScriptSha256": "21fe16ab63808ab61f12ad807f4758c3f91e6d405b1eae00a1aca7f0518749a2",
+  "SettingsSha256": "dfed8b5c4ece0fd9fed8e791462c268dd2d61ad45ed1f4e715ff6b3007c5339d",
+  "ReusedNumericalSourceRevision": "8a77d0006ac8e50ca3539f3e3fd26a0097d57bb2",
+  "PreservedBaselineReceipt": "issues/regression/receipts/generative-prior/results/g1-linear-curve/k80-on/trials.jsonl",
+  "BaselineNormalizedFileBytesPreserved": true,
+  "UnchangedSourceSha256": {
+    "Network.cs": "45e7c66cceacba112db90fecc85a6d76f2dd2b9b3ffbf469bc94126b8d34f9de",
+    "Reference.cs": "0142be7d7fdc8e23f86f472cb1cc104793dfdddb963a4cf15f70efcb5d0ea519",
+    "Recover method": "6cbb34311b8e7cee50ab414715bfe44a32513875002aae85aa9c4729e0c4fd81"
+  },
+  "UniquePairedProblems": 30,
+  "RecordedArmEndpoints": 120,
+  "NewArmRuns": 90,
+  "AllScaledPrefixEntryBitMismatches": 0,
+  "AllBaselineScalarAndVectorBitsAgree": true,
+  "FreshReplayRepetition": 1,
+  "FreshReplayMeasurementCounts": [
+    80,
+    240
+  ],
+  "FreshReplayAllNumericalFieldsAndEndpointBitsAgree": true,
+  "FreshReplayDataCheckFieldsAgree": true,
+  "ObservedSkippedCycleLengths": [],
+  "FilesNormalizedToLF": {
+    "m120/summary.json": {
+      "bytes": 930,
+      "sha256": "4474c0d674cbe78192dc60f22a4da5a279baafa2a5a10757fba80e841b223af5",
+      "actual_output": "artifacts/generative-prior/g1-measurements-primary/results/m120/summary.json"
+    },
+    "m120/trials.jsonl": {
+      "bytes": 172112,
+      "sha256": "2d815846f0402602051689aeb30f74cebe16b421cc8b251746e1bfd2bd9b8b46",
+      "actual_output": "artifacts/generative-prior/g1-measurements-primary/results/m120/trials.jsonl"
+    },
+    "m150/summary.json": {
+      "bytes": 256,
+      "sha256": "271211f92e5be4a3a996caaf9860f9ef1d1a8e60a67a414c291345e1c4517a7c",
+      "actual_output": "artifacts/generative-prior/g1-measurements-primary/results/m150/summary.json"
+    },
+    "m150/trials.jsonl": {
+      "bytes": 171694,
+      "sha256": "e22016c74d5c95a011bf77ea574d42a8226783d0c67b3cc9ae6b2b6bf717b253",
+      "actual_output": "artifacts/generative-prior/g1-measurements-primary/results/m150/trials.jsonl"
+    },
+    "m240/summary.json": {
+      "bytes": 930,
+      "sha256": "a71989aeab041b1a6af51339e0d36f577263bcc74807284defe00060dbd93d39",
+      "actual_output": "artifacts/generative-prior/g1-measurements-primary/results/m240/summary.json"
+    },
+    "m240/trials.jsonl": {
+      "bytes": 171497,
+      "sha256": "8d44b94b8f892a0d396d9965567025ea8b074bc287ce52d013e1861d28a7a35b",
+      "actual_output": "artifacts/generative-prior/g1-measurements-primary/results/m240/trials.jsonl"
+    },
+    "m80/summary.json": {
+      "bytes": 906,
+      "sha256": "dd8ff0efcf4ce4cb32e0fa9bcb0c686fc891638c718e58fd573fc505be1f9516",
+      "actual_output": "artifacts/generative-prior/g1-measurements-primary/results/m80/summary.json"
+    },
+    "m80/trials.jsonl": {
+      "bytes": 172102,
+      "sha256": "1308baf751c3e485e02d77c366c35ca0e579429baddb6b2ec6cde74f29623c10",
+      "actual_output": "artifacts/generative-prior/g1-measurements-primary/results/m80/trials.jsonl"
+    },
+    "data-checks.jsonl": {
+      "bytes": 42358,
+      "sha256": "a5b2ad9258a96300ff2539820c72b6b0566214edb83dec2881c5aacb231f0633",
+      "actual_output": "artifacts/generative-prior/g1-measurements-primary/results/data-checks.jsonl"
+    },
+    "analysis.json": {
+      "bytes": 11150,
+      "sha256": "8038773728a9b444ecfe0632e933608089d234bb5b54e34c0c2341777365fca7",
+      "actual_output": "artifacts/generative-prior/g1-measurements-primary/analysis/analysis.json"
+    },
+    "replay/m80/trials.jsonl": {
+      "bytes": 5730,
+      "sha256": "a9814bcf2c52c3245ce1427193344c5e44527ad628f38c062c1064e78dc34826",
+      "actual_output": "artifacts/generative-prior/g1-measurements-replay/results/m80/trials.jsonl"
+    },
+    "replay/m80/summary.json": {
+      "bytes": 896,
+      "sha256": "d2b0770a833d5af3ac11751f6d98997a1ff937a21f6e8337aa1fd0a0c19459a2",
+      "actual_output": "artifacts/generative-prior/g1-measurements-replay/results/m80/summary.json"
+    },
+    "replay/m240/trials.jsonl": {
+      "bytes": 5705,
+      "sha256": "7f57f3172770acbba420debddb811d22b8446eed15fe78284697c1121c662e25",
+      "actual_output": "artifacts/generative-prior/g1-measurements-replay/results/m240/trials.jsonl"
+    },
+    "replay/m240/summary.json": {
+      "bytes": 903,
+      "sha256": "59a998f46f146b9b5ab0cb623081c33d2f9789dba040afa737cc1c3a2251f0e7",
+      "actual_output": "artifacts/generative-prior/g1-measurements-replay/results/m240/summary.json"
+    },
+    "replay/data-checks.jsonl": {
+      "bytes": 1409,
+      "sha256": "e232edac2245d0fd6065641eb7a01b446640f1c3bef574a913431a7dcd72b960",
+      "actual_output": "artifacts/generative-prior/g1-measurements-replay/results/data-checks.jsonl"
+    }
+  }
+}

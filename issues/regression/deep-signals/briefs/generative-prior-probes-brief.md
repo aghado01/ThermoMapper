@@ -223,6 +223,71 @@ The complete curve, paired outcomes, endpoint geometry, exact ray control and st
 
 **Rerun and execution rules.** Freeze the original results, seeds, thresholds and neighbourhoods. If a data-preservation or numerical gate fails, diagnose and replay the affected repetition with the same settings before interpreting recovery. Investigate individual reversals against the stored endpoints and stop reasons, without changing the solver or extending its cap. Replay a changed-m path on a fresh pinned build and compare its numerical fields and endpoint bits. A new skipped-cycle length receives a full unaccelerated control as in the preceding round. All heavy execution remains serial, below normal priority, with one .NET processor exposed. This round ends at the fixed-k comparison.
 
+### Fixed-k readings and primary decision
+
+**The named primary contrast supports increased recovery by the fixed solver at m = 240 versus m = 80.** Twenty-nine paired problems changed from failure to recovery, none changed from recovery to failure, and one failed in both cells. The estimated increase is 29/30 = 96.67 percentage points. The two-sided exact McNemar p value is 3.725290298461914 × 10⁻⁹ against the preregistered α = 0.05. The experiment contains 30 underlying paired problems, with 90 new arm runs and 30 archived m = 150 endpoints. [Actual analysis](../../../../artifacts/generative-prior/g1-measurements-primary/analysis/analysis.json) · [Tracked analysis](../../receipts/generative-prior/results/g1-measurements/analysis.json)
+
+| m | m/k | Recovered / 30 | Wilson 95% interval | Negative neighbourhood | Elsewhere | Gradient stops | Update-limit stops |
+| ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: |
+| 80 | 1 | 0 | 0–0.11351 | 0 | 30 | 0 | 30 |
+| 120 | 1.5 | 4 | 0.05310–0.29681 | 0 | 26 | 0 | 30 |
+| 150 | 1.875 | 20 | 0.48780–0.80770 | 0 | 10 | 0 | 30 |
+| 240 | 3 | 29 | 0.83330–0.99409 | 0 | 1 | 1 | 29 |
+
+The reused m = 150 trial file agrees with its preceding receipt after line-ending normalization, and every original field and endpoint bit is preserved. All 30 regenerated m = 150 initial signed objectives, endpoint objectives, final gradient norms, ray controls, truths and starts agreed bit for bit. The four generators' hashes agreed within every problem, and every scaled Gaussian prefix entry passed its bit check. The data-check rows contain the five component seeds and the hashes of the generator matrices, truth/start vectors, standard Gaussian prefixes and scaled measurement matrices. [Data checks](../../receipts/generative-prior/results/g1-measurements/data-checks.jsonl)
+
+### Raw paired outcomes and individual readings
+
+All six comparisons have zero success reversals. The p values outside the named 80-versus-240 contrast are descriptive. The full lists of gained and lost repetition indices and all 30 four-bit success patterns appear in the analysis receipt.
+
+| Lower m | Higher m | Both recover | Lower only | Higher only | Neither | Exact McNemar p |
+| ---: | ---: | ---: | ---: | ---: | ---: | ---: |
+| 80 | 120 | 0 | 0 | 4 | 26 | 0.125 |
+| 80 | 150 | 0 | 0 | 20 | 10 | 1.90735 × 10⁻⁶ |
+| 80 | 240 | 0 | 0 | 29 | 1 | 3.72529 × 10⁻⁹ |
+| 120 | 150 | 4 | 0 | 16 | 10 | 3.05176 × 10⁻⁵ |
+| 120 | 240 | 4 | 0 | 25 | 1 | 5.96046 × 10⁻⁸ |
+| 150 | 240 | 20 | 0 | 9 | 1 | 0.00390625 |
+
+The m = 120 recovered repetition indices were 11, 12, 19 and 21. The nine gains from 150 to 240 were 1, 4, 6, 7, 14, 17, 20, 24 and 28. Repetition 27 failed at every m. These partitions also account for the smaller-to-larger comparisons.
+
+Relative error can increase while a pair remains in the same success class. As a descriptive check, the audit retains every pairwise relative-error increase, including variations between already recovered codes. Increases involving a failed endpoint occurred for repetitions 1 and 24 from 80 to 120, repetition 24 from 80 to 150 and from 120 to 150, and repetition 27 from 150 to 240. The corresponding raw errors are below.
+
+| Repetition | Error at m = 80 | Error at m = 120 | Error at m = 150 | Error at m = 240 |
+| ---: | ---: | ---: | ---: | ---: |
+| 1 | 1.45199011 | 1.47888388 | 0.80638013 | 5.2948 × 10⁻¹⁶ |
+| 24 | 1.04620676 | 1.06026218 | 1.07439788 | 4.3045 × 10⁻¹⁶ |
+| 27 | 1.13111584 | 0.85671663 | 0.77663723 | 0.83223969 |
+
+Repetition 27's seed was 74883976. At m = 240 its final objective was 0.35075344 and gradient norm 0.08706143 after 50,000 updates. Its angle to −x★ was 131.772° and radius ratio 1.035498, placing it in the elsewhere class. All 67 failed arm endpoints reached the update limit with nonzero gradients, ranging from 0.00380094 to 0.15750543. Of the 53 successful endpoints, 52 also reached the limit. The sole gradient stop was repetition 1 at m = 240, after 13,046 updates.
+
+### Finite solver and identifiability
+
+For an exact real-valued standard Gaussian row array U, the noiseless code-feasibility sets are S_m = {x | U[1:m]G(x) = U[1:m]G(x★)}. Their nesting gives S₂₄₀ ⊆ S₁₅₀ ⊆ S₁₂₀ ⊆ S₈₀, since the positive 1/√m scale cancels from each exact equation. Global identifiability asks whether S_m contains only x★.
+
+This round measures a prescribed start and at most 50,000 unit-step signed updates on each finite binary64 objective. Increasing m changes that objective and its gradient field. The observed 0 → 4 → 20 → 29 recovery counts support improved performance of this solver in the paired cohort. A cap failure leaves global identifiability unresolved, and one recovered code supplies a recovery witness without enumerating all feasible codes. Repetition 27's nonzero residual objective and gradient at the cap document its unfinished trajectory.
+
+### Numerical checks, pins and replay
+
+All data-preservation and numerical gates passed. The largest independent scalar-reference discrepancy across the 120 endpoints was 1.2872 × 10⁻¹⁵ against the 10⁻¹⁰ bound, and the selected-preactivation zero count was zero. The new arms evaluated 4,463,046 updates, with 1,500,000 archived updates reused for m = 150. No exact cycle was skipped in these cells.
+
+The protocol is pinned at `f61f907`, and the numerical experiment/settings at `c8912cc9009cbf638836a12428aed623b8d9d855`. The audit began at `3968003`; its final receipt commit adds the descriptive error-increase lists. The verification manifest pins the exact audit script by SHA-256. The original `Network.cs`, `Reference.cs` and `Recover` method body agree with the preceding pinned experiment, with their hashes recorded in that manifest. All new runs were serial, below normal priority, with `DOTNET_PROCESSOR_COUNT=1`, on .NET 10.0.5 x64.
+
+Primary outputs are `artifacts/generative-prior/g1-measurements-primary/results/m<M>/trials.jsonl` and `summary.json`, with `data-checks.jsonl` beside the cell directories. A fresh pinned build replayed repetition 1 at both m = 80 and m = 240, reproducing every trial field, endpoint bit and data-check field. The compact tracked receipts retain all 120 endpoints and occupy about 759 kB plus their verification manifest. [Verification manifest](../../receipts/generative-prior/results/g1-measurements/verification.json) · [Actual m = 240 endpoints](../../../../artifacts/generative-prior/g1-measurements-primary/results/m240/trials.jsonl) · [Actual changed-m replay](../../../../artifacts/generative-prior/g1-measurements-replay/results/m240/trials.jsonl)
+
+From the repository root, replay the whole fixed-k round with a fresh run name, then run the standard-library Python audit.
+
+```powershell
+./issues/regression/receipts/generative-prior/replay.ps1 -Revision c8912cc -RunName g1-measurements-review -Experiment measurements
+./artifacts/evidence-contrasts/venv/Scripts/python.exe ./issues/regression/receipts/generative-prior/audit-measurements.py --results artifacts/generative-prior/g1-measurements-review/results --output artifacts/generative-prior/g1-measurements-review/analysis
+```
+
+Another Python 3 interpreter can run the audit. For the short changed-m replay, add `-Cells 'm80,m240' -TrialIndices 1` to the first command and use a fresh run name. The full-cohort audit expects all four measurement cells and 30 repetitions each.
+
+### Round decision and doc changes owed
+
+The paired fixed-k experiment supports the named increase in recovery from m = 80 to 240 for the frozen solver, with all original numerical gates met. There were no success reversals, and the error-increase diagnostics and unfinished repetition 27 are retained for review. The nested-row construction, paired counts, finite-solver interpretation and replay are available for the next documentation batch. This closes the fixed-k comparison.
+
 ## Exposition
 
 In noiseless recovery through a bias-free Gaussian ReLU generator of widths 10 → 250 → 600, 150 Gaussian measurements sufficed to recover the generating code in all 30 independent repetitions of the signed descent experiment. At each iteration the method evaluated the quadratic measurement loss at both signs and took a unit gradient step from the lower-loss sign. Seventeen starts changed sign, all on the first comparison. No selected iterate had an exactly zero layer preactivation, so the practical gradient agreed with the paper's subgradient algorithm throughout these runs.
@@ -234,3 +299,7 @@ Across the published depth-two linear-recovery grid, with widths 250/600 and m =
 With networks, truths and starts paired, disabling the sign check changed recovery from 20/30 to 16/30 at k = 80. Six pairs recovered only with the check and two only without it. Both modes recovered 30/30 at k = 10 and the same single code at k = 100. None of the three exact paired tests reached the registered significance threshold.
 
 For each finite generator and measurement matrix, positive homogeneity gives the exact negative-ray optimum a★ = max(0, ⟨AG(−x★), AG(x★)⟩/‖AG(−x★)‖²) when the denominator is positive. This control distinguishes a realization's radial shift from a returned code pointing in another direction. Every failed endpoint in these runs reached the update limit and lay outside the declared negative neighbourhood around −x★/π.
+
+At fixed k = 80 and widths 250/600, nested Gaussian measurement rows gave 0, 4, 20 and 29 successful code recoveries among the same 30 paired problems at m = 80, 120, 150 and 240. The prescribed signed unit-step solver retained its 50,000-update cap and 10⁻³ relative-code-error threshold. The named 240-versus-80 contrast had 29 gains, zero losses and one joint failure, with two-sided exact McNemar p = 3.72529 × 10⁻⁹. Every individual success pattern was monotone across the four m values.
+
+Exact noiseless feasible sets shrink under nested measurement rows. The finite optimization trajectory also depends on how those rows reshape the objective. The fixed-budget recovery counts measure that solver's performance, while global identifiability concerns uniqueness over the entire feasible set. Relative code errors increased on some individual failed trajectories despite the monotone binary success patterns.

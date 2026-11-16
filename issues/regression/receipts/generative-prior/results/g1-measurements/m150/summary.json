@@ -1,0 +1,10 @@
+{
+  "ReusedSourceRevision": "8a77d0006ac8e50ca3539f3e3fd26a0097d57bb2",
+  "ReusedFrom": "results/g1-linear-curve/k80-on",
+  "Measurements": 150,
+  "Repetitions": 30,
+  "Successes": 20,
+  "GradientStops": 0,
+  "UpdateLimitStops": 30,
+  "GatePassed": true
+}
