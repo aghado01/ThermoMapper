@@ -168,41 +168,63 @@ The user chose these as E36's next work, decision 7's and decision 6's later ste
   - the sampled sensitivity on a gated fit against a closed form.
 - *Fitting untouched.*
 
-### Slice 6: mixed bases, ridges beside BASS's hinge terms
+### Slice 6: mixed bases (a draft, revised after the pure-basis readings: kinds by width recommended, ridges beside BASS's hinges the alternative)
 
 **Refused today.**
 - `BassConfig.cs:181` refuses a directional basis beside `Structure.Legendre`.
 - `Structure.Directional` replaces BASS's hinges outright: its prior holds no continuous hinge part, and `BassModel` builds E36's kernel alone.
 - `BassTermProposal`, D01's kernel, refuses a directional config by name (`BassModel.Proposal`).
 
-**The design** (E28's questions, answered for ridges beside hinge terms).
-- **6a, the label, open.**
-  - *Recommended:* one kind per term, a ridge (a direction with its categorical part) or a BASS hinge term (continuous hinges with theirs). The term measure is the mixture ρ·π_ridge + (1 − ρ)·π_hinge.
-  - *Per variable,* E28's middle: each continuous variable is labelled for ridges or for hinges, declared or drawn. It is simpler to read ("kinked in x₁, oblique in x₂, x₃"), but a ridge cannot then reach a hinge variable. A drawn label moves every term on that variable at once, which no move here makes. A declared one is cheap and could be an option over the recommendation.
-  - *Per part within a term* (a hinge on x₃ times a ridge on x₁, x₂): not recommended. The derivative's product rule assumes one kernel reads each variable, no source proposes it, and it multiplies the label space.
-  - *One fit per basis, compared by evidence* (E9; the ladder and SMC evidence exist): no new code, and it gives a choice between bases rather than a mixture. It is the cheapest answer, and a reading worth taking first whichever way 6a goes.
-- **6b, ρ's prior, open.**
-  - *Recommended:* ρ ~ Beta(1, 1) integrated, as λ is (D02). The collection weight gains B(1 + M_r, 1 + M_h)/B(1, 1), so the split between ridges and hinges is uniform at every M. That factor depends on the collection, so it sits in the terms' prior beside the determinant's coupling, and the target is unchanged.
-  - *Alternative:* ρ fixed at ½. That is a binomial on the split, which says that about half the terms are ridges, more firmly as M grows.
-- **6c, a ridge's least active count in a mixed fit, open.**
-  - *Recommended:* a ≥ 2. A ridge at a = 1 is an axis hinge on one variable, its knot continuous rather than at a data value. The two kinds then represent the same column, so the label is unidentified there, and D06 refuses near-duplicate pairs across kinds. Oblique directions are what ridges add.
-  - *Alternative:* a ≥ 1, the paper's own law.
+**Revised after the pure-basis readings (2026-11-15; the report "Pure-basis readings before slice 6").**
+- *Smoothness, not direction, decides most of the evidence between the bases.* The paper's cubic blocks win every smooth function by 9 to 46 nats, axis-aligned ones included, and lose axis kinks to degree-1 hinges by 24.
+- *At matched degree the direction's own share is modest* where the function is smooth: about +6 oblique, −4 to −7 axis-aligned. It is large on an oblique kink: +68.
+- *Plain chains under ridge blocks hold M where they start* (R̂(M) 8.3 and 5.2 over four starts), where tempering's chains and SMC's replicates agree.
+
+**The design** (E28's questions, answered).
+- **6a, the kinds, open.**
+  - *Recommended, after the readings: the kinds by width, inside the directional basis.* A term is a K = 4 block (smooth: the paper's ridge), a K = 1 directional hinge (kinked; at a = 1 an axis hinge with a continuous knot), or categorical factors alone. Each direction-bearing term takes slice 5's gates.
+    - *What carries over:* one term measure, (θ, t₀) with its subsets, serves both widths, so E36's moves, the determinant, the cells and the fair coin carry over. Slice 5's blocks of varying width already expand and read them back.
+    - *What it answers:* the question the readings put, kinked or smooth. The axis-or-oblique question is answered inside the direction prior.
+    - *What it lacks:* BASS's hinge products, interactions as products rather than as sums of ridges. On Friedman's function these read no better than directional hinges (−538.1 against −537.4).
+  - *The draft's: ridges beside BASS's hinge terms.* Two term measures and a kernel combining D01's and E36's laws. It keeps BASS's product interactions and data-located knots.
+  - *Per variable,* E28's middle: each continuous variable is labelled for one kind, declared or drawn. A declared label is cheap; a drawn one moves every term on its variable at once.
+  - *Per part within a term* (a hinge on x₃ times a ridge on x₁, x₂): not recommended. The derivative's product rule assumes one kernel reads each variable, and no source proposes it.
+  - *One fit per basis, compared by evidence:* now read. On functions of one structure the pure bases separate by 8 to 69 nats, and a single basis chosen by evidence serves. A mixed basis is for a function holding both a smooth and a kinked structure, which no pure basis reads well.
+- **Who owns a term of categorical factors alone** (the user's review; it applies to either design).
+  - *Recommended: its own kind,* with one explicitly weighted place in the prior. Each kind's law is conditioned on what makes it that kind, so the laws' supports are disjoint and a term's kind is read from the term itself:
+    - a direction (a ≥ 1) in a block of K columns or in one column;
+    - under the draft's design, at least one continuous hinge;
+    - at least one subset and nothing else.
+    - *The reverse birth* reads the dying term's kind off the term: its kind's proposal weight times its kind's law under that kind's counts.
+    - *The counts:* the per-kind counts (M_K4, M_K1, M_c; or M_r, M_h, M_c) are functions of the state, and their sum M feeds the count law.
+    - *Its cost:* each kind's law is conditioned, so the direction's order runs from 1 there and the categorical kind's from 1.
+  - *A retained label:* each term carries its kind through draws, restores and the term table.
+    - A categorical term's label has no likelihood, only its share's prior, so it is a nuisance variable the chain must mix, and the same term under two labels is two states.
+    - The reverse birth reads the label's kind; M_r and M_h count labels, and the categorical terms split between them by prior noise.
+  - *The mixture integrated, no label:* a categorical term's prior is ρ_r π_r(t) + ρ_h π_h(t).
+    - A collection's prior then sums over the ambiguous terms' labels, a polynomial in the shares that takes O(A²) to integrate for A ambiguous terms.
+    - The reverse birth reads both kinds' laws, mixed by their proposal weights, and M_r and M_h are undefined for those terms.
+- **6b, the shares, open.**
+  - *Recommended:* Dirichlet(1, 1, 1) over the three kinds, integrated as λ is. The collection weight gains Γ(3)·Π_k Γ(1 + M_k)/Γ(3 + M), uniform over the split at every M, and sits in the terms' prior beside the determinant.
+  - *The birth's ratio:* the birth draws a kind with a fixed weight (⅓ each) and then its law. Its ratio carries that weight, the Dirichlet factor's ratio, the kind's law under its own counts, and the reverse death's 1/(M + 1) over all terms.
+  - *Computed by the mixed kernel itself:* E36's and D01's kernels take the death's denominator from the counts they are handed, so delegating the whole ratio to them with per-kind counts would be wrong (the user's review).
+  - *Alternative:* fixed shares, a multinomial on the split, firmer as M grows.
+- **6c, the least active count, open.**
+  - *Recommended, under the width design:* none is needed. A K = 1 hinge at a = 1 is the only axis hinge in the basis, so no two kinds duplicate one column, and a block at a = 1 is a univariate spline curve.
+  - *Under the draft's design,* the user's review: 2 by default for a one-column directional hinge, 1 allowed for a block, and an explicit 2 kept for fits meant to be oblique.
 - **6d, the coefficient prior, open.**
-  - *Recommended:* the g-prior's forms only (Zellner–Siow, the g-form), which are unchanged by rescaling columns. Hinge columns are normalized to a maximum of one; ridge columns are the paper's, unnormalized. So a scale-sensitive form (KHAOS's raw ridge) would shrink the two kinds unequally, and it is refused, as slice 3 refused the raw ridge at K ≥ 2. (E21's normalized ridge reads diag(G)/N, so it does not: the user's review above.)
-  - *Alternative:* a per-kernel scale (E21's standardization). It changes every fit's column scale under those forms, so it is its own decision.
-- **The moves.**
-  - A birth draws the kind with probability ½, then that kind's birth: D01's law under the hinge terms' counts, or E36's under the ridges' counts.
-  - A death is uniform over all terms, its ratio reading the dead term's kind.
-  - A change keeps the kind: D01's redraw for a hinge term, E36's change (or 5's categorical redraw) for a ridge. A term changes kind only by a death and a birth; the coefficients are integrated, so that needs no Jacobian.
-  - Local steps, the fixed-M family, and E4's history and residual births stay refused in a mixed fit at first, since each reads hinge terms alone.
-- **The counts and the count prior.** M = M_r + M_h feeds the count law, as now. Each kind's birth reads its own counts: D01's orders and appearances over hinge terms, E36's a and 𝒥 over ridges. The categorical part's counts are kept per kind. Every readout that counts terms reports M with M_r and M_h beside it.
-- **Mixing and identifiability.** One oblique effect can be one ridge or many hinge products, and the path between them crosses poor states: E28's multimodality, which tempering and SMC are for. f's functionals do not care which representation is drawn. The per-kind counts and inclusion readouts say less the freer the mix. Slice 3's finding stands: a settled chain holds M, so a mixed fit's default sampler is part of the mixing reading.
+  - *Recommended:* the g-form's default and E21's normalized `RidgeForm`, whose precision reads diag(G)/N, so rescaling one column cancels. That is tested by rescaling one admitted ridge column and checking the marginal likelihood and predictions.
+  - *Kept:* `RawRidgeForm` stays refused at K ≥ 2.
+  - *Not taken:* a penalty tuned apart for a whole block is a further model choice.
+- **The sampler, recommended:** tempering to the reference rung (which also gives the evidence) or SMC by default; a plain chain is refused with its reason. A term changes kind only by a death and a birth, which settled ridge chains do not make. Under the width design a fourth move helps: a width change, θ, t₀ and the subsets kept, between K = 1 and K = 4, which needs no Jacobian and accepts on the likelihood ratio, the shares' ratio and the kind weights.
+- **The moves.** A birth draws the kind, then its law. A death is uniform over all terms. A change keeps the kind: E36's or slice 5's change for a direction-bearing term, slice 5's subset redraw for a categorical term, and D01's redraw for a BASS hinge term under the draft's design. Local steps, the fixed-M family, and E4's history and residual births stay refused.
+- **Mixing and identifiability.** f's functionals do not care which representation is drawn. The per-kind counts and inclusion readouts say less the freer the mix.
 
 **Gates, slice 6.**
-- *The prior:* the label's collection weight by hand, and the term measure's draws against it.
-- *Moves and Geweke:* each move's ratio across kinds against a direct evaluation. Geweke's test with the prior alone, with M_r, M_h and per-kind statistics.
-- *Blocks:* K-column ridge blocks beside one-column hinge terms, expanded and read back bit for bit.
-- *Recovery from outside the model:* an oblique ridge plus an axis effect, for example exp(0.6x₁ + 0.8x₂) + sin(2πx₃). The mixed fit against a ridge-only and a hinge-only fit, and the evidence comparison on the same data.
+- *The prior:* the shares' collection weight by hand, the conditioned kinds' laws, and draws against them.
+- *Moves and Geweke:* each move's ratio across kinds, the width change included, against a direct evaluation. Geweke's test with the prior alone, with M per kind.
+- *Blocks:* K = 4 blocks beside one-column terms; slice 5 built and gated the expansion.
+- *Recovery from outside the model:* a smooth oblique ridge plus an axis kink, for example exp(0.6x₀ + 0.8x₁) + 3(x₂ − 0.4)₊. The mixed fit against each pure basis, with their evidence, under tempering and SMC.
 - *Fitting untouched.*
 
 ### How both meet what is built
@@ -256,6 +278,80 @@ The user chose these as E36's next work, decision 7's and decision 6's later ste
 Under "Reports" below, newest first, per slice: what landed by commit; the gates' numbers; decisions taken beyond this brief; what was left unbuilt and why; follow-ups with the decision each would change; the doc changes owed.
 
 ## Reports
+
+### Pure-basis readings before slice 6 (2026-11-15)
+
+The coordinating session asked, as the user's review directs, for the pure-basis readings before anything of slice 6's chain: the log-evidence difference between a ridge-only and a hinge-only fit on matched data under proper priors, with its Monte Carlo error and flags, and M across independent starts against tempering's and SMC's. Then the definition 6a needs: who owns a term of categorical factors alone. The probe is `artifacts/chip-bppr/probes/PureBasisReadingProbe.cs`, run on a fresh snapshot of `37812fd` in a fresh build folder; nothing in `src/` changed.
+
+**The setup.**
+- *Six functions from outside the model,* n = 300, inputs uniform on [0, 1]^p:
+  - oblique exp(0.6x₀ + 0.8x₁) (p = 4, noise sd 0.1);
+  - axis sin(2πx₀) + 4(x₁ − ½)² (p = 4, 0.1);
+  - mixed, the oblique plus sin(2πx₂) (p = 4, 0.1);
+  - Friedman's (p = 6, sd 1);
+  - axis kinks 3(x₀ − 0.4)₊ + 2|x₁ − 0.6| (p = 4, 0.1);
+  - an oblique kink 3(0.6x₀ + 0.8x₁ − 0.7)₊ (p = 4, 0.1).
+- *Four bases under the same proper priors* (BASS's centre and σ² prior, Zellner–Siow τ, the count prior Gamma(10, 10), M's default caps):
+  - the paper's ridge blocks, K = 4;
+  - directional hinges, K = 1, degree 1;
+  - BASS's hinges at degree 1, its default;
+  - BASS's hinges at degree 3.
+  The second and fourth are the controls at matched smoothness.
+- *Per fit:*
+  - four plain chains from independent starts (10,000 burn-in sweeps, 1,000 draws), reporting each chain's M and R̂(M);
+  - SMC with 500 particles, 4 replicates and 12 mutation steps, reporting ln Z with its error and the overdispersion flag;
+  - a self-sizing ladder to the exact reference rung, two chains, reporting stepping-stone ln Z with its flags.
+
+**The evidence.** ln Z by SMC / by tempering. † marks SMC overdispersed and ‡ tempering saturated; Monte Carlo errors are 0.04 to 2.2 (SMC) and 0.2 to 2.8 (tempering).
+
+| | ridge, K = 4 | directional hinge, K = 1 | BASS's hinges, degree 1 | BASS's hinges, degree 3 |
+| --- | --- | --- | --- | --- |
+| oblique | **236.9** / **237.5** | 227.4 / 228.0 | 221.3 / 222.6 | 194.3 / 194.4 |
+| axis | **219.7** / **219.5** | 167.8† / 174.8 | 175.1† / 178.4 | 203.1 / 205.2‡ |
+| mixed | **197.8** / **194.6** | 151.6 / 156.0 | 146.6 / 152.5 | 139.0† / 143.4 |
+| Friedman | **−523.6** / **−520.8** | −537.4† / −540.7‡ | −538.1† / −535.3‡ | −560.8 / −557.7‡ |
+| axis kinks | 200.2 / 200.6 | **225.0** / **225.2** | 223.6 / 224.5 | 188.8 / 187.3 |
+| oblique kink | 253.0 / 253.1 | **261.4** / **261.4** | 192.5† / 194.2‡ | 191.8† / 186.0 |
+
+- *Ridge-only against hinge-only,* the question as asked (K = 4 against BASS's default): +15.6/+14.9 on the oblique function, +44.6/+41.1 on the axis one, +51.2/+42.1 on the mixed one, +14.5/+14.5 on Friedman's, −23.4/−23.9 on the axis kinks and +60.5/+58.9 on the oblique kink.
+- *Smoothness decides most of it.* The paper's cubic blocks win every smooth function, the axis-aligned one by more than the oblique one, and lose the axis kinks to both degree-1 bases. BASS's degree-3 hinges are no stand-in for them: those truncated cubics trail BASS's degree 1 everywhere but the smooth axis function.
+- *Direction at matched degree* (directional against BASS's hinges, both degree 1):
+  - +6.1/+5.5 on the oblique function and +5.0/+3.5 on the mixed one;
+  - −7.3/−3.6 on the smooth axis function, and +1.5/+0.7 on the axis kinks, where a = 1 directional hinges are axis hinges with continuous knots;
+  - +68.9/+67.3 on the oblique kink, which BASS's products cannot follow;
+  - Friedman's is inconclusive, every estimate flagged.
+
+**M across independent starts.** R̂(M) over four plain chains:
+
+| | ridge, K = 4 | directional hinge | BASS, degree 1 | BASS, degree 3 |
+| --- | --- | --- | --- | --- |
+| oblique | 8.32 | 2.14 | 1.01 | 1.34 |
+| axis | constant (2) | 1.23 | 1.56 | 1.04 |
+| mixed | constant (2) | 2.60 | 1.83 | 1.09 |
+| Friedman | 5.21 | 2.28 | 1.45 | 1.20 |
+| axis kinks | constant (3) | 1.84 | 1.03 | 1.87 |
+| oblique kink | constant (1) | 3.57 | 3.11 | 2.64 |
+
+- *Ridge chains hold M where they start.*
+  - On the oblique function three chains sat at M = 1 and one at 3.88. On Friedman's they sat at 5, 5, 6 and 6, each chain constant.
+  - SMC's replicates and tempering's chains agree on the same data: 1.00 throughout on the oblique function; 4.4 to 4.8 (SMC) and 4.94 and 4.96 (tempering) on Friedman's, each spanning more than one M.
+  - "Constant" means every chain found the same M and never left it, which the function's count of effects explains.
+- *Degree-1 bases' chains disagree less, but they disagree.* R̂ reaches 2 to 3.6 on the oblique kink and the mixed function. SMC's replicates there are flagged overdispersed in places (Friedman's hinges: 8.6 to 10.6).
+
+**What the evidence's errors do not cover.**
+- *Round trips:* the ladders recorded about no round trips per scan in most runs; the reference rung's fresh prior draws are what move them.
+- *The two estimators disagree beyond their errors:* by 3.2 on the mixed function's ridges (unflagged, 197.8 ± 0.7 against 194.6 ± 0.5) and by 7.0 on the axis function's directional hinges.
+- So differences under about 8 nats read as indicative.
+- *What stands under either estimator:* the smoothness contrasts of 14 to 46 nats, the axis kinks' 24, and the oblique kink's 68.
+- *At the edge:* the 8 to 10 nats between the cubic blocks and directional hinges on the two oblique functions.
+
+**For slice 6** (its revised draft holds the decisions):
+- *The useful mixture is kinked beside smooth,* not axis beside oblique. The smooth functions go to the cubic blocks and the kinked ones to degree-1 hinges, by 8 to 46 nats over the other smoothness. At matched degree the axis-or-oblique question is answered within the direction prior, a = 1 being an axis hinge.
+- *A mixed fit cannot take plain chains:* its kinds change only by deaths and births, which a settled ridge chain does not make. Tempering or SMC is the default.
+- *A function holding both a smooth and a kinked structure* is where a mixed basis would beat both pure ones; it is slice 6's recovery gate, since no pure basis can read it.
+
+**Doc changes owed.**
+- `docs/Maths/Regression/BASS.md`: the pure-basis readings (the evidence table, smoothness against direction, M's mixing), as the reading behind slice 6's design.
 
 ### Slice 5 verified from a clean archive (coordinating session, 2026-11-15)
 
