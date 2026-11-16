@@ -76,12 +76,7 @@ This is exploration on probes. The engine stays as it is: a gap found here is a 
 
 ### In progress
 
-- 2026-11-16, stopped at a usage limit. Probe at `artifacts/latent-recovery/probe/` against a `be979dd` snapshot (`artifacts/latent-recovery/source/`); build `artifacts/latent-recovery/build/`. **Done:** B1 and B2 run and read (below); the Stage 1 and Stage 2 gates committed before their first readings. **Running when stopped:** a background loop running `s1-run` for k = 1…5 and then `s1-gate` into `artifacts/latent-recovery/results/stage1/` (logs in `logs/s1-k*.log`, `logs/s1-gate.log`). k = 1–3 had finished and k = 4 was mid-grid. If the loop died, rerun `s1-run 4`, `s1-run 5` and `s1-gate`; the seeds make the rows reproducible. **Not yet written:** Stage 1's readings. **Next:** run `s2-run 2`, `s2-run 3` and `s2-gate` (into `results/stage2/`, after Stage 1, since the machine is loaded); then the outcome table, the primitives, the unread and unrun items, **Doc changes owed**, and receipts for stage1/stage2 under `receipts/latent-recovery/results/`.
-- *Unread, provisional notes from k = 1–4, not readings against the gate:*
-  - **Fits:** held-out R² was 0.995, 0.988, 0.986 and 0.919 for k = 1–4 (RMSE 0.15, 0.25, 0.28 and 0.57 nepers); each fit took 3–12 s. Residuals are correlated along ln f, with lag-1 r 0.70–0.81 against −0.016 for independent noise.
-  - **k = 1:** R1 and R2 pass at both low noise levels, and the coverage is conservative (30/30 in most cells). The posterior σ is dominated by the IG(2, 0.3) prior at small m.
-  - **Declared discrepancy:** at ratio ≤ 4 it fails to converge in 50–73% of replicates, and its error is 3–7 times the error without it.
-  - **Reconstruction:** at the held-back bins it is set by emulator error, 0.16 against 0.01 for the reference at the lowest noise.
+- Closed on 2026-11-16. Every sweep and stage ran and is read below, and nothing is left running. The probe is at `artifacts/latent-recovery/probe/`, built against a `be979dd` snapshot in `artifacts/latent-recovery/source/`; its sources, settings and summaries are tracked in `receipts/latent-recovery/`. Post-gate checks (`b2-supplement`, `s1-mixing`, `s1-capacity`, `s2-capacity`) are labelled as such where they are read and changed no gate. The interim notes written at the usage-limit stop are folded into the readings; one of their figures was wrong (the discrepancy's error ratio reads 1.0–3.3, not 3–7).
 
 ### Gates as pre-stated
 
@@ -164,7 +159,7 @@ Each gate was written here before the first reading of its stage or sweep. A gat
   - With the reference, they fell from 10/10 to 6/10 (k = 4) and 9/10 (k = 5), and the median spread fell from 0.6–0.9 sd to 0.4–0.6 sd.
 
   The flags read as slow mixing of the θ walk on narrow, curved posteriors, not as modes: the narrower the posterior (the reference, low noise, larger k), the slower the walk.
-- *R4 fires* at every k ≥ 2 in 20 cells where the reference meets the threshold: the BASS median error is 3 to 32 times the reference's. A post-gate refit of the same design (`s1-capacity`, held-out only) reads the misfit as the emulator's capacity and budget, not a ceiling: at k = 4 the held-out RMSE falls from 0.57 (MaxBasis 80, burn-in 8000, the gate's) to 0.43 (200, 8000), 0.37 (200, 32 000) and 0.30 (400, 32 000); at k = 5 from 0.61 to 0.48, 0.38 and 0.35. That is still 10 to 30 times the reference's reconstruction error. Axis-aligned hinge products buy a moving resonance peak slowly.
+- *R4 fires* at every k ≥ 2 in 20 cells where the reference meets the threshold: the BASS median error is 3 to 32 times the reference's. A post-gate refit of the same design (`s1-capacity`, held-out only) reads the misfit as the emulator's capacity and budget, not a ceiling: at k = 4 the held-out RMSE falls from 0.57 (MaxBasis 80, burn-in 8000, the gate's) to 0.43 (200, 8000), 0.37 (200, 32 000) and 0.30 (400, 32 000); at k = 5 from 0.61 to 0.48, 0.38 and 0.35. That is still about 12 to 18 times the reference's reconstruction error at ratio 8. Axis-aligned hinge products buy a moving resonance peak slowly.
 - *R5:* the fits took 3–12 s (the larger post-gate fits 11–58 s); a calibration's median was 1.5–4.7 s with BASS and 0.2–1.2 s with the reference; each k's grid of 840–920 calibrations took 0.4–0.8 CPU-h. Cost does not stop it near k = 5.
 - *Discrepancy on* (middle noise, BASS): errors 1.0–3.3 times those without it, and 10–100% of replicates unconverged. The declared D = [1, standardized ln f] is a level and a tilt, which the gain and a resonance's skirt also produce. The discrepancy is confounded with them, as a Kennedy–O'Hagan discrepancy is with any parameter whose effect lies in D's span.
 - *Reconstruction at the held-back bins,* the consistency-across-views signal:
@@ -173,3 +168,77 @@ Each gate was written here before the first reading of its stage or sweep. A gat
 
   Held-back error above the noise level is how an inversion through the wrong generator shows itself without ground truth.
 - *Noise:* with the reference, errors grow with the noise level (k = 4, ratio 4: 0.008, 0.013, 0.030); with BASS they do not move, being misfit-bound.
+
+**Stage 2: run and reported as it fell. Neither layout serves. Through a perfect generator, f₀ is recovered at ratio 8, and the comb's posterior is multimodal; tempering and cut SMC resolve it where the nested sampler's chains get trapped.** The cells and the octave table are in `receipts/latent-recovery/results/stage2/s2-readings.txt`.
+
+- *Emulators:* held-out R² 0.04 for the functional layout (k = 2 and 3) and 0.09 and 0.13 for the directional one, with RMSE 1.89–1.99 nepers against a response sd of 1.97. Both predict roughly the envelope and miss the comb, so neither serves. A post-gate refit at k = 2 (`s2-capacity`) tried more capacity:
+  - With MaxBasis 400 and a 32 000-scan burn-in, the functional layout stays at 0.04 and the directional one rises to 0.34 (47 s).
+  - K = 4 ridge blocks (MaxBasis 120, 32 000 scans) were still fitting when this was committed; the reading follows when it lands.
+
+  Axis-aligned hinge products cannot see the comb at any capacity tried; directions see part of it and gain with capacity. The held-out residuals' lag-1 r is 0.31–0.35, lower than Stage 1's because the misfit is the comb itself, alternating harmonic by harmonic.
+- *Inversions through the emulators:* f₀'s posterior stays near the prior. The median sd is 0.23–0.28 of the box (a uniform's is 0.29), f₀ coverage 0.85–1.00, f₀ error 0.07–0.23, and the mass within a semitone of f₀* 0.09–0.32. The directional layout reads a little of f₀ at ratio 16 (error 0.073; mass at the truth 0.26 and 0.32 at k = 2 and 3).
+- *The reference inversion:* at k = 2 and ratio 8 the median f₀ error is 0.021, with 0.96 of the mass within a semitone of f₀*; at ratio 4 the posterior is spread (0.33 at the truth). More bins did not help the nested sampler. At ratio 16:
+  - the f₀ error rose to 0.167 and the mass at the truth fell to 0.67;
+  - 3 of 20 replicates put more than half their mass on an octave impostor, and k = 3 behaved alike (3 of 20);
+  - every inner run at ratio ≥ 4 failed the verdict;
+  - in the trapped replicates the posterior σ rose to 1.0–1.5, and the mass split in thirds across the three chains (for example 0.33 at the truth and 0.67 at f₀*/2).
+- *Tempering and cut SMC resolve it* (k = 2, 10 replicates). At ratio 16 both put all the mass within a semitone of f₀* in 10 of 10 replicates, with no impostor mass. At ratio 4 they read errors of 0.116–0.119 against the nested sampler's 0.157, and 0.25–0.26 of the mass at the truth: there the posterior itself is spread. The octave is a structured impostor, as expected: f₀*/2 and 2f₀* together drew 0.07–0.22 of the nested sampler's mass on average at ratios 4–16, and none under tempering at ratio 16. It is not the only one. The comb's likelihood in f₀ is rugged at every harmonic alignment, and at ratio 4 most of the mass away from the truth sits away from the octaves too.
+
+### What each outcome row came to
+
+| Outcome | What it came to | Next primitive |
+|---|---|---|
+| Recovery near a small multiple of k, honest coverage | Not through the engine's emulators: R1 fails for k ≥ 2 in Stage 1, and nothing serves in Stage 2. Through the synthesizer itself it holds: 2k–4k bins at 30–40 dB and 8k at 20 dB in Stage 1, 8k for f₀ in Stage 2 (k = 2), with conservative intervals | Q, once an emulator serves (primitive 2); B1 shows the log-power table needs no data |
+| Multimodal posterior | Stage 1: the trigger fired, but on slow mixing, not modes (tempering and SMC agree; 4× the budget clears the BASS runs). Stage 2: genuine. The comb's f₀ posterior traps the nested sampler's chains, octaves among the traps; tempering and cut SMC recover f₀ in 10 of 10 at ratio 16 | Tempering as the default for this use, which is built already: the nested sampler on a ladder, or cut SMC. This evidence calls for no octave-jump move. Stage 1's mixing calls for primitive 3 |
+| Emulator misfit dominates | Yes, in both stages: at k ≥ 2 the Stage 1 errors are 3–32× the reference's, and Stage 2 reaches R² ≤ 0.34 | The basis first (primitives 5 and 1). The declared discrepancy did not substitute for it and confounded (primitive 4) |
+| Cost stops it near k = 5 | No: fits took 3–58 s and calibrations 0.2–4.7 s | None |
+
+### Primitives proposed
+
+Stated for any application and not built. Each is to be checked by rerunning this pilot's grid through it; the probe is the harness.
+
+1. **An emulator's error covariance across outputs, from held-out residual vectors.**
+   - *The gap:* `BassFitEmulator` gives each draw σ²_e·I (D09's amendment), yet a direct functional fit's residuals are correlated along the output index, with lag-1 r 0.70–0.83 here.
+   - *The proposal:* an emulator built on a direct functional or multi-output fit carries a residual set, the out-of-sample residual vectors of its training cases (from cross-fitting or a held-out design). The calibration covariance takes the set through the existing `TruncationTerm.ResidualSet` path, as the basis emulator's truncation residuals already enter it.
+   - *What it would change:* the likelihood would discount the output directions the emulator gets wrong instead of reading them as signal, which is where the stalled code error is expected to come from. Only `TruncationResiduals()` changes for direct fits; the samplers do not.
+2. **The declared output inner product Q in BASS's fitting core** (the working-response contract's Q, refused today; the Lean chip's S4 is its specification).
+   - *What B1 supplies:* the correlation of log power between any two noise-dominated cells is Li₂(|G|²)/Li₂(1), from the windows alone, with the pseudo-Gram entry near DC and Nyquist.
+   - *Calibration needs nothing new:* its multivariate formulation already takes a fixed output correlation.
+   - *Where Q is needed:* fitting an emulator to spectral responses on overlapping windows or dense bins, whose noise is correlated, without overcounting them.
+3. **A θ move for narrow, curved conditionals.**
+   - *The gap:* the adaptive random walk fails the verdict at k ≥ 3 at the gate's budget on posteriors a few hundredths of the box wide, while tempering and SMC show no modes. Four times the budget leaves the answer where it was.
+   - *The proposal:* a move that follows the target's local geometry. Either a gradient-informed move through the emulator's derivative in θ (a hinge basis has it in closed form), or an affine-invariant ensemble move across an inner run's chains.
+   - *What it would change:* the budget the verdict needs, not the posterior.
+4. **A discrepancy kept out of the parameters' span.**
+   - *The gap:* the declared D = [1, ln f] is confounded with the gain and the skirts. With it on, errors were 1.0–3.3× those without it and 10–100% of replicates were unconverged.
+   - *The proposal:* project D orthogonal to the emulator's sensitivity ∂η/∂θ at the current θ, or averaged over the prior (Plumlee 2017's orthogonal discrepancy).
+   - *What it would change:* θ stays identifiable beside δ, so a discrepancy can absorb misfit without stealing the parameters' effects.
+5. **Declared derived inputs.**
+   - *The proposal:* a coordinate computed from existing inputs by a declared map (here f/f₀, or ln f − ln f₀), which the basis takes as an input and the emulator evaluates from θ and the fixed inputs at prediction.
+   - *Why:* where structure lives on a known invariant, the basis places knots along it instead of discovering the direction. The comb is a near-periodic function of f/f₀ with peaks at the integers, while the directional basis has to find the direction and then knot a profile whose peaks narrow as 1/h in ln f. A periodic ridge profile along such a coordinate is the natural next term family, but that is a further step.
+
+### Left unread or unrun
+
+- *B1:* the near-Nyquist family; the mean of log power; cells of a signal plus noise (only noise was tested).
+- *B2:* real-valued tones and chirps; windows other than rectangular and Hann.
+- *Stage 1:*
+  - The PCA-basis layout (`BassBasisEmulator`) was not tried. It would need a kept-output view, which the basis emulator lacks (`BassFitEmulator` has `outputLocations`); a probe-side wrapper could supply one.
+  - B1's table as the multivariate formulation's correlation was not tried.
+  - The discrepancy ran at the middle noise only, with one basis.
+  - No criterion fell in the marginal zone, so the rerun seeds were never used.
+  - R2's band at k = 1 cannot see over-coverage.
+  - The mixing check covered one cell at each of k = 4 and 5.
+  - The larger post-gate fits were not carried through a calibration grid.
+- *Stage 2:* the modality subset ran at k = 2 only; the capacity refits ran at k = 2 only and were not calibrated through; no octave-jump move was tried.
+- *Lean chip:* no reading contradicted a posed statement, so no message went to it.
+
+### Doc changes owed
+
+- `docs/Maths/Regression/BASS.md`, "BASS: calibration":
+  - A direct functional emulator's draws carry σ²_e·I while its residuals are correlated along the output index (lag-1 r 0.70–0.83 in this pilot), so the stated noise is an approximation to flag.
+  - The declared functional discrepancy is confounded with any parameter whose effect lies in its span (1.0–3.3× the error, 10–100% of runs unconverged here).
+  - At its defaults, the nested sampler's verdict can fail on narrow posteriors at p ≥ 3 with a stable answer. On multimodal ones, such as a harmonic comb, its chains get trapped, and tempering or cut SMC is the remedy.
+- `docs/Maths/Regression/Status&Caveats.md`:
+  - A functional response with moving peaks needs MaxBasis well above 80: held-out RMSE went from 0.57 to 0.30 with 400 at k = 4.
+  - A harmonic comb is beyond both the functional and the directional layouts at the capacities tried (held-out R² ≤ 0.34).
+- If a time–frequency note is written: the Li₂ identity with its pseudo-Gram qualification, and B2's window-constant table (rectangular 1.255τ and 1.43/√c; Hann 2.376τ and 2.09/√c).

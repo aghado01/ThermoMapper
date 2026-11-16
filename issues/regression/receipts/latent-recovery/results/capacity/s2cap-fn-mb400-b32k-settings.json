@@ -1,0 +1,59 @@
+{
+  "Stage": "s2cap-fn-mb400-b32k",
+  "MasterSeed": 2026111602,
+  "Replicates": 20,
+  "NoiseVariances": [
+    0.001
+  ],
+  "Ratios": [
+    2,
+    4,
+    8,
+    16
+  ],
+  "TrainingBase": 100,
+  "TrainingPerK": 100,
+  "TestRuns": 100,
+  "Layouts": [
+    "functional"
+  ],
+  "MaxBasis": 400,
+  "MaxInteraction": 3,
+  "FitChains": 2,
+  "FitBurnIn": 32000,
+  "FitSamples": 500,
+  "FitThin": 4,
+  "CalBurnIn": 1000,
+  "CalDecorrelation": 100,
+  "OuterDraws": 8,
+  "CalChains": 3,
+  "MaxSamples": 2000,
+  "BatchSize": 250,
+  "RHat": 1.05,
+  "MinEss": 50,
+  "PriorDf": 2,
+  "PriorSd": 0.3,
+  "DiscrepancyScale": 1,
+  "DiscrepancyNoise": -1,
+  "Ladder": [
+    1,
+    0.6,
+    0.35,
+    0.2,
+    0.1,
+    0.05
+  ],
+  "SmcParticles": 400,
+  "ModalityKs": [
+    2
+  ],
+  "ModalityRatios": [
+    4,
+    16
+  ],
+  "ModalityNoise": 0,
+  "ModalityReplicates": 10,
+  "ReconstructionDraws": 200,
+  "Threads": 6,
+  "DirectionalColumns": 1
+}

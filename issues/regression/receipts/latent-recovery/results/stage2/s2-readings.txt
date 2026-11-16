@@ -1,0 +1,78 @@
+## Stage 2 readings
+
+### Fits
+
+- {"Layout":"functional","K":2,"TrainingRuns":300,"Rows":38400,"Seconds":2.7464939,"Draws":1000,"SigmaMean":1.9617553312498213,"HeldOutRmse":1.9301704806212634,"HeldOutR2":0.04351270543346475,"HeldOutMaxBinRmse":2.7799647688482185,"ResponseSd":1.9735860495263051,"ResidualDependence":"training lag-1 r along lnf: mean 0.346 (independent noise -0.008), quantiles 0.241;0.303;0.349;0.393;0.453 at 0.05;0.25;0.50;0.75;0.95; held-out lag-1 r along the bins: median 0.354, 5%\u201395% 0.260\u20130.459"}
+- {"Layout":"scalar-directional","K":2,"TrainingRuns":300,"Rows":38400,"Seconds":11.3053296,"Draws":1000,"SigmaMean":1.9282228960213255,"HeldOutRmse":1.8854000515677887,"HeldOutR2":0.08736967396421003,"HeldOutMaxBinRmse":2.7519623830468443,"ResponseSd":1.9735860495263051,"ResidualDependence":"training check: none for a scalar layout; held-out lag-1 r along the bins: median 0.328, 5%\u201395% 0.248\u20130.440"}
+- {"Layout":"functional","K":3,"TrainingRuns":400,"Rows":51200,"Seconds":3.4388629,"Draws":1000,"SigmaMean":1.9697646425421025,"HeldOutRmse":1.99471410044082,"HeldOutR2":0.047859747499228944,"HeldOutMaxBinRmse":2.8877143124471707,"ResponseSd":2.044232058628281,"ResidualDependence":"training lag-1 r along lnf: mean 0.349 (independent noise -0.008), quantiles 0.241;0.300;0.353;0.396;0.458 at 0.05;0.25;0.50;0.75;0.95; held-out lag-1 r along the bins: median 0.340, 5%\u201395% 0.239\u20130.463"}
+- {"Layout":"scalar-directional","K":3,"TrainingRuns":400,"Rows":51200,"Seconds":21.4318743,"Draws":1000,"SigmaMean":1.8984130120601315,"HeldOutRmse":1.908468780351765,"HeldOutR2":0.1284150344524435,"HeldOutMaxBinRmse":2.827038750262096,"ResponseSd":2.044232058628281,"ResidualDependence":"training check: none for a scalar layout; held-out lag-1 r along the bins: median 0.305, 5%\u201395% 0.193\u20130.415"}
+
+### Cells (nested sampler)
+
+| k | emulator | disc | σ²ₙ | ratio | n | median err | mean err | coverage (band 99%) | unconverged | median sd | recon held (clean) | recon held (noisy) | fit kept | σ post | s/cal |
+|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|
+| 2 | bass | off | 1e-3 | 2 | 20 | 0.273 | 0.257 | 37/40 = 0.93 [30,40] | 0.00 | 0.281 | 2.018 | 1.994 | 0.789 | 0.515 | 0.6 |
+| 2 | bass | off | 1e-3 | 4 | 20 | 0.245 | 0.251 | 37/40 = 0.93 [30,40] | 0.05 | 0.271 | 2.023 | 1.998 | 1.699 | 0.508 | 0.6 |
+| 2 | bass | off | 1e-3 | 8 | 20 | 0.228 | 0.227 | 37/40 = 0.93 [30,40] | 0.05 | 0.262 | 2.013 | 1.984 | 1.875 | 0.486 | 0.7 |
+| 2 | bass | off | 1e-3 | 16 | 20 | 0.197 | 0.208 | 38/40 = 0.95 [30,40] | 0.05 | 0.241 | 1.963 | 1.926 | 2.053 | 0.506 | 0.7 |
+| 2 | bass-scalar-directional | off | 1e-3 | 2 | 20 | 0.265 | 0.261 | 37/40 = 0.93 [30,40] | 0.05 | 0.279 | 2.025 | 2.000 | 0.772 | 0.514 | 0.7 |
+| 2 | bass-scalar-directional | off | 1e-3 | 4 | 20 | 0.258 | 0.264 | 37/40 = 0.93 [30,40] | 0.10 | 0.275 | 2.022 | 1.996 | 1.617 | 0.514 | 0.9 |
+| 2 | bass-scalar-directional | off | 1e-3 | 8 | 20 | 0.231 | 0.226 | 37/40 = 0.93 [30,40] | 0.20 | 0.256 | 2.001 | 1.974 | 1.717 | 0.467 | 1.4 |
+| 2 | bass-scalar-directional | off | 1e-3 | 16 | 20 | 0.195 | 0.200 | 37/40 = 0.93 [30,40] | 0.20 | 0.226 | 1.941 | 1.908 | 2.029 | 0.522 | 1.4 |
+| 2 | oracle | off | 1e-3 | 2 | 20 | 0.238 | 0.247 | 33/40 = 0.82 [30,40] | 0.50 | 0.275 | 1.980 | 1.962 | 0.093 | 0.254 | 0.8 |
+| 2 | oracle | off | 1e-3 | 4 | 20 | 0.202 | 0.191 | 36/40 = 0.90 [30,40] | 1.00 | 0.191 | 1.687 | 1.654 | 0.115 | 0.214 | 1.1 |
+| 2 | oracle | off | 1e-3 | 8 | 20 | 0.059 | 0.105 | 34/40 = 0.85 [30,40] | 1.00 | 0.084 | 0.310 | 0.335 | 0.148 | 0.207 | 1.3 |
+| 2 | oracle | off | 1e-3 | 16 | 20 | 0.122 | 0.144 | 37/40 = 0.93 [30,40] | 1.00 | 0.191 | 0.797 | 0.782 | 0.625 | 1.080 | 1.9 |
+| 3 | bass | off | 1e-3 | 2 | 20 | 0.290 | 0.299 | 49/60 = 0.82 [47,59] | 0.00 | 0.281 | 1.919 | 1.889 | 0.826 | 0.479 | 1.1 |
+| 3 | bass | off | 1e-3 | 4 | 20 | 0.272 | 0.290 | 52/60 = 0.87 [47,59] | 0.00 | 0.273 | 1.911 | 1.887 | 1.819 | 0.495 | 1.1 |
+| 3 | bass | off | 1e-3 | 8 | 20 | 0.282 | 0.273 | 52/60 = 0.87 [47,59] | 0.00 | 0.265 | 1.920 | 1.895 | 1.681 | 0.430 | 1.1 |
+| 3 | bass | off | 1e-3 | 16 | 20 | 0.267 | 0.255 | 51/60 = 0.85 [47,59] | 0.00 | 0.247 | 1.955 | 1.931 | 1.681 | 0.382 | 1.3 |
+| 3 | bass-scalar-directional | off | 1e-3 | 2 | 20 | 0.294 | 0.301 | 49/60 = 0.82 [47,59] | 0.10 | 0.280 | 1.913 | 1.883 | 0.789 | 0.485 | 1.4 |
+| 3 | bass-scalar-directional | off | 1e-3 | 4 | 20 | 0.276 | 0.289 | 51/60 = 0.85 [47,59] | 0.20 | 0.272 | 1.923 | 1.898 | 1.681 | 0.499 | 1.7 |
+| 3 | bass-scalar-directional | off | 1e-3 | 8 | 20 | 0.282 | 0.267 | 53/60 = 0.88 [47,59] | 0.50 | 0.260 | 1.912 | 1.891 | 1.528 | 0.417 | 2.4 |
+| 3 | bass-scalar-directional | off | 1e-3 | 16 | 20 | 0.269 | 0.252 | 53/60 = 0.88 [47,59] | 0.95 | 0.246 | 1.855 | 1.834 | 1.608 | 0.382 | 3.8 |
+| 3 | oracle | off | 1e-3 | 2 | 20 | 0.274 | 0.278 | 52/60 = 0.87 [47,59] | 0.90 | 0.268 | 1.867 | 1.836 | 0.104 | 0.225 | 1.0 |
+| 3 | oracle | off | 1e-3 | 4 | 20 | 0.233 | 0.251 | 43/60 = 0.72 [47,59] OUT | 1.00 | 0.219 | 1.626 | 1.610 | 0.171 | 0.244 | 1.3 |
+| 3 | oracle | off | 1e-3 | 8 | 20 | 0.110 | 0.169 | 51/60 = 0.85 [47,59] | 1.00 | 0.187 | 0.697 | 0.701 | 0.199 | 0.397 | 1.6 |
+| 3 | oracle | off | 1e-3 | 16 | 20 | 0.129 | 0.143 | 53/60 = 0.88 [47,59] | 1.00 | 0.148 | 0.598 | 0.596 | 0.292 | 0.548 | 2.2 |
+
+### f₀: error and octave masses
+
+| k | emulator | mode | ratio | n | median |f₀ err| (unit) | f₀ coverage | median mass at θ* | replicates with mass > 0.5 at 2f₀ or f₀/2 | mean mass at 2f₀ | mean mass at f₀/2 |
+|---|---|---|---|---|---|---|---|---|---|---|
+| 2 | bass-functional | nested | 2 | 20 | 0.226 | 1.00 | 0.09 | 0 | 0.05 | 0.03 |
+| 2 | bass-functional | nested | 4 | 20 | 0.207 | 1.00 | 0.09 | 0 | 0.04 | 0.03 |
+| 2 | bass-functional | nested | 8 | 20 | 0.148 | 1.00 | 0.10 | 0 | 0.03 | 0.03 |
+| 2 | bass-functional | nested | 16 | 20 | 0.099 | 1.00 | 0.12 | 0 | 0.01 | 0.04 |
+| 2 | bass-functional | smc | 4 | 10 | 0.213 | 1.00 | 0.09 | 0 | 0.05 | 0.02 |
+| 2 | bass-functional | smc | 16 | 10 | 0.104 | 1.00 | 0.13 | 0 | 0.02 | 0.03 |
+| 2 | bass-functional | tempered | 4 | 10 | 0.215 | 1.00 | 0.09 | 0 | 0.05 | 0.02 |
+| 2 | bass-functional | tempered | 16 | 10 | 0.096 | 1.00 | 0.13 | 0 | 0.02 | 0.03 |
+| 2 | bass-scalar-directional | nested | 2 | 20 | 0.226 | 1.00 | 0.09 | 0 | 0.04 | 0.03 |
+| 2 | bass-scalar-directional | nested | 4 | 20 | 0.201 | 1.00 | 0.09 | 0 | 0.04 | 0.03 |
+| 2 | bass-scalar-directional | nested | 8 | 20 | 0.109 | 1.00 | 0.18 | 0 | 0.03 | 0.02 |
+| 2 | bass-scalar-directional | nested | 16 | 20 | 0.073 | 1.00 | 0.26 | 0 | 0.01 | 0.03 |
+| 2 | bass-scalar-directional | smc | 4 | 10 | 0.196 | 1.00 | 0.09 | 0 | 0.05 | 0.02 |
+| 2 | bass-scalar-directional | smc | 16 | 10 | 0.066 | 1.00 | 0.25 | 0 | 0.01 | 0.02 |
+| 2 | bass-scalar-directional | tempered | 4 | 10 | 0.199 | 1.00 | 0.10 | 0 | 0.05 | 0.02 |
+| 2 | bass-scalar-directional | tempered | 16 | 10 | 0.074 | 1.00 | 0.28 | 0 | 0.02 | 0.02 |
+| 2 | oracle | nested | 2 | 20 | 0.211 | 0.90 | 0.09 | 0 | 0.04 | 0.05 |
+| 2 | oracle | nested | 4 | 20 | 0.157 | 0.85 | 0.33 | 1 | 0.01 | 0.08 |
+| 2 | oracle | nested | 8 | 20 | 0.021 | 0.80 | 0.96 | 1 | 0.00 | 0.07 |
+| 2 | oracle | nested | 16 | 20 | 0.167 | 1.00 | 0.67 | 3 | 0.10 | 0.12 |
+| 2 | oracle | smc | 4 | 10 | 0.119 | 0.90 | 0.25 | 0 | 0.02 | 0.03 |
+| 2 | oracle | smc | 16 | 10 | 0.000 | 1.00 | 1.00 | 0 | 0.00 | 0.00 |
+| 2 | oracle | tempered | 4 | 10 | 0.116 | 1.00 | 0.26 | 0 | 0.02 | 0.03 |
+| 2 | oracle | tempered | 16 | 10 | 0.000 | 0.90 | 1.00 | 0 | 0.00 | 0.00 |
+| 3 | bass-functional | nested | 2 | 20 | 0.207 | 0.85 | 0.09 | 0 | 0.04 | 0.04 |
+| 3 | bass-functional | nested | 4 | 20 | 0.170 | 0.90 | 0.11 | 0 | 0.04 | 0.04 |
+| 3 | bass-functional | nested | 8 | 20 | 0.137 | 0.90 | 0.12 | 0 | 0.04 | 0.02 |
+| 3 | bass-functional | nested | 16 | 20 | 0.125 | 0.95 | 0.14 | 0 | 0.03 | 0.01 |
+| 3 | bass-scalar-directional | nested | 2 | 20 | 0.188 | 0.85 | 0.10 | 0 | 0.04 | 0.04 |
+| 3 | bass-scalar-directional | nested | 4 | 20 | 0.181 | 0.90 | 0.11 | 0 | 0.04 | 0.04 |
+| 3 | bass-scalar-directional | nested | 8 | 20 | 0.138 | 0.95 | 0.17 | 0 | 0.04 | 0.04 |
+| 3 | bass-scalar-directional | nested | 16 | 20 | 0.073 | 1.00 | 0.32 | 0 | 0.06 | 0.03 |
+| 3 | oracle | nested | 2 | 20 | 0.214 | 0.90 | 0.15 | 0 | 0.03 | 0.03 |
+| 3 | oracle | nested | 4 | 20 | 0.196 | 0.65 | 0.33 | 1 | 0.07 | 0.04 |
+| 3 | oracle | nested | 8 | 20 | 0.114 | 0.75 | 0.67 | 1 | 0.05 | 0.07 |
+| 3 | oracle | nested | 16 | 20 | 0.155 | 0.70 | 0.67 | 3 | 0.13 | 0.08 |

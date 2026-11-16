@@ -1,0 +1,13 @@
+HarmonicSynthesizer: frame 1024, fs 8000, floor 0.01, L 128, f 100..2000
+theta 5.298;6.685;5.298: energy 829.1, feature min -4.61 max 4.93 (ln floor -4.61); SNR dB at noise levels: 29.1
+   noise 0.001: noisy − clean mean 0.071 rms 0.112 max 0.39
+theta 5.970;7.335;5.026: energy 488.6, feature min -4.61 max 4.96 (ln floor -4.61); SNR dB at noise levels: 26.8
+   noise 0.001: noisy − clean mean 0.092 rms 0.135 max 0.39
+theta 5.335;6.008;5.840: energy 1110, feature min -4.61 max 5.13 (ln floor -4.61); SNR dB at noise levels: 30.3
+   noise 0.001: noisy − clean mean 0.072 rms 0.125 max 0.45
+theta 5.714;6.323;5.652: energy 702.9, feature min -4.61 max 4.87 (ln floor -4.61); SNR dB at noise levels: 28.4
+   noise 0.001: noisy − clean mean 0.111 rms 0.164 max 0.58
+theta 5.118;6.691;5.310: energy 942.9, feature min -4.61 max 4.94 (ln floor -4.61); SNR dB at noise levels: 29.6
+   noise 0.001: noisy − clean mean 0.068 rms 0.123 max 0.45
+theta 5.461;7.161;4.896: energy 317.6, feature min -4.61 max 3.77 (ln floor -4.61); SNR dB at noise levels: 24.9
+   noise 0.001: noisy − clean mean 0.099 rms 0.153 max 0.53
