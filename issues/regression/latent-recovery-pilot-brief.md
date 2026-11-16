@@ -76,7 +76,7 @@ This is exploration on probes. The engine stays as it is: a gap found here is a 
 
 ### In progress
 
-- Closed on 2026-11-16. Every sweep and stage ran and is read below, and nothing is left running. The probe is at `artifacts/latent-recovery/probe/`, built against a `be979dd` snapshot in `artifacts/latent-recovery/source/`; its sources, settings and summaries are tracked in `receipts/latent-recovery/`. Post-gate checks (`b2-supplement`, `s1-mixing`, `s1-capacity`, `s2-capacity`) are labelled as such where they are read and changed no gate. The interim notes written at the usage-limit stop are folded into the readings; one of their figures was wrong (the discrepancy's error ratio reads 1.0–3.3, not 3–7).
+- Closed on 2026-11-16 against the done criteria: every sweep and stage ran and is read below. One post-gate refit (Stage 2, K = 4 ridge blocks) was still fitting at close; its reading replaces the marked line in the Stage 2 readings when it lands. The probe is at `artifacts/latent-recovery/probe/`, built against a `be979dd` snapshot in `artifacts/latent-recovery/source/`; its sources, settings and summaries are tracked in `receipts/latent-recovery/`. Post-gate checks (`b2-supplement`, `s1-mixing`, `s1-capacity`, `s2-capacity`) are labelled as such where they are read and changed no gate. The interim notes written at the usage-limit stop are folded into the readings; one of their figures was wrong (the discrepancy's error ratio reads 1.0–3.3, not 3–7).
 
 ### Gates as pre-stated
 
