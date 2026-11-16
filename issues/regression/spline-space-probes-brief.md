@@ -46,3 +46,66 @@ Schumaker's *Spline Functions: Basic Theory* gives exact theorems for three ques
 ## Working rules
 
 Those of the [pilot brief](latent-recovery-pilot-brief.md#working-rules).
+
+## Report (the numerical chip, from 2026-11-16)
+
+### In progress
+
+- 2026-11-16: started after the pilot closed (`9128238`). The probe is at `artifacts/spline-space/probe/`, built against the same `be979dd` snapshot as the pilot (`artifacts/latent-recovery/source/`). The gates for P1, P2 and P3 are below, written before any probe code ran. Runs next, P1 first.
+
+### Gates as pre-stated
+
+Each gate was written here before the first reading of its probe. A gate changed after a failure is recorded below it as a change, with the reason. Schumaker is read in the user's conversion, with the corrected forms from `errata.md`.
+
+**P1, design admission against the exact rank condition.**
+
+- *Bases.* Clamped B-splines of degree d ∈ {1, 2, 3} (order m = d + 1) on [0, 1], interior knots ξ₁ < … < ξ_k, k ∈ {0, …, 12}, n = k + m columns. The probe evaluates them with its own Cox–de Boor recursion and checks it against the engine's `SplineBasis.Design` (max |difference| recorded; above 10⁻¹² the comparison stops). Each support σ_j follows (4.133) and Theorem 4.63: open (y_j, y_{j+m}) when y_j < y_{j+m−1}, closed on the left otherwise, and closed at x = 1 for the last B-spline.
+- *Designs.* Knot laws: uniform order statistics, or clustered (half the knots inside one window of width 0.02 placed uniformly). Site counts N ∈ {n − 1, n, n + 1, n + 3, 2n}. Site laws: uniform on [0, 1]; one to three clusters of width 0.05; uniform with a random gap of width 0.2 removed. 20 draws per (degree, k, N, knot law, site law): 23 400 designs. Seed `SeedTree.Derive(2026111701, 4)`: [designs, products, reruns, spare].
+- *Three verdicts per design.* M: the greedy ordered matching (the Lean chip's S7d) on the sorted sites and the supports. R: the singular values of the probe's design by one-sided Jacobi, with ρ = σ_min/σ_max recorded. E: the engine's `SplineTarget.Evaluate` on the design (cubic, quadratic or linear `SplineBasis`, `WeightedNormalModel`, `UniformPrior(12)`, the default support gate), read as its `DesignRejection`.
+- *Pass, the theorem's two halves on these designs:*
+  - (i) every design with M false has ρ ≤ 10⁻¹³, singular to rounding;
+  - (ii) the designs with M true are read, not gated: exact full rank cannot be read numerically, so the reading is ρ's distribution and the count below 10⁻¹².
+  - *Rerun rule for (i):* a violation with ρ ≤ 10⁻¹¹ is rechecked on the design with every entry outside its support set to exactly zero. If the recheck clears it, it is reported as rounding; anything above 10⁻¹¹, or not cleared, is a counterexample to report.
+- *Engine readings:* the cross-table of M against E's reason, which answers the decisions: designs refused although M is true (by reason), and designs admitted although M is false.
+- *Product designs in two dimensions:* cubic on both axes, k_x, k_y ∈ {0, …, 4}, n = n_x·n_y columns; scattered sites, N ∈ {n, 2n, 4n}; site laws uniform in the square, on the diagonal y = x, near it (|y − x| ≤ 0.02), and in clusters; 20 draws per cell (3000 designs). Verdicts:
+  - per-axis matching on the distinct projected sites (M_x, M_y);
+  - a bipartite matching of sites to product supports (augmenting paths; a site serves a column when it lies in the product of the two supports);
+  - the numerical rank.
+
+  Read four counts: full rank with M_x or M_y false (necessity of per-axis matching), M_x and M_y true but rank-deficient (sufficiency), full rank without a bipartite matching (its necessity), and a bipartite matching but rank-deficient (its sufficiency). Rank-deficient here means ρ ≤ 10⁻¹³. The counterexamples are kept.
+
+**P2, what free knots buy on sparse events.**
+
+- *Theory, read in § 7.4 to § 7.6 before stating it.* With free knots, order m holds on BV^{m−1} (Theorem 7.12) and on functions smooth except at finitely many points (Theorem 7.20, knots placed at the singularities). A balanced partition equalizes the local error, so on the smooth parts the knot density is ∝ |D^m f|^σ with σ = 1/(m + 1/p): σ = 2/9 for cubic least squares (m = 4, p = 2). A kink, a jump in f′, is a spline knot of multiplicity m − 1 = 3: the theory puts three knots at it. With uniform knots a kink costs the order: the L₂ error falls as h^{3/2}.
+- *Curves* on [0, 1]: background b(x) = sin(2πx) + 0.5·cos(5πx), plus E kinks Σ a_e·|x − x_e|, E ∈ {0, 1, 2, 4, 8}, a_e = ±U[0.5, 1], x_e uniform on [0.1, 0.9] with gaps ≥ 0.05; one more family with E = 2 jumps in f″ (a_e·(x − x_e)₊²).
+- *Data:* n = 2000 equispaced points, Gaussian noise σ = 10⁻³; 5 replicates per curve family, fresh events and noise each.
+- *Fits:*
+  - Least squares on k ∈ {2, 4, 8, 16, 32, 64} uniform interior knots, through the engine's `SplineBasis` and the probe's solve.
+  - BARS as built (cubic, `WeightedNormalModel`, its default kernel), once with a free count (`UniformPrior(80)`) and once per k ∈ {2, 4, 8, 16, 32} with the count held near k by a steep probe-side prior (log p = −50·|j − k|).
+  - Each fit uses 2 chains, burn-in 2000, 1000 kept.
+- *Readings:*
+  - RMS error against the clean curve on 4001 grid points: for least squares per k; for BARS, the posterior-mean fit per run, at its posterior mean knot count.
+  - The slope of ln error on ln k over k ∈ [4, 32], by curve family and method.
+  - The pooled posterior knots: the share within ±0.02 of an event against that window's share of [0, 1]; knots per event; and, away from events, the histogram against the density ∝ |b⁽⁴⁾|^{2/9}, as a total-variation distance.
+  - Under the free count: the posterior mean k against E, its fitted slope and residual sd.
+- *Pass, rate separation:* on the kink families (E ≥ 1), the free-knot slope is steeper than the uniform slope by at least 1.0 (the theory's gap is 2.5: −4 against −1.5). *Marginal:* a gap in [0.8, 1.0): rerun the family on the rerun seeds, pass only if the rerun reaches 1.0. The density, knots-per-event and k-against-E rows are readings.
+- *Seeds:* `SeedTree.Derive(2026111702, 8)`: curves, noise, least squares (unused), BARS free, BARS held, reruns, spare, spare.
+
+**P3, pieces that oscillate.**
+
+- *Basis, in probe code:* the damped oscillator's one-sided basis on [0, 1]. Two null-space functions, e^{−γx}·cos(ωx) and e^{−γx}·sin(ωx), and g(x − ξᵢ) at each interior knot, g(x) = e^{−γx}·sin(ωx)/ω for x ≥ 0 and 0 before (S8). It implements the engine's `IBasis`, so BARS's free-knot sampler runs on it as built. The support gate is turned off (`MinColumnMass` 0), because its column-mass rule assumes nonnegative columns and these are signed. The coefficient prior is centred at zero for both bases (`GPriorCentre.Zero`).
+- *Signals:* n = 1000 equispaced points; ω = 2π·20 (20 cycles over the domain); γ = 8; R ∈ {1, 2, 4} resonances A_r·g(x − t_r)·ω, onsets uniform on [0.05, 0.8] with gaps ≥ 0.05, A_r = ±U[0.5, 1.5]; noise σ = 0.01; 5 replicates per R. Mismatch variants at R = 2: the data's ω × 1.05, and γ × 1.5, the basis keeping the nominal values.
+- *Fits:*
+  - BARS cubic (`UniformPrior(150)`, the default support gate).
+  - BARS on the oscillator basis (`UniformPrior(20)`, gate off).
+  - Least squares on the oscillator basis with knots at the true onsets.
+
+  Each BARS run uses 2 chains, burn-in 2000, 1000 kept. Readings: RMS error of the posterior mean against the clean signal, the posterior mean knot count, and wall time.
+- *Decision threshold, stated in advance:* an oscillatory term type earns its own brief when, on the matched signals, BARS on it reaches an error at most 1.5 times the cubic fit's with at most a quarter of its knots, and under each mismatch stays within twice the cubic fit's error.
+- *Spacing sweep:* knots uniformly spaced at h with hω/π ∈ {0.05, 0.10, …, 1.20}, plus 0.48–0.52 in steps of 0.005, on 4000 sites, γ ∈ {0, 8}. Three readings per spacing:
+  - the one-sided basis's equilibrated Gram condition number (Jacobi eigenvalues);
+  - the order-2 local element Q of S8, scaled by e^{−γ(x−y₀)}: its sup norm and whether it takes negative values;
+  - the equilibrated condition number of the local elements written unnormalized (S8's numerators).
+
+  *S8 agrees* if Q's sup norm diverges at y₂ − y₀ = π/ω (at hω/π = 0.5, at least 10⁶ times its value at 0.25) and Q takes negative values for y₂ − y₀ beyond π/ω. The conditioning rows are readings.
+- *Seeds:* `SeedTree.Derive(2026111703, 4)`: signals, noise, BARS, spare.
