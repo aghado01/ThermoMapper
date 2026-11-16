@@ -149,6 +149,52 @@ public static class P2
              .. rows.OrderBy(t => t.Item1).Select(t => t.Item2)]);
     }
 
+    /// <summary>
+    /// Post-gate: on replicate 0 of the E = 0 and E = 4 kink curves, a BARS run held at 32 knots (the gate's own seeds),
+    /// with least squares refitted at each retained draw's knots, against the posterior mean and uniform least squares:
+    /// whether the free knots are placed well and the error comes from averaging, or the knots themselves are the gap.
+    /// </summary>
+    public static void Diagnose(string dir)
+    {
+        int[] seeds = SeedTree.Derive(Master, 8);
+        (string Family, int E)[] families = [("kink", 0), ("kink", 1), ("kink", 2), ("kink", 4), ("kink", 8), ("f2jump", 2)];
+        int[] curveSeeds = SeedTree.Derive(seeds[0], families.Length * Replicates);
+        int[] noiseSeeds = SeedTree.Derive(seeds[1], families.Length * Replicates);
+        int[] heldSeeds = SeedTree.Derive(seeds[4], families.Length * Replicates * HeldKnots.Length);
+        double[] x = Enumerable.Range(0, N).Select(i => i / (N - 1.0)).ToArray();
+        double[] grid = Enumerable.Range(0, GridPoints).Select(i => i / (GridPoints - 1.0)).ToArray();
+        var lines = new List<string> { "family,E,k,posterior_mean_rms,ls_at_draw_knots_median,ls_at_draw_knots_best,uniform_ls_rms,draw_knots_within_0.02_of_events_per_event" };
+        foreach (int f in new[] { 0, 3 })
+        {
+            int idx = f * Replicates;
+            Curve curve = Draw(families[f].Family, families[f].E, new Xoshiro256PlusPlus(curveSeeds[idx]));
+            var noise = new Xoshiro256PlusPlus(noiseSeeds[idx]);
+            double[] y = x.Select(v => curve.Value(v) + Noise * Normal.SampleStandard(noise)).ToArray();
+            double[] truth = grid.Select(curve.Value).ToArray();
+            const int k = 32;
+            var config = new BarsConfig { Degree = 3, Prior = new HeldCountPrior(k), Chains = 2, MasterSeed = heldSeeds[idx * HeldKnots.Length + Array.IndexOf(HeldKnots, k)], BurnIn = 2000, MaxSamples = 1000 };
+            BarsResult result = Bars.Run(config, x, y, grid);
+            var basis = new SplineBasis(3);
+            var errs = new List<double>();
+            double perEvent = 0;
+            int used = 0;
+            foreach (var chain in result.Draws)
+                for (int i = 0; i < chain.Count; i += 50)   // every 50th retained draw
+                {
+                    KnotConfig kc = chain[i].Knots;
+                    double[] b = LeastSquares(basis.Design(kc, x), y);
+                    errs.Add(Rms(Multiply(basis.Design(kc, grid), b), truth));
+                    if (curve.E > 0) perEvent += kc.InteriorKnots.Count(kn => curve.Locations.Any(l => Math.Abs(kn - l) <= Window)) / (double)curve.E;
+                    used++;
+                }
+            var uni = new KnotConfig(Enumerable.Range(1, k).Select(i => i / (k + 1.0)).ToArray());
+            double uniform = Rms(Multiply(basis.Design(uni, grid), LeastSquares(basis.Design(uni, x), y)), truth);
+            lines.Add(string.Join(",", curve.Family, curve.E, k, F(Rms(result.Fit, truth), "E3"), F(Median(errs), "E3"), F(errs.Min(), "E3"), F(uniform, "E3"), F(perEvent / used, "F2")));
+            Console.WriteLine(lines[^1]);
+        }
+        File.WriteAllLines(Path.Combine(dir, "p2-diagnostic.csv"), lines);
+    }
+
     public static string Summary(string dir, string file = "p2-runs.csv")
     {
         var d = File.ReadAllLines(Path.Combine(dir, file)).Skip(1).Select(l => l.Split(',')).ToList();

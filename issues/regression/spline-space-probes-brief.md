@@ -51,7 +51,7 @@ Those of the [pilot brief](latent-recovery-pilot-brief.md#working-rules).
 
 ### In progress
 
-- 2026-11-16: started after the pilot closed (`9128238`). The probe is at `artifacts/spline-space/probe/`, built against the same `be979dd` snapshot as the pilot (`artifacts/latent-recovery/source/`). The gates below were written before any probe code ran. P1 and the P3 spacing sweep are run and read. Running in the background: the P3 BARS fits, then P2 (`artifacts/spline-space/logs/p3.log`, `p2.log`), whose summaries `p3-summary` and `p2-summary` print into `results/`. Next: their readings, the primitives and the closing sections.
+- Closed on 2026-11-16. P1, P2 and P3 each ran against its gate and are read below; nothing is left running. The probe is at `artifacts/spline-space/probe/`, built against the pilot's `be979dd` snapshot (`artifacts/latent-recovery/source/`); its sources and summaries are tracked in `receipts/spline-space/`. Post-gate readings (`p3-uniform`, `p2-diagnostic`) are labelled where they are read and changed no gate. Verdicts: P1 passes; P2 fails; P3's sweep agrees with S8, and its knot threshold is not met as written.
 
 ### Gates as pre-stated
 
@@ -166,3 +166,81 @@ Each gate was written here before the first reading of its probe. A gate changed
 - *Decisions:*
   - On this evidence an oscillatory term type saves knots by more than an order of magnitude when its operator matches the signal. Whether it earns its own brief is the user's call, since the pre-stated test did not decide it.
   - It needs no admission rule on spacing in its one-sided form (the sweep). Its weakness is the operator's parameters: a 5% carrier error spends the knot budget. That argues either for working on a band after mixing down, where the carrier is known, or for making γ and ω part of the term (sampled or profiled), not fixed.
+
+**P2: fails its gate on every kink family, not marginally. At these sizes the free-knot error reaches a floor set by the noise before the theory's rate can show, and the knot count is no event counter.** Rows and summary in `receipts/spline-space/results/p2-summary.md` and `p2-diagnostic.csv`.
+
+- *Slopes of ln rms on ln k over k ∈ [4, 32],* medians over 5 replicates:
+
+  | family | uniform LS | BARS held | gap | verdict |
+  |---|---|---|---|---|
+  | kink, E = 1 | −1.48 | −1.07 | −0.41 | fail |
+  | kink, E = 2 | −1.24 | −0.91 | −0.33 | fail |
+  | kink, E = 4 | −1.15 | −0.73 | −0.42 | fail |
+  | kink, E = 8 | −1.24 | −0.71 | −0.53 | fail |
+  | kink, E = 0 | −2.03 | −1.07 | −0.95 | reading |
+  | f″ jumps, E = 2 | −2.00 | −1.12 | −0.88 | reading |
+
+  Uniform knots follow the theory: −1.2 to −1.5 with kinks (h^{3/2}), −2 on the smooth and f″-jump curves at these k. The held BARS fits flatten instead. Their posterior-mean error stops at 4×10⁻⁴ to 1.2×10⁻³ by k = 32, a few tenths of the noise level σ = 10⁻³, so every gap is negative.
+- *At equal k, free knots win only where kinks dominate:*
+  - At k = 16, BARS held reads 0.9–2.0×10⁻³ against uniform's 1.3–3.4×10⁻³ on the kink families.
+  - At k = 32 the two are within 25% of each other, E = 1 already favouring uniform (5.4×10⁻⁴ against 4.7×10⁻⁴).
+  - On the smooth curve uniform wins outright: 1.3×10⁻⁴ against 4.4×10⁻⁴ at k = 32.
+  - The held prior did not hold the small counts: at k = 2 and 4 the posterior sat at 4.5–7.0 knots, and those cells read at their actual k̄.
+- *Post-gate diagnostic* (`p2-diagnostic`: replicate 0, k = 32, least squares refitted at every 50th retained draw's knots):
+  - On the smooth curve, least squares at BARS's own knots reads a median of 5.6×10⁻⁴ (best 3.2×10⁻⁴), no better than the posterior mean's 4.9×10⁻⁴, and both trail uniform knots (1.3×10⁻⁴). The knots, not the averaging, set the error. At an error below the noise, the data cannot tell placements apart, and the posterior wanders among them.
+  - On the four-kink curve, BARS beats uniform (6.3×10⁻⁴ against 1.5×10⁻³) and places 2.3 knots within ±0.02 of each kink, against the theory's 3.
+- *Free count* (`UniformPrior(80)`):
+  - The posterior holds 8.7–11.7 knots for 0 to 8 kinks, rms 1.1–2.3×10⁻³.
+  - Knots crowd toward events at 1.7–2.4 times the windows' share of the domain (0.096 against 0.040 at E = 1; 0.557 against 0.320 at E = 8), but only 0.8–1.0 knots per kink and 0.5 per f″ jump.
+  - Away from events the knot histogram is far from the density ∝ |b⁽⁴⁾|^{2/9}: total-variation distance 0.61–0.72.
+  - k̄ against E has slope 0.29 knots per event and residual sd 2.0 knots, so E read from k̄ carries an sd of 6.8 events.
+- *Decisions:*
+  - The measured rates do not separate as the theorems say at the sizes the engine runs (n = 2000, σ = 10⁻³, k ≤ 32). The order-m rate needs errors well above the noise; here the free-knot posterior hits the noise floor by k ≈ 8–16, where uniform knots are still kink-limited.
+  - Posterior knot density does not track the curve's variation closely enough for a knot count to estimate how many events a signal holds. Under the free count, a kink costs 0.3 knots on average.
+
+### What each decision came to
+
+| Probe | Decision | Answer |
+|---|---|---|
+| P1 | Does the built rule refuse exactly full-rank designs, or admit singular ones? | It refuses 78% of the full-rank designs with N > n, nearly all well conditioned, at the column-mass gate. It admits no singular design |
+| P1 | Could the matching test stand in front of the factorization? | Yes, as an exact rank test in O(N + n), with the condition check kept behind it |
+| P1 | What do scattered product designs need beyond one dimension? | A bipartite matching of sites to product supports is necessary; neither it nor per-axis matching is sufficient on sites in degenerate position (a line). A genericity condition is the missing part, and the numerical rank stays the decider |
+| P2 | Do the rates separate at the engine's sizes? | No: the free-knot error floors near the noise before the order-m rate shows |
+| P2 | Can a knot count be read as an event count? | No (sd of 6.8 events) |
+| P3 | Does an oscillatory term save enough knots? | It saves twenty to eighty times in knots at lower error when its operator matches. The pre-stated test did not decide it, because its knot clause compared against a cubic BARS fit that collapsed. The user's call |
+| P3 | Does it need a spacing rule, or a band after mixing down? | No spacing rule in its one-sided form. It is sensitive to its operator's parameters, so: a band after mixing down, or γ and ω inside the term |
+| P3 | Does S8's half-period degeneracy match the numbers? | Yes for the positive local element; the design's conditioning shows nothing at that spacing |
+
+### Primitives proposed
+
+Stated for any application and not built.
+
+1. **A support rule on supports, not mass, with the ordered matching in front of the factorization.**
+   - *The gap:* the column-mass gate refuses most full-rank designs.
+   - *The proposal:* the S7 matching (Theorem 4.61) decides a B-spline design's exact rank from the knots and the sorted sites in one pass, before any design is built. A declared support rule can then be stated as "one site per support, in order", and the mass rule kept only where it is wanted as a prior.
+   - *Why it reaches further:* the same rule is the one a signed basis needs, since the mass gate had to be turned off for the oscillator basis. Products would take the bipartite matching as their necessary pre-check, the rank still deciding.
+   - *What it would change:* the free-knot sampler's support would stop excluding well-conditioned configurations, and admission would cost less.
+2. **An L-spline term family:** the one-sided Green's-function columns of a declared linear differential operator (here D² + 2γD + γ² + ω²), with the operator's parameters sampled or profiled rather than fixed. It runs under BARS's `IBasis` today in probe code. The engine lacks a basis with continuous parameters inside the sampler and a support rule for signed columns (primitive 1). It would let a free-knot fit spend one or two knots per resonance instead of tens.
+3. **Births that can climb a flat likelihood.**
+   - *The gap:* cubic BARS stayed near zero knots on 13 of 15 oscillatory signals, because a single new knot buys nothing there.
+   - *The proposal:* block births and deaths (several knots at once), or a start scaled to the data rather than the fixed `StartDispersion` of 4. The ensemble's built tempering ladder may already serve and is the first thing to try.
+   - *What it would change:* free-knot fits of any signal whose first knots carry no likelihood gain.
+
+### Left unread or unrun
+
+- *P1:* only the Normal model's admission (Poisson and Whittle factor weighted matrices); BAPS's `TensorProductDesign` was not called (the product designs were built in probe code); knot multiplicities beyond the clamped ends, which BARS's open simplex excludes; degrees above 3.
+- *P2:* noise levels other than 10⁻³, though the rate-against-floor question turns on noise; tempered BARS; window widths other than ±0.02.
+- *P3:* cubic BARS with a larger start or tempering; S8's positive local basis under BARS; γ and ω sampled; orders above 2.
+- *The source:*
+  - Lemma 10.16's statement is damaged in the user's conversion: the "<" of "τ₁ < … < τ_d" and the sentence around it are lost to markup (`schumaker_012_converted.md`, near line 359). That is a conversion defect, beside the book's own misprint already in `errata.md`.
+  - A suspected new misprint, unverified: § 4.8's opening sentence reads "y₁ < y₂ < ⋯ < y_{n+m} … with y_i < y_{i+m}", where the second condition and (4.133)'s case y_i = y_{i+m−1} both need ≤ in the first. The PDF's text layer cannot tell ≤ from <, and no page renderer is installed here, so it is reported to the user for checking against the printed page, not added to `errata.md`.
+
+### Doc changes owed
+
+- `docs/Maths/Regression/BARS.md`:
+  - The support gate (column mass ≥ 1) refuses most exactly full-rank designs (78% of the full-rank designs with N > n here, nearly all well conditioned) and admits no singular one.
+  - Theorem 4.61 (Schoenberg–Whitney) is the exact rank condition, decidable in O(N + n).
+  - The gate assumes nonnegative columns, so a custom `IBasis` with signed columns needs it off.
+  - Single-knot births can stall on signals whose first knots buy nothing (oscillatory ones).
+  - At noise-level errors, a free-knot posterior's count is not an event count.
+- `docs/Maths/Regression/BAPS.md`, or wherever scattered tensor designs are documented: per-axis Schoenberg–Whitney is necessary and not sufficient, and a site-to-support matching is necessary and not sufficient in degenerate site geometry.

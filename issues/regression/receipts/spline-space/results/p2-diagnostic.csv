@@ -1,0 +1,3 @@
+family,E,k,posterior_mean_rms,ls_at_draw_knots_median,ls_at_draw_knots_best,uniform_ls_rms,draw_knots_within_0.02_of_events_per_event
+kink,0,32,4.940E-004,5.597E-004,3.153E-004,1.300E-004,0.00
+kink,4,32,6.296E-004,7.977E-004,5.669E-004,1.547E-003,2.34
