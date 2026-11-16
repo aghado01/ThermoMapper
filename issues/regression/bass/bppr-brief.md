@@ -279,6 +279,49 @@ Under "Reports" below, newest first, per slice: what landed by commit; the gates
 
 ## Reports
 
+### Pure-block Friedman coverage under three samplers (2026-11-16)
+
+The measurement the sampler decision owed (`a83db0c`'s entry below), complete: 18/18.
+- **The run.** `artifacts/chip-bppr/probes/SamplerCoverageProbe.cs` on Friedman's fixture, with `BpprFriedmanTests`' data and priors: Jeffreys σ², the intercept inside the g-prior, Zellner–Siow τ, K = 4.
+  - *The data:* n = 300, noise sd 1, 2,000 held-out points.
+  - *The cases:* three data seeds (3671, 3681, 3691) by two sampler seeds by three samplers.
+    - The default, which resolves to self-sizing tempering with a hot end of 1/300 because Jeffreys σ² refuses the reference rung.
+    - Declared plain chains.
+    - Declared SMC: the linear form, 500 particles, 12 mutations.
+  - *Each fit:* four starts at 18,000 + 2,000 sweeps per chain.
+  - *The intervals:* f's from the weighted latent draws; y's from the exact predictive mixture.
+  - *Receipts:* `build-s6b/runs/20261115_222520-coverage/coverage.trx` and `coverage-output.txt`.
+
+| Sampler | M across starts | R̂(M) | f, pooled (MC sd) | f, one start: mean (range) | y, pooled / one start | RMSE f | Fit s | Sweep-equivalents |
+| --- | --- | --- | --- | --- | --- | --- | --- | --- |
+| default (tempering) | moves within each start; start means differ by ≤ 0.76 | 1.00–1.36 | 91.1% (2.5) | 87.3% (78.8–93.5) | 95.6% / 95.2% | 0.420 | 338 (204–420) | 1.28M |
+| declared plain | fixed in every start of 4 fits; start means 4 to 6 | frozen ×4; 7.0, 5.0 | 92.8% (3.4) | 83.1% (70.0–94.0) | 95.6% / 94.9% | 0.484 (one 0.812) | 8 (5–13) | 80k |
+| declared SMC | replicates agree within 0.25 | n/a | 89.1% (0.9) | 87.3% (81.2–94.2) | 95.4% / 95.3% | 0.423 | 2,948 (2,069–4,030) | 2.74M |
+
+How to read the columns:
+- *Values* are means over the six fits.
+- *MC sd* comes from the two sampler seeds on each dataset: √(mean Δ²/2) over the three pairs.
+- *The six fits' sd of pooled f* is 3.3–3.6 points under every sampler, data and Monte Carlo together.
+- *Given a fit,* the held-out binomial error is about 0.7 points for f and 0.5 for y.
+- *"One start"* is a single chain or replicate, as the paper's single `BayesPPR` run is (91.1% for f, 94.9% for y).
+
+What it reads:
+- **Plain chains hold M:** fixed in every start of four fits, R̂ 7.0 and 5.0 in the other two. A single plain chain covers f at 83.1% on average and 70.0% at worst, the case the caution names.
+  - *Pooled over four starts* the coverage rises to 92.8%. That is the spread of four frozen chains at different M, not mixing.
+  - *Their RMSE is the worst:* 0.484, with 0.812 in one fit.
+- **The default moves M within each chain and matches SMC.** Single-run f coverage is 87.3% under both; RMSE is 0.420 against 0.423.
+  - *Its cost* is about 40× the plain chain's wall time and about a ninth of SMC's.
+  - *SMC's pooled coverage is the most reproducible:* MC sd 0.9 points.
+- **No sampler reaches nominal f coverage at this budget:** 83–87% for one start, 89–93% pooled. That leaves the coverage decision noted in slice 6's report open, for pure blocks too.
+- **y coverage reads 94.2–96.2% pooled and 93.3–96.2% for one start,** and does not separate the samplers.
+
+Caveats:
+- *The default's ladders made essentially no round trips:* at most 0.0001 per scan, over 14–18 levels with a maximum pair rejection of 0.74–0.97. Its M moves through neighbouring swaps, so R̂ near 1 does not show mixing over the whole ladder.
+- *Fit seconds were taken under the shared machine's load.*
+- *The readout dominated each case's time:* the predictive-mixture quantile was inverted five times per fit, so each case took 15 min to 1 h 15 min. The CDF-membership test gives the same coverage far faster.
+
+**Doc changes owed:** none beyond `a83db0c`'s entry.
+
 ### 17522a6 read against slice 6's draft (2026-11-16)
 
 A reading, at the coordinating session's request; nothing built.
@@ -298,7 +341,7 @@ A reading, at the coordinating session's request; nothing built.
   - *Negligible on Friedman:* under the near-Poisson(10) count law at n = 300 that mass lies above M = 74. It matters for small N or a count law reaching ⌊(N − 1)/4⌋.
   - *Not in the recovery readings:* they set a cap of 12 for every basis.
 
-### The sampler default for ridge bases, committed at `a83db0c` (2026-11-15; coverage pending)
+### The sampler default for ridge bases, committed at `a83db0c` (2026-11-15; coverage read 2026-11-16)
 
 **Landed.** The user's sampler decision for pure ridge-block fits: eleven files, `BassSamplerDefault.cs` and `RidgeSamplerTests.cs` new. The mixed-width slice kept it unchanged for mixed fits (`17522a6`; its legacy probe, in that slice's report below).
 - **The setting.** `BassSampling.Sampler` takes `Automatic` or `PlainChains`. `Automatic` is the default and is left out of the serialized form, so every existing config keeps its form and fingerprint. A declared `PlainChains` serializes, with a fingerprint of its own.
@@ -340,12 +383,12 @@ A reading, at the coordinating session's request; nothing built.
   - *Maths.Regression.Tests:* 263 of 358 classes, the slow tier's 71 methods out and the pinned tier in; 2,852/2,852.
   - *The other 25 projects* select nothing.
   - *Receipts:* `build-s6c/test-select/20261115_222345-commit/` and `…/20261115_223603-commit/`.
-- **Coverage, pending.**
+- **Coverage.**
   - *The probe:* `artifacts/chip-bppr/probes/SamplerCoverageProbe.cs`, on Friedman's fixture with `BpprFriedmanTests`' data and priors.
   - *The cases:* 18 fits, three data seeds (3671, 3681, 3691) by two sampler seeds by three samplers: the default, declared plain chains, and declared SMC (linear form, 500 particles, 12 mutations).
   - *Each fit:* four starts, 18,000 + 2,000 sweeps per chain.
   - *The readings:* M per start with R̂(M), 95% coverage of f and of y pooled and per start, RMSE for f, and cost as wall time and sweep-equivalents.
-  - *Where it stands:* it runs at `build-s6b/runs/20261115_222520-coverage/`, 7 of 18 done at 03:48 with no failure. Its rows reach the trx when it ends. Whether it finishes or is rerun with the CDF-membership test is the user's call, relayed by the coordinating session. Its readings will follow here.
+  - *Where it stands:* complete, 18/18, at 09:15 on 2026-11-16, unrestarted. Its readings are in the entry "Pure-block Friedman coverage under three samplers" above.
 - **Doc changes owed.**
   - BASS's config reference: `Sampling.Sampler`, the ridge-basis default and its resolution, the caution, the declared and resolved configs, and the checkpoint rule.
   - The sampler page: tempering by default for ridge bases.
