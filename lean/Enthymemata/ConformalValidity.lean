@@ -1307,6 +1307,452 @@ theorem seqRank_law [Fintype Z] (S : (n : ℕ) → (Fin n → Z) → Fin n → �
 
 end Sequential
 
+/-! ### E35's follow-up: M-1 under covariate shift -/
+
+section CovariateShift
+
+variable {Z β : Type*} [LinearOrder β]
+
+/-- `P(L + θT ≤ u)` for `θ` uniform on `(0, 1]`: a smoothed p-value's distribution function
+given the
+mass `L` strictly below its score and the mass `T` tied with it, itself included. -/
+noncomputable def smoothCdf (L T u : ℝ) : ℝ :=
+  if 0 < T then max 0 (min 1 ((u - L) / T)) else if L ≤ u then 1 else 0
+
+/-- An ordering's weight, newest first: the likelihood ratio over its newest `s` positions, the
+stream's, and 1 over the rest, the reference sample's (Tibshirani et al.'s Definition 1). -/
+noncomputable def streamWeight (w : Z → ℝ) (s : ℕ) {n : ℕ} (x : Fin n → Z) : ℝ :=
+  ∏ i : Fin n, if (i : ℕ) < s then w (x i) else 1
+
+/-- The weights of every ordering of the bag `x`. -/
+noncomputable def streamTotal (w : Z → ℝ) (s : ℕ) {n : ℕ} (x : Fin n → Z) : ℝ :=
+  ∑ τ : Equiv.Perm (Fin n), streamWeight w s (x ∘ τ)
+
+/-- **Tibshirani et al.'s Lemma 3:** the chance that unit `j` of the bag holds the newest position,
+each ordering weighed by its stream weight. -/
+noncomputable def newestShare (w : Z → ℝ) (s : ℕ) {n : ℕ} (x : Fin (n + 1) → Z) (j : Fin (n +
+    1)) : ℝ :=
+  (∑ τ ∈ univ.filter fun τ : Equiv.Perm (Fin (n + 1)) => τ 0 = j, streamWeight w s (x ∘ τ)) /
+    streamTotal w s x
+
+/-- The weighted mass strictly below the newest score. -/
+noncomputable def shiftBelow (w : Z → ℝ) (a : Z → β) (s : ℕ) {n : ℕ} (x : Fin (n + 1) → Z) : ℝ :=
+  ∑ j, if a (x j) < a (x 0) then newestShare w s x j else 0
+
+/-- The weighted mass tied with the newest score, itself included. -/
+noncomputable def shiftTied (w : Z → ℝ) (a : Z → β) (s : ℕ) {n : ℕ} (x : Fin (n + 1) → Z) : ℝ :=
+  ∑ j, if a (x j) = a (x 0) then newestShare w s x j else 0
+
+/-- Newest first: the product over the newest `k` arrivals, the stream's, of each weighted smoothed
+p-value's distribution function, at `us 0` for the newest. At each arrival the bag is every unit so
+far, its stream positions the newest; the oldest `n − k` units are the reference sample. -/
+noncomputable def shiftSeqCdf (w : Z → ℝ) (a : Z → β) :
+    (k : ℕ) → {n : ℕ} → (Fin n → Z) → (Fin k → ℝ) → ℝ
+  | 0, _, _, _ => 1
+  | _ + 1, 0, _, _ => 0
+  | k + 1, _ + 1, x, us => smoothCdf (shiftBelow w a (k + 1) x) (shiftTied w a (k + 1) x) (us 0) *
+      shiftSeqCdf w a k (fun i => x i.succ) (fun i => us i.succ)
+
+/-- The weighted tie classes cover `[0, min(u, total)]`: with masses `P ≥ 0`, each unit's smoothed
+distribution function at `u ≥ 0`, weighed by its mass, sums to `min(u, ∑ P)`. -/
+theorem sum_smoothCdf {ι : Type*} (P : ι → ℝ) (hP : ∀ i, 0 ≤ P i) (a : ι → β)
+    {u : ℝ} (hu : 0 ≤ u) : ∀ C : Finset ι,
+      ∑ j ∈ C, P j * smoothCdf (∑ i ∈ C, if a i < a j then P i else 0)
+        (∑ i ∈ C, if a i = a j then P i else 0) u = min u (∑ i ∈ C, P i) := by
+  classical
+  intro C
+  induction C using Finset.strongInduction with
+  | H C ih =>
+    rcases C.eq_empty_or_nonempty with hC | hC
+    · subst hC; simp [hu]
+    obtain ⟨t, ht, htmax⟩ := C.exists_max_image a hC
+    set M := C.filter fun j => a j = a t with hM
+    set C' := C.filter fun j => a j ≠ a t with hC'
+    have hsplit : ∀ f : ι → ℝ, ∑ j ∈ C, f j = ∑ j ∈ C', f j + ∑ j ∈ M, f j := fun f => by
+      rw [hC', hM, add_comm, sum_filter_add_sum_filter_not]
+    have hsub : C' ⊂ C := by
+      refine (filter_ssubset).2 ⟨t, ht, by simp⟩
+    have ih' := ih C' hsub
+    -- below the top class, the masses read in C are those in C'
+    have hlow : ∀ j ∈ C', (∑ i ∈ C, if a i < a j then P i else 0) =
+        ∑ i ∈ C', if a i < a j then P i else 0 := fun j hj => by
+      rw [hsplit]
+      have : ∑ i ∈ M, (if a i < a j then P i else 0) = 0 := sum_eq_zero fun i hi => by
+        have hi' := (mem_filter.1 hi).2
+        have hj' := mem_filter.1 hj
+        have : ¬ a i < a j := by rw [hi']; exact not_lt.2 (htmax j hj'.1)
+        simp [this]
+      rw [this, add_zero]
+    have htie : ∀ j ∈ C', (∑ i ∈ C, if a i = a j then P i else 0) =
+        ∑ i ∈ C', if a i = a j then P i else 0 := fun j hj => by
+      rw [hsplit]
+      have : ∑ i ∈ M, (if a i = a j then P i else 0) = 0 := sum_eq_zero fun i hi => by
+        have hi' := (mem_filter.1 hi).2
+        have hj' := (mem_filter.1 hj).2
+        have : ¬ a i = a j := by rw [hi']; exact fun h => hj' h.symm
+        simp [this]
+      rw [this, add_zero]
+    -- the top class reads everything else below it, and itself tied
+    set S' := ∑ i ∈ C', P i
+    set TM := ∑ i ∈ M, P i
+    have htopL : ∀ j ∈ M, (∑ i ∈ C, if a i < a j then P i else 0) = S' := fun j hj => by
+      have hj' := (mem_filter.1 hj).2
+      rw [hsplit]
+      have h1 : ∑ i ∈ C', (if a i < a j then P i else 0) = S' := sum_congr rfl fun i hi => by
+        have hi' := mem_filter.1 hi
+        have : a i < a j := by rw [hj']; exact lt_of_le_of_ne (htmax i hi'.1) hi'.2
+        simp [this]
+      have h2 : ∑ i ∈ M, (if a i < a j then P i else 0) = 0 := sum_eq_zero fun i hi => by
+        have hi' := (mem_filter.1 hi).2
+        simp [hi', hj']
+      rw [h1, h2, add_zero]
+    have htopT : ∀ j ∈ M, (∑ i ∈ C, if a i = a j then P i else 0) = TM := fun j hj => by
+      have hj' := (mem_filter.1 hj).2
+      rw [hsplit]
+      have h1 : ∑ i ∈ C', (if a i = a j then P i else 0) = 0 := sum_eq_zero fun i hi => by
+        have hi' := (mem_filter.1 hi).2
+        have : ¬ a i = a j := by rw [hj']; exact hi'
+        simp [this]
+      have h2 : ∑ i ∈ M, (if a i = a j then P i else 0) = TM := sum_congr rfl fun i hi => by
+        have hi' := (mem_filter.1 hi).2
+        simp [hi', hj']
+      rw [h1, h2, zero_add]
+    have hS'0 : 0 ≤ S' := sum_nonneg fun i _ => hP i
+    have hTM0 : 0 ≤ TM := sum_nonneg fun i _ => hP i
+    rw [hsplit, hsplit P]
+    rw [sum_congr rfl fun j hj => by rw [hlow j hj, htie j hj], ih']
+    rw [sum_congr rfl fun j hj => by rw [htopL j hj, htopT j hj], ← sum_mul]
+    change min u S' + TM * smoothCdf S' TM u = min u (S' + TM)
+    unfold smoothCdf
+    rcases eq_or_lt_of_le hTM0 with h0 | hpos
+    · rw [← h0]; simp
+    · rw [if_pos hpos]
+      have key : TM * max 0 (min 1 ((u - S') / TM)) = max 0 (min TM (u - S')) := by
+        rw [mul_max_of_nonneg _ _ hTM0, mul_min_of_nonneg _ _ hTM0, mul_zero, mul_one,
+          mul_div_cancel₀ _ hpos.ne']
+      rw [key]
+      simp only [min_def, max_def]
+      split_ifs <;> linarith
+
+/-- The bag without unit `p`, in the order `decomposeFin` gives it. -/
+def tailAt {n : ℕ} (x : Fin (n + 1) → Z) (p : Fin (n + 1)) : Fin n → Z :=
+  fun i => x (Equiv.swap 0 p i.succ)
+
+theorem comp_decomposeFin_zero {n : ℕ} (x : Fin (n + 1) → Z) (p : Fin (n + 1))
+    (e : Equiv.Perm (Fin n)) : (x ∘ Equiv.Perm.decomposeFin.symm (p, e)) 0 = x p := by
+  simp [Equiv.Perm.decomposeFin_symm_apply_zero]
+
+theorem comp_decomposeFin_succ {n : ℕ} (x : Fin (n + 1) → Z) (p : Fin (n + 1))
+    (e : Equiv.Perm (Fin n)) :
+    (fun i : Fin n => (x ∘ Equiv.Perm.decomposeFin.symm (p, e)) i.succ) = tailAt x p ∘ e := by
+  funext i
+  simp [tailAt, Equiv.Perm.decomposeFin_symm_apply_succ]
+
+theorem streamWeight_succ (w : Z → ℝ) (s : ℕ) {n : ℕ} (x : Fin (n + 1) → Z) :
+    streamWeight w (s + 1) x = w (x 0) * streamWeight w s (fun i => x i.succ) := by
+  unfold streamWeight
+  rw [Fin.prod_univ_succ]
+  simp [Fin.val_succ]
+
+theorem streamWeight_nonneg {w : Z → ℝ} (hw : ∀ z, 0 ≤ w z) (s : ℕ) {n : ℕ} (x : Fin n → Z) :
+    0 ≤ streamWeight w s x :=
+  prod_nonneg fun i _ => by split_ifs; exacts [hw _, zero_le_one]
+
+theorem streamTotal_nonneg {w : Z → ℝ} (hw : ∀ z, 0 ≤ w z) (s : ℕ) {n : ℕ} (x : Fin n → Z) :
+    0 ≤ streamTotal w s x :=
+  sum_nonneg fun _ _ => streamWeight_nonneg hw s _
+
+/-- Placing a unit at the newest position: the bag's weight is the newest's ratio times the
+rest's. -/
+theorem streamTotal_succ (w : Z → ℝ) (s : ℕ) {n : ℕ} (x : Fin (n + 1) → Z) :
+    streamTotal w (s + 1) x = ∑ p, w (x p) * streamTotal w s (tailAt x p) := by
+  unfold streamTotal
+  rw [← Equiv.sum_comp Equiv.Perm.decomposeFin.symm, Fintype.sum_prod_type]
+  refine sum_congr rfl fun p _ => ?_
+  rw [mul_sum]
+  refine sum_congr rfl fun e _ => ?_
+  rw [streamWeight_succ, comp_decomposeFin_zero, comp_decomposeFin_succ]
+
+/-- The orderings putting unit `p` newest weigh its ratio times the rest's. -/
+theorem sum_newest_eq (w : Z → ℝ) (s : ℕ) {n : ℕ} (x : Fin (n + 1) → Z) (p : Fin (n + 1)) :
+    ∑ τ ∈ univ.filter fun τ : Equiv.Perm (Fin (n + 1)) => τ 0 = p, streamWeight w (s + 1) (x ∘ τ) =
+      w (x p) * streamTotal w s (tailAt x p) := by
+  rw [sum_filter, ← Equiv.sum_comp Equiv.Perm.decomposeFin.symm, Fintype.sum_prod_type]
+  simp only [Equiv.Perm.decomposeFin_symm_apply_zero]
+  rw [sum_eq_single p]
+  · simp only [if_true]
+    unfold streamTotal
+    rw [mul_sum]
+    refine sum_congr rfl fun e _ => ?_
+    rw [streamWeight_succ, comp_decomposeFin_zero, comp_decomposeFin_succ]
+  · intro q _ hq
+    exact sum_eq_zero fun e _ => if_neg hq
+  · intro h; exact absurd (mem_univ p) h
+
+theorem streamTotal_comp (w : Z → ℝ) (s : ℕ) {n : ℕ} (x : Fin n → Z) (σ : Equiv.Perm (Fin n)) :
+    streamTotal w s (x ∘ σ) = streamTotal w s x := by
+  unfold streamTotal
+  exact Equiv.sum_comp (Equiv.mulLeft σ) (fun τ => streamWeight w s (x ∘ τ))
+
+theorem newestShare_comp (w : Z → ℝ) (s : ℕ) {n : ℕ} (x : Fin (n + 1) → Z)
+    (σ : Equiv.Perm (Fin (n + 1))) (j : Fin (n + 1)) :
+    newestShare w s (x ∘ σ) j = newestShare w s x (σ j) := by
+  unfold newestShare
+  rw [streamTotal_comp]
+  congr 1
+  rw [sum_filter, sum_filter]
+  rw [← Equiv.sum_comp (Equiv.mulLeft σ⁻¹)]
+  refine sum_congr rfl fun τ _ => ?_
+  simp only [Equiv.coe_mulLeft, Equiv.Perm.coe_mul, Function.comp_apply]
+  by_cases h : τ 0 = σ j
+  · have h' : σ⁻¹ (τ 0) = j := by rw [h]; simp
+    rw [if_pos h', if_pos h]
+    congr 1
+    funext i
+    simp
+  · have h' : ¬ σ⁻¹ (τ 0) = j := fun hh => h (by rw [← hh]; simp)
+    rw [if_neg h', if_neg h]
+
+theorem shiftBelow_comp (w : Z → ℝ) (a : Z → β) (s : ℕ) {n : ℕ} (x : Fin (n + 1) → Z)
+    (σ : Equiv.Perm (Fin (n + 1))) :
+    shiftBelow w a s (x ∘ σ) = ∑ j, if a (x j) < a (x (σ 0)) then newestShare w s x j else 0 := by
+  unfold shiftBelow
+  simp only [newestShare_comp, Function.comp_apply]
+  exact Equiv.sum_comp σ (fun j => if a (x j) < a (x (σ 0)) then newestShare w s x j else 0)
+
+theorem shiftTied_comp (w : Z → ℝ) (a : Z → β) (s : ℕ) {n : ℕ} (x : Fin (n + 1) → Z)
+    (σ : Equiv.Perm (Fin (n + 1))) :
+    shiftTied w a s (x ∘ σ) = ∑ j, if a (x j) = a (x (σ 0)) then newestShare w s x j else 0 := by
+  unfold shiftTied
+  simp only [newestShare_comp, Function.comp_apply]
+  exact Equiv.sum_comp σ (fun j => if a (x j) = a (x (σ 0)) then newestShare w s x j else 0)
+
+/-- **M-1 under covariate shift, the finite core.** Over every ordering of a fixed bag of `n`
+units, each
+weighed by the likelihood ratio over its newest `k` positions, the stream's (Tibshirani et al.'s
+Definition 1, the oldest `n − k` units the reference sample), the stream's weighted smoothed
+p-values
+have joint distribution function `∏ uₜ`: independent and uniform. Each p-value ranks its unit among
+every unit so far by Lemma 3's chance of holding the newest position, its ties broken by a fresh
+uniform draw. -/
+theorem shift_uniform (w : Z → ℝ) (hw : ∀ z, 0 ≤ w z) (a : Z → β) :
+    ∀ (k : ℕ) {n : ℕ} (x : Fin n → Z) (us : Fin k → ℝ), k ≤ n → (∀ i, 0 ≤ us i ∧ us i ≤ 1) →
+      ∑ σ : Equiv.Perm (Fin n), streamWeight w k (x ∘ σ) * shiftSeqCdf w a k (x ∘ σ) us =
+        streamTotal w k x * ∏ i, us i
+  | 0, n, x, us, _, _ => by simp [shiftSeqCdf, streamTotal]
+  | k + 1, 0, _, _, hk, _ => absurd hk (by omega)
+  | k + 1, n + 1, x, us, hk, hus => by
+    have ih := fun y : Fin n → Z =>
+      shift_uniform w hw a k y (fun i => us i.succ) (by omega) fun i => hus i.succ
+    set G : Fin (n + 1) → ℝ := fun p =>
+      smoothCdf (∑ j, if a (x j) < a (x p) then newestShare w (k + 1) x j else 0)
+        (∑ j, if a (x j) = a (x p) then newestShare w (k + 1) x j else 0) (us 0) with hG
+    have hstep : ∀ (p : Fin (n + 1)) (e : Equiv.Perm (Fin n)),
+        streamWeight w (k + 1) (x ∘ Equiv.Perm.decomposeFin.symm (p, e)) *
+            shiftSeqCdf w a (k + 1) (x ∘ Equiv.Perm.decomposeFin.symm (p, e)) us =
+          (w (x p) * G p) * (streamWeight w k (tailAt x p ∘ e) *
+            shiftSeqCdf w a k (tailAt x p ∘ e) (fun i => us i.succ)) := by
+      intro p e
+      have hz := comp_decomposeFin_zero x p e
+      have hs := comp_decomposeFin_succ x p e
+      simp only [shiftSeqCdf]
+      rw [streamWeight_succ, shiftBelow_comp, shiftTied_comp,
+          Equiv.Perm.decomposeFin_symm_apply_zero, hz,
+        hs, hG]
+      ring
+    rw [← Equiv.sum_comp Equiv.Perm.decomposeFin.symm, Fintype.sum_prod_type]
+    simp only [hstep, ← mul_sum, ih]
+    have hT := streamTotal_succ w k x
+    have hnn : ∀ p, 0 ≤ w (x p) * streamTotal w k (tailAt x p) := fun p =>
+      mul_nonneg (hw _) (streamTotal_nonneg hw k _)
+    rw [Fin.prod_univ_succ]
+    rcases eq_or_lt_of_le (streamTotal_nonneg hw (k + 1) x) with h0 | hpos
+    · have hz : ∀ p, w (x p) * streamTotal w k (tailAt x p) = 0 := fun p =>
+        (sum_eq_zero_iff_of_nonneg fun p _ => hnn p).1 (hT ▸ h0.symm) p (mem_univ p)
+      rw [← h0, zero_mul]
+      exact sum_eq_zero fun p _ => by
+        rw [show w (x p) * G p * (streamTotal w k (tailAt x p) * ∏ i : Fin k, us i.succ) =
+          (w (x p) * streamTotal w k (tailAt x p)) * (G p * ∏ i : Fin k, us i.succ) by ring, hz
+              p, zero_mul]
+    · have hshare : ∀ p, newestShare w (k + 1) x p =
+          w (x p) * streamTotal w k (tailAt x p) / streamTotal w (k + 1) x := fun p => by
+        unfold newestShare; rw [sum_newest_eq]
+      have hsum1 : ∑ p, newestShare w (k + 1) x p = 1 := by
+        simp only [hshare, ← sum_div, ← hT]
+        exact div_self hpos.ne'
+      have hcov := sum_smoothCdf (fun p => newestShare w (k + 1) x p)
+        (fun p => by rw [hshare]; exact div_nonneg (hnn p) hpos.le) (fun p => a (x p)) (hus 0).1
+            univ
+      simp only [hsum1, min_eq_left (hus 0).2] at hcov
+      have : ∑ p, w (x p) * G p * (streamTotal w k (tailAt x p) * ∏ i : Fin k, us i.succ) =
+          streamTotal w (k + 1) x * (∑ p, newestShare w (k + 1) x p * G p) * ∏ i : Fin k, us
+              i.succ := by
+        rw [mul_sum, sum_mul]
+        refine sum_congr rfl fun p _ => ?_
+        rw [hshare]
+        field_simp
+      rw [this, hcov]
+      ring
+
+/-- **M-1 under covariate shift, under a weighted exchangeable law** (Tibshirani et al.'s
+Definition 1): a law on bags of `n` units with probability `∏ (ratios over the newest k) · g`, `g`
+symmetric. Then the stream's weighted smoothed p-values have joint distribution function `∏ uₜ`. -/
+theorem shift_law [Fintype Z] (w : Z → ℝ) (hw : ∀ z, 0 ≤ w z) (a : Z → β) {n k : ℕ} (hk : k ≤ n)
+    (g : (Fin n → Z) → ℝ) (hg : ∀ σ : Equiv.Perm (Fin n), ∀ z, g (z ∘ σ) = g z)
+    (h1 : ∑ z, streamWeight w k z * g z = 1) (us : Fin k → ℝ) (hus : ∀ i, 0 ≤ us i ∧ us i ≤ 1) :
+    ∑ z, streamWeight w k z * g z * shiftSeqCdf w a k z us = ∏ i, us i := by
+  have huniv : permsOn (univ : Finset (Fin n)) = univ :=
+    eq_univ_of_forall fun σ => mem_permsOn_univ σ
+  have hA := sum_law_average (C := univ) g (fun σ _ z => hg σ z)
+    (fun z => streamWeight w k z * shiftSeqCdf w a k z us)
+  have hB := sum_law_average (C := univ) g (fun σ _ z => hg σ z) (fun z => streamWeight w k z)
+  rw [huniv] at hA hB
+  simp only [shift_uniform w hw a k _ us hk hus] at hA
+  have hB' : ∑ z, g z * (streamTotal w k z / (univ : Finset (Equiv.Perm (Fin n))).card) = 1 := by
+    rw [← h1]
+    unfold streamTotal
+    rw [show ∑ z, streamWeight w k z * g z = ∑ z, g z * streamWeight w k z from
+      sum_congr rfl fun z _ => mul_comm _ _, hB]
+  calc ∑ z, streamWeight w k z * g z * shiftSeqCdf w a k z us
+      = ∑ z, g z * (streamWeight w k z * shiftSeqCdf w a k z us) :=
+        sum_congr rfl fun z _ => by ring
+    _ = ∑ z, g z * ((streamTotal w k z * ∏ i, us i) /
+          (univ : Finset (Equiv.Perm (Fin n))).card) := hA
+    _ = (∑ z, g z * (streamTotal w k z / (univ : Finset (Equiv.Perm (Fin n))).card)) *
+          ∏ i, us i := by
+        rw [sum_mul]; exact sum_congr rfl fun z _ => by ring
+    _ = ∏ i, us i := by rw [hB', one_mul]
+
+/-- The elementary symmetric polynomial `e_r` of the values `v` over `C`. -/
+noncomputable def esymmOn {ι : Type*} (C : Finset ι) (r : ℕ) (v : ι → ℝ) : ℝ :=
+  ∑ S ∈ C.powersetCard r, ∏ i ∈ S, v i
+
+theorem esymmOn_insert {ι : Type*} [DecidableEq ι] {a : ι} {D : Finset ι} (ha : a ∉ D) (r : ℕ)
+    (v : ι → ℝ) : esymmOn (insert a D) (r + 1) v = esymmOn D (r + 1) v + v a * esymmOn D r v := by
+  unfold esymmOn
+  rw [powersetCard_succ_insert ha, sum_union]
+  · congr 1
+    rw [sum_image, mul_sum]
+    · refine sum_congr rfl fun S hS => ?_
+      rw [prod_insert fun h => ha ((mem_powersetCard.1 hS).1 h)]
+    · intro S hS T hT hST
+      have hS' := (mem_powersetCard.1 hS).1
+      have hT' := (mem_powersetCard.1 hT).1
+      rw [← erase_insert (fun h => ha (hS' h)), ← erase_insert (fun h => ha (hT' h))]
+      rw [hST]
+  · rw [disjoint_left]
+    intro S hS hS2
+    obtain ⟨T, -, rfl⟩ := mem_image.1 hS2
+    exact ha ((mem_powersetCard.1 hS).1 (mem_insert_self a T))
+
+/-- Counting each `(r + 1)`-set once per member: `∑ⱼ vⱼ e_r(v₋ⱼ) = (r + 1) e_(r+1)(v)`. -/
+theorem sum_mul_esymmOn_erase {ι : Type*} [DecidableEq ι] (v : ι → ℝ) :
+    ∀ (C : Finset ι) (r : ℕ), ∑ p ∈ C, v p * esymmOn (C.erase p) r v = (r + 1) * esymmOn C (r +
+        1) v := by
+  intro C
+  induction C using Finset.induction_on with
+  | empty =>
+    intro r
+    simp only [sum_empty, esymmOn]
+    rw [powersetCard_eq_empty.2 (by simp), sum_empty, mul_zero]
+  | insert a B ha ih =>
+    intro r
+    rw [sum_insert ha, erase_insert ha]
+    have herase : ∀ p ∈ B, (insert a B).erase p = insert a (B.erase p) := fun p hp =>
+      erase_insert_of_ne (fun h => ha (h ▸ hp))
+    rw [sum_congr rfl fun p hp => by rw [herase p hp]]
+    cases r with
+    | zero =>
+      simp only [esymmOn, powersetCard_zero, sum_singleton, prod_empty, mul_one, Nat.cast_zero,
+        zero_add, one_mul, powersetCard_one, sum_map, Function.Embedding.coeFn_mk, prod_singleton]
+      rw [sum_insert ha]
+    | succ r =>
+      have hins : ∀ p ∈ B, esymmOn (insert a (B.erase p)) (r + 1) v =
+          esymmOn (B.erase p) (r + 1) v + v a * esymmOn (B.erase p) r v := fun p hp =>
+        esymmOn_insert (fun h => ha (mem_of_mem_erase h)) r v
+      rw [sum_congr rfl fun p hp => by rw [hins p hp]]
+      simp only [mul_add, sum_add_distrib]
+      rw [ih (r + 1), esymmOn_insert ha (r + 1) v]
+      have h2 : ∑ p ∈ B, v p * (v a * esymmOn (B.erase p) r v) =
+          v a * ∑ p ∈ B, v p * esymmOn (B.erase p) r v := by
+        rw [mul_sum]; exact sum_congr rfl fun p _ => by ring
+      rw [h2, ih r]
+      push_cast
+      ring
+
+theorem esymmOn_map {ι κ : Type*} (C : Finset ι) (f : ι ↪ κ) (r : ℕ) (v : κ → ℝ) :
+    esymmOn (C.map f) r v = esymmOn C r (v ∘ f) := by
+  unfold esymmOn
+  rw [powersetCard_map, sum_map]
+  refine sum_congr rfl fun S _ => ?_
+  simp [prod_map]
+
+/-- The bag without unit `p` is the bag's other units. -/
+theorem map_tailAt (n : ℕ) (p : Fin (n + 1)) :
+    (univ : Finset (Fin n)).map ⟨fun i => Equiv.swap 0 p i.succ, fun i j h => by
+      simpa using h⟩ = univ.erase p := by
+  apply eq_of_subset_of_card_le
+  · intro q hq
+    obtain ⟨i, -, rfl⟩ := mem_map.1 hq
+    refine mem_erase.2 ⟨fun h => ?_, mem_univ _⟩
+    simp only [Function.Embedding.coeFn_mk] at h
+    have : (i.succ : Fin (n + 1)) = 0 := by
+      have h' := congrArg (Equiv.swap 0 p) h
+      simp at h'
+    exact Fin.succ_ne_zero i this
+  · rw [card_map, card_erase_of_mem (mem_univ p), card_univ, card_univ, Fintype.card_fin,
+      Fintype.card_fin]
+    omega
+
+/-- **The orderings' total weight is `s! (n − s)! e_s(w)`**: each set of `s` units fills the stream
+positions in `s!` orders and the reference positions in `(n − s)!`. -/
+theorem streamTotal_esymm (w : Z → ℝ) :
+    ∀ (s : ℕ) {n : ℕ} (x : Fin n → Z), s ≤ n →
+      streamTotal w s x = s.factorial * (n - s).factorial * esymmOn univ s (w ∘ x)
+  | 0, n, x, _ => by
+    simp [streamTotal, streamWeight, esymmOn, Fintype.card_perm]
+  | s + 1, 0, _, hs => absurd hs (by omega)
+  | s + 1, n + 1, x, hs => by
+    rw [streamTotal_succ]
+    have hmap : ∀ p : Fin (n + 1), esymmOn univ s (w ∘ tailAt x p) =
+        esymmOn ((univ : Finset (Fin (n + 1))).erase p) s (w ∘ x) := fun p => by
+      rw [← map_tailAt n p, esymmOn_map]
+      rfl
+    simp only [streamTotal_esymm w s _ (by omega : s ≤ n), hmap]
+    have hsum := sum_mul_esymmOn_erase (w ∘ x) univ s
+    simp only [Function.comp_apply] at hsum
+    rw [show ∑ p : Fin (n + 1), w (x p) * ((s.factorial : ℝ) * ((n - s).factorial : ℝ) *
+        esymmOn (univ.erase p) s (w ∘ x)) = (s.factorial : ℝ) * ((n - s).factorial : ℝ) *
+        ∑ p : Fin (n + 1), w (x p) * esymmOn (univ.erase p) s (w ∘ x) by
+      rw [mul_sum]; exact sum_congr rfl fun p _ => by ring]
+    rw [hsum, show n + 1 - (s + 1) = n - s by omega, Nat.factorial_succ]
+    push_cast
+    ring
+
+/-- **The share, as `CovariateShiftPValues` computes it**: Lemma 3's chance that unit `j` holds the
+newest of `k + 1` stream positions is `πⱼ/(k + 1)`, with `πⱼ = wⱼ e_k(w₋ⱼ)/e_(k+1)(w)` the
+conditional
+Poisson inclusion probability. -/
+theorem newestShare_eq_esymm (w : Z → ℝ) {k n : ℕ} (hk : k ≤ n) (x : Fin (n + 1) → Z) (j : Fin
+    (n + 1)) :
+    newestShare w (k + 1) x j = w (x j) * esymmOn (univ.erase j) k (w ∘ x) /
+      ((k + 1) * esymmOn univ (k + 1) (w ∘ x)) := by
+  unfold newestShare
+  rw [sum_newest_eq, streamTotal_esymm w k _ hk, streamTotal_esymm w (k + 1) _ (by omega)]
+  have hmap : esymmOn univ k (w ∘ tailAt x j) = esymmOn ((univ : Finset (Fin (n + 1))).erase j)
+      k (w ∘ x) := by
+    rw [← map_tailAt n j, esymmOn_map]
+    rfl
+  rw [hmap, show n + 1 - (k + 1) = n - k by omega, Nat.factorial_succ]
+  have hf : (0 : ℝ) < k.factorial := by exact_mod_cast k.factorial_pos
+  have hg : (0 : ℝ) < (n - k).factorial := by exact_mod_cast (n - k).factorial_pos
+  push_cast
+  rcases eq_or_ne (esymmOn univ (k + 1) (w ∘ x)) 0 with h0 | h0
+  · simp [h0]
+  · field_simp
+
+end CovariateShift
+
 /-! ### E35, M-2: the betting product and Ville's inequality -/
 
 section Betting

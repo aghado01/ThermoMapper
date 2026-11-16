@@ -233,6 +233,33 @@ The user asked for this on 2026-11-08 ("Yes, start it"), relayed by the BASS ext
 
 Newest first.
 
+### 2026-11-15 — E35's follow-up: M-1 under covariate shift, proved
+
+Asked 2026-11-15 at the user's word ("Yes, prove it"), relayed by the main session: prove the guarantee posed for `CovariateShiftPValues` (d4c97d4). The statements are in the ledger, under "E35's follow-up: M-1 under covariate shift". The new declarations are PROOF-CLOSED, with the standard three axioms only. The checks ran first.
+
+- *Proved.*
+  - `shift_uniform`: over every ordering weighed by the likelihood ratio over its stream positions, the stream's weighted smoothed p-values have joint distribution function `∏ uₜ`.
+  - `shift_law`: the same under Tibshirani et al.'s weighted exchangeable law.
+  - `newestShare_eq_esymm`: the shares are the C#'s `πⱼ/k`, with `πⱼ = wⱼ e_(k−1)(w₋ⱼ)/e_k(w)`.
+- *The route.* M-1's reverse filtration with each ordering weighed. A weighted tie lemma (`sum_smoothCdf`) makes the newest p-value uniform whichever unit is newest. The C#'s formula comes from `streamTotal = s! (n − s)! e_s(w)`.
+- *Findings for the C#.* None that change the statement.
+  - The theorem needs only `w ≥ 0`, which the C# checks. A stream unit with `w = 0` has probability 0 under the null.
+  - The ratio must be the true one. An estimated ratio is outside the theorem, as the class says.
+  - The `5e-324` clamp only rounds an underflow.
+- *Not formalized,* as for M-1: the lift from a finite space and the θ draws, written as distribution functions, to random variables. `ville`'s premise follows by the standard identification of a law by its distribution function.
+- *Changed.*
+  - `ConformalValidity.lean`: section `CovariateShift` (29 declarations), after M-1's `Sequential`, with no new imports.
+  - The checks: a new section.
+  - The ledger.
+- *Gates.* All pass:
+  - the module build and the barrel build (3,204 jobs);
+  - the axioms probe: 10 results, standard three only;
+  - meta-ci;
+  - the full checks run (655 s).
+  - D: has 30.3 GB free.
+- *Hypotheses read.* A known nonnegative ratio meets `w ≥ 0`. Any finite reference sample with a symmetric `g` normalizing `∏ w · g` meets `shift_law`'s premises, for example independent draws from P and Q with `dQ/dP = w`.
+- *For the `#print axioms` file:* `sum_smoothCdf`, `streamTotal_succ`, `sum_newest_eq`, `shift_uniform`, `shift_law`, `sum_mul_esymmOn_erase`, `streamTotal_esymm`, `newestShare_eq_esymm`.
+
 ### 2026-11-15 — RoBAS-Full's Dawson bounds proved in Lean (scope B)
 
 Asked 2026-11-14 by the user ("Full Lean, bounds too"), after scope A (700c718). `RobasDawsonBounds` is now a theorem, so RoBAS-Full's interval result needs no hypothesis on Dawson's function. The new declarations are PROOF-CLOSED, with the standard three axioms only. The statements are in the ledger, under "RoBAS-Full's intervals at n ≥ 4", "Scope B".

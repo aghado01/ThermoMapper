@@ -2,7 +2,7 @@
 
 Pins the contract of the engine's conformal layer, one layer over retained draws and pointwise densities for every model with a pointwise density ([E16](../../../issues/regression/bass/extensions-brief.md#conformal-bayes-the-consumer)). The layer owns coverage and the score owns width. These are the finite statements of that split. They are the sibling of [GuardedEstimator](../BASS/guarded-estimator-lemmas.md): there, means valid whatever the emulator does; here, prediction sets valid whatever the model does. Written from the [chip brief](conformal-chip-brief.md).
 
-**Status (2026-11-15).** Proved in `lean/Enthymemata/ConformalValidity.lean`, namespace `Conformal`, with no apologies (PROOF-CLOSED, 668 declarations counting E35's M-1 and M-2 and slices 9, 10, 12, 13, 14, 15, 16 and 18, slice 14's follow-ups 1, 2 and 3, slice 18's follow-up, RoBAS-Full's intervals, and E35's CUSUM and Shiryaev–Roberts guarantees at the end of this page; RoBAS-Full's Dawson bounds in `lean/Enthymemata/ConformalDawson.lean`, 151 declarations; `#print axioms` shows `propext`, `Classical.choice`, `Quot.sound` only):
+**Status (2026-11-15).** Proved in `lean/Enthymemata/ConformalValidity.lean`, namespace `Conformal`, with no apologies (PROOF-CLOSED, 697 declarations counting E35's M-1 and M-2 and slices 9, 10, 12, 13, 14, 15, 16 and 18, slice 14's follow-ups 1, 2 and 3, slice 18's follow-up, RoBAS-Full's intervals, and E35's CUSUM and Shiryaev–Roberts guarantees and M-1 under covariate shift at the end of this page; RoBAS-Full's Dawson bounds in `lean/Enthymemata/ConformalDawson.lean`, 151 declarations; `#print axioms` shows `propext`, `Classical.choice`, `Quot.sound` only):
 - CB-1: `card_rankLe_le`, `coverage_orderings`, `coverage_orderings_eq`, `coverage_strict_le`, `coverage_orderings_le`, `rank_uniform`, `coverage_tieBreak`, `coverage_given`, `coverage_law`, `coverage_stratum`;
 - CB-2: `split_coverage`, `exchangeable_given_training`, `cqr_ordConnected`;
 - CB-4: `sum_jointU`, `post_addOneIn`, `integratedScore_equivariant`, `latentScore_equivariant`, `latentScore_eq`, `sum_jointU_addOneIn`, `integratedScore_le_latentScore`, `accepts_latent_of_mixed`, `mixed_counterexample`;
@@ -1370,6 +1370,8 @@ Asked on 2026-11-15 by the user: "The CUSUM and Shiryaev–Roberts guarantees". 
 
 ## Posed: M-1 under covariate shift (2026-11-15)
 
+*Proved since (2026-11-15):* `shift_law` and `newestShare_eq_esymm`, under "E35's follow-up: M-1 under covariate shift" below.
+
 Posed by the conformal C# chip at the user's choice ("Build, checks now", 2026-11-15). The C# is d4c97d4 (`CovariateShiftPValues`) and its report e885e6a, in the addendum. Not yet proved.
 
 - *The setting.* The joint density is Π_{t>m} w(z_t) · g(z₁, …, z_N) with g symmetric: Tibshirani, Barber, Candès and Ramdas 2019, Definition 1.
@@ -1385,3 +1387,44 @@ Posed by the conformal C# chip at the user's choice ("Build, checks now", 2026-1
   - Finite core: over every ordering of a fixed bag, weighed and normalized, the stream's tie-randomized weighted ranks are jointly uniform.
   - Equal weights give back M-1.
 - *Checks so far (the C#'s).* Enumeration over six units: P(every pₜ ≤ uₜ) = Π uₜ to within 2e-15 over a grid. Ties are included, and so is a zero weight at a reference position. A stream unit with w = 0 has probability zero under the null, and the C# refuses it.
+
+## E35's follow-up: M-1 under covariate shift
+
+Asked on 2026-11-15 at the user's word ("Yes, prove it"), relayed by the main session. The statement is the one posed above, under "Posed: M-1 under covariate shift", for `CovariateShiftPValues` (d4c97d4). The source is Tibshirani, Barber, Candès and Ramdas 2019, Definition 1 and Lemma 3, carried into M-1's reverse filtration. Proved on 2026-11-15 in `ConformalValidity.lean`, section `CovariateShift`, right after M-1's `Sequential` (29 declarations). PROOF-CLOSED, with the standard three axioms only. The checks (section "E35 follow-up: M-1 under covariate shift") ran first.
+
+**The model**, newest first as in M-1. A bag of `n` units: its oldest `n − k` are the reference sample, its newest `k` the stream.
+- *An ordering's weight* (`streamWeight`): the likelihood ratio `w` over the stream positions, and 1 over the reference positions. `streamTotal` sums it over every ordering of the bag.
+- *Lemma 3's share* (`newestShare`): the weighted share of orderings putting unit `j` newest.
+- *The p-value.* The newest unit's masses are the shares strictly below its score (`shiftBelow`) and tied with it, itself included (`shiftTied`). The p-value is `p = Below + θ Tied`, with θ uniform on (0, 1].
+  - Its distribution function given the masses is `smoothCdf`, which is `clamp((u − L)/T)`.
+  - `shiftSeqCdf` multiplies them over the stream arrivals. At each arrival the bag is every unit so far.
+- *The score* is a fixed function `a : Z → β`, as the C# takes it.
+
+**The statements.**
+- *The share is the C#'s* (`newestShare_eq_esymm`): Lemma 3's share of the newest of `k + 1` stream positions is `πⱼ/(k + 1)`, with `πⱼ = wⱼ e_k(w₋ⱼ)/e_(k+1)(w)`. This is `StreamShares`' conditional Poisson inclusion probability. It goes through `streamTotal_esymm`: the orderings' total weight is `s! (n − s)! e_s(w)`, by the double count `∑ⱼ wⱼ e_s(w₋ⱼ) = (s + 1) e_(s+1)(w)` (`sum_mul_esymmOn_erase`).
+- *The finite core* (`shift_uniform`). Over every ordering of a fixed bag, each weighed by its stream weight, the stream's weighted smoothed p-values have joint distribution function `∏ uₜ` on `[0, 1]^k`.
+- *Under a weighted exchangeable law* (`shift_law`). Tibshirani et al.'s Definition 1 is a law with probability `∏ (stream ratios) · g`, with `g` symmetric. Under it the same holds: the stream's p-values are independent and uniform.
+
+**The route.** Vovk's reverse filtration, as in `seqRank_uniform`, with each ordering weighed.
+- Peel off the newest unit (`decomposeFin`). Its weight factors as the newest's ratio times the rest's (`streamTotal_succ`, `sum_newest_eq`).
+- The rest's p-values read only the rest's bag, so the induction applies to them.
+- The newest's p-value, averaged over which unit is newest, is uniform by the weighted tie lemma (`sum_smoothCdf`). With masses `P ≥ 0`, `∑ⱼ Pⱼ cdf(Lⱼ, Tⱼ, u) = min(u, ∑ P)`. Its proof peels off the top score class, which covers `[∑ below, ∑ below + T]`.
+
+**Against the source and the C#.**
+- *The weights.* The theorem needs `w ≥ 0`, which the C# checks: reference ratios at least 0, stream ratios above 0.
+  - A stream unit with `w = 0` has probability 0 under the weighted exchangeable law, so refusing it costs nothing.
+  - Neither boundedness nor positivity is needed.
+  - A bag whose stream positions cannot all hold positive weights has probability 0 too. The C# throws there.
+- *The ratio is the true one.* `shift_law` takes the law's own `w`. An estimated ratio is outside the theorem, as the C#'s remarks say.
+- *The clamp.* The C# reports `max(p, 5e-324)`. In exact arithmetic `p ≥ θ Pₙ > 0` for a positive stream ratio, so the clamp only rounds an underflow and changes nothing on the reals.
+- *The lift to continuous laws is not formalized*, as for M-1. That covers the finite space `Z` and the θ draws written as distribution functions rather than random variables on a product space. `ville`'s premise, the p-values' law being `Measure.pi` uniform, follows by the standard identification of a law on `[0, 1]^k` by its distribution function.
+
+**For the C#.**
+- *The guarantee is proved*, as the class's remarks pose it: under weighted exchangeability with the true ratio, the stream's p-values are i.i.d. uniform.
+- *Its shares are Lemma 3's*, with no condition the C# does not already check.
+- *The remarks can say so.* "Posed here, checked by enumeration, not yet in Lean" can become "proved (`shift_law`, `newestShare_eq_esymm`), up to the continuous lift as for M-1".
+
+**Checks.**
+- *The shares.* The arrangement shares equal `πⱼ/t` on 46 units and sum to 1.
+- *The weighted tie lemma* holds on 27 cases.
+- *The joint distribution function.* Over every ordering weighed by the stream's `w`, it is `∏ uₜ` exactly on 100 grid points, with ties and zero reference weights. The unweighted ranks miss by up to 0.243.

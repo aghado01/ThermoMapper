@@ -1096,6 +1096,118 @@ def _e35_alarm_checks():
 
 _e35_alarm_checks()
 
+print()
+print("=== E35 follow-up: M-1 under covariate shift (CovariateShiftPValues) ===")
+# Tibshirani, Barber, Candes and Ramdas 2019, Definition 1 and Lemma 3, in Vovk's reverse filtration. A bag of N units
+# (m reference positions first, weight 1, then k stream positions, weight w); each ordering weighed by the product of
+# w over the stream positions. At the t-th stream arrival the newest position holds unit j with chance P_j, the
+# arrangement share, which equals pi_j/t with pi_j = w_j e_(t-1)(w_-j)/e_t(w) (CovariateShiftPValues.StreamShares).
+# The smoothed p-value p = sum_j P_j [a_j < a_new] + theta sum_j P_j [a_j = a_new], theta uniform on (0, 1], has
+# P(p <= u | ordering) = clamp((u - L)/T). Checked exactly:
+# (a) the arrangement share equals pi_j/t, and the shares sum to 1;
+# (b) the weighted tie lemma: sum_j P_j cdf(L_j, T_j, u) = min(u, sum P) for u >= 0;
+# (c) the finite core: over every ordering of a bag, weighed and normalized, the stream's p-values have joint CDF
+#     prod u_t on a grid, ties and zero reference weights included;
+# (d) the unweighted ranks fail it under unequal weights.
+
+
+def _shift_checks():
+    import itertools as it
+    from math import factorial, comb as _comb
+
+    def esymm(ws, r):
+        return sum((math.prod(c) for c in it.combinations(ws, r)), Q(0)) if r >= 0 else Q(0)
+
+    def cdf(L, T, u):
+        if T > 0:
+            return min(Q(1), max(Q(0), (u - L) / T))
+        return Q(1) if L <= u else Q(0)
+
+    def shares(ws, s):
+        """Arrangement shares of the newest position, s stream slots among the units ws (newest-first slots)."""
+        n = len(ws)
+        num = [Q(0)] * n
+        tot = Q(0)
+        for perm in it.permutations(range(n)):
+            wt = math.prod((ws[perm[i]] for i in range(s)), start=Q(1))
+            tot += wt
+            num[perm[0]] += wt
+        return [x / tot for x in num] if tot else [Q(0)] * n, tot
+
+    n_a = 0
+    for ws in [(Q(1), Q(2), Q(1, 2)), (Q(0), Q(3), Q(1), Q(2)), (Q(1), Q(1), Q(5), Q(1, 3), Q(2))]:
+        n = len(ws)
+        for s in range(1, n + 1):
+            sh, tot = shares(list(ws), s)
+            ek = esymm(ws, s)
+            assert tot == factorial(s) * factorial(n - s) * ek
+            if ek == 0:
+                continue
+            for j in range(n):
+                rest = ws[:j] + ws[j + 1:]
+                assert sh[j] == ws[j] * esymm(rest, s - 1) / (s * ek)
+                n_a += 1
+            assert sum(sh) == 1
+
+    n_b = 0
+    for P_, a_ in [((Q(1, 4), Q(1, 4), Q(1, 2)), (1, 1, 2)), ((Q(1, 3), Q(0), Q(1, 6), Q(1, 2)), (2, 0, 2, 1)),
+                   ((Q(1, 5),) * 5, (0, 0, 1, 1, 1))]:
+        for u in [Q(i, 7) for i in range(9)]:
+            lhs = Q(0)
+            for j in range(len(P_)):
+                L = sum((P_[i] for i in range(len(P_)) if a_[i] < a_[j]), Q(0))
+                T = sum((P_[i] for i in range(len(P_)) if a_[i] == a_[j]), Q(0))
+                lhs += P_[j] * cdf(L, T, u)
+            assert lhs == min(u, sum(P_))
+            n_b += 1
+
+    def joint(order_vals, m, us, weighted=True):
+        """For an ordering (arrival order list of (score, weight)), prod over stream arrivals of the conditional CDF."""
+        val = Q(1)
+        N = len(order_vals)
+        for t in range(m + 1, N + 1):
+            bag = order_vals[:t]
+            s = t - m
+            ws = [b[1] for b in reversed(bag)] if weighted else [Q(1)] * t   # newest first
+            sh, _ = shares(ws, s)
+            newest = bag[-1][0]
+            scores = [b[0] for b in reversed(bag)]
+            L = sum((sh[i] for i in range(t) if scores[i] < newest), Q(0))
+            T = sum((sh[i] for i in range(t) if scores[i] == newest), Q(0))
+            val *= cdf(L, T, us[t - m - 1])
+        return val
+
+    n_c, worst_d = 0, Q(0)
+    bags = [((1, Q(1)), (2, Q(2)), (2, Q(1, 2)), (3, Q(1))),
+            ((1, Q(0)), (1, Q(3)), (2, Q(1)), (3, Q(2))),
+            ((0, Q(2)), (1, Q(1)), (1, Q(1)), (2, Q(4)), (0, Q(1, 2)))]
+    for bag in bags:
+        N = len(bag)
+        for m in range(1, N):
+            k = N - m
+            grid = [Q(1, 4), Q(1, 2), Q(5, 6), Q(1)] if k <= 2 else [Q(1, 3), Q(1)]
+            for us in it.product(grid, repeat=k):
+                tw = num = numu = Q(0)
+                for perm in it.permutations(range(N)):
+                    order = [bag[i] for i in perm]
+                    wt = math.prod((order[t][1] for t in range(m, N)), start=Q(1))
+                    tw += wt
+                    num += wt * joint(order, m, us)
+                    numu += wt * joint(order, m, us, weighted=False)
+                if tw == 0:
+                    continue
+                assert num / tw == math.prod(us)
+                worst_d = max(worst_d, abs(numu / tw - math.prod(us)))
+                n_c += 1
+    assert worst_d > 0
+    print(f"M-1 under shift: the arrangement shares equal pi_j/t = w_j e_(t-1)(w_-j)/(t e_t(w)) on {n_a} units and sum "
+          f"to 1; the weighted tie lemma on {n_b} cases; over every ordering weighed by the stream's w, the p-values' joint "
+          f"CDF is prod u_t exactly on {n_c} grid points (ties, zero reference weights); the unweighted ranks miss by up to "
+          f"{float(worst_d):.3f}")
+
+
+_shift_checks()
+
 
 print()
 print("=== Slice 9: the jackknife+ and the cross-fitted rule ===")
