@@ -1,10 +1,10 @@
 # BAMRS: free-knot tensor-product spline surfaces (preparation brief)
 
-Date: 2026-11-12. Status: preparation; nothing is built. This is E3 of the [extensions checklist](../../bass/extensions-checklist.md), queued by the user on 2026-11-08. It replaces the design notes under E3 in the [extensions brief](../../bass/extensions-brief.md#free-knot-tensor-product-surfaces-abmrs) as the working document. Written by the main session at the user's request, after a re-read of the sources and a survey of the engine. Its decisions are proposals until the user takes them. Revised 2026-11-15 after an external review the user relayed: [the record](#review-of-2026-11-15) lists what changed.
+Date: 2026-11-12. Status: preparation; nothing is built. This is E3 of the [extensions checklist](../../bass/extensions-checklist.md), queued by the user on 2026-11-08. It replaces the design notes under E3 in the [extensions brief](../../bass/extensions-brief.md#free-knot-tensor-product-surfaces-abmrs) as the working document. Written by the main session at the user's request, after a re-read of the sources and a survey of the engine. Its decisions are proposals until the user takes them. Revised 2026-11-15 after an external review the user relayed: [the record](#review-of-2026-11-15) lists what changed. The rollout was re-planned the same day at the user's direction: BAMRS is built as a new engine beside BARS and BAPS ([Decision 1](#decisions), [its record](#rollout-re-plan-of-2026-11-15)).
 
 ## Why
 
-BAMRS fits a surface over two or three inputs with a tensor-product B-spline whose knots are free on every axis: reversible-jump births, deaths and relocations per axis, with the coefficients and the noise variance integrated out. It is BARS on a product carrier. He, Yang and Kang's ABMRS is the published instance. BAMRS is this engine's version, on the corrected forms the regression family already holds.
+BAMRS fits a surface over two or three inputs with a tensor-product B-spline whose knots are free on every axis: reversible-jump births, deaths and relocations per axis, with the coefficients and the noise variance integrated out. In method it is BARS on a product carrier. In code it is its own engine, as BASS is. He, Yang and Kang's ABMRS is the published instance. BAMRS is this engine's version, on the corrected forms the regression family already holds.
 
 What it adds to the family:
 
@@ -66,7 +66,7 @@ Every form below is settled for BARS and carries over. The product structure is 
 - **Structure prior.** A product across axes, restricted to the admissible set. Its log density there is Σₐ [ln p(kₐ) + ln kₐ!], the count law times the order-statistics density. The restriction couples the axes, so their counts are not independent under the prior (item 6 of the next section). Any `IComplexityPrior` serves an axis. `EbicPrior(γ, Cₐ)` reproduces the source's law, since a uniform draw of kₐ sites from a grid tends to the order statistics of kₐ uniforms as the grid refines; C stays as a nominal count.
 - **Coefficients and noise.** The centred collapsed g-prior block, with the σ² priors BARS has (`Sigma2Prior`). Under the Jeffreys prior its marginal is Lemma 1 on ỹ = y − c.
 - **Admission.** In order of cost: the simplex and the count priors; the size bound m > ν, read from the counts alone, with ν = Πₐ νₐ computed under overflow protection; the support gate on product columns; then factor admission (`DesignAdmission`). No design is allocated before the size bound passes (item 6 of the next section has the arithmetic). A refused configuration scores −∞. Truncating the prior to the admissible set keeps every acceptance ratio valid, since an inadmissible proposal is simply rejected.
-  - The order leaves the admitted set as it was. It changes the reason a doubly refused configuration is tallied under: BARS's models refuse `TooFewObservations` after the design is built. The one-axis path keeps BARS's order wherever a pinned tally reads the reason.
+  - The order is BAMRS's own. BARS's target keeps its order, in which the models refuse `TooFewObservations` after the design is built. So a configuration refused on two counts can carry a different reason in the two engines' tallies, while the admitted sets agree.
   - The gate needs no dense design. A product column's mass Σᵢ Πₐ Bₐ(xᵢₐ) accumulates from each row's Πₐ (pₐ + 1) nonzero entries. B-spline values lie in [0, 1], so that mass is at most each factor column's own mass, and an axis column below the minimum refuses before any product is formed.
 - **Moves.** Birth, death and relocation on one axis at a time, with the chain owning the selection ratio. Constant weights are BARS's default and the prior-cancelling schedule its option (`DmgkSchedule`); the source's schedule is that option at c = 0.3 on the EBIC law.
 
@@ -89,7 +89,11 @@ These follow from the model. None is in the source.
    - *The measurement and its decision* is under Decision 2.
 3. **Size.** ν grows as a product and the block needs m > ν. In lexicographic order the Gram's half-bandwidth is about p·ν_inner + p, so the factor is cheapest with the axis of fewer columns innermost. That choice is a pure function of the state, so it does not disturb bit-for-bit resumption.
    - *Axis identity.* A birth can change which axis has fewer columns, so the cheapest order flips during a run. BAPS flattens coefficients as j·ν_y + k, and `TensorPenalty` strides by ν_y (`TensorPenalty.cs:101`–`105`). Its caller fixes the order once, which fixed knots allow. A flip that reached the coefficients would swap the axes under every consumer, with no error raised.
-   - *Recommended.* The coefficient order every consumer sees is fixed: the first axis outermost and the last fastest, whatever the counts. The band's order is the builder's own, carried as an explicit layout (the axis permutation and its strides). Whatever writes into the band, the Gram or a penalty, takes its strides from the layout, and a solve permutes on the way in and out. Retained draws, restrictions and prediction see the fixed order only, so draws from different states pool without a permutation for each.
+   - *Recommended.* BAMRS's assembler is its own, and BAPS's `TensorProductDesign` and `TensorPenalty` stay as they are. Outside the assembler a draw's coefficients are a d-way array addressed by multi-index (j₁, …, j_d), with one meaning whatever the counts. The physical order belongs to the assembler and its factor, and nothing else reads it. Three things can then change the physical form without reaching a consumer:
+     - the size rule (at d = 3 the half-bandwidth is p times the product of every axis but the outermost, so the rule is the largest axis outermost);
+     - a factor that is not a flat band;
+     - the full-grid shortcut, which produces the array from per-axis factors with no band at all.
+   - *Sequence.* The first build keeps the declared order, and reordering arrives with BAMRS's own Gram path. A penalty, if Decision 2 adds one, is per-axis data that the assembler places through `DifferencePenalty.AccumulateStrided`, which already takes a stride.
    - *Its test.* A rectangular design (ν₁ ≠ ν₂) with different penalties on the two axes, against dense Kronecker algebra, in both size orders so that the layout flips between them.
 4. **A steep transition's columns span the box.** On this carrier the knots are distinct, so every draw is continuous with p − 1 continuous derivatives, and f(c⁺) − f(c⁻) = 0 at every c however tightly the knots cluster. What p + 1 knots inside one gap in the data give is a free change across the gap: the polynomial pieces on its two sides no longer constrain each other, and no observation sits in the transition. To the data that is a jump. Every column keeps its support: no B-spline has all p + 2 of its knots inside a cluster of p + 1, so each reaches data on one side. I argued this from B-spline support and did not run it against the gate.
    - *What spans the box is the cost.* The cluster's knots lie on a whole line (or plane) across the box, and each costs a slice of columns (item 1). The contrast across the gap, f(g⁺, θ) − f(g⁻, θ), is itself a spline in θ on the other axis's knots. Its amplitude can vary along the line and vanish on part of it. So a transition confined to part of the domain is representable, and it is paid for across the whole box.
@@ -104,22 +108,22 @@ These follow from the model. None is in the source.
 
 ## What is already built
 
-Read from the source on 2026-11-12. "As is" means by reading, not by running.
+Read from the source on 2026-11-12. "As is" means by reading, not by running. Nothing in this table is edited in place: BAMRS calls it as it stands, or adds an entry beside it (Decision 1's rule).
 
 | Piece | Where | Use for BAMRS |
 |---|---|---|
 | Per-axis carrier and basis | `KnotConfig`, `SplineBasis`, `BSpline`, `StepBasis`, `IBasis` | As is, one per axis. `IBasis` needs no change: the product is taken over the axes' own designs, so axes may mix bases (a step axis with a cubic axis) |
-| Tensor design | `Baps.TensorProductDesign` | Upgrade: it is bivariate and takes `SplineBasis`. Lift it to d axes over `IBasis`, and BAPS's `AnisotropicTensorSpline` and BAMRS share one builder, with item 3's fixed coefficient order and explicit band layout. Today its caller picks the order ("put the smaller dimension as y") |
+| Tensor design | `Baps.TensorProductDesign` | Left as it is: bivariate, over `SplineBasis`, in the order its caller picks ("put the smaller dimension as y"). BAMRS builds its own d-axis assembler over `IBasis` in its folder (item 3) |
 | Face-splitting contraction (N-X1) | `KhatriRao.FaceSplittingGram`, `FaceSplittingCrossProducts`, `FaceSplittingHalfBandwidth`, `KroneckerGram`, `FaceSplittingRow` | As is. Built for this; only tests call it |
 | Wide-band factor (N-X2) | `WideBandCholesky`, `SpdFactors.ForBand` | As is. Built for this; nothing selects it |
-| Observation models | `IObservationModel`: `WeightedNormalModel`, `PoissonModel`, `WhittleModel`, `GibbsLossModel` | As is in correctness: each takes a dense design and knows nothing of the basis. `BandedDesign` reads each row's first and last nonzero column, so a tensor row's span is p·ν_inner + p wide and the accumulation costs O(m·bw²). At the source's benchmark sizes (m ≤ 1000, ν ≲ 150) that is small. The upgrade, when sizes ask for it, is accumulation by `FaceSplittingRow` and a factor from `SpdFactors.ForBand` |
+| Observation models | `IObservationModel`: `WeightedNormalModel`, `PoissonModel`, `WhittleModel`, `GibbsLossModel` | As is in correctness: each takes a dense design and knows nothing of the basis. `BandedDesign` reads each row's first and last nonzero column, so a tensor row's span is p·ν_inner + p wide and the accumulation costs O(m·bw²). At the source's benchmark sizes (m ≤ 1000, ν ≲ 150) that is small. When sizes ask for more, BAMRS forms its own Gram by `FaceSplittingRow` with a factor from `SpdFactors.ForBand`, behind its own seam, and the models stay as they are |
 | Collapsed block | `CollapsedGPrior`, `BandedGPrior`, `GPriorCentre`, `Sigma2Prior` | As is: any `ISpdFactor`, the centre conventions, tempered marginals, leave-out densities |
-| Target | `SplineTarget` | New beside it, same composition: per-axis count priors, the size bound ahead of any design, the gate on product columns, the model's marginal, and a reference sampler that draws every axis and rejects the whole state (item 6) |
-| Moves | `KnotBirthMove`, `KnotDeathMove`, `KnotRelocateMove`, `KnotBirthDensity`, the kernels, `DmgkSchedule`, `ScheduledMove` | Lift: an adaptor applies an `IRjMove<KnotConfig>` to one axis of the product carrier. The chain normalizes selection over the 3d moves, and a null proposal at kₐ = 0 stays put, which is the balance row 5 asks for |
+| Target | `SplineTarget` | Left as it is. BAMRS's target is new, in its folder, with the same composition: per-axis count priors, the size bound ahead of any design, the gate on product columns, the model's marginal, and a reference sampler that draws every axis and rejects the whole state (item 6) |
+| Moves | `KnotBirthMove`, `KnotDeathMove`, `KnotRelocateMove`, `KnotBirthDensity`, the kernels, `DmgkSchedule`, `ScheduledMove` | As is, wrapped: BAMRS's adaptor applies an `IRjMove<KnotConfig>` to one axis of the product carrier. The chain normalizes selection over the 3d moves, and a null proposal at kₐ = 0 stays put, which is the balance row 5 asks for |
 | Chains and ensembles | `ReversibleJumpChain<TState>`, `ParallelTempering<TState>`, `TemperingLadder`, `ChainEnsemble`, `IEnsembleModel<TState>`, `LadderEvidence` | As is: generic in the state |
 | Other samplers | `SmcRun`, `MulticanonicalRun` and the flat-histogram family | Candidates for item 1's count barriers. Their contracts are unread |
-| Orchestration | `BarsEnsemble : IEnsembleModel<KnotConfig>` (82 KB): chains, robust weights, noise, checkpoints, evidence, the conformal hooks | Decision 1. Its carrier and its peak readout are one-dimensional |
-| Curve readouts | `SplineExtrema`, `BarsDraw`, `PeakDraw`, `PeakSpan`, λ, π, `PeakModes` | [Readouts](#readouts-how-the-bars-contract-extends) |
+| Orchestration | `BarsEnsemble : IEnsembleModel<KnotConfig>` (82 KB): chains, robust weights, noise, checkpoints, evidence, the conformal hooks | Left as it is, and read as a pattern. BAMRS has its own ensemble on the generic shell, as BASS (`BassEnsemble`) and BAPS (`BapsEnsemble`) have theirs (Decision 1) |
+| Curve readouts | `SplineExtrema`, `BarsDraw`, `PeakDraw`, `PeakSpan`, λ, π, `PeakModes` | `SplineExtrema` is called as it stands on a restriction. The draw and peak records are BARS's, and BAMRS has its own. [Readouts](#readouts-how-the-bars-contract-extends) |
 | Moments over piecewise polynomials | `Bass.Sensitivity.PiecewisePolynomial`, `BassMoments` | Sobol indices and effects for tensor B-splines, as the extensions brief notes |
 | Declared coefficient priors | `PriorPencil`, `CollapsedPencilPrior`, `TauPrior`, BAPS's `TensorPenalty` | Decision 2's ridge option |
 | Term contract (F-X3) | `Bass.IDesignKernel<TPoints>`, `DesignFactor` | The other route: a tensor B-spline part as a BASS term type. Not recommended as the first build (Decision 1) |
@@ -129,12 +133,18 @@ Read from the source on 2026-11-12. "As is" means by reading, not by running.
 
 Each is the main session's recommendation, with its alternatives. The user may take or reverse any.
 
-1. **One engine over the carrier, with BARS as its d = 1 member.**
-   - *Recommended.* Build the product carrier, the lifted moves and the tensor target beside the existing types, and qualify them on the generic chain and ensemble. Then lift `BarsEnsemble`'s orchestration over the carrier, with the per-draw readout behind a seam. BARS becomes the one-axis case. Deletions wait for the final sweep.
-   - *Acceptance.* BARS's pinned tier passes unchanged through the lifted engine, so the one-axis path must consume its streams exactly as today.
-   - *Alternative: a sibling ensemble.* Faster to a first surface, at the cost of a second copy of the orchestration (robust weights, noise, checkpoints, evidence, conformal hooks) to keep in step.
-   - *Alternative: a BASS term type.* BASS sums many sparse terms under its term measure; ABMRS is one full tensor term with moving knots. The fit is poor, though a tensor part inside BASS remains a later option through F-X3.
-   - *Open until slice 0:* how much of `BarsEnsemble` depends on the carrier. I read its surface, not its body.
+1. **A new engine beside BARS and BAPS.** Decided by the user on 2026-11-15. It reverses this brief's first recommendation, which lifted `BarsEnsemble` over the product carrier and made BARS the one-axis member.
+   - *Why.* BARS has grown well past the original Kass method, and BAPS is fitted work. Unifying an engine while building a new one puts both at risk for the new one's sake. BASS was built the other way, as its own engine on shared primitives, and BAMRS follows it.
+   - *The shape,* after BASS and BARS. Its own folder, `src/maths/regression/spline/bamrs/`, in `Maths.Regression`, with tests under `tests/regression/`. Its own state, target, move adaptor, ensemble, and draw and result records. A declarative config with a static entry point. The names follow the family's pattern: `BamrsConfig`, `BamrsState`, `BamrsTarget`, `BamrsEnsemble`, `Bamrs.Fit`.
+   - *The reuse rule,* in order of preference:
+     1. Call a primitive as it stands.
+     2. Add to a shared primitive beside what is there: a new member, overload or type, with every existing signature and path left as it is. The commit gates on every test project from disk, with BARS's and BAPS's pinned tiers unchanged.
+     3. Where neither serves, BAMRS takes its own variant in its folder, and the split is logged as a follow-up. Whether to unify is a separate decision for the user, after BAMRS stands.
+   - *What this withdraws.* Lifting `BarsEnsemble`; the tensor builder shared with BAPS; BARS's pinned tier as an acceptance through a lifted engine; and opening `SplineExtrema` in place.
+   - *What it gains.* BARS becomes an independent oracle for BAMRS at d = 1 ([Validation](#validation)). The first plan made the two one code path, which could not check itself.
+   - *Its cost.* BAMRS's ensemble repeats the shape of BARS's. The first build carries only what a Normal fit needs: the knot block, retained draws, the fit and its spread, checkpoint and resume. Robust weights, the noise block, evidence and the conformal hooks each arrive in their own slice when asked for, reusing BARS's primitives where those take a design and not a carrier.
+   - *Still not recommended: a BASS term type.* BASS sums many sparse terms under its term measure; ABMRS is one full tensor term with moving knots. The fit is poor, though a tensor part inside BASS remains a later option through F-X3.
+   - *Open until slice 0:* which of BARS's later blocks (weights, noise, the conformal hooks) take a design and not a carrier. I read `BarsEnsemble`'s surface, not its body.
 2. **Thin product columns: the g-prior with the gate, and a ridge option only on evidence.**
    - *Recommended.* Keep the g-prior and the gate, the source's model in its corrected form, as the default.
    - *The measurement and its decision.* The question is how much posterior mass the gate excludes. The share of evaluations refused as `ThinSupport` does not answer it, since that share follows where the proposals go. So on the source's benchmark surfaces at d = 2, run the same g-prior model with the gate off and factor admission kept, and record each retained draw's least product-column mass. The posterior share of draws below the default minimum is the mass the gate removes, and the record answers for every other minimum too. If that share is material, add a declared ridge or penalty prior through `PriorPencil`, under which thin columns are regularized and the gate can relax. If it is not, the option waits for a caller. The refusal share and the counts the source reports stay as context. What share counts as material is fixed in the slice brief before the first reading, with the run's size and seeds.
@@ -157,7 +167,10 @@ Each is the main session's recommendation, with its alternatives. The user may t
 - *Sobol outputs are functionals of a draw.* A variance component is quadratic in the coefficients, and an index is a ratio of two. Neither is a functional of the conditional mean. Each is computed on the draw's joint (β, σ²) and summarized over draws, as BASS does (`SobolDecomposition`). A variance component βᵀQβ also has a closed-form conditional expectation, β̄ᵀQβ̄ + tr(Q·Cov(β | ξ)); an index has none. The decomposition of the posterior mean surface is a different quantity, which leaves out the posterior spread, and it takes its own name if it is ever reported.
 
 **Tier 1: restrictions reuse the curve engine as it stands.** Fix every axis but one. f(·, θ) is a spline in T on axis 1's knots, with coefficients cⱼ(θ) = Σₗ βⱼₗ Bₗ(θ). `SplineExtrema` applies to it unchanged, so each draw gives the ridge T*(θ), its height, its significant peaks and their spans along T, exactly, at any θ. Pooled over a θ grid these are λ(T | θ) and π(T | θ), and a posterior band for the ridge.
-- *One upgrade that serves both engines.* `SplineExtrema` takes (`KnotConfig`, coefficients, `SplineBasis`), though inside it needs only breakpoints, an evaluator and a degree. Opening it to a piecewise-polynomial input lets it read restrictions, derivative splines (below) and oblique lines. Along an oblique line a bicubic restricts to a piecewise polynomial of degree 6, which the general-degree path already handles.
+- *What needs no change, and what needs an entry beside.* `SplineExtrema` takes (`KnotConfig`, coefficients, `SplineBasis`).
+  - An axis-aligned restriction is a spline on axis 1's own `KnotConfig` with coefficients cⱼ(θ), so `SplineExtrema` reads it as it stands.
+  - A derivative spline (below) is a spline of degree p − 1 on the same knots, which the same entry reads with a `SplineBasis` of that degree.
+  - Only an oblique line asks for more. There a bicubic restricts to a piecewise polynomial of degree 6, which is no spline on either axis's knots. Its reader takes breakpoints, an evaluator and a degree, and the general-degree path already handles degree 6. By Decision 1's rule it is an entry beside `SplineExtrema`'s own or a type in BAMRS's folder, and BARS's calls are untouched.
 - *The ridge is a peak set at each θ.* T*(θ) jumps where two ridges exchange dominance. So the pooled readout is the peak set along T at each θ, λ(T | θ), and the argmax is one view of it.
 - *Ridge births and ends belong to this tier.* The interior ones are found among the roots of one polynomial in θ, and the rest are a branch leaving the box (see the fold on a surface, below).
 
@@ -173,7 +186,7 @@ Each is the main session's recommendation, with its alternatives. The user may t
 
 ## Features on spline curves beyond peaks
 
-This answers the user's wish to characterize more kinds of feature. It is a proposal, and it applies to BARS today and to every Tier 1 restriction of a surface.
+This answers the user's wish to characterize more kinds of feature. It is a proposal. The readouts are functions of one curve (knots, coefficients, basis), so they serve every Tier 1 restriction of a surface and would serve a BARS draw as well. They are built with BAMRS. Whether BARS takes them up is a separate decision, outside this rollout.
 
 **The organizing fact.** The derivative of a degree-p spline is a degree-(p−1) spline on the same knots, with coefficients from differences. So one extrema-and-crossings engine, run on f, f′ and f″, reads features of every order:
 
@@ -229,7 +242,7 @@ Everything here is at the protolemma stage: candidate statements, none compiled.
 
 **The carrier.** Polynomial pieces on a finite break set, with continuity as a hypothesis.
 - It is closed under each operation the readouts use: differentiation, the restriction of a tensor product to a line, and the difference of two draws on their merged breaks.
-- It matches the upgrade proposed for `SplineExtrema`, which needs breakpoints, an evaluator and a degree.
+- It matches Tier 1's piecewise-polynomial reader, which needs breakpoints, an evaluator and a degree.
 - The B-spline coefficient form is a later bridge onto it. Partition of unity and the numerical contract belong to that bridge.
 - A surface is one polynomial per cell of a box partition. `tensorExpansion` shows the pattern over `Fin d → ℝ`. Opening its factor family past Legendre would give BASS and BAMRS one tensor carrier; that is a candidate, not a decision.
 
@@ -278,18 +291,19 @@ The docs' mistaken expansion points at a real successor. A multiresolution splin
 
 ## Slices
 
-Proposed order; engine first, with no consumer wired in.
+Proposed order; engine first, with no consumer wired in. Every slice lands in `spline/bamrs/` and its tests. A slice that touches a shared file does so by an entry beside what is there, and its commit gates on every test project from disk with BARS's and BAPS's pinned tiers unchanged (Decision 1).
 
-0. **Read and measure.** Read `BarsEnsemble`'s body for Decision 1. Run a bicubic design through `WeightedNormalModel` as it stands, and check the marginal against dense algebra.
-1. **Carrier, design, target, moves.** The product carrier, the d-axis design builder with its fixed coefficient order (item 3), the tensor target and the axis adaptor. Qualify on the generic chain under a constant likelihood: the joint count law after admission (item 6), kₐ = 0 included, for the chain and for the reference sampler on both tempering paths, against the quadrature oracle.
+0. **Read and measure.** Read `BarsEnsemble` and `BassRun` as patterns for the ensemble's shape. List the shared types BAMRS will call, each marked as it stands or as needing an entry beside. Run a bicubic design through `WeightedNormalModel` as it stands, and check the marginal against dense algebra.
+1. **State, design, target, moves.** The product state (one `KnotConfig` per axis), the d-axis assembler with its coefficient form (item 3), the target with size-first admission and the whole-state reference sampler (item 6), and the axis adaptor over BARS's knot moves. At d = 1 the target's evaluations are read against BARS's `SplineTarget`. Qualify on the generic chain under a constant likelihood: the joint count law after admission (item 6), kₐ = 0 included, for the chain and for the reference sampler on both tempering paths, against the quadrature oracle.
 2. **The gate's measurement** (Decision 2) and **the count-mixing measurement** (item 1), with their decisions. Each reading's size, seeds and rerun rule are fixed in the slice brief before it is taken.
-3. **The ensemble** (Decision 1), with BARS's pinned tier as the acceptance.
-4. **Tier 1 readouts,** with `SplineExtrema` opened to piecewise polynomials, the order-2 curve features, and ridge births and ends.
+3. **The ensemble.** `BamrsEnsemble` on the generic shell, with the config and the entry point: the knot block, retained draws with their joint (β, σ²), the fit and its spread, checkpoint and resume. Normal responses with fixed weights. Acceptance: resume bit for bit, and at d = 1 agreement with a BARS run on the same data inside a Monte Carlo gate stated beforehand.
+4. **Tier 1 readouts,** with the order-2 curve features and ridge births and ends. `SplineExtrema` is called as it stands, and the piecewise-polynomial reader for oblique lines is the one new entry.
 5. **Fixed counts and Tier 2.**
-6. **Accumulation and factor upgrades,** when a measured size asks for them.
+6. **BAMRS's own Gram path:** accumulation by face-splitting rows, the band factor and the size-ordered layout, when a measured size asks for them.
 7. **The full-grid shortcut.**
-8. **Tier 3 and the merge tree,** after the π₀ foundation.
-9. **Non-normal responses.**
+8. **What BARS grew, one slice each when asked for:** robust weights, the noise block, evidence, the conformal hooks.
+9. **Tier 3 and the merge tree,** after the π₀ foundation.
+10. **Non-normal responses.**
 
 ## Validation
 
@@ -299,10 +313,13 @@ Ground truth comes from outside the estimator, and the source's code is a sanity
 - **Quadrature** when each axis holds at most one knot. Each of the count vectors (0, 0), (1, 0), (0, 1) and (1, 1) needs an integral over at most two knot positions.
   - *With the data* the integrand is the marginal likelihood. It gives the posterior over the four and the posterior mean of a surface functional. With `EbicPrior(γ, 1)` on each axis the four are the whole support.
   - *Under a constant likelihood* the integrand is the admission indicator, and the integral is Pr(admitted | k). The law of k, given that it is one of the four, is Πₐ pₐ(kₐ)·Pr(admitted | k) normalized over the four. That holds under any count law, so it checks the chain and the reference sampler on the powered path (Poisson(1) counts) and on the likelihood path (the configured law). The indicator is discontinuous, so the rule locates the admitted region's edge and does not integrate across it.
-- **The one-axis case equals BARS** bit for bit.
+- **BARS as the one-axis oracle.** The two are separate code paths, so their agreement is evidence.
+  - *Evaluations.* For the same knots, BAMRS's target at d = 1 returns BARS's log prior and marginal: to rounding, and bit for bit where both call the same model on the same design.
+  - *Posteriors.* On shared data the count law, the fit and `FitSd` agree with a BARS run within Monte Carlo error, under a gate whose size, seeds and rerun rule are fixed first.
+- **Nothing built is disturbed.** Every commit that touches a shared file passes every test project from disk, with BARS's and BAPS's pinned tiers unchanged.
 - **A full grid by both paths:** the Kronecker shortcut and the scattered path agree to rounding.
 - **Axis exchange:** transposing the inputs leaves every posterior summary unchanged.
-- **A Geweke joint test** of the lifted moves, as E34's.
+- **A Geweke joint test** of the wrapped moves, as E34's.
 - **Seeded random sweeps** of the numerical primitives: the design builder, the Bernstein conversion and the subdivision solver.
 - **Column order:** a rectangular design with different penalties on its two axes, against dense Kronecker algebra, in both size orders (item 3).
 - **A fixed-knot fixture** for the spread: with the knots held, every draw's conditional mean is the same, and `FitSd` equals the closed-form posterior sd of the fit.
@@ -321,6 +338,7 @@ Ground truth comes from outside the estimator, and the source's code is a sanity
 - Nothing in the Lean section was compiled. Its Mathlib names were checked for existence in the local checkout, and the fold's effect on the gated count was read against `SignificantPeaks` and `ValleyFloor`, not tested.
 - Nothing here was run. The numbers under "What the product structure changes" are arithmetic, and item 6's count pairs are an enumeration.
 - The fMRI analysis, and the article's use of the cardiopulmonary-bypass reference, are known from the abstract and the reference list alone.
+- Whether `SplineBasis` and `SplineExtrema` serve a derivative spline at degree p − 1, as their signatures suggest. And which of BARS's later blocks take a design and not a carrier.
 - The 2026-11-15 revision ran no sampler. The fold identity Δ′ = −4A·∂_θ∂_T f was derived by hand and checked on two examples. That p + 1 knots free the two sides of a gap is a dimension count, not a run.
 
 ## Doc changes owed
@@ -350,9 +368,28 @@ An external read-only review, relayed by the user. Its main finding is that admi
 Added in the same pass, beyond the review's text:
 - An axis's marginal count mass after the size bound (121 pairs against 17), as the concrete form of point 1.
 - The gate without a dense design, and the per-axis mass as a bound on the product column's.
-- The tally label a reordered admission can change on the one-axis path.
+- The tally label a reordered admission can change. The re-plan below made this a difference between two engines' tallies, where the first text had a one-axis path to protect.
 - For point 4, the choice between the review's two remedies: a fixed coefficient order, with the permutation confined to the band.
 - For point 5, that the source's own sampler draws distinct sites while its test surfaces carry fourfold knots, and that `StepBasis` is the discontinuous basis already at hand.
 - For point 7, the identity Δ′ = −4A·∂_θ∂_T f, which makes "simple root" and "transversal fold" one condition.
 - For point 8, the cardiopulmonary-bypass reference, which leaves the cardiac application unverified where the brief had called it invented.
 - For point 9, the aggregation in `summary_output.qmd`: a square root per replicate, then the mean and sd.
+
+## Rollout re-plan of 2026-11-15
+
+The user's direction, given after the review above: unifying the engine while building BAMRS was a mistake. BARS has gone beyond the original Kass work and BAPS is fitted, and neither is to be dismantled or reshaped for BAMRS's sake. BAMRS is built as a new engine, as BASS was, reusing primitives and upgrading them along the way only where that breaks nothing already built.
+
+What the survey behind the re-plan found (2026-11-15, by reading):
+- Every engine already has its own ensemble on the generic shell in `src/maths/samplers/`: `BarsEnsemble`, `BapsEnsemble`, `BassEnsemble`, `BgpSampler`. BASS takes two primitives from BARS's folder (`TemperedForm`, `StudentTWeights`) and none of its target, moves, models or ensemble. BAMRS will call far more of BARS's public surface than that, as a consumer, which is why the reuse rule never asks those signatures to change.
+- `src/maths/regression/spline/bamrs/` exists and is empty.
+- The spline root already holds the neutral pieces: `KnotConfig`, `IBasis`, `SplineBasis`, `BSpline`, `BandedDesign`, `BandedGPrior`.
+- BARS's models, moves, count priors and `SplineExtrema` are public and take a design or a `KnotConfig`, so BAMRS calls them without an edit. The whole tree is one assembly, `Maths.Regression`.
+
+Where the brief changed:
+- **Decision 1** is the user's: a new engine, with the reuse rule in three steps.
+- **"What is already built"**: the Tensor design, Observation models, Target, Moves, Orchestration and Curve readouts rows now say what is left as it is and what BAMRS builds for itself.
+- **Item 3**: the assembler and the coefficient form are BAMRS's own, and BAPS's builder and penalty are untouched. The clause that draws "pool without a permutation" is gone; draws at different counts never pooled.
+- **Tier 1**: restrictions and derivative splines need no change to `SplineExtrema`. Only the oblique-line reader is new.
+- **The curve features** are built with BAMRS, and their adoption by BARS is a separate decision.
+- **Slices**: the ensemble is BAMRS's own (slice 3), the Gram path is BAMRS's own (slice 6), and what BARS grew arrives one slice at a time (slice 8).
+- **Validation**: BARS is the one-axis oracle, and every commit on a shared file leaves BARS's and BAPS's pinned tiers unchanged.
