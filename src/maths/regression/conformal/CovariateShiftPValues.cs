@@ -20,9 +20,10 @@ public readonly record struct WeightedPValue(int Count, double Score, double Bel
 /// position holds unit j with chance Pⱼ = πⱼ/k. Here πⱼ = wⱼ e_(k−1)(w₋ⱼ)/e_k(w) is the chance that unit j holds one of the k stream
 /// positions, the conditional Poisson inclusion probability, and e_r is the elementary symmetric polynomial of the bag's weights. The
 /// newest score is ranked by those chances, p = Σ Pⱼ[αⱼ &lt; αₙ] + θ Σ Pⱼ[αⱼ = αₙ], with θ uniform on (0, 1].</para>
-/// <para><b>The guarantee</b> (posed here, checked by enumeration, not yet in Lean). Suppose the units are independent, the reference
-/// units from P and the stream from Q with dQ/dP = w, or more generally their joint law is weighted exchangeable with weights 1 then w
-/// (Tibshirani et al.'s Definition 1), and the scores are one fixed function. Then the stream's p-values are i.i.d. uniform.
+/// <para><b>The guarantee</b> (proved: <c>shift_law</c>, and <c>newestShare_eq_esymm</c> for these shares, up to the continuous lift as
+/// for M-1). Suppose the units are independent, the reference units from P and the stream from Q with dQ/dP = w the true ratio, or
+/// more generally their joint law is weighted exchangeable with weights 1 then w (Tibshirani et al.'s Definition 1), and the scores are
+/// one fixed function. Then the stream's p-values are i.i.d. uniform.
 /// <list type="bullet">
 /// <item>Given the bag at time n and every later unit, the units' arrangement has chance ∝ Π w over the stream positions (their
 /// Lemma 3), so pₙ is uniform given them.</item>
