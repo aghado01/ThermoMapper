@@ -50,7 +50,7 @@ Opened 2026-11-14 at the user's word ("that brief was getting way too long, adde
 
       The Simple Jumper, already built, simplifies it, per Vovk, Petej, Nouretdinov, Ahlberg, Carlsson and Gammerman 2021, "Retrain or not retrain", Algorithm 1: `PDFs/Bayesian/vovk21b.pdf` (COPA 2021), the same paper as arXiv 2102.10439 in `gauntlet/conformal-bayes`. No source on the shelf defines a "Composite Jumper".
     - *CUSUM's and Shiryaev–Roberts's guarantees in Lean, proved and verified* (Vovk 2021, Propositions 4.2 and 4.4; the Lean `4c832df`, the C# `ad78359`; its report below). The almost-sure lim sup is not formalized.
-    - *Open, the user's word:* M-1 under covariate shift, posed in the Lean ledger for `d4c97d4`'s monitor.
+    - *M-1 under covariate shift,* posed in the Lean ledger for `d4c97d4`'s monitor, is commissioned to the conformal Lean chip at the user's word (2026-11-15, "Yes, prove it"). It is stated as the C# computes it. A condition the C# does not check comes back as a finding for the C# chip, never as a weakened statement.
     - *Streams with known structure or under covariate shift,* which E35's brief leaves out: a score that removes a trend or season, or a test martingale weighted for the shift. Decides whether the monitor serves streams that are not exchangeable as they stand.
       - *Covariate shift: built and verified* (`d4c97d4`; its report below), scoped first by the user. Its guarantee is posed to the conformal Lean chip as a follow-up.
       - *The Mondrian monitor, built and verified* (`c64ccc9`; its report below). Pool the strata for a change everywhere; watch each stratum for a change confined to one.
