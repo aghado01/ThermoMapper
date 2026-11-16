@@ -20,7 +20,9 @@ Opened 2026-11-14 at the user's word ("that brief was getting way too long, adde
 - Slice 17's grid-free intervals for the residual scores (`28993bb`, `ResidualShrinkage.Intervals`) are built and verified.
 - The asymmetric interval's exact law is closed (`b8cd947`, docstrings only). Where the band's width varies, the union of the two tails is Makarov's worst case given their Beta laws. Beta(k_lo + k_hi, m − k_lo − k_hi) holds only at constant width, the residual interval.
 - Slice 17's RoBAS-Full (`942df9c`, `ResidualScore.Horseshoe`) is built and verified. It is served by `Prediction`, the grid form. Its sets are not always intervals: two pieces at n 2 and 3 (`f400892`, probed and verified).
-- RoBAS-Full's sets are intervals from n 4 when the residuals are not all equal. The Lean proves it (`robasFull_interval`, `700c718`, verified), granted four bounds on Dawson's function that the checks certify. `Intervals` serves RoBAS-Full there (`c3539b7`, verified) and refuses it below n 4.
+- RoBAS-Full's sets are intervals from n 4 when the residuals are not all equal, proved unconditionally. Scope A (`700c718`) proved it granted four bounds on Dawson's function. Scope B (`7d98281`, `ConformalDawson.lean`) proves those bounds, so `robasFull_ordConnected` needs only n ≥ 4 and residuals not all equal.
+  - Verified from a clean archive on 2026-11-15 ([receipts](receipts/verify-lean-conformal-7d98281/)): checks 425 s, the barrel built (3,191 jobs), the 23 named results on the standard three axioms, meta-ci PASS.
+  - `Intervals` serves RoBAS-Full there (`c3539b7`, verified) and refuses it below n 4. Its docstrings cite the unconditional theorem (`bb2fd78`; comments only, read).
 - CBMA reads each model's evidence from its BASS or BARS fit (`3e3b7f2`, verified): the `ModelEvidence` seam and the two engines' `ForAveraging` adapters, with both engines' constants pinned against the closed form.
 - Slice 15's alternation speed (`192ee84`, verified): safeguarded extrapolation of γ, 1.3–3× fewer passes at n 1,000 to 10,000. It is on by default and moves existing results within the fit's tolerance (report).
 - τ through richer features (`274f69d`, verified): `DensityRatio.Spline`, additive cubic B-splines with the ridge chosen by 5-fold cross-validated log loss, opt-in through `ScoreMixtureOptions.Knots`.
@@ -29,7 +31,6 @@ Opened 2026-11-14 at the user's word ("that brief was getting way too long, adde
 
 ## Open, each with the decision it would change
 
-- **The four Dawson bounds in Lean (scope B),** at the user's word in the Lean chip's session. Half built in the chip's scratch: the certificates pass in Python, but the Lean form compiles in about 10 minutes, too slowly as it stands. When it lands, `robasFull_interval` drops its `RobasDawsonBounds` hypothesis, and the C# docstrings drop "granted four bounds … the checks certify".
 - **A stop that reads R², for slice 15's factorization** (the alternation speed's finding). On noisy τ at J ≥ 3, the 300-pass cap still binds after R² has settled. It decides whether the factorization stops on R² and cuts that cost severalfold. The user's.
 - **The spline τ's two follow-ups** (its report), the user's:
   - interactions between inputs;
