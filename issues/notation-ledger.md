@@ -11,6 +11,14 @@ Splits in the module's language (symbols, identifiers, terms), logged as session
 
 ## Entries
 
+### Q, the fitted energy, beside Q, the output inner product (2026-11-16)
+
+- **Kind:** one name for several concepts.
+- **Readings:**
+  - Q = ‖Zβ_OLS‖², the least-squares fit's energy, which the collapsed block's scale reads (`src/maths/regression/gprior/CollapsedGPrior.cs:64`, `:118`).
+  - Q = R⁻¹, the inner product on the output index that a residual correlated along it declares (`WorkingResponse`, `src/maths/regression/spline/bass/BassObservationModel.cs:180`; `KhatriRao.Gram`'s W = I ⊗ Q).
+- **Found:** 2026-11-16, by the Lean chip's S4 (`lean/Enthymemata/BassWhitenedMarginal.lean`). Once the core serves Q ≠ I, the marginal's scale carries both: S = ỹᵀỹ − Q_fit/(τ + 1) with ỹᵀỹ = Σᵢ yᵢᵀQyᵢ.
+
 ### The tilde in E21: Z̃, z̃ and ũ (2026-11-13)
 
 - **Kind:** one name for several concepts.

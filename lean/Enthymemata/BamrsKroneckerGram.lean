@@ -9,10 +9,12 @@ import Mathlib.LinearAlgebra.Matrix.Vec
 /-!
 # The Kronecker Gram (S5)
 
-On a complete grid a product design is the Kronecker product `Z = A ⊗ B` of its axes' designs, and
-its Gram and projection factor by axis. That is the BAMRS brief's full-grid shortcut, which reads the
-fitted energy as `‖P_A·Y·P_B‖²_F`. Scattered rows give only the row-wise (face-splitting)
-product, whose Gram `Σᵣ (aᵣaᵣᵀ) ⊗ (bᵣbᵣᵀ)` does not factor.
+On a complete grid a product design is the Kronecker product `Z = A ⊗ B` of its axes' designs,
+and its Gram and projection factor by axis. That is the BAMRS brief's full-grid shortcut, which
+reads the fitted energy as `‖P_A·Y·P_B‖²_F`. Scattered rows give only the row-wise
+(face-splitting) product, whose Gram `Σᵣ (aᵣaᵣᵀ) ⊗ (bᵣbᵣᵀ)` does not factor. BASS's functional
+design pairs columns instead (column-wise Khatri–Rao), and its Gram is a Hadamard product,
+`BASS.khatriRao_gram`.
 
 * `kronecker_gram`: `(A ⊗ B)ᵀ(A ⊗ B) = (AᵀA) ⊗ (BᵀB)`.
 * `proj_kronecker`: `P_{A ⊗ B} = P_A ⊗ P_B` for `P_A = A(AᵀA)⁻¹Aᵀ` (`proj`). The identity needs no

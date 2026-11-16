@@ -49,8 +49,14 @@ Candidate statements for [the Lean chip's brief](../../../issues/lean/time-frequ
 
 ## S5. The Kronecker Gram
 
-**Status:** posed; see the brief's report.
+**Status:** proved, `Enthymemata/BamrsKroneckerGram.lean`. The Gram and projection factor with no invertibility hypothesis. The energy is `‖P_A·Y·P_B‖²_F` for `y (i, j) = Y i j`; Mathlib's column-major `vec Y` pairs with `P_B ⊗ P_A`.
 
 ## S4. The whitened marginal
 
-**Status:** posed; see the brief's report.
+**Status:** proved, `Enthymemata/BassWhitenedMarginal.lean`.
+- The residual and density identities need only `Ω = L·Lᵀ`, with `det L ≠ 0` for the density.
+- The collapsed marginal under the whitened-Gram prior is the unit-noise closed form on `(ỹ, Z̃)` less `½·log det Ω`.
+- Under `I ⊗ R` the terms are `n·log det R` and `Σᵢ yᵢᵀQyᵢ`, and the functional design's Gram is `(AᵀA)∘(HᵀQH)`.
+- The intercept's level is the generalized least-squares level `1ᵀQȳ / 1ᵀQ1`.
+
+The brief's report gives the methods.

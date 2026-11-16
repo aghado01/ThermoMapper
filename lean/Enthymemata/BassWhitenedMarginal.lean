@@ -1,5 +1,6 @@
 import Mathlib.Analysis.SpecialFunctions.Log.Basic
 import Mathlib.Analysis.SpecialFunctions.Pow.Real
+import Mathlib.LinearAlgebra.Matrix.Hadamard
 import Mathlib.LinearAlgebra.Matrix.Kronecker
 import Mathlib.LinearAlgebra.Matrix.NonsingularInverse
 import Mathlib.LinearAlgebra.Matrix.Notation
@@ -61,11 +62,13 @@ theorem quadForm_whiten (L : Matrix ι ι ℝ) (v w : ι → ℝ) :
     v ⬝ᵥ ((L * Lᵀ)⁻¹ *ᵥ w) = (L⁻¹ *ᵥ v) ⬝ᵥ (L⁻¹ *ᵥ w) := by
   rw [inv_mul_transpose, ← mulVec_mulVec, dotProduct_transpose_mulVec]
 
+omit [Fintype κ] [DecidableEq κ] in
 /-- The whitened Gram: `ZᵀΩ⁻¹Z = Z̃ᵀZ̃`. -/
 theorem gram_whiten (L : Matrix ι ι ℝ) (Z : Matrix ι κ ℝ) :
     Zᵀ * (L * Lᵀ)⁻¹ * Z = (L⁻¹ * Z)ᵀ * (L⁻¹ * Z) := by
   simp only [inv_mul_transpose, transpose_mul, Matrix.mul_assoc]
 
+omit [Fintype κ] [DecidableEq κ] in
 /-- The whitened cross products: `ZᵀΩ⁻¹y = Z̃ᵀỹ`. -/
 theorem cross_whiten (L : Matrix ι ι ℝ) (Z : Matrix ι κ ℝ) (y : ι → ℝ) :
     Zᵀ *ᵥ ((L * Lᵀ)⁻¹ *ᵥ y) = (L⁻¹ * Z)ᵀ *ᵥ (L⁻¹ *ᵥ y) := by
@@ -108,6 +111,7 @@ theorem gaussLogDensity_congr (L M : Matrix ι ι ℝ) (hL : L.det ≠ 0) (hM : 
     dotProduct_transpose_mulVec, mulVec_sub]
   ring
 
+omit [DecidableEq κ] in
 /-- **S4, the density.** The Gaussian log density of `y` under mean `Zβ` and covariance `σ²Ω`,
 `Ω = L·Lᵀ`, is that of `ỹ = L⁻¹y` under mean `Z̃β` and covariance `σ²I`, less `½·log det Ω`. -/
 theorem gaussLogDensity_whiten (L : Matrix ι ι ℝ) (hL : L.det ≠ 0) (Z : Matrix ι κ ℝ)
@@ -127,6 +131,7 @@ theorem gaussLogDensity_whiten (L : Matrix ι ι ℝ) (hL : L.det ≠ 0) (Z : Ma
 noncomputable def proj (X : Matrix ι κ ℝ) : Matrix ι ι ℝ :=
   X * (Xᵀ * X)⁻¹ * Xᵀ
 
+omit [DecidableEq ι] in
 theorem proj_mul_self (X : Matrix ι κ ℝ) (h : IsUnit (Xᵀ * X).det) :
     proj X * proj X = proj X := by
   simp only [proj, Matrix.mul_assoc]
@@ -183,7 +188,10 @@ theorem gaussLogDensity_gPrior (X : Matrix ι κ ℝ) (h : IsUnit (Xᵀ * X).det
     field_simp
   have hquad : (y - 0) ⬝ᵥ ((σ2 • (1 + τ⁻¹ • proj X))⁻¹ *ᵥ (y - 0)) =
       (y ⬝ᵥ y - y ⬝ᵥ (proj X *ᵥ y) / (τ + 1)) / σ2 := by
-    sorry
+    rw [sub_zero, inv_smul_one_add_smul_proj X h hσ.ne' h1a, hd, smul_mulVec, sub_mulVec,
+      one_mulVec, smul_mulVec, dotProduct_smul, dotProduct_sub, dotProduct_smul]
+    simp only [smul_eq_mul]
+    ring
   have h2π : Real.log (2 * Real.pi * σ2) = Real.log (2 * Real.pi) + Real.log σ2 :=
     Real.log_mul (by positivity) hσ.ne'
   unfold gaussLogDensity
@@ -235,18 +243,21 @@ theorem inv_one_kronecker (R : Matrix o o ℝ) :
     ((1 : Matrix c c ℝ) ⊗ₖ R)⁻¹ = 1 ⊗ₖ R⁻¹ := by
   rw [inv_kronecker, inv_one]
 
+omit [DecidableEq o] in
 /-- A factor of `R` gives one of `I_n ⊗ R`: `(I ⊗ L_R)(I ⊗ L_R)ᵀ = I ⊗ L_R·L_Rᵀ`. -/
 theorem one_kronecker_mul_transpose (LR : Matrix o o ℝ) :
     ((1 : Matrix c c ℝ) ⊗ₖ LR) * ((1 : Matrix c c ℝ) ⊗ₖ LR)ᵀ =
       (1 : Matrix c c ℝ) ⊗ₖ (LR * LRᵀ) := by
   rw [← kroneckerMap_transpose, transpose_one, ← mul_kronecker_mul, Matrix.mul_one]
 
+omit [DecidableEq o] in
 theorem one_kronecker_mulVec_apply (Q : Matrix o o ℝ) (w : c × o → ℝ) (i : c) (l : o) :
     (((1 : Matrix c c ℝ) ⊗ₖ Q) *ᵥ w) (i, l) = (Q *ᵥ fun l' => w (i, l')) l := by
   simp only [mulVec, dotProduct, kroneckerMap_apply, Fintype.sum_prod_type]
   rw [Finset.sum_eq_single i (fun b _ hb => by simp [one_apply, Ne.symm hb]) (by simp)]
   simp
 
+omit [DecidableEq o] in
 /-- `vᵀ(I_n ⊗ Q)w = Σᵢ vᵢᵀQwᵢ`, with `vᵢ = v (i, ·)`, the case index outer. -/
 theorem dotProduct_one_kronecker_mulVec (Q : Matrix o o ℝ) (v w : c × o → ℝ) :
     v ⬝ᵥ (((1 : Matrix c c ℝ) ⊗ₖ Q) *ᵥ w) =
@@ -261,6 +272,47 @@ theorem quadForm_one_kronecker (LR : Matrix o o ℝ) (y : c × o → ℝ) :
   rw [← quadForm_whiten, one_kronecker_mul_transpose, inv_one_kronecker,
     dotProduct_one_kronecker_mulVec]
 
+/-- BASS's direct functional design, the column-wise Khatri–Rao product `A ⊙ H`: column `j` is
+`aⱼ ⊗ hⱼ`, rows indexed `(case, location)` with the case outer, as `KhatriRao` lays them out. -/
+def khatriRao (A : Matrix c κ ℝ) (H : Matrix o κ ℝ) : Matrix (c × o) κ ℝ :=
+  of fun x j => A x.1 j * H x.2 j
+
+omit [DecidableEq ι] [Fintype κ] [DecidableEq κ] [DecidableEq o] in
+/-- **The Khatri–Rao Gram.** Under `W = I_n ⊗ Q`, `(A ⊙ H)ᵀW(A ⊙ H) = (AᵀA)∘(HᵀQH)`, the
+Hadamard product: `KhatriRao.Gram`'s form, and the whitened Gram of the functional design for
+`Q = R⁻¹`. -/
+theorem khatriRao_gram (A : Matrix c κ ℝ) (H : Matrix o κ ℝ) (Q : Matrix o o ℝ) :
+    (khatriRao A H)ᵀ * ((1 : Matrix c c ℝ) ⊗ₖ Q) * khatriRao A H =
+      (Aᵀ * A) ⊙ (Hᵀ * Q * H) := by
+  ext j j'
+  have hentry : ((khatriRao A H)ᵀ * ((1 : Matrix c c ℝ) ⊗ₖ Q) * khatriRao A H) j j' =
+      (fun x => khatriRao A H x j) ⬝ᵥ
+        (((1 : Matrix c c ℝ) ⊗ₖ Q) *ᵥ fun x => khatriRao A H x j') := by
+    rw [Matrix.mul_assoc]
+    rfl
+  have hHQH : (Hᵀ * Q * H) j j' = (fun l => H l j) ⬝ᵥ (Q *ᵥ fun l => H l j') := by
+    rw [Matrix.mul_assoc]
+    rfl
+  have hAA : (Aᵀ * A) j j' = ∑ i, A i j * A i j' := rfl
+  rw [hentry, dotProduct_one_kronecker_mulVec, hadamard_apply, hHQH, hAA, Finset.sum_mul]
+  refine Finset.sum_congr rfl fun i _ => ?_
+  have e1 : (fun l => khatriRao A H (i, l) j) = A i j • fun l => H l j := by
+    ext l
+    simp [khatriRao]
+  have e2 : (fun l => khatriRao A H (i, l) j') = A i j' • fun l => H l j' := by
+    ext l
+    simp [khatriRao]
+  rw [e1, e2, mulVec_smul, smul_dotProduct, dotProduct_smul, smul_eq_mul, smul_eq_mul]
+  ring
+
+omit [DecidableEq ι] [Fintype κ] [DecidableEq κ] [DecidableEq c] [DecidableEq o] in
+/-- Unit output weights: `(A ⊙ H)ᵀ(A ⊙ H) = (AᵀA)∘(HᵀH)`, the Cartesian shortcut. -/
+theorem khatriRao_gram_one (A : Matrix c κ ℝ) (H : Matrix o κ ℝ) :
+    (khatriRao A H)ᵀ * khatriRao A H = (Aᵀ * A) ⊙ (Hᵀ * H) := by
+  classical
+  have := khatriRao_gram A H 1
+  rwa [one_kronecker_one, Matrix.mul_one, Matrix.mul_one] at this
+
 /-! ### The level-centred intercept under `Q` -/
 
 /-- The whitened constant column's least-squares level is the generalized least-squares level:
@@ -270,6 +322,7 @@ theorem level_whiten (L : Matrix ι ι ℝ) (y : ι → ℝ) :
       ((fun _ => 1) ⬝ᵥ ((L * Lᵀ)⁻¹ *ᵥ y)) / ((fun _ => 1) ⬝ᵥ ((L * Lᵀ)⁻¹ *ᵥ fun _ => 1)) := by
   rw [quadForm_whiten, quadForm_whiten]
 
+omit [DecidableEq o] in
 /-- **S4, the level under `Q`.** With `W = I_n ⊗ Q`, the level is `Σᵢ 1ᵀQyᵢ / (n·1ᵀQ1)`: the
 `Q`-weighted level of the mean curve, with mass `n·1ᵀQ1`. -/
 theorem level_one_kronecker (Q : Matrix o o ℝ) (y : c × o → ℝ) :
@@ -280,6 +333,7 @@ theorem level_one_kronecker (Q : Matrix o o ℝ) (y : c × o → ℝ) :
   rw [dotProduct_one_kronecker_mulVec, dotProduct_one_kronecker_mulVec, Finset.sum_const,
     Finset.card_univ, nsmul_eq_mul]
 
+omit [DecidableEq o] in
 /-- **S4, when the level is the mean.** If `1ᵀQ = λ·1ᵀ` with `λ ≠ 0` (constant column sums), the
 level under `W = I_n ⊗ Q` is the plain mean of all `n·m` values. -/
 theorem level_eq_mean (Q : Matrix o o ℝ) {lam : ℝ} (hQ : (fun _ => (1 : ℝ)) ᵥ* Q = lam • fun _ => 1)
@@ -298,6 +352,25 @@ theorem level_eq_mean (Q : Matrix o o ℝ) {lam : ℝ} (hQ : (fun _ => (1 : ℝ)
   field_simp
 
 /-! ### Witnesses -/
+
+/-- The engine-terms statement's hypotheses hold on a correlated pair: `L = [[1, 0], [1, 1]]`,
+so `Ω = [[1, 1], [1, 2]]`, the design `Z = (1, 1)ᵀ`, `σ² = 1` and `τ = 1`. -/
+example (y : Fin 2 → ℝ) :=
+  have hinv : (!![(1 : ℝ), 0; 1, 1])⁻¹ = !![1, 0; -1, 1] := by
+    apply inv_eq_left_inv
+    ext i j
+    fin_cases i <;> fin_cases j <;> simp [Matrix.mul_apply, Fin.sum_univ_two]
+  have hG : IsUnit ((!![(1 : ℝ), 0; 1, 1]⁻¹ * !![(1 : ℝ); 1])ᵀ *
+      (!![(1 : ℝ), 0; 1, 1]⁻¹ * !![(1 : ℝ); 1])).det := by
+    rw [hinv]
+    exact isUnit_iff_ne_zero.2 (by simp [Matrix.mul_apply, Fin.sum_univ_two])
+  gPrior_logMarginal_whiten !![(1 : ℝ), 0; 1, 1] (by simp [det_fin_two_of]) !![(1 : ℝ); 1] hG
+    one_pos one_pos y
+
+/-- The Khatri–Rao Gram on two cases, two locations and one column. -/
+example : (khatriRao !![(1 : ℝ); 2] !![(3 : ℝ); 4])ᵀ * khatriRao !![(1 : ℝ); 2] !![(3 : ℝ); 4] =
+    (!![(1 : ℝ); 2]ᵀ * !![(1 : ℝ); 2]) ⊙ (!![(3 : ℝ); 4]ᵀ * !![(3 : ℝ); 4]) :=
+  khatriRao_gram_one _ _
 
 /-- The level equals the mean under `Q = I` on two cases and two locations. -/
 example (y : Fin 2 × Fin 2 → ℝ) :
