@@ -57,12 +57,102 @@ Those of the [first brief](time-frequency-statements-brief.md#working-rules).
 
 ## Report
 
-### In progress
+### 2026-11-16 — S7 to S9: all proved, none false as posed
 
-*Updated 2026-11-16.*
-- **Landed:** S9 and S7 (S7a to S7e) in `lean/Enthymemata/Spline/`, each with a witness.
-  - S7e carries Theorem 4.61's sufficiency half as the premise `h461`. `h461_indicator` proves that premise at order 1, so it is satisfiable.
-  - S9's fixed-knot f jumps at a + (b − a)(√2 − 1), an irrational position, so that it never meets a uniform breakpoint for any k.
-- **Next:** S8, the order-2 trigonometric B-spline and the damped oscillator.
-- **Uncommitted:** nothing.
-- **For the user (errata):** the conversion `schumaker_009_converted.md` drops Theorem 7.10's displayed statement after "Then". That is a transcription gap, not a misprint in the book.
+**Landed:** `8a3cd9d` (S7, S9) and the commit that adds this report (S8).
+
+**Per statement.** Modules sit in `lean/Enthymemata/Spline/`, namespace `Spline`.
+
+| | Module | Status | Changes from the posed form, and why |
+|---|---|---|---|
+| S7a | `DesignRank.lean` | proved | **Field** relaxed to any commutative ring (`det_eq_zero_of_zero_block`). |
+| S7b | `DesignRank.lean` | proved | **Sites** need only be nondecreasing. **Supports** may close on the left at ℓ j when `closed j` holds, which covers (4.133)'s full-multiplicity case (`inSupport_of_det_ne_zero`). That needs one structural hypothesis: a support closing at ℓ μ forces every earlier support with the same left end to close. B-splines satisfy it, since equal y_i = y_μ with μ > i makes y_i = … = y_{i+m−1}. **The open case as posed** is `mem_Ioo_of_det_ne_zero`. |
+| S7c | `DesignRank.lean` | proved | **Full column rank** is stated as injectivity of c ↦ Mc. **N ≥ n** follows and is not assumed. The route is `exists_strictMono_det_ne_zero`: n independent rows, sorted, give a nonsingular square submatrix. |
+| S7d | `DesignRank.lean` | proved | **The greedy** is correct for any decidable membership predicate, not only for interval supports (`exists_isSelection_iff_greedy`). It is stated on ℕ indices. `isSelection_iff_strictMono` translates to Fin-indexed strictly increasing selections. |
+| S7e | `DesignRank.lean` | proved, with premise | **The premise** `h461` is Theorem 4.61's sufficiency half, carried as a hypothesis (`fullRank_of_selection`). `fullRank_iff_greedy` closes the loop: full column rank ⟺ greedy succeeds. **Satisfiable:** `h461_indicator` proves the premise at order 1. **Sites** must be strictly increasing, as 4.61 requires. |
+| S8 | `TrigonometricBSpline.lean` | proved | **The carrier** is a general ω, with `trigBSpline_half` the posed ω = ½. **The definition** is written with continuous branches; `trigBSpline_eq_left`, `_right` and `_zero` give the posed half-open pieces. **The null space** claim is split: pieces lie in span{cos ωx, sin ωx}, and that span solves f″ + ω²f = 0. That nothing else solves it (ODE uniqueness) is not formalized. **Sharpness** adds `collocation_det`: the span's Tchebycheff determinant at s, t is sin(ω(t − s)), zero at t − s = π/ω. **The Green's function** is built on `nullDamped`, the null space of D² + 2γD + (γ² + ω²). **Theorem 10.15 at order 2** is proved in full (`spline_span`, `spline_indep`); its pieces are taken on closed intervals, so continuity is implied, not assumed. |
+| S9 | `FreeKnotSteps.lean` | proved | **"k breakpoints"** is stated as at most k + 1 interval pieces (`PiecewiseConst`), each interval open or closed at either end. A monotone f's jumps need that: half-open pieces cannot follow a jump that belongs to the left. **Free:** the constant is exact, (f b − f a)/(2(k + 1)) (`exists_piecewiseConst_monotone`). **Fixed:** the step function is constrained only on the open pieces, which makes the lower bound strongest (`exists_monotone_far_from_uniform`). One f for every k needs a jump at an irrational relative position, a + (b − a)(√2 − 1); a rational one is a breakpoint for some k. **The optional BV form** is not done. |
+
+**Declarations to print axioms for:**
+- *S7a, S7b:* `det_eq_zero_of_zero_block`, `inSupport_of_det_ne_zero`, `mem_Ioo_of_det_ne_zero`.
+- *S7c:* `exists_strictMono_det_ne_zero`, `exists_selection_of_fullRank`.
+- *S7d:* `exists_isSelection_iff_greedy`, `isSelection_iff_strictMono`.
+- *S7e:* `fullRank_of_selection`, `fullRank_iff_greedy`, `h461_indicator`.
+- *S8:* `trig_ode`, `continuous_trigBSpline`, `trigBSpline_pos`, `trigBSpline_half`, `trigBSpline_eq_left`, `trigBSpline_eq_right`, `trigBSpline_eq_zero`, `collocation_det`, `twoKnotBump_spec`, `nullDamped_ode`, `green_spec`, `green_ode`, `spline_span`, `spline_indep`.
+- *S9:* `exists_piecewiseConst_monotone`, `exists_monotone_far_from_uniform`.
+- Each prints only `propext`, `Classical.choice` and `Quot.sound`. The two greedy results print only `propext` and `Quot.sound`.
+
+**Witnesses:**
+- *S7:* order-1 splines on knots 0, 1, 2 at sites ½, 3/2. The chain runs through `h461_indicator`, so the cited premise is met, not assumed.
+- *S8:* the posed spline on knots 0, 1, 2 (2 < 2π); the two-knot bump at ω = ½ on [0, 2π]; the Green's function at γ = 1, ω = 2; independence on knots 0, 1, 2.
+- *S9:* f = id on [0, 1] with k = 1, and the fixed-knot f on [0, 1].
+
+**Gates:**
+- `lean` on each file during drafting.
+- `lake build Enthymemata.Spline` with the linter set: no warnings after fixes.
+- `scripts/meta-ci.ps1`: PASS with its build gate, all three modules `PROOF-CLOSED`.
+- Cache: one scoped fetch, `lake exe cache get Mathlib.NumberTheory.Real.Irrational` (3 files). D: had 22 GB free at the end.
+
+**Errata for the user.** No new misprint in the book was found in §§ 4.8, 7.4, 10.3 or 10.8. The In-progress entry of `8a3cd9d` said the conversion drops Theorem 7.10's display. That was wrong: (7.30) is in `schumaker_009_converted.md`, and I had read past it.
+
+**Follow-ups:**
+- *Promotion review* of the three modules, all `PROOF-CLOSED`.
+- *Theorem 4.61 itself,* which would discharge `h461`. It needs the book's zero counts for splines (Theorem 4.56), outside this brief.
+- *S9's optional BV form.* The quantize-the-variation construction gives TV/(k + 1) directly, and TV/(2(k + 1)) with midranges on each piece.
+- *S8's null space as the full solution set* (ODE uniqueness), if a statement needs "exactly".
+
+#### Methods
+
+**S7a, the zero block.**
+- Write det M = Σ_σ sgn σ·Π_i M_{σ(i), i}.
+- If some permutation avoided the block, σ⁻¹ would map the r block rows injectively into the n − s columns outside it, so r ≤ n − s.
+- Since r + s > n, every product has a factor in the block.
+
+**S7b, necessity.**
+- *Too far left.* Suppose t_i ≤ ℓ_i, and t_i is not the closed end. For ν ≤ i ≤ μ, t_ν ≤ t_i ≤ ℓ_i ≤ ℓ_μ, so φ_μ(t_ν) = 0. The only escape is t_ν = ℓ_μ with support μ closed. The chain then collapses to ℓ_i = ℓ_μ = t_i, and the closure hypothesis makes support i closed, a contradiction. That is a zero block of (i + 1) rows by (n − i) columns.
+- *Too far right.* Suppose t_i ≥ u_i. Then ν ≥ i ≥ μ gives t_ν ≥ t_i ≥ u_i ≥ u_μ, a zero block of (n − i) rows by (i + 1) columns.
+- *Either way* r + s = n + 1, and S7a applies.
+
+**S7c, designs.**
+- *The rows span.* Injectivity of c ↦ Mc means no nonzero functional ⟨·, c⟩ kills every row. A proper span would admit one (`Submodule.exists_le_ker_of_lt_top`), so the rows span ℝⁿ.
+- *Square submatrix.* A linearly independent subfamily that spans is a basis, so it has n members. Sorting their indices gives an order embedding e, and the rows of M at e are linearly independent, so that submatrix is nonsingular.
+- *Selection.* S7b on the sites t ∘ e, still sorted, gives the selection.
+
+**S7d, the greedy.**
+- *Dominance,* by induction on k: if e is any selection, the greedy's k-th pick p_k exists and p_k ≤ e_k.
+  - Column 0: e_0 witnesses a site in the first support, and the greedy takes the first one.
+  - Column k + 1: e_{k+1} > e_k ≥ p_k witnesses a site after p_k.
+- *Converse.* When every pick exists, the picks form a selection by construction.
+- Nothing uses intervals, so the check is exact for any membership pattern.
+
+**S7e, sufficiency with 4.61 as premise.**
+- On a selection e, the premise makes the square submatrix S of rows e nonsingular.
+- Mc = 0 restricts to Sc = 0, so c = 0.
+- With S7c, S7d and `isSelection_iff_strictMono`: rank full ⟺ selection exists ⟺ greedy succeeds.
+- *The order-1 premise.* For indicators of (y_j, y_{j+1}) at sites in their own supports, a site in support k lies in no other. So the collocation matrix is the identity.
+
+**S8, the trigonometric B-spline.**
+- *Span.* sin(ω(x − c)) = cos(ωc)·sin ωx − sin(ωc)·cos ωx. Differentiation maps (A, B) to (ωB, −ωA), and twice to −ω²(A, B), which is the equation.
+- *Continuity* is three `Continuous.if_le` joins.
+  - At y₀ and y₂ the pieces vanish, since sin 0 = 0.
+  - At y₁ both equal 1/sin(ω(y₂ − y₀)). That needs only sin(ω(y₁ − y₀)) ≠ 0 and sin(ω(y₂ − y₁)) ≠ 0.
+- *Positivity.* Each numerator's argument lies in (0, ω(y₂ − y₀)) ⊂ (0, π), and so does each denominator's.
+- *Sharpness.*
+  - The order-2 Tchebycheff determinant is det[[cos ωs, sin ωs], [cos ωt, sin ωt]] = sin(ω(t − s)). Haar holds on intervals shorter than π/ω and fails at π/ω.
+  - There sin(ω(x − y₀)), cut to [y₀, y₂], vanishes at both ends. It is the continuous two-knot element that Lemma 10.16, with its corrected Σ_{i=1}^{d}, rules out under the ET hypothesis.
+
+**S8, the damped oscillator.**
+- *The null space.* Differentiation maps e^{−γx}(A cos ωx + B sin ωx) to the same form with (A, B) ↦ (−γA + ωB, −ωA − γB). Applied twice, A₂ + 2γA₁ + (γ² + ω²)A = 0 and likewise for B. The whole null space solves the equation, and the Green's function is its member (0, 1/ω) cut at 0.
+- *Its value at 0.* The right derivative at 0 is the first coefficient after one step, −γ·0 + ω·(1/ω) = 1. For x > 0 the function agrees with the smooth member near x, so its derivatives do too (`EventuallyEq.deriv`).
+
+**S8, Theorem 10.15 at order 2.**
+- *Shift.* On [τ, ∞), green(· − τ) is in the null space, by angle subtraction with the factor e^{γτ}.
+- *Vanishing.* A member vanishing at τ is a multiple of green(· − τ) there. Write ωt = ω(t − τ) + ωτ; the cos(ω(t − τ)) coefficient is the value at τ, which is zero.
+- *Span,* by induction over pieces. On [τ_{k+1}, ∞) the current representation is one member of the null space. The next piece agrees with it at τ_{k+1}, so their difference vanishes there and is c·green(· − τ_{k+1}). That term is zero left of τ_{k+1}, so the earlier pieces are untouched.
+- *Independence.*
+  - On the first piece only the null-space part survives. At two points δ apart, with 0 < ωδ < π, the collocation determinant sin(ωδ) ≠ 0 forces A = B = 0.
+  - Then left to right: on [τ_i, τ_{i+1}], earlier coefficients are zero and later Green's terms vanish. Evaluating at τ_i + δ, where green(δ) > 0, forces d_i = 0.
+
+**S9, free against fixed.**
+- *Free.* Cut [f(a), f(b)] into k + 1 bands of height h = (f(b) − f(a))/(k + 1). The band index q(x) = min(⌊(f(x) − f(a))/h⌋, k) is monotone in x, so each band's preimage is an interval, possibly open or closed at either end. Setting s = f(a) + (q + ½)h gives \|f − s\| ≤ h/2, because qh ≤ f(x) − f(a) ≤ (q + 1)h. The cap at k covers f(x) = f(b).
+- *Fixed.* With r = √2 − 1, the position ρ = (k + 1)r is irrational, so it lies strictly between ⌊ρ⌋ and ⌊ρ⌋ + 1. The jump at a + (b − a)r is then interior to an open uniform piece. A constant v on that piece is at distance max(\|v\|, \|1 − v\|) ≥ ½ from one side of the jump.
