@@ -83,6 +83,20 @@ Under "Reports" below, newest first, per slice: what landed by commit; the gates
 
 ## Reports
 
+### A term's variables: the rule stated and tested (2026-11-15)
+
+**Landed** in `5e99c83`, at the coordinating session's request after E36's slice 5 (`f11c8cc`) added a non-separable term's categorical factors to `TermVariablesOf`.
+- *The comment* states the rule as a completeness requirement: every variable a term's value depends on. The route skips the block of an input no held term reads, giving it A's values bit for bit, so a variable left out reads zero. A non-separable term's categorical factors come from the term itself, since `ReadsVariable` answers for continuous variables only.
+- *The test,* `SampledTermVariablesTests`. For each term and each input the rule leaves out, the term's column on A's rows equals its column on the route's own hybrid moving that input alone (`Stacked`), bit for bit. An output variable is moved alone at its locations.
+  - *Hand terms* on the scalar fixture, at degrees 1 and 2, eleven kinds: a hinge, a hinge pair, a hinge with a categorical factor, a categorical term, Legendre alone and paired, a directional hinge on two inputs and on one, a gated directional hinge, a ridge column and a gated ridge column. Each leaves an input out (16 pairs per degree), and each column varies over A's rows, so it reads something.
+  - *The fixtures' fitted terms:* the scalar fit (16 held terms, 21 pairs), the functional fit with t integrated (15, 20) and the two-output fit with both integrated (25, 46). The commit message's "61 terms" should read 56.
+  - *Its power:* with slice 5's line removed in a snapshot, built into a fresh folder, the gated directional hinge and the gated ridge column fail at both degrees, and nothing else does.
+  - *The basis route* (`BassBasisSampledSensitivity`, `BassBasisEffects`) calls the same function, so it needs no test of its own.
+- *Gates,* on a snapshot of `d93c812` with the two files, every file touched, built into a fresh folder (`artifacts/chip-sensitivity/b-d93c812/`). The commit landed on `e96222c`, which changes no code since `d93c812`.
+  - *Selected at commit scope,* per test project from disk: Regression 262 of 357 classes and Oracle 13 of 40. No other project holds the files.
+  - *Regression at commit scope* (with the pinned tier): 2,847 of 2,847. *Oracle:* 57 of 57.
+  - *This chip's seven classes in full:* 105 of 105.
+
 ### The estimator papers, read against slices 0 to 3 (2026-11-15)
 
 The user supplied the six papers the brief cited from memory: Jansen 1999, Sobol' 2001, Sobol' and Kucherenko 2009 and Saltelli et al. 2010 in `supellex-private/PDFs/sensitivity/` (by DOI), and Owen 2013 (`1204.4763v1`) and Janon et al. (`1303.6451v1`, the preprint of the 2014 paper) in `supellex-private/gauntlet/stats/`. Each is read for its forms, their credits and their variances. Every form the engine computes is as the reports state it, and no code changes. Two credits are corrected below, and the remaining citations are now read.
