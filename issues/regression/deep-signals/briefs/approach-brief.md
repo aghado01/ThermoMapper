@@ -90,6 +90,40 @@ Each of these was claimed in the discussion and then turned by a proof or a read
 - **"The whitener is fixed by the windows."** For noise-like cells away from DC and Nyquist. A cell with a strong deterministic component has log-power variance about 2/SNR.
 - **"Measurements scale linearly with k."** Consistent with the pilot, on thin evidence: k ≤ 5, four ratios, the same model generating and inverting, a Gaussian likelihood on log power.
 
+## The compressed-sensing guarantees: used by analogy, not yet tested
+
+These theorems are the certificate the whole approach leans on, and so far the work has touched them only at the edges. Statements are from the papers' LaTeX (`1705.07576v3`, `1812.04176v1`, `1807.04261v1`, `2008.10579v1`, `1805.08855v2`, `2006.07953v2`).
+
+**What they say.**
+- *The setting.* A generator G : ℝᵏ → ℝⁿ, d ReLU layers with no bias, and a signal y₀ = G(x₀). Observe Ay₀ with m ≪ n rows and minimize f(x) = ½‖AG(x) − Ay₀‖².
+- *The landscape theorem* (Hand and Voroninski). If every layer satisfies the weight distribution condition and A satisfies the range restricted isometry condition, f has a strict descent direction at every nonzero x outside two small balls, one around x₀ and one around −ρ_d·x₀, and zero is a local maximizer. With A = I this says such a network is approximately invertible.
+- *The weight distribution condition.* For every pair x, y, the sum Σᵢ 1{wᵢ·x > 0}·1{wᵢ·y > 0}·wᵢwᵢᵀ over a layer's rows is within ε of Q_{x,y} = ((π − θ)/2π)·I + (sin θ/2π)·M, with θ the angle between x and y and M the map exchanging their directions. Q is that sum's expectation for Gaussian rows, so a layer acts on a pair through its angle alone.
+- *The range restricted isometry condition.* A preserves inner products between differences of points in G's range, to within ε.
+- *When they hold.* Gaussian layers that expand by nᵢ ≥ c·nᵢ₋₁·log nᵢ₋₁, and a Gaussian A with m > c·d·k·log(n₁⋯n_d), satisfy both with high probability. The count is linear in k.
+- *The algorithm.* Subgradient descent with a sign check converges to x₀ up to the noise level.
+- *Around it.* The same from magnitudes, where a sparsity prior needs k² measurements; noise reduced by about k/n, by an encoder in one pass too; and the lifted form, ‖G(x)G(x)ᵀ − M‖²_F with M a sample covariance.
+
+**Why they matter here.**
+- The measurement budget follows the code's dimension, with an efficient algorithm and not only an existence claim.
+- Local methods suffice, which is what makes a solver a trustworthy teacher.
+- The two conditions are design constraints: a decoder that expands with well-spread weights, and views that are near-isometric on the signal manifold. The second is the global form of the whitened metric pulled back through the decoder.
+
+**What the work has used.**
+- The deterministic half of the amplitude-flow convergence, as the contraction result in Lean.
+- The mechanism of the three-pattern uniqueness theorem, as phase propagation in Lean.
+- The Bayesian analogue on a parametric synthesizer: a code recovered from 2k to 4k bins, and octave traps standing in for the impostor at −ρ_d·x₀.
+
+**What is untested.**
+- No ReLU generator has been run. The papers' regime has not been reproduced, and the engine's inversion has not been tried on their object.
+- The weight condition has not been measured for anything of ours, such as a layer of directional hinges under its prior, which has sparse directions and thresholds.
+- The isometry condition has not been measured for spectrogram rows or magnitudes on any signal manifold, whitened or not.
+- The k/n noise reduction has not been read from the pilot's receipts.
+
+**Posable next.**
+- *In Lean:* Q_{x,y} as the Gaussian expectation; the angle map it induces, cos θ′ = ((π − θ)·cos θ + sin θ)/π, with θ′ < θ on (0, π]; that the isometry condition bounds the compressed objective's inner products by the uncompressed ones; the one-layer landscape in expectation.
+- *Numerically:* success against m/k for the papers' algorithm on random expansive networks; the same inverse problem through the calibration stack with G behind the emulator contract, reading threshold, coverage and the impostor; the weight condition's residual against width, for Gaussian layers and for directional-hinge layers; the isometry constant for structured views on the synthesizer's range.
+- *What they would decide:* whether a gradient-informed move on the code is justified, which the benign landscape suggests; how wide a decoder must be; whether our views are isometric enough; and how the engine's inversion scales in k against descent.
+
 ## What is missing, in build order
 
 Stated for any application. The order follows the pilot's main finding: generator adequacy first, then honest noise, then robust inference, then the time–frequency pieces.
