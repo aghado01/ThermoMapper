@@ -83,7 +83,7 @@ public sealed class SampledOutputsTests(ITestOutputHelper output)
             var cells = new Dictionary<string, SampledSensitivityTests.Piece>();
             for (int f = 0; f < functionals.Length; f++)
             {
-                SobolAnalysis sampled = BassSensitivity.Projected(fit, data, functionals[f], new SensitivitySpec { Route = SensitivityRoute.Sampled, Points = N, Seed = seed }, form);
+                SobolAnalysis sampled = BassMultiOutput.Sensitivity(fit, data, functionals[f], new SensitivitySpec { Route = SensitivityRoute.Sampled, Points = N, Seed = seed, MainVarianceForm = form });
                 Assert.Equal(SensitivityRoute.Sampled, sampled.Route);
                 Add(cells, $"output {f}", exact[f], sampled.Decompositions[0]);
             }
@@ -112,6 +112,18 @@ public sealed class SampledOutputsTests(ITestOutputHelper output)
             double[] functional = [1.0, -0.4];
             var spec = new SensitivitySpec { Route = SensitivityRoute.Sampled, Points = 512, Seed = 3 };
             SobolDecomposition projected = BassMultiOutput.Sensitivity(fit, d, functional, spec).Decompositions[0];
+            if (ReferenceEquals(fit, chain))
+            {
+                foreach (MainVarianceForm form in new[] { MainVarianceForm.Saltelli, MainVarianceForm.TwoDifference })
+                {
+                    SobolAnalysis auto = BassMultiOutput.Sensitivity(fit, d, functional, spec with { Route = SensitivityRoute.Auto, MainVarianceForm = form });
+                    SobolAnalysis sampled = BassMultiOutput.Sensitivity(fit, d, functional, spec with { MainVarianceForm = form });
+                    Assert.Equal(SensitivityRoute.Sampled, auto.Route);
+                    Assert.Equal(sampled.Decompositions[0].MainVariance, auto.Decompositions[0].MainVariance);
+                    Assert.Equal(sampled.Decompositions[0].MainIndexError, auto.Decompositions[0].MainIndexError);
+                    if (form == MainVarianceForm.TwoDifference) Assert.Equal(projected.MainVariance, sampled.Decompositions[0].MainVariance);
+                }
+            }
             var response = (MultiOutputResponse)d.Response;
             var scalarData = new BassData(d.Predictors, new ScalarResponse([.. Enumerable.Range(0, response.Cases).Select(i => functional[0] * response[i, 0] + functional[1] * response[i, 1])]));
             BassFit scalar = Bass.Fit(fit.Config with { OutputCovariance = null, Sigma2 = Sigma2Prior.InverseGamma(3, 1), Sampling = new BassSampling { Chains = 1, BurnIn = 2, Samples = 1 } }, scalarData);
@@ -144,7 +156,7 @@ public sealed class SampledOutputsTests(ITestOutputHelper output)
         var runs = new List<Dictionary<string, SampledSensitivityTests.Piece>>();
         foreach (int seed in SeedTree.Derive(342, Seeds))
         {
-            BasisSobolAnalysis sampled = BassBasisSensitivity.OfInForm(fit, spec with { Route = SensitivityRoute.Sampled, Points = N, Seed = seed }, form);
+            BasisSobolAnalysis sampled = fit.Sensitivity(spec with { Route = SensitivityRoute.Sampled, Points = N, Seed = seed, MainVarianceForm = form });
             Assert.Equal(SensitivityRoute.Sampled, sampled.Route);
             Assert.Equal(N, sampled.Points);
             var cells = new Dictionary<string, SampledSensitivityTests.Piece>();
@@ -301,7 +313,17 @@ public sealed class SampledOutputsTests(ITestOutputHelper output)
         Assert.Equal(sampled.Integrated.Count, sampled.Count);
 
         BassBasisFit directional = DirectionalComponents.Value;
-        Assert.Equal(SensitivityRoute.Sampled, directional.Sensitivity(new SensitivitySpec { Draws = [0], Points = 64 }).Route);
+        var directionalSpec = new SensitivitySpec { Draws = [0], Points = 64 };
+        BasisSobolAnalysis automatic = directional.Sensitivity(directionalSpec);
+        Assert.Equal(SensitivityRoute.Sampled, automatic.Route);
+        foreach (MainVarianceForm form in new[] { MainVarianceForm.Saltelli, MainVarianceForm.TwoDifference })
+        {
+            BasisSobolAnalysis autoForm = directional.Sensitivity(directionalSpec with { MainVarianceForm = form });
+            BasisSobolAnalysis explicitForm = directional.Sensitivity(directionalSpec with { Route = SensitivityRoute.Sampled, MainVarianceForm = form });
+            Assert.Equal(autoForm.Integrated.MainVariance, explicitForm.Integrated.MainVariance);
+            Assert.Equal(autoForm.AtLocation(3).MainIndexError, explicitForm.AtLocation(3).MainIndexError);
+            if (form == MainVarianceForm.TwoDifference) Assert.Equal(automatic.Integrated.MainVariance, explicitForm.Integrated.MainVariance);
+        }
         Assert.Contains("not a product of one-variable factors",
             Assert.Throws<ArgumentException>(() => directional.Sensitivity(new SensitivitySpec { Route = SensitivityRoute.Exact })).Message);
     }
@@ -448,8 +470,8 @@ public sealed class SampledOutputsTests(ITestOutputHelper output)
             var cells = new Dictionary<string, SampledSensitivityTests.Piece>();
             for (int i = 0; i < cases.Length; i++)
             {
-                SobolAnalysis sampled = BassSensitivity.OfInForm(cases[i].Fit, cases[i].Data,
-                    cases[i].Spec with { Route = SensitivityRoute.Sampled, Draws = [.. Enumerable.Range(0, 20)], Points = N, Seed = seed }, form);
+                SobolAnalysis sampled = cases[i].Fit.Sensitivity(cases[i].Data,
+                    cases[i].Spec with { Route = SensitivityRoute.Sampled, Draws = [.. Enumerable.Range(0, 20)], Points = N, Seed = seed, MainVarianceForm = form });
                 Assert.Equal(SensitivityRoute.Sampled, sampled.Route);
                 Assert.Equal(exact[i].Decompositions.Count, sampled.Decompositions.Count);
                 Assert.Equal(exact[i].Form, sampled.Form);

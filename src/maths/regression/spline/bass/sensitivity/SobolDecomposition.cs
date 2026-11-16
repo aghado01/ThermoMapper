@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using Maths.Regression.Sensitivity;
 
 namespace Maths.Regression.Spline.Bass.Sensitivity;
 
@@ -109,6 +110,11 @@ public sealed record SensitivitySpec
 
     /// <summary>The route (decision 1).</summary>
     public SensitivityRoute Route { get; init; } = SensitivityRoute.Auto;
+
+    /// <summary>The sampled main-variance estimator (decision 3); ignored on the exact route. The default uses reverse hybrids,
+    /// costing N(2p + 2) surface values for first-order and total indices. Explicit <see cref="Maths.Regression.Sensitivity.MainVarianceForm.Saltelli"/>
+    /// selects the centred covariance form at N(p + 2). Both retain Jansen's totals and the subset and column budgets.</summary>
+    public MainVarianceForm MainVarianceForm { get; init; } = MainVarianceForm.TwoDifference;
 
     /// <summary>The sampled route's rows N in each of its two base sets, drawn once from the product law and shared by every draw.</summary>
     public int Points { get; init; } = 4096;

@@ -14,7 +14,7 @@ namespace Maths.Regression.Tests;
 
 /// <summary>
 /// The sampled-sensitivity brief's slice 1 gates: Sobol indices on the sampled route for a scalar fit (<see cref="BassSensitivity.Of"/>
-/// with <see cref="SensitivityRoute"/>), under both main-variance forms while the form's default waits on the user.
+/// with <see cref="SensitivityRoute"/>), under both public main-variance forms.
 /// <list type="bullet">
 /// <item>Separable fits read on both routes: every draw's sampled pieces against its exact ones, replicated over seeds, within their
 /// stated errors, on the sensitivity fixtures under every kind of product law and on a Legendre fit.</item>
@@ -139,7 +139,7 @@ public sealed class SampledSensitivityTests(ITestOutputHelper output)
         var runs = new List<Dictionary<string, Piece>>();
         foreach (int seed in SeedTree.Derive(20261115, Seeds))
         {
-            SobolAnalysis analysis = BassSensitivity.OfInForm(fit, data, new SensitivitySpec { Measures = laws, Route = SensitivityRoute.Sampled, Points = N, Seed = seed }, form);
+            SobolAnalysis analysis = fit.Sensitivity(data, new SensitivitySpec { Measures = laws, Route = SensitivityRoute.Sampled, Points = N, Seed = seed, MainVarianceForm = form });
             Assert.Equal(SensitivityRoute.Sampled, analysis.Route);
             Assert.Equal(N, analysis.Points);
             SobolDecomposition sampled = analysis.Decompositions[0];
@@ -267,7 +267,7 @@ public sealed class SampledSensitivityTests(ITestOutputHelper output)
         var runs = new List<Dictionary<string, Piece>>();
         foreach (int seed in SeedTree.Derive(36, Seeds))
         {
-            SobolAnalysis analysis = BassSensitivity.OfInForm(fit, data, new SensitivitySpec { Points = N, Seed = seed }, form);
+            SobolAnalysis analysis = fit.Sensitivity(data, new SensitivitySpec { Points = N, Seed = seed, MainVarianceForm = form });
             Assert.Equal(SensitivityRoute.Sampled, analysis.Route);
             SobolDecomposition sampled = analysis.Decompositions[0];
             Assert.Equal(7, sampled.Subsets.Count);

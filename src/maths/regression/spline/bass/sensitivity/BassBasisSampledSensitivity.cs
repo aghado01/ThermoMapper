@@ -60,7 +60,7 @@ public static partial class BassBasisSensitivity
         kinds.Add([p]);
         kinds.Sort((x, y) => x.Length != y.Length ? x.Length.CompareTo(y.Length) : x.AsSpan().SequenceCompareTo(y));
         PickFreezeDesign Design(int inputs, IReadOnlyList<int[]> asked) =>
-            form is { } chosen ? new PickFreezeDesign(inputs, asked, chosen, inputs + spec.SubsetBudget) : new PickFreezeDesign(inputs, asked, budget: inputs + spec.SubsetBudget);
+            new(inputs, asked, form ?? spec.MainVarianceForm, inputs + spec.SubsetBudget);
         PickFreezeDesign atLocation = Design(p, subsets), integrated = Design(p + 1, kinds);
 
         // The stacked x-rows: A, B, then each location block reading only inputs some term reads (hybrid, then reverse); a block holding

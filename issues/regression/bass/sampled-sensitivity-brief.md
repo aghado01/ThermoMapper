@@ -84,6 +84,15 @@ Under "Reports" below, newest first, per slice: what landed by commit; the gates
 
 ## Reports
 
+### Decision 3: public sampled estimator choice — in progress (2026-11-15)
+
+- Owner: the public sampled-estimator chat. Base snapshot `a83db0c`; other chats' structure-chain changes and document moves are excluded.
+- `SensitivitySpec.MainVarianceForm` defaults to `TwoDifference`, carried through scalar/named-output, direct-functional and basis sampled designs. The primitive's default stays unchanged. The existing two-form public-readout gates are migrated off the temporary internal overrides; those overrides and their nullable plumbing will be removed in a separate cleanup commit.
+- Baseline receipt: `artifacts/chip-sensitivity-public-form/baseline-results/baseline.trx`, 7/7. Public Saltelli tables at the base commit are fingerprinted for scalar, directional, named-output, integrated, conditioned, partially conditioned and basis views at matched seed/points/draws. The new pinned tests assert those fingerprints with explicit Saltelli.
+- Scoped gates: **78/78** in `scoped-results/scoped.trx` (2 min 25 s), including both public forms against exact moments/quadrature and both primitive forms' closed references, far-range sweeps and small-index checks. The first capture run precedes the final pin assertions and expanded Auto checks; those are in the commit run. Calibration tables: `scoped-calibration.txt`.
+- Running: the commit selection (264/359 Regression classes, plus pinned), under `artifacts/chip-sensitivity-public-form/`. Two processors, two test threads, single-node builds, below-normal MSBuild priority. The first parallel-node restore stalled and was cancelled; single-node restore/build proceeds, with NuGet's existing access-denied vulnerability-cache warning. Oracle selects 13/40 classes and will run separately.
+- Next: final pins and route checks, commit selection and whole-assembly gates, cleanup of the superseded overrides, then the completed handoff here. Mixed-basis control variates remain deferred.
+
 ### The term-variables rule and its test verified from a clean archive (coordinating session, 2026-11-15)
 
 - **Commit:** `5e99c83`, on a snapshot of `0802553`, through `scripts/verify-csharp.ps1` over its two changed files, in the two projects that select.

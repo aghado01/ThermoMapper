@@ -59,8 +59,7 @@ public static partial class BassSensitivity
         Func<int, int[]> Variables = TermVariables(fit, s, kernels);
         int maxOrder = spec.MaxOrder ?? Math.Max(1, s.TermIds.Select(id => Variables(id).Length).DefaultIfEmpty(0).Max());
         int[][] subsets = Subsets(s.TermIds.Select(id => (IReadOnlyList<int>)Variables(id)), maxOrder, spec.SubsetBudget);
-        PickFreezeDesign design = form is { } chosen ? new PickFreezeDesign(p, subsets, chosen, p + spec.SubsetBudget)
-                                                     : new PickFreezeDesign(p, subsets, budget: p + spec.SubsetBudget);
+        var design = new PickFreezeDesign(p, subsets, form ?? spec.MainVarianceForm, p + spec.SubsetBudget);
         var read = new bool[p];
         foreach (int id in s.TermIds)
             foreach (int v in Variables(id)) read[v] = true;
@@ -549,8 +548,7 @@ public static partial class BassSensitivity
         Func<int, int[]> variables = TermVariables(fit, s, kernels);
         int maxOrder = spec.MaxOrder ?? Math.Max(1, s.TermIds.Select(id => variables(id).Length).DefaultIfEmpty(0).Max());
         int[][] subsets = Subsets(s.TermIds.Select(id => (IReadOnlyList<int>)variables(id)), maxOrder, spec.SubsetBudget);
-        PickFreezeDesign design = form is { } chosen ? new PickFreezeDesign(p, subsets, chosen, p + spec.SubsetBudget)
-                                                     : new PickFreezeDesign(p, subsets, budget: p + spec.SubsetBudget);
+        var design = new PickFreezeDesign(p, subsets, form ?? spec.MainVarianceForm, p + spec.SubsetBudget);
         var segments = new List<(bool FromB, int[] Other)> { (false, []), (true, []) };
         var hybridAt = new int[design.Blocks.Count];
         var reverseAt = new int[design.Blocks.Count];
