@@ -272,6 +272,7 @@ public sealed class BassPriorSampler : IReferenceSampler<BassState>
     {
         BassStructurePrior prior = _model.Prior;
         var terms = new BassTerm[DrawCount(rng)];
+        if (prior.MixedWidths) return DrawMixedCollection(rng, terms.Length);
         if (prior.Directions != DirectionPrior.Determinant)
         {
             double logTermPrior = 0.0;
@@ -324,6 +325,50 @@ public sealed class BassPriorSampler : IReferenceSampler<BassState>
                 InterceptTerms++;
                 return null;
             }
+            terms[j] = term;
+        }
+        return (terms, prior.LogTermsPrior(terms));
+    }
+
+    // Polya's urn draws integrated Dirichlet shares. Keep kinds and categorical parts fixed during determinant rejection;
+    // both directional widths enter that determinant. Missing ranges and admission remain whole-collection refusals.
+    private (BassTerm[] Terms, double LogTermPrior)? DrawMixedCollection(Xoshiro256PlusPlus rng, int count)
+    {
+        BassStructurePrior prior = _model.Prior;
+        var kinds = new int[count];
+        var counts = new int[prior.AvailableKinds];
+        var parts = new (ProjectionDirection? Direction, CategoricalFactor[] Cells)[count];
+        int directed = 0;
+        for (int j = 0; j < count; j++)
+        {
+            int pick = BassDraws.Below(rng, j + counts.Length), kind = 0;
+            while (pick >= counts[kind] + 1) pick -= counts[kind++] + 1;
+            kinds[j] = kind;
+            counts[kind]++;
+            parts[j] = prior.DrawMixedParts(rng, kind);
+            if (parts[j].Direction is not null) directed++;
+        }
+        if (prior.Directions == DirectionPrior.Determinant)
+        {
+            if (directed > prior.Directional!.Variables) { DeterminantRejections++; return null; }
+            var directions = new ProjectionDirection[directed];
+            for (long tries = 0; ; tries++)
+            {
+                for (int j = 0, d = 0; j < count; j++)
+                    if (parts[j].Direction is { } direction) directions[d++] = direction;
+                if (Math.Log(rng.NextDouble()) < DirectionDeterminant.LogDeterminant(directions)) break;
+                DeterminantRejections++;
+                if (tries + 1 >= MaxAttempts) return null;
+                Attempts++;
+                for (int j = 0; j < count; j++)
+                    if (parts[j].Direction is not null) parts[j].Direction = prior.DrawDirectionPart(rng);
+            }
+        }
+        var terms = new BassTerm[count];
+        for (int j = 0; j < count; j++)
+        {
+            if (prior.MixedTermWithKnot(rng, kinds[j], parts[j].Direction, parts[j].Cells) is not { } term)
+            { InterceptTerms++; return null; }
             terms[j] = term;
         }
         return (terms, prior.LogTermsPrior(terms));

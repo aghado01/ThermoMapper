@@ -94,12 +94,15 @@ public sealed class ProjectionDirection : IEquatable<ProjectionDirection>
 /// </summary>
 public sealed record DirectionalHinge
 {
-    /// <summary>The hinge on <paramref name="direction"/> with knot <paramref name="knot"/>, in standardized projection units.</summary>
-    public DirectionalHinge(ProjectionDirection direction, double knot)
+    /// <summary>The hinge on <paramref name="direction"/> with knot <paramref name="knot"/>, in standardized projection units;
+    /// <paramref name="columns"/> marks its structural width in a mixed basis.</summary>
+    public DirectionalHinge(ProjectionDirection direction, double knot, int columns = 1)
     {
         Direction = direction ?? throw new ArgumentNullException(nameof(direction));
         if (!double.IsFinite(knot)) throw new ArgumentOutOfRangeException(nameof(knot), "The knot is a finite projection value.");
         Knot = knot;
+        if (columns is not (1 or 4)) throw new ArgumentOutOfRangeException(nameof(columns));
+        Columns = columns;
     }
 
     /// <summary>The direction θ.</summary>
@@ -108,9 +111,12 @@ public sealed record DirectionalHinge
     /// <summary>The knot t, on the projection θᵀz.</summary>
     public double Knot { get; }
 
+    /// <summary>The structure's width in a mixed basis: 1 for a hinge, 4 for a smooth block. Pure bases use their configured width.</summary>
+    public int Columns { get; }
+
     /// <inheritdoc/>
     public override string ToString()
-        => $"({Direction} {(Knot < 0.0 ? '+' : '−')} {Math.Abs(Knot).ToString("R", CultureInfo.InvariantCulture)})₊";
+        => $"{(Columns == 4 ? "K4 " : "")}({Direction} {(Knot < 0.0 ? '+' : '−')} {Math.Abs(Knot).ToString("R", CultureInfo.InvariantCulture)})₊";
 }
 
 /// <summary>

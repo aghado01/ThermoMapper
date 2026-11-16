@@ -52,7 +52,7 @@ internal sealed record BassPriorColumn(double[] Centred, double Shift);
 /// <summary>The admission rules a design applies, resolved from the config on the data.</summary>
 public sealed record BassAdmission(
     int MaxBasis, SupportKind Support, double SupportMinimum, double? SupportMinimumFunctional, double AngleFloor,
-    double? MaxVarianceInflation)
+    double? MaxVarianceInflation, int? MaxTerms = null)
 {
     /// <summary>The rules <paramref name="config"/> sets, with the data's thresholds from <paramref name="resolved"/>.</summary>
     public static BassAdmission From(BassConfig config, BassResolved resolved)
@@ -60,8 +60,9 @@ public sealed record BassAdmission(
         ArgumentNullException.ThrowIfNull(config);
         ArgumentNullException.ThrowIfNull(resolved);
         // The cap on columns: M's, times a ridge block's K columns a term (E36's slice 3).
-        return new(resolved.MaxBasis * (config.Structure.Directional?.Columns ?? 1), config.Structure.Support.Kind, resolved.SupportMinimum,
-                   resolved.SupportMinimumFunctional, config.Structure.AngleFloor, config.Structure.MaxVarianceInflation);
+        bool mixed = config.Structure.Directional is { MixedWidths: true };
+        return new(mixed ? resolved.Observations - 1 : resolved.MaxBasis * (config.Structure.Directional?.Columns ?? 1), config.Structure.Support.Kind, resolved.SupportMinimum,
+                   resolved.SupportMinimumFunctional, config.Structure.AngleFloor, config.Structure.MaxVarianceInflation, mixed ? resolved.MaxBasis : null);
     }
 }
 
@@ -694,7 +695,7 @@ public sealed class BassDesign
     {
         _pending = null;
         // M's cap on structure terms, apart from the columns' K·M_max: terms of categorical factors alone are one column each (slice 5).
-        if (units.Count > _rules.MaxBasis / _expansion!.Columns) return DesignProposal.Refused(BassRefusal.Cap);
+        if (units.Count > (_rules.MaxTerms ?? _rules.MaxBasis / _expansion!.Columns)) return DesignProposal.Refused(BassRefusal.Cap);
         _scratch ??= new BassDesign(_basis, _data, _rules, _ridge, _response.Working, _intercept, _precision, _expansion);
         if (_scratch.Load(units, _response.Working) is { } refusal) return DesignProposal.Refused(refusal);
         DesignProposal account = _scratch.Account();
@@ -900,6 +901,7 @@ public sealed class BassDesign
         bool reread = _outputs is not null && !ReferenceEquals(response, _response);   // several outputs read on a new reading (E34's slice 4)
         if (_expansion is not null && !terms.Any(t => t.Ridge is not null))
         {
+            if (_rules.MaxTerms is { } termCap && terms.Count > termCap) return BassRefusal.Cap;
             // A ridge basis loads structure terms as their blocks of columns (E36's slice 3); a block whose knots leave a column undefined
             // lies outside the support. A draw's terms are its columns already, whole blocks in order, and load as they are; a list holding no
             // ridge column (a term of categorical factors alone is its own column, slice 5) expands to itself.
@@ -911,6 +913,7 @@ public sealed class BassDesign
             }
             terms = expanded;
         }
+        if (_rules.MaxTerms is { } maxTerms && _expansion!.Units(terms).Count > maxTerms) return BassRefusal.Cap;
         if (terms.Count > _rules.MaxBasis) return BassRefusal.Cap;
         var seen = new HashSet<BassTerm>();
         var columns = new List<double[]>(terms.Count);

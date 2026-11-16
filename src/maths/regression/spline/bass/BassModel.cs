@@ -121,10 +121,11 @@ public sealed class BassModel
         BassStructurePrior prior = BassStructurePrior.From(config, resolved, inputs);
         BassTermProposal? proposal = config.Structure.Legendre is null && config.Structure.Directional is null ? BassTermProposal.From(config, prior) : null;
         IBassProposalKernel kernel = proposal is not null ? proposal
+            : prior.MixedWidths ? new MixedWidthProposal(config, prior)
             : config.Structure.Directional is not null ? DirectionalTermProposal.From(config, prior)
             : new LegendreTermProposal(prior, config.Structure.Legendre!);
         var target = new BassTarget(config, resolved, prior, form ?? config.Sampling.Tempering?.Form ?? config.Sampling.Smc?.Form ?? TemperedForm.Integrated, working);
-        RidgeExpansion? expansion = config.Structure.Directional is { Columns: >= 2 } ridge ? new RidgeExpansion(prior.Directional!, ridge.Columns) : null;
+        RidgeExpansion? expansion = config.Structure.Directional is { Columns: >= 2 } ridge ? new RidgeExpansion(prior.Directional!, ridge.Columns, ridge.MixedWidths) : null;
         return new(config, data, resolved, transform, inputs, basis, admission, prior, proposal, kernel, target, observation, working, baseReading, block, expansion)
         {
             Declared = asDeclared,

@@ -19,6 +19,10 @@ namespace Maths.Regression.Spline.Bass;
 /// </summary>
 public sealed record DirectionalBasis
 {
+    /// <summary>Admit disjoint K = 4 smooth blocks, K = 1 directional hinges and, when available, categorical-only terms.
+    /// Their shares have an integrated uniform Dirichlet prior over the available kinds.</summary>
+    [System.Text.Json.Serialization.JsonIgnore(Condition = System.Text.Json.Serialization.JsonIgnoreCondition.WhenWritingDefault)]
+    public bool MixedWidths { get; init; }
     /// <summary>p₀ in (0, 1]: the prior probability that the knot lies above the least projected training case, so that the hinge is zero on
     /// some case. The knot is uniform on [U − (U − Q₀)/p₀, U] (the paper's eq. (UL)); 2/3, the paper's and <c>BayesPPR</c>'s default.</summary>
     public double LocalProbability { get; init; } = 2.0 / 3.0;
@@ -42,6 +46,7 @@ public sealed record DirectionalBasis
     /// <summary>The first setting out of range, as its name and the reason; null when every one holds.</summary>
     public (string Setting, string Reason)? Problem()
     {
+        if (MixedWidths && Columns != 4) return (nameof(Columns), "a mixed-width basis takes 4: its directional kinds have widths 4 and 1");
         if (!(LocalProbability > 0.0 && LocalProbability <= 1.0))
             return (nameof(LocalProbability), "must lie in (0, 1]: at 0 the knot's lower end is −∞");
         if (ActiveCases is { } active && !(active > 0.0 && double.IsFinite(active)))

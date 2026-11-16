@@ -642,6 +642,9 @@ public enum BassMoveKind
     /// <summary>A directional hinge's direction moved on its active coordinates by the power spherical law, or its sign by a fair coin at
     /// a = 1, and its knot redrawn from its prior given the new direction (E36).</summary>
     DirectionChange,
+
+    /// <summary>A directional term's width flipped between a hinge and a smooth four-column block.</summary>
+    WidthChange,
 }
 
 /// <summary>

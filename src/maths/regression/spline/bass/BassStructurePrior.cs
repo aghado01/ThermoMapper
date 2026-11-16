@@ -110,12 +110,14 @@ public sealed class BassStructurePrior
     /// <paramref name="count"/>, and the directions independent given M or under <paramref name="directions"/>' determinant (slice 4). With
     /// categorical predictors of <paramref name="levels"/> levels and a cap <paramref name="maxCategoricalInteraction"/> &gt; 0 it holds
     /// BASS's categorical part beside the direction (slice 5, decision 7): each part's order uniform from 0, a draw with both empty the
-    /// intercept, outside F, and the subsets from <paramref name="subsets"/>. Bases that mix directional hinges with BASS's are an option the
-    /// contract allows, not built (decision 6).
+    /// intercept, outside F, and the subsets from <paramref name="subsets"/>. With <paramref name="mixedWidths"/> the three kinds are
+    /// conditioned to disjoint supports and their available shares are integrated under a uniform Dirichlet law.
     /// </summary>
     public BassStructurePrior(DirectionalTermSpace space, BassCountPrior count, DirectionPrior directions = DirectionPrior.Independent,
-                              int[]? levels = null, int maxCategoricalInteraction = 0, CategoricalSubsetMeasure subsets = CategoricalSubsetMeasure.SizeUniform)
+                              int[]? levels = null, int maxCategoricalInteraction = 0, CategoricalSubsetMeasure subsets = CategoricalSubsetMeasure.SizeUniform,
+                              bool mixedWidths = false)
     {
+        MixedWidths = mixedWidths;
         if (!Enum.IsDefined(directions)) throw new ArgumentOutOfRangeException(nameof(directions), "Not a known direction prior.");
         Directions = directions;
         ArgumentNullException.ThrowIfNull(space);
@@ -147,7 +149,7 @@ public sealed class BassStructurePrior
             return new(new DirectionalTermSpace(inputs, resolved.MaxInteraction,
                                                 resolved.KnotLevel ?? throw new ArgumentException("The resolution holds no knot level for the directional basis.", nameof(resolved)),
                                                 directional.LocalProbability, resolved.ActiveCases), config.Count, directional.Directions,
-                       levels, resolved.MaxCategoricalInteraction, config.Structure.CategoricalSubsets);
+                       levels, resolved.MaxCategoricalInteraction, config.Structure.CategoricalSubsets, directional.MixedWidths);
         }
         return new(inputs, resolved.MaxInteraction, resolved.MaxCategoricalInteraction, resolved.MaxFunctionalInteraction,
                    config.Structure.CategoricalSubsets, config.Count);
@@ -181,6 +183,26 @@ public sealed class BassStructurePrior
     /// the determinant (<see cref="DirectionDeterminant"/>).</summary>
     public DirectionPrior Directions { get; } = DirectionPrior.Independent;
 
+    /// <summary>Whether the term space has disjoint smooth, hinge and available categorical-only kinds.</summary>
+    public bool MixedWidths { get; }
+
+    /// <summary>The available mixed kinds: two on continuous-only data, three beside categories.</summary>
+    public int AvailableKinds => Has(BassPart.Categorical) ? 3 : 2;
+
+    /// <summary>A mixed term's kind: smooth 0, hinge 1, categorical-only 2.</summary>
+    public static int KindOf(BassTerm term) => term.Directional is not { } h ? 2 : h.Columns == 4 ? 0 : 1;
+
+    /// <summary>The integrated Dirichlet(1, …, 1) collection weight over the available kinds.</summary>
+    public double LogKindShares(IReadOnlyList<BassTerm> terms)
+    {
+        if (!MixedWidths) return 0.0;
+        var counts = new int[AvailableKinds];
+        foreach (BassTerm term in terms) counts[KindOf(term)]++;
+        double log = SpecialFunctions.LogGamma(AvailableKinds) - SpecialFunctions.LogGamma(AvailableKinds + terms.Count);
+        foreach (int count in counts) log += SpecialFunctions.LogGamma(1.0 + count);
+        return log;
+    }
+
     /// <summary>
     /// ln of a structure's term prior: its terms' <see cref="LogPrior"/> summed in order, and under the determinant direction prior the
     /// coupling ln det(ΘᵀΘ) − ln c_M over their directions (E36's slice 4), −∞ past M = p or on a dependence. A structure's log prior is this
@@ -191,7 +213,7 @@ public sealed class BassStructurePrior
         ArgumentNullException.ThrowIfNull(terms);
         double sum = 0.0;
         for (int j = 0; j < terms.Count; j++) sum += LogPrior(terms[j]);
-        return Directions == DirectionPrior.Determinant ? sum + LogCoupling(terms) : sum;
+        return sum + LogKindShares(terms) + (Directions == DirectionPrior.Determinant ? LogCoupling(terms) : 0.0);
     }
 
     /// <summary>The coupling between a structure's terms beyond their own priors: ln det(ΘᵀΘ) − ln c_M under the determinant direction prior,
@@ -201,7 +223,8 @@ public sealed class BassStructurePrior
 
     internal Part? this[BassPart part] => _parts[(int)part];
 
-    /// <summary>ln π(term), the term measure's log probability.</summary>
+    /// <summary>ln π(term). In a mixed-width fit this is conditional on the represented kind; the integrated shares enter
+    /// <see cref="LogTermsPrior"/> once for the collection.</summary>
     public double LogPrior(BassTerm term)
     {
         Validate(term);
@@ -220,6 +243,13 @@ public sealed class BassStructurePrior
             lp += p.LogSets[k];
             lp += p.LogFactors(term);
         }
+        if (MixedWidths && this[BassPart.Categorical] is { } gate)
+        {
+            Part direction = this[BassPart.Directional]!;
+            // Condition the kind's parts: a >= 1 for a direction, k >= 1 for categorical-only.
+            lp += term.Directional is not null ? Math.Log((direction.Cap + 1.0) / direction.Cap)
+                : -direction.LogOrder + Math.Log((gate.Cap + 1.0) / gate.Cap);
+        }
         return lp;
     }
 
@@ -229,11 +259,13 @@ public sealed class BassStructurePrior
     /// measure. Null is the intercept, the draw whose parts all came out empty; it has mass only when the fit has several
     /// parts, and it lies outside F. A directional fit's draw is a, 𝒥, θ and the knot from theirs (<see cref="DirectionalTermSpace"/>), beside a
     /// categorical part both parts' orders from 0, then the subsets, and the knot over the term's cells; it is null where the knot has no
-    /// range, a term outside the support.
+    /// range, a term outside the support. A mixed-width fit draws a single term at equal marginal kind shares; correlated collections
+    /// under its integrated shares are drawn by <see cref="BassPriorSampler"/>.
     /// </summary>
     public BassTerm? DrawTerm(Xoshiro256PlusPlus rng)
     {
         ArgumentNullException.ThrowIfNull(rng);
+        if (MixedWidths) return DrawMixedTerm(rng, BassDraws.Below(rng, AvailableKinds));
         if (Legendre is { } space) return space.Draw(rng);
         if (Directional is not null) return DrawParts(rng) is var (direction, cells) ? WithKnot(rng, direction, cells) : null;
         Span<int> orders = stackalloc int[3];
@@ -308,6 +340,34 @@ public sealed class BassStructurePrior
 
     private BassTerm? WithKnot(Xoshiro256PlusPlus rng, ProjectionDirection? direction, CategoricalFactor[] cells) => WithKnot(rng, Directional!, direction, cells);
 
+    internal (ProjectionDirection? Direction, CategoricalFactor[] Cells) DrawMixedParts(Xoshiro256PlusPlus rng, int kind)
+    {
+        ProjectionDirection? direction = kind == 2 ? null : DrawDirectionPart(rng);
+        Part? gate = this[BassPart.Categorical];
+        int minimum = kind == 2 ? 1 : 0;
+        int k = gate is null ? 0 : minimum + BassDraws.Below(rng, gate.Cap - minimum + 1);
+        var cells = new CategoricalFactor[k];
+        if (k > 0)
+        {
+            int[] variables = UniformSubset(rng, gate!.Sizes.Length, k);
+            for (int j = 0; j < k; j++) cells[j] = gate.DrawSubset(rng, variables[j], Subsets);
+        }
+        return (direction, cells);
+    }
+
+    internal BassTerm? DrawMixedTerm(Xoshiro256PlusPlus rng, int kind)
+    {
+        var parts = DrawMixedParts(rng, kind);
+        return MixedTermWithKnot(rng, kind, parts.Direction, parts.Cells);
+    }
+
+    internal BassTerm? MixedTermWithKnot(Xoshiro256PlusPlus rng, int kind, ProjectionDirection? direction, CategoricalFactor[] cells)
+    {
+        BassTerm? term = WithKnot(rng, Directional!, direction, cells);
+        return term?.Directional is { } h && kind == 0
+            ? new BassTerm(categorical: cells, directional: new DirectionalHinge(h.Direction, h.Knot, 4)) : term;
+    }
+
     // k of the p variables, uniformly among the C(p, k) subsets: a partial Fisher–Yates shuffle.
     private static int[] UniformSubset(Xoshiro256PlusPlus rng, int p, int k)
     {
@@ -366,6 +426,8 @@ public sealed class BassStructurePrior
         ArgumentNullException.ThrowIfNull(term);
         if (Directional is { } directions)
         {
+            if (!MixedWidths && term.Directional is { Columns: not 1 })
+                throw new ArgumentException("A pure directional basis uses its configured width; structure terms carry no mixed-width marker.", nameof(term));
             directions.Validate(term);
             if (_parts[(int)BassPart.Categorical] is { } gate) ValidateSubsets(term, gate);
             else if (term.Categorical.Count > 0) throw new ArgumentException("The fit has no categorical part.", nameof(term));
@@ -585,6 +647,7 @@ public sealed class BassStructurePrior
 /// </summary>
 public sealed class BassTermCounts
 {
+    private readonly List<BassTerm> _mixedTerms = [];
     private readonly int[][] _orders = new int[BassStructurePrior.PartCount][];
     private readonly int[][] _appearances = new int[BassStructurePrior.PartCount][];
 
@@ -604,6 +667,7 @@ public sealed class BassTermCounts
     {
         Prior = source.Prior;
         Terms = source.Terms;
+        _mixedTerms.AddRange(source._mixedTerms);
         for (int p = 0; p < BassStructurePrior.PartCount; p++)
         {
             _orders[p] = (int[])source._orders[p].Clone();
@@ -616,6 +680,17 @@ public sealed class BassTermCounts
 
     /// <summary>The structure's terms, M.</summary>
     public int Terms { get; private set; }
+
+    /// <summary>Counts restricted to one mixed kind, using that kind's own adaptation history.</summary>
+    public BassTermCounts ForKind(int kind)
+    {
+        if (!Prior.MixedWidths) throw new InvalidOperationException("Per-kind counts require a mixed-width prior.");
+        if ((uint)kind >= (uint)Prior.AvailableKinds) throw new ArgumentOutOfRangeException(nameof(kind));
+        var result = new BassTermCounts(Prior);
+        foreach (BassTerm term in _mixedTerms)
+            if (BassStructurePrior.KindOf(term) == kind) result.Add(term);
+        return result;
+    }
 
     /// <summary>The terms whose <paramref name="part"/> has order <paramref name="order"/>.</summary>
     public int Order(BassPart part, int order) => _orders[(int)part][order];
@@ -632,6 +707,7 @@ public sealed class BassTermCounts
     {
         Prior.Validate(term);
         Shift(term, +1);
+        if (Prior.MixedWidths) _mixedTerms.Add(term);
         Terms++;
     }
 
@@ -639,8 +715,10 @@ public sealed class BassTermCounts
     public void Remove(BassTerm term)
     {
         Prior.Validate(term);
-        if (Terms == 0 || !Holds(term)) throw new ArgumentException("The counts hold no such term.", nameof(term));
+        if (Terms == 0 || (Prior.MixedWidths ? !_mixedTerms.Contains(term) : !Holds(term)))
+            throw new ArgumentException("The counts hold no such term.", nameof(term));
         Shift(term, -1);
+        if (Prior.MixedWidths) _mixedTerms.Remove(term);
         Terms--;
     }
 

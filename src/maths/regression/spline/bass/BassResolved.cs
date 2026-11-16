@@ -336,7 +336,7 @@ public sealed record BassResolved
                         + $" of the {Text(cases)} training cases above it, the paper's eq. (UL)"));
         }
 
-        int perTerm = s.Directional?.Columns ?? 1;   // a ridge block's K columns a term (E36's slice 3)
+        int perTerm = s.Directional is { MixedWidths: true } ? 1 : s.Directional?.Columns ?? 1;
         int bound = (n - 1) / perTerm;   // the intercept counts toward the dimension bound
         int maxBasis;
         if (s.MaxBasis is { } declared)
