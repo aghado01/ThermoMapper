@@ -1,0 +1,238 @@
+{
+  "NumericalSourceRevision": "8a77d0006ac8e50ca3539f3e3fd26a0097d57bb2",
+  "AuditRevision": "968fed6",
+  "ProtocolRevision": "4116728",
+  "BaselineOriginalFieldsAndBitsAgree": true,
+  "UniqueIndependentProblems": 450,
+  "RecordedArmEndpoints": 540,
+  "ControlRepetition": 13,
+  "CycleLengthValidated": 1,
+  "Controls": {
+    "on": {
+      "PrimaryEqualsFreshAccelerated": true,
+      "FullIterationNumericalFieldsAndBitsAgree": true,
+      "FullUpdates": 50000,
+      "SkippedUpdates": 49589,
+      "FullOutput": "artifacts/generative-prior/g1-linear-full-control/results/k10-on/trials.jsonl"
+    },
+    "off": {
+      "PrimaryEqualsFreshAccelerated": true,
+      "FullIterationNumericalFieldsAndBitsAgree": true,
+      "FullUpdates": 50000,
+      "SkippedUpdates": 49553,
+      "FullOutput": "artifacts/generative-prior/g1-linear-replay/results-full/k10-off/trials.jsonl"
+    }
+  },
+  "FilesNormalizedToLF": {
+    "k10-off/summary.json": {
+      "bytes": 867,
+      "sha256": "10c59847e4efc298ed59721936f7c4f854d09e3c354061318e5f7b9ac7e8ce94",
+      "actual_output": "artifacts/generative-prior/g1-linear-primary/results/k10-off/summary.json"
+    },
+    "k10-off/trials.jsonl": {
+      "bytes": 47788,
+      "sha256": "08f7b3145c0eba061b3118bdf07e390d3dc85b40bf61c6534b60e03f72be6701",
+      "actual_output": "artifacts/generative-prior/g1-linear-primary/results/k10-off/trials.jsonl"
+    },
+    "k10-on/summary.json": {
+      "bytes": 868,
+      "sha256": "42014964e0b1aa58ae419d41183752c6210065fa95bb592e559df90267c67039",
+      "actual_output": "artifacts/generative-prior/g1-linear-primary/results/k10-on/summary.json"
+    },
+    "k10-on/trials.jsonl": {
+      "bytes": 47700,
+      "sha256": "ef168f09e84a1ac2dbb9cec91da308b9158e9e2d1f23834068ac6ab991b5ea49",
+      "actual_output": "artifacts/generative-prior/g1-linear-primary/results/k10-on/trials.jsonl"
+    },
+    "k100-off/summary.json": {
+      "bytes": 879,
+      "sha256": "a03feb716c6abaf84d6f734ac7fe1bab2dc6955f6e678848dc575c0ef2359138",
+      "actual_output": "artifacts/generative-prior/g1-linear-primary/results/k100-off/summary.json"
+    },
+    "k100-off/trials.jsonl": {
+      "bytes": 207421,
+      "sha256": "a031cf75714d72b4942679f073b04e11e9051791740db97c75e105c6d4cd2a9c",
+      "actual_output": "artifacts/generative-prior/g1-linear-primary/results/k100-off/trials.jsonl"
+    },
+    "k100-on/summary.json": {
+      "bytes": 879,
+      "sha256": "ab775b2e5872f4a0cd1c45e9e2c32f7a23e176a70decb17c5c5580617ff85363",
+      "actual_output": "artifacts/generative-prior/g1-linear-primary/results/k100-on/summary.json"
+    },
+    "k100-on/trials.jsonl": {
+      "bytes": 207451,
+      "sha256": "4a14ab5b3776e5e62a17b28797bb7213e43cc87244f8895c50f61ab11f74dd36",
+      "actual_output": "artifacts/generative-prior/g1-linear-primary/results/k100-on/trials.jsonl"
+    },
+    "k15-on/summary.json": {
+      "bytes": 854,
+      "sha256": "a70eeb56b9e3abed2a6f0e3ee97e3d8cb5528ce7c0d802945ba65af0ea9d476c",
+      "actual_output": "artifacts/generative-prior/g1-linear-primary/results/k15-on/summary.json"
+    },
+    "k15-on/trials.jsonl": {
+      "bytes": 56302,
+      "sha256": "b629227764e381b9b4b1da4c6e32ec51873090b0365277355db1b7129cb3a856",
+      "actual_output": "artifacts/generative-prior/g1-linear-primary/results/k15-on/trials.jsonl"
+    },
+    "k20-on/summary.json": {
+      "bytes": 871,
+      "sha256": "8ad22cb2980a7df32576c2d003acfd0c018ed2b1b403308c8083582e38abbbaa",
+      "actual_output": "artifacts/generative-prior/g1-linear-primary/results/k20-on/summary.json"
+    },
+    "k20-on/trials.jsonl": {
+      "bytes": 65133,
+      "sha256": "0c66ee003eb88e310597e123ad009d98a78f773dbb80fbfdcac249ce3fa0da3d",
+      "actual_output": "artifacts/generative-prior/g1-linear-primary/results/k20-on/trials.jsonl"
+    },
+    "k25-on/summary.json": {
+      "bytes": 856,
+      "sha256": "b5645c4c9c223e14b3e2ae762dc743ce6a36220905e16b5bc90872e5f08cf73d",
+      "actual_output": "artifacts/generative-prior/g1-linear-primary/results/k25-on/summary.json"
+    },
+    "k25-on/trials.jsonl": {
+      "bytes": 73973,
+      "sha256": "b7e8c8775c9ea146439573653043ec5ee3d0e600cee0c563703c3cd633ec2393",
+      "actual_output": "artifacts/generative-prior/g1-linear-primary/results/k25-on/trials.jsonl"
+    },
+    "k30-on/summary.json": {
+      "bytes": 871,
+      "sha256": "3609476de13f108f0df82e030a8f20c8d5e627995143ac4df07a5cd38b571a17",
+      "actual_output": "artifacts/generative-prior/g1-linear-primary/results/k30-on/summary.json"
+    },
+    "k30-on/trials.jsonl": {
+      "bytes": 82826,
+      "sha256": "cb49fe0c6b8486b044810c3791f6eac120141a458d03e172adcf35753872e0a6",
+      "actual_output": "artifacts/generative-prior/g1-linear-primary/results/k30-on/trials.jsonl"
+    },
+    "k35-on/summary.json": {
+      "bytes": 856,
+      "sha256": "029b8fd7b331a727b517f2a1fad55987c017575b3c059636a4a77f165e25678a",
+      "actual_output": "artifacts/generative-prior/g1-linear-primary/results/k35-on/summary.json"
+    },
+    "k35-on/trials.jsonl": {
+      "bytes": 91853,
+      "sha256": "925837f6efb05ff21310a413e9044063727b7b2583046fbae24831647cc0c0b0",
+      "actual_output": "artifacts/generative-prior/g1-linear-primary/results/k35-on/trials.jsonl"
+    },
+    "k40-on/summary.json": {
+      "bytes": 856,
+      "sha256": "0a2cbc6a88759f950469e25b12badb5c4bac00e3220ac4db0a7ff38df19a08bc",
+      "actual_output": "artifacts/generative-prior/g1-linear-primary/results/k40-on/summary.json"
+    },
+    "k40-on/trials.jsonl": {
+      "bytes": 100713,
+      "sha256": "6972ac4ea81ddde59f9b9e46bbeb22948d3db50a08036a612794732d4eb51799",
+      "actual_output": "artifacts/generative-prior/g1-linear-primary/results/k40-on/trials.jsonl"
+    },
+    "k45-on/summary.json": {
+      "bytes": 857,
+      "sha256": "60d717a4201031e4590ac96b14b40a13af8752dcfcd0edfeb0003101b6b2a719",
+      "actual_output": "artifacts/generative-prior/g1-linear-primary/results/k45-on/summary.json"
+    },
+    "k45-on/trials.jsonl": {
+      "bytes": 109397,
+      "sha256": "9a61835f6a223f2bf0171b62b6f3a22bf4f1bd411c661b09a1eb1ba25d2c66fe",
+      "actual_output": "artifacts/generative-prior/g1-linear-primary/results/k45-on/trials.jsonl"
+    },
+    "k50-on/summary.json": {
+      "bytes": 859,
+      "sha256": "50fa6d85803e7277cbbf116c1b088eebe6829747456f0770fb859870aa37b6eb",
+      "actual_output": "artifacts/generative-prior/g1-linear-primary/results/k50-on/summary.json"
+    },
+    "k50-on/trials.jsonl": {
+      "bytes": 118209,
+      "sha256": "f71ec4d0ef4ceb50623fe83389d90ebb9e340279099ff6ab3e2af5b7a62dd91e",
+      "actual_output": "artifacts/generative-prior/g1-linear-primary/results/k50-on/trials.jsonl"
+    },
+    "k55-on/summary.json": {
+      "bytes": 876,
+      "sha256": "4a9b23fda0decea85b19ec55c5e9b65225044f0b5447246009bcf4e160676483",
+      "actual_output": "artifacts/generative-prior/g1-linear-primary/results/k55-on/summary.json"
+    },
+    "k55-on/trials.jsonl": {
+      "bytes": 127090,
+      "sha256": "0fa530412dfa343184407fe65f17d0d127323f9986a5697ed8c29233926712a4",
+      "actual_output": "artifacts/generative-prior/g1-linear-primary/results/k55-on/trials.jsonl"
+    },
+    "k60-on/summary.json": {
+      "bytes": 860,
+      "sha256": "ba5a6035e52d0b5dad5c862d377fe083d006e6efd16b59b193a23f4b06c6f7d9",
+      "actual_output": "artifacts/generative-prior/g1-linear-primary/results/k60-on/summary.json"
+    },
+    "k60-on/trials.jsonl": {
+      "bytes": 135804,
+      "sha256": "694eefd1ba8974bcc3711f4203c9846929e60b5c54d42a9d49ffb838642dff8d",
+      "actual_output": "artifacts/generative-prior/g1-linear-primary/results/k60-on/trials.jsonl"
+    },
+    "k70-on/summary.json": {
+      "bytes": 881,
+      "sha256": "3b67a2c977aa4c1102c01178989e5600687174ea694544797333e38dde31064b",
+      "actual_output": "artifacts/generative-prior/g1-linear-primary/results/k70-on/summary.json"
+    },
+    "k70-on/trials.jsonl": {
+      "bytes": 153637,
+      "sha256": "6bd6399699120268ab2464ae32a92a18338d9325d921795305d8242c04f8062d",
+      "actual_output": "artifacts/generative-prior/g1-linear-primary/results/k70-on/trials.jsonl"
+    },
+    "k80-off/summary.json": {
+      "bytes": 878,
+      "sha256": "f7d6cccfd887900e60cdea6aa4a7c284f1ab7c075bc3a81beebae3986b69f569",
+      "actual_output": "artifacts/generative-prior/g1-linear-primary/results/k80-off/summary.json"
+    },
+    "k80-off/trials.jsonl": {
+      "bytes": 171763,
+      "sha256": "2c405ef6d31a7a8fe759a175830521e509557f4d6c8f9c8e1035469b0379e4a2",
+      "actual_output": "artifacts/generative-prior/g1-linear-primary/results/k80-off/trials.jsonl"
+    },
+    "k80-on/summary.json": {
+      "bytes": 881,
+      "sha256": "af0b71739473172ec2474a25e79d20718d6d1c48c4b704e5c0680bef54627212",
+      "actual_output": "artifacts/generative-prior/g1-linear-primary/results/k80-on/summary.json"
+    },
+    "k80-on/trials.jsonl": {
+      "bytes": 171694,
+      "sha256": "e22016c74d5c95a011bf77ea574d42a8226783d0c67b3cc9ae6b2b6bf717b253",
+      "actual_output": "artifacts/generative-prior/g1-linear-primary/results/k80-on/trials.jsonl"
+    },
+    "k90-on/summary.json": {
+      "bytes": 878,
+      "sha256": "76d7ae61041fe0e0d8b4e9c72b022740af4c4793893dde1f7153e0d5d8d556fe",
+      "actual_output": "artifacts/generative-prior/g1-linear-primary/results/k90-on/summary.json"
+    },
+    "k90-on/trials.jsonl": {
+      "bytes": 189328,
+      "sha256": "69f405c2c587d16514584fb829d1e16947dd0eb55c1d3c6a7406f9c18d4bc74b",
+      "actual_output": "artifacts/generative-prior/g1-linear-primary/results/k90-on/trials.jsonl"
+    },
+    "analysis.json": {
+      "bytes": 32751,
+      "sha256": "4381fcf8f5978ec03ad821bf886985e10547ccf52b840e47eb92f5b1667b1353",
+      "actual_output": "artifacts/generative-prior/g1-linear-primary/analysis/analysis.json"
+    },
+    "curve.csv": {
+      "bytes": 1922,
+      "sha256": "ba292a9c3b3bc08592d3fe7c6f5f1c7294993727b187cce07cc4e847d1720fd3",
+      "actual_output": "artifacts/generative-prior/g1-linear-primary/analysis/curve.csv"
+    },
+    "verification/k10-on-full/trials.jsonl": {
+      "bytes": 1627,
+      "sha256": "a971fcbde3d73cac828b0428910a1c8032facf1fd7cd976e867a89a7dc71873a",
+      "actual_output": "artifacts/generative-prior/g1-linear-full-control/results/k10-on/trials.jsonl"
+    },
+    "verification/k10-on-full/summary.json": {
+      "bytes": 853,
+      "sha256": "839c54a0ede2097d1aedd4b8ca4771684392c4543c1a8eb0bf14f0de11083dcd",
+      "actual_output": "artifacts/generative-prior/g1-linear-full-control/results/k10-on/summary.json"
+    },
+    "verification/k10-off-full/trials.jsonl": {
+      "bytes": 1627,
+      "sha256": "ae35527d2222126ba0d068a96f9027092fd30060c044d7b5d037ef155eae95aa",
+      "actual_output": "artifacts/generative-prior/g1-linear-replay/results-full/k10-off/trials.jsonl"
+    },
+    "verification/k10-off-full/summary.json": {
+      "bytes": 854,
+      "sha256": "93d190166514adf78bce76e7a4c8f6ac6639e06ade375a1712025c4ddf7d878b",
+      "actual_output": "artifacts/generative-prior/g1-linear-replay/results-full/k10-off/summary.json"
+    }
+  }
+}

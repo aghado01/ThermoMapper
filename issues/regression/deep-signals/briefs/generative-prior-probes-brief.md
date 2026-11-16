@@ -139,8 +139,84 @@ The numerical baseline, stopping-rule observation and distinction between the li
 
 **Rerun and diagnosis.** Keep every original row. For a curve discrepancy, numerical check failure, a paired count anomaly or failed shortcut equivalence, replay the affected cell with identical seeds, inspect endpoint geometry and stopping/accounting, and diagnose against these original gates. Add no fresh seeds and tune no step, stopping threshold or neighbourhood after observing the results. A fresh pinned replay must exercise both sign modes and a skipped cycle. Preserve endpoints and seeds for independent checking. Stop after this linear comparison.
 
+### Linear curve readings
+
+**The curve passed the registered comparison gate.** All 15 two-sided Fisher p values exceed 0.05/15. There were 420 new independent problems, with the original 30 signed k = 10 problems reused. The signed k = 10 diagnostic replay matched every original trial field and endpoint bit and supplied the additional geometry for that cohort. The intervals below describe the new cohort's recovery probability. Both cohorts' Wilson intervals and the unrounded p values are retained in the analysis receipt. [Actual analysis](../../../../artifacts/generative-prior/g1-linear-primary/analysis/analysis.json) · [Tracked analysis](../../receipts/generative-prior/results/g1-linear-curve/analysis.json) · [Curve CSV](../../receipts/generative-prior/results/g1-linear-curve/curve.csv)
+
+| k | m/k | Signed successes / 30 | Paper / 30 | Wilson 95% interval | Fisher p |
+| ---: | ---: | ---: | ---: | ---: | ---: |
+| 10 | 15 | 30 | 30 | 0.88649–1 | 1 |
+| 15 | 10 | 30 | 30 | 0.88649–1 | 1 |
+| 20 | 7.5 | 30 | 30 | 0.88649–1 | 1 |
+| 25 | 6 | 30 | 30 | 0.88649–1 | 1 |
+| 30 | 5 | 30 | 30 | 0.88649–1 | 1 |
+| 35 | 4.28571 | 30 | 30 | 0.88649–1 | 1 |
+| 40 | 3.75 | 30 | 30 | 0.88649–1 | 1 |
+| 45 | 3.33333 | 30 | 30 | 0.88649–1 | 1 |
+| 50 | 3 | 30 | 30 | 0.88649–1 | 1 |
+| 55 | 2.72727 | 29 | 28 | 0.83330–0.99409 | 1 |
+| 60 | 2.5 | 30 | 28 | 0.88649–1 | 0.49153 |
+| 70 | 2.14286 | 29 | 25 | 0.83330–0.99409 | 0.19451 |
+| 80 | 1.875 | 20 | 17 | 0.48780–0.80770 | 0.59591 |
+| 90 | 1.66667 | 9 | 7 | 0.16665–0.47876 | 0.77102 |
+| 100 | 1.5 | 1 | 4 | 0.00591–0.16670 | 0.35326 |
+
+### Paired sign comparison
+
+The three paired cells contain 90 matched problems. Each pair shares all five RNG streams, matrices, observations, truth and start. Independent checks confirmed the pairing. The success advantage at k = 80 was 4/30 = 13.33 percentage points, with two pairs recovering only when the sign check was disabled. No paired test crossed the registered 0.05/3 threshold.
+
+| k | Sign-on / 30 | Sign-off / 30 | Both | On only | Off only | Neither | Exact McNemar p |
+| ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: |
+| 10 | 30 | 30 | 30 | 0 | 0 | 0 | 1 |
+| 80 | 20 | 16 | 14 | 6 | 2 | 8 | 0.2890625 |
+| 100 | 1 | 1 | 1 | 0 | 0 | 29 | 1 |
+
+### Negative-ray readings and stopping
+
+All 105 failed endpoints across the 540 recorded arm endpoints were classified **elsewhere**. None passed the 20-degree negative-orientation condition or the population-radius band on its own. The failed endpoints' angles to −x★ ranged from 105.254° to 170.758°, and their relative radii ranged from 0.962260 to 1.759443. Their finite-realization negative-ray optima a★ ranged from 0.125326 to 0.608903. Every ray was nonflat. The raw control scalars, endpoint vectors and both radius deviations remain in each trial row.
+
+| k | Mode | Recovered | Negative neighbourhood | Elsewhere |
+| ---: | --- | ---: | ---: | ---: |
+| 10 | on | 30 | 0 | 0 |
+| 10 | off | 30 | 0 | 0 |
+| 80 | on | 20 | 0 | 10 |
+| 80 | off | 16 | 0 | 14 |
+| 100 | on | 1 | 0 | 29 |
+| 100 | off | 1 | 0 | 29 |
+
+The cohort therefore supplies no observed endpoint in the predicted negative neighbourhood at this budget. All failed runs reached 50,000 updates, with final gradient norms between 0.0015763 and 0.184191. These readings describe budget-limited endpoints. Across all arms, 343 runs stopped on the gradient norm and 197 reached the update cap, including 92 successful recoveries. The loop accounted for 10,765,396 updates, evaluating 10,567,773 and skipping 197,623 proven repeated updates in four period-one cycles. The maximal scalar-reference discrepancy was 1.272 × 10⁻¹⁵ against the registered 10⁻¹⁰ bound, all readings were finite, and the selected-preactivation zero count was zero. All 2,250 component seeds across the 450 independent problems were distinct.
+
+### Pins, receipts and replay
+
+The protocol is pinned at `4116728`, the numerical implementation/settings at `8a77d0006ac8e50ca3539f3e3fd26a0097d57bb2`, and the independent audit at `968fed6`. Each primary cell has `trials.jsonl` and `summary.json` under `artifacts/generative-prior/g1-linear-primary/results/k<K>-on/`, with matching `-off/` directories at the three paired k values. The k = 10 signed diagnostic rows originated in `g1-linear-validation/results/k10-on/` and are copied into the primary directory for the combined audit. Its original first-checkpoint rows remain the baseline. Small tracked copies of all cell outputs sit under `issues/regression/receipts/generative-prior/results/g1-linear-curve/`. [Settings](../../receipts/generative-prior/settings/g1-linear-curve.json) · [Example actual paired endpoints](../../../../artifacts/generative-prior/g1-linear-primary/results/k80-off/trials.jsonl)
+
+The signed k = 10 repetition 13 with acceleration disabled executed all 50,000 updates and agreed with the accelerated result in every numerical field and endpoint bit. A fresh build replayed repetition 13 in both modes and reproduced the primary accelerated rows, including skipped-update accounting. A full unaccelerated sign-off run also matched the accelerated numerical fields and endpoint bits. Both controls matched comparison counts, zero counts and flip indices. All observed skipped cycles had period one. The verification manifest records the checks, source pins and SHA-256 hashes of the 42 retained output files. These receipts use LF line endings and occupy about 2.2 MB, plus the manifest. [Verification manifest](../../receipts/generative-prior/results/g1-linear-curve/verification.json) · [Actual signed full control](../../../../artifacts/generative-prior/g1-linear-full-control/results/k10-on/trials.jsonl) · [Actual sign-off full control](../../../../artifacts/generative-prior/g1-linear-replay/results-full/k10-off/trials.jsonl)
+
+The shortcut's equivalence follows from the state it caches. No RNG is consumed inside descent. Fixed matrices, data, sign mode and code bits determine the next selected mask, gradient, sign choice, stop decision and code bits. On observing a repeated code, every transition in that cycle has already run without a gradient stop. Repeating a whole cycle returns the same code. Its zero counts and one-based flip indices are translated and accumulated before the remaining original iterations run. The original stopping rule and returned endpoint are preserved.
+
+To replay the whole linear round, run the following from the repository root with the .NET 10 SDK. It also regenerates the signed k = 10 diagnostic rows on the same fixed problems.
+
+```powershell
+./issues/regression/receipts/generative-prior/replay.ps1 -Revision 8a77d00 -RunName g1-linear-review -Experiment linear
+./artifacts/evidence-contrasts/venv/Scripts/python.exe ./issues/regression/receipts/generative-prior/audit-linear.py --results artifacts/generative-prior/g1-linear-review/results --baseline issues/regression/receipts/generative-prior/results/g1-k10/trials.jsonl --output artifacts/generative-prior/g1-linear-review/analysis
+```
+
+The audit uses only Python's standard library, so another Python 3 interpreter can run the second command. A short replay exercising both sign modes and period-one acceleration is available with `-Cells 'k10-on,k10-off' -TrialIndices 13`. Add `-FullIterations` with a fresh run name to execute all 50,000 updates in each selected arm. All heavy execution ran serially at below-normal priority with `DOTNET_PROCESSOR_COUNT=1`, on .NET 10.0.5 x64.
+
+### Round decision and doc changes owed
+
+The linear curve agrees with the published experiment under the predeclared independent-cohort comparison. The paired data show a measured advantage of 4/30 at k = 80 and equal recovery counts at k = 10 and 100. Their exact paired tests supply insufficient evidence for a recovery advantage across these cells. The predicted negative-ray neighbourhood was unoccupied by returned endpoints in either mode. The widths, finite-realization controls and stopping budget accompany that observation. No engine primitive was needed.
+
+The complete curve, paired outcomes, endpoint geometry, exact ray control and stopping observations are available for the next documentation batch. Depth three, magnitudes, the remaining G1 extensions and G2–G5 remain queued.
+
 ## Exposition
 
 In noiseless recovery through a bias-free Gaussian ReLU generator of widths 10 → 250 → 600, 150 Gaussian measurements sufficed to recover the generating code in all 30 independent repetitions of the signed descent experiment. At each iteration the method evaluated the quadratic measurement loss at both signs and took a unit gradient step from the lower-loss sign. Seventeen starts changed sign, all on the first comparison. No selected iterate had an exactly zero layer preactivation, so the practical gradient agreed with the paper's subgradient algorithm throughout these runs.
 
 Recovery and numerical termination are separate measurements. All relative code errors were below 9.24 × 10⁻¹⁶. In one run the signed update rounded back to the same binary64 vector while the gradient norm remained above the spacing at one. That run satisfied the experimental recovery criterion at the 50,000-update limit.
+
+Across the published depth-two linear-recovery grid, with widths 250/600 and m = 150, signed descent recovered 30/30 codes through k = 50, 29/30 at k = 55, 30/30 at k = 60, 29/30 at k = 70, 20/30 at k = 80, 9/30 at k = 90 and 1/30 at k = 100. All 15 comparisons with the paper's independent 30-run cohorts passed the preregistered family-wise Fisher-test gate.
+
+With networks, truths and starts paired, disabling the sign check changed recovery from 20/30 to 16/30 at k = 80. Six pairs recovered only with the check and two only without it. Both modes recovered 30/30 at k = 10 and the same single code at k = 100. None of the three exact paired tests reached the registered significance threshold.
+
+For each finite generator and measurement matrix, positive homogeneity gives the exact negative-ray optimum a★ = max(0, ⟨AG(−x★), AG(x★)⟩/‖AG(−x★)‖²) when the denominator is positive. This control distinguishes a realization's radial shift from a returned code pointing in another direction. Every failed endpoint in these runs reached the update limit and lay outside the declared negative neighbourhood around −x★/π.

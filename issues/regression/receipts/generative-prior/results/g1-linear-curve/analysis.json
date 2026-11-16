@@ -1,0 +1,1194 @@
+{
+  "curve_gate_passed": true,
+  "curve": [
+    {
+      "k": 10,
+      "m_over_k": 15.0,
+      "successes": 30,
+      "n": 30,
+      "paper_successes": 30,
+      "wilson95": [
+        0.8864866068260312,
+        0.9999999999999999
+      ],
+      "paper_wilson95": [
+        0.8864866068260312,
+        0.9999999999999999
+      ],
+      "fisher_p": 1.0,
+      "discrepant": false
+    },
+    {
+      "k": 15,
+      "m_over_k": 10.0,
+      "successes": 30,
+      "n": 30,
+      "paper_successes": 30,
+      "wilson95": [
+        0.8864866068260312,
+        0.9999999999999999
+      ],
+      "paper_wilson95": [
+        0.8864866068260312,
+        0.9999999999999999
+      ],
+      "fisher_p": 1.0,
+      "discrepant": false
+    },
+    {
+      "k": 20,
+      "m_over_k": 7.5,
+      "successes": 30,
+      "n": 30,
+      "paper_successes": 30,
+      "wilson95": [
+        0.8864866068260312,
+        0.9999999999999999
+      ],
+      "paper_wilson95": [
+        0.8864866068260312,
+        0.9999999999999999
+      ],
+      "fisher_p": 1.0,
+      "discrepant": false
+    },
+    {
+      "k": 25,
+      "m_over_k": 6.0,
+      "successes": 30,
+      "n": 30,
+      "paper_successes": 30,
+      "wilson95": [
+        0.8864866068260312,
+        0.9999999999999999
+      ],
+      "paper_wilson95": [
+        0.8864866068260312,
+        0.9999999999999999
+      ],
+      "fisher_p": 1.0,
+      "discrepant": false
+    },
+    {
+      "k": 30,
+      "m_over_k": 5.0,
+      "successes": 30,
+      "n": 30,
+      "paper_successes": 30,
+      "wilson95": [
+        0.8864866068260312,
+        0.9999999999999999
+      ],
+      "paper_wilson95": [
+        0.8864866068260312,
+        0.9999999999999999
+      ],
+      "fisher_p": 1.0,
+      "discrepant": false
+    },
+    {
+      "k": 35,
+      "m_over_k": 4.285714285714286,
+      "successes": 30,
+      "n": 30,
+      "paper_successes": 30,
+      "wilson95": [
+        0.8864866068260312,
+        0.9999999999999999
+      ],
+      "paper_wilson95": [
+        0.8864866068260312,
+        0.9999999999999999
+      ],
+      "fisher_p": 1.0,
+      "discrepant": false
+    },
+    {
+      "k": 40,
+      "m_over_k": 3.75,
+      "successes": 30,
+      "n": 30,
+      "paper_successes": 30,
+      "wilson95": [
+        0.8864866068260312,
+        0.9999999999999999
+      ],
+      "paper_wilson95": [
+        0.8864866068260312,
+        0.9999999999999999
+      ],
+      "fisher_p": 1.0,
+      "discrepant": false
+    },
+    {
+      "k": 45,
+      "m_over_k": 3.3333333333333335,
+      "successes": 30,
+      "n": 30,
+      "paper_successes": 30,
+      "wilson95": [
+        0.8864866068260312,
+        0.9999999999999999
+      ],
+      "paper_wilson95": [
+        0.8864866068260312,
+        0.9999999999999999
+      ],
+      "fisher_p": 1.0,
+      "discrepant": false
+    },
+    {
+      "k": 50,
+      "m_over_k": 3.0,
+      "successes": 30,
+      "n": 30,
+      "paper_successes": 30,
+      "wilson95": [
+        0.8864866068260312,
+        0.9999999999999999
+      ],
+      "paper_wilson95": [
+        0.8864866068260312,
+        0.9999999999999999
+      ],
+      "fisher_p": 1.0,
+      "discrepant": false
+    },
+    {
+      "k": 55,
+      "m_over_k": 2.727272727272727,
+      "successes": 29,
+      "n": 30,
+      "paper_successes": 28,
+      "wilson95": [
+        0.8332960900859082,
+        0.9940914096183874
+      ],
+      "paper_wilson95": [
+        0.7867654163738308,
+        0.9815229762087295
+      ],
+      "fisher_p": 1.0,
+      "discrepant": false
+    },
+    {
+      "k": 60,
+      "m_over_k": 2.5,
+      "successes": 30,
+      "n": 30,
+      "paper_successes": 28,
+      "wilson95": [
+        0.8864866068260312,
+        0.9999999999999999
+      ],
+      "paper_wilson95": [
+        0.7867654163738308,
+        0.9815229762087295
+      ],
+      "fisher_p": 0.4915254237288136,
+      "discrepant": false
+    },
+    {
+      "k": 70,
+      "m_over_k": 2.142857142857143,
+      "successes": 29,
+      "n": 30,
+      "paper_successes": 25,
+      "wilson95": [
+        0.8332960900859082,
+        0.9940914096183874
+      ],
+      "paper_wilson95": [
+        0.6643564949358398,
+        0.9266345762815145
+      ],
+      "fisher_p": 0.19450977211904955,
+      "discrepant": false
+    },
+    {
+      "k": 80,
+      "m_over_k": 1.875,
+      "successes": 20,
+      "n": 30,
+      "paper_successes": 17,
+      "wilson95": [
+        0.4878005164454384,
+        0.8076950191632386
+      ],
+      "paper_wilson95": [
+        0.3919730700081361,
+        0.7262251442353347
+      ],
+      "fisher_p": 0.5959098408345821,
+      "discrepant": false
+    },
+    {
+      "k": 90,
+      "m_over_k": 1.6666666666666667,
+      "successes": 9,
+      "n": 30,
+      "paper_successes": 7,
+      "wilson95": [
+        0.16664748268243793,
+        0.47875787458714947
+      ],
+      "paper_wilson95": [
+        0.11792388144489496,
+        0.40928326158122164
+      ],
+      "fisher_p": 0.7710239760310259,
+      "discrepant": false
+    },
+    {
+      "k": 100,
+      "m_over_k": 1.5,
+      "successes": 1,
+      "n": 30,
+      "paper_successes": 4,
+      "wilson95": [
+        0.005908590381612455,
+        0.16670390991409173
+      ],
+      "paper_wilson95": [
+        0.053096554840547455,
+        0.296813266820363
+      ],
+      "fisher_p": 0.35325602140945583,
+      "discrepant": false
+    }
+  ],
+  "pairs": [
+    {
+      "k": 10,
+      "both": 30,
+      "on_only": 0,
+      "off_only": 0,
+      "neither": 0,
+      "difference": 0.0,
+      "mcnemar_p": 1,
+      "significant": false,
+      "on_classes": {
+        "recovered": 30
+      },
+      "off_classes": {
+        "recovered": 30
+      }
+    },
+    {
+      "k": 80,
+      "both": 14,
+      "on_only": 6,
+      "off_only": 2,
+      "neither": 8,
+      "difference": 0.13333333333333333,
+      "mcnemar_p": 0.2890625,
+      "significant": false,
+      "on_classes": {
+        "elsewhere": 10,
+        "recovered": 20
+      },
+      "off_classes": {
+        "elsewhere": 14,
+        "recovered": 16
+      }
+    },
+    {
+      "k": 100,
+      "both": 1,
+      "on_only": 0,
+      "off_only": 0,
+      "neither": 29,
+      "difference": 0.0,
+      "mcnemar_p": 1,
+      "significant": false,
+      "on_classes": {
+        "elsewhere": 29,
+        "recovered": 1
+      },
+      "off_classes": {
+        "elsewhere": 29,
+        "recovered": 1
+      }
+    }
+  ],
+  "numerical_gates_passed": true,
+  "k10_baseline_fields_match": true,
+  "distinct_component_seeds": 2250,
+  "cells": {
+    "k10-on": {
+      "SourceRevision": "8a77d0006ac8e50ca3539f3e3fd26a0097d57bb2",
+      "SettingsSha256": "f56e866735e0eec636a779666ead79f953a55851747fa8fd965b50159c67e4a5",
+      "Runtime": ".NET 10.0.5",
+      "Architecture": "X64",
+      "Priority": "BelowNormal",
+      "ProcessorCount": 1,
+      "CodeDimension": 10,
+      "SignCheck": true,
+      "FastForward": true,
+      "Repetitions": 30,
+      "Successes": 30,
+      "GradientStops": 29,
+      "UpdateLimitStops": 1,
+      "MinUpdates": 189,
+      "MaxUpdates": 50000,
+      "SignChecks": 58659,
+      "Flips": 17,
+      "RepetitionsWithFlips": 17,
+      "SelectedPreactivationZeros": 0,
+      "MinRelativeCodeError": 2.507430344997508e-16,
+      "MaxRelativeCodeError": 9.234406371691406e-16,
+      "MaxReferenceDiscrepancy": 7.771561172376096e-16,
+      "EvaluatedUpdates": 9041,
+      "SkippedUpdates": 49589,
+      "CycleLengths": [
+        1
+      ],
+      "EndpointClasses": {
+        "recovered": 30
+      },
+      "GatePassed": true
+    },
+    "k10-off": {
+      "SourceRevision": "8a77d0006ac8e50ca3539f3e3fd26a0097d57bb2",
+      "SettingsSha256": "f56e866735e0eec636a779666ead79f953a55851747fa8fd965b50159c67e4a5",
+      "Runtime": ".NET 10.0.5",
+      "Architecture": "X64",
+      "Priority": "BelowNormal",
+      "ProcessorCount": 1,
+      "CodeDimension": 10,
+      "SignCheck": false,
+      "FastForward": true,
+      "Repetitions": 30,
+      "Successes": 30,
+      "GradientStops": 29,
+      "UpdateLimitStops": 1,
+      "MinUpdates": 189,
+      "MaxUpdates": 50000,
+      "SignChecks": 58707,
+      "Flips": 0,
+      "RepetitionsWithFlips": 0,
+      "SelectedPreactivationZeros": 0,
+      "MinRelativeCodeError": 2.507430344997508e-16,
+      "MaxRelativeCodeError": 9.840798552781934e-16,
+      "MaxReferenceDiscrepancy": 7.771561172376096e-16,
+      "EvaluatedUpdates": 9125,
+      "SkippedUpdates": 49553,
+      "CycleLengths": [
+        1
+      ],
+      "EndpointClasses": {
+        "recovered": 30
+      },
+      "GatePassed": true
+    },
+    "k15-on": {
+      "SourceRevision": "8a77d0006ac8e50ca3539f3e3fd26a0097d57bb2",
+      "SettingsSha256": "f56e866735e0eec636a779666ead79f953a55851747fa8fd965b50159c67e4a5",
+      "Runtime": ".NET 10.0.5",
+      "Architecture": "X64",
+      "Priority": "BelowNormal",
+      "ProcessorCount": 1,
+      "CodeDimension": 15,
+      "SignCheck": true,
+      "FastForward": true,
+      "Repetitions": 30,
+      "Successes": 30,
+      "GradientStops": 30,
+      "UpdateLimitStops": 0,
+      "MinUpdates": 281,
+      "MaxUpdates": 595,
+      "SignChecks": 12866,
+      "Flips": 16,
+      "RepetitionsWithFlips": 16,
+      "SelectedPreactivationZeros": 0,
+      "MinRelativeCodeError": 3.96942613510196e-16,
+      "MaxRelativeCodeError": 1.2112005138723888e-15,
+      "MaxReferenceDiscrepancy": 9.480150774798474e-16,
+      "EvaluatedUpdates": 12836,
+      "SkippedUpdates": 0,
+      "CycleLengths": [],
+      "EndpointClasses": {
+        "recovered": 30
+      },
+      "GatePassed": true
+    },
+    "k20-on": {
+      "SourceRevision": "8a77d0006ac8e50ca3539f3e3fd26a0097d57bb2",
+      "SettingsSha256": "f56e866735e0eec636a779666ead79f953a55851747fa8fd965b50159c67e4a5",
+      "Runtime": ".NET 10.0.5",
+      "Architecture": "X64",
+      "Priority": "BelowNormal",
+      "ProcessorCount": 1,
+      "CodeDimension": 20,
+      "SignCheck": true,
+      "FastForward": true,
+      "Repetitions": 30,
+      "Successes": 30,
+      "GradientStops": 29,
+      "UpdateLimitStops": 1,
+      "MinUpdates": 394,
+      "MaxUpdates": 50000,
+      "SignChecks": 65875,
+      "Flips": 12,
+      "RepetitionsWithFlips": 12,
+      "SelectedPreactivationZeros": 0,
+      "MinRelativeCodeError": 2.7389133219800157e-16,
+      "MaxRelativeCodeError": 1.3762217097651681e-15,
+      "MaxReferenceDiscrepancy": 9.829003220718887e-16,
+      "EvaluatedUpdates": 16388,
+      "SkippedUpdates": 49458,
+      "CycleLengths": [
+        1
+      ],
+      "EndpointClasses": {
+        "recovered": 30
+      },
+      "GatePassed": true
+    },
+    "k25-on": {
+      "SourceRevision": "8a77d0006ac8e50ca3539f3e3fd26a0097d57bb2",
+      "SettingsSha256": "f56e866735e0eec636a779666ead79f953a55851747fa8fd965b50159c67e4a5",
+      "Runtime": ".NET 10.0.5",
+      "Architecture": "X64",
+      "Priority": "BelowNormal",
+      "ProcessorCount": 1,
+      "CodeDimension": 25,
+      "SignCheck": true,
+      "FastForward": true,
+      "Repetitions": 30,
+      "Successes": 30,
+      "GradientStops": 30,
+      "UpdateLimitStops": 0,
+      "MinUpdates": 543,
+      "MaxUpdates": 1021,
+      "SignChecks": 21772,
+      "Flips": 16,
+      "RepetitionsWithFlips": 16,
+      "SelectedPreactivationZeros": 0,
+      "MinRelativeCodeError": 3.451470166006812e-16,
+      "MaxRelativeCodeError": 1.1829018838658125e-15,
+      "MaxReferenceDiscrepancy": 9.445605822162128e-16,
+      "EvaluatedUpdates": 21742,
+      "SkippedUpdates": 0,
+      "CycleLengths": [],
+      "EndpointClasses": {
+        "recovered": 30
+      },
+      "GatePassed": true
+    },
+    "k30-on": {
+      "SourceRevision": "8a77d0006ac8e50ca3539f3e3fd26a0097d57bb2",
+      "SettingsSha256": "f56e866735e0eec636a779666ead79f953a55851747fa8fd965b50159c67e4a5",
+      "Runtime": ".NET 10.0.5",
+      "Architecture": "X64",
+      "Priority": "BelowNormal",
+      "ProcessorCount": 1,
+      "CodeDimension": 30,
+      "SignCheck": true,
+      "FastForward": true,
+      "Repetitions": 30,
+      "Successes": 30,
+      "GradientStops": 29,
+      "UpdateLimitStops": 1,
+      "MinUpdates": 645,
+      "MaxUpdates": 50000,
+      "SignChecks": 76099,
+      "Flips": 17,
+      "RepetitionsWithFlips": 17,
+      "SelectedPreactivationZeros": 0,
+      "MinRelativeCodeError": 3.294726494275377e-16,
+      "MaxRelativeCodeError": 1.3384293317229307e-15,
+      "MaxReferenceDiscrepancy": 1.0738714276410905e-15,
+      "EvaluatedUpdates": 27047,
+      "SkippedUpdates": 49023,
+      "CycleLengths": [
+        1
+      ],
+      "EndpointClasses": {
+        "recovered": 30
+      },
+      "GatePassed": true
+    },
+    "k35-on": {
+      "SourceRevision": "8a77d0006ac8e50ca3539f3e3fd26a0097d57bb2",
+      "SettingsSha256": "f56e866735e0eec636a779666ead79f953a55851747fa8fd965b50159c67e4a5",
+      "Runtime": ".NET 10.0.5",
+      "Architecture": "X64",
+      "Priority": "BelowNormal",
+      "ProcessorCount": 1,
+      "CodeDimension": 35,
+      "SignCheck": true,
+      "FastForward": true,
+      "Repetitions": 30,
+      "Successes": 30,
+      "GradientStops": 30,
+      "UpdateLimitStops": 0,
+      "MinUpdates": 868,
+      "MaxUpdates": 1510,
+      "SignChecks": 35224,
+      "Flips": 16,
+      "RepetitionsWithFlips": 16,
+      "SelectedPreactivationZeros": 0,
+      "MinRelativeCodeError": 2.290372339381589e-16,
+      "MaxRelativeCodeError": 1.1628941851270181e-15,
+      "MaxReferenceDiscrepancy": 9.068627065843222e-16,
+      "EvaluatedUpdates": 35194,
+      "SkippedUpdates": 0,
+      "CycleLengths": [],
+      "EndpointClasses": {
+        "recovered": 30
+      },
+      "GatePassed": true
+    },
+    "k40-on": {
+      "SourceRevision": "8a77d0006ac8e50ca3539f3e3fd26a0097d57bb2",
+      "SettingsSha256": "f56e866735e0eec636a779666ead79f953a55851747fa8fd965b50159c67e4a5",
+      "Runtime": ".NET 10.0.5",
+      "Architecture": "X64",
+      "Priority": "BelowNormal",
+      "ProcessorCount": 1,
+      "CodeDimension": 40,
+      "SignCheck": true,
+      "FastForward": true,
+      "Repetitions": 30,
+      "Successes": 30,
+      "GradientStops": 30,
+      "UpdateLimitStops": 0,
+      "MinUpdates": 1096,
+      "MaxUpdates": 2500,
+      "SignChecks": 49334,
+      "Flips": 19,
+      "RepetitionsWithFlips": 19,
+      "SelectedPreactivationZeros": 0,
+      "MinRelativeCodeError": 2.21498917861944e-16,
+      "MaxRelativeCodeError": 1.3102109874878593e-15,
+      "MaxReferenceDiscrepancy": 9.795653708829483e-16,
+      "EvaluatedUpdates": 49304,
+      "SkippedUpdates": 0,
+      "CycleLengths": [],
+      "EndpointClasses": {
+        "recovered": 30
+      },
+      "GatePassed": true
+    },
+    "k45-on": {
+      "SourceRevision": "8a77d0006ac8e50ca3539f3e3fd26a0097d57bb2",
+      "SettingsSha256": "f56e866735e0eec636a779666ead79f953a55851747fa8fd965b50159c67e4a5",
+      "Runtime": ".NET 10.0.5",
+      "Architecture": "X64",
+      "Priority": "BelowNormal",
+      "ProcessorCount": 1,
+      "CodeDimension": 45,
+      "SignCheck": true,
+      "FastForward": true,
+      "Repetitions": 30,
+      "Successes": 30,
+      "GradientStops": 30,
+      "UpdateLimitStops": 0,
+      "MinUpdates": 1570,
+      "MaxUpdates": 4532,
+      "SignChecks": 71995,
+      "Flips": 15,
+      "RepetitionsWithFlips": 15,
+      "SelectedPreactivationZeros": 0,
+      "MinRelativeCodeError": 2.352131630327128e-16,
+      "MaxRelativeCodeError": 1.5285291672231617e-15,
+      "MaxReferenceDiscrepancy": 9.880586339840272e-16,
+      "EvaluatedUpdates": 71965,
+      "SkippedUpdates": 0,
+      "CycleLengths": [],
+      "EndpointClasses": {
+        "recovered": 30
+      },
+      "GatePassed": true
+    },
+    "k50-on": {
+      "SourceRevision": "8a77d0006ac8e50ca3539f3e3fd26a0097d57bb2",
+      "SettingsSha256": "f56e866735e0eec636a779666ead79f953a55851747fa8fd965b50159c67e4a5",
+      "Runtime": ".NET 10.0.5",
+      "Architecture": "X64",
+      "Priority": "BelowNormal",
+      "ProcessorCount": 1,
+      "CodeDimension": 50,
+      "SignCheck": true,
+      "FastForward": true,
+      "Repetitions": 30,
+      "Successes": 30,
+      "GradientStops": 28,
+      "UpdateLimitStops": 2,
+      "MinUpdates": 2217,
+      "MaxUpdates": 50000,
+      "SignChecks": 213350,
+      "Flips": 13,
+      "RepetitionsWithFlips": 13,
+      "SelectedPreactivationZeros": 0,
+      "MinRelativeCodeError": 2.399531732422022e-16,
+      "MaxRelativeCodeError": 1.335025438649824e-15,
+      "MaxReferenceDiscrepancy": 8.157307338418449e-16,
+      "EvaluatedUpdates": 213322,
+      "SkippedUpdates": 0,
+      "CycleLengths": [],
+      "EndpointClasses": {
+        "recovered": 30
+      },
+      "GatePassed": true
+    },
+    "k55-on": {
+      "SourceRevision": "8a77d0006ac8e50ca3539f3e3fd26a0097d57bb2",
+      "SettingsSha256": "f56e866735e0eec636a779666ead79f953a55851747fa8fd965b50159c67e4a5",
+      "Runtime": ".NET 10.0.5",
+      "Architecture": "X64",
+      "Priority": "BelowNormal",
+      "ProcessorCount": 1,
+      "CodeDimension": 55,
+      "SignCheck": true,
+      "FastForward": true,
+      "Repetitions": 30,
+      "Successes": 29,
+      "GradientStops": 25,
+      "UpdateLimitStops": 5,
+      "MinUpdates": 2264,
+      "MaxUpdates": 50000,
+      "SignChecks": 466709,
+      "Flips": 15,
+      "RepetitionsWithFlips": 15,
+      "SelectedPreactivationZeros": 0,
+      "MinRelativeCodeError": 2.470157899810257e-16,
+      "MaxRelativeCodeError": 0.6684619610737471,
+      "MaxReferenceDiscrepancy": 8.881784197001252e-16,
+      "EvaluatedUpdates": 466684,
+      "SkippedUpdates": 0,
+      "CycleLengths": [],
+      "EndpointClasses": {
+        "recovered": 29,
+        "elsewhere": 1
+      },
+      "GatePassed": true
+    },
+    "k60-on": {
+      "SourceRevision": "8a77d0006ac8e50ca3539f3e3fd26a0097d57bb2",
+      "SettingsSha256": "f56e866735e0eec636a779666ead79f953a55851747fa8fd965b50159c67e4a5",
+      "Runtime": ".NET 10.0.5",
+      "Architecture": "X64",
+      "Priority": "BelowNormal",
+      "ProcessorCount": 1,
+      "CodeDimension": 60,
+      "SignCheck": true,
+      "FastForward": true,
+      "Repetitions": 30,
+      "Successes": 30,
+      "GradientStops": 23,
+      "UpdateLimitStops": 7,
+      "MinUpdates": 4511,
+      "MaxUpdates": 50000,
+      "SignChecks": 656843,
+      "Flips": 14,
+      "RepetitionsWithFlips": 14,
+      "SelectedPreactivationZeros": 0,
+      "MinRelativeCodeError": 2.9657553648999914e-16,
+      "MaxRelativeCodeError": 9.15283037073275e-16,
+      "MaxReferenceDiscrepancy": 1.2718997775948148e-15,
+      "EvaluatedUpdates": 656820,
+      "SkippedUpdates": 0,
+      "CycleLengths": [],
+      "EndpointClasses": {
+        "recovered": 30
+      },
+      "GatePassed": true
+    },
+    "k70-on": {
+      "SourceRevision": "8a77d0006ac8e50ca3539f3e3fd26a0097d57bb2",
+      "SettingsSha256": "f56e866735e0eec636a779666ead79f953a55851747fa8fd965b50159c67e4a5",
+      "Runtime": ".NET 10.0.5",
+      "Architecture": "X64",
+      "Priority": "BelowNormal",
+      "ProcessorCount": 1,
+      "CodeDimension": 70,
+      "SignCheck": true,
+      "FastForward": true,
+      "Repetitions": 30,
+      "Successes": 29,
+      "GradientStops": 1,
+      "UpdateLimitStops": 29,
+      "MinUpdates": 28305,
+      "MaxUpdates": 50000,
+      "SignChecks": 1478306,
+      "Flips": 18,
+      "RepetitionsWithFlips": 18,
+      "SelectedPreactivationZeros": 0,
+      "MinRelativeCodeError": 3.6119877910885303e-16,
+      "MaxRelativeCodeError": 0.5847286130712445,
+      "MaxReferenceDiscrepancy": 1.2342173129594218e-15,
+      "EvaluatedUpdates": 1478305,
+      "SkippedUpdates": 0,
+      "CycleLengths": [],
+      "EndpointClasses": {
+        "recovered": 29,
+        "elsewhere": 1
+      },
+      "GatePassed": true
+    },
+    "k80-on": {
+      "SourceRevision": "8a77d0006ac8e50ca3539f3e3fd26a0097d57bb2",
+      "SettingsSha256": "f56e866735e0eec636a779666ead79f953a55851747fa8fd965b50159c67e4a5",
+      "Runtime": ".NET 10.0.5",
+      "Architecture": "X64",
+      "Priority": "BelowNormal",
+      "ProcessorCount": 1,
+      "CodeDimension": 80,
+      "SignCheck": true,
+      "FastForward": true,
+      "Repetitions": 30,
+      "Successes": 20,
+      "GradientStops": 0,
+      "UpdateLimitStops": 30,
+      "MinUpdates": 50000,
+      "MaxUpdates": 50000,
+      "SignChecks": 1500000,
+      "Flips": 17,
+      "RepetitionsWithFlips": 17,
+      "SelectedPreactivationZeros": 0,
+      "MinRelativeCodeError": 4.786947719556205e-16,
+      "MaxRelativeCodeError": 1.0743978761567243,
+      "MaxReferenceDiscrepancy": 1.1780975410010428e-15,
+      "EvaluatedUpdates": 1500000,
+      "SkippedUpdates": 0,
+      "CycleLengths": [],
+      "EndpointClasses": {
+        "elsewhere": 10,
+        "recovered": 20
+      },
+      "GatePassed": true
+    },
+    "k80-off": {
+      "SourceRevision": "8a77d0006ac8e50ca3539f3e3fd26a0097d57bb2",
+      "SettingsSha256": "f56e866735e0eec636a779666ead79f953a55851747fa8fd965b50159c67e4a5",
+      "Runtime": ".NET 10.0.5",
+      "Architecture": "X64",
+      "Priority": "BelowNormal",
+      "ProcessorCount": 1,
+      "CodeDimension": 80,
+      "SignCheck": false,
+      "FastForward": true,
+      "Repetitions": 30,
+      "Successes": 16,
+      "GradientStops": 0,
+      "UpdateLimitStops": 30,
+      "MinUpdates": 50000,
+      "MaxUpdates": 50000,
+      "SignChecks": 1500000,
+      "Flips": 0,
+      "RepetitionsWithFlips": 0,
+      "SelectedPreactivationZeros": 0,
+      "MinRelativeCodeError": 5.070012054849786e-16,
+      "MaxRelativeCodeError": 1.25968292082946,
+      "MaxReferenceDiscrepancy": 1.1657341758564144e-15,
+      "EvaluatedUpdates": 1500000,
+      "SkippedUpdates": 0,
+      "CycleLengths": [],
+      "EndpointClasses": {
+        "elsewhere": 14,
+        "recovered": 16
+      },
+      "GatePassed": true
+    },
+    "k90-on": {
+      "SourceRevision": "8a77d0006ac8e50ca3539f3e3fd26a0097d57bb2",
+      "SettingsSha256": "f56e866735e0eec636a779666ead79f953a55851747fa8fd965b50159c67e4a5",
+      "Runtime": ".NET 10.0.5",
+      "Architecture": "X64",
+      "Priority": "BelowNormal",
+      "ProcessorCount": 1,
+      "CodeDimension": 90,
+      "SignCheck": true,
+      "FastForward": true,
+      "Repetitions": 30,
+      "Successes": 9,
+      "GradientStops": 0,
+      "UpdateLimitStops": 30,
+      "MinUpdates": 50000,
+      "MaxUpdates": 50000,
+      "SignChecks": 1500000,
+      "Flips": 15,
+      "RepetitionsWithFlips": 15,
+      "SelectedPreactivationZeros": 0,
+      "MinRelativeCodeError": 6.332788688936741e-16,
+      "MaxRelativeCodeError": 1.780393093364777,
+      "MaxReferenceDiscrepancy": 1.1102230246251565e-15,
+      "EvaluatedUpdates": 1500000,
+      "SkippedUpdates": 0,
+      "CycleLengths": [],
+      "EndpointClasses": {
+        "recovered": 9,
+        "elsewhere": 21
+      },
+      "GatePassed": true
+    },
+    "k100-on": {
+      "SourceRevision": "8a77d0006ac8e50ca3539f3e3fd26a0097d57bb2",
+      "SettingsSha256": "f56e866735e0eec636a779666ead79f953a55851747fa8fd965b50159c67e4a5",
+      "Runtime": ".NET 10.0.5",
+      "Architecture": "X64",
+      "Priority": "BelowNormal",
+      "ProcessorCount": 1,
+      "CodeDimension": 100,
+      "SignCheck": true,
+      "FastForward": true,
+      "Repetitions": 30,
+      "Successes": 1,
+      "GradientStops": 0,
+      "UpdateLimitStops": 30,
+      "MinUpdates": 50000,
+      "MaxUpdates": 50000,
+      "SignChecks": 1500000,
+      "Flips": 11,
+      "RepetitionsWithFlips": 11,
+      "SelectedPreactivationZeros": 0,
+      "MinRelativeCodeError": 4.626284540866402e-13,
+      "MaxRelativeCodeError": 1.585074553532444,
+      "MaxReferenceDiscrepancy": 1.1902587162881601e-15,
+      "EvaluatedUpdates": 1500000,
+      "SkippedUpdates": 0,
+      "CycleLengths": [],
+      "EndpointClasses": {
+        "elsewhere": 29,
+        "recovered": 1
+      },
+      "GatePassed": true
+    },
+    "k100-off": {
+      "SourceRevision": "8a77d0006ac8e50ca3539f3e3fd26a0097d57bb2",
+      "SettingsSha256": "f56e866735e0eec636a779666ead79f953a55851747fa8fd965b50159c67e4a5",
+      "Runtime": ".NET 10.0.5",
+      "Architecture": "X64",
+      "Priority": "BelowNormal",
+      "ProcessorCount": 1,
+      "CodeDimension": 100,
+      "SignCheck": false,
+      "FastForward": true,
+      "Repetitions": 30,
+      "Successes": 1,
+      "GradientStops": 0,
+      "UpdateLimitStops": 30,
+      "MinUpdates": 50000,
+      "MaxUpdates": 50000,
+      "SignChecks": 1500000,
+      "Flips": 0,
+      "RepetitionsWithFlips": 0,
+      "SelectedPreactivationZeros": 0,
+      "MinRelativeCodeError": 4.626284540866402e-13,
+      "MaxRelativeCodeError": 1.3479344639081083,
+      "MaxReferenceDiscrepancy": 1.1934897514720433e-15,
+      "EvaluatedUpdates": 1500000,
+      "SkippedUpdates": 0,
+      "CycleLengths": [],
+      "EndpointClasses": {
+        "elsewhere": 29,
+        "recovered": 1
+      },
+      "GatePassed": true
+    }
+  },
+  "geometry": {
+    "k10-on": {
+      "negative_orientation_count": 0,
+      "population_radius_count": 0,
+      "negative_neighbourhood_count": 0,
+      "flat_ray_count": 0,
+      "failed_endpoint_ranges": {
+        "NegativeAngleDegrees": null,
+        "RadiusRatio": null,
+        "RayOptimalRadius": null,
+        "FiniteRayRadiusDeviation": null
+      }
+    },
+    "k10-off": {
+      "negative_orientation_count": 0,
+      "population_radius_count": 0,
+      "negative_neighbourhood_count": 0,
+      "flat_ray_count": 0,
+      "failed_endpoint_ranges": {
+        "NegativeAngleDegrees": null,
+        "RadiusRatio": null,
+        "RayOptimalRadius": null,
+        "FiniteRayRadiusDeviation": null
+      }
+    },
+    "k15-on": {
+      "negative_orientation_count": 0,
+      "population_radius_count": 0,
+      "negative_neighbourhood_count": 0,
+      "flat_ray_count": 0,
+      "failed_endpoint_ranges": {
+        "NegativeAngleDegrees": null,
+        "RadiusRatio": null,
+        "RayOptimalRadius": null,
+        "FiniteRayRadiusDeviation": null
+      }
+    },
+    "k20-on": {
+      "negative_orientation_count": 0,
+      "population_radius_count": 0,
+      "negative_neighbourhood_count": 0,
+      "flat_ray_count": 0,
+      "failed_endpoint_ranges": {
+        "NegativeAngleDegrees": null,
+        "RadiusRatio": null,
+        "RayOptimalRadius": null,
+        "FiniteRayRadiusDeviation": null
+      }
+    },
+    "k25-on": {
+      "negative_orientation_count": 0,
+      "population_radius_count": 0,
+      "negative_neighbourhood_count": 0,
+      "flat_ray_count": 0,
+      "failed_endpoint_ranges": {
+        "NegativeAngleDegrees": null,
+        "RadiusRatio": null,
+        "RayOptimalRadius": null,
+        "FiniteRayRadiusDeviation": null
+      }
+    },
+    "k30-on": {
+      "negative_orientation_count": 0,
+      "population_radius_count": 0,
+      "negative_neighbourhood_count": 0,
+      "flat_ray_count": 0,
+      "failed_endpoint_ranges": {
+        "NegativeAngleDegrees": null,
+        "RadiusRatio": null,
+        "RayOptimalRadius": null,
+        "FiniteRayRadiusDeviation": null
+      }
+    },
+    "k35-on": {
+      "negative_orientation_count": 0,
+      "population_radius_count": 0,
+      "negative_neighbourhood_count": 0,
+      "flat_ray_count": 0,
+      "failed_endpoint_ranges": {
+        "NegativeAngleDegrees": null,
+        "RadiusRatio": null,
+        "RayOptimalRadius": null,
+        "FiniteRayRadiusDeviation": null
+      }
+    },
+    "k40-on": {
+      "negative_orientation_count": 0,
+      "population_radius_count": 0,
+      "negative_neighbourhood_count": 0,
+      "flat_ray_count": 0,
+      "failed_endpoint_ranges": {
+        "NegativeAngleDegrees": null,
+        "RadiusRatio": null,
+        "RayOptimalRadius": null,
+        "FiniteRayRadiusDeviation": null
+      }
+    },
+    "k45-on": {
+      "negative_orientation_count": 0,
+      "population_radius_count": 0,
+      "negative_neighbourhood_count": 0,
+      "flat_ray_count": 0,
+      "failed_endpoint_ranges": {
+        "NegativeAngleDegrees": null,
+        "RadiusRatio": null,
+        "RayOptimalRadius": null,
+        "FiniteRayRadiusDeviation": null
+      }
+    },
+    "k50-on": {
+      "negative_orientation_count": 0,
+      "population_radius_count": 0,
+      "negative_neighbourhood_count": 0,
+      "flat_ray_count": 0,
+      "failed_endpoint_ranges": {
+        "NegativeAngleDegrees": null,
+        "RadiusRatio": null,
+        "RayOptimalRadius": null,
+        "FiniteRayRadiusDeviation": null
+      }
+    },
+    "k55-on": {
+      "negative_orientation_count": 0,
+      "population_radius_count": 0,
+      "negative_neighbourhood_count": 0,
+      "flat_ray_count": 0,
+      "failed_endpoint_ranges": {
+        "NegativeAngleDegrees": [
+          140.27984966576815,
+          140.27984966576815
+        ],
+        "RadiusRatio": [
+          0.965316027382852,
+          0.965316027382852
+        ],
+        "RayOptimalRadius": [
+          0.3162860164615306,
+          0.3162860164615306
+        ],
+        "FiniteRayRadiusDeviation": [
+          0.6490300109213214,
+          0.6490300109213214
+        ]
+      }
+    },
+    "k60-on": {
+      "negative_orientation_count": 0,
+      "population_radius_count": 0,
+      "negative_neighbourhood_count": 0,
+      "flat_ray_count": 0,
+      "failed_endpoint_ranges": {
+        "NegativeAngleDegrees": null,
+        "RadiusRatio": null,
+        "RayOptimalRadius": null,
+        "FiniteRayRadiusDeviation": null
+      }
+    },
+    "k70-on": {
+      "negative_orientation_count": 0,
+      "population_radius_count": 0,
+      "negative_neighbourhood_count": 0,
+      "flat_ray_count": 0,
+      "failed_endpoint_ranges": {
+        "NegativeAngleDegrees": [
+          146.13176492304495,
+          146.13176492304495
+        ],
+        "RadiusRatio": [
+          1.0073556437083857,
+          1.0073556437083857
+        ],
+        "RayOptimalRadius": [
+          0.3069990367461324,
+          0.3069990367461324
+        ],
+        "FiniteRayRadiusDeviation": [
+          0.7003566069622533,
+          0.7003566069622533
+        ]
+      }
+    },
+    "k80-on": {
+      "negative_orientation_count": 0,
+      "population_radius_count": 0,
+      "negative_neighbourhood_count": 0,
+      "flat_ray_count": 0,
+      "failed_endpoint_ranges": {
+        "NegativeAngleDegrees": [
+          119.5108479510055,
+          149.89466451920504
+        ],
+        "RadiusRatio": [
+          1.008188918761021,
+          1.2002491737879581
+        ],
+        "RayOptimalRadius": [
+          0.2151973544920293,
+          0.4467761692698854
+        ],
+        "FiniteRayRadiusDeviation": [
+          0.5614127494911355,
+          0.8969590192895478
+        ]
+      }
+    },
+    "k80-off": {
+      "negative_orientation_count": 0,
+      "population_radius_count": 0,
+      "negative_neighbourhood_count": 0,
+      "flat_ray_count": 0,
+      "failed_endpoint_ranges": {
+        "NegativeAngleDegrees": [
+          110.05762175922236,
+          167.51738963016936
+        ],
+        "RadiusRatio": [
+          0.9650857286948771,
+          1.2325794829465286
+        ],
+        "RayOptimalRadius": [
+          0.13840581737504276,
+          0.4467761692698854
+        ],
+        "FiniteRayRadiusDeviation": [
+          0.6507256609911044,
+          1.017482344922572
+        ]
+      }
+    },
+    "k90-on": {
+      "negative_orientation_count": 0,
+      "population_radius_count": 0,
+      "negative_neighbourhood_count": 0,
+      "flat_ray_count": 0,
+      "failed_endpoint_ranges": {
+        "NegativeAngleDegrees": [
+          105.25443470666092,
+          170.7581489264449
+        ],
+        "RadiusRatio": [
+          0.9722991987994382,
+          1.759442840937388
+        ],
+        "RayOptimalRadius": [
+          0.20833484267163388,
+          0.5582825947951975
+        ],
+        "FiniteRayRadiusDeviation": [
+          0.5260121462042715,
+          1.437244102885305
+        ]
+      }
+    },
+    "k100-on": {
+      "negative_orientation_count": 0,
+      "population_radius_count": 0,
+      "negative_neighbourhood_count": 0,
+      "flat_ray_count": 0,
+      "failed_endpoint_ranges": {
+        "NegativeAngleDegrees": [
+          106.96417376422447,
+          158.25287225433905
+        ],
+        "RadiusRatio": [
+          0.9943428074554533,
+          1.5557330276719101
+        ],
+        "RayOptimalRadius": [
+          0.1253256915134707,
+          0.6089027598021564
+        ],
+        "FiniteRayRadiusDeviation": [
+          0.6131371537674076,
+          1.0712876131342202
+        ]
+      }
+    },
+    "k100-off": {
+      "negative_orientation_count": 0,
+      "population_radius_count": 0,
+      "negative_neighbourhood_count": 0,
+      "flat_ray_count": 0,
+      "failed_endpoint_ranges": {
+        "NegativeAngleDegrees": [
+          116.0187072687122,
+          163.90425507013697
+        ],
+        "RadiusRatio": [
+          0.9622602368167464,
+          1.5289159269398889
+        ],
+        "RayOptimalRadius": [
+          0.1253256915134707,
+          0.6089027598021564
+        ],
+        "FiniteRayRadiusDeviation": [
+          0.4778148222790566,
+          1.2356887827924354
+        ]
+      }
+    }
+  }
+}
