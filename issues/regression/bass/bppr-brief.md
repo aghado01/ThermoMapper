@@ -279,6 +279,77 @@ Under "Reports" below, newest first, per slice: what landed by commit; the gates
 
 ## Reports
 
+### 17522a6 read against slice 6's draft (2026-11-16)
+
+A reading, at the coordinating session's request; nothing built.
+- **The prior and every ratio match the draft and the user's review.**
+  - *Categorical-only terms* are their own kind, read off the term, with no label. Their law drops the direction's order and conditions the categorical order to k ≥ 1. Direction-bearing kinds condition a ≥ 1. Both corrections are exact against slice 5's uniform orders from 0, which carry no intercept renormalization.
+  - *The shares* enter once, in `LogTermsPrior`, as the integrated Dirichlet(1, …, 1) factor over the available kinds. `BassSweep` reads `LogTermsPrior` whole, so every move's ratio carries them.
+  - *The birth's ratio is the mixed kernel's own:* the kind weight 1/K, the kind's adaptive law under its own counts, and the reverse death 1/(M + 1) over all terms. The death mirrors it. Component kernels serve only the ordinary change.
+  - *The width change keeps θ, t₀ and the cells,* with a proposal ratio of 0. The draft's "kind weights" in its acceptance belong to the fixed-shares alternative alone.
+  - *The prior sampler is exact.* Kinds come by Polya's urn. The determinant rejection redraws directions alone with kinds and cells held, since E[det]/c_{M_θ} = 1 at each M_θ.
+- **Left out, recorded, not built.**
+  - The per-kind count readout and the `WidthChange` tally in `BassDiagnostics`, which this brief's file table lists; the probes compute per-kind counts from the draws.
+  - A sensitivity split; the whole-surface sampled route reads mixed fits.
+  - The BASS-hinge alternative.
+- **The default caps differ.**
+  - *The mixed fit's structural cap* reads one column a term: min(1000, N − 1) (`BassResolved.cs:339`). Pure K = 4's is min(1000, ⌊(N − 1)/4⌋). Past ⌊(N − 1)/4⌋ blocks, the mixed fit's column cap N − 1 refuses designs as admission.
+  - *A default-cap evidence comparison* between a mixed and a pure fit therefore truncates M's law at different points. The two normalizers differ by the count law's mass between the caps.
+  - *Negligible on Friedman:* under the near-Poisson(10) count law at n = 300 that mass lies above M = 74. It matters for small N or a count law reaching ⌊(N − 1)/4⌋.
+  - *Not in the recovery readings:* they set a cap of 12 for every basis.
+
+### The sampler default for ridge bases, committed at `a83db0c` (2026-11-15; coverage pending)
+
+**Landed.** The user's sampler decision for pure ridge-block fits: eleven files, `BassSamplerDefault.cs` and `RidgeSamplerTests.cs` new. The mixed-width slice kept it unchanged for mixed fits (`17522a6`; its legacy probe, in that slice's report below).
+- **The setting.** `BassSampling.Sampler` takes `Automatic` or `PlainChains`. `Automatic` is the default and is left out of the serialized form, so every existing config keeps its form and fingerprint. A declared `PlainChains` serializes, with a fingerprint of its own.
+- **The rule** reads the configured basis, so a draw holding no block resolves the same.
+  - *Passes through untouched,* nothing logged, unless `Structure.Directional.Columns` ≥ 2.
+  - *A declared `Tempering`, `Smc` or `FlatHistogram` runs as declared.*
+  - *Otherwise, self-sizing parallel tempering:* on the likelihood path, in the form the model runs, integrated unless its caller names one.
+    - The exact reference rung where the engine's own resolution admits it.
+    - Else a positive hot end auto-picked by the resolution, with the rung's refusal as the reason. On Friedman's fixture, Jeffreys σ² refuses the rung, and the hot end resolves to 1/300.
+    - Else plain chains, with the caution and both refusals.
+  - *`Validate` refuses* `PlainChains` beside a declared sampler, and an undefined value.
+- **The logged row** is `Sampler`, first in `AutoPicks`. Its readings:
+  - "parallel tempering, self-sizing, exact reference rung", because "automatic for a ridge basis (K ≥ 2): its plain chains can hold M where they started";
+  - "…auto-picked hot end", with "no reference rung, since Sampling.Tempering.ReferenceRung needs b = 0, where the integrated form is undefined under the Jeffreys σ² prior; the linear form reaches it (D05)";
+  - "plain chains", "as declared (Sampling.Sampler = PlainChains)" or "as the resumed checkpoint ran", each with the caution.
+- **The caution.** `BassDiagnostics.SamplerCaution` is set where plain chains run on a ridge basis, declared or resumed. Its text: "plain chains on a ridge basis can hold M where they started, and f's intervals can then be too narrow (E36's pure-basis readings: R̂(M) 5 to 8 over four starts); tempering or SMC is the default for this basis". It is null otherwise.
+- **Declared and resolved configs.** The run takes the resolved config (`BassModel.Config`). The fit, its fingerprint and the checkpoint's identity carry the declared one (`BassModel.Declared`).
+- **Checkpoints.** `Bass.Run` reads the sampler that produced a checkpoint (`BassEnsemble.Tempered`: a ladder in the restart state) and resolves with it.
+  - A plain checkpoint under an automatic config, such as one taken before this default, resumes plain. It carries the caution and the row "as the resumed checkpoint ran", and goes on as the plain run's own resume does.
+  - A tempered checkpoint resumes on the same ladder, bit for bit with the uninterrupted run.
+- **Review fixes before the gate.**
+  - The refusal quoted as the reason drops .NET's " (Parameter 'config')".
+  - The automatic ladder takes the form the model runs, so a caller naming the linear form under Jeffreys σ² gets the reference rung, and the ladder and the target agree.
+- **The K ≥ 2 tests.**
+  - *`BpprFriedmanTests`:* declares `PlainChains`, the paper's and `BayesPPR`'s single plain chain.
+  - *`DirectionalRidgeTests`' chain case:* declares `PlainChains` and asserts the caution. The case reads the chain beside its tempered and SMC cases.
+  - *`CategoricalReadoutTests`' and `DirectionDeterminantTests`' chain cases:* declare `PlainChains`. Their subject is the readouts and the prior, so the sampler is incidental; their SMC cases are unchanged.
+  - *`SampledEffectsTests` (the sensitivity chip's, K = 4):* takes the default, tempering; not edited.
+  - *K = 1 and BASS-hinge fits (`RidgeColumnTests` among them):* unaffected.
+  - *`RidgeSamplerTests`, 5 tests:*
+    - the automatic ladder and its row;
+    - the hot end under Jeffreys σ², and the linear form's rung;
+    - declared plain chains with the caution;
+    - declared SMC and ladders winning, and the refusals;
+    - K = 1 and BASS's hinges passing through with the JSON unchanged;
+    - both checkpoint rules.
+- **Gate:** a fresh snapshot (`5aef657` plus the eleven files) and a fresh build folder, `artifacts/chip-bppr/build-s6c`.
+  - *Maths.Oracle.Tests:* 22 of 40 classes, 106/106.
+  - *Maths.Regression.Tests:* 263 of 358 classes, the slow tier's 71 methods out and the pinned tier in; 2,852/2,852.
+  - *The other 25 projects* select nothing.
+  - *Receipts:* `build-s6c/test-select/20261115_222345-commit/` and `…/20261115_223603-commit/`.
+- **Coverage, pending.**
+  - *The probe:* `artifacts/chip-bppr/probes/SamplerCoverageProbe.cs`, on Friedman's fixture with `BpprFriedmanTests`' data and priors.
+  - *The cases:* 18 fits, three data seeds (3671, 3681, 3691) by two sampler seeds by three samplers: the default, declared plain chains, and declared SMC (linear form, 500 particles, 12 mutations).
+  - *Each fit:* four starts, 18,000 + 2,000 sweeps per chain.
+  - *The readings:* M per start with R̂(M), 95% coverage of f and of y pooled and per start, RMSE for f, and cost as wall time and sweep-equivalents.
+  - *Where it stands:* it runs at `build-s6b/runs/20261115_222520-coverage/`, 7 of 18 done at 03:48 with no failure. Its rows reach the trx when it ends. Whether it finishes or is rerun with the CDF-membership test is the user's call, relayed by the coordinating session. Its readings will follow here.
+- **Doc changes owed.**
+  - BASS's config reference: `Sampling.Sampler`, the ridge-basis default and its resolution, the caution, the declared and resolved configs, and the checkpoint rule.
+  - The sampler page: tempering by default for ridge bases.
+
 ### Slice 6: mixed directional widths, implemented and qualified (2026-11-15–16)
 
 **Ownership and base.** Started on local `main` at `a83db0c`, with the unrelated document moves preserved. Only the BPPR structure/sampler files, `MixedWidthTests.cs` and this brief belong to this slice. Independent sensitivity and evidence changes stay outside the snapshots and commits. No subagents, no push. Snapshots are `a83db0c` plus the explicit file lists under `artifacts/chip-bppr-mixed/`; each has its own build root. Runs use `DOTNET_PROCESSOR_COUNT=2`, below-normal launches and bounded parallelism.
