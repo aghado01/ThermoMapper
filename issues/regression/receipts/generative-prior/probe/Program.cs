@@ -27,7 +27,7 @@ internal static class Program
 {
     private static double Norm(double[] v) => Math.Sqrt(PairwiseSum.Dot(v, v));
 
-    private static double[] Code(int dimension, int seed)
+    internal static double[] Code(int dimension, int seed)
     {
         var rng = new Xoshiro256PlusPlus(seed);
         return Enumerable.Range(0, dimension).Select(_ => Normal.SampleStandard(rng)).ToArray();
@@ -179,6 +179,8 @@ internal static class Program
             throw new InvalidOperationException("Run at below-normal priority with DOTNET_PROCESSOR_COUNT=1.");
 
         byte[] settingsBytes = File.ReadAllBytes(args[0]);
+        if (JsonDocument.Parse(settingsBytes).RootElement.TryGetProperty("MeasurementCounts", out _))
+            return Measurements.Run(args, settingsBytes);
         if (JsonDocument.Parse(settingsBytes).RootElement.TryGetProperty("Cells", out _))
             return Curve.Run(args, settingsBytes);
         var settings = JsonSerializer.Deserialize<Settings>(settingsBytes)!;
@@ -215,7 +217,7 @@ internal static class Program
             SourceRevision = revision, SettingsSha256 = Convert.ToHexStringLower(SHA256.HashData(settingsBytes)),
             Runtime = RuntimeInformation.FrameworkDescription, Architecture = RuntimeInformation.ProcessArchitecture.ToString(),
             Priority = process.PriorityClass.ToString(), ProcessorCount = Environment.ProcessorCount,
-            settings.CodeDimension, settings.SignCheck, settings.FastForward,
+            settings.CodeDimension, settings.Measurements, settings.MasterSeed, settings.SignCheck, settings.FastForward,
             Repetitions = trials.Count, Successes = successes, GradientStops = trials.Count(t => t.Stop == "gradient"),
             UpdateLimitStops = trials.Count(t => t.Stop == "update-limit"),
             MinUpdates = trials.Min(t => t.Updates), MaxUpdates = trials.Max(t => t.Updates),

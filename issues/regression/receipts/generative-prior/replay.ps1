@@ -2,7 +2,7 @@
 param(
     [Parameter(Mandatory)][string]$Revision,
     [Parameter(Mandatory)][ValidatePattern('^[a-zA-Z0-9_-]+$')][string]$RunName,
-    [ValidateSet('checkpoint','linear')][string]$Experiment = 'checkpoint',
+    [ValidateSet('checkpoint','linear','measurements')][string]$Experiment = 'checkpoint',
     [string]$Cells = 'all',
     [string]$TrialIndices = 'all',
     [switch]$FullIterations
@@ -19,7 +19,10 @@ $build = Join-Path $run 'build'
 $results = Join-Path $run 'results'
 $null = New-Item -ItemType Directory -Path $source
 $archive = Join-Path $run 'source.tar'
-git -C $repo archive --format=tar "--output=$archive" $pin -- Directory.Build.props projects/Maths.Rng projects/Maths.Distributions projects/Maths.LinAlg src/maths/rng src/maths/distributions src/maths/linalg "$receipts/probe" "$receipts/settings"
+$paths = @('Directory.Build.props', 'projects/Maths.Rng', 'projects/Maths.Distributions', 'projects/Maths.LinAlg',
+    'src/maths/rng', 'src/maths/distributions', 'src/maths/linalg', "$receipts/probe", "$receipts/settings")
+if ($Experiment -eq 'measurements') { $paths += "$receipts/results/g1-linear-curve/k80-on" }
+git -C $repo archive --format=tar "--output=$archive" $pin -- @paths
 tar -xf $archive -C $source
 Remove-Item -LiteralPath $archive
 
@@ -29,9 +32,10 @@ $env:DOTNET_CLI_TELEMETRY_OPTOUT = '1'
 $probe = Join-Path $source $receipts
 dotnet build (Join-Path $probe 'probe/GenerativePrior.csproj') -c Release "-p:ArtifactsRoot=$build/" --disable-build-servers -m:1 -p:UseSharedCompilation=false
 $assembly = Join-Path $build 'bin/GenerativePrior/Release/net10.0/GenerativePrior.dll'
-if ($Experiment -eq 'linear') {
+if ($Experiment -in @('linear','measurements')) {
     $mode = if ($FullIterations) { 'full' } else { 'accelerated' }
-    dotnet $assembly (Join-Path $probe 'settings/g1-linear-curve.json') $results $pin $Cells $TrialIndices $mode
+    $settingsFile = if ($Experiment -eq 'linear') { 'g1-linear-curve.json' } else { 'g1-measurements.json' }
+    dotnet $assembly (Join-Path $probe "settings/$settingsFile") $results $pin $Cells $TrialIndices $mode
 } else {
     dotnet $assembly (Join-Path $probe 'settings/g1-k10.json') $results $pin
 }

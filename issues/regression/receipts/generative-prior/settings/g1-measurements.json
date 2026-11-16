@@ -1,0 +1,20 @@
+{
+  "Solver": {
+    "CodeDimension": 80,
+    "HiddenWidth": 250,
+    "OutputWidth": 600,
+    "Measurements": 150,
+    "Repetitions": 30,
+    "MasterSeed": 1600914390,
+    "Step": 1,
+    "GradientTolerance": 2.220446049250313e-16,
+    "MaxUpdates": 50000,
+    "SuccessTolerance": 0.001,
+    "ReferenceTolerance": 1e-10,
+    "SignCheck": true,
+    "FastForward": true,
+    "RequireAllRecovered": false
+  },
+  "MeasurementCounts": [80, 120, 150, 240],
+  "BaselineReceipt": "results/g1-linear-curve/k80-on"
+}
