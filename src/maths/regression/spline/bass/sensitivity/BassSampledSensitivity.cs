@@ -151,7 +151,8 @@ public static partial class BassSensitivity
     }
 
     // A term's variables in the measure's numbering: the moment service's for a separable term; otherwise the continuous variables a
-    // case kernel reading the term says it reads (a projection's active coordinates), through the design-kernel contract.
+    // case kernel reading the term says it reads (a projection's active coordinates), through the design-kernel contract, and the variables
+    // of its categorical factors, which gate a direction (E36's slice 5) and would otherwise go unvaried.
     internal static Func<BassTerm, int[]> TermVariablesOf(BassMoments moments, DesignKernels kernels)
     {
         var variables = new Dictionary<BassTerm, int[]>();
@@ -161,7 +162,8 @@ public static partial class BassSensitivity
         {
             if (variables.TryGetValue(term, out int[]? known)) return known;
             int[] v = kernels.Separable(term) ? [.. moments.Variables(term)]
-                : [.. Enumerable.Range(0, continuous).Where(k => kernels.Case.Any(c => c.Reads(term) && c.ReadsVariable(term, k))).Select(measure.OfContinuous).Order()];
+                : [.. Enumerable.Range(0, continuous).Where(k => kernels.Case.Any(c => c.Reads(term) && c.ReadsVariable(term, k))).Select(measure.OfContinuous)
+                     .Concat(term.Categorical.Select(c => measure.OfCategorical(c.Variable))).Order()];
             variables[term] = v;
             return v;
         };

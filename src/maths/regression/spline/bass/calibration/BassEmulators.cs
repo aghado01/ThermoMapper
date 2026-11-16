@@ -454,9 +454,11 @@ internal sealed class ThetaSurface
             if (parameter >= 0) onTheta.Add((parameter, factor));
             else kept.Add(factor);
         }
+        // The rest keeps every part but the factors on θ's categorical parameters: a gated direction or ridge column keeps its direction (E36's
+        // slice 5), which a rebuild from the hinge, Legendre and functional parts alone would drop.
         BassTerm? rest = onTheta.Count == 0 ? term
-                       : term.Continuous.Count + kept.Count + term.Functional.Count + term.Legendre.Count == 0 ? null
-                       : new BassTerm(term.Continuous, kept, term.Functional, term.Legendre);
+                       : term.Continuous.Count + kept.Count + term.Functional.Count + term.Legendre.Count == 0 && term.Directional is null && term.Ridge is null ? null
+                       : new BassTerm(term.Continuous, kept, term.Functional, term.Legendre, term.Directional, term.Ridge);
         double[]? h = null;
         if (_outputs is { } outputs)
         {
