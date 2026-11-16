@@ -83,6 +83,14 @@ Under "Reports" below, newest first, per slice: what landed by commit; the gates
 
 ## Reports
 
+### The term-variables rule and its test verified from a clean archive (coordinating session, 2026-11-15)
+
+- **Commit:** `5e99c83`, on a snapshot of `0802553`, through `scripts/verify-csharp.ps1` over its two changed files, in the two projects that select.
+- **Result:** Regression 2,847 of 2,847 and Oracle 57 of 57 at commit scope, `SampledTermVariablesTests`' three cases among them.
+- **Read.** The source change is the comment alone, which now states the rule as a completeness requirement. The test asserts, for each kind of term, that at least one input is left out, so no kind is tested vacuously.
+- **Why it was asked for.** The BPPR chip's slice 5 found by one fixture that a category gating a ridge was never varied; the report shows this test failing on exactly the two gated kinds with that fix removed. The next term type whose reads are understated fails here.
+- **Receipts:** `artifacts/verify-sens-vars-0802553/`, with the changed list, the counters and the snapshot tracked in [receipts](../receipts/verify-sens-vars-0802553/).
+
 ### A term's variables: the rule stated and tested (2026-11-15)
 
 **Landed** in `5e99c83`, at the coordinating session's request after E36's slice 5 (`f11c8cc`) added a non-separable term's categorical factors to `TermVariablesOf`.
