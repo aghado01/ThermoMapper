@@ -72,15 +72,125 @@ Those of the [first brief](time-frequency-statements-brief.md#working-rules).
 
 ## Report
 
-### In progress
+### 2026-11-16 — S10 to S15 proved, nine modules promoted, the Q extension prepared
 
-*Updated 2026-11-16.*
-- **Landed:** Part A's S10 to S15, each with a witness and standard axioms only.
-  - S10a, S10b, S12, S13, S14 and S15 are proved.
-  - S10b needs no premise: Γ′(k + 1) = k!(H_k − γ) comes from Mathlib, and integrability from its Mellin derivative.
-  - S10c and S11 are proved from their named premises, each met by an instance.
-  - S13 holds with the tight bracket 1.25 < u⋆ < 1.26.
-- **Part B landed:** the nine modules of the first two briefs pass the README's checks and are promoted to `lean/Lemmas/` (`TimeFrequency/`, `Spline/`, `BassWhitenedMarginal`, `BamrsKroneckerGram`), namespaces unchanged; meta-CI PASS.
-- **Part C landed:** `issues/regression/bass/output-inner-product-brief.md`, prepared and not built.
-- **Next:** the report; S16 is optional.
-- **Uncommitted:** nothing.
+**Landed:**
+- `5b08d17`: Part A, S10 to S15.
+- `f0cc4e2`: Part B, the promotions.
+- `9afb503`: Part C, the preparation brief.
+- The commit that adds this report.
+
+S16 was not attempted.
+
+**Part A, per statement.** Every declaration named below prints only `propext`, `Classical.choice` and `Quot.sound`. The modules are in `lean/Enthymemata/TimeFrequency/` except S14's.
+
+| | Module | Status | Changes from the posed form, and why |
+|---|---|---|---|
+| S10a | `LogPowerCovariance.lean` | proved | Stated at n + 1 over ℚ (`alternating_choose_harmonic`), with an ℝ copy. |
+| S10b | `LogPowerCovariance.lean` | proved, no premise | **The moment formula** ∫ xᵏ ln x e^{−x} = k!(H_k − γ) is proved, not assumed (`integral_pow_mul_log_mul_exp`): it is Mathlib's Γ′(k + 1) through the Gamma integral's derivative. Integrability comes from Mathlib's Mellin derivative lemma (`integrableOn_pow_mul_log_mul_exp`). **The Laguerre polynomial** is as posed (`laguerre`). |
+| S10c | `LogPowerCovariance.lean` | proved from a named premise | **The premise** `LaguerreProductPremise` is the Hille–Hardy expansion integrated term by term: E[ln X·ln Y] = Σₙ κⁿ·(∫ ln x·L_n·e^{−x})². The interchange of sum and integral belongs to the premise. **The marginals' means** enter as hypotheses: each is ∫ ln x e^{−x}, which `integral_log_mul_exp` shows is −γ. **The endpoint** π²/6 is `dilog_one`, from Mathlib's ζ(2). **The instance** meeting the premise is a degenerate law at κ = 0, not the Gaussian pair: it shows the premise is no contradiction. |
+| S11 | `LogPowerCovariance.lean` | proved from a named premise | **The pairing rule** is a hypothesis on the one fourth moment used (`cov_normSq_pairing`). **Zero means** are not needed. **The instance** is a six-point real law with E x² = 1 and E x⁴ = 3, read as a complex pair. |
+| S12 | `PeakOfExponentials.lean` | proved | **As posed** (`integral_one_sub_pow_one_sub_exp`). **The probabilistic form** (the maximum's mean) is not formalized: it needs the layer-cake formula and a product law. |
+| S13 | `WindowTurnover.lean` | proved | **The tight bracket** 1.25 < u⋆ < 1.26 holds (`turnover_spec`, with `turnover_le` for the maximizer). |
+| S14 | `Lemmas/BassWhitenedMarginal.lean` | proved | **Stated on second moments** with integrable products (`integral_secondMoment_response`, `marginal_covariance`). That the sum is Gaussian stays a premise of S4's reading. **The instance** is four outcomes with β ⟂ ε. |
+| S15 | `QuadraticFormVariance.lean` | proved from a named premise | **The premise** `Pairing` is Isserlis on the fourth-moment tensor. **The results:** `pairing_variance` (algebra) and `variance_quadForm` (expectation). **The instance** is the six-point law. |
+| S16 | — | not attempted | Optional and last; see the follow-ups. |
+
+**Part B, the promotion review.** Every check below ran on each of the nine modules:
+- no `sorry` and no `axiom`;
+- no `import Enthymemata.*`;
+- only barrels refer to it;
+- a witness for each main result;
+- a fresh read of each statement against its brief.
+
+All nine pass, and all are moved with namespaces and declaration names unchanged.
+
+| Module | Now at | Review note |
+|---|---|---|
+| S1 `PhasePropagation` | `Lemmas/TimeFrequency/` | none |
+| S2 `WindowScaling` | `Lemmas/TimeFrequency/` | none |
+| S3 `FlatnessBound` | `Lemmas/TimeFrequency/` | The docstring now points to S15 for the Gaussian identity it cites. |
+| S6 `Contraction` | `Lemmas/TimeFrequency/` | none |
+| S4 + Khatri–Rao + S14 `BassWhitenedMarginal` | `Lemmas/` | `gaussLogDensity` is the density's formula with log det, a density only for positive-definite C; the docstring says so. |
+| S5 `BamrsKroneckerGram` | `Lemmas/` | `BAMRS.proj` duplicates `BASS.proj`, in another namespace. |
+| S7 `DesignRank` | `Lemmas/Spline/` | `fullRank_iff_greedy` is conditional on `h461`, proved at order 1. |
+| S8 `TrigonometricBSpline` | `Lemmas/Spline/` | none |
+| S9 `FreeKnotSteps` | `Lemmas/Spline/` | none |
+
+- *Left in `Enthymemata`:* the four noise-law modules, which landed today and await the coordinating session's clean-archive check.
+- *Barrels:* `Lemmas/TimeFrequency.lean` and `Lemmas/Spline.lean` are new. `Enthymemata/Spline.lean` is removed, and `Enthymemata/TimeFrequency.lean` now holds the noise-law modules.
+- *The review is the author's.* The coordinating session's clean-archive verification is the independent check.
+
+**Part C.** [output-inner-product-brief.md](../regression/bass/output-inner-product-brief.md) is prepared, not built. It covers:
+- the proved specification;
+- what is already built;
+- a table of every place that reads the independent form;
+- seven decisions with recommendations and the slice where each binds;
+- five slices gated by the whitening oracle, with Q = I bit for bit as the invariant.
+
+Building waits on the user's go-ahead.
+
+**Declarations to print axioms for:**
+- `TimeFrequency.alternating_choose_harmonic`, `alternating_choose_harmonic_real`.
+- `TimeFrequency.integral_pow_mul_log_mul_exp`, `integrableOn_pow_mul_log_mul_exp`, `integral_log_mul_laguerre`, `integral_log_mul_exp`.
+- `TimeFrequency.logPower_covariance`, `dilog_one`, `cov_normSq_pairing`.
+- `TimeFrequency.integral_one_sub_pow_one_sub_exp`, `turnover_spec`, `turnover_le`.
+- `TimeFrequency.pairing_variance`, `variance_quadForm`.
+- `BASS.integral_mulVec_mul_mulVec`, `integral_secondMoment_response`, `marginal_covariance`.
+
+**Gates:**
+- `lean` on each file during drafting.
+- `lake build` with the linter set on `Enthymemata.TimeFrequency`, `Enthymemata.BassWhitenedMarginal` (before its move) and `Lemmas`: no warnings. One lint is disabled locally on `integral_secondMoment_response`, whose statement needs no finiteness of ι while its proof does.
+- `scripts/meta-ci.ps1 -NoBuild` after the moves: PASS.
+- Cache: scoped fetches of `Mathlib.NumberTheory.Harmonic.GammaDeriv`, `Mathlib.NumberTheory.ZetaValues`, `Mathlib.Analysis.Complex.ExponentialBounds` (95 files) and `Mathlib.Data.Matrix.ColumnRowPartitioned` (1 file). D: had 22 GB free at the end.
+
+**Follow-ups:**
+- *S16,* Theorem 4.61 at order 2. It would discharge `h461` for hat functions and make `fullRank_iff_greedy` unconditional for degree-1 splines. The route: a nonzero spline vanishing at n sites interleaved with its supports has too many zeros, Schumaker's Theorem 4.56 at m = 2.
+- *The two premises with Gaussian content,* S10c's Hille–Hardy expansion with its interchange and S15's Isserlis rule. Both await Mathlib's multivariate Gaussian.
+- *Clean-archive verification* of the four noise-law modules and of the promoted tier.
+
+#### Methods
+
+**S10a.**
+- *Pascal's rule* splits C(n+1, j+1) into C(n, j) + C(n, j+1), and H_{j+1} = H_j + 1/(j + 1).
+- *The pieces:* the C(n, j+1)·H_{j+1} sum is the row-n sum A_n read with its index shifted. The C(n, j)·H_j sum is −A_n. They cancel, leaving −Σ_j (−1)ʲ C(n, j)/(j + 1).
+- *The leftover sum:* that one is 1/(n + 1), since C(n, j)/(j + 1) = C(n+1, j+1)/(n + 1) and the alternating row sum of C(n+1, ·) is 0. Hence A_{n+1} = −1/(n + 1), with no induction hypothesis on A_n.
+
+**S10b.**
+- *The moments.* Mathlib gives Γ′(k + 1) = k!(H_k − γ) (`Complex.hasDerivAt_Gamma_nat`). It also gives the Gamma integral's derivative as ∫ t^{s−1} ln t e^{−t} dt (`hasDerivAt_GammaIntegral`). Γ equals that integral on Re s > 0, so the two derivatives at k + 1 coincide. The complex integral is the real one, since t^{(k+1)−1} = tᵏ for t > 0.
+- *Integrability:* the first half of `mellin_hasDerivAt_of_isBigO_rpow`, with its side conditions copied from Mathlib's own proof.
+- *Then:* expanding L_n gives Σ_k C(n, k)(−1)ᵏ(H_k − γ) = −1/n − γ·0.
+
+**S10c.**
+- *The n = 0 term* of the premise's series is (∫ ln x e^{−x})², which is the product of the two means. Removing it (`hasSum_nat_add_iff'`) leaves Σ_{n≥1} κⁿ·(−1/n)².
+- *No γ appears,* so the result holds for any common value of the marginal means.
+
+**S11.**
+- *Lift to ℂ:* ‖a‖² = a·conj a, so each real integral is the complex integral of a product (`integral_complex_ofReal`).
+- *Conjugates:* ∫ conj a·b = conj ∫ a·conj b and ∫ conj a·conj b = conj ∫ a·b (`integral_conj`).
+- *Then:* the pairing rule's two cross terms are \|E a·conj b\|² and \|E ab\|². No integrability is needed, because the premise supplies the values.
+
+**S12.**
+- *The geometric sum,* with q = 1 − e^{−x}: 1 − qⁿ = (1 − q)·Σ_{k<n} qᵏ = e^{−x}·Σ qᵏ. That is the derivative of Σ_{k<n} q^{k+1}/(k + 1).
+- *The improper integral:* Mathlib's `integral_Ioi_of_hasDerivAt_of_nonneg` gives limit minus initial value, H_n − 0. It needs only a nonnegative integrand.
+
+**S13.**
+- *The derivative:* φ′(u) = (1 − e^{−u})·(e^{−u}(1 + 2u) − 1)/u², and the last factor is e^{−u}·ψ(u) with ψ = 1 + 2u − eᵘ.
+- *ψ's shape:* ψ(0) = 0, ψ′ = 2 − eᵘ, so ψ rises on [0, ln 2] and falls on [ln 2, ∞). Hence ψ > 0 on (0, u⋆), ψ < 0 after, and the positive root is unique.
+- *The bracket:* e^{5/4} = e·e^{1/4} < 2.7182818286 × 1.2841 < 3.5, and e^{63/50} = e·e^{13/50} > 2.7182818283 × 1.2969 > 3.52. Both use `Real.exp_bound` with five terms. ψ therefore changes sign in (5/4, 63/50), and the intermediate value theorem places u⋆ there.
+- *Monotonicity:* from the derivative's sign on each side (`strictMonoOn_of_deriv_pos`).
+
+**S14.**
+- *A general lemma:* E[(AX)_i (AX)_j] = (AMAᵀ)_ij for any second-moment matrix M, by expanding the double sum and integrating term by term.
+- *Stacking:* X = (β, ε) over κ ⊕ ι, with A = [Z \| I] and M block-diagonal (Σ_β, Σ_ε), because E[βεᵀ] = 0.
+- *Then:* `fromCols_mul_fromBlocks` and `fromCols_mul_fromRows` give ZΣ_βZᵀ + Σ_ε. With S4's Σ_β and Σ_ε, the `module` tactic finishes σ²(Ω + τ⁻¹ZG⁻¹Zᵀ).
+
+**S15.**
+- *Expansion:* E[(xᵀHx)²] = Σ_pqrs H_pq H_rs m4_pqrs.
+- *The three pairings:*
+  - the direct pairing S_pq S_rs gives (Σ H_pq S_pq)² = (E xᵀHx)²;
+  - the two cross pairings each give tr((HS)²) once the indices are relabelled and H, S used symmetric.
+- *Reindexing:* tr((HS)²) expands as Σ_p Σ_a Σ_c Σ_b H_pb S_ba H_ac S_cp. Matching it to each cross pairing takes two or three swaps of nested sums, done under `conv`.
+- *S symmetric* follows from S's definition as second moments.
+
+**Part B.** The README's bar is a module that stops apologizing and whose statement and dependencies pass semantic review. Meta-CI enforces the first half; this report records the second, by module.
