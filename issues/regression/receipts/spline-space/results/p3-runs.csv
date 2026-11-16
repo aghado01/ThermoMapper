@@ -1,0 +1,51 @@
+variant,R,rep,method,k_mean,rms,oracle_ls_rms,share_near_onsets,evaluations,seconds
+matched,1,0,cubic,0.07,1.697E-001,,0.089,None:2581;ThinSupport:1,7.0
+matched,1,0,oscillator,2.23,8.773E-004,4.481E-004,0.898,None:6002,53.2
+matched,1,1,cubic,17.25,2.061E-002,,0.166,None:5121;OutsideSimplex:1;ThinSupport:2,47.7
+matched,1,1,oscillator,2.05,1.015E-003,9.588E-004,0.782,None:5995,42.0
+matched,1,2,cubic,43.51,3.808E-003,,0.081,None:5937,41.3
+matched,1,2,oscillator,1.85,7.243E-004,5.751E-004,0.928,None:5988,10.9
+matched,1,3,cubic,0.04,2.394E-001,,0.000,None:2559;ThinSupport:1,4.7
+matched,1,3,oscillator,2.21,9.361E-004,4.708E-004,0.907,None:6002,4.2
+matched,1,4,cubic,0.05,2.345E-001,,0.022,None:2530,11.0
+matched,1,4,oscillator,2.15,1.080E-003,7.234E-004,0.931,None:6002,9.2
+matched,2,0,cubic,0.06,2.009E-001,,0.071,None:2640,16.3
+matched,2,0,oscillator,3.26,1.026E-003,9.139E-004,0.936,None:5998;Inadmissible:1,32.0
+matched,2,1,cubic,0.06,2.858E-001,,0.026,None:2590;ThinSupport:1,40.4
+matched,2,1,oscillator,4.17,1.256E-003,6.660E-004,0.902,None:6000;Inadmissible:1,42.8
+matched,2,2,cubic,0.07,2.938E-001,,0.042,None:2708;ThinSupport:1,15.5
+matched,2,2,oscillator,4.16,1.112E-003,5.135E-004,0.960,None:6002,6.7
+matched,2,3,cubic,0.05,2.621E-001,,0.067,None:2580;ThinSupport:1,9.1
+matched,2,3,oscillator,3.65,1.134E-003,7.478E-004,0.920,None:5995,9.4
+matched,2,4,cubic,0.16,1.599E-001,,0.051,None:2948,13.0
+matched,2,4,oscillator,3.50,1.038E-003,6.810E-004,0.912,None:6002,18.0
+matched,4,0,cubic,0.12,3.494E-001,,0.054,None:2801;ThinSupport:1,10.9
+matched,4,0,oscillator,7.05,1.550E-003,8.152E-004,0.929,None:5994;ZeroCountPrior:7;Inadmissible:1,46.0
+matched,4,1,cubic,0.08,3.007E-001,,0.064,None:2745,16.0
+matched,4,1,oscillator,8.93,2.178E-003,7.883E-004,0.937,None:6000;Inadmissible:2,43.5
+matched,4,2,cubic,0.03,3.403E-001,,0.017,None:2532,9.0
+matched,4,2,oscillator,8.74,2.094E-003,7.138E-004,0.937,None:5996;Inadmissible:6,20.8
+matched,4,3,cubic,0.02,4.520E-001,,0.000,None:2496;ThinSupport:2,15.4
+matched,4,3,oscillator,6.28,1.447E-003,7.085E-004,0.941,None:5999;ZeroCountPrior:2;Inadmissible:1,23.2
+matched,4,4,cubic,0.02,2.978E-001,,0.049,None:2547;ThinSupport:2,28.1
+matched,4,4,oscillator,7.91,1.408E-003,8.293E-004,0.956,None:5990;ZeroCountPrior:12,46.7
+omega x1.05,2,0,cubic,60.96,6.447E-003,,0.125,None:5037,58.1
+omega x1.05,2,0,oscillator,20.00,1.056E-002,1.355E-001,0.200,None:3781;ZeroCountPrior:2219,26.0
+omega x1.05,2,1,cubic,34.49,7.044E-002,,0.133,None:4325;ThinSupport:1,36.9
+omega x1.05,2,1,oscillator,19.97,6.835E-003,9.737E-002,0.205,None:3873;ZeroCountPrior:2127;Inadmissible:1,99.9
+omega x1.05,2,2,cubic,0.09,1.897E-001,,0.026,None:2912;ThinSupport:1,22.2
+omega x1.05,2,2,oscillator,18.35,2.999E-003,6.674E-002,0.192,None:5193;ZeroCountPrior:806;Inadmissible:1,14.8
+omega x1.05,2,3,cubic,0.07,2.567E-001,,0.044,None:2665;ThinSupport:1,8.6
+omega x1.05,2,3,oscillator,20.00,8.917E-003,1.382E-001,0.154,None:3809;ZeroCountPrior:2193,16.9
+omega x1.05,2,4,cubic,51.34,4.274E-003,,0.151,None:5348;ThinSupport:2,16.1
+omega x1.05,2,4,oscillator,19.97,6.063E-003,8.845E-002,0.144,None:3845;ZeroCountPrior:2157,26.0
+gamma x1.5,2,0,cubic,0.20,2.350E-001,,0.113,None:3116,9.9
+gamma x1.5,2,0,oscillator,18.28,3.479E-003,4.520E-002,0.252,None:5153;ZeroCountPrior:848;Inadmissible:1,50.3
+gamma x1.5,2,1,cubic,0.05,1.850E-001,,0.009,None:2549,13.4
+gamma x1.5,2,1,oscillator,18.94,3.471E-003,3.540E-002,0.251,None:4663;ZeroCountPrior:1339,64.4
+gamma x1.5,2,2,cubic,0.05,2.432E-001,,0.020,None:2491,18.5
+gamma x1.5,2,2,oscillator,19.71,3.456E-003,4.395E-002,0.194,None:4186;ZeroCountPrior:1815,24.2
+gamma x1.5,2,3,cubic,0.06,1.297E-001,,0.039,None:2599;ThinSupport:1,7.5
+gamma x1.5,2,3,oscillator,19.65,3.429E-003,2.465E-002,0.224,None:4301;ZeroCountPrior:1698;Inadmissible:1,18.7
+gamma x1.5,2,4,cubic,0.16,1.626E-001,,0.029,None:2773,5.8
+gamma x1.5,2,4,oscillator,19.34,2.903E-003,2.927E-002,0.221,None:4709;ZeroCountPrior:1293,10.9

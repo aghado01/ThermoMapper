@@ -144,3 +144,25 @@ Each gate was written here before the first reading of its probe. A gate changed
   - The one-sided basis's equilibrated condition number falls smoothly as the knots spread: 7.6×10⁵ at hω/π = 0.05, 3.1×10³ at 0.5 and 1.3×10³ at 0.7 undamped; with γ = 8, 4.9×10⁵, 2.1×10² and 51. Its one bump is at hω/π = 1 (4.2×10³ undamped, 91 damped), where a knot's g and its neighbour's cancel beyond the second knot.
   - S8's elements written unnormalized (its numerators) stay at κ ≈ 3–4.5 through 0.5 and rise only toward 1 (680 at 1.0).
 - *Decision, for the spacing question:* an oscillatory term built on the one-sided basis needs no admission rule on spacing, only the usual guard against crowded knots (its conditioning grows as h → 0). A term built on local, positive elements needs the rule y₂ − y₀ < π/ω, and it must avoid h = π/ω. The knot-count question waits on the BARS runs below.
+
+**P3, the fits: the oscillator basis fits a sum of decaying resonances with about two knots per resonance at the noise level; cubic BARS as built never leaves zero knots. The pre-stated threshold is not met as written, because its knot clause compares against a cubic fit that collapsed.** Rows in `receipts/spline-space/results/p3-summary.md` and `p3-uniform-cubic.csv`.
+
+- *Matched signals* (5 replicates each; medians):
+
+  | R | oscillator k̄ | oscillator rms | least squares at the true onsets | knots within ±0.01 of an onset | cubic k̄ | cubic rms |
+  |---|---|---|---|---|---|---|
+  | 1 | 2.1 | 9.4×10⁻⁴ | 5.8×10⁻⁴ | 0.91 | 0.1 | 0.17 |
+  | 2 | 3.6 | 1.1×10⁻³ | 6.8×10⁻⁴ | 0.92 | 0.1 | 0.26 |
+  | 4 | 7.9 | 1.6×10⁻³ | 7.9×10⁻⁴ | 0.94 | 0.0 | 0.34 |
+
+  The oscillator posterior puts its knots at the onsets and comes within a factor of two of least squares with the onsets known.
+- *Cubic BARS* starts at 0–4 knots (its overdispersed start) and stays there: one knot of a cubic buys nothing against a 20-cycle oscillation, so the one-knot birth moves meet a flat likelihood and are refused. Two of the fifteen matched-signal runs climbed, both at R = 1: to 17 knots (rms 0.021) and to 44 (rms 0.0038). So did three of the five ω-mismatch runs, to 34–61 knots (rms 0.0043–0.070). When the chain does climb, free knots beat uniform ones: 44 free knots reach 0.0038, below uniform least squares at 160. Against the oscillator at R = 1, that is twenty times the knots for four times the error.
+- *Post-gate, apart from the search:* cubic least squares on uniform knots for the same signals (`p3-uniform`) reads, median over the matched signals: rms 0.26, 0.13, 0.020, 0.0097 and 0.0062 at 10, 40, 80, 120 and 160 knots. Its approximation needs about 80 knots for 0.02 and 160 for 0.006, still four to seven times the oscillator's error with 2–8 knots.
+- *Mismatch* (R = 2, the basis at the nominal γ and ω):
+  - With ω × 1.05 the oscillator fit uses 20 knots, the count prior's cap, for an rms of 6.8×10⁻³ (cubic BARS 0.070).
+  - With γ × 1.5 it uses 19.3, for 3.5×10⁻³ (cubic BARS 0.185, at about zero knots).
+  - Least squares at the true onsets is poor under both, 0.097 and 0.035: one knot per onset no longer spans the signal, and the free knots buy the shortfall back at up to ten times the count.
+- *The threshold as stated:* the error clause passes, with errors two orders below cubic BARS's in every matched cell, and so does the mismatch clause (6.8×10⁻³ against 0.070, 3.5×10⁻³ against 0.185). The knot clause (at most a quarter of the cubic fit's knots) cannot be met against a cubic fit near zero knots. The gate stands as written and is recorded as not met, for a reason that belongs to the cubic sampler's search. The post-gate least-squares reading puts the saving at twenty to eighty times in knots, at lower error.
+- *Decisions:*
+  - On this evidence an oscillatory term type saves knots by more than an order of magnitude when its operator matches the signal. Whether it earns its own brief is the user's call, since the pre-stated test did not decide it.
+  - It needs no admission rule on spacing in its one-sided form (the sweep). Its weakness is the operator's parameters: a 5% carrier error spends the knot budget. That argues either for working on a band after mixing down, where the carrier is known, or for making γ and ω part of the term (sampled or profiled), not fixed.

@@ -148,6 +148,41 @@ public static class P3
             ["variant,R,rep,method,k_mean,rms,oracle_ls_rms,share_near_onsets,evaluations,seconds", .. rows.OrderBy(t => t.Item1).Select(t => t.Item2)]);
     }
 
+    /// <summary>
+    /// Post-gate: cubic least squares on uniform knots for the same signals and noise as <see cref="Run"/>, k ∈ {10, 20, 40,
+    /// 80, 120, 160}, so the cubic's approximation error is read apart from BARS's search.
+    /// </summary>
+    public static void UniformCubic(string dir)
+    {
+        int[] seeds = SeedTree.Derive(Master, 4);
+        var cases = new List<(string Variant, int R, int Rep)>();
+        foreach (int r in new[] { 1, 2, 4 }) for (int rep = 0; rep < Replicates; rep++) cases.Add(("matched", r, rep));
+        foreach (string v in new[] { "omega x1.05", "gamma x1.5" }) for (int rep = 0; rep < Replicates; rep++) cases.Add((v, 2, rep));
+        int[] signalSeeds = SeedTree.Derive(seeds[0], cases.Count), noiseSeeds = SeedTree.Derive(seeds[1], cases.Count);
+        double[] x = Enumerable.Range(0, N).Select(i => i / (N - 1.0)).ToArray();
+        double[] grid = Enumerable.Range(0, 2001).Select(i => i / 2000.0).ToArray();
+        var lines = new List<string> { "variant,R,rep,k,rms" };
+        var basis = new SplineBasis(3);
+        for (int c = 0; c < cases.Count; c++)
+        {
+            (string variant, int r, int rep) = cases[c];
+            (double[] onsets, double[] amps) = Draw(r, new Xoshiro256PlusPlus(signalSeeds[c]));
+            double g = variant == "gamma x1.5" ? 1.5 * Gamma : Gamma, w = variant == "omega x1.05" ? 1.05 * Omega : Omega;
+            var noise = new Xoshiro256PlusPlus(noiseSeeds[c]);
+            double[] y = x.Select(v => Signal(v, onsets, amps, g, w) + Noise * Normal.SampleStandard(noise)).ToArray();
+            double[] truth = grid.Select(v => Signal(v, onsets, amps, g, w)).ToArray();
+            foreach (int k in new[] { 10, 20, 40, 80, 120, 160 })
+            {
+                var cfg = new KnotConfig(Enumerable.Range(1, k).Select(i => i / (k + 1.0)).ToArray());
+                double[] b = LeastSquares(basis.Design(cfg, x), y);
+                lines.Add(string.Join(",", variant, r, rep, k, F(Rms(Multiply(basis.Design(cfg, grid), b), truth), "E3")));
+            }
+        }
+        File.WriteAllLines(Path.Combine(dir, "p3-uniform-cubic.csv"), lines);
+        foreach (var g in lines.Skip(1).Select(l => l.Split(',')).GroupBy(f => (f[0], f[3])).OrderBy(g => g.Key.Item1).ThenBy(g => int.Parse(g.Key.Item2)))
+            Console.WriteLine($"{g.Key.Item1} k={g.Key.Item2}: median rms {P2.Median(g.Select(f => double.Parse(f[4], CultureInfo.InvariantCulture))):E2}");
+    }
+
     /// <summary>The spacing sweep: one-sided basis conditioning, S8's local element, and its unnormalized form.</summary>
     public static void Sweep(string dir)
     {

@@ -27,6 +27,7 @@ public static class Program
             case "p2-summary": Write(dir, "p2-summary.md", P2.Summary(dir)); break;
             case "p3": P3.Run(dir); break;
             case "p3-sweep": P3.Sweep(dir); break;
+            case "p3-uniform": P3.UniformCubic(dir); break;
             case "p3-summary": Write(dir, "p3-summary.md", P3.Summary(dir)); break;
             default: Console.Error.WriteLine($"unknown command {args[0]}"); return 2;
         }
