@@ -1,0 +1,1 @@
+import Enthymemata.GenerativePrior.IsometryCondition
