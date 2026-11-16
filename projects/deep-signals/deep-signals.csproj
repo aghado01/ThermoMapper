@@ -1,0 +1,11 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <RootNamespace>DeepSignals</RootNamespace>
+    <EnableDefaultCompileItems>false</EnableDefaultCompileItems>
+  </PropertyGroup>
+  <ItemGroup>
+    <Compile Include="..\..\src\deep-signals\**\*.cs" Link="%(RecursiveDir)%(Filename)%(Extension)" />
+    <PackageReference Include="NAudio.Core" Version="3.3.0" />
+    <PackageReference Include="TorchSharp" Version="0.107.0" />
+  </ItemGroup>
+</Project>
