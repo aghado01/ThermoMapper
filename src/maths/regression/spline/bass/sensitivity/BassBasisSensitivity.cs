@@ -26,9 +26,7 @@ public static partial class BassBasisSensitivity
     /// only at its training locations, which are integrated equally weighted), components fitted at different hinge degrees,
     /// and the spec's own refusals.
     /// </summary>
-    public static BasisSobolAnalysis Of(BassBasisFit fit, SensitivitySpec? spec = null) => OfCore(fit, spec, null);
-
-    private static BasisSobolAnalysis OfCore(BassBasisFit fit, SensitivitySpec? spec, Maths.Regression.Sensitivity.MainVarianceForm? form)
+    public static BasisSobolAnalysis Of(BassBasisFit fit, SensitivitySpec? spec = null)
     {
         ArgumentNullException.ThrowIfNull(fit);
         spec ??= new SensitivitySpec();
@@ -66,7 +64,7 @@ public static partial class BassBasisSensitivity
         (int[] chains, int[] within) = ChainOrder(joint);
         var kernels = new DesignKernels(inputs, degree, hinges);
         if (Resolve(spec, held, kernels) == SensitivityRoute.Sampled)
-            return Sampled(fit, spec, inputs, measure, moments, kernels, joint, selected, pooled, held, chains, within, form);
+            return Sampled(fit, spec, inputs, measure, moments, kernels, joint, selected, pooled, held, chains, within);
         int largest = held.Select(t => moments.Variables(t).Count).DefaultIfEmpty(0).Max();
         int maxOrder = spec.MaxOrder ?? Math.Max(1, largest);
         int integratedOrder = spec.MaxOrder ?? largest + 1;

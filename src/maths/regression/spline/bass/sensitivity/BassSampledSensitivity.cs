@@ -19,13 +19,6 @@ public static partial class BassSensitivity
 {
     internal const long ColumnBudget = 1L << 23;   // term-column values one batch of draws keeps, about 64 MB
 
-    /// <summary><see cref="Of"/> with the main variances read in <paramref name="form"/> on the sampled route: the gates read both forms
-    /// while the form's default waits on the user (the slice 0 report's follow-up).</summary>
-    internal static SobolAnalysis OfInForm(BassFit fit, BassData data, SensitivitySpec? spec, MainVarianceForm form) => OfCore(fit, data, spec, null, form);
-
-    /// <summary>A fit of several outputs read on <paramref name="output"/>'s functional, its main variances in <paramref name="form"/>.</summary>
-    internal static SobolAnalysis Projected(BassFit fit, BassData data, double[] output, SensitivitySpec? spec, MainVarianceForm form) => OfCore(fit, data, spec, output, form);
-
     // Decision 1: the exact route where every term the draws hold has one-variable factors, the sampled route otherwise; Exact refuses a
     // term without them up front, with its reason.
     private static SensitivityRoute Resolve(BassFit fit, SensitivitySpec spec, Setup s)
@@ -45,9 +38,9 @@ public static partial class BassSensitivity
 
     // A fit of several named outputs (E34) reads its declared output functional's surface: Setup's coefficients project each draw's
     // output coefficients, so the route reads it as it reads a scalar fit.
-    private static SobolAnalysis Sampled(BassFit fit, SensitivitySpec spec, Setup s, MainVarianceForm? form)
+    private static SobolAnalysis Sampled(BassFit fit, SensitivitySpec spec, Setup s)
     {
-        if (s.Form is not null) return SampledFunctional(fit, spec, s, form);
+        if (s.Form is not null) return SampledFunctional(fit, spec, s);
         if (spec.Points < 2) throw new ArgumentOutOfRangeException(nameof(spec), "The sampled route needs two rows in each base set.");
         BassInputs inputs = s.Moments.Inputs;
         ProductMeasure measure = s.Moments.Measure;
@@ -59,7 +52,7 @@ public static partial class BassSensitivity
         Func<int, int[]> Variables = TermVariables(fit, s, kernels);
         int maxOrder = spec.MaxOrder ?? Math.Max(1, s.TermIds.Select(id => Variables(id).Length).DefaultIfEmpty(0).Max());
         int[][] subsets = Subsets(s.TermIds.Select(id => (IReadOnlyList<int>)Variables(id)), maxOrder, spec.SubsetBudget);
-        var design = new PickFreezeDesign(p, subsets, form ?? spec.MainVarianceForm, p + spec.SubsetBudget);
+        var design = new PickFreezeDesign(p, subsets, spec.MainVarianceForm, p + spec.SubsetBudget);
         var read = new bool[p];
         foreach (int id in s.TermIds)
             foreach (int v in Variables(id)) read[v] = true;
@@ -536,7 +529,7 @@ public static partial class BassSensitivity
     // The integrated form reads the output variables as more inputs, drawn with the points; the conditioned form holds them (or those
     // ConditionOn names) at each coordinate, a decomposition per coordinate. Each row's value is Σⱼ aⱼ·Bⱼ(x_r)·hⱼ(t_r) at its own output
     // location, so the pick-freeze blocks swap integrated output variables as they swap inputs.
-    private static SobolAnalysis SampledFunctional(BassFit fit, SensitivitySpec spec, Setup s, MainVarianceForm? form)
+    private static SobolAnalysis SampledFunctional(BassFit fit, SensitivitySpec spec, Setup s)
     {
         if (spec.Points < 2) throw new ArgumentOutOfRangeException(nameof(spec), "The sampled route needs two rows in each base set.");
         BassInputs inputs = s.Moments.Inputs;
@@ -548,7 +541,7 @@ public static partial class BassSensitivity
         Func<int, int[]> variables = TermVariables(fit, s, kernels);
         int maxOrder = spec.MaxOrder ?? Math.Max(1, s.TermIds.Select(id => variables(id).Length).DefaultIfEmpty(0).Max());
         int[][] subsets = Subsets(s.TermIds.Select(id => (IReadOnlyList<int>)variables(id)), maxOrder, spec.SubsetBudget);
-        var design = new PickFreezeDesign(p, subsets, form ?? spec.MainVarianceForm, p + spec.SubsetBudget);
+        var design = new PickFreezeDesign(p, subsets, spec.MainVarianceForm, p + spec.SubsetBudget);
         var segments = new List<(bool FromB, int[] Other)> { (false, []), (true, []) };
         var hybridAt = new int[design.Blocks.Count];
         var reverseAt = new int[design.Blocks.Count];

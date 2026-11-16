@@ -31,13 +31,9 @@ public static partial class BassBasisSensitivity
         };
     }
 
-    /// <summary><see cref="Of"/> with the main variances read in <paramref name="form"/> on the sampled route: the gates read both forms
-    /// while the form's default waits on the user.</summary>
-    internal static BasisSobolAnalysis OfInForm(BassBasisFit fit, SensitivitySpec spec, MainVarianceForm form) => OfCore(fit, spec, form);
-
     private static BasisSobolAnalysis Sampled(BassBasisFit fit, SensitivitySpec spec, BassInputs inputs, ProductMeasure measure, BassMoments moments,
                                               DesignKernels kernels, BassJointDraws joint, int[] selected, List<BassDraw>[] pooled,
-                                              HashSet<BassTerm> held, int[] chains, int[] within, MainVarianceForm? form)
+                                              HashSet<BassTerm> held, int[] chains, int[] within)
     {
         if (spec.Points < 2) throw new ArgumentOutOfRangeException(nameof(spec), "The sampled route needs two rows in each base set.");
         int r = fit.Components.Count, p = measure.Count, n = spec.Points, draws = selected.Length;
@@ -60,7 +56,7 @@ public static partial class BassBasisSensitivity
         kinds.Add([p]);
         kinds.Sort((x, y) => x.Length != y.Length ? x.Length.CompareTo(y.Length) : x.AsSpan().SequenceCompareTo(y));
         PickFreezeDesign Design(int inputs, IReadOnlyList<int[]> asked) =>
-            new(inputs, asked, form ?? spec.MainVarianceForm, inputs + spec.SubsetBudget);
+            new(inputs, asked, spec.MainVarianceForm, inputs + spec.SubsetBudget);
         PickFreezeDesign atLocation = Design(p, subsets), integrated = Design(p + 1, kinds);
 
         // The stacked x-rows: A, B, then each location block reading only inputs some term reads (hybrid, then reverse); a block holding

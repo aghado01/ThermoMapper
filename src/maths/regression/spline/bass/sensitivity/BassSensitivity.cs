@@ -29,11 +29,11 @@ public static partial class BassSensitivity
     internal static SobolAnalysis Projected(BassFit fit, BassData data, double[] output, SensitivitySpec? spec)
         => OfCore(fit, data, spec, output);
 
-    private static SobolAnalysis OfCore(BassFit fit, BassData data, SensitivitySpec? spec, double[]? output, Maths.Regression.Sensitivity.MainVarianceForm? form = null)
+    private static SobolAnalysis OfCore(BassFit fit, BassData data, SensitivitySpec? spec, double[]? output)
     {
         spec ??= new SensitivitySpec();
         Setup s = Setup.Of(fit, data, spec, output);
-        if (Resolve(fit, spec, s) == SensitivityRoute.Sampled) return Sampled(fit, spec, s, form);
+        if (Resolve(fit, spec, s) == SensitivityRoute.Sampled) return Sampled(fit, spec, s);
         int maxOrder = spec.MaxOrder ?? Math.Max(1, s.TermIds.Select(id => s.Moments.Variables(fit.Terms[id]).Count).DefaultIfEmpty(0).Max());
         int[][] subsets = Subsets(s.TermIds.Select(id => s.Moments.Variables(fit.Terms[id])), maxOrder, spec.SubsetBudget);
         var index = new Dictionary<int[], int>(subsets.Length, SubsetComparer.Instance);
