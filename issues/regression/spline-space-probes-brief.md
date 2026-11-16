@@ -145,7 +145,7 @@ Each gate was written here before the first reading of its probe. A gate changed
   - S8's elements written unnormalized (its numerators) stay at κ ≈ 3–4.5 through 0.5 and rise only toward 1 (680 at 1.0).
 - *Decision, for the spacing question:* an oscillatory term built on the one-sided basis needs no admission rule on spacing, only the usual guard against crowded knots (its conditioning grows as h → 0). A term built on local, positive elements needs the rule y₂ − y₀ < π/ω, and it must avoid h = π/ω. The knot-count question waits on the BARS runs below.
 
-**P3, the fits: the oscillator basis fits a sum of decaying resonances with about two knots per resonance at the noise level; cubic BARS as built never leaves zero knots. The pre-stated threshold is not met as written, because its knot clause compares against a cubic fit that collapsed.** Rows in `receipts/spline-space/results/p3-summary.md` and `p3-uniform-cubic.csv`.
+**P3, the fits: the oscillator basis fits a sum of decaying resonances with about two knots per resonance at the noise level; cubic BARS as built stays near zero knots on 13 of 15 matched signals. The pre-stated threshold is not met as written, because its knot clause compares against a cubic fit that collapsed.** Rows in `receipts/spline-space/results/p3-summary.md` and `p3-uniform-cubic.csv`.
 
 - *Matched signals* (5 replicates each; medians):
 
