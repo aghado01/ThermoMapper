@@ -257,6 +257,80 @@ Under "Reports" below, newest first, per slice: what landed by commit; the gates
 
 ## Reports
 
+### Slice 5: categorical inputs (2026-11-15)
+
+The user approved slice 5 at its recommendations (5a, 5b, 5c) and reviewed the plan before the build. The review's three slice 5 points are built here: blocks of varying width, the determinant counting direction-bearing terms, and a gate-only Sobol fixture with what an empty, small or tied cell does. Its slice 6 points are recorded at that section's head (6dc2384).
+
+**Landed**, one commit per concern.
+- *The gated model* (`7d0d1e2`).
+  - `BassTerm` takes categorical factors beside a direction or a ridge column; hinge and Legendre factors there stay refused (decision 6).
+  - `DirectionalTermSpace` reads a gated term's knot range and a block's knots over its cells, the cases whose levels each factor holds. U is the 1 − n_active/n_S quantile of their n_S projections. n_active is the fit's, after a ridge block's floor, now resolved as `BassResolved.ActiveCases`. Ranges are cached per direction and cells.
+  - *5a's edge cases:* a cell with no case, n_S ≤ n_active, or a range with no width gives no range. The term's log prior is then −∞, outside the support: the term measure and the prior sampler meet it as a null draw, a birth as a failed one, a change as a null move. Nothing is redrawn and nothing renormalized.
+  - `BassStructurePrior` holds BASS's categorical part beside the direction when the data have categorical predictors. Each part's order is uniform from 0, a draw with both parts empty is the intercept, outside F, and the subsets come from `CategoricalSubsets`. A term of categorical factors alone is allowed (5b). Without categorical predictors every draw, sum and ratio is slice 2's, bit for bit.
+  - `DirectionalTermProposal`:
+    - a birth draws both parts' orders and variables by D01's law, then θ, the subsets and the knot over the cells;
+    - a change on a term holding both parts takes the direction or a subset with probability ½ each: the subset by D01's redraw, then the knot from its prior over the new cells;
+    - every move accepts on the likelihood ratio, with the count and order terms as before.
+  - *Blocks of varying width.*
+    - `RidgeExpansion` expands a direction into K gated columns and a term of categorical factors alone into one column, itself, and reads columns back term by term.
+    - `BassDesign` tells columns from structure terms by any ridge column. It caps structure terms at M_max apart from the columns' K·M_max, and takes the newest angle over the last term's own columns.
+    - `BassStructure.TermCount` reads the term table, counting a block once and a categorical term once. All seven readouts that count terms read it, replacing slice 3's division by K, which miscounts a categorical term beside a block (5/4 = 1).
+  - *The determinant counts direction-bearing terms (5c, the user's review).*
+    - Terms without a direction take no part in det. c is read at M_θ, the number of directions, so which terms bear one stays the term measure's.
+    - M keeps its cap beside a categorical part, and M_θ ≤ p binds through det. Without one, slice 4's cut of M at p stands.
+    - The prior sampler now draws M and each term's parts from the base law, then redraws the directions alone until kept with probability det, then the knots. A missing range is met after the rejection, since a range checked inside it would tilt the parts' law. Slice 4's draw, M from p(M)/c_M with the whole collection rejected, is exact for slice 4's target but cannot read M_θ.
+    - ln c_M is now summed as Σ_{j<M} ln(1 − j/p), exact at M ≤ 1, where the log-gamma difference left 9·10⁻¹⁶.
+  - `BassResolved` lifts decision 7's refusal and keeps the categorical cap; `DirectionalChainTests` and `DirectionalHingeTests` assert the lifted refusals as built.
+- *The readouts* (`f11c8cc`).
+  - *The calibration emulator's split* on a categorical calibration parameter (`BassEmulators.cs:457`) keeps a gated term's direction or ridge column. It rebuilt the term from its hinge, Legendre and functional parts, which would have dropped the direction.
+  - *Sobol's sampled route* (`BassSampledSensitivity.TermVariablesOf`, the sampled-sensitivity chip's file, two lines) reads a non-separable term's categorical factors as variables it reads. Before, a category entering only as a gate was never varied: on the C·X fixture HEAD's route held no subset for C at all.
+
+**Gates.**
+- *The gated model* (`CategoricalRidgeTests`, 7 cases):
+  - ranges over the cells against R's type-7 quantile by hand: 8.9·10⁻¹⁶; gated hinge and ridge columns against the mask times slice 1's hand hinge and slice 3's exact paper columns: 1.4·10⁻¹⁵; a block's knots over the cells: 2.6·10⁻¹⁶;
+  - an empty, a too-small and a tied cell: no range, log prior −∞ under either basis; the empty and tied cells leave no block (a support refusal); the small cell's block exists, its term outside the support through its prior;
+  - the term measure against the hand measure over both parts: 1.8·10⁻¹⁵; 60,000 draws over (a, k): χ² 7.42 on 5; subset sizes 15,040 of 30,080 at one level;
+  - each move's ratio against a direct evaluation over gated and categorical terms (four births and their deaths, sixteen changes, three of them direction changes and thirteen subset changes): 1.6·10⁻¹³;
+  - Geweke's test with the prior alone over gated terms (13 statistics, 200,000 sweeps against 40,000 prior draws): worst |z| 2.16;
+  - *the determinant on one continuous input beside the categorical one* (the user's example): M's cap stays 4, a ridge and a categorical contrast couple at 0 (ln 1 − ln c₁), two directions give −∞; Geweke worst |z| 1.17, M_θ ≤ 1 in every draw, 7.7% of the prior at M ≥ 2;
+  - *a ridge and a categorical term at K = 4* (the user's gate), loaded in either order: 5 columns, reloaded from them bit for bit, M = 2 through the table, the fit's sums equal to 10⁻⁹, and a third term a cap refusal at M_max = 2 though its column would fit.
+- *Slices 2 to 4 under the change* (on the same snapshot, 65 cases): slice 2's Geweke bit for bit (2.83); slice 4's tilt χ² 1.23 on 4 (5.27 under the old sampler), its Geweke 2.14 and 1.50 (2.69 and 1.38), its hinge-basis fit 5.5% of the spread (5.0%).
+- *The readouts* (`CategoricalReadoutTests`, 5 cases), on y = exp(0.6x₀ + 0.8x₁) where c ≠ 1, plus 1 where c = 2, and 0.5 where c = 1 (n = 300, noise sd 0.05; from outside the model):
+
+  | | mean M | gated directions / categorical terms (draws) | RMSE of the spread 1.154 | BASS's hinges | E8's angle |
+  | --- | --- | --- | --- | --- | --- |
+  | chain, K = 4 | 2.01 | 600 / 605 (600) | 0.0057 | 0.0178 | 0.0063 |
+  | SMC, K = 4 | 2.03 | 400 / 412 (400) | 0.0054 | 0.0173 | 0.0019 |
+  | chain, K = 1 | 5.74 | 2,247 / 900 (600) | 0.0189 | 0.0178 | 0.0164 |
+
+  - every draw's M through the table equals its terms read back; the summary and the traces equal it; the prediction against each draw's columns by hand: 7.4·10⁻¹⁶;
+  - `BayesPPR` with the paper's dummy coding on the same data (exploration; `artifacts/chip-bppr/probes/categorical_bppr.R`): RMSE 0.0131 with about four ridges, against the gated blocks' 0.0057 with a ridge and a level shift;
+  - the emulator's split: 60 readings over 160 gated terms in the draws, equal to the fit's prediction bit for bit;
+  - Sobol's sampled route through `SensitivityRoute.Auto` on f(C, X) = C·X (C ~ Bernoulli(½), X ~ U(0, 1)): S_C 0.588, T_C 0.790, S_X 0.205, T_X 0.393 against 3/5, 4/5, 1/5, 2/5; E8's Poincaré check: no violation, its totals' error present.
+- *Fitting untouched:* every test project test-select selects, read from disk, each commit on a fresh snapshot of HEAD plus its files and built into a fresh folder (no build folder reused across bases):
+  - `7d0d1e2` on `77873bd`: Oracle 22 of 40 classes, 106 of 106 (2,602 s under the machine's load); Regression 260 of 355, 2,839 of 2,839. Only docs landed between that base and the commit.
+  - `f11c8cc` on `7d0d1e2`: Oracle 13 of 40, 57 of 57; Regression 261 of 356, 2,844 of 2,844.
+  - The other 25 projects hold none of the files and select nothing.
+
+**Decisions taken beyond the brief.**
+- *n_active over the cells is the fit's count,* so about n_active of the term's own cases lie above U, as 5a reads; a cell with n_S ≤ n_active hosts no gated term.
+- *A block's knots need only two cases above t₀,* so a block can exist where t₀'s range does not; such a term is outside the support through its prior.
+- *The determinant's c at M_θ* rather than a mixture over M (the user's review). It keeps the law of which terms bear a direction.
+- *The prior sampler's determinant draw* restructured for both slices, as above.
+- *Both readout fixes in other files* (the emulator's split and the sampled route's variables), each the smallest change, with a test that reaches it.
+
+**Follow-ups.**
+- *The sampled-sensitivity chip's slice 4 split* can now read a gated term as separable between its cells and its direction (the slice 6 draft's note).
+- *A gated ridge's E8 readout* averages over the categories under the product law; a per-category active subspace is a readout question for E8, not built.
+
+**Doc changes owed.**
+- `docs/Maths/Regression/BASS.md`, the directional basis's categorical part:
+  - the gated term and its cells; 5a's ranges and edge cases; the two-part term measure and moves;
+  - blocks of varying width and the term count through the table;
+  - the determinant at M_θ and the prior sampler's direction rejection; ln c_M's sum.
+- `docs/Maths/Regression/Sources&Changes.md`: the paper's dummy coding against subset gates, with `BayesPPR`'s reading on the same data.
+- `docs/Maths/Regression/Sensitivity.md` (or wherever the sampled route lives): a gate's variable read by the sampled route.
+
 ### Slice 4 verified from a clean archive; the brief's slices are all landed (coordinating session, 2026-11-15)
 
 - **Commit:** `3ef7dc4`, on a snapshot of `e120042`, through `scripts/verify-csharp.ps1` over its eight changed files, in the two projects that select.
