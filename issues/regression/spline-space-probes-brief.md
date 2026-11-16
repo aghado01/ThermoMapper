@@ -41,7 +41,7 @@ Schumaker's *Spline Functions: Basic Theory* gives exact theorems for three ques
 ## Done
 
 - P1, P2 and P3 each run against its gate, with its decisions answered or the reason one could not be.
-- A report appended to this brief in the pilot brief's form, with the primitives proposed and what each would change.
+- A report appended to this brief in the pilot brief's form, with the primitives proposed and what each would change. That form's **Doc changes owed** heading is replaced, at the user's direction on 2026-11-16, by an **Exposition** section of self-contained segments, with no pointers into `docs/`.
 
 ## Working rules
 
@@ -235,12 +235,57 @@ Stated for any application and not built.
   - Lemma 10.16's statement is damaged in the user's conversion: the "<" of "τ₁ < … < τ_d" and the sentence around it are lost to markup (`schumaker_012_converted.md`, near line 359). That is a conversion defect, beside the book's own misprint already in `errata.md`.
   - A suspected new misprint, unverified: § 4.8's opening sentence reads "y₁ < y₂ < ⋯ < y_{n+m} … with y_i < y_{i+m}", where the second condition and (4.133)'s case y_i = y_{i+m−1} both need ≤ in the first. The PDF's text layer cannot tell ≤ from <, and no page renderer is installed here, so it is reported to the user for checking against the printed page, not added to `errata.md`.
 
-### Doc changes owed
+### Exposition
 
-- `docs/Maths/Regression/BARS.md`:
-  - The support gate (column mass ≥ 1) refuses most exactly full-rank designs (78% of the full-rank designs with N > n here, nearly all well conditioned) and admits no singular one.
-  - Theorem 4.61 (Schoenberg–Whitney) is the exact rank condition, decidable in O(N + n).
-  - The gate assumes nonnegative columns, so a custom `IBasis` with signed columns needs it off.
-  - Single-knot births can stall on signals whose first knots buy nothing (oscillatory ones).
-  - At noise-level errors, a free-knot posterior's count is not an event count.
-- `docs/Maths/Regression/BAPS.md`, or wherever scattered tensor designs are documented: per-axis Schoenberg–Whitney is necessary and not sufficient, and a site-to-support matching is necessary and not sufficient in degenerate site geometry.
+Self-contained segments on what this work established, written to be spliced into documentation as they stand. Each gives the method, the result with its numbers, and the caveats. The probes ran on the engine at `be979dd`.
+
+**The exact rank condition for a B-spline design.** Let B₁, …, B_n be the B-splines of order m on a clamped knot vector, with supports σ_j: open (y_j, y_{j+m}) when y_j < y_{j+m−1}, closed on the left otherwise, and the last one closed at the right end. For n sites, the collocation matrix (B_j(t_i)) is nonsingular exactly when t_i ∈ σ_i for every i (Schoenberg–Whitney; Schumaker, Theorems 4.61 and 4.63).
+- *A least-squares design* with N ≥ n sorted sites has full column rank exactly when some increasing selection of n sites puts the k-th chosen site in σ_k.
+- *A one-pass greedy test decides it:* for each support in turn, take the first unused site after the previous pick that lies in it. The test costs O(N + n) and needs only the knots and the sorted sites, before any design is built. One site in an overlap cannot serve two columns, so data under every column is not enough.
+- *Measured* on 23 400 seeded designs (degrees 1–3, 0–12 interior knots, uniform and clustered knots; uniform, clustered and gapped sites; N from n − 1 to 2n): every design the test refused was singular to rounding (σ_min/σ_max ≤ 2.2×10⁻¹⁷).
+- *Exact rank is not numerical rank:* 6 of 4317 designs that passed had σ_min/σ_max below 10⁻¹⁰, each with a site barely inside a support. The test can stand ahead of a factorization; the condition check behind it remains.
+
+**A column-mass support gate against the rank condition.** A gate that asks each column for mass Σᵢ Bⱼ(xᵢ) ≥ 1 (one point's worth) is a prior restriction, not a rank test.
+- *Measured* on the same designs: the gate admitted no singular design, and refused 2722 of the 3509 designs that were exactly full rank with N > n (78%). Of those refusals, 2669 had σ_min/σ_max ≥ 10⁻⁶.
+- *Signed bases:* a mass rule assumes nonnegative columns, so a basis whose columns change sign (an L-spline's Green's functions) fails it for reasons unrelated to data coverage. A support rule stated per support ("one site per support, in order") serves both kinds.
+
+**Scattered sites under a tensor-product basis.**
+- *Necessary conditions:* full column rank of B_a(x)·B_b(y) on scattered sites requires Schoenberg–Whitney on each axis's distinct projected sites. The partition of unity along the other axis gives each axis's design as a linear image of the product design. It also requires a perfect matching of sites to product supports, since a nonsingular n × n minor needs a nonzero permutation term.
+- *Neither is sufficient:*
+  - Of 6000 seeded cubic designs, 3040 of the 4211 that matched on both axes were rank-deficient.
+  - The bipartite matching held on every uniform design (681 of 681), but 374 of 374 matched designs with sites on the line y = x were rank-deficient. On a curve, the product space restricts to a space of lower dimension; with no interior knots, products of cubics in x and y restrict to polynomials of degree 6, 7 functions for 16 columns.
+- *The missing part* is a genericity condition on the sites' joint position. The matching is the cheap necessary check; the numerical rank decides.
+
+**Free knots and the rate theory, at finite noise.**
+- *Theory:* with k free knots, splines of order m approximate at order m every f with D^{m−1}f of bounded variation (Theorem 7.12), and every f smooth except at finitely many points, knots placed at the singularities (Theorem 7.20).
+- *Where the knots go:* a balanced partition equalizes local errors, so on smooth parts the knot density is ∝ |D^m f|^σ, σ = 1/(m + 1/p): 2/9 for cubic least squares. A jump in D^j f is a knot of multiplicity m − j: three knots at a kink for cubics.
+- *Uniform knots* pay at a kink: the L₂ error falls as h^{3/2}.
+- *Measured,* on curves sin 2πx + ½cos 5πx plus 0–8 kinks, n = 2000, Gaussian noise σ = 10⁻³:
+  - Uniform least squares follows the theory: log-log slope −1.2 to −1.5 with kinks, −2.0 without.
+  - The free-knot posterior mean (BARS, count held near k) floors at 4×10⁻⁴ to 1.2×10⁻³ by k = 32, a fraction of σ. Its slope over k ∈ [4, 32] is shallower than uniform's on every kink family, by 0.3 to 0.5.
+  - At equal k = 16 free knots beat uniform by 1.4–1.8 times on kink curves; at k = 32 the two are within 25%; on the smooth curve uniform wins by 3.4 times.
+  - Least squares refitted at the posterior's own knot draws matches the posterior mean, so the knots, not the averaging, set the error. Below the noise level the data cannot rank placements, and the posterior wanders among them.
+- *Caveat:* the order-m advantage of free knots shows only while the error stands well above the noise.
+
+**A free-knot count is not an event count.** Under a flat count prior on 0–80 (BARS, cubic, same curves), the posterior held 8.7 to 11.7 knots for 0 to 8 kinks.
+- k̄ against the event count has slope 0.29 knots per event and residual sd 2.0 knots, so an event count read from k̄ carries an sd of 6.8 events.
+- Knots crowd toward events at 1.7–2.4 times the domain share of a ±0.02 window around each event, 0.8–1.0 knots per kink against the theory's 3. Away from events, their histogram is far from |D⁴f|^{2/9} (total variation 0.61–0.72).
+- With the count held at 32, the posterior placed 2.3 knots per kink.
+
+**The damped oscillator as an L-spline.**
+- *The space:* for L = D² + 2γD + (γ² + ω²), the null space is spanned by e^{−γx}cos ωx and e^{−γx}sin ωx, and the Green's function is g(x) = e^{−γx}sin(ωx)/ω for x ≥ 0, 0 before: g(0) = 0, g′(0⁺) = 1. With simple knots ξ₁ < … < ξ_k, the two null-space functions and g(· − ξᵢ) form a one-sided basis of the continuous L-splines (Schumaker, Theorem 10.15). A decaying resonance with onset ξ is exactly ω·A·g(x − ξ): one knot per resonance, when γ and ω are right.
+- *Measured* under BARS's free-knot sampler with this basis (signals of 1, 2 and 4 resonances, γ = 8, ω = 2π·20 on [0, 1], n = 1000, noise σ = 0.01):
+  - The posterior used 2.1, 3.6 and 7.9 knots, about two per resonance, with 91–94% of them within ±0.01 of a true onset. Its rms was 0.9–1.6×10⁻³, within a factor of two of least squares with the onsets known.
+  - Cubic least squares on uniform knots needed about 80 knots for rms 0.02 and 160 for 0.006.
+- *Sensitivity:* a 5% error in ω, or 50% in γ, sent the oscillator fit to its 20-knot cap (rms 6.8×10⁻³ and 3.5×10⁻³). The operator's parameters belong inside the term (sampled or profiled), or the term belongs on a band after mixing down, where the carrier is known.
+
+**Local trigonometric elements and the half-period condition.** For knots y₀ < y₁ < y₂ and carrier ω, the order-2 element is Q(x) = sin(ω(x − y₀))/(sin(ω(y₁ − y₀))·sin(ω(y₂ − y₀))) on [y₀, y₁) and sin(ω(y₂ − x))/(sin(ω(y₂ − y₁))·sin(ω(y₂ − y₀))) on [y₁, y₂), 0 elsewhere. It is (10.103) built from (10.99) and scaled; with damping, it is multiplied by e^{−γ(x − y₀)}.
+- *Its condition:* Q is continuous, and positive on (y₀, y₂), exactly while y₂ − y₀ < π/ω, half the carrier's period.
+- *Measured* with uniform spacing h:
+  - Q's sup norm is 1.0 at hω/π = 0.25 and 8×10¹⁵ at 0.5, and Q is negative at every spacing beyond, damped or not. A second divergence sits at hω/π = 1, where one interval spans half a period.
+  - The degeneracy is the local element's, not the space's. The one-sided basis's equilibrated condition number falls smoothly with spacing (7.6×10⁵ at hω/π = 0.05, 3.1×10³ at 0.5, 1.3×10³ at 0.7, undamped, 40 knots), with one bump at hω/π = 1. The elements written without their normalization (the numerators) stay at κ ≈ 3–4.5 through 0.5.
+- *Admission:* a term on the one-sided basis needs no spacing rule beyond the usual guard against crowded knots. A term on positive local elements needs y₂ − y₀ < π/ω and must avoid h = π/ω.
+
+**Single-knot births on signals whose first knots buy nothing.** A reversible-jump sampler that adds one knot at a time climbs only where one more knot raises the marginal likelihood.
+- *Measured:* on a 20-cycle damped oscillation, cubic BARS started at 0–4 knots (its overdispersed start) stayed near zero knots on 13 of 15 signals (rms 0.16–0.45). When a chain did climb, 44 free knots reached rms 0.0038, better than uniform least squares at 160.
+- *Remedies,* none tried here: block births of several knots, a start scaled to the data, or tempering of the knot sampler.

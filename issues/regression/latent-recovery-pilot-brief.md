@@ -63,7 +63,7 @@ This is exploration on probes. The engine stays as it is: a gap found here is a 
 
 - Stage 1 complete against its gate. Stage 2 run and reported as it fell, including a layout that failed.
 - B1 and B2 complete with their decisions answered.
-- A report appended to this brief: the gates as pre-stated, the readings, what each outcome table row came to, the primitives proposed with what each would change, and what was left unread or unrun. A **Doc changes owed** heading. An **In progress** entry kept current while work is open.
+- A report appended to this brief: the gates as pre-stated, the readings, what each outcome table row came to, the primitives proposed with what each would change, and what was left unread or unrun. A **Doc changes owed** heading: replaced on 2026-11-16, at the user's direction, by an **Exposition** section of self-contained segments to splice into documentation, with no pointers into `docs/`. An **In progress** entry kept current while work is open.
 
 ## Working rules
 
@@ -232,13 +232,51 @@ Stated for any application and not built. Each is to be checked by rerunning thi
 - *Stage 2:* the modality subset ran at k = 2 only; the capacity refits ran at k = 2 only and were not calibrated through; the K = 4 ridge-block refit was stopped unfinished; no octave-jump move was tried.
 - *Lean chip:* no reading contradicted a posed statement, so no message went to it.
 
-### Doc changes owed
+### Exposition
 
-- `docs/Maths/Regression/BASS.md`, "BASS: calibration":
-  - A direct functional emulator's draws carry σ²_e·I while its residuals are correlated along the output index (lag-1 r 0.70–0.83 in this pilot), so the stated noise is an approximation to flag.
-  - The declared functional discrepancy is confounded with any parameter whose effect lies in its span (1.0–3.3× the error, 10–100% of runs unconverged here).
-  - At its defaults, the nested sampler's verdict can fail on narrow posteriors at p ≥ 3 with a stable answer. On multimodal ones, such as a harmonic comb, its chains get trapped, and tempering or cut SMC is the remedy.
-- `docs/Maths/Regression/Status&Caveats.md`:
-  - A functional response with moving peaks needs MaxBasis well above 80: held-out RMSE went from 0.57 to 0.30 with 400 at k = 4.
-  - A harmonic comb is beyond both the functional and the directional layouts at the capacities tried (held-out R² ≤ 0.34).
-- If a time–frequency note is written: the Li₂ identity with its pseudo-Gram qualification, and B2's window-constant table (rectangular 1.255τ and 1.43/√c; Hann 2.376τ and 2.09/√c).
+Self-contained segments on what this work established, written to be spliced into documentation as they stand. Each gives the method, the result with its numbers, and the caveats. The probes ran on the engine at `be979dd`.
+
+**The covariance of log powers.** Let (a, b) be jointly circular complex Gaussian with E|a|² = E|b|² = 1 and squared coherence κ = |E[a·conj(b)]|². Then Cov(ln|a|², ln|b|²) = Li₂(κ) = Σ_{n≥1} κⁿ/n², and Var(ln|a|²) = π²/6 = Li₂(1); the identity is invariant to the variances and to the phase of the coherence.
+- *Derivation:* |a|² and |b|² have Kibble's bivariate exponential law, f(x, y) = e^{−x−y}·Σ_{n≥0} κⁿ·L_n(x)·L_n(y) in Laguerre polynomials. Since ∫₀^∞ ln x·e^{−x}·L_n(x) dx = −1/n for n ≥ 1, the covariance is Σ κⁿ/n².
+- *Confirmed* by Monte Carlo at 15 values of κ (4×10⁶ pairs each): every estimate lies within 1.6 standard errors of Li₂(κ), and the linear alternative κ·π²/6 lies 7 to 311 standard errors away.
+
+**Log-power correlation in a spectrogram of white noise.** A short-time Fourier coefficient is X = Σₙ xₙ·conj(aₙ), with atom aₙ = g(n − s)·e^{2πi f (n − c)} and a unit-energy window g. For white noise of variance σ², two coefficients have E[X₁·conj(X₂)] = σ²·G₁₂, with G₁₂ = Σₙ conj(a₁ₙ)·a₂ₙ the atoms' Gram entry. When the pair is circular, corr(ln|X₁|², ln|X₂|²) = Li₂(|G₁₂|²)/Li₂(1), at any time and frequency offset and across window lengths.
+- *Measured* on Hann windows of 64, 128 and 256 samples (2×10⁵ realizations): the largest gap between estimate and prediction is 0.0053 for complex noise and 0.0059 for real noise away from DC (186 pairs, max |z| 3.3).
+- *The whitener needs no data:* the correlation part of the log-power noise of a stationary white source is a table over the windows' Gram entries.
+- *Caveats:*
+  - Real signals near DC and Nyquist are not circular. Their pseudo-covariance E[X₁X₂] = σ²·Σ conj(a₁)·conj(a₂) is not small there, and the table needs that entry too. One bin from DC (Hann's own pseudo-entry 1/6) the prediction fell short by up to 0.076.
+  - The table describes the log power of noise. A cell dominated by a deterministic component S has log-power variance ≈ 2σ²/|S|², not π²/6.
+
+**Peak power against window length.** With a unit-energy window (Σ g² = 1) and power P = |Σ_j g_j·x_j·e^{−2πi f j}|²:
+- a tone A·e^{iω₀j} gives P(ω₀) = |A|²·(Σ g)²: w for the rectangular window and 2w/3 for periodic Hann;
+- an impulse gives |a|²·max g² at best placement: 1/w for the rectangular window, 8/(3w) for Hann;
+- white noise gives E P = σ² at every frequency.
+
+Slopes of ln P on ln w read +1, −1 and 0 to four digits. Two qualifications:
+- *A frame's largest bin is not w⁰ for noise:* it is the maximum of about w exponential variables, near σ²·(ln w + γ_E), and rose with slope 0.19–0.22 to 8.1–8.9·σ² at w = 4096. A classifier on the window-length axis must read averaged power.
+- *Turnovers carry the window's constant:*
+  - A decaying resonance e^{−n/τ}·e^{iω₀n} rises as a tone and falls as an impulse. For the rectangular window aligned at onset, P(w) ≈ τ²(1 − e^{−u})²/w with u = w/τ, maximal where 2u·e^{−u} = 1 − e^{−u}, at u* = 1.2564; the measured turnover is 1.255τ. Hann turns over at 2.376τ in its nominal length.
+  - A linear chirp e^{iπcj²} rises as w below 1/√c and falls as 1/(c·w) above it (stationary phase). It turns over at 1.42–1.43/√c with the rectangular window and 2.09–2.10/√c with Hann, constant to three digits across c.
+  - Beyond the turnover, Hann approaches slope −1 slowly: −0.78 for w/τ ∈ [8, 16), −0.92 for [16, 32), −0.98 for [32, 64).
+
+**Calibrating a low-dimensional code from part of a log spectrum.**
+- *Setup:* a synthesizer outside the estimator. One or two impulse-excited damped resonances (k = 1–5 code coordinates: log centre frequencies, bandwidths, gain), an 8 kHz, 512-sample frame, Hann window, 64 log-spaced bins from 150 Hz to 3.6 kHz, feature ln(|X|² + 10⁻⁴), and white noise on the waveform at about 40, 30 and 20 dB.
+- *Inversion:* the cut posterior of the nested reference sampler, from m = ratio·k randomly kept bins, through two emulators: a BASS fit on a direct functional response, and the synthesizer itself (a perfect generator).
+- *With a perfect generator,* the code is recovered to 5% of its box from about 2k–4k bins at 30–40 dB and 8k at 20 dB, and to 0.1–2% from 8k bins at the two lower noise levels: a sample count linear in k.
+- *Through the BASS emulator* the error stalls at 7–16% of the box for every k ≥ 2, 3 to 32 times the perfect generator's. Its held-out R² falls from 0.995 (k = 1) to 0.91 (k = 5), RMS 0.15–0.61 nepers. The misfit is the emulator's capacity, not a ceiling: at k = 4, held-out RMSE goes from 0.57 to 0.30 when MaxBasis rises from 80 to 400 with four times the burn-in. Axis-aligned hinge products follow a peak that moves with the code only slowly.
+- *Held-back bins check the generator:* reconstruction error there falls to the noise level through a perfect generator, and stays at the emulator's RMSE through a misfitting one. Error above the noise at bins the inversion never saw marks a wrong generator without ground truth.
+
+**An emulator's error is correlated across outputs.** A direct functional BASS fit's residuals along the output index have lag-1 correlation 0.70–0.81 in training and 0.75–0.83 held out, against −0.016 for independent noise, while each draw's emulator noise is declared σ²_e·I. In the calibration above, the inflated measurement variance absorbed the misfit and kept 90% coverage at 0.85–0.98 while the error stalled. The correlated part is unmodelled. A residual set of held-out residual vectors, entering the covariance as a low-rank term, would carry it.
+
+**A declared discrepancy confounds with parameters in its span.** A functional discrepancy δ = D·v with D = [1, standardized ln f] (a level and a tilt) and v ~ N(0, I) made code recovery 1.0–3.3 times worse and left 10–100% of inner runs unconverged. A gain is a level, and a resonance's skirt is close to a tilt. Any parameter whose effect lies in D's span trades off against v. A discrepancy basis projected orthogonal to the emulator's sensitivity ∂η/∂θ keeps θ identifiable.
+
+**Coverage with few outputs.** An inverse-gamma prior on the measurement variance, σ² ~ IG(ν/2, ν·ŝ²/2) with ν = 2 and ŝ = 0.3, outweighs a handful of outputs: with m = 8 residuals of rms 0.03 the posterior σ stays near 0.15. Through a perfect generator, the 90% intervals then over-cover (0.97–1.00), outside the binomial band in 5 cells at k = 3–5.
+
+**The nested sampler on narrow and on multimodal posteriors.**
+- *Narrow:* on narrow, curved conditionals (a perfect generator at low noise, k ≥ 3), the adaptive random walk fails its convergence verdict (R̂ ≤ 1.05, ESS ≥ 50 per chain) in 17–77% of replicates at k = 3 and 67–100% at k = 4–5, at 2000 kept draws per chain, although tempering and cut SMC agree with its answer (79 of 80 comparisons within 2 posterior sd). Four times the budget cleared the BASS-emulator runs (9 of 10 to 1 of 10 unconverged) without moving the errors. This is mixing, not modes.
+- *Multimodal:* on a harmonic comb, the likelihood in the fundamental f₀ is rugged at every harmonic alignment, octaves included. With many bins the nested sampler's chains settle in different modes (in 3 of 20 replicates the posterior put most of its mass on f₀/2 or 2f₀, split chain by chain). Tempering and cut SMC put all the mass within a semitone of the truth in 10 of 10.
+
+**Harmonic combs and the emulator's basis.** A steady harmonic source with fundamental f₀ ∈ [100, 400] Hz through one resonance, 128 linear bins from 100 Hz to 2 kHz. In (ln f₀, ln f) its peaks lie on diagonals at ln h, narrowing as 1/h.
+- A direct functional BASS fit, with axis-aligned hinge products, reached held-out R² 0.04, unchanged with MaxBasis 400 and four times the burn-in.
+- A scalar layout with ln f as a fixed input and directional hinges reached 0.09 at its defaults and 0.34 with MaxBasis 400.
+- Neither carries f₀ into an inversion. A comb is a near-periodic function of f/f₀; a basis needs that coordinate declared, or a periodic profile along a learned direction.
