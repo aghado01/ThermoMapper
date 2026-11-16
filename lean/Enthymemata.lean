@@ -19,5 +19,6 @@ import Enthymemata.CumulativeField
 import Enthymemata.GuardedEstimator
 import Enthymemata.PenalizedAdmission
 import Enthymemata.PottsPK
+import Enthymemata.Spline
 import Enthymemata.Stability
 import Enthymemata.TimeFrequency

@@ -54,3 +54,15 @@ Numbering continues the first brief's. Each is the coordinating session's posing
 ## Working rules
 
 Those of the [first brief](time-frequency-statements-brief.md#working-rules).
+
+## Report
+
+### In progress
+
+*Updated 2026-11-16.*
+- **Landed:** S9 and S7 (S7a to S7e) in `lean/Enthymemata/Spline/`, each with a witness.
+  - S7e carries Theorem 4.61's sufficiency half as the premise `h461`. `h461_indicator` proves that premise at order 1, so it is satisfiable.
+  - S9's fixed-knot f jumps at a + (b − a)(√2 − 1), an irrational position, so that it never meets a uniform breakpoint for any k.
+- **Next:** S8, the order-2 trigonometric B-spline and the damped oscillator.
+- **Uncommitted:** nothing.
+- **For the user (errata):** the conversion `schumaker_009_converted.md` drops Theorem 7.10's displayed statement after "Then". That is a transcription gap, not a misprint in the book.
