@@ -1,10 +1,12 @@
 import Enthymemata.ActiveSubspace
 import Enthymemata.Ascent
+import Enthymemata.BamrsKroneckerGram
 import Enthymemata.BARS
 import Enthymemata.BassContractionCover
 import Enthymemata.BassIntegrals
 import Enthymemata.BassSensitivity
 import Enthymemata.BassStructureChain
+import Enthymemata.BassWhitenedMarginal
 import Enthymemata.Bifiltration
 import Enthymemata.BgpCovering
 import Enthymemata.BgpGaussianKL

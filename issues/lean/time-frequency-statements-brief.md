@@ -74,8 +74,18 @@ Each is the coordinating session's posing. Sharpen hypotheses and conventions as
 
 ### In progress
 
-*Updated 2026-11-16.*
-- **Landed:** S1, S2, S3 and S6 are proved in `lean/Enthymemata/TimeFrequency/`. Each has a witness, and every closed result prints only `propext`, `Classical.choice` and `Quot.sound`. The candidate note is [time-frequency-lemmas.md](../../lean/Protolemmata/TimeFrequency/time-frequency-lemmas.md).
-- **Next:** S5, then S4, beside the regression-family modules.
-- **Uncommitted:** nothing.
-- **Numerical chip:** not messaged. S2 keeps the energy normalization Σⱼ|gⱼ|² = 1, and nothing posed proved false.
+*Updated 2026-11-16; the session's usage limit stopped work here.*
+- **Landed (`475c447`):** S1, S2, S3 and S6 proved in `lean/Enthymemata/TimeFrequency/`, each with a witness. Every closed result prints only `propext`, `Classical.choice` and `Quot.sound`. `lake build Enthymemata.TimeFrequency` and `meta-ci.ps1 -NoBuild` passed. Candidate note: [time-frequency-lemmas.md](../../lean/Protolemmata/TimeFrequency/time-frequency-lemmas.md).
+- **Landed with this entry:**
+  - S5 is proved in `lean/Enthymemata/BamrsKroneckerGram.lean`: `kronecker_gram`, `proj_kronecker` (no invertibility needed), `rowMajor_energy` and `colMajor_energy`.
+    - The convention: `y (i, j) = Y i j`, the A-index outer (Mathlib's `vec Yᵀ`), gives `yᵀ(P_A ⊗ P_B)y = ‖P_A Y P_B‖²_F`.
+    - Mathlib's column-major `vec Y` swaps the factors to `P_B ⊗ P_A`.
+  - S4 is in `lean/Enthymemata/BassWhitenedMarginal.lean`, `apologizing(1)`.
+    - Proved: `residual_whiten` (any L, no rank or definiteness needed), `gaussLogDensity_congr`, `gaussLogDensity_whiten`, `det_one_add_smul_proj`, `inv_smul_one_add_smul_proj` and the `I ⊗ R` facts (`log_det_one_kronecker`, `inv_one_kronecker`, `quadForm_one_kronecker`).
+    - Also proved: the level under Q, `level_one_kronecker` and `level_eq_mean`. The intercept's level is the GLS level Σᵢ1ᵀQyᵢ/(n·1ᵀQ1) with mass n·1ᵀQ1. It equals the plain mean when 1ᵀQ = λ1ᵀ.
+    - Open: the `hquad` step inside `gaussLogDensity_gPrior` (the closed form's quadratic term) is `sorry`. The lemma `smul_mulVec_assoc` is not under that name in this Mathlib. `gPrior_logMarginal_whiten` depends on it.
+- **Not yet run on S4 and S5:** `lake build` with linters (unused-section-variable lints are expected), `#print axioms` and meta-CI.
+- **Next:**
+  - Close `hquad`. A witness for `gPrior_logMarginal_whiten` was drafted with L = [[1,0],[1,1]] and dropped after an elaboration timeout; it needs type ascriptions on the numerals.
+  - Then: the per-statement report, the **Doc changes owed** heading, and the Khatri–Rao Gram (A ⊙ H)ᵀ(I ⊗ Q)(A ⊙ H) = (AᵀA)∘(HᵀQH), which would audit `KhatriRao.Gram`'s comment.
+- **Numerical chip:** not messaged. S2 keeps Σⱼ|gⱼ|² = 1, and nothing posed proved false.
