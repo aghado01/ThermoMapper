@@ -61,7 +61,7 @@ How far each row was checked is in the last column. "Elaborated" means the coord
 | For order-2 hat splines with nondecreasing knots and strictly increasing sites, full column rank is equivalent to the greedy support matching. S16 proves the sufficiency premise for this basis, including repeated knots under the right-continuous convention | `Enthymemata/Spline/HatDesignRank.lean` | Clean archive of `e0b70c4` built and passed all ten axiom checks and the taxonomy check. [S16 report](../../../lean/noise-law-statements-brief.md#2026-11-16--s16-order-2-hat-design-rank) |
 | The order-2 trigonometric B-spline is positive while its support is under half the carrier's period, and the condition is sharp; the damped oscillator's Green's function gives a one-sided basis | `Spline/TrigonometricBSpline.lean` | Chip's report |
 | Free knots approximate any monotone f by steps within (f(b) − f(a))/(2(k + 1)); uniform knots leave some f at ½ for every k | `Spline/FreeKnotSteps.lean` | Chip's report |
-| The covariance of log powers is Σκⁿ/n², from the Laguerre coefficients −1/n of the logarithm, with the bivariate expansion as a named premise | `TimeFrequency/LogPowerCovariance.lean` | Chip's report |
+| For a unit jointly circular complex Gaussian pair with squared coherence κ, the covariance of its log powers is Li₂(κ). The joint Laplace transform gives the series directly for arbitrary correlation phase. At perfect coherence the log-power variance is π²/6 | `TimeFrequency/CircularGaussianPowers.lean` and its three supporting modules | Clean archive of `2d9494c` built and passed all 26 axiom checks and the taxonomy check. [S10c proof report](../../../lean/noise-law-statements-brief.md#2026-11-16--s10c-gaussian-log-power-covariance) |
 | Cov(\|a\|², \|b\|²) = \|E[a·conj b]\|² + \|E[a·b]\|², and Var(xᵀHx) = 2·tr((HΣ)²), each with the Gaussian pairing rule as a named premise | `TimeFrequency/LogPowerCovariance.lean`, `TimeFrequency/QuadraticFormVariance.lean` | Chip's report |
 | ∫₀^∞ (1 − (1 − e^{−x})ⁿ) dx = H_n; the rectangular window's turnover is the root of eᵘ = 1 + 2u, between 1.25 and 1.26 | `TimeFrequency/PeakOfExponentials.lean`, `TimeFrequency/WindowTurnover.lean` | Chip's report |
 | The response's second moments under the g-prior on the whitened Gram are the covariance the whitened marginal reads | `BassWhitenedMarginal.lean` | Chip's report |
@@ -76,7 +76,7 @@ How far each row was checked is in the last column. "Elaborated" means the coord
 
 | Finding | Checked |
 |---|---|
-| The covariance of log powers of circular Gaussians with squared coherence κ is Li₂(κ). The correlation of log power between any two cells of white noise is Li₂(\|G\|²)/Li₂(1) from the windows' Gram entry alone | Gates checked |
+| For unit-energy window cells of Gaussian white noise whose coefficients are jointly circular, the measured log-power correlation follows Li₂(\|G\|²)/Li₂(1). Real-signal cells near DC and Nyquist can have appreciable pseudo-covariance, as the one-bin-from-DC probe demonstrates | Gates checked. [B1 readings](../../latent-recovery-pilot-brief.md) |
 | Real signals within about two bins of DC or Nyquist need the pseudo-Gram entry as well | Gates checked |
 | Log power against log window length has slope +1, −1, 0 for tone, impulse, noise, exactly | Gates diffed; numbers from the chip's report |
 | With the synthesizer itself as the generator, a code of dimension k ≤ 5 is recovered from about 2k to 4k frequency bins at 30–40 dB | Gates checked |
