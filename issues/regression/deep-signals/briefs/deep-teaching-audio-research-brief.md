@@ -164,6 +164,8 @@ This follows the preceding questions rather than inheriting a sample-complexity 
 
 ## Scope, sequencing and acceptance
 
+The follow-up asks how the observation budget and temporal span depend on memory depth. It uses the all-depth stationary collision for finite-sample testing and the depth-four design as a case for recovering a tree from unpaired measurements. [Evidence for memory depth](deep-teaching/evidence-for-memory-depth-brief.md)
+
 Begin by reviewing the candidate depth-four completion theorem and its minimality class. Questions 2 and 3 then measure what the added observations buy. Question 4 connects a reliable teacher to deployment inputs. Question 5 addresses the ultimate data-efficiency claim. No conversation recording is needed to resolve these first mathematical questions.
 
 For each later slice brief, require a concrete source class, actual observation operators, exact quantifiers, a useful positive statement and an obstruction or sharpness case where applicable. Standard factorization, conditional-expectation, linear-algebra and risk identities are supporting lemmas. The main deliverable must settle a project decision that those identities alone leave open.
