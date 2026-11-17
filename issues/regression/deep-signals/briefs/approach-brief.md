@@ -58,6 +58,7 @@ How far each row was checked is in the last column. "Elaborated" means the coord
 | The marginal under noise σ²(I ⊗ R), with the prior on the whitened Gram, is the unit-noise marginal on whitened data plus a determinant term; the Khatri–Rao Gram under Q; the level under Q | `BassWhitenedMarginal.lean` | Elaborated |
 | A Kronecker design's Gram and projection factor by axis | `BamrsKroneckerGram.lean` | Elaborated |
 | A design's full column rank is equivalent to a greedy ordered matching of sites to supports, given Theorem 4.61 as a premise (met at order 1) | `Spline/DesignRank.lean` | Chip's report |
+| For order-2 hat splines with nondecreasing knots and strictly increasing sites, full column rank is equivalent to the greedy support matching. S16 proves the sufficiency premise for this basis, including repeated knots under the right-continuous convention | `Enthymemata/Spline/HatDesignRank.lean` | Clean archive of `e0b70c4` built and passed all ten axiom checks and the taxonomy check. [S16 report](../../../lean/noise-law-statements-brief.md#2026-11-16--s16-order-2-hat-design-rank) |
 | The order-2 trigonometric B-spline is positive while its support is under half the carrier's period, and the condition is sharp; the damped oscillator's Green's function gives a one-sided basis | `Spline/TrigonometricBSpline.lean` | Chip's report |
 | Free knots approximate any monotone f by steps within (f(b) − f(a))/(2(k + 1)); uniform knots leave some f at ½ for every k | `Spline/FreeKnotSteps.lean` | Chip's report |
 | The covariance of log powers is Σκⁿ/n², from the Laguerre coefficients −1/n of the logarithm, with the bivariate expansion as a named premise | `TimeFrequency/LogPowerCovariance.lean` | Chip's report |
@@ -216,7 +217,6 @@ For permanent charts, the Viz v2 plan assigns producer-specific translation to `
 - Does the mass gate give way to "one site per support, in order", or stay as a declared prior beside it?
 - The Q extension's seven decisions, each at a recommendation in its preparation brief.
 - Promotion of the noise-law modules; the first nine are promoted.
-- Theorem 4.61 at order 2, left unattempted, which would make the rank result unconditional for degree-1 splines.
 - Which reading leads, fitting the spectrogram's surface or fitting the waveform with atoms? For a linear transform with full column rank, Gram whitening preserves the waveform's squared residual norm. A fit to magnitudes or log powers still has its own observation model.
 - Two source notes from the numerical chip: a suspected misprint at the opening of Schumaker § 4.8, unverified, and a conversion defect at Lemma 10.16.
 
