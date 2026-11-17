@@ -3,3 +3,4 @@ import Enthymemata.GenerativePrior.ComparisonField
 import Enthymemata.GenerativePrior.GaussianWeightMoment
 import Enthymemata.GenerativePrior.IsometryCondition
 import Enthymemata.GenerativePrior.IsotropicProjection
+import Enthymemata.GenerativePrior.SignPatterns
