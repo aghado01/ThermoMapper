@@ -196,6 +196,8 @@ For a first comparison, load identical G1 weights, measurements and initial code
 
 ## Inspecting regression fits before training a network
 
+The [phaseless audio statements sequence](phaseless-audio/README.md) asks what the recorded window powers determine about a waveform, how errors propagate across quiet intervals, and when a population of such measurements determines a signal model.
+
 The current implementation work is the Lean and numerical briefs. The user wants to inspect audio fits, BASS uncertainty and the generative-prior results in that order. The first signal-processing literature pass examines windowed measurements, speech prediction residuals and sparse innovations. [Audio analysis brief](audio-analysis-brief.md)
 
 | Proposed view | What goes into it | What to check on the first example |
