@@ -206,3 +206,20 @@ Building waits on the user's go-ahead.
 - *S symmetric* follows from S's definition as second moments.
 
 **Part B.** The README's bar is a module that stops apologizing and whose statement and dependencies pass semantic review. Meta-CI enforces the first half; this report records the second, by module.
+
+### 2026-11-16 — S16 order-2 hat design rank
+
+**Proof revision `e0b70c4`** in `Enthymemata.Spline.HatDesignRank`. `Spline.h461_hat` proves the sufficiency premise of Theorem 4.61. `Spline.hat_fullRank_iff_greedy` applies the existing S7 equivalence directly to these B-splines. Both take a nondecreasing knot sequence and strictly increasing sites. A matched site lies strictly below its hat’s upper knot. Its lower endpoint is included exactly when the first two knots of that hat coincide. The basis is right-continuous at repeated knots. The theorem only reads the first n+2 knots. It covers simple and repeated knots and a zero-column design.
+
+`hat_two_sites_witness` uses knots 0,0,1,1 and sites ¼,¾. Both sites lie inside both supports. The 2-by-2 collocation determinant equals ½. All ten theorem declarations in the file printed only `propext`, `Classical.choice` and `Quot.sound`. The module and aggregate built without warnings from the new file. Replay from `lean/` with below-normal priority and `LEAN_NUM_THREADS=2`.
+
+```powershell
+lake build +Enthymemata.Spline.HatDesignRank +Enthymemata
+lake env lean Enthymemata/Spline/HatDesignRank.lean
+```
+
+**In progress.** S10c uses a direct Laplace-transform calculation. The logarithm representation and absolute-integrability step for the product have elaborated locally. The Gaussian law and covariance series still need proofs. The phaseless-audio coordinator requested slice 1 next. The remaining noise-law queue includes S10c, S11/S15, S12 and S14/S4.
+
+#### Methods
+
+On a positive-length knot span, only the two adjoining hat pieces contribute. Their sum gives ordinary affine interpolation of the two control coefficients, with zero padding at the outer knots. Suppose a collocation-kernel coefficient is nonzero. Its selected zero must fall strictly to the right of its peak and the next coefficient must be nonzero. To see this inductively, a selected zero to the left either abuts a zero coefficient or shares its span with the preceding selected zero. The first case contradicts the interpolation weights. In the second, an affine piece with two distinct zeros has both endpoint values zero. Rightward propagation would therefore reach the padded zero, a contradiction. This proves nonsingularity and supplies S7’s missing premise.
