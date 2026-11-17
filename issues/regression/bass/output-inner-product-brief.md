@@ -7,7 +7,7 @@ Date: 2026-11-16. Status: **prepared, not built.** The Lean chip wrote it for Pa
 A direct functional fit treats its noise as independent across output locations (D07). When the misfit or the noise is smooth along the index, a dense grid counts n·m independent observations. Intervals then come out too narrow, and births absorb smooth residual. [extensions-brief.md § Residuals correlated along the output index](extensions-brief.md#residuals-correlated-along-the-output-index) states the model: residual covariance σ²(I_n ⊗ R), Q = R⁻¹.
 
 The working-response contract already declares Q, and today's core refuses it. Two callers ask for it now, both from the numerical chip's [latent-recovery pilot](../latent-recovery-pilot-brief.md#primitives-proposed):
-- **Primitive 2,** Q in the fitting core. Its B1 reading supplies Q for spectral noise from the windows alone. The log-power correlation of two noise-dominated cells is Li₂(\|G\|²)/Li₂(1), with the pseudo-Gram entry near DC and Nyquist.
+- **Primitive 2,** Q in the fitting core. For jointly circular Gaussian noise coefficients, B1 and S10c give the log-power correlation Li₂(\|G\|²)/Li₂(1) from the windows alone. The real-noise probe one bin from DC found deviations when the pseudo-Gram was appreciable. S11 gives the covariance of squared magnitudes in that case. The corresponding log-power table remains open. [B1 measurements](../latent-recovery-pilot-brief.md#readings) and [noise-law proofs](../../lean/noise-law-statements-brief.md#independent-replay-and-promotion)
 - **Primitive 1,** an emulator's error covariance across outputs. Its Stage 1 fits read residual lag-1 r of 0.70 to 0.83 along ln f.
 
 ## The specification: what is proved
@@ -92,7 +92,7 @@ The user selected both coefficient-prior Grams and all three precision-weight pa
    - *Implementations to add:*
      - dense Q from a given R, by Cholesky;
      - E12's tridiagonal Markov Q, linear in m;
-     - B1's table, R_kl = Li₂(\|G_kl\|²)/Li₂(1), dense or banded by window overlap, with the pseudo-Gram entry within two bins of DC and Nyquist.
+     - B1's table, R_kl = Li₂(\|G_kl\|²)/Li₂(1), dense or banded by window overlap, for jointly circular Gaussian cells. Extending the table to noncircular real-signal cells near DC or Nyquist requires a separately validated log-power covariance.
    - *Binds at:* slice 1 (dense) and slice 5 (the table).
 
 ## The slices

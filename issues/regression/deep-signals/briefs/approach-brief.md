@@ -47,24 +47,24 @@ The recovery theorems do not perform these. They certify the tasks: they say whe
 
 How far each row was checked is in the last column. "Elaborated" means the coordinating session re-elaborated the statements and printed their axioms; "gates checked" means it diffed the pre-stated gates against their final text and matched headline numbers to receipts; "chip's report" means neither was done.
 
-**Proved in Lean** (no `sorry`, standard axioms). The first nine modules were promoted to `lean/Lemmas/` on 2026-11-16 (`f0cc4e2`). The noise-law and generative-prior modules are in `lean/Enthymemata/`. Paths below are relative to the stage.
+**Proved in Lean** (no `sorry`, standard axioms). The time–frequency, spline and noise-law results through S16 are in `lean/Lemmas/`. The first nine modules moved in `f0cc4e2` and the remaining fourteen in `9cf612b`. The generative-prior results S17–S22 are in `lean/Enthymemata/`. Paths below are relative to the stage. [Noise-law verification and promotion](../../../lean/noise-law-statements-brief.md#independent-replay-and-promotion)
 
 | Result | Module | Checked |
 |---|---|---|
-| Edge products and magnitudes pin a signal up to one phase exactly when the graph is connected; polarization supplies the edge products from magnitudes | `TimeFrequency/PhasePropagation.lean` | Elaborated |
-| A unit-energy window of length w reads \|A\|²·w from a tone, \|a\|²/w from an impulse, σ² from white noise | `TimeFrequency/WindowScaling.lean` | Elaborated |
-| For symmetric 2×2 H, ‖SᵀHS‖²_F ≥ 2(det S)²\|det H\|, attained at every cell area | `TimeFrequency/FlatnessBound.lean` | Elaborated |
-| A regularity inequality on a ball gives linear convergence to the noise level | `TimeFrequency/Contraction.lean` | Elaborated |
-| The marginal under noise σ²(I ⊗ R), with the prior on the whitened Gram, is the unit-noise marginal on whitened data plus a determinant term; the Khatri–Rao Gram under Q; the level under Q | `BassWhitenedMarginal.lean` | Elaborated |
-| A Kronecker design's Gram and projection factor by axis | `BamrsKroneckerGram.lean` | Elaborated |
-| A design's full column rank is equivalent to a greedy ordered matching of sites to supports, given Theorem 4.61 as a premise (met at order 1) | `Spline/DesignRank.lean` | Chip's report |
-| For order-2 hat splines with nondecreasing knots and strictly increasing sites, full column rank is equivalent to the greedy support matching. S16 proves the sufficiency premise for this basis, including repeated knots under the right-continuous convention | `Enthymemata/Spline/HatDesignRank.lean` | Clean archive of `e0b70c4` built and passed all ten axiom checks and the taxonomy check. [S16 report](../../../lean/noise-law-statements-brief.md#2026-11-16--s16-order-2-hat-design-rank) |
-| The order-2 trigonometric B-spline is positive while its support is under half the carrier's period, and the condition is sharp; the damped oscillator's Green's function gives a one-sided basis | `Spline/TrigonometricBSpline.lean` | Chip's report |
-| Free knots approximate any monotone f by steps within (f(b) − f(a))/(2(k + 1)); uniform knots leave some f at ½ for every k | `Spline/FreeKnotSteps.lean` | Chip's report |
+| Edge products and magnitudes pin a signal up to one phase exactly when the graph is connected; polarization supplies the edge products from magnitudes | `TimeFrequency/PhasePropagation.lean` | Clean archive replay |
+| A unit-energy window of length w reads \|A\|²·w from a tone, \|a\|²/w from an impulse, σ² from white noise | `TimeFrequency/WindowScaling.lean` | Clean archive replay |
+| For symmetric 2×2 H, ‖SᵀHS‖²_F ≥ 2(det S)²\|det H\|, attained at every cell area | `TimeFrequency/FlatnessBound.lean` | Clean archive replay |
+| A regularity inequality on a ball gives linear convergence to the noise level | `TimeFrequency/Contraction.lean` | Clean archive replay |
+| The marginal under noise σ²(I ⊗ R), with the prior on the whitened Gram, is the unit-noise marginal on whitened data plus a determinant term; the Khatri–Rao Gram under Q; the level under Q | `BassWhitenedMarginal.lean` | Clean archive replay |
+| A Kronecker design's Gram and projection factor by axis | `BamrsKroneckerGram.lean` | Clean archive replay |
+| A design's full column rank is equivalent to a greedy ordered matching of sites to supports, given Theorem 4.61 as a premise (met at order 1) | `Spline/DesignRank.lean` | Clean archive replay |
+| For order-2 hat splines with nondecreasing knots and strictly increasing sites, full column rank is equivalent to the greedy support matching. S16 proves the sufficiency premise for this basis, including repeated knots under the right-continuous convention | `Spline/HatDesignRank.lean` | Clean archive of `e0b70c4` built and passed all ten axiom checks and the taxonomy check. [S16 report](../../../lean/noise-law-statements-brief.md#2026-11-16--s16-order-2-hat-design-rank) |
+| The order-2 trigonometric B-spline is positive while its support is under half the carrier's period, and the condition is sharp; the damped oscillator's Green's function gives a one-sided basis | `Spline/TrigonometricBSpline.lean` | Clean archive replay |
+| Free knots approximate any monotone f by steps within (f(b) − f(a))/(2(k + 1)); uniform knots leave some f at ½ for every k | `Spline/FreeKnotSteps.lean` | Clean archive replay |
 | For a unit jointly circular complex Gaussian pair with squared coherence κ, the covariance of its log powers is Li₂(κ). The joint Laplace transform gives the series directly for arbitrary correlation phase. At perfect coherence the log-power variance is π²/6 | `TimeFrequency/CircularGaussianPowers.lean` and its three supporting modules | Clean archive of `2d9494c` built and passed all 26 axiom checks and the taxonomy check. [S10c proof report](../../../lean/noise-law-statements-brief.md#2026-11-16--s10c-gaussian-log-power-covariance) |
-| Cov(\|a\|², \|b\|²) = \|E[a·conj b]\|² + \|E[a·b]\|², and Var(xᵀHx) = 2·tr((HΣ)²), each with the Gaussian pairing rule as a named premise | `TimeFrequency/LogPowerCovariance.lean`, `TimeFrequency/QuadraticFormVariance.lean` | Chip's report |
-| ∫₀^∞ (1 − (1 − e^{−x})ⁿ) dx = H_n; the rectangular window's turnover is the root of eᵘ = 1 + 2u, between 1.25 and 1.26 | `TimeFrequency/PeakOfExponentials.lean`, `TimeFrequency/WindowTurnover.lean` | Chip's report |
-| The response's second moments under the g-prior on the whitened Gram are the covariance the whitened marginal reads | `BassWhitenedMarginal.lean` | Chip's report |
+| For a centered jointly real-Gaussian complex pair, Cov(\|a\|², \|b\|²) = \|E[a·conj b]\|² + \|E[a·b]\|². For a centered real Gaussian vector and symmetric H, Var(xᵀHx) = 2·tr((HΣ)²), including singular Σ. Both proofs derive the Gaussian fourth moments | `TimeFrequency/GaussianComplexPowers.lean`, `TimeFrequency/GaussianQuadraticVariance.lean` | Clean archive replay |
+| The expected maximum of n ≥ 1 independent unit exponentials is Hₙ. The rectangular window's turnover is the positive root of eᵘ = 1 + 2u, between 1.25 and 1.26 | `TimeFrequency/ExponentialMaximum.lean`, `TimeFrequency/WindowTurnover.lean` | Clean archive replay |
+| For independent centered Gaussian coefficients and noise with the specified covariances, Zβ + ε is centered Gaussian with the covariance used by the whitened-Gram marginal | `BassGaussianResponse.lean`, `BassWhitenedMarginal.lean` | Clean archive replay |
 | A range-restricted isometry bounds the squared norm of every generator secant and the compressed objective. At ε < 1 it preserves injectivity on each set where the generator is injective | `GenerativePrior/IsometryCondition.lean` | Elaborated |
 | For isotropic raw second moments σ²I, the expected squared norm after a fixed rank-k orthogonal projection is σ²k, against σ²n in the ambient space | `GenerativePrior/IsotropicProjection.lean` | Elaborated |
 | The exact ReLU angle map is strictly increasing and 1-Lipschitz on [0, π]. Its iterates decrease to zero from every positive starting angle and stay at zero when started there. A one-step angular error at most δ accumulates to at most dδ after d layers | `GenerativePrior/AngleMap.lean` | Elaborated, all 25 axiom prints checked |
@@ -216,7 +216,6 @@ For permanent charts, the Viz v2 plan assigns producer-specific translation to `
 - Does the oscillatory term family earn its own brief?
 - Does the mass gate give way to "one site per support, in order", or stay as a declared prior beside it?
 - For the Q extension, decisions 3–7 and the default prior Gram for a newly declared nonidentity Q remain open. [Decision brief](../../bass/output-inner-product-brief.md#decisions)
-- Promotion of the noise-law modules; the first nine are promoted.
 - Which reading leads, fitting the spectrogram's surface or fitting the waveform with atoms? For a linear transform with full column rank, Gram whitening preserves the waveform's squared residual norm. A fit to magnitudes or log powers still has its own observation model.
 - Two source notes from the numerical chip: a suspected misprint at the opening of Schumaker § 4.8, unverified, and a conversion defect at Lemma 10.16.
 

@@ -1,6 +1,6 @@
 # Noise-law statements, open links, and the Q extension's preparation: the Lean chip's third brief
 
-Date: 2026-11-16. Status: **posed at the user's request on 2026-11-16** ("do we have follow up work for lean chip. im also ok with additive engine work so long as its coherent"). Drafted by the coordinating session. It follows the [time–frequency](time-frequency-statements-brief.md) and [spline-space](spline-space-statements-brief.md) briefs, both closed.
+The coordinator closed the S10–S16 proof queue on 2026-11-16 after independent replay and promotion. The Q extension is in design review. This brief follows the [time–frequency](time-frequency-statements-brief.md) and [spline-space](spline-space-statements-brief.md) briefs. [Verification](#independent-replay-and-promotion) · [Q decisions](../regression/bass/output-inner-product-brief.md#decisions)
 
 ## Why
 
@@ -262,3 +262,11 @@ The continuous linear map (β,ε) ↦ Zβ+ε preserves Gaussianity. Gaussian sec
 #### Methods
 
 Four derivatives of the real Gaussian moment-generating function give E[X⁴] = 3 Var(X)² for centered X. Polarizing with A+B and A−B gives E[A²B²]. A second polarization, this time of (A±B)²(C±D)², gives all three pairings. The real and imaginary parts of each complex observation are real linear functionals. Expanding their finite sums therefore yields the complex tensor, also when some of the observations are conjugated. Evaluating it on a, conj(a), b, conj(b) gives S11. Evaluating it on coordinate projections supplies the integrable moments used by S15's trace calculation.
+
+### Independent replay and promotion
+
+The coordinator rebuilt all 23 modules for S1–S16 from a clean source archive at `6c08cfc` using the installed dependency cache and a fresh project build directory (3,271 Lake jobs). All 216 theorem declarations printed their axiom dependencies. Every list was a subset of `propext`, `Classical.choice` and `Quot.sound`. The first inventory query also picked up two lines of prose. A case-sensitive query over the pinned declarations reproduced all 216 archive listings. The taxonomy check passed on source archives of `6c08cfc` and `1313d60`.
+
+The semantic review matched the public statements against the laws and witnesses above. S16 discharges the Schoenberg–Whitney sufficiency premise for order-2 hats. S12 assumes independent unit exponentials. S14 derives the response law for the whitened-Gram prior with the stated coefficient and noise covariances. S15 allows singular Gaussian covariance. For audio, S11 includes the pseudo-covariance term for **squared magnitudes**. The S10c dilogarithm formula for **log powers** requires joint circularity. A log-power model for noncircular cells still needs a derivation or separate numerical qualification.
+
+Fourteen modules moved into `lean/Lemmas/` in `9cf612b`, joining the nine previously promoted. The module bodies matched the proof revision after substituting the promoted import paths. A concurrent import of `WeightedSignCut` acquired its source file in the next commit, `1313d60`. At that revision the full Lake build (3,379 jobs) and both stage aggregates (3,375 jobs) passed. All 216 axiom listings from the promoted imports matched the clean archive. The tracked Lean sources matched `1313d60` before and after the shared-checkout run. Verification receipts are under `artifacts/verify-lean-6c08cfc/receipts/` and `artifacts/verify-lean-1313d60/receipts/`.
