@@ -22,11 +22,13 @@ def main():
         if not source.is_file():
             continue
         record = {"actual": source.as_posix(), "bytes": source.stat().st_size, "sha256": sha(source)}
-        if source.name != "posterior-draws.jsonl":
+        if source.name not in ("posterior-draws.jsonl", "alignment-states.jsonl"):
             target = a.output / source.name
             target.write_bytes(source.read_bytes().replace(b"\r\n", b"\n"))
             record["receipt"] = target.as_posix()
             record["receipt_sha256_lf"] = sha(target)
+        else:
+            record["raw_states_local_only"] = True
         if a.replay:
             replay = a.replay / "results" / source.name
             record["replay"] = replay.as_posix()

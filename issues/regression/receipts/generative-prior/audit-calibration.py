@@ -120,7 +120,9 @@ def main():
         group = [r for r in problems if (r["k"], r["ratio"]) == (k, ratio)]
         errors = [norm([x - y for x, y in zip(r["Descent"]["X"], r["Truth"])]) / norm(r["Truth"]) for r in group]
         descent.append({"k": k, "ratio": ratio, "median_error": statistics.median(errors), "errors": errors,
-                        "below_0_1": sum(e <= 0.1 for e in errors), "stops": dict(collections.Counter(r["Descent"]["Stop"] for r in group))})
+                        "below_0_1": sum(e <= 0.1 for e in errors), "median_seconds": statistics.median(r["DescentSeconds"] for r in group),
+                        "outside_prior_box": sum(any(abs(x) > 3 for x in r["Descent"]["X"]) for r in group),
+                        "stops": dict(collections.Counter(r["Descent"]["Stop"] for r in group))})
     replay_checks = []
     if a.replay:
         for name in ("calibrations.jsonl", "problems.jsonl", "posterior-draws.jsonl", "alignment-states.jsonl"):
@@ -132,9 +134,19 @@ def main():
                 count += 1
             replay_checks.append({"file": name, "rows_equal_excluding_timing": count})
         assert json.loads((a.replay / "grid-control.json").read_text()) == grid
+    noise = []
+    for g in summary["Groups"]:
+        group = [r for r in readings if (r["K"], r["Ratio"], r["Method"]) == (g["K"], g["Ratio"], g["Method"])]
+        actual = 0.1 / math.sqrt(g["K"] * g["Ratio"])
+        noise.append({"k": g["K"], "ratio": g["Ratio"], "method": g["Method"], "actual_deviation": actual,
+                      "median_posterior_rms_deviation": statistics.median(r["NoiseDeviation"] for r in group)})
+    failures = [{name: r[name] for name in ("K", "Ratio", "Repetition", "Method", "MaximumRHat", "MinimumEssPerChain",
+                "MinimumParticleEss", "MinimumFamilies", "PopulationSpread")} for r in readings if not r["DiagnosticGate"]]
     result = {"passed": True, "calibrations": len(readings), "problems": len(problems), "states": sum(r["states"] for r in raw_counts),
         "raw_state_counts": raw_counts, "grid_mean_gap": mean_gap, "grid_quantile_gap": quantile_gap,
-        "replay": replay_checks, "descent": descent, "alignment_diagnostic_subsets": alignment_summary}
+        "replay": replay_checks, "descent": descent, "alignment_diagnostic_subsets": alignment_summary,
+        "noise": noise, "diagnostic_failures": failures,
+        "chain_metric_scope": "reported max R-hat/min ESS cover theta and log variance; the original engine verdict also gates log likelihood"}
     a.output.mkdir(parents=True, exist_ok=True)
     (a.output / "audit.json").write_text(json.dumps(result, indent=2) + "\n")
     print(json.dumps({k: result[k] for k in ("passed", "calibrations", "states", "grid_mean_gap", "grid_quantile_gap", "replay")}))

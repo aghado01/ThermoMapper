@@ -1,0 +1,63 @@
+{
+  "Revision": "3296cb48ac848ab14529cd1dd22ddc0f8f604966",
+  "SettingsSha256": "4914fd80ebb43c8717aae3ba66c6d2d43e7f84630b213df5199eef942950b7b7",
+  "Groups": [
+    {
+      "K": 2,
+      "Ratio": 4,
+      "Method": "nested",
+      "MedianError": 0.022947887242514776,
+      "Coverage": 1,
+      "DiagnosticQualifiedCoverage": null,
+      "IncludesFailedDiagnostics": true,
+      "DiagnosticPasses": 0,
+      "MedianSeconds": 0.7134854,
+      "MeanNegativeMass": 0,
+      "Passed": false
+    },
+    {
+      "K": 2,
+      "Ratio": 4,
+      "Method": "tempered",
+      "MedianError": 0.025699971872190835,
+      "Coverage": 1,
+      "DiagnosticQualifiedCoverage": 1,
+      "IncludesFailedDiagnostics": false,
+      "DiagnosticPasses": 1,
+      "MedianSeconds": 1.5186341,
+      "MeanNegativeMass": 0,
+      "Passed": false
+    },
+    {
+      "K": 2,
+      "Ratio": 4,
+      "Method": "smc",
+      "MedianError": 0.02533487935470566,
+      "Coverage": 1,
+      "DiagnosticQualifiedCoverage": 1,
+      "IncludesFailedDiagnostics": false,
+      "DiagnosticPasses": 1,
+      "MedianSeconds": 11.9777407,
+      "MeanNegativeMass": 0,
+      "Passed": false
+    }
+  ],
+  "ExpandedTo16": false,
+  "GridSamplerMeanGates": [
+    {
+      "Method": "nested",
+      "GridMeanError": 0.006123499817942801,
+      "Passed": true
+    },
+    {
+      "Method": "tempered",
+      "GridMeanError": 0.0028057125237509473,
+      "Passed": true
+    },
+    {
+      "Method": "smc",
+      "GridMeanError": 0.001042257818684167,
+      "Passed": true
+    }
+  ]
+}

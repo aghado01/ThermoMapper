@@ -1,0 +1,3022 @@
+{
+  "passed": true,
+  "calibrations": 162,
+  "problems": 54,
+  "states": 342222,
+  "raw_state_counts": [
+    {
+      "key": [
+        2,
+        2,
+        1,
+        "nested"
+      ],
+      "states": 3000
+    },
+    {
+      "key": [
+        2,
+        2,
+        1,
+        "tempered"
+      ],
+      "states": 1500
+    },
+    {
+      "key": [
+        2,
+        2,
+        1,
+        "smc"
+      ],
+      "states": 768
+    },
+    {
+      "key": [
+        2,
+        4,
+        1,
+        "nested"
+      ],
+      "states": 3000
+    },
+    {
+      "key": [
+        2,
+        4,
+        1,
+        "tempered"
+      ],
+      "states": 2250
+    },
+    {
+      "key": [
+        2,
+        4,
+        1,
+        "smc"
+      ],
+      "states": 768
+    },
+    {
+      "key": [
+        2,
+        8,
+        1,
+        "nested"
+      ],
+      "states": 3000
+    },
+    {
+      "key": [
+        2,
+        8,
+        1,
+        "tempered"
+      ],
+      "states": 1500
+    },
+    {
+      "key": [
+        2,
+        8,
+        1,
+        "smc"
+      ],
+      "states": 768
+    },
+    {
+      "key": [
+        2,
+        2,
+        2,
+        "nested"
+      ],
+      "states": 3000
+    },
+    {
+      "key": [
+        2,
+        2,
+        2,
+        "tempered"
+      ],
+      "states": 3000
+    },
+    {
+      "key": [
+        2,
+        2,
+        2,
+        "smc"
+      ],
+      "states": 768
+    },
+    {
+      "key": [
+        2,
+        4,
+        2,
+        "nested"
+      ],
+      "states": 3000
+    },
+    {
+      "key": [
+        2,
+        4,
+        2,
+        "tempered"
+      ],
+      "states": 1500
+    },
+    {
+      "key": [
+        2,
+        4,
+        2,
+        "smc"
+      ],
+      "states": 768
+    },
+    {
+      "key": [
+        2,
+        8,
+        2,
+        "nested"
+      ],
+      "states": 3000
+    },
+    {
+      "key": [
+        2,
+        8,
+        2,
+        "tempered"
+      ],
+      "states": 1500
+    },
+    {
+      "key": [
+        2,
+        8,
+        2,
+        "smc"
+      ],
+      "states": 768
+    },
+    {
+      "key": [
+        2,
+        2,
+        3,
+        "nested"
+      ],
+      "states": 3000
+    },
+    {
+      "key": [
+        2,
+        2,
+        3,
+        "tempered"
+      ],
+      "states": 1500
+    },
+    {
+      "key": [
+        2,
+        2,
+        3,
+        "smc"
+      ],
+      "states": 768
+    },
+    {
+      "key": [
+        2,
+        4,
+        3,
+        "nested"
+      ],
+      "states": 3000
+    },
+    {
+      "key": [
+        2,
+        4,
+        3,
+        "tempered"
+      ],
+      "states": 3000
+    },
+    {
+      "key": [
+        2,
+        4,
+        3,
+        "smc"
+      ],
+      "states": 768
+    },
+    {
+      "key": [
+        2,
+        8,
+        3,
+        "nested"
+      ],
+      "states": 3000
+    },
+    {
+      "key": [
+        2,
+        8,
+        3,
+        "tempered"
+      ],
+      "states": 1500
+    },
+    {
+      "key": [
+        2,
+        8,
+        3,
+        "smc"
+      ],
+      "states": 768
+    },
+    {
+      "key": [
+        2,
+        2,
+        4,
+        "nested"
+      ],
+      "states": 3000
+    },
+    {
+      "key": [
+        2,
+        2,
+        4,
+        "tempered"
+      ],
+      "states": 750
+    },
+    {
+      "key": [
+        2,
+        2,
+        4,
+        "smc"
+      ],
+      "states": 768
+    },
+    {
+      "key": [
+        2,
+        4,
+        4,
+        "nested"
+      ],
+      "states": 3000
+    },
+    {
+      "key": [
+        2,
+        4,
+        4,
+        "tempered"
+      ],
+      "states": 750
+    },
+    {
+      "key": [
+        2,
+        4,
+        4,
+        "smc"
+      ],
+      "states": 768
+    },
+    {
+      "key": [
+        2,
+        8,
+        4,
+        "nested"
+      ],
+      "states": 3000
+    },
+    {
+      "key": [
+        2,
+        8,
+        4,
+        "tempered"
+      ],
+      "states": 1500
+    },
+    {
+      "key": [
+        2,
+        8,
+        4,
+        "smc"
+      ],
+      "states": 768
+    },
+    {
+      "key": [
+        2,
+        2,
+        5,
+        "nested"
+      ],
+      "states": 3000
+    },
+    {
+      "key": [
+        2,
+        2,
+        5,
+        "tempered"
+      ],
+      "states": 1500
+    },
+    {
+      "key": [
+        2,
+        2,
+        5,
+        "smc"
+      ],
+      "states": 768
+    },
+    {
+      "key": [
+        2,
+        4,
+        5,
+        "nested"
+      ],
+      "states": 3000
+    },
+    {
+      "key": [
+        2,
+        4,
+        5,
+        "tempered"
+      ],
+      "states": 2250
+    },
+    {
+      "key": [
+        2,
+        4,
+        5,
+        "smc"
+      ],
+      "states": 768
+    },
+    {
+      "key": [
+        2,
+        8,
+        5,
+        "nested"
+      ],
+      "states": 3000
+    },
+    {
+      "key": [
+        2,
+        8,
+        5,
+        "tempered"
+      ],
+      "states": 750
+    },
+    {
+      "key": [
+        2,
+        8,
+        5,
+        "smc"
+      ],
+      "states": 768
+    },
+    {
+      "key": [
+        2,
+        2,
+        6,
+        "nested"
+      ],
+      "states": 3000
+    },
+    {
+      "key": [
+        2,
+        2,
+        6,
+        "tempered"
+      ],
+      "states": 2250
+    },
+    {
+      "key": [
+        2,
+        2,
+        6,
+        "smc"
+      ],
+      "states": 768
+    },
+    {
+      "key": [
+        2,
+        4,
+        6,
+        "nested"
+      ],
+      "states": 3000
+    },
+    {
+      "key": [
+        2,
+        4,
+        6,
+        "tempered"
+      ],
+      "states": 1500
+    },
+    {
+      "key": [
+        2,
+        4,
+        6,
+        "smc"
+      ],
+      "states": 768
+    },
+    {
+      "key": [
+        2,
+        8,
+        6,
+        "nested"
+      ],
+      "states": 3000
+    },
+    {
+      "key": [
+        2,
+        8,
+        6,
+        "tempered"
+      ],
+      "states": 2250
+    },
+    {
+      "key": [
+        2,
+        8,
+        6,
+        "smc"
+      ],
+      "states": 768
+    },
+    {
+      "key": [
+        4,
+        2,
+        1,
+        "nested"
+      ],
+      "states": 3000
+    },
+    {
+      "key": [
+        4,
+        2,
+        1,
+        "tempered"
+      ],
+      "states": 3000
+    },
+    {
+      "key": [
+        4,
+        2,
+        1,
+        "smc"
+      ],
+      "states": 768
+    },
+    {
+      "key": [
+        4,
+        4,
+        1,
+        "nested"
+      ],
+      "states": 3000
+    },
+    {
+      "key": [
+        4,
+        4,
+        1,
+        "tempered"
+      ],
+      "states": 3000
+    },
+    {
+      "key": [
+        4,
+        4,
+        1,
+        "smc"
+      ],
+      "states": 768
+    },
+    {
+      "key": [
+        4,
+        8,
+        1,
+        "nested"
+      ],
+      "states": 3000
+    },
+    {
+      "key": [
+        4,
+        8,
+        1,
+        "tempered"
+      ],
+      "states": 3000
+    },
+    {
+      "key": [
+        4,
+        8,
+        1,
+        "smc"
+      ],
+      "states": 768
+    },
+    {
+      "key": [
+        4,
+        2,
+        2,
+        "nested"
+      ],
+      "states": 3000
+    },
+    {
+      "key": [
+        4,
+        2,
+        2,
+        "tempered"
+      ],
+      "states": 3000
+    },
+    {
+      "key": [
+        4,
+        2,
+        2,
+        "smc"
+      ],
+      "states": 768
+    },
+    {
+      "key": [
+        4,
+        4,
+        2,
+        "nested"
+      ],
+      "states": 3000
+    },
+    {
+      "key": [
+        4,
+        4,
+        2,
+        "tempered"
+      ],
+      "states": 3000
+    },
+    {
+      "key": [
+        4,
+        4,
+        2,
+        "smc"
+      ],
+      "states": 768
+    },
+    {
+      "key": [
+        4,
+        8,
+        2,
+        "nested"
+      ],
+      "states": 3000
+    },
+    {
+      "key": [
+        4,
+        8,
+        2,
+        "tempered"
+      ],
+      "states": 3000
+    },
+    {
+      "key": [
+        4,
+        8,
+        2,
+        "smc"
+      ],
+      "states": 768
+    },
+    {
+      "key": [
+        4,
+        2,
+        3,
+        "nested"
+      ],
+      "states": 3000
+    },
+    {
+      "key": [
+        4,
+        2,
+        3,
+        "tempered"
+      ],
+      "states": 3000
+    },
+    {
+      "key": [
+        4,
+        2,
+        3,
+        "smc"
+      ],
+      "states": 768
+    },
+    {
+      "key": [
+        4,
+        4,
+        3,
+        "nested"
+      ],
+      "states": 3000
+    },
+    {
+      "key": [
+        4,
+        4,
+        3,
+        "tempered"
+      ],
+      "states": 3000
+    },
+    {
+      "key": [
+        4,
+        4,
+        3,
+        "smc"
+      ],
+      "states": 768
+    },
+    {
+      "key": [
+        4,
+        8,
+        3,
+        "nested"
+      ],
+      "states": 3000
+    },
+    {
+      "key": [
+        4,
+        8,
+        3,
+        "tempered"
+      ],
+      "states": 3000
+    },
+    {
+      "key": [
+        4,
+        8,
+        3,
+        "smc"
+      ],
+      "states": 768
+    },
+    {
+      "key": [
+        4,
+        2,
+        4,
+        "nested"
+      ],
+      "states": 3000
+    },
+    {
+      "key": [
+        4,
+        2,
+        4,
+        "tempered"
+      ],
+      "states": 3000
+    },
+    {
+      "key": [
+        4,
+        2,
+        4,
+        "smc"
+      ],
+      "states": 768
+    },
+    {
+      "key": [
+        4,
+        4,
+        4,
+        "nested"
+      ],
+      "states": 3000
+    },
+    {
+      "key": [
+        4,
+        4,
+        4,
+        "tempered"
+      ],
+      "states": 3000
+    },
+    {
+      "key": [
+        4,
+        4,
+        4,
+        "smc"
+      ],
+      "states": 768
+    },
+    {
+      "key": [
+        4,
+        8,
+        4,
+        "nested"
+      ],
+      "states": 3000
+    },
+    {
+      "key": [
+        4,
+        8,
+        4,
+        "tempered"
+      ],
+      "states": 3000
+    },
+    {
+      "key": [
+        4,
+        8,
+        4,
+        "smc"
+      ],
+      "states": 768
+    },
+    {
+      "key": [
+        4,
+        2,
+        5,
+        "nested"
+      ],
+      "states": 3000
+    },
+    {
+      "key": [
+        4,
+        2,
+        5,
+        "tempered"
+      ],
+      "states": 3000
+    },
+    {
+      "key": [
+        4,
+        2,
+        5,
+        "smc"
+      ],
+      "states": 768
+    },
+    {
+      "key": [
+        4,
+        4,
+        5,
+        "nested"
+      ],
+      "states": 3000
+    },
+    {
+      "key": [
+        4,
+        4,
+        5,
+        "tempered"
+      ],
+      "states": 3000
+    },
+    {
+      "key": [
+        4,
+        4,
+        5,
+        "smc"
+      ],
+      "states": 768
+    },
+    {
+      "key": [
+        4,
+        8,
+        5,
+        "nested"
+      ],
+      "states": 3000
+    },
+    {
+      "key": [
+        4,
+        8,
+        5,
+        "tempered"
+      ],
+      "states": 3000
+    },
+    {
+      "key": [
+        4,
+        8,
+        5,
+        "smc"
+      ],
+      "states": 768
+    },
+    {
+      "key": [
+        4,
+        2,
+        6,
+        "nested"
+      ],
+      "states": 3000
+    },
+    {
+      "key": [
+        4,
+        2,
+        6,
+        "tempered"
+      ],
+      "states": 3000
+    },
+    {
+      "key": [
+        4,
+        2,
+        6,
+        "smc"
+      ],
+      "states": 768
+    },
+    {
+      "key": [
+        4,
+        4,
+        6,
+        "nested"
+      ],
+      "states": 3000
+    },
+    {
+      "key": [
+        4,
+        4,
+        6,
+        "tempered"
+      ],
+      "states": 3000
+    },
+    {
+      "key": [
+        4,
+        4,
+        6,
+        "smc"
+      ],
+      "states": 768
+    },
+    {
+      "key": [
+        4,
+        8,
+        6,
+        "nested"
+      ],
+      "states": 3000
+    },
+    {
+      "key": [
+        4,
+        8,
+        6,
+        "tempered"
+      ],
+      "states": 3000
+    },
+    {
+      "key": [
+        4,
+        8,
+        6,
+        "smc"
+      ],
+      "states": 768
+    },
+    {
+      "key": [
+        8,
+        2,
+        1,
+        "nested"
+      ],
+      "states": 3000
+    },
+    {
+      "key": [
+        8,
+        2,
+        1,
+        "tempered"
+      ],
+      "states": 3000
+    },
+    {
+      "key": [
+        8,
+        2,
+        1,
+        "smc"
+      ],
+      "states": 768
+    },
+    {
+      "key": [
+        8,
+        4,
+        1,
+        "nested"
+      ],
+      "states": 3000
+    },
+    {
+      "key": [
+        8,
+        4,
+        1,
+        "tempered"
+      ],
+      "states": 3000
+    },
+    {
+      "key": [
+        8,
+        4,
+        1,
+        "smc"
+      ],
+      "states": 768
+    },
+    {
+      "key": [
+        8,
+        8,
+        1,
+        "nested"
+      ],
+      "states": 3000
+    },
+    {
+      "key": [
+        8,
+        8,
+        1,
+        "tempered"
+      ],
+      "states": 3000
+    },
+    {
+      "key": [
+        8,
+        8,
+        1,
+        "smc"
+      ],
+      "states": 768
+    },
+    {
+      "key": [
+        8,
+        2,
+        2,
+        "nested"
+      ],
+      "states": 3000
+    },
+    {
+      "key": [
+        8,
+        2,
+        2,
+        "tempered"
+      ],
+      "states": 3000
+    },
+    {
+      "key": [
+        8,
+        2,
+        2,
+        "smc"
+      ],
+      "states": 768
+    },
+    {
+      "key": [
+        8,
+        4,
+        2,
+        "nested"
+      ],
+      "states": 3000
+    },
+    {
+      "key": [
+        8,
+        4,
+        2,
+        "tempered"
+      ],
+      "states": 3000
+    },
+    {
+      "key": [
+        8,
+        4,
+        2,
+        "smc"
+      ],
+      "states": 768
+    },
+    {
+      "key": [
+        8,
+        8,
+        2,
+        "nested"
+      ],
+      "states": 3000
+    },
+    {
+      "key": [
+        8,
+        8,
+        2,
+        "tempered"
+      ],
+      "states": 3000
+    },
+    {
+      "key": [
+        8,
+        8,
+        2,
+        "smc"
+      ],
+      "states": 768
+    },
+    {
+      "key": [
+        8,
+        2,
+        3,
+        "nested"
+      ],
+      "states": 3000
+    },
+    {
+      "key": [
+        8,
+        2,
+        3,
+        "tempered"
+      ],
+      "states": 3000
+    },
+    {
+      "key": [
+        8,
+        2,
+        3,
+        "smc"
+      ],
+      "states": 768
+    },
+    {
+      "key": [
+        8,
+        4,
+        3,
+        "nested"
+      ],
+      "states": 3000
+    },
+    {
+      "key": [
+        8,
+        4,
+        3,
+        "tempered"
+      ],
+      "states": 3000
+    },
+    {
+      "key": [
+        8,
+        4,
+        3,
+        "smc"
+      ],
+      "states": 768
+    },
+    {
+      "key": [
+        8,
+        8,
+        3,
+        "nested"
+      ],
+      "states": 3000
+    },
+    {
+      "key": [
+        8,
+        8,
+        3,
+        "tempered"
+      ],
+      "states": 3000
+    },
+    {
+      "key": [
+        8,
+        8,
+        3,
+        "smc"
+      ],
+      "states": 768
+    },
+    {
+      "key": [
+        8,
+        2,
+        4,
+        "nested"
+      ],
+      "states": 3000
+    },
+    {
+      "key": [
+        8,
+        2,
+        4,
+        "tempered"
+      ],
+      "states": 3000
+    },
+    {
+      "key": [
+        8,
+        2,
+        4,
+        "smc"
+      ],
+      "states": 768
+    },
+    {
+      "key": [
+        8,
+        4,
+        4,
+        "nested"
+      ],
+      "states": 3000
+    },
+    {
+      "key": [
+        8,
+        4,
+        4,
+        "tempered"
+      ],
+      "states": 3000
+    },
+    {
+      "key": [
+        8,
+        4,
+        4,
+        "smc"
+      ],
+      "states": 768
+    },
+    {
+      "key": [
+        8,
+        8,
+        4,
+        "nested"
+      ],
+      "states": 3000
+    },
+    {
+      "key": [
+        8,
+        8,
+        4,
+        "tempered"
+      ],
+      "states": 3000
+    },
+    {
+      "key": [
+        8,
+        8,
+        4,
+        "smc"
+      ],
+      "states": 768
+    },
+    {
+      "key": [
+        8,
+        2,
+        5,
+        "nested"
+      ],
+      "states": 3000
+    },
+    {
+      "key": [
+        8,
+        2,
+        5,
+        "tempered"
+      ],
+      "states": 3000
+    },
+    {
+      "key": [
+        8,
+        2,
+        5,
+        "smc"
+      ],
+      "states": 768
+    },
+    {
+      "key": [
+        8,
+        4,
+        5,
+        "nested"
+      ],
+      "states": 3000
+    },
+    {
+      "key": [
+        8,
+        4,
+        5,
+        "tempered"
+      ],
+      "states": 3000
+    },
+    {
+      "key": [
+        8,
+        4,
+        5,
+        "smc"
+      ],
+      "states": 768
+    },
+    {
+      "key": [
+        8,
+        8,
+        5,
+        "nested"
+      ],
+      "states": 3000
+    },
+    {
+      "key": [
+        8,
+        8,
+        5,
+        "tempered"
+      ],
+      "states": 3000
+    },
+    {
+      "key": [
+        8,
+        8,
+        5,
+        "smc"
+      ],
+      "states": 768
+    },
+    {
+      "key": [
+        8,
+        2,
+        6,
+        "nested"
+      ],
+      "states": 3000
+    },
+    {
+      "key": [
+        8,
+        2,
+        6,
+        "tempered"
+      ],
+      "states": 3000
+    },
+    {
+      "key": [
+        8,
+        2,
+        6,
+        "smc"
+      ],
+      "states": 768
+    },
+    {
+      "key": [
+        8,
+        4,
+        6,
+        "nested"
+      ],
+      "states": 3000
+    },
+    {
+      "key": [
+        8,
+        4,
+        6,
+        "tempered"
+      ],
+      "states": 3000
+    },
+    {
+      "key": [
+        8,
+        4,
+        6,
+        "smc"
+      ],
+      "states": 768
+    },
+    {
+      "key": [
+        8,
+        8,
+        6,
+        "nested"
+      ],
+      "states": 3000
+    },
+    {
+      "key": [
+        8,
+        8,
+        6,
+        "tempered"
+      ],
+      "states": 3000
+    },
+    {
+      "key": [
+        8,
+        8,
+        6,
+        "smc"
+      ],
+      "states": 768
+    }
+  ],
+  "grid_mean_gap": 2.4490736749704922e-06,
+  "grid_quantile_gap": 0.013845982059776052,
+  "replay": [
+    {
+      "file": "calibrations.jsonl",
+      "rows_equal_excluding_timing": 3
+    },
+    {
+      "file": "problems.jsonl",
+      "rows_equal_excluding_timing": 1
+    },
+    {
+      "file": "posterior-draws.jsonl",
+      "rows_equal_excluding_timing": 6018
+    },
+    {
+      "file": "alignment-states.jsonl",
+      "rows_equal_excluding_timing": 600
+    }
+  ],
+  "descent": [
+    {
+      "k": 2,
+      "ratio": 2,
+      "median_error": 0.1839179519966348,
+      "errors": [
+        0.053524327188673115,
+        0.06459393604194501,
+        0.27168703873600875,
+        0.09614886525726084,
+        0.6118175992066078,
+        1.9557164075703646
+      ],
+      "below_0_1": 3,
+      "median_seconds": 0.3251721,
+      "outside_prior_box": 0,
+      "stops": {
+        "gradient": 3,
+        "update-limit": 3
+      }
+    },
+    {
+      "k": 2,
+      "ratio": 4,
+      "median_error": 0.0883976460193195,
+      "errors": [
+        0.02816988061642089,
+        0.01791275830313878,
+        0.34909837592398935,
+        0.04092810741984721,
+        0.1358671846187918,
+        1.2019681742680617
+      ],
+      "below_0_1": 3,
+      "median_seconds": 0.11532200000000001,
+      "outside_prior_box": 0,
+      "stops": {
+        "gradient": 2,
+        "update-limit": 4
+      }
+    },
+    {
+      "k": 2,
+      "ratio": 8,
+      "median_error": 0.026321995035732668,
+      "errors": [
+        0.020940100039468508,
+        0.012272817049014076,
+        0.04495440225967278,
+        0.03170389003199683,
+        0.07422235854561184,
+        0.01775177722923619
+      ],
+      "below_0_1": 6,
+      "median_seconds": 0.1052969,
+      "outside_prior_box": 0,
+      "stops": {
+        "gradient": 3,
+        "update-limit": 3
+      }
+    },
+    {
+      "k": 4,
+      "ratio": 2,
+      "median_error": 0.34571115970971344,
+      "errors": [
+        0.21867043133059108,
+        0.6555070276659336,
+        0.4727518880888358,
+        0.05471836531647504,
+        0.10244453446884783,
+        1.565301512549027
+      ],
+      "below_0_1": 1,
+      "median_seconds": 0.14111915,
+      "outside_prior_box": 0,
+      "stops": {
+        "gradient": 1,
+        "update-limit": 5
+      }
+    },
+    {
+      "k": 4,
+      "ratio": 4,
+      "median_error": 0.04900640919982337,
+      "errors": [
+        0.05010272099184223,
+        0.0479100974078045,
+        0.030775369377464036,
+        0.01922202885578842,
+        0.12003636128798638,
+        0.1383934542159507
+      ],
+      "below_0_1": 4,
+      "median_seconds": 0.07894975,
+      "outside_prior_box": 0,
+      "stops": {
+        "update-limit": 3,
+        "gradient": 3
+      }
+    },
+    {
+      "k": 4,
+      "ratio": 8,
+      "median_error": 0.03754810800096923,
+      "errors": [
+        0.08256263860318429,
+        0.02858546983043323,
+        0.01899613405266467,
+        0.0222616598732071,
+        0.046510746171505225,
+        0.05996016904125974
+      ],
+      "below_0_1": 6,
+      "median_seconds": 0.0545735,
+      "outside_prior_box": 0,
+      "stops": {
+        "gradient": 4,
+        "update-limit": 2
+      }
+    },
+    {
+      "k": 8,
+      "ratio": 2,
+      "median_error": 0.31284725254471923,
+      "errors": [
+        0.16500169541080548,
+        0.0818458606545475,
+        0.27742052720872673,
+        0.8011447803409705,
+        1.1570016329302615,
+        0.3482739778807118
+      ],
+      "below_0_1": 1,
+      "median_seconds": 9.824652350000001,
+      "outside_prior_box": 0,
+      "stops": {
+        "update-limit": 6
+      }
+    },
+    {
+      "k": 8,
+      "ratio": 4,
+      "median_error": 0.04970966463245281,
+      "errors": [
+        0.09363650956948377,
+        0.04831138182580103,
+        0.05110794743910459,
+        0.03942611642691061,
+        0.05561528317497689,
+        0.04357408225932697
+      ],
+      "below_0_1": 6,
+      "median_seconds": 0.1950613,
+      "outside_prior_box": 0,
+      "stops": {
+        "update-limit": 3,
+        "gradient": 3
+      }
+    },
+    {
+      "k": 8,
+      "ratio": 8,
+      "median_error": 0.02741722901739292,
+      "errors": [
+        0.05136971870284999,
+        0.015381586562548151,
+        0.022133238892856153,
+        0.028871118376503795,
+        0.02596333965828205,
+        0.029716662134805293
+      ],
+      "below_0_1": 6,
+      "median_seconds": 0.09283145,
+      "outside_prior_box": 0,
+      "stops": {
+        "update-limit": 4,
+        "gradient": 2
+      }
+    }
+  ],
+  "alignment_diagnostic_subsets": [
+    {
+      "k": 2,
+      "method": "nested",
+      "above_error_0_1": false,
+      "states": 2159,
+      "median_clean_cosine": 0.9654788130947046,
+      "median_noisy_cosine": 0.8105954282631979,
+      "positive_clean_fraction": 1.0,
+      "positive_noisy_fraction": 0.8383510884668828
+    },
+    {
+      "k": 2,
+      "method": "nested",
+      "above_error_0_1": true,
+      "states": 1441,
+      "median_clean_cosine": 0.8372623994728713,
+      "median_noisy_cosine": 0.7752515975700489,
+      "positive_clean_fraction": 0.9868147120055517,
+      "positive_noisy_fraction": 0.9125607217210271
+    },
+    {
+      "k": 2,
+      "method": "smc",
+      "above_error_0_1": false,
+      "states": 2148,
+      "median_clean_cosine": 0.9647106884620437,
+      "median_noisy_cosine": 0.8247144233863043,
+      "positive_clean_fraction": 1.0,
+      "positive_noisy_fraction": 0.8486964618249534
+    },
+    {
+      "k": 2,
+      "method": "smc",
+      "above_error_0_1": true,
+      "states": 1452,
+      "median_clean_cosine": 0.8518583779770966,
+      "median_noisy_cosine": 0.7867632998168942,
+      "positive_clean_fraction": 0.9738292011019284,
+      "positive_noisy_fraction": 0.9097796143250688
+    },
+    {
+      "k": 2,
+      "method": "tempered",
+      "above_error_0_1": false,
+      "states": 2258,
+      "median_clean_cosine": 0.9634039373026803,
+      "median_noisy_cosine": 0.8123016987603827,
+      "positive_clean_fraction": 1.0,
+      "positive_noisy_fraction": 0.8454384410983171
+    },
+    {
+      "k": 2,
+      "method": "tempered",
+      "above_error_0_1": true,
+      "states": 1342,
+      "median_clean_cosine": 0.8456420303505618,
+      "median_noisy_cosine": 0.7587769666752013,
+      "positive_clean_fraction": 0.9932935916542474,
+      "positive_noisy_fraction": 0.9120715350223547
+    },
+    {
+      "k": 4,
+      "method": "nested",
+      "above_error_0_1": false,
+      "states": 2122,
+      "median_clean_cosine": 0.9151329390477233,
+      "median_noisy_cosine": 0.6762705434773834,
+      "positive_clean_fraction": 1.0,
+      "positive_noisy_fraction": 0.9335532516493874
+    },
+    {
+      "k": 4,
+      "method": "nested",
+      "above_error_0_1": true,
+      "states": 1478,
+      "median_clean_cosine": 0.79196738171536,
+      "median_noisy_cosine": 0.5961528992023194,
+      "positive_clean_fraction": 0.9986468200270636,
+      "positive_noisy_fraction": 0.928958051420839
+    },
+    {
+      "k": 4,
+      "method": "smc",
+      "above_error_0_1": false,
+      "states": 2106,
+      "median_clean_cosine": 0.9044919516158731,
+      "median_noisy_cosine": 0.6546901305412476,
+      "positive_clean_fraction": 1.0,
+      "positive_noisy_fraction": 0.9259259259259259
+    },
+    {
+      "k": 4,
+      "method": "smc",
+      "above_error_0_1": true,
+      "states": 1494,
+      "median_clean_cosine": 0.7882416699849428,
+      "median_noisy_cosine": 0.5967977565132915,
+      "positive_clean_fraction": 0.9959839357429718,
+      "positive_noisy_fraction": 0.9491298527443106
+    },
+    {
+      "k": 4,
+      "method": "tempered",
+      "above_error_0_1": false,
+      "states": 2229,
+      "median_clean_cosine": 0.9053990171350774,
+      "median_noisy_cosine": 0.6593023130849985,
+      "positive_clean_fraction": 1.0,
+      "positive_noisy_fraction": 0.9286675639300135
+    },
+    {
+      "k": 4,
+      "method": "tempered",
+      "above_error_0_1": true,
+      "states": 1371,
+      "median_clean_cosine": 0.7700238288346833,
+      "median_noisy_cosine": 0.5582551189763958,
+      "positive_clean_fraction": 0.9978118161925602,
+      "positive_noisy_fraction": 0.913202042304887
+    },
+    {
+      "k": 8,
+      "method": "nested",
+      "above_error_0_1": false,
+      "states": 1099,
+      "median_clean_cosine": 0.8914524940148053,
+      "median_noisy_cosine": 0.8178888251492799,
+      "positive_clean_fraction": 1.0,
+      "positive_noisy_fraction": 1.0
+    },
+    {
+      "k": 8,
+      "method": "nested",
+      "above_error_0_1": true,
+      "states": 2501,
+      "median_clean_cosine": 0.8135528933974479,
+      "median_noisy_cosine": 0.7568330263901094,
+      "positive_clean_fraction": 0.9988004798080767,
+      "positive_noisy_fraction": 0.998000799680128
+    },
+    {
+      "k": 8,
+      "method": "smc",
+      "above_error_0_1": false,
+      "states": 2274,
+      "median_clean_cosine": 0.8954475849936092,
+      "median_noisy_cosine": 0.6609168429369969,
+      "positive_clean_fraction": 1.0,
+      "positive_noisy_fraction": 0.9890061565523307
+    },
+    {
+      "k": 8,
+      "method": "smc",
+      "above_error_0_1": true,
+      "states": 1326,
+      "median_clean_cosine": 0.6777107341220152,
+      "median_noisy_cosine": 0.5616307182875409,
+      "positive_clean_fraction": 1.0,
+      "positive_noisy_fraction": 0.9962292609351433
+    },
+    {
+      "k": 8,
+      "method": "tempered",
+      "above_error_0_1": false,
+      "states": 1398,
+      "median_clean_cosine": 0.8998916947337424,
+      "median_noisy_cosine": 0.863026539314909,
+      "positive_clean_fraction": 1.0,
+      "positive_noisy_fraction": 1.0
+    },
+    {
+      "k": 8,
+      "method": "tempered",
+      "above_error_0_1": true,
+      "states": 2202,
+      "median_clean_cosine": 0.7851385608351091,
+      "median_noisy_cosine": 0.7246306142124045,
+      "positive_clean_fraction": 1.0,
+      "positive_noisy_fraction": 0.9986376021798365
+    }
+  ],
+  "noise": [
+    {
+      "k": 2,
+      "ratio": 2,
+      "method": "nested",
+      "actual_deviation": 0.05,
+      "median_posterior_rms_deviation": 0.05405193308051684
+    },
+    {
+      "k": 2,
+      "ratio": 2,
+      "method": "tempered",
+      "actual_deviation": 0.05,
+      "median_posterior_rms_deviation": 0.054699785591502605
+    },
+    {
+      "k": 2,
+      "ratio": 2,
+      "method": "smc",
+      "actual_deviation": 0.05,
+      "median_posterior_rms_deviation": 0.055494381021443065
+    },
+    {
+      "k": 2,
+      "ratio": 4,
+      "method": "nested",
+      "actual_deviation": 0.035355339059327376,
+      "median_posterior_rms_deviation": 0.03712609577173266
+    },
+    {
+      "k": 2,
+      "ratio": 4,
+      "method": "tempered",
+      "actual_deviation": 0.035355339059327376,
+      "median_posterior_rms_deviation": 0.037130397322174324
+    },
+    {
+      "k": 2,
+      "ratio": 4,
+      "method": "smc",
+      "actual_deviation": 0.035355339059327376,
+      "median_posterior_rms_deviation": 0.03719354495542347
+    },
+    {
+      "k": 2,
+      "ratio": 8,
+      "method": "nested",
+      "actual_deviation": 0.025,
+      "median_posterior_rms_deviation": 0.025559037140262975
+    },
+    {
+      "k": 2,
+      "ratio": 8,
+      "method": "tempered",
+      "actual_deviation": 0.025,
+      "median_posterior_rms_deviation": 0.025567891696205804
+    },
+    {
+      "k": 2,
+      "ratio": 8,
+      "method": "smc",
+      "actual_deviation": 0.025,
+      "median_posterior_rms_deviation": 0.025853169700163967
+    },
+    {
+      "k": 4,
+      "ratio": 2,
+      "method": "nested",
+      "actual_deviation": 0.035355339059327376,
+      "median_posterior_rms_deviation": 0.03797109298133444
+    },
+    {
+      "k": 4,
+      "ratio": 2,
+      "method": "tempered",
+      "actual_deviation": 0.035355339059327376,
+      "median_posterior_rms_deviation": 0.03792466674959402
+    },
+    {
+      "k": 4,
+      "ratio": 2,
+      "method": "smc",
+      "actual_deviation": 0.035355339059327376,
+      "median_posterior_rms_deviation": 0.03716065691033829
+    },
+    {
+      "k": 4,
+      "ratio": 4,
+      "method": "nested",
+      "actual_deviation": 0.025,
+      "median_posterior_rms_deviation": 0.02657093305727112
+    },
+    {
+      "k": 4,
+      "ratio": 4,
+      "method": "tempered",
+      "actual_deviation": 0.025,
+      "median_posterior_rms_deviation": 0.026395183251010125
+    },
+    {
+      "k": 4,
+      "ratio": 4,
+      "method": "smc",
+      "actual_deviation": 0.025,
+      "median_posterior_rms_deviation": 0.026769635011126232
+    },
+    {
+      "k": 4,
+      "ratio": 8,
+      "method": "nested",
+      "actual_deviation": 0.017677669529663688,
+      "median_posterior_rms_deviation": 0.018088554892773848
+    },
+    {
+      "k": 4,
+      "ratio": 8,
+      "method": "tempered",
+      "actual_deviation": 0.017677669529663688,
+      "median_posterior_rms_deviation": 0.0178197369198696
+    },
+    {
+      "k": 4,
+      "ratio": 8,
+      "method": "smc",
+      "actual_deviation": 0.017677669529663688,
+      "median_posterior_rms_deviation": 0.017576470654600204
+    },
+    {
+      "k": 8,
+      "ratio": 2,
+      "method": "nested",
+      "actual_deviation": 0.025,
+      "median_posterior_rms_deviation": 0.04302811349636413
+    },
+    {
+      "k": 8,
+      "ratio": 2,
+      "method": "tempered",
+      "actual_deviation": 0.025,
+      "median_posterior_rms_deviation": 0.037103045962195935
+    },
+    {
+      "k": 8,
+      "ratio": 2,
+      "method": "smc",
+      "actual_deviation": 0.025,
+      "median_posterior_rms_deviation": 0.034513785931406055
+    },
+    {
+      "k": 8,
+      "ratio": 4,
+      "method": "nested",
+      "actual_deviation": 0.017677669529663688,
+      "median_posterior_rms_deviation": 0.028556937824769285
+    },
+    {
+      "k": 8,
+      "ratio": 4,
+      "method": "tempered",
+      "actual_deviation": 0.017677669529663688,
+      "median_posterior_rms_deviation": 0.023151529994019125
+    },
+    {
+      "k": 8,
+      "ratio": 4,
+      "method": "smc",
+      "actual_deviation": 0.017677669529663688,
+      "median_posterior_rms_deviation": 0.017860712839338905
+    },
+    {
+      "k": 8,
+      "ratio": 8,
+      "method": "nested",
+      "actual_deviation": 0.0125,
+      "median_posterior_rms_deviation": 0.019893308018320302
+    },
+    {
+      "k": 8,
+      "ratio": 8,
+      "method": "tempered",
+      "actual_deviation": 0.0125,
+      "median_posterior_rms_deviation": 0.015776308852329578
+    },
+    {
+      "k": 8,
+      "ratio": 8,
+      "method": "smc",
+      "actual_deviation": 0.0125,
+      "median_posterior_rms_deviation": 0.012898116786775857
+    }
+  ],
+  "diagnostic_failures": [
+    {
+      "K": 2,
+      "Ratio": 4,
+      "Repetition": 1,
+      "Method": "nested",
+      "MaximumRHat": 1.1284753927409792,
+      "MinimumEssPerChain": 8.212002499143974,
+      "MinimumParticleEss": null,
+      "MinimumFamilies": null,
+      "PopulationSpread": null
+    },
+    {
+      "K": 2,
+      "Ratio": 8,
+      "Repetition": 1,
+      "Method": "nested",
+      "MaximumRHat": 1.082646890832064,
+      "MinimumEssPerChain": 9.571586716438567,
+      "MinimumParticleEss": null,
+      "MinimumFamilies": null,
+      "PopulationSpread": null
+    },
+    {
+      "K": 2,
+      "Ratio": 2,
+      "Repetition": 2,
+      "Method": "nested",
+      "MaximumRHat": 1.037309054793447,
+      "MinimumEssPerChain": 54.169391058222,
+      "MinimumParticleEss": null,
+      "MinimumFamilies": null,
+      "PopulationSpread": null
+    },
+    {
+      "K": 2,
+      "Ratio": 2,
+      "Repetition": 2,
+      "Method": "tempered",
+      "MaximumRHat": 1.011274734912496,
+      "MinimumEssPerChain": 109.20643803005633,
+      "MinimumParticleEss": null,
+      "MinimumFamilies": null,
+      "PopulationSpread": null
+    },
+    {
+      "K": 2,
+      "Ratio": 4,
+      "Repetition": 2,
+      "Method": "nested",
+      "MaximumRHat": 1.0305785643160918,
+      "MinimumEssPerChain": 19.150361083560536,
+      "MinimumParticleEss": null,
+      "MinimumFamilies": null,
+      "PopulationSpread": null
+    },
+    {
+      "K": 2,
+      "Ratio": 8,
+      "Repetition": 2,
+      "Method": "nested",
+      "MaximumRHat": 1.0385302446273788,
+      "MinimumEssPerChain": 43.57665047108312,
+      "MinimumParticleEss": null,
+      "MinimumFamilies": null,
+      "PopulationSpread": null
+    },
+    {
+      "K": 2,
+      "Ratio": 2,
+      "Repetition": 3,
+      "Method": "nested",
+      "MaximumRHat": 1.0354157697966826,
+      "MinimumEssPerChain": 42.21548456523637,
+      "MinimumParticleEss": null,
+      "MinimumFamilies": null,
+      "PopulationSpread": null
+    },
+    {
+      "K": 2,
+      "Ratio": 4,
+      "Repetition": 3,
+      "Method": "nested",
+      "MaximumRHat": 1.01634642846754,
+      "MinimumEssPerChain": 42.56841997737303,
+      "MinimumParticleEss": null,
+      "MinimumFamilies": null,
+      "PopulationSpread": null
+    },
+    {
+      "K": 2,
+      "Ratio": 8,
+      "Repetition": 3,
+      "Method": "nested",
+      "MaximumRHat": 1.0748656146465048,
+      "MinimumEssPerChain": 74.26327329743401,
+      "MinimumParticleEss": null,
+      "MinimumFamilies": null,
+      "PopulationSpread": null
+    },
+    {
+      "K": 2,
+      "Ratio": 4,
+      "Repetition": 4,
+      "Method": "nested",
+      "MaximumRHat": 1.042648840081693,
+      "MinimumEssPerChain": 24.95609483618451,
+      "MinimumParticleEss": null,
+      "MinimumFamilies": null,
+      "PopulationSpread": null
+    },
+    {
+      "K": 2,
+      "Ratio": 8,
+      "Repetition": 4,
+      "Method": "nested",
+      "MaximumRHat": 1.214400030405837,
+      "MinimumEssPerChain": 3.36408304748996,
+      "MinimumParticleEss": null,
+      "MinimumFamilies": null,
+      "PopulationSpread": null
+    },
+    {
+      "K": 2,
+      "Ratio": 2,
+      "Repetition": 5,
+      "Method": "nested",
+      "MaximumRHat": 1.0278447651875444,
+      "MinimumEssPerChain": 35.18862238045015,
+      "MinimumParticleEss": null,
+      "MinimumFamilies": null,
+      "PopulationSpread": null
+    },
+    {
+      "K": 2,
+      "Ratio": 4,
+      "Repetition": 5,
+      "Method": "nested",
+      "MaximumRHat": 1.0619028128824435,
+      "MinimumEssPerChain": 10.795206143613262,
+      "MinimumParticleEss": null,
+      "MinimumFamilies": null,
+      "PopulationSpread": null
+    },
+    {
+      "K": 2,
+      "Ratio": 8,
+      "Repetition": 5,
+      "Method": "nested",
+      "MaximumRHat": 1.081421316110425,
+      "MinimumEssPerChain": 21.091812571161192,
+      "MinimumParticleEss": null,
+      "MinimumFamilies": null,
+      "PopulationSpread": null
+    },
+    {
+      "K": 2,
+      "Ratio": 4,
+      "Repetition": 6,
+      "Method": "nested",
+      "MaximumRHat": 1.074236654566091,
+      "MinimumEssPerChain": 34.83422776955235,
+      "MinimumParticleEss": null,
+      "MinimumFamilies": null,
+      "PopulationSpread": null
+    },
+    {
+      "K": 2,
+      "Ratio": 8,
+      "Repetition": 6,
+      "Method": "nested",
+      "MaximumRHat": 1.0407240464187444,
+      "MinimumEssPerChain": 33.88207895776458,
+      "MinimumParticleEss": null,
+      "MinimumFamilies": null,
+      "PopulationSpread": null
+    },
+    {
+      "K": 4,
+      "Ratio": 2,
+      "Repetition": 1,
+      "Method": "nested",
+      "MaximumRHat": 1.1309154458663928,
+      "MinimumEssPerChain": 8.351218038127389,
+      "MinimumParticleEss": null,
+      "MinimumFamilies": null,
+      "PopulationSpread": null
+    },
+    {
+      "K": 4,
+      "Ratio": 2,
+      "Repetition": 1,
+      "Method": "tempered",
+      "MaximumRHat": 1.0793739851447406,
+      "MinimumEssPerChain": 10.342174055511071,
+      "MinimumParticleEss": null,
+      "MinimumFamilies": null,
+      "PopulationSpread": null
+    },
+    {
+      "K": 4,
+      "Ratio": 4,
+      "Repetition": 1,
+      "Method": "nested",
+      "MaximumRHat": 1.0952504670130108,
+      "MinimumEssPerChain": 7.227321380816702,
+      "MinimumParticleEss": null,
+      "MinimumFamilies": null,
+      "PopulationSpread": null
+    },
+    {
+      "K": 4,
+      "Ratio": 4,
+      "Repetition": 1,
+      "Method": "tempered",
+      "MaximumRHat": 1.0931465139230099,
+      "MinimumEssPerChain": 25.774370592834703,
+      "MinimumParticleEss": null,
+      "MinimumFamilies": null,
+      "PopulationSpread": null
+    },
+    {
+      "K": 4,
+      "Ratio": 8,
+      "Repetition": 1,
+      "Method": "nested",
+      "MaximumRHat": 1.344938058479599,
+      "MinimumEssPerChain": 1.9523660710699409,
+      "MinimumParticleEss": null,
+      "MinimumFamilies": null,
+      "PopulationSpread": null
+    },
+    {
+      "K": 4,
+      "Ratio": 8,
+      "Repetition": 1,
+      "Method": "tempered",
+      "MaximumRHat": 1.2491393539238873,
+      "MinimumEssPerChain": 16.278880379872852,
+      "MinimumParticleEss": null,
+      "MinimumFamilies": null,
+      "PopulationSpread": null
+    },
+    {
+      "K": 4,
+      "Ratio": 2,
+      "Repetition": 2,
+      "Method": "nested",
+      "MaximumRHat": 1.3655654722663644,
+      "MinimumEssPerChain": 2.25527579449219,
+      "MinimumParticleEss": null,
+      "MinimumFamilies": null,
+      "PopulationSpread": null
+    },
+    {
+      "K": 4,
+      "Ratio": 2,
+      "Repetition": 2,
+      "Method": "tempered",
+      "MaximumRHat": 1.245186621096848,
+      "MinimumEssPerChain": 17.20929050055965,
+      "MinimumParticleEss": null,
+      "MinimumFamilies": null,
+      "PopulationSpread": null
+    },
+    {
+      "K": 4,
+      "Ratio": 4,
+      "Repetition": 2,
+      "Method": "nested",
+      "MaximumRHat": 1.4255869526905298,
+      "MinimumEssPerChain": 2.014024366914978,
+      "MinimumParticleEss": null,
+      "MinimumFamilies": null,
+      "PopulationSpread": null
+    },
+    {
+      "K": 4,
+      "Ratio": 4,
+      "Repetition": 2,
+      "Method": "tempered",
+      "MaximumRHat": 1.2051871427976972,
+      "MinimumEssPerChain": 2.599666104110151,
+      "MinimumParticleEss": null,
+      "MinimumFamilies": null,
+      "PopulationSpread": null
+    },
+    {
+      "K": 4,
+      "Ratio": 8,
+      "Repetition": 2,
+      "Method": "nested",
+      "MaximumRHat": 2.2446476688032484,
+      "MinimumEssPerChain": 1.1157976520615622,
+      "MinimumParticleEss": null,
+      "MinimumFamilies": null,
+      "PopulationSpread": null
+    },
+    {
+      "K": 4,
+      "Ratio": 8,
+      "Repetition": 2,
+      "Method": "tempered",
+      "MaximumRHat": 1.3025129698802596,
+      "MinimumEssPerChain": 4.369138781357344,
+      "MinimumParticleEss": null,
+      "MinimumFamilies": null,
+      "PopulationSpread": null
+    },
+    {
+      "K": 4,
+      "Ratio": 2,
+      "Repetition": 3,
+      "Method": "nested",
+      "MaximumRHat": 1.3998964772724587,
+      "MinimumEssPerChain": 1.4862259848585635,
+      "MinimumParticleEss": null,
+      "MinimumFamilies": null,
+      "PopulationSpread": null
+    },
+    {
+      "K": 4,
+      "Ratio": 2,
+      "Repetition": 3,
+      "Method": "tempered",
+      "MaximumRHat": 1.098289503936038,
+      "MinimumEssPerChain": 7.412259062347817,
+      "MinimumParticleEss": null,
+      "MinimumFamilies": null,
+      "PopulationSpread": null
+    },
+    {
+      "K": 4,
+      "Ratio": 4,
+      "Repetition": 3,
+      "Method": "nested",
+      "MaximumRHat": 1.52758624328332,
+      "MinimumEssPerChain": 1.8612650331815075,
+      "MinimumParticleEss": null,
+      "MinimumFamilies": null,
+      "PopulationSpread": null
+    },
+    {
+      "K": 4,
+      "Ratio": 4,
+      "Repetition": 3,
+      "Method": "tempered",
+      "MaximumRHat": 1.1441251271464967,
+      "MinimumEssPerChain": 6.369319392046402,
+      "MinimumParticleEss": null,
+      "MinimumFamilies": null,
+      "PopulationSpread": null
+    },
+    {
+      "K": 4,
+      "Ratio": 8,
+      "Repetition": 3,
+      "Method": "nested",
+      "MaximumRHat": 2.053382614997632,
+      "MinimumEssPerChain": 1.1654043897143493,
+      "MinimumParticleEss": null,
+      "MinimumFamilies": null,
+      "PopulationSpread": null
+    },
+    {
+      "K": 4,
+      "Ratio": 8,
+      "Repetition": 3,
+      "Method": "tempered",
+      "MaximumRHat": 1.2587119131882132,
+      "MinimumEssPerChain": 2.920498655028256,
+      "MinimumParticleEss": null,
+      "MinimumFamilies": null,
+      "PopulationSpread": null
+    },
+    {
+      "K": 4,
+      "Ratio": 2,
+      "Repetition": 4,
+      "Method": "nested",
+      "MaximumRHat": 1.3838554813109933,
+      "MinimumEssPerChain": 3.953218810472171,
+      "MinimumParticleEss": null,
+      "MinimumFamilies": null,
+      "PopulationSpread": null
+    },
+    {
+      "K": 4,
+      "Ratio": 2,
+      "Repetition": 4,
+      "Method": "tempered",
+      "MaximumRHat": 1.0571586821915486,
+      "MinimumEssPerChain": 38.28267391991654,
+      "MinimumParticleEss": null,
+      "MinimumFamilies": null,
+      "PopulationSpread": null
+    },
+    {
+      "K": 4,
+      "Ratio": 4,
+      "Repetition": 4,
+      "Method": "nested",
+      "MaximumRHat": 1.6573818623796535,
+      "MinimumEssPerChain": 2.296103793241616,
+      "MinimumParticleEss": null,
+      "MinimumFamilies": null,
+      "PopulationSpread": null
+    },
+    {
+      "K": 4,
+      "Ratio": 4,
+      "Repetition": 4,
+      "Method": "tempered",
+      "MaximumRHat": 1.1934104708079878,
+      "MinimumEssPerChain": 4.00919686381496,
+      "MinimumParticleEss": null,
+      "MinimumFamilies": null,
+      "PopulationSpread": null
+    },
+    {
+      "K": 4,
+      "Ratio": 8,
+      "Repetition": 4,
+      "Method": "nested",
+      "MaximumRHat": 1.694809866355605,
+      "MinimumEssPerChain": 1.5697026207096945,
+      "MinimumParticleEss": null,
+      "MinimumFamilies": null,
+      "PopulationSpread": null
+    },
+    {
+      "K": 4,
+      "Ratio": 8,
+      "Repetition": 4,
+      "Method": "tempered",
+      "MaximumRHat": 1.2231295327196212,
+      "MinimumEssPerChain": 4.585776028568101,
+      "MinimumParticleEss": null,
+      "MinimumFamilies": null,
+      "PopulationSpread": null
+    },
+    {
+      "K": 4,
+      "Ratio": 2,
+      "Repetition": 5,
+      "Method": "nested",
+      "MaximumRHat": 1.0856955369625172,
+      "MinimumEssPerChain": 12.880853383567766,
+      "MinimumParticleEss": null,
+      "MinimumFamilies": null,
+      "PopulationSpread": null
+    },
+    {
+      "K": 4,
+      "Ratio": 4,
+      "Repetition": 5,
+      "Method": "nested",
+      "MaximumRHat": 1.2267114315174794,
+      "MinimumEssPerChain": 4.916785706472001,
+      "MinimumParticleEss": null,
+      "MinimumFamilies": null,
+      "PopulationSpread": null
+    },
+    {
+      "K": 4,
+      "Ratio": 4,
+      "Repetition": 5,
+      "Method": "tempered",
+      "MaximumRHat": 1.0647758106154228,
+      "MinimumEssPerChain": 25.916535596745366,
+      "MinimumParticleEss": null,
+      "MinimumFamilies": null,
+      "PopulationSpread": null
+    },
+    {
+      "K": 4,
+      "Ratio": 8,
+      "Repetition": 5,
+      "Method": "nested",
+      "MaximumRHat": 2.084441390850018,
+      "MinimumEssPerChain": 1.530071963842506,
+      "MinimumParticleEss": null,
+      "MinimumFamilies": null,
+      "PopulationSpread": null
+    },
+    {
+      "K": 4,
+      "Ratio": 8,
+      "Repetition": 5,
+      "Method": "tempered",
+      "MaximumRHat": 1.1320763007943282,
+      "MinimumEssPerChain": 12.445481237902525,
+      "MinimumParticleEss": null,
+      "MinimumFamilies": null,
+      "PopulationSpread": null
+    },
+    {
+      "K": 4,
+      "Ratio": 2,
+      "Repetition": 6,
+      "Method": "nested",
+      "MaximumRHat": 1.4273674906958242,
+      "MinimumEssPerChain": 9.136693906238287,
+      "MinimumParticleEss": null,
+      "MinimumFamilies": null,
+      "PopulationSpread": null
+    },
+    {
+      "K": 4,
+      "Ratio": 2,
+      "Repetition": 6,
+      "Method": "tempered",
+      "MaximumRHat": 1.0710186774151078,
+      "MinimumEssPerChain": 44.77506456883398,
+      "MinimumParticleEss": null,
+      "MinimumFamilies": null,
+      "PopulationSpread": null
+    },
+    {
+      "K": 4,
+      "Ratio": 4,
+      "Repetition": 6,
+      "Method": "nested",
+      "MaximumRHat": 1.2107631011243636,
+      "MinimumEssPerChain": 4.03029660422316,
+      "MinimumParticleEss": null,
+      "MinimumFamilies": null,
+      "PopulationSpread": null
+    },
+    {
+      "K": 4,
+      "Ratio": 4,
+      "Repetition": 6,
+      "Method": "tempered",
+      "MaximumRHat": 1.2221189699926374,
+      "MinimumEssPerChain": 10.922996728944023,
+      "MinimumParticleEss": null,
+      "MinimumFamilies": null,
+      "PopulationSpread": null
+    },
+    {
+      "K": 4,
+      "Ratio": 8,
+      "Repetition": 6,
+      "Method": "nested",
+      "MaximumRHat": 1.455524411390207,
+      "MinimumEssPerChain": 2.8449422590886653,
+      "MinimumParticleEss": null,
+      "MinimumFamilies": null,
+      "PopulationSpread": null
+    },
+    {
+      "K": 4,
+      "Ratio": 8,
+      "Repetition": 6,
+      "Method": "tempered",
+      "MaximumRHat": 1.0675251452947532,
+      "MinimumEssPerChain": 7.892344040265556,
+      "MinimumParticleEss": null,
+      "MinimumFamilies": null,
+      "PopulationSpread": null
+    },
+    {
+      "K": 8,
+      "Ratio": 2,
+      "Repetition": 1,
+      "Method": "nested",
+      "MaximumRHat": 2.1100650385167072,
+      "MinimumEssPerChain": 1.310158821430934,
+      "MinimumParticleEss": null,
+      "MinimumFamilies": null,
+      "PopulationSpread": null
+    },
+    {
+      "K": 8,
+      "Ratio": 2,
+      "Repetition": 1,
+      "Method": "tempered",
+      "MaximumRHat": 1.573003307612162,
+      "MinimumEssPerChain": 1.193252063937424,
+      "MinimumParticleEss": null,
+      "MinimumFamilies": null,
+      "PopulationSpread": null
+    },
+    {
+      "K": 8,
+      "Ratio": 2,
+      "Repetition": 1,
+      "Method": "smc",
+      "MaximumRHat": null,
+      "MinimumEssPerChain": null,
+      "MinimumParticleEss": 177.9737150821072,
+      "MinimumFamilies": 4,
+      "PopulationSpread": 0.5162074809735664
+    },
+    {
+      "K": 8,
+      "Ratio": 4,
+      "Repetition": 1,
+      "Method": "nested",
+      "MaximumRHat": 2.4165170875211412,
+      "MinimumEssPerChain": 1.3485617414432474,
+      "MinimumParticleEss": null,
+      "MinimumFamilies": null,
+      "PopulationSpread": null
+    },
+    {
+      "K": 8,
+      "Ratio": 4,
+      "Repetition": 1,
+      "Method": "tempered",
+      "MaximumRHat": 1.6098550334180397,
+      "MinimumEssPerChain": 1.667179717846577,
+      "MinimumParticleEss": null,
+      "MinimumFamilies": null,
+      "PopulationSpread": null
+    },
+    {
+      "K": 8,
+      "Ratio": 8,
+      "Repetition": 1,
+      "Method": "nested",
+      "MaximumRHat": 2.7305884266482123,
+      "MinimumEssPerChain": 1.088437095561458,
+      "MinimumParticleEss": null,
+      "MinimumFamilies": null,
+      "PopulationSpread": null
+    },
+    {
+      "K": 8,
+      "Ratio": 8,
+      "Repetition": 1,
+      "Method": "tempered",
+      "MaximumRHat": 2.2411558353372207,
+      "MinimumEssPerChain": 1.7120139486985437,
+      "MinimumParticleEss": null,
+      "MinimumFamilies": null,
+      "PopulationSpread": null
+    },
+    {
+      "K": 8,
+      "Ratio": 2,
+      "Repetition": 2,
+      "Method": "nested",
+      "MaximumRHat": 2.59775460976625,
+      "MinimumEssPerChain": 1.24489305492315,
+      "MinimumParticleEss": null,
+      "MinimumFamilies": null,
+      "PopulationSpread": null
+    },
+    {
+      "K": 8,
+      "Ratio": 2,
+      "Repetition": 2,
+      "Method": "tempered",
+      "MaximumRHat": 1.6855035283076831,
+      "MinimumEssPerChain": 1.4578954683184653,
+      "MinimumParticleEss": null,
+      "MinimumFamilies": null,
+      "PopulationSpread": null
+    },
+    {
+      "K": 8,
+      "Ratio": 2,
+      "Repetition": 2,
+      "Method": "smc",
+      "MaximumRHat": null,
+      "MinimumEssPerChain": null,
+      "MinimumParticleEss": 170.71582774065237,
+      "MinimumFamilies": 5,
+      "PopulationSpread": 0.5377040894708626
+    },
+    {
+      "K": 8,
+      "Ratio": 4,
+      "Repetition": 2,
+      "Method": "nested",
+      "MaximumRHat": 2.4385625459808367,
+      "MinimumEssPerChain": 1.2209312604956633,
+      "MinimumParticleEss": null,
+      "MinimumFamilies": null,
+      "PopulationSpread": null
+    },
+    {
+      "K": 8,
+      "Ratio": 4,
+      "Repetition": 2,
+      "Method": "tempered",
+      "MaximumRHat": 2.2678282098065674,
+      "MinimumEssPerChain": 1.5760770725135955,
+      "MinimumParticleEss": null,
+      "MinimumFamilies": null,
+      "PopulationSpread": null
+    },
+    {
+      "K": 8,
+      "Ratio": 8,
+      "Repetition": 2,
+      "Method": "nested",
+      "MaximumRHat": 1.9891584076410525,
+      "MinimumEssPerChain": 1.4318178548038019,
+      "MinimumParticleEss": null,
+      "MinimumFamilies": null,
+      "PopulationSpread": null
+    },
+    {
+      "K": 8,
+      "Ratio": 8,
+      "Repetition": 2,
+      "Method": "tempered",
+      "MaximumRHat": 2.1438289545038955,
+      "MinimumEssPerChain": 1.416657928858867,
+      "MinimumParticleEss": null,
+      "MinimumFamilies": null,
+      "PopulationSpread": null
+    },
+    {
+      "K": 8,
+      "Ratio": 2,
+      "Repetition": 3,
+      "Method": "nested",
+      "MaximumRHat": 1.739702976233589,
+      "MinimumEssPerChain": 1.7616394750059927,
+      "MinimumParticleEss": null,
+      "MinimumFamilies": null,
+      "PopulationSpread": null
+    },
+    {
+      "K": 8,
+      "Ratio": 2,
+      "Repetition": 3,
+      "Method": "tempered",
+      "MaximumRHat": 1.6213965259000342,
+      "MinimumEssPerChain": 1.6767274064919864,
+      "MinimumParticleEss": null,
+      "MinimumFamilies": null,
+      "PopulationSpread": null
+    },
+    {
+      "K": 8,
+      "Ratio": 4,
+      "Repetition": 3,
+      "Method": "nested",
+      "MaximumRHat": 2.2544834029441745,
+      "MinimumEssPerChain": 1.266438424471756,
+      "MinimumParticleEss": null,
+      "MinimumFamilies": null,
+      "PopulationSpread": null
+    },
+    {
+      "K": 8,
+      "Ratio": 4,
+      "Repetition": 3,
+      "Method": "tempered",
+      "MaximumRHat": 2.6743687489559678,
+      "MinimumEssPerChain": 1.0874872931379567,
+      "MinimumParticleEss": null,
+      "MinimumFamilies": null,
+      "PopulationSpread": null
+    },
+    {
+      "K": 8,
+      "Ratio": 8,
+      "Repetition": 3,
+      "Method": "nested",
+      "MaximumRHat": 2.881075361387873,
+      "MinimumEssPerChain": 1.161599049769137,
+      "MinimumParticleEss": null,
+      "MinimumFamilies": null,
+      "PopulationSpread": null
+    },
+    {
+      "K": 8,
+      "Ratio": 8,
+      "Repetition": 3,
+      "Method": "tempered",
+      "MaximumRHat": 1.552736363565325,
+      "MinimumEssPerChain": 1.522059080929014,
+      "MinimumParticleEss": null,
+      "MinimumFamilies": null,
+      "PopulationSpread": null
+    },
+    {
+      "K": 8,
+      "Ratio": 2,
+      "Repetition": 4,
+      "Method": "nested",
+      "MaximumRHat": 2.308398785584729,
+      "MinimumEssPerChain": 1.2539278579381712,
+      "MinimumParticleEss": null,
+      "MinimumFamilies": null,
+      "PopulationSpread": null
+    },
+    {
+      "K": 8,
+      "Ratio": 2,
+      "Repetition": 4,
+      "Method": "tempered",
+      "MaximumRHat": 1.5154140550448039,
+      "MinimumEssPerChain": 1.222852593125577,
+      "MinimumParticleEss": null,
+      "MinimumFamilies": null,
+      "PopulationSpread": null
+    },
+    {
+      "K": 8,
+      "Ratio": 4,
+      "Repetition": 4,
+      "Method": "nested",
+      "MaximumRHat": 3.7142447125271505,
+      "MinimumEssPerChain": 1.0944567963466592,
+      "MinimumParticleEss": null,
+      "MinimumFamilies": null,
+      "PopulationSpread": null
+    },
+    {
+      "K": 8,
+      "Ratio": 4,
+      "Repetition": 4,
+      "Method": "tempered",
+      "MaximumRHat": 1.9592743681649663,
+      "MinimumEssPerChain": 1.3162001480102468,
+      "MinimumParticleEss": null,
+      "MinimumFamilies": null,
+      "PopulationSpread": null
+    },
+    {
+      "K": 8,
+      "Ratio": 8,
+      "Repetition": 4,
+      "Method": "nested",
+      "MaximumRHat": 3.281599317990246,
+      "MinimumEssPerChain": 1.3994226056801626,
+      "MinimumParticleEss": null,
+      "MinimumFamilies": null,
+      "PopulationSpread": null
+    },
+    {
+      "K": 8,
+      "Ratio": 8,
+      "Repetition": 4,
+      "Method": "tempered",
+      "MaximumRHat": 1.916977751914748,
+      "MinimumEssPerChain": 1.7836743773520636,
+      "MinimumParticleEss": null,
+      "MinimumFamilies": null,
+      "PopulationSpread": null
+    },
+    {
+      "K": 8,
+      "Ratio": 2,
+      "Repetition": 5,
+      "Method": "nested",
+      "MaximumRHat": 2.0185933631232174,
+      "MinimumEssPerChain": 1.7307434487528166,
+      "MinimumParticleEss": null,
+      "MinimumFamilies": null,
+      "PopulationSpread": null
+    },
+    {
+      "K": 8,
+      "Ratio": 2,
+      "Repetition": 5,
+      "Method": "tempered",
+      "MaximumRHat": 2.0334545151317553,
+      "MinimumEssPerChain": 1.2131674899610225,
+      "MinimumParticleEss": null,
+      "MinimumFamilies": null,
+      "PopulationSpread": null
+    },
+    {
+      "K": 8,
+      "Ratio": 4,
+      "Repetition": 5,
+      "Method": "nested",
+      "MaximumRHat": 2.8562810891974157,
+      "MinimumEssPerChain": 1.157181519691961,
+      "MinimumParticleEss": null,
+      "MinimumFamilies": null,
+      "PopulationSpread": null
+    },
+    {
+      "K": 8,
+      "Ratio": 4,
+      "Repetition": 5,
+      "Method": "tempered",
+      "MaximumRHat": 1.4780175759766172,
+      "MinimumEssPerChain": 1.8976028751104403,
+      "MinimumParticleEss": null,
+      "MinimumFamilies": null,
+      "PopulationSpread": null
+    },
+    {
+      "K": 8,
+      "Ratio": 8,
+      "Repetition": 5,
+      "Method": "nested",
+      "MaximumRHat": 1.8565846965753487,
+      "MinimumEssPerChain": 1.452674458104485,
+      "MinimumParticleEss": null,
+      "MinimumFamilies": null,
+      "PopulationSpread": null
+    },
+    {
+      "K": 8,
+      "Ratio": 8,
+      "Repetition": 5,
+      "Method": "tempered",
+      "MaximumRHat": 1.8616164147919643,
+      "MinimumEssPerChain": 1.2535153183863124,
+      "MinimumParticleEss": null,
+      "MinimumFamilies": null,
+      "PopulationSpread": null
+    },
+    {
+      "K": 8,
+      "Ratio": 2,
+      "Repetition": 6,
+      "Method": "nested",
+      "MaximumRHat": 2.216732318351736,
+      "MinimumEssPerChain": 1.2751564352789078,
+      "MinimumParticleEss": null,
+      "MinimumFamilies": null,
+      "PopulationSpread": null
+    },
+    {
+      "K": 8,
+      "Ratio": 2,
+      "Repetition": 6,
+      "Method": "tempered",
+      "MaximumRHat": 1.7427718955241351,
+      "MinimumEssPerChain": 1.943255286328129,
+      "MinimumParticleEss": null,
+      "MinimumFamilies": null,
+      "PopulationSpread": null
+    },
+    {
+      "K": 8,
+      "Ratio": 4,
+      "Repetition": 6,
+      "Method": "nested",
+      "MaximumRHat": 2.91638610130202,
+      "MinimumEssPerChain": 1.1933654975427082,
+      "MinimumParticleEss": null,
+      "MinimumFamilies": null,
+      "PopulationSpread": null
+    },
+    {
+      "K": 8,
+      "Ratio": 4,
+      "Repetition": 6,
+      "Method": "tempered",
+      "MaximumRHat": 1.9332245633222638,
+      "MinimumEssPerChain": 1.3822987839656466,
+      "MinimumParticleEss": null,
+      "MinimumFamilies": null,
+      "PopulationSpread": null
+    },
+    {
+      "K": 8,
+      "Ratio": 8,
+      "Repetition": 6,
+      "Method": "nested",
+      "MaximumRHat": 2.1106273094614982,
+      "MinimumEssPerChain": 1.295289548700069,
+      "MinimumParticleEss": null,
+      "MinimumFamilies": null,
+      "PopulationSpread": null
+    },
+    {
+      "K": 8,
+      "Ratio": 8,
+      "Repetition": 6,
+      "Method": "tempered",
+      "MaximumRHat": 2.116191052550428,
+      "MinimumEssPerChain": 1.1215300377046324,
+      "MinimumParticleEss": null,
+      "MinimumFamilies": null,
+      "PopulationSpread": null
+    }
+  ],
+  "chain_metric_scope": "reported max R-hat/min ESS cover theta and log variance; the original engine verdict also gates log likelihood"
+}

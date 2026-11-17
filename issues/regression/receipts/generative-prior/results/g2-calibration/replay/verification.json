@@ -1,0 +1,44 @@
+{
+  "files": [
+    {
+      "actual": "artifacts/generative-prior/g2-calibration-replay/results/alignment-states.jsonl",
+      "bytes": 169976,
+      "sha256": "682a3672302e4f7cfc6211271d4600820963d7eed691c4c7d25c0382a7119e6a",
+      "raw_states_local_only": true
+    },
+    {
+      "actual": "artifacts/generative-prior/g2-calibration-replay/results/calibrations.jsonl",
+      "bytes": 25002,
+      "sha256": "6bf0b5c031a1e3bd5d63127c5d66ecb4bbf7232f3548dda5eaba341a635ebb35",
+      "receipt": "issues/regression/receipts/generative-prior/results/g2-calibration/replay/calibrations.jsonl",
+      "receipt_sha256_lf": "e5c1c0b1adfdb16ad372790f3d0c504f4555edb3e7b27e292efe7ee70fc67933"
+    },
+    {
+      "actual": "artifacts/generative-prior/g2-calibration-replay/results/grid-control.json",
+      "bytes": 515,
+      "sha256": "33c558e65e826359c2ab6d4b7eb0443d4fbc9414537290b991aa5a1d6173779c",
+      "receipt": "issues/regression/receipts/generative-prior/results/g2-calibration/replay/grid-control.json",
+      "receipt_sha256_lf": "706ff9fe2e5bd4ff8c768bc824307ae43a5b5b25b1eb3fba4969547eb30bd884"
+    },
+    {
+      "actual": "artifacts/generative-prior/g2-calibration-replay/results/posterior-draws.jsonl",
+      "bytes": 1610396,
+      "sha256": "56fbe7cc109fbb4abedcd54054b0fe2586492fbae8528425c2c27108bdca4c90",
+      "raw_states_local_only": true
+    },
+    {
+      "actual": "artifacts/generative-prior/g2-calibration-replay/results/problems.jsonl",
+      "bytes": 1094,
+      "sha256": "41c2f2364dbf696dc3dba665cf123c129b5dcc116022384f30d13309b3de8ab4",
+      "receipt": "issues/regression/receipts/generative-prior/results/g2-calibration/replay/problems.jsonl",
+      "receipt_sha256_lf": "fee1d5a93b382ee80a12fd2039e3050255c862002b52d0c148c6dede7b338e14"
+    },
+    {
+      "actual": "artifacts/generative-prior/g2-calibration-replay/results/summary.json",
+      "bytes": 1595,
+      "sha256": "ebfe7d5bbde5f2328720a7a9c8a3434f0beb10d1b65944b69c3d5b856402ff69",
+      "receipt": "issues/regression/receipts/generative-prior/results/g2-calibration/replay/summary.json",
+      "receipt_sha256_lf": "6f19d077f903351eff61f1f77e47d59355890c764e95ad2653d981f043ade240"
+    }
+  ]
+}
