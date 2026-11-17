@@ -1,6 +1,6 @@
 # How much evidence supports memory at depth d?
 
-Research brief, 2026-11-17. **Commissioned Lean investigation; sections 1–2 proved, section 3 in progress.** For a given observation design, how many independent records, spanning how many events, suffice to detect a dependence at lag \(d\), recover the minimal context tree, or predict the next event to a specified tolerance? The design decision for audio is whether to spend a recording budget on longer spans, different windows, or retaining the pairing between measurements.
+Research brief, 2026-11-17. **Commissioned Lean investigation; sections 1–3 proved.** For a given observation design, how many independent records, spanning how many events, suffice to detect a dependence at lag \(d\), recover the minimal context tree, or predict the next event to a specified tolerance? The design decision for audio is whether to spend a recording budget on longer spans, different windows, or retaining the pairing between measurements.
 
 The depth-four work supplies one case where a measurement design can be studied exactly. This follow-up starts from the already proved collision at **every** \(d\ge4\). Its first two questions can proceed independently of the depth-four completion proof. [Population cutoff and witness](../context-tree-memory-identifiability-brief.md#verified-result--2026-11-16) · [Depth-four measurement design](01-depth-four-completion-brief.md) · [Predictive ambiguity](02-predictive-ambiguity-brief.md)
 
@@ -131,11 +131,62 @@ This is an explicit sufficient bound, not an optimal sample complexity. Uniform 
 
 **Verification.** Full `lake build` passed (3809 jobs), BelowNormal priority with `LEAN_NUM_THREADS=2`. The 42 public theorem axiom listings in section 2, and 91 across sections 1–2, contain only subsets of `[propext, Classical.choice, Quot.sound]`. The new modules emit no warnings. The taxonomy gate `lean/scripts/meta-ci.ps1 -NoBuild` passes for sections 1–2, with all ten new modules PROOF-CLOSED. They remain Enthymemata pending semantic review and promotion.
 
-## Section 3 in progress
+## Section 3 result — 2026-11-17
 
-The next slice fixes a candidate maximum depth before data collection and constructs confidence sets of valid source laws, then projects to supported depths. Empty sets must return an explicit inconclusive outcome. The depth-four unpaired comparison will propagate observable errors through reconstruction and conditional probabilities with a stated history-mass floor. These confidence and reconstruction bounds are not yet qualified.
+**Supported depths.** Fix the maximum history length D and candidate class before observing data. Form a simultaneous confidence set of valid source laws, then project it to the maximum leaf length of their minimal suffix trees. The minimum supported depth is a lower confidence bound; an empty set returns `None`, not a depth claim. Whenever the set contains the truth, this minimum cannot exceed the true block-kernel depth. Overstatement therefore has probability at most the noncoverage probability.
 
+Here “depth” is formally the depth of the D-history conditional kernel. The current `Source` structure expresses stationary sign-symmetric cylinder laws, not a Markov memory bound. Interpreting this finite-kernel depth as the entire process's memory requires the declared restriction to sources of memory at most D. The confidence-set construction does not infer that restriction from the data.
+
+A suffix is retained as a split only when the confidence set is nonempty and every candidate has nonconstant transitions there. For a truly constant suffix, false retention has probability at most noncoverage. In a transition band of radius t, a true difference greater than 4t forces retention on coverage; missed retention then has probability at most noncoverage. These are distinct error statements. Section 2 supplies the paired experiment's simultaneous coverage budget.
+
+**Unpaired depth-four experiment.** Record n independent length-five blocks for each of six preselected views: rectangular DC powers of widths 2, 3, 4 and 5, and the two four-site tapers omitting sites 3 and 2. Each block supplies one scalar power. Normalize the four rectangular powers by 4, 9, 16 and 25. The width-four and width-five groups also supply their top-bin indicators; the two taper groups supply their top-bin indicators. These eight statistics lie in [0,1]; the two statistics sharing each rectangular group need not be independent.
+
+Write m for their eight empirical means. Their expectations are the actual eight source summaries used by the explicit depth-four inversion. Simultaneously,
+
+\[
+ P\{\max_j|m_j-\mathbb E m_j|\ge\varepsilon\}
+ \le16e^{-2n\varepsilon^2}.
+\]
+
+Thus n ≥ ceil(ln(16/δ)/(2ε²)) suffices for noncoverage at most δ, for ε>0 and 0<δ<1. The charge is **6n independent blocks, span five events per block, 6n retained scalar powers**. Prefix views use only their specified sites. No overlapping-recording or adaptive-allocation bound is asserted.
+
+**Stability through the actual inversion.** The eight summaries recover all 32 five-symbol atom masses by an explicit affine map. A kernel-checked integer coefficient certificate bounds every row's absolute sum by C=385/16. Hence summary error at most ε gives atom error at most Cε. For two valid sources with every four-symbol history mass at least η>0, atom error at most E gives transition error at most E/η. This ratio bound uses the validity of the source masses and the history floor.
+
+Restrict the candidate class to that common history floor and retain sources whose summaries lie within ε of m. On coverage, every retained candidate Q satisfies
+
+\[
+ \max_h |q_Q(h)-q_P(h)|\le 2C\varepsilon/\eta.
+\]
+
+This uses valid candidate laws; it does not treat an unconstrained affine estimate with potentially negative atoms as a probability law. The confidence set is a mathematical feasibility set, not an implemented numerical solver. A true split with gap greater than 4Cε/η is retained on coverage. If every nonconstant suffix has a gap at least γ and 2Cε/η<γ/4, thresholding any retained candidate's transitions at range γ/2 recovers the true minimal tree. Its excess Brier prediction loss is at most (2Cε/η)².
+
+**Budget comparison.** For a target transition radius u, substituting ε=ηu/(2C) gives the following conservative sufficient budgets. The paired formula is for 0<u≤1/2; both use 0<δ<1.
+
+| Depth-four design | Sufficient independent blocks | Retained measurements |
+| --- | --- | --- |
+| Paired adjacent powers | N ≥ ceil(ln(32/δ)/(ηu²)) | 4N scalar powers, grouped by block |
+| Six unpaired views | n ≥ ceil(2C² ln(16/δ)/(η²u²)) per view, N=6n | N scalar powers, one per block |
+
+At a common total block budget N, the unpaired design can allocate floor(N/6) blocks per view; the paired design uses all N blocks. Both require a maximum span of five events. The unpaired bound loses additional factors through the conservative inversion estimate and division by rare histories. These are guarantees for the specified estimators, not matching minimax bounds or a proof of optimal measurement allocation.
+
+**Collision and prediction tolerance.** Under a common observed law, if a supported-depth set covers each of depths 0 and d with error at most δ, it contains both with probability at least 1−2δ. Applied to the existing all-depth rectangular collision, additional independent records of those same views cannot resolve the depth ambiguity uniformly.
+
+Depth ambiguity need not prevent accurate prediction. For every positive tolerance τ, the existing depth-four family contains a positive exact-depth-four alternative with the same rectangular Fourier laws as the fair source, whose three-symbol suffix predictor is 1/2 and whose excess Brier loss is at most τ. The exact loss along the family parameter (a,0) is a²/2. This is an existence result for arbitrarily weak deep dependence, not a uniform shallow-predictor guarantee over all deep sources. Brier loss is in squared-probability units, not bits.
+
+**Relation to observed-sequence results.** Kontoyiannis studies prior predictive likelihood and posterior consistency for observed discrete time series; Galves and Leonardi give nonuniform exponential bounds and consistency for an empirical Context estimator, allowing unbounded trees. Their abstract-level scope differs from the independent, transformed block experiment proved here. Here the power observation must first identify the relevant law, and reconstruction incurs its own stability and history-mass factors. The present results do not transfer either paper's single-series guarantees to overlapping power windows. [Kontoyiannis](https://arxiv.org/abs/2211.02676v4) · [Galves and Leonardi](https://arxiv.org/abs/0710.5900v3)
+
+**Declarations.** Namespace `TimeFrequency.ContextTree.DepthEvidence`.
+
+- [MemoryDepthConfidence.lean](../../../../../lean/Enthymemata/TimeFrequency/MemoryDepthConfidence.lean): supported depths, empty outcome, coverage, false/missed split events, common-law ambiguity.
+- [MemoryDepthReconstruction.lean](../../../../../lean/Enthymemata/TimeFrequency/MemoryDepthReconstruction.lean): the eight-summary inversion and exact source reconstruction.
+- [MemoryDepthStability.lean](../../../../../lean/Enthymemata/TimeFrequency/MemoryDepthStability.lean): integer row certificate, affine stability, ratio and source-kernel bounds.
+- [MemoryDepthEmpirical.lean](../../../../../lean/Enthymemata/TimeFrequency/MemoryDepthEmpirical.lean): bounded-statistic concentration and separate-view rounded budget.
+- [MemoryDepthUnpaired.lean](../../../../../lean/Enthymemata/TimeFrequency/MemoryDepthUnpaired.lean): physical statistics, expectations, six-view allocation and simultaneous error.
+- [MemoryDepthPrediction.lean](../../../../../lean/Enthymemata/TimeFrequency/MemoryDepthPrediction.lean): transition-error prediction bound and arbitrarily weak deep example.
+- [MemoryDepthPowerConfidence.lean](../../../../../lean/Enthymemata/TimeFrequency/MemoryDepthPowerConfidence.lean): valid-source confidence sets, split errors, candidate tree and prediction guarantees.
+
+**Verification.** Full `lake build` passed (3816 jobs), BelowNormal priority with `LEAN_NUM_THREADS=2`. Section 3 has 52 public axiom listings; all 143 across sections 1–3 use only subsets of `[propext, Classical.choice, Quot.sound]`. The new modules emit no warnings and contain no proof holes or postulated axioms. The repository-wide taxonomy check will be repeated after the queued predictive-information modules are registered; their unregistered drafts are not covered by this build receipt. All modules remain Enthymemata pending semantic review and promotion.
 
 ## Doc changes owed
 
-After the evidence sequence closes, update the research overview with observation budgets, their sampling assumptions and units, and the distinction between pair discrimination, tree recovery, and prediction tolerance. No engine or documentation-site changes are included in this slice.
+The research overview now records observation budgets, sampling assumptions and units, and the distinction between pair discrimination, tree recovery and prediction tolerance. Its exact-operator-norm question remains explicitly open; the proved reconstruction constant is conservative. No engine or documentation-site changes are included in this slice.

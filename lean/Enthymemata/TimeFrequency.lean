@@ -10,5 +10,6 @@ import Enthymemata.TimeFrequency.DepthFourSharpness
 import Enthymemata.TimeFrequency.DepthFourPrediction
 import Enthymemata.TimeFrequency.MemoryDepthEvidence
 import Enthymemata.TimeFrequency.MemoryDepthTree
+import Enthymemata.TimeFrequency.MemoryDepthPowerConfidence
 
 /-! Phaseless audio recovery statements. -/

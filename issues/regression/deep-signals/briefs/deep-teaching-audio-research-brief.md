@@ -168,9 +168,9 @@ This follows the preceding questions rather than inheriting a sample-complexity 
 
 ## Scope, sequencing and acceptance
 
-The follow-up asks how the observation budget and temporal span depend on memory depth. It uses the all-depth stationary collision for finite-sample testing and the depth-four design as a case for recovering a tree from unpaired measurements. [Evidence for memory depth](deep-teaching/evidence-for-memory-depth-brief.md)
+The [evidence-for-memory-depth follow-up](deep-teaching/evidence-for-memory-depth-brief.md) separates pair discrimination, whole-tree recovery and prediction tolerance. For the specified all-depth pair, the taper-bit budget has matching necessary/sufficient order a⁻²log(1/δ), with span d+1 events. Paired adjacent powers recover a tree with sufficient independent-block budget ceil(16 ln(2^(d+1)/δ)/(π_min γ²)). The depth-four unpaired design uses six groups of n independent blocks and eight bounded summaries, with n ≥ ceil(ln(16/δ)/(2ε²)) per group. Its normalized-summary inversion has a proved conservative block-mass constant 385/16; conditional error also depends on a positive history-mass floor. The owning report supplies exact assumptions, declarations and verification. None of these budgets is a concentration guarantee for overlapping windows from one conversation.
 
-Questions 1 and 2 now establish the depth-four design and its predictive consequence. Question 3 must quantify stability before question 4 connects an approximate teacher to deployment inputs. Question 5 addresses the ultimate data-efficiency claim. No conversation recording is needed to resolve these first mathematical questions.
+Questions 1 and 2 now establish the depth-four design and its predictive consequence. The evidence follow-up supplies a conservative stability bound for question 3; its exact-norm target remains open. Question 4 connects an approximate teacher to deployment inputs. Question 5 addresses the ultimate data-efficiency claim. No conversation recording is needed to resolve these first mathematical questions.
 
 For each later slice brief, require a concrete source class, actual observation operators, exact quantifiers, a useful positive statement and an obstruction or sharpness case where applicable. Standard factorization, conditional-expectation, linear-algebra and risk identities are supporting lemmas. The main deliverable must settle a project decision that those identities alone leave open.
 
@@ -195,7 +195,7 @@ After a proposed theorem is verified, update the approach's measurement and teac
 
 ## Concrete follow-up statements from the depth-four slices
 
-The following are candidate assignments for questions 3–5. They have no Lean verification receipt yet.
+The following are candidate assignments for questions 3–5. The evidence-for-memory-depth follow-up now supplies the affine reconstruction and a conservative stability bound for question 3; its final verification receipt is recorded in that brief. The exact operator norm, teacher-transfer and learning-efficiency questions remain open.
 
 **Question 3.** Use the eight real summaries \(m=(M_2,M_3,M_4,M_5,e_4,e_5,e_A,e_B)\), where \(e_4=\Pr(Y_4=16)\), \(e_5=\Pr(Y_5=25)\) and \(e_S=\Pr(Z_S=16)\). Construct the affine map from these summaries to \((r_1,r_2,r_3,r_4,q,q_A,q_B,q_C)\), followed by the signed Walsh map to the 32 word masses. Prove the exact operator norm from a declared weighted supremum norm on \(m\) to block-mass error, with an attained example when possible. On two valid recovered distributions whose four-word history masses are at least \(\eta>0\), test the conditional bound
 \[
