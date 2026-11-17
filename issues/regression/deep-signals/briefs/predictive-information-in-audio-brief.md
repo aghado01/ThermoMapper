@@ -1,6 +1,6 @@
 # What predictive information does a learned audio representation retain?
 
-Research proposal · 2026-11-17
+Research proposal and commissioned first-slice proof report · 2026-11-17
 
 **For a specified future observable in conversational speech, how much does earlier audio improve prediction once the recent audio is known? Which self-supervised objectives make a learned representation preserve that improvement, and how many independent conversations does it take to learn and demonstrate it?**
 
@@ -36,28 +36,28 @@ The first term measures the encoder. The second measures how well the decoder re
 
 ## A context tree gives one exact case
 
-Take \(Y\) to be the next sign, \(R\) the most recent \(d-1\) signs, and \(O\) the preceding sign. For every \(d\ge4\), the project has constructed a fair IID source and a positive stationary sign-symmetric binary source of exact memory \(d\) whose separate rectangular-power laws agree through width \(d+1\). The latter has two positive-probability histories with the same \(R\) and different next-sign probabilities. The direct information-theoretic consequence is \(G_X=0\) for the fair source and \(G_X>0\) for the other. Thus even exact knowledge of these training summaries leaves the *presence* of incremental predictive information undecidable across the pair. The existing Lean statements establish the collision and transition difference. Expressing this corollary in bits is a proposed formalization. [Stationary sources and Fourier observations](context-tree-memory-identifiability-brief.md#verified-result--2026-11-16)
+Take \(Y\) to be the next sign, \(R\) the most recent \(d-1\) signs, and \(O\) the preceding sign. For every \(d\ge4\), the project has constructed a fair IID source and a positive stationary sign-symmetric binary source of exact memory \(d\) whose separate rectangular-power laws agree through width \(d+1\). The latter has two positive-probability histories with the same \(R\) and different next-sign probabilities. The direct information-theoretic consequence is \(G_X=0\) for the fair source and \(G_X>0\) for the other. Thus even exact knowledge of these training summaries leaves the *presence* of incremental predictive information undecidable across the pair. The existing Lean statements establish the collision and transition difference. The first-slice result below formalizes this zero/positive distinction in bits. [Stationary sources and Fourier observations](context-tree-memory-identifiability-brief.md#verified-result--2026-11-16)
 
 At depth four, the completed proofs go further. Two specified four-site taper laws recover the source throughout the stated class. Every single four-site indicator taper admits a collision. With signed deployment histories, the sharp supremal minimax excess Brier loss on the constructed family matching the fair observations is \(1/8\), including after one taper. Brier loss has squared-probability units. The corresponding value in bits requires its own calculation. The training summaries in these proofs describe populations, whereas \(Z\) describes one deployed history. They enter different parts of a learning theorem. [Completion report](deep-teaching/01-depth-four-completion-brief.md#result-and-proof-report--2026-11-17) · [Prediction report](deep-teaching/02-predictive-ambiguity-brief.md#result-and-proof-report--2026-11-17) · [Finite-sample evidence follow-up](deep-teaching/evidence-for-memory-depth-brief.md)
 
-## First representation theorem to pursue
+## First representation theorem
 
 **Can low self-supervised training loss certify that *any encoder achieving it* preserves the joint future activity law?** Use \(Y=(A,B)\) from the audio experiment. Compare heads predicting two observable bits, \(A\) and \(B\), with three heads predicting \(A,B,AB\). The product is observed on the same future interval and records simultaneous activity. All heads receive \((R,Z)\). This comparison changes one training target while holding the desired future event and deployment inputs fixed.
 
-**Obstruction.** Construct a finite law with constant \(R\) and a fair older bit \(O\). Conditional on \(O=0\), the future is equally likely to be \(00\) or \(11\). Conditional on \(O=1\), it is equally likely to be \(01\) or \(10\). Both individual activity probabilities are always one half. A constant encoder therefore attains full-history Bayes risk on both marginal training heads. Yet the joint future determines \(O\), so this encoder discards exactly one bit per prediction. This is a candidate lower-bound witness for the objective. It specifies a possible dependency between observable events, without assuming a context tree.
+**Obstruction.** Construct a finite law with constant \(R\) and a fair older bit \(O\). Conditional on \(O=0\), the future is equally likely to be \(00\) or \(11\). Conditional on \(O=1\), it is equally likely to be \(01\) or \(10\). Both individual activity probabilities are always one half. A constant encoder therefore attains full-history Bayes risk on both marginal training heads. Yet the joint future determines \(O\), so this encoder discards exactly one bit per prediction. This is the lower-bound witness for the objective formalized in the first-slice report. It specifies a possible dependency between observable events, without assuming a context tree.
 
 The witness admits a waveform realization. Encode \(O\) by silence or a fixed pulse in the older segment, give every example the same recent segment, and render each future bit as silence or a pulse on its channel. Choose the energy threshold strictly between their energies. A two-value code storing \(O\) attains full-history prediction of the joint law, so a one-bit representation budget suffices. The marginal objective also admits the constant optimum under that same budget. This isolates the choice of training target from the encoder's capacity. All three labels can be computed from the same recorded interval.
 
 **Positive statement.** Write \(u=P(A=1\mid X)\), \(v=P(B=1\mid X)\) and \(w=P(AB=1\mid X)\). The four probabilities of \(00,10,01,11\) are \((1-u-v+w,u-w,v-w,w)\). The same inversion holds given \((R,Z)\). Prove that at full-history Bayes risk on the three heads, the learned representation retains the entire conditional law of \(Y\).
 
-For an approximate version, let \(\eta\) be the **sum of the three population squared-loss excesses above their respective full-history Bayes risks**. Conditional-expectation projection bounds the sum of mean squared errors between the three full and encoded conditional means by \(\eta\), even for imperfect heads. The linear part of the displayed inversion has squared Frobenius norm eight. This gives the candidate bounds
+For an approximate version, let \(\eta\) be the **sum of the three population squared-loss excesses above their respective full-history Bayes risks**. Conditional-expectation projection bounds the sum of mean squared errors between the three full and encoded conditional means by \(\eta\), even for imperfect heads. The linear part of the displayed inversion has squared Frobenius norm eight. The first-slice proof establishes the bounds
 
 \[
 \mathbb E\|P(Y\mid X)-P(Y\mid R,Z)\|_2^2\le8\eta,\qquad
 G_X-G_Z\le\frac{8\eta}{\beta\ln 2}
 \]
 
-for the second inequality when all four encoded conditional probabilities are at least \(\beta>0\) almost surely. Verify the log bound with the encoded conditional law in the denominator. The squared bound also applies on the simplex boundary. These constants are sufficient targets. Report any improvement or counterexample with its hypotheses. The result would say exactly which extra self-supervision forces a predictive distinction to survive, with a quantitative penalty for imperfect learning.
+for the second inequality when all four encoded conditional probabilities are at least \(\beta>0\) almost surely. The log bound uses the encoded conditional law in the denominator. The squared bound also applies on the simplex boundary. These constants are sufficient targets. Report any improvement or counterexample with its hypotheses. The result states which extra self-supervision forces a predictive distinction to survive, with a quantitative penalty for imperfect learning.
 
 ## From an objective to a learned audio representation
 
@@ -71,3 +71,62 @@ for the second inequality when all four encoded conditional probabilities are at
 Laskowski and Shriberg found that older activity could be represented at coarser timing resolution, with activity seven seconds back still useful for predicting speech onset on their two conversational corpora. Robertson and Dunbar found that phone discriminability peaked around 40 ms of preceding context in their contrastive pretraining setup. Ekstedt and Skantze study the dependencies among future voice activity events with a self-supervised target. These studies motivate specifying the observable, horizon and representation each time a context length is reported. [Conversational history compression](https://www.cs.cmu.edu/~kornel/pubs/0004937.pdf) · [Acoustic context in pretraining](https://arxiv.org/abs/2312.01515) · [Voice Activity Projection](https://arxiv.org/abs/2205.09812)
 
 For a first Lean slice, take finite histories and targets, prove the one-bit obstruction and the three-head retention bound, then instantiate the criterion on a declared measurement of a future audio block. Quantify over eligible encoders and heads. State which conclusions hold for every encoder, which depend on an optimization guarantee, and which still require evidence from recordings. The entropy identities supply the bookkeeping. The deliverable that guides model design is the change of observable targets that forces preservation, together with a bound at the loss the learner can attain. [Deep Teaching research brief](deep-teaching-audio-research-brief.md) · [Lean harness](../../../../lean/README.md)
+
+## First-slice result and proof report — 2026-11-17
+
+**Model and quantifiers.** Use a finite retained history support X with a strictly positive history law, and an arbitrary nonnegative conditional distribution p_x on the four future outcomes 00, 10, 01, 11. Zero future probabilities are allowed. A frozen deployment feature f maps X into a finite used alphabet and is surjective onto that alphabet. For the proposed audio experiment, instantiate f(x)=(R(x),Z(x)); the theorem does not require that a representation replace the recent audio. Surjectivity only removes unused code values. The encoded conditional law is defined by the actual weighted fibers of f, rather than supplied as a premise.
+
+The results quantify over every such frozen encoder and every three real-valued decoder heads. There is no premise that the heads are Bayes-optimal, no learning algorithm and no optimization guarantee. The code-size comparison below is specific to the one-bit witness; the general theorem is conditional on the excess the chosen encoder and heads attain.
+
+**A marginal optimum can discard one bit.** Let the older bit O be fair and recent context constant. Given O=0, the future is 00 or 11 with probability 1/2 each; given O=1, it is 10 or 01 with probability 1/2 each. Both marginal activity means equal 1/2 at every history. A constant encoder with constant heads 1/2 therefore attains the full-history Bayes risk on both marginal tasks, pointwise in O. Its encoded joint law is uniform on the four outcomes.
+
+Its expected divergence from the full-history joint law is exactly **one bit per prediction**. The conditional-entropy difference is also proved to be one. A two-value identity code storing O reproduces the full conditional joint law. Both this code and the constant code meet an alphabet-size-at-most-two constraint. Thus the marginal objective admits a maximally lossy solution for the available one-bit joint distinction even though that distinction fits the stated budget.
+
+**Observable targets and waveform realization.** The three heads predict A, B and A AND B, all on the same future outcome; their means are u=p10+p11, v=p01+p11 and w=p11. Their equality to the expectations of the three explicit finite observables is proved. The inversion is
+
+\[
+ (p_{00},p_{10},p_{01},p_{11})=(1-u-v+w,u-w,v-w,w).
+\]
+
+The waveform witness uses finite sampled blocks: silence or a fixed pulse encodes the older bit and each future channel's activity; the recent block is common silence. Squared sample energy and a threshold strictly between zero and pulse energy recover each bit exactly. A one-sample unit pulse with threshold 1/2 is an explicit realization. Past, recent and future blocks have ordered slot timestamps −2, −1 and +1 relative to cutoff zero. These are dimensionless event slots, not a calibrated speech-time or detector model. The two future channels share the future slot, so their conjunction needs no additional recording or future interval. The construction exhibits a possible audio dependency; it is not a claim about conversational speech frequencies.
+
+**Three heads force joint retention.** Define η as the sum of the three population squared-loss excesses above their respective full-history Bayes risks. The encoded conditional means are weighted projections onto the fibers of f. The proved projection identity separates representation error from the additional error of the supplied heads. It implies
+
+\[
+ \mathbb E\|p_X-q_{f(X)}\|_2^2\le8\eta .
+\]
+
+The constant eight is a sufficient bound, not an optimal operator norm. At η=0, the entire conditional joint law agrees at every retained history. The squared bound remains valid on the probability-simplex boundary and accommodates imperfect heads.
+
+If every encoded probability q_z(y) is at least β>0, then
+
+\[
+ \mathbb E\,\mathrm{KL}_2(p_X\Vert q_{f(X)})
+ = H(Y\mid f(X))-H(Y\mid X)
+ \le \frac{8\eta}{\beta\ln2}.
+\]
+
+The floor is on **q**, the encoded law in the divergence denominator, not on p. Full-history probabilities may vanish. The formal definitions use natural logarithms internally and divide by ln 2. The entropy identity ties the divergence bound to discarded bits. For f=(R,Z), this is precisely the difference between the older-audio gain available from X and the gain retained by (R,Z). No floor-free bound in bits is claimed.
+
+**All-depth context-tree case.** With uniform histories from the existing stationary construction at every depth d=m+4, take recent context to be the tail of the history and the target to be the next sign. Its transition probabilities lie strictly between zero and one. The existing exact-memory witness provides two histories with the same recent context and different next-sign probabilities. A generic finite projection theorem proves that such a distinction yields strictly positive expected conditional divergence in bits. The fair source has zero gain.
+
+The combined declaration retains the actual equality of all separate rectangular Fourier-power laws through width d+1 alongside the zero/positive information conclusions. It therefore upgrades the earlier transition-based obstruction to an information statement. It does not calculate a universal numerical bit gap, and the earlier sharp Brier value 1/8 is not reused as a value in bits.
+
+**Declarations.** Namespace `TimeFrequency.PredictiveActivity`.
+
+- [PredictiveActivityCore.lean](../../../../lean/Enthymemata/TimeFrequency/PredictiveActivityCore.lean): actual observable means, exact inversion, injectivity and the factor-eight squared bound.
+- [PredictiveActivityProjection.lean](../../../../lean/Enthymemata/TimeFrequency/PredictiveActivityProjection.lean): weighted code fibers, conditional means, orthogonality and the projection/error identities.
+- [PredictiveActivityRetention.lean](../../../../lean/Enthymemata/TimeFrequency/PredictiveActivityRetention.lean): actual encoded law, head excess, approximate joint retention and exact retention at zero excess.
+- [PredictiveActivityBits.lean](../../../../lean/Enthymemata/TimeFrequency/PredictiveActivityBits.lean): scalar divergence bound, encoded probability floor and discarded-bit bound.
+- [PredictiveActivityEntropy.lean](../../../../lean/Enthymemata/TimeFrequency/PredictiveActivityEntropy.lean): weighted log identity and conditional entropy interpretation.
+- [PredictiveActivityObstruction.lean](../../../../lean/Enthymemata/TimeFrequency/PredictiveActivityObstruction.lean): constant marginal optimum, exact one-bit loss, identity-code retention, code sizes and pulse realization.
+- [PredictiveInformationPositive.lean](../../../../lean/Enthymemata/TimeFrequency/PredictiveInformationPositive.lean): divergence positivity and information lost by merging differing conditional probabilities.
+- [PredictiveInformationContext.lean](../../../../lean/Enthymemata/TimeFrequency/PredictiveInformationContext.lean): actual all-depth transition law, fair/deep information and the rectangular-observation obstruction.
+
+**Verification.** Full `lake build` passed (3824 jobs), BelowNormal priority with `LEAN_NUM_THREADS=2`. All 52 public axiom listings in these eight modules, and all 195 across this slice and the memory-depth evidence sequence, use only subsets of `[propext, Classical.choice, Quot.sound]` (including one empty axiom set). The new modules emit no warnings and contain no proof holes or postulated axioms. The taxonomy gate `lean/scripts/meta-ci.ps1 -NoBuild` passes, with all eight new modules PROOF-CLOSED and reached by the aggregate import closure. Modules remain Enthymemata pending semantic review and promotion.
+
+**Scope remaining.** A finite-sample theorem for learning a constrained encoder, real-recording evidence, longer acoustic-band targets, continuous-time waveform analysis and optimal constants remain unproved. This first slice establishes what the specified population objective forces every eligible encoder to retain, conditional on its attained population loss.
+
+## Doc changes owed
+
+Update the approach's target-selection and teacher claims in the next documentation batch: individual future marginals can erase predictive dependence; adding their same-interval conjunction identifies a binary joint law; small three-head population excess gives the stated squared and floored bit guarantees. Preserve the distinction between a theorem about attained population loss and a guarantee that training attains it.

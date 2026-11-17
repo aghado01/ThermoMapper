@@ -11,5 +11,7 @@ import Enthymemata.TimeFrequency.DepthFourPrediction
 import Enthymemata.TimeFrequency.MemoryDepthEvidence
 import Enthymemata.TimeFrequency.MemoryDepthTree
 import Enthymemata.TimeFrequency.MemoryDepthPowerConfidence
+import Enthymemata.TimeFrequency.PredictiveActivityObstruction
+import Enthymemata.TimeFrequency.PredictiveInformationContext
 
 /-! Phaseless audio recovery statements. -/

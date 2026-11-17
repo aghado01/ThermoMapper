@@ -185,7 +185,7 @@ Depth ambiguity need not prevent accurate prediction. For every positive toleran
 - [MemoryDepthPrediction.lean](../../../../../lean/Enthymemata/TimeFrequency/MemoryDepthPrediction.lean): transition-error prediction bound and arbitrarily weak deep example.
 - [MemoryDepthPowerConfidence.lean](../../../../../lean/Enthymemata/TimeFrequency/MemoryDepthPowerConfidence.lean): valid-source confidence sets, split errors, candidate tree and prediction guarantees.
 
-**Verification.** Full `lake build` passed (3816 jobs), BelowNormal priority with `LEAN_NUM_THREADS=2`. Section 3 has 52 public axiom listings; all 143 across sections 1–3 use only subsets of `[propext, Classical.choice, Quot.sound]`. The new modules emit no warnings and contain no proof holes or postulated axioms. The repository-wide taxonomy check will be repeated after the queued predictive-information modules are registered; their unregistered drafts are not covered by this build receipt. All modules remain Enthymemata pending semantic review and promotion.
+**Verification.** Full `lake build` passed (3816 jobs), BelowNormal priority with `LEAN_NUM_THREADS=2`. Section 3 has 52 public axiom listings; all 143 across sections 1–3 use only subsets of `[propext, Classical.choice, Quot.sound]`. The new modules emit no warnings and contain no proof holes or postulated axioms. The repository-wide taxonomy check `lean/scripts/meta-ci.ps1 -NoBuild` passes after registration of the queued predictive-information modules. All 17 memory-depth modules are PROOF-CLOSED. That structural check does not qualify the queued proofs; this build receipt covers the memory-depth sequence. All modules remain Enthymemata pending semantic review and promotion.
 
 ## Doc changes owed
 
