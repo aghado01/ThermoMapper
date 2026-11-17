@@ -1,3 +1,4 @@
+import Enthymemata.TimeFrequency.CircularGaussianPowers
 import Enthymemata.TimeFrequency.LogLaplace
 import Enthymemata.TimeFrequency.LogPowerCovariance
 import Enthymemata.TimeFrequency.PeakOfExponentials
