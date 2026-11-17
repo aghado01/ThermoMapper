@@ -36,9 +36,9 @@ internal static class GeneratorCalibration
 {
     private sealed record Reading(int K, int Ratio, int Repetition, int DataSeed, int SamplerSeed, string Method,
         double[] Truth, double[] Mean, double[] Q05, double[] Q95, int Covered, double RelativeError,
-        bool DiagnosticGate, double? MaximumRHat, double? MinimumEss, int MinimumFamilies,
-        double PopulationSpread, double NoiseDeviation, double NegativeMass, double Seconds,
-        double[] AlignmentClean, double[] AlignmentNoisy, double GridMeanError);
+        bool DiagnosticGate, double? MaximumRHat, double? MinimumEssPerChain, double? MinimumParticleEss,
+        int? MinimumFamilies, double? PopulationSpread, double NoiseDeviation, double NegativeMass, double Seconds,
+        double[] AlignmentClean, double[] AlignmentNoisy, double? GridMeanError);
 
     private static double Dot(double[] a, double[] b) => PairwiseSum.Dot(a, b);
     private static double Norm(double[] a) => Math.Sqrt(Dot(a, a));
@@ -235,7 +235,7 @@ internal static class GeneratorCalibration
                                     diagnostics.Add(ChainDiagnostics.Diagnose(run.Chains.Select(chain => chain.Select(d =>
                                         j == k ? Math.Log(d.Variances[0]) : d.Theta[j]).ToArray()).ToArray()));
                             maximumRhat = Finite(diagnostics.Where(d => double.IsFinite(d.RHat.Value)).Select(d => d.RHat.Value).DefaultIfEmpty(double.NaN).Max());
-                            minimumEss = Finite(diagnostics.Where(d => double.IsFinite(d.Ess.Value)).Select(d => d.Ess.Value).DefaultIfEmpty(double.NaN).Min());
+                            minimumEss = Finite(diagnostics.Where(d => double.IsFinite(d.Ess.Value)).Select(d => d.Ess.Value / config.Chains).DefaultIfEmpty(double.NaN).Min());
                         }
                         double seconds = clock.Elapsed.TotalSeconds;
                         CalibrationDraw[] draws = populations.SelectMany(p => p).ToArray();
@@ -284,9 +284,11 @@ internal static class GeneratorCalibration
                                 CleanCosine = alignmentClean[i], NoisyCosine = alignmentNoisy[i] }));
                         }
                         double sigma = Math.Sqrt(draws.Select((d, i) => weights[i] * d.Variances[0]).Sum() / total);
-                        double gridError = fineGrid.HasValue ? mean.Zip(fineGrid.Value.Mean, (a, b) => Math.Abs(a - b)).Max() : 0;
+                        double? gridError = fineGrid.HasValue ? mean.Zip(fineGrid.Value.Mean, (a, b) => Math.Abs(a - b)).Max() : null;
                         var reading = new Reading(k, ratio, rep + 1, seeds[rep], samplerSeed, method, truth, mean, lower, upper,
-                            covered, error, diagnostic, maximumRhat, minimumEss, families, spread, sigma, negativeMass,
+                            covered, error, diagnostic, maximumRhat, method == "smc" ? null : minimumEss,
+                            method == "smc" ? minimumEss : null, method == "smc" ? families : null,
+                            method == "smc" ? spread : null, sigma, negativeMass,
                             seconds, alignmentClean, alignmentNoisy, gridError);
                         readings.Add(reading); rowsFile.WriteLine(JsonSerializer.Serialize(reading));
                         Console.WriteLine($"G2 k={k} ratio={ratio} rep={rep + 1} {method} error={error:G4} diagnostic={diagnostic} seconds={seconds:F2}");
