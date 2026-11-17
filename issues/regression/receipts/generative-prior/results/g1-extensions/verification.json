@@ -1,0 +1,251 @@
+{
+  "SourceRevision": "0fe904572986597a6dec41b266514639f057bfae",
+  "ProtocolRevision": "d579c14",
+  "AuditRevision": "b51874a",
+  "ControlDriverRevision": "73c7b82",
+  "BridgeAllOriginalFieldsAndEndpointBitsAgree": true,
+  "AllCycleControlsNumericalFieldsAndBitsAgree": true,
+  "CycleLengthsValidated": [
+    1,
+    2,
+    9,
+    38,
+    48,
+    51,
+    96,
+    106
+  ],
+  "NewArmEndpoints": 420,
+  "FilesNormalizedToLF": {
+    "d2-mag-k10-off/summary.json": {
+      "sha256": "663f811c4e4be5ce66f90d1c50b47a4d86f73bf5e93e547be8f5976cd7038475",
+      "bytes": 1085,
+      "actual_output": "artifacts/generative-prior/g1-extensions-primary/results/d2-mag-k10-off/summary.json"
+    },
+    "d2-mag-k10-off/trials.jsonl": {
+      "sha256": "90562e82d54593da346fc14294be6a2256041478848e508dd9e41f6ea259f5a4",
+      "bytes": 50216,
+      "actual_output": "artifacts/generative-prior/g1-extensions-primary/results/d2-mag-k10-off/trials.jsonl"
+    },
+    "d2-mag-k10-on/summary.json": {
+      "sha256": "3420b0c1aae4067f72376a77e1b5baa97814525ccf67483138c7eba10aed35e3",
+      "bytes": 1085,
+      "actual_output": "artifacts/generative-prior/g1-extensions-primary/results/d2-mag-k10-on/summary.json"
+    },
+    "d2-mag-k10-on/trials.jsonl": {
+      "sha256": "1dd977498167f852c91e292c3e2588c82dfb1a18c5740d2123cfc9a8a47711c3",
+      "bytes": 49921,
+      "actual_output": "artifacts/generative-prior/g1-extensions-primary/results/d2-mag-k10-on/trials.jsonl"
+    },
+    "d2-mag-k100-off/summary.json": {
+      "sha256": "6c41f2e6960744de9a8f7871ee89c9b1f56067e45b27b5cfd357942475c8f8ef",
+      "bytes": 1043,
+      "actual_output": "artifacts/generative-prior/g1-extensions-primary/results/d2-mag-k100-off/summary.json"
+    },
+    "d2-mag-k100-off/trials.jsonl": {
+      "sha256": "67317bec6dbd257fd8626f6023ecb5af58e5ff99229984e79b5e38bd6b109086",
+      "bytes": 209282,
+      "actual_output": "artifacts/generative-prior/g1-extensions-primary/results/d2-mag-k100-off/trials.jsonl"
+    },
+    "d2-mag-k100-on/summary.json": {
+      "sha256": "99ae4a8910736590e40ea7bdd549c1b54fb51d168267aeec250fc1e3d4dbad57",
+      "bytes": 1042,
+      "actual_output": "artifacts/generative-prior/g1-extensions-primary/results/d2-mag-k100-on/summary.json"
+    },
+    "d2-mag-k100-on/trials.jsonl": {
+      "sha256": "4324451092b61992ad284944ba1024ffbd6e2443bd50b18aacddaa81234b4f91",
+      "bytes": 209337,
+      "actual_output": "artifacts/generative-prior/g1-extensions-primary/results/d2-mag-k100-on/trials.jsonl"
+    },
+    "d2-mag-k80-off/summary.json": {
+      "sha256": "e188744cbbc10b96ffa6b533eb102fada0afc3500e1181e2b296881b0a34c0a0",
+      "bytes": 1042,
+      "actual_output": "artifacts/generative-prior/g1-extensions-primary/results/d2-mag-k80-off/summary.json"
+    },
+    "d2-mag-k80-off/trials.jsonl": {
+      "sha256": "c0b84077b5c003a87512b6710f4090c8846c50c1c9a7e41b8e7995992a179d65",
+      "bytes": 174192,
+      "actual_output": "artifacts/generative-prior/g1-extensions-primary/results/d2-mag-k80-off/trials.jsonl"
+    },
+    "d2-mag-k80-on/summary.json": {
+      "sha256": "8227c1ca72bd7e2f05b53cc2b35ee5069fb9bbda9799db79449339666dfdc77c",
+      "bytes": 1042,
+      "actual_output": "artifacts/generative-prior/g1-extensions-primary/results/d2-mag-k80-on/summary.json"
+    },
+    "d2-mag-k80-on/trials.jsonl": {
+      "sha256": "59e8e7a0c627e57e86f515fd2bb792a9159e88a9c0c41667bfea6e3a1bb89a40",
+      "bytes": 174291,
+      "actual_output": "artifacts/generative-prior/g1-extensions-primary/results/d2-mag-k80-on/trials.jsonl"
+    },
+    "d3-linear-k10-off/summary.json": {
+      "sha256": "6098d6a2edc5ffa5a19fdca850a9baf07052e3ccbf2f3b62a682bbf899d6a82f",
+      "bytes": 1072,
+      "actual_output": "artifacts/generative-prior/g1-extensions-primary/results/d3-linear-k10-off/summary.json"
+    },
+    "d3-linear-k10-off/trials.jsonl": {
+      "sha256": "be96d453e7595d6e44bdbe4db125b14bd5f002fec466fabd0cbcf06834f52e89",
+      "bytes": 50532,
+      "actual_output": "artifacts/generative-prior/g1-extensions-primary/results/d3-linear-k10-off/trials.jsonl"
+    },
+    "d3-linear-k10-on/summary.json": {
+      "sha256": "afda5032a47ce1ca4c3136c11e2efcb4563f803352ee0e9d119f04a62a3f0b94",
+      "bytes": 1084,
+      "actual_output": "artifacts/generative-prior/g1-extensions-primary/results/d3-linear-k10-on/summary.json"
+    },
+    "d3-linear-k10-on/trials.jsonl": {
+      "sha256": "f66f0c956aad8d19b18584568fb393e96f11c0ead017d3405eaf127e596f7a4f",
+      "bytes": 50561,
+      "actual_output": "artifacts/generative-prior/g1-extensions-primary/results/d3-linear-k10-on/trials.jsonl"
+    },
+    "d3-linear-k80-off/summary.json": {
+      "sha256": "b4ada42917d81cfe6832fb9afe15bf966108cbc7ff072fc0c63000f754bb788d",
+      "bytes": 1064,
+      "actual_output": "artifacts/generative-prior/g1-extensions-primary/results/d3-linear-k80-off/summary.json"
+    },
+    "d3-linear-k80-off/trials.jsonl": {
+      "sha256": "4884a648f8d2d7175e8cccd2c87937ea9576bf4ab82582c8c647a3cc81b9dc07",
+      "bytes": 174666,
+      "actual_output": "artifacts/generative-prior/g1-extensions-primary/results/d3-linear-k80-off/trials.jsonl"
+    },
+    "d3-linear-k80-on/summary.json": {
+      "sha256": "eac1245207f355ff04ecf6de3bd51454bfa49fb257620560c2efb2910e43e06f",
+      "bytes": 1067,
+      "actual_output": "artifacts/generative-prior/g1-extensions-primary/results/d3-linear-k80-on/summary.json"
+    },
+    "d3-linear-k80-on/trials.jsonl": {
+      "sha256": "d8e72f03e37fbfb23435155a3ecd9fe603ccf68dac4b511abf6aa4fbb00b82a0",
+      "bytes": 174743,
+      "actual_output": "artifacts/generative-prior/g1-extensions-primary/results/d3-linear-k80-on/trials.jsonl"
+    },
+    "d3-mag-k10-off/summary.json": {
+      "sha256": "68711850d3a87378834426cbbe54a64b0b7c2a8bf86998749081a4220b665271",
+      "bytes": 1085,
+      "actual_output": "artifacts/generative-prior/g1-extensions-primary/results/d3-mag-k10-off/summary.json"
+    },
+    "d3-mag-k10-off/trials.jsonl": {
+      "sha256": "82e75a906d77d9f16a7a054ce8d35c65ac9310f6798af5fb397f1ac5632a5cfd",
+      "bytes": 50718,
+      "actual_output": "artifacts/generative-prior/g1-extensions-primary/results/d3-mag-k10-off/trials.jsonl"
+    },
+    "d3-mag-k10-on/summary.json": {
+      "sha256": "dc296fc33ab24c5752cf05d747c352fb0c51b45716d6adb2d25bf3323445929a",
+      "bytes": 1082,
+      "actual_output": "artifacts/generative-prior/g1-extensions-primary/results/d3-mag-k10-on/summary.json"
+    },
+    "d3-mag-k10-on/trials.jsonl": {
+      "sha256": "d56978f1e1295f5c783e50145a03d9ab850f3cb86fc8d5fe578487c4c3fbb8db",
+      "bytes": 50598,
+      "actual_output": "artifacts/generative-prior/g1-extensions-primary/results/d3-mag-k10-on/trials.jsonl"
+    },
+    "d3-mag-k80-off/summary.json": {
+      "sha256": "30afc31ca62f0dd0807968847e0897270c9b58146746fc44554286e443146451",
+      "bytes": 1041,
+      "actual_output": "artifacts/generative-prior/g1-extensions-primary/results/d3-mag-k80-off/summary.json"
+    },
+    "d3-mag-k80-off/trials.jsonl": {
+      "sha256": "0de98e2108ea938edb4368b7e3a4af64268c77e3af125cdde96d369f5229c12c",
+      "bytes": 174597,
+      "actual_output": "artifacts/generative-prior/g1-extensions-primary/results/d3-mag-k80-off/trials.jsonl"
+    },
+    "d3-mag-k80-on/summary.json": {
+      "sha256": "2f6494184d912a79e737d3aecece1b0270ba521eb47c3b67ac555e8603da241c",
+      "bytes": 1041,
+      "actual_output": "artifacts/generative-prior/g1-extensions-primary/results/d3-mag-k80-on/summary.json"
+    },
+    "d3-mag-k80-on/trials.jsonl": {
+      "sha256": "d3ea2bc6d436bebcbecd86887a876abb1b604b0058d361416ced3fcce8535fa5",
+      "bytes": 174582,
+      "actual_output": "artifacts/generative-prior/g1-extensions-primary/results/d3-mag-k80-on/trials.jsonl"
+    },
+    "analysis.json": {
+      "sha256": "3803249829748fdfb7305d70e33165b07d746e133f4ebbf234411e2870b0e6ea",
+      "bytes": 10402,
+      "actual_output": "artifacts/generative-prior/g1-extensions-primary/analysis/analysis.json"
+    },
+    "verification/bridge-trials.jsonl": {
+      "sha256": "3eb7df288b0f8f6984f8996a6b8187eb4e93bb59a076633d4d564c3936bfad37",
+      "bytes": 49920,
+      "actual_output": "artifacts/generative-prior/g1-extension-bridge/results/bridge-k10-on/trials.jsonl"
+    },
+    "verification/control-plan.json": {
+      "sha256": "147429e852f8256c90c6891b08a46849b87c185650d7efb38ea7c7b85da3f435",
+      "bytes": 1488,
+      "actual_output": "artifacts/generative-prior/g1-extension-cycle-controls/control-plan.json"
+    },
+    "verification/period-1/trials.jsonl": {
+      "sha256": "753c652a1102488c00a1c670e1ae7c0f8a4b0d057e289e2961b74241c00851da",
+      "bytes": 1677,
+      "actual_output": "artifacts/generative-prior/g1-extension-cycle-controls/results/period-1/trials.jsonl"
+    },
+    "verification/period-1/settings.json": {
+      "sha256": "3ec1a160a533ab0561d8bfca204595d3809509c70cb7d1f739eac2c5c9037bfb",
+      "bytes": 427,
+      "actual_output": "artifacts/generative-prior/g1-extension-cycle-controls/control-settings/period-1.json"
+    },
+    "verification/period-2/trials.jsonl": {
+      "sha256": "37548254298bb72647dbc1bff802f36bc65260fd2a272d40d262fb2c23df1aca",
+      "bytes": 1683,
+      "actual_output": "artifacts/generative-prior/g1-extension-cycle-controls/results/period-2/trials.jsonl"
+    },
+    "verification/period-2/settings.json": {
+      "sha256": "a52e21d4a4bc60818ac5cf7de3ba8e99e40d4286974c8f07bd02863a4998a6bb",
+      "bytes": 428,
+      "actual_output": "artifacts/generative-prior/g1-extension-cycle-controls/control-settings/period-2.json"
+    },
+    "verification/period-9/trials.jsonl": {
+      "sha256": "6ca93049fc0bc21a66f5aa715ea558c22ac04da0700b99ad5e5acadd17241fb4",
+      "bytes": 1685,
+      "actual_output": "artifacts/generative-prior/g1-extension-cycle-controls/results/period-9/trials.jsonl"
+    },
+    "verification/period-9/settings.json": {
+      "sha256": "3ec1a160a533ab0561d8bfca204595d3809509c70cb7d1f739eac2c5c9037bfb",
+      "bytes": 427,
+      "actual_output": "artifacts/generative-prior/g1-extension-cycle-controls/control-settings/period-9.json"
+    },
+    "verification/period-38/trials.jsonl": {
+      "sha256": "a1f5c09561052de42fe3a5cf6e33ac42bf660cdbe80561fdba918ba3fd7c33e8",
+      "bytes": 1691,
+      "actual_output": "artifacts/generative-prior/g1-extension-cycle-controls/results/period-38/trials.jsonl"
+    },
+    "verification/period-38/settings.json": {
+      "sha256": "cbd9276fcfd61519e3693bf212fb89e383df126821079d242296ac2ba7a83e97",
+      "bytes": 413,
+      "actual_output": "artifacts/generative-prior/g1-extension-cycle-controls/control-settings/period-38.json"
+    },
+    "verification/period-48/trials.jsonl": {
+      "sha256": "5c6e17b5448ff48afdb540c9a184a5d9d1f16b9c905df8a8c186e2dc37e2f31f",
+      "bytes": 1701,
+      "actual_output": "artifacts/generative-prior/g1-extension-cycle-controls/results/period-48/trials.jsonl"
+    },
+    "verification/period-48/settings.json": {
+      "sha256": "d08616ce14016083b568610f99fff11b03271029463a65fcd142697e5f25808d",
+      "bytes": 412,
+      "actual_output": "artifacts/generative-prior/g1-extension-cycle-controls/control-settings/period-48.json"
+    },
+    "verification/period-51/trials.jsonl": {
+      "sha256": "34532944069f3e19b5e08ccb218182bc21c538d408586b13c1ab9aa8baa52e89",
+      "bytes": 1711,
+      "actual_output": "artifacts/generative-prior/g1-extension-cycle-controls/results/period-51/trials.jsonl"
+    },
+    "verification/period-51/settings.json": {
+      "sha256": "dbdb00de16b544fa28f0d603bfd51b7e81b53a6d04d234c31d44a7a3bc8c1343",
+      "bytes": 426,
+      "actual_output": "artifacts/generative-prior/g1-extension-cycle-controls/control-settings/period-51.json"
+    },
+    "verification/period-96/trials.jsonl": {
+      "sha256": "a6f6b9f7e10791af30c6cb166498e11bd207ca62b1855df3909128ca8798d588",
+      "bytes": 1689,
+      "actual_output": "artifacts/generative-prior/g1-extension-cycle-controls/results/d2-mag-k10-on/trials.jsonl"
+    },
+    "verification/period-106/trials.jsonl": {
+      "sha256": "30120dbf132fddb3e6f8f8fda8b22acb097fdc02d9dfafc236cf0b1f1acd29c7",
+      "bytes": 1715,
+      "actual_output": "artifacts/generative-prior/g1-extension-cycle-controls/results/period-106/trials.jsonl"
+    },
+    "verification/period-106/settings.json": {
+      "sha256": "31ccca92e17a6ddbcc523febcd521428399fa1bdd6846e4b42617fb63d9ee3aa",
+      "bytes": 427,
+      "actual_output": "artifacts/generative-prior/g1-extension-cycle-controls/control-settings/period-106.json"
+    }
+  }
+}

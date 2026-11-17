@@ -294,9 +294,9 @@ Continue G1, then G3, G4, G2 and G5. Each block receives committed settings and 
 
 ## G1 report — depth and magnitude extensions
 
-### In progress
+### Status
 
-The protocol is `d579c14` and the numerical source/settings pin is `0fe9045`. The bridge matched all original signed k = 10 fields and endpoint bits. G1 output is accumulating in `artifacts/generative-prior/g1-extensions-primary/results/`; the independent audit is `receipts/generative-prior/audit-extensions.py`. New skipped cycle lengths require full controls before reporting. G3 and G4 protocols and sources have been prepared in `0094720` and `8e527e3`, with their execution queued after G1. No G3 or G4 numerical readings have been taken.
+G1 is complete at the declared finite experimental scope. Its bridge, all extension cells and all full-cycle controls passed. The remaining probes proceed in order below.
 
 ### Protocol registered before extension readings
 
@@ -309,6 +309,50 @@ The protocol is `d579c14` and the numerical source/settings pin is `0fe9045`. Th
 **Negative-ray controls.** Starting at θ₀ = π, iterate g(θ) = arccos(((π − θ)cosθ + sinθ)/π). The linear radius is cosθ_d. The magnitude radius is 2 sinθ_d/π + ((π − 2θ_d)/π)cosθ_d, giving the depth-two checks 1/π and 0.6691522942. Use the same 20-degree angular bound and ±25% band around the objective/depth-specific radius, with recovered endpoints classified first and an elsewhere class retained. Record the exact finite-ray optimum a★ = max(0, ⟨v,y⟩/‖v‖²) for linear data and max(0, ⟨|v|,b⟩/‖v‖²) for magnitudes, where v = AG(−x★), marking a flat ray if v = 0. Population-radius and finite-ray deviations are separate readings.
 
 **Reruns.** Preserve original rows and gates. A bridge, reference or finiteness failure triggers same-seed diagnosis and replay before interpretation. A sign-comparison significance finding is reported at the registered family threshold, with no tuning or added seeds. Validate any newly skipped deterministic cycle length on a full unaccelerated path. Replay at least one new magnitude and one new depth-three path on a fresh pinned build. Keep heavy execution serial, capped and below normal priority.
+
+### Extension readings and decisions
+
+All 420 extension endpoints passed the scalar-reference, finiteness and kink-count gates. There were 153 recoveries and 267 elsewhere endpoints, with no endpoint in its objective/depth-specific negative neighbourhood. No tested sign comparison crossed the registered 0.05/7 family threshold. The magnitude k = 10 point improved by 7/30 with the sign check at each depth, with eight on-only recoveries and one off-only recovery. The raw p = 0.0390625 in each case remains above the family threshold. [Actual analysis](../../../../artifacts/generative-prior/g1-extensions-primary/analysis/analysis.json) · [Tracked analysis](../../receipts/generative-prior/results/g1-extensions/analysis.json)
+
+| Depth | Widths | Objective | k | Sign-on / 30 | Sign-off / 30 | Both | On only | Off only | Neither | Exact paired p |
+| ---: | --- | --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: |
+| 2 | 250/600 | magnitude | 10 | 26 | 19 | 18 | 8 | 1 | 3 | 0.0390625 |
+| 2 | 250/600 | magnitude | 80 | 0 | 0 | 0 | 0 | 0 | 30 | 1 |
+| 2 | 250/600 | magnitude | 100 | 0 | 0 | 0 | 0 | 0 | 30 | 1 |
+| 3 | 250/400/600 | linear | 10 | 28 | 30 | 28 | 0 | 2 | 0 | 0.5 |
+| 3 | 250/400/600 | linear | 80 | 3 | 2 | 2 | 1 | 0 | 27 | 1 |
+| 3 | 250/400/600 | magnitude | 10 | 26 | 19 | 18 | 8 | 1 | 3 | 0.0390625 |
+| 3 | 250/400/600 | magnitude | 80 | 0 | 0 | 0 | 0 | 0 | 30 | 1 |
+
+The matched depth-two signed linear counts were 30, 20 and 1 at k = 10,80,100 in the preceding receipts. Their magnitude counts here were 26,0,0. These are separate forward observation models on the paired generators. The Gaussian DPR experiment does not reproduce the paper's MNIST/Adam experiment. The stronger depth-three losses also coincide with a changed intermediate architecture and the declared 8/9 step. These finite readings establish no universal depth or objective effect.
+
+The radii used in the classifier were 0.3183098862 for depth-two linear, 0.6691522942 for depth-two magnitude, 0.4937310902 for depth-three linear and 0.7159203500 for depth-three magnitude. No endpoint passed the 20-degree negative-orientation gate. Twenty-three passed a population-radius band alone. Thus a radial match would have misclassified directions if used by itself. The full negative stationary-point location remains unobserved in this cohort.
+
+The exact finite-ray controls gave the following descriptive k = 10 readings, shared by sign arms. They minimize the loss on the fixed negative ray, with full-space stationarity left to the actual gradient.
+
+| Depth/objective | Population radius | Finite-ray minimum | Finite-ray mean | Finite-ray maximum |
+| --- | ---: | ---: | ---: | ---: |
+| 2 / magnitude | 0.66915229 | 0.48347940 | 0.68162601 | 0.84042577 |
+| 3 / linear | 0.49373109 | 0.29656075 | 0.51133998 | 0.68627838 |
+| 3 / magnitude | 0.71592035 | 0.44494995 | 0.72807827 | 0.96363856 |
+
+### Numerical controls and interpretation for later probes
+
+There were 119 gradient stops and 301 update-limit stops, including 34 successful recoveries. Thirty-five trajectories reached exactly repeated states. Their periods were 1,2,9,38,48,51,96 and 106. Every period received a full unaccelerated 50,000-update control on a fresh pinned build, agreeing in numerical fields, stop/event counts and endpoint bits. The shortcut evaluated 13,406,886 updates and accounted for 1,717,139 skipped updates. The largest scalar-reference discrepancy was 1.4433 × 10⁻¹⁵ against the 10⁻¹⁰ bound. Selected ReLU and magnitude preactivation zero counts were both zero.
+
+The failures therefore include finite-step cycles with nonzero gradients. Their endpoints are finite-optimizer readings. The population negative-ray predictions and the papers' convergence claims require their stated distribution/isometry and step assumptions. The present outcomes supply no capture at those negative locations. G2 keeps its declared linear noisy likelihood and reads posterior mass and convergence separately from these optimization trajectories. G3 and G4 measure their own sampled condition residuals, with no causal attribution of G1 failures to an unmeasured condition.
+
+### Extension pins, receipts and replay
+
+The protocol is `d579c14`, numerical source/settings `0fe9045`, independent audit `b51874a`, and full-cycle driver `73c7b82`. Primary cells reside at `artifacts/generative-prior/g1-extensions-primary/results/<cell>-<on|off>/`. All 420 endpoints, summaries, the bridge rows, generated full-control settings and control outputs are tracked under `receipts/generative-prior/results/g1-extensions/`. The manifest links each copy to its actual output and SHA-256. [Verification manifest](../../receipts/generative-prior/results/g1-extensions/verification.json) · [Actual full controls](../../../../artifacts/generative-prior/g1-extension-cycle-controls/control-plan.json)
+
+```powershell
+./issues/regression/receipts/generative-prior/replay.ps1 -Revision 0fe9045 -RunName g1-extensions-review -Experiment extensions
+./artifacts/evidence-contrasts/venv/Scripts/python.exe ./issues/regression/receipts/generative-prior/audit-extensions.py --results artifacts/generative-prior/g1-extensions-review/results --output artifacts/generative-prior/g1-extensions-review/analysis
+./issues/regression/receipts/generative-prior/verify-extension-cycles.ps1 -RunName g1-extension-controls-review -Analysis artifacts/generative-prior/g1-extensions-review/analysis/analysis.json
+```
+
+Use fresh run names. The original signed k = 10 bridge can be selected with `-Cells bridge-k10`. All numerical runs remained capped and below normal priority. Doc changes owed include the depth/magnitude table, the four distinct radii, the absence of negative-direction capture and the distinction between finite cycles and posterior trapping.
 
 ## G3 report — layer weight conditions
 

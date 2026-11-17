@@ -1,0 +1,483 @@
+{
+  "numerical_gates_passed": true,
+  "readings": [
+    {
+      "cell": "d2-mag-k10-on",
+      "k": 10,
+      "depth": 2,
+      "magnitude": true,
+      "rho": 0.6691522942169523,
+      "successes": 26,
+      "wilson95": [
+        0.703186733179637,
+        0.9469034451594526
+      ],
+      "gradient_stops": 26,
+      "limit_stops": 4,
+      "classes": {
+        "recovered": 26,
+        "elsewhere": 4
+      },
+      "max_reference_discrepancy": 9.992007221626409e-16,
+      "negative_orientation_count": 0,
+      "radius_match_count": 3,
+      "failed_angles": [
+        78.99144598251308,
+        121.69213664731798
+      ]
+    },
+    {
+      "cell": "d2-mag-k10-off",
+      "k": 10,
+      "depth": 2,
+      "magnitude": true,
+      "rho": 0.6691522942169523,
+      "successes": 19,
+      "wilson95": [
+        0.4551356365479487,
+        0.7812607919389929
+      ],
+      "gradient_stops": 19,
+      "limit_stops": 11,
+      "classes": {
+        "recovered": 19,
+        "elsewhere": 11
+      },
+      "max_reference_discrepancy": 9.992007221626409e-16,
+      "negative_orientation_count": 0,
+      "radius_match_count": 8,
+      "failed_angles": [
+        70.62125082309055,
+        121.69213664731798
+      ]
+    },
+    {
+      "cell": "d2-mag-k80-on",
+      "k": 80,
+      "depth": 2,
+      "magnitude": true,
+      "rho": 0.6691522942169523,
+      "successes": 0,
+      "wilson95": [
+        0.0,
+        0.11351339317396876
+      ],
+      "gradient_stops": 0,
+      "limit_stops": 30,
+      "classes": {
+        "elsewhere": 30
+      },
+      "max_reference_discrepancy": 1.3141129066314038e-15,
+      "negative_orientation_count": 0,
+      "radius_match_count": 0,
+      "failed_angles": [
+        88.36793564329189,
+        117.00529908385052
+      ]
+    },
+    {
+      "cell": "d2-mag-k80-off",
+      "k": 80,
+      "depth": 2,
+      "magnitude": true,
+      "rho": 0.6691522942169523,
+      "successes": 0,
+      "wilson95": [
+        0.0,
+        0.11351339317396876
+      ],
+      "gradient_stops": 0,
+      "limit_stops": 30,
+      "classes": {
+        "elsewhere": 30
+      },
+      "max_reference_discrepancy": 1.2561969511877876e-15,
+      "negative_orientation_count": 0,
+      "radius_match_count": 0,
+      "failed_angles": [
+        86.14862499503721,
+        111.24977075169396
+      ]
+    },
+    {
+      "cell": "d2-mag-k100-on",
+      "k": 100,
+      "depth": 2,
+      "magnitude": true,
+      "rho": 0.6691522942169523,
+      "successes": 0,
+      "wilson95": [
+        0.0,
+        0.11351339317396876
+      ],
+      "gradient_stops": 0,
+      "limit_stops": 30,
+      "classes": {
+        "elsewhere": 30
+      },
+      "max_reference_discrepancy": 1.2212453270876722e-15,
+      "negative_orientation_count": 0,
+      "radius_match_count": 0,
+      "failed_angles": [
+        86.05887469140528,
+        113.13768587013998
+      ]
+    },
+    {
+      "cell": "d2-mag-k100-off",
+      "k": 100,
+      "depth": 2,
+      "magnitude": true,
+      "rho": 0.6691522942169523,
+      "successes": 0,
+      "wilson95": [
+        0.0,
+        0.11351339317396876
+      ],
+      "gradient_stops": 0,
+      "limit_stops": 30,
+      "classes": {
+        "elsewhere": 30
+      },
+      "max_reference_discrepancy": 1.4432899320127035e-15,
+      "negative_orientation_count": 0,
+      "radius_match_count": 0,
+      "failed_angles": [
+        87.35283490450182,
+        113.13768587013998
+      ]
+    },
+    {
+      "cell": "d3-linear-k10-on",
+      "k": 10,
+      "depth": 3,
+      "magnitude": false,
+      "rho": 0.4937310902003716,
+      "successes": 28,
+      "wilson95": [
+        0.7867654163738308,
+        0.9815229762087295
+      ],
+      "gradient_stops": 22,
+      "limit_stops": 8,
+      "classes": {
+        "recovered": 28,
+        "elsewhere": 2
+      },
+      "max_reference_discrepancy": 8.881784197001252e-16,
+      "negative_orientation_count": 0,
+      "radius_match_count": 0,
+      "failed_angles": [
+        94.08845787053332,
+        121.91567475450506
+      ]
+    },
+    {
+      "cell": "d3-linear-k10-off",
+      "k": 10,
+      "depth": 3,
+      "magnitude": false,
+      "rho": 0.4937310902003716,
+      "successes": 30,
+      "wilson95": [
+        0.8864866068260312,
+        0.9999999999999999
+      ],
+      "gradient_stops": 20,
+      "limit_stops": 10,
+      "classes": {
+        "recovered": 30
+      },
+      "max_reference_discrepancy": 8.881784197001252e-16,
+      "negative_orientation_count": 0,
+      "radius_match_count": 0,
+      "failed_angles": null
+    },
+    {
+      "cell": "d3-linear-k80-on",
+      "k": 80,
+      "depth": 3,
+      "magnitude": false,
+      "rho": 0.4937310902003716,
+      "successes": 3,
+      "wilson95": [
+        0.03459988874733419,
+        0.25621082579184085
+      ],
+      "gradient_stops": 0,
+      "limit_stops": 30,
+      "classes": {
+        "elsewhere": 27,
+        "recovered": 3
+      },
+      "max_reference_discrepancy": 9.399938328860295e-16,
+      "negative_orientation_count": 0,
+      "radius_match_count": 0,
+      "failed_angles": [
+        98.33873388095805,
+        174.3578804580102
+      ]
+    },
+    {
+      "cell": "d3-linear-k80-off",
+      "k": 80,
+      "depth": 3,
+      "magnitude": false,
+      "rho": 0.4937310902003716,
+      "successes": 2,
+      "wilson95": [
+        0.018477023791270378,
+        0.2132345836261692
+      ],
+      "gradient_stops": 0,
+      "limit_stops": 30,
+      "classes": {
+        "elsewhere": 28,
+        "recovered": 2
+      },
+      "max_reference_discrepancy": 9.399938328860295e-16,
+      "negative_orientation_count": 0,
+      "radius_match_count": 0,
+      "failed_angles": [
+        98.33873388095805,
+        159.21282286855958
+      ]
+    },
+    {
+      "cell": "d3-mag-k10-on",
+      "k": 10,
+      "depth": 3,
+      "magnitude": true,
+      "rho": 0.7159203500255176,
+      "successes": 26,
+      "wilson95": [
+        0.703186733179637,
+        0.9469034451594526
+      ],
+      "gradient_stops": 18,
+      "limit_stops": 12,
+      "classes": {
+        "recovered": 26,
+        "elsewhere": 4
+      },
+      "max_reference_discrepancy": 7.771561172376096e-16,
+      "negative_orientation_count": 0,
+      "radius_match_count": 3,
+      "failed_angles": [
+        84.18746749660295,
+        93.98381154642566
+      ]
+    },
+    {
+      "cell": "d3-mag-k10-off",
+      "k": 10,
+      "depth": 3,
+      "magnitude": true,
+      "rho": 0.7159203500255176,
+      "successes": 19,
+      "wilson95": [
+        0.4551356365479487,
+        0.7812607919389929
+      ],
+      "gradient_stops": 14,
+      "limit_stops": 16,
+      "classes": {
+        "recovered": 19,
+        "elsewhere": 11
+      },
+      "max_reference_discrepancy": 7.771561172376096e-16,
+      "negative_orientation_count": 0,
+      "radius_match_count": 9,
+      "failed_angles": [
+        63.76635920019422,
+        121.74707237307356
+      ]
+    },
+    {
+      "cell": "d3-mag-k80-on",
+      "k": 80,
+      "depth": 3,
+      "magnitude": true,
+      "rho": 0.7159203500255176,
+      "successes": 0,
+      "wilson95": [
+        0.0,
+        0.11351339317396876
+      ],
+      "gradient_stops": 0,
+      "limit_stops": 30,
+      "classes": {
+        "elsewhere": 30
+      },
+      "max_reference_discrepancy": 1.031638770698662e-15,
+      "negative_orientation_count": 0,
+      "radius_match_count": 0,
+      "failed_angles": [
+        84.04979390747853,
+        110.19553983466213
+      ]
+    },
+    {
+      "cell": "d3-mag-k80-off",
+      "k": 80,
+      "depth": 3,
+      "magnitude": true,
+      "rho": 0.7159203500255176,
+      "successes": 0,
+      "wilson95": [
+        0.0,
+        0.11351339317396876
+      ],
+      "gradient_stops": 0,
+      "limit_stops": 30,
+      "classes": {
+        "elsewhere": 30
+      },
+      "max_reference_discrepancy": 1.031638770698662e-15,
+      "negative_orientation_count": 0,
+      "radius_match_count": 0,
+      "failed_angles": [
+        86.41938807229981,
+        106.42923130593343
+      ]
+    }
+  ],
+  "paired": [
+    {
+      "cell": "d2-mag-k10",
+      "both": 18,
+      "on_only": [
+        9,
+        10,
+        12,
+        16,
+        24,
+        25,
+        26,
+        30
+      ],
+      "off_only": [
+        6
+      ],
+      "neither": 3,
+      "mcnemar_p": 0.0390625,
+      "family_significant": false
+    },
+    {
+      "cell": "d2-mag-k80",
+      "both": 0,
+      "on_only": [],
+      "off_only": [],
+      "neither": 30,
+      "mcnemar_p": 1,
+      "family_significant": false
+    },
+    {
+      "cell": "d2-mag-k100",
+      "both": 0,
+      "on_only": [],
+      "off_only": [],
+      "neither": 30,
+      "mcnemar_p": 1,
+      "family_significant": false
+    },
+    {
+      "cell": "d3-linear-k10",
+      "both": 28,
+      "on_only": [],
+      "off_only": [
+        6,
+        28
+      ],
+      "neither": 0,
+      "mcnemar_p": 0.5,
+      "family_significant": false
+    },
+    {
+      "cell": "d3-linear-k80",
+      "both": 2,
+      "on_only": [
+        29
+      ],
+      "off_only": [],
+      "neither": 27,
+      "mcnemar_p": 1,
+      "family_significant": false
+    },
+    {
+      "cell": "d3-mag-k10",
+      "both": 18,
+      "on_only": [
+        5,
+        12,
+        13,
+        17,
+        23,
+        25,
+        26,
+        30
+      ],
+      "off_only": [
+        24
+      ],
+      "neither": 3,
+      "mcnemar_p": 0.0390625,
+      "family_significant": false
+    },
+    {
+      "cell": "d3-mag-k80",
+      "both": 0,
+      "on_only": [],
+      "off_only": [],
+      "neither": 30,
+      "mcnemar_p": 1,
+      "family_significant": false
+    }
+  ],
+  "cycle_representatives": {
+    "96": {
+      "cell": "d2-mag-k10",
+      "sign": true,
+      "repetition": 6
+    },
+    "48": {
+      "cell": "d2-mag-k10",
+      "sign": true,
+      "repetition": 20
+    },
+    "38": {
+      "cell": "d2-mag-k10",
+      "sign": false,
+      "repetition": 12
+    },
+    "1": {
+      "cell": "d3-linear-k10",
+      "sign": true,
+      "repetition": 3
+    },
+    "9": {
+      "cell": "d3-linear-k10",
+      "sign": true,
+      "repetition": 17
+    },
+    "2": {
+      "cell": "d3-linear-k10",
+      "sign": false,
+      "repetition": 25
+    },
+    "51": {
+      "cell": "d3-mag-k10",
+      "sign": true,
+      "repetition": 24
+    },
+    "106": {
+      "cell": "d3-mag-k10",
+      "sign": false,
+      "repetition": 23
+    }
+  },
+  "controls": {
+    "rho_linear_2": 0.3183098861837907,
+    "rho_magnitude_2": 0.6691522942169524
+  }
+}

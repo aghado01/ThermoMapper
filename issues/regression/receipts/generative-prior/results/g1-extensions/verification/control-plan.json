@@ -1,0 +1,65 @@
+[
+  {
+    "Repetition": 3,
+    "Output": "results/period-1/trials.jsonl",
+    "Period": 1,
+    "Cell": "d3-linear-k10",
+    "Sign": true,
+    "Settings": "control-settings/period-1.json"
+  },
+  {
+    "Repetition": 25,
+    "Output": "results/period-2/trials.jsonl",
+    "Period": 2,
+    "Cell": "d3-linear-k10",
+    "Sign": false,
+    "Settings": "control-settings/period-2.json"
+  },
+  {
+    "Repetition": 17,
+    "Output": "results/period-9/trials.jsonl",
+    "Period": 9,
+    "Cell": "d3-linear-k10",
+    "Sign": true,
+    "Settings": "control-settings/period-9.json"
+  },
+  {
+    "Repetition": 12,
+    "Output": "results/period-38/trials.jsonl",
+    "Period": 38,
+    "Cell": "d2-mag-k10",
+    "Sign": false,
+    "Settings": "control-settings/period-38.json"
+  },
+  {
+    "Repetition": 20,
+    "Output": "results/period-48/trials.jsonl",
+    "Period": 48,
+    "Cell": "d2-mag-k10",
+    "Sign": true,
+    "Settings": "control-settings/period-48.json"
+  },
+  {
+    "Repetition": 24,
+    "Output": "results/period-51/trials.jsonl",
+    "Period": 51,
+    "Cell": "d3-mag-k10",
+    "Sign": true,
+    "Settings": "control-settings/period-51.json"
+  },
+  {
+    "Repetition": 6,
+    "Cell": "d2-mag-k10",
+    "Period": 96,
+    "Sign": true,
+    "Output": "results/d2-mag-k10-on/trials.jsonl"
+  },
+  {
+    "Repetition": 23,
+    "Output": "results/period-106/trials.jsonl",
+    "Period": 106,
+    "Cell": "d3-mag-k10",
+    "Sign": false,
+    "Settings": "control-settings/period-106.json"
+  }
+]
