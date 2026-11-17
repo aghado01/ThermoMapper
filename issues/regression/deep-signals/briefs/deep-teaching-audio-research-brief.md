@@ -1,6 +1,6 @@
 # Deep Teaching principles for an unsupervised audio model
 
-Date: 2026-11-17. Status: **questions 1 and 2 commissioned for Lean investigation**. The research direction and later questions remain proposals. Historical novelty remains unassessed.
+Date: 2026-11-17. Status: **questions 1 and 2 proved in Lean; reports below**. The research direction and later questions remain proposals. Historical novelty remains unassessed.
 
 ## Purpose
 
@@ -81,6 +81,8 @@ The [phaseless sequence](phaseless-audio/README.md) locates the distinct contrib
 
 ## Proposed Lean questions, in dependency order
 
+Questions 1 and 2 are now settled in the [completion report](deep-teaching/01-depth-four-completion-brief.md#result-and-proof-report--2026-11-17) and [prediction report](deep-teaching/02-predictive-ambiguity-brief.md#result-and-proof-report--2026-11-17). Questions 3–5 remain proposals; the final section gives concrete candidate statements.
+
 ### 1. Complete the first unresolved measurement boundary
 
 **Question:** For every stationary, sign-symmetric binary source of memory at most four with positive length-five word masses, do the separate rectangular DC-power laws at widths one through five, augmented by the two four-site DC-power laws below, determine the transition kernel and its minimal context tree?
@@ -95,7 +97,7 @@ Z_S=\left(\sum_{i\in S}X_i\right)^2,
 
 The proposed augmentation observes the laws of Z_A and Z_B separately. It needs no correspondence between their individual samples. The proposed sharpness statement is that **one extra four-site indicator taper on the same five sites cannot identify the entire class**, even if the original rectangular observations retain all frequency powers jointly within each width. This minimality claim is only within that taper class. Arbitrary real weights, extra windows or paired measurements are different experiments.
 
-There is a concrete algebraic route to test before commissioning the proof:
+The commissioning proposal followed this algebraic route, now verified in the completion report:
 
 1. Existing power-mean second differences recover r_1 through r_4, where r_k=E[X_0 X_k]. Width-four extreme power recovers q=E[X_0 X_1 X_2 X_3]; stationarity also supplies the shifted four-way moment.
 2. Write q_S=E[product of X_i over i in S]. Each selected four-site law gives
@@ -106,19 +108,21 @@ There is a concrete algebraic route to test before commissioning the proof:
    \[
    16\Pr(Y_5=25)=1+4r_1+3r_2+2r_3+r_4+2q+q_A+q_B+q_C.
    \]
-   Thus the two new laws appear to recover the two remaining independent degrees of freedom. Sign symmetry removes odd moments; finite Walsh inversion would recover the length-five law, then positivity permits division to obtain transitions.
+   Thus the two new laws recover the two remaining independent degrees of freedom. Sign symmetry removes odd moments; finite Walsh inversion recovers the length-five law, then positivity permits division to obtain transitions.
 4. For necessity, examine the two-parameter family
    \[
    p_{a,b}(x)=2^{-5}\{1+a\chi_A(x)+b\chi_B(x)-(a+b)\chi_C(x)\},
    \qquad |a|+|b|+|a+b|<1,
    \]
-   where chi_S is the product over S. Each character contains both endpoints, so proper contiguous marginals are fair and both length-four endpoint marginals agree. Check that this defines a positive stationary order-at-most-four source. Cyclic-shift invariance of the full rectangular Fourier-power vector is the proposed reason its law cancels the zero-sum quartic perturbation. Any one four-site indicator taper appears to retain only one linear combination of a and b.
+   where chi_S is the product over S. Each character contains both endpoints, so proper contiguous marginals are fair and both length-four endpoint marginals agree. The report verifies a positive stochastic shift-and-append kernel with invariant uniform histories and this five-word law. Cyclic-shift invariance of the full rectangular Fourier-power vector cancels the zero-sum quartic perturbation. Any one four-site indicator taper retains at most one linear combination of a and b.
 
-All sufficiency and necessity steps above are **candidate derivations**, not a verification report. Connect them to actual `framePower` observations and actual stationary sources. An acceptable result is a proved completion/minimality theorem or a counterexample with the corrected boundary. Counting moments alone is insufficient.
+The [verified completion report](deep-teaching/01-depth-four-completion-brief.md#result-and-proof-report--2026-11-17) connects these steps to actual `framePower` observations and a stationary finite-state source construction. It records the formal hypotheses, all 35 public axiom checks, and the distinction between finite conditional reconstruction and identification under a memory bound.
 
-**Why this matters:** it would identify an exact, modest change in an observation objective that makes previously invisible temporal structure learnable. It extends the existing depth cutoff to a constructive design decision. General depth D is a subsequent question; two tapers at depth four imply no uniform result for larger memory.
+**Why this matters:** it identifies an exact, modest change in an observation objective that makes previously invisible temporal structure learnable. It extends the existing depth cutoff to a constructive design decision. General depth D is a subsequent question; two tapers at depth four imply no uniform result for larger memory.
 
 ### 2. Determine the predictive cost of discarded structure
+
+**Verified outcome:** the [prediction report](deep-teaching/02-predictive-ambiguity-brief.md#result-and-proof-report--2026-11-17) derives the actual family conditionals, their exact two-source minimax costs, a sharp supremal ambiguity cost of 1/8 on the fair-observation fiber, and the complete classification of its linear predictive functionals. Both added tapers remove the population ambiguity term throughout the positive depth-four class.
 
 **Question:** What unavoidable next-symbol prediction error is imposed by training information that cannot distinguish the stationary sources above? Which predictive quantities can still be learned without identifying the full source?
 
@@ -166,7 +170,7 @@ This follows the preceding questions rather than inheriting a sample-complexity 
 
 The follow-up asks how the observation budget and temporal span depend on memory depth. It uses the all-depth stationary collision for finite-sample testing and the depth-four design as a case for recovering a tree from unpaired measurements. [Evidence for memory depth](deep-teaching/evidence-for-memory-depth-brief.md)
 
-Begin by reviewing the candidate depth-four completion theorem and its minimality class. Questions 2 and 3 then measure what the added observations buy. Question 4 connects a reliable teacher to deployment inputs. Question 5 addresses the ultimate data-efficiency claim. No conversation recording is needed to resolve these first mathematical questions.
+Questions 1 and 2 now establish the depth-four design and its predictive consequence. Question 3 must quantify stability before question 4 connects an approximate teacher to deployment inputs. Question 5 addresses the ultimate data-efficiency claim. No conversation recording is needed to resolve these first mathematical questions.
 
 For each later slice brief, require a concrete source class, actual observation operators, exact quantifiers, a useful positive statement and an obstruction or sharpness case where applicable. Standard factorization, conditional-expectation, linear-algebra and risk identities are supporting lemmas. The main deliverable must settle a project decision that those identities alone leave open.
 
@@ -176,15 +180,42 @@ Generator selection and engine implementation follow the resulting contracts. Bo
 
 ## Commissioning record
 
-On 2026-11-17 the user authorized this Lean session to begin [depth-four measurement completion](deep-teaching/01-depth-four-completion-brief.md), followed by [predictive ambiguity and its repair](deep-teaching/02-predictive-ambiguity-brief.md). The owning slice briefs carry proof obligations and verification reports. Questions 3–5 will receive concrete statements informed by those results.
+On 2026-11-17 the user authorized this Lean session to begin [depth-four measurement completion](deep-teaching/01-depth-four-completion-brief.md), followed by [predictive ambiguity and its repair](deep-teaching/02-predictive-ambiguity-brief.md). The owning slice briefs carry proof obligations and verification reports. Questions 3–5 have concrete, unproved statements in the final section, informed by those results.
 
 ## Preparation record
 
 - Reviewed the public paper and patent material in the preceding research discussion; source links above preserve that evidence.
-- Checked current reports for the phaseless slices and context-tree result, and located the corresponding Lean declarations. Reused established results instead of assigning them again. No new proof or numerical claim is reported here.
+- Checked current reports for the phaseless slices and context-tree result, and located the corresponding Lean declarations. Reused established results instead of assigning them again. That preparation pass did not run Lean; the subsequent proof receipts are in the two owning slice reports.
 - Read the existing approach and conformal sequence. This brief supplements their research direction without changing their reported outcomes.
 - Investigation anchors are retained under `artifacts/doc-dive/deep-teaching-research/`; authored findings identify this coordinating session.
 
 ### Doc changes owed
 
 After a proposed theorem is verified, update the approach's measurement and teacher claims with its precise source class, observation regime and stability assumptions. Keep this research brief's conjectures visibly separate from subsequent proof reports.
+
+## Concrete follow-up statements from the depth-four slices
+
+The following are candidate assignments for questions 3–5. They have no Lean verification receipt yet.
+
+**Question 3.** Use the eight real summaries \(m=(M_2,M_3,M_4,M_5,e_4,e_5,e_A,e_B)\), where \(e_4=\Pr(Y_4=16)\), \(e_5=\Pr(Y_5=25)\) and \(e_S=\Pr(Z_S=16)\). Construct the affine map from these summaries to \((r_1,r_2,r_3,r_4,q,q_A,q_B,q_C)\), followed by the signed Walsh map to the 32 word masses. Prove the exact operator norm from a declared weighted supremum norm on \(m\) to block-mass error, with an attained example when possible. On two valid recovered distributions whose four-word history masses are at least \(\eta>0\), test the conditional bound
+\[
+\|q-\widetilde q\|_\infty\leq
+\frac{\|p-\widetilde p\|_\infty}{\eta}.
+\]
+The weights should account for powers up to 25 and probabilities up to 1. Determine which combinations of moment errors control the predictive target more tightly, and construct a small-history-mass family testing the dependence on \(\eta\).
+
+**Question 4.** Let \(U=H\) be the signed causal history, \(Y\) the next-positive indicator, and \(V\) a specified richer offline observation containing \(U\). Build an approximate teacher from the source estimate of question 3 and quantify \(\|\mathbb E[T(V)-\mathbb E[Y\mid V]\mid H]\|_{L^2(\pi)}\) in terms of the measured-law errors and the declared model mismatch. Compare this with a teacher that selects one branch of the Fourier collision. Require an explicit branch-selection example attaining nonzero predictive bias. When the measurements leave both sources admissible, analyze the midpoint or a declared set of conditional probabilities under its stated loss. The completed population design removes the source ambiguity term; the finite-sample estimation and conditional-bias terms still need proofs.
+
+**Question 5.** Begin with independent five-sign blocks from the two-parameter stationary family and the same next-sign target and length-four deployment history for both estimators. Write \(\theta=(a,b,-a-b)\). Estimate its three quartic moments from raw blocks and project onto the zero-sum plane. Compare its induced predictor with the explicit unpooled unbiased estimate
+\[
+\widehat q_{\rm unpooled}(h)=\tfrac12+
+\frac8n\sum_{\ell=1}^n
+\mathbf1\{H_\ell=h\}S_{\ell,4}.
+\]
+The candidate exact averaged excess risks before clipping are
+\[
+R_{\rm projected}=\frac{2-\|\theta\|_2^2}{4n},
+\qquad
+R_{\rm unpooled}=\frac{16-\|\theta\|_2^2}{4n}.
+\]
+Verify these identities, the effects of clipping, and the additional bias under a concrete departure from the zero-sum quartic family. This comparison uses a known structural class, so a learned prior must account for its own data. An unrestricted direct estimator receiving the same raw blocks can reproduce the projection procedure. Any efficiency claim must therefore identify the compared estimator or computational restriction. A separate variant should analyze estimation from the two tapered-power histograms and count their independent recording samples explicitly.

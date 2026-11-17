@@ -7,5 +7,6 @@ import Enthymemata.TimeFrequency.PairedViewLaws
 import Enthymemata.TimeFrequency.UnpairedModels
 import Enthymemata.TimeFrequency.ContextTreeFourier
 import Enthymemata.TimeFrequency.DepthFourSharpness
+import Enthymemata.TimeFrequency.DepthFourPrediction
 
 /-! Phaseless audio recovery statements. -/
