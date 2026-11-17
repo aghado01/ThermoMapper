@@ -2,6 +2,7 @@ import Enthymemata.ActiveSubspace
 import Enthymemata.Ascent
 import Enthymemata.BARS
 import Enthymemata.BassContractionCover
+import Enthymemata.BassGaussianResponse
 import Enthymemata.BassIntegrals
 import Enthymemata.BassSensitivity
 import Enthymemata.BassStructureChain
