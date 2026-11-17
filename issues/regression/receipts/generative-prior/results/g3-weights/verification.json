@@ -5,6 +5,7 @@
       "bytes": 237679,
       "sha256": "53cd4ce274280e2ae38111510ea56fb6ee6030fbfce76e211cc5231321368939",
       "receipt": "issues/regression/receipts/generative-prior/results/g3-weights/control-matrices.jsonl",
+      "receipt_sha256_lf": "d825ef6f240c63a7120f533eadadf4ae6f6c682595d85ff1b02cb78b5c55aa9f",
       "replay": "artifacts/generative-prior/g3-weights-replay/results/control-matrices.jsonl",
       "replay_sha256": "53cd4ce274280e2ae38111510ea56fb6ee6030fbfce76e211cc5231321368939",
       "exact_replay": true
@@ -14,6 +15,7 @@
       "bytes": 223481,
       "sha256": "f431b7d48ff41855c179d2d8dfa7baa2a08a7dbc72ff9b3a0f350e537a1eb38c",
       "receipt": "issues/regression/receipts/generative-prior/results/g3-weights/readings.jsonl",
+      "receipt_sha256_lf": "bb0b63e27e21514c1367bf71e416b2484029d2ee614bc599f287ece24e834068",
       "replay": "artifacts/generative-prior/g3-weights-replay/results/readings.jsonl",
       "replay_sha256": "f431b7d48ff41855c179d2d8dfa7baa2a08a7dbc72ff9b3a0f350e537a1eb38c",
       "exact_replay": true
@@ -23,6 +25,7 @@
       "bytes": 28808,
       "sha256": "d68c2f7097245982bf5c06f54168db49686641fba752f94aef56a0552f026087",
       "receipt": "issues/regression/receipts/generative-prior/results/g3-weights/summary.json",
+      "receipt_sha256_lf": "34f9eb9c53930a032625a5e9cd92c95e4dc8275d809b1221b23e2b70bf852537",
       "replay": "artifacts/generative-prior/g3-weights-replay/results/summary.json",
       "replay_sha256": "d68c2f7097245982bf5c06f54168db49686641fba752f94aef56a0552f026087",
       "exact_replay": true
@@ -31,7 +34,8 @@
       "actual": "artifacts/generative-prior/g3-weights-primary/analysis/audit.json",
       "receipt": "issues/regression/receipts/generative-prior/results/g3-weights/audit.json",
       "bytes": 4701,
-      "sha256": "c70df0a32bc35e54766c4a4ba364e1160c3b30ec120785d24ac13e29ffc93aaf"
+      "sha256": "c70df0a32bc35e54766c4a4ba364e1160c3b30ec120785d24ac13e29ffc93aaf",
+      "receipt_sha256_lf": "cea389dcf6d5a0ded42cb3ffc885fd7ea6fcf14051a9e44ced3082fb91c33946"
     }
   ]
 }

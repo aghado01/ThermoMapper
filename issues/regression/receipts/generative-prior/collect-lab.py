@@ -24,8 +24,9 @@ def main():
         record = {"actual": source.as_posix(), "bytes": source.stat().st_size, "sha256": sha(source)}
         if source.name != "posterior-draws.jsonl":
             target = a.output / source.name
-            shutil.copyfile(source, target)
+            target.write_bytes(source.read_bytes().replace(b"\r\n", b"\n"))
             record["receipt"] = target.as_posix()
+            record["receipt_sha256_lf"] = sha(target)
         if a.replay:
             replay = a.replay / "results" / source.name
             record["replay"] = replay.as_posix()
@@ -34,10 +35,11 @@ def main():
             assert record["exact_replay"], source
         records.append(record)
     for source in sorted((a.run / "analysis").glob("*.json")):
-        shutil.copyfile(source, a.output / source.name)
+        (a.output / source.name).write_bytes(source.read_bytes().replace(b"\r\n", b"\n"))
         records.append({"actual": source.as_posix(), "receipt": (a.output / source.name).as_posix(),
-                        "bytes": source.stat().st_size, "sha256": sha(source)})
-    (a.output / "verification.json").write_text(json.dumps({"files": records}, indent=2) + "\n")
+                        "bytes": source.stat().st_size, "sha256": sha(source),
+                        "receipt_sha256_lf": sha(a.output / source.name)})
+    (a.output / "verification.json").write_bytes((json.dumps({"files": records}, indent=2) + "\n").encode())
     print(json.dumps({"files": len(records), "copied_bytes": sum(r["bytes"] for r in records if "receipt" in r),
                       "exact_replay": bool(a.replay)}))
 
