@@ -1,5 +1,7 @@
 import Enthymemata.TimeFrequency.CircularGaussianPowers
 import Enthymemata.TimeFrequency.ExponentialMaximum
+import Enthymemata.TimeFrequency.GaussianComplexPowers
+import Enthymemata.TimeFrequency.GaussianQuadraticVariance
 import Enthymemata.TimeFrequency.LogLaplace
 import Enthymemata.TimeFrequency.LogPowerCovariance
 import Enthymemata.TimeFrequency.PeakOfExponentials
