@@ -231,3 +231,34 @@ On a positive-length knot span, only the two adjoining hat pieces contribute. Th
 #### Methods
 
 Completing the square in each independent Gaussian block gives the joint power transform 1/((1+s)(1+t)−κst), including κ=1. The Frullani representation of log x has absolute kernel integral |log x|. The diagonal transform then gives finite second log moments, which justify Fubini for the mixed log product. Subtracting the two mean kernels leaves a nonnegative geometric expansion. Each separated term has double integral κⁿ/n², and ζ(2) bounds their sum through κ=1. This route proves the covariance and both interchanges directly.
+
+### 2026-11-16 — S12 expected exponential maximum
+
+**Proof revision `f9f6a88`.** `TimeFrequency.expected_exponentialMaximum` proves E[max Xᵢ] = Hₘ for every sample size m ≥ 1. The coordinates on the probability space are measurable, jointly independent and each has Mathlib's `expMeasure 1` law. `exponentialMaximum_cdf` gives the maximum's distribution function on t ≥ 0 and `exponentialMaximum_integrable` proves finite absolute expectation. The product-law witness `exponentialMaximum_two` evaluates the maximum of two actual draws to 3/2. The module built with five axiom checks, each printing only `propext`, `Classical.choice` and `Quot.sound`.
+
+#### Methods
+
+The event that every coordinate is at most t is a finite intersection. Independence gives its probability (1−exp(−t))ᵐ. At t=0 this gives strict positivity almost surely. Layer cake turns the mean into the survival integral from the original S12 proof. The strictly positive harmonic value also yields Bochner integrability.
+
+### 2026-11-16 — S14/S4 Gaussian marginal response
+
+**Proof revision `78a1f4e`.** `BASS.gaussian_linear_response` proves that Zβ+ε has Gaussian law whenever (β,ε) has Gaussian law as a real vector. `BASS.gaussian_marginal_response` takes independent centered Gaussian coefficient and noise vectors with covariance matrices (σ²/τ)(ZᵀΩ⁻¹Z)⁻¹ and σ²Ω. It concludes jointly that the response is Gaussian, its mean is zero and its covariance is σ²(Ω+τ⁻¹Z(ZᵀΩ⁻¹Z)⁻¹Zᵀ). This is a law and covariance result for the stated input covariances, including singular cases. A density or normalization via log determinant requires additional hypotheses.
+
+`unit_gaussian_response` uses identity design and two independent N(0,1) draws. The response law equals N(0,2). The module built with three axiom checks, each printing only `propext`, `Classical.choice` and `Quot.sound`.
+
+#### Methods
+
+The continuous linear map (β,ε) ↦ Zβ+ε preserves Gaussianity. Gaussian second moments are finite. Independence factors each coefficient–noise product expectation, and centering makes it zero. Passing the resulting raw second moments to the existing `BASS.marginal_covariance` theorem identifies the centered response covariance.
+
+### 2026-11-16 — S11/S15 Gaussian fourth moments and combined verification
+
+**Proof revision `6c08cfc`.** `TimeFrequency.gaussian_four_projections` proves the three Isserlis pairings for four continuous real linear observations of a centered Gaussian measure on a separable real Banach space. `gaussian_complex_fourth` proves the corresponding identity for four complex-valued real-linear observations. Both include degenerate Gaussian measures.
+
+- **S11.** `covariance_gaussian_powers` takes a jointly real-Gaussian pair of complex variables with vector mean zero. It proves Cov(|a|²,|b|²) = |E[a conj(b)]|² + |E[ab]|², using `cov_normSq_pairing` with its fourth-moment premise discharged. `realGaussian_complex_witness` embeds a single standard real Gaussian in both coordinates. Its pseudo-covariance is one and its power covariance is two.
+- **S15.** `gaussian_coordinate_pairing` supplies the original `Pairing` tensor from the centered finite Gaussian vector. `variance_gaussian_quadForm` gives Var(xᵀHx) = 2 tr((HS)²) for every symmetric real H, with S computed from the law. It covers singular S. `standardNormal_square_variance` checks the one-coordinate value two.
+
+**Combined verification.** `lake build` passed (3378 jobs) and `pwsh -NoProfile -File lean/scripts/meta-ci.ps1 -NoBuild` passed on the shared checkout. The three S11/S15 modules emitted thirteen public declaration audits, all with only `propext`, `Classical.choice` and `Quot.sound`. S12 and S14/S4 also passed direct file elaboration with all eight printed axiom checks. Mathlib's scoped cache fetch supplied 21 files for the exponential and Gaussian modules. Independent archive replay and promotion remain with the coordinator.
+
+#### Methods
+
+Four derivatives of the real Gaussian moment-generating function give E[X⁴] = 3 Var(X)² for centered X. Polarizing with A+B and A−B gives E[A²B²]. A second polarization, this time of (A±B)²(C±D)², gives all three pairings. The real and imaginary parts of each complex observation are real linear functionals. Expanding their finite sums therefore yields the complex tensor, also when some of the observations are conjugated. Evaluating it on a, conj(a), b, conj(b) gives S11. Evaluating it on coordinate projections supplies the integrable moments used by S15's trace calculation.
