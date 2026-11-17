@@ -1,0 +1,12 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <StartupObject>GenerativePrior.LabProgram</StartupObject>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <ServerGarbageCollection>false</ServerGarbageCollection>
+  </PropertyGroup>
+  <ItemGroup>
+    <Compile Include="../probe/*.cs" Link="reference/%(Filename)%(Extension)" />
+    <ProjectReference Include="$(RepositoryRoot)projects/Maths.Regression/Maths.Regression.csproj" />
+  </ItemGroup>
+</Project>

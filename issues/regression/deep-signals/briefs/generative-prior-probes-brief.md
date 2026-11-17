@@ -306,6 +306,22 @@ Continue G1, then G3, G4, G2 and G5. Each block receives committed settings and 
 
 **Reruns.** Preserve original rows and gates. A bridge, reference or finiteness failure triggers same-seed diagnosis and replay before interpretation. A sign-comparison significance finding is reported at the registered family threshold, with no tuning or added seeds. Validate any newly skipped deterministic cycle length on a full unaccelerated path. Replay at least one new magnitude and one new depth-three path on a fresh pinned build. Keep heavy execution serial, capped and below normal priority.
 
+## G3 report — layer weight conditions
+
+### Protocol frozen before G3 execution
+
+Execute after the G1 extension report. Use k = 2, 8, 16 and n/k = 8, 32, 128, 512, with 10 independent repetitions. Derive k masters by `SeedTree.Derive(181204180,3)`, then ten repetition seeds each. Each repetition derives separate streams for Gaussian rows, spherical rows, sparse directions, knots, the training design and pair orientations. Widths use nested raw-row prefixes rescaled by n, so repeated widths within a repetition are paired.
+
+Compare Gaussian rows N(0,I/n), uniform-sphere rows scaled by √(k/n), and the engine's independent sparse directions with active count uniform on 1..min(3,k), uniform coordinate subsets and `DirectionalTermSpace.DrawDirection`. Use the same sparse directions without thresholds and with engine-drawn knots. Train the knot law on 512 independent standard Gaussian cases, transformed by the engine's fitted standardization, with q = 1 − 20/512 and local probability 2/3. Check the engine knot bounds against sorted scalar projections and a type-7 quantile at tolerance 10⁻¹⁰. Scale knots by the same √(k/n) factor as sparse rows.
+
+For each matrix, measure ‖WᵀW − I‖₂ and the maximum sampled ‖Σ 1{w·x > t}1{w·y > t}wwᵀ − Q(x,y)‖₂. Use angles 0, π/12, π/4, π/2, 3π/4 and π, with four independent random orientations each. Include x = y = e₁, x = e₁ and y = e₂, and opposite e₁ explicitly. Threshold-free inputs have unit radius. Thresholded inputs use equal radii 0.5, 1 and 2 in standardized coordinates. Q uses the Gaussian angle formula, and parallel/opposite controls are I/2 and zero.
+
+Check dense symmetric eigenvalues against the scalar Jacobi oracle on the explicit controls for every cell, to 10⁻⁹ × max(1, operator norm), with eigenpair residuals at the same tolerance. Report ten-repetition medians and ranges. The empirical width decision is the first tested n/k whose median sampled maximum is ≤ 0.1. A sampled maximum is a lower bound on the uniform supremum, so meeting that reading gives sampled evidence only.
+
+At the widest threshold-free layer, compare the pooled e₁/e₁ second-diagonal mean with 1/2 for Gaussian/spherical rows and (A − 1)/(4(k − 1)) for sparse rows, A = min(3,k). Require agreement within four repetition-based standard errors plus 10⁻¹⁰. At k = 8 the sparse prediction is 1/14, giving the 3/7 population gap from I/2. Record this witness beside every sampled maximum. No finite-width sample is required to meet an unmeasured uniform WDC.
+
+On a numerical-control failure replay that same seeded case and diagnose before interpreting the layer law. A lone witness deviation between four and five standard errors gets one replay on the same seeds to check reproducibility and is reported against its original gate. No new widths, seeds or tolerances are substituted. Preserve pair matrices for the widest k = 8 controls, scalar witness rows for every cell, and compact summaries. Execution remains serial, capped and below normal priority.
+
 ## Exposition
 
 In noiseless recovery through a bias-free Gaussian ReLU generator of widths 10 → 250 → 600, 150 Gaussian measurements sufficed to recover the generating code in all 30 independent repetitions of the signed descent experiment. At each iteration the method evaluated the quadratic measurement loss at both signs and took a unit gradient step from the lower-loss sign. Seventeen starts changed sign, all on the first comparison. No selected iterate had an exactly zero layer preactivation, so the practical gradient agreed with the paper's subgradient algorithm throughout these runs.

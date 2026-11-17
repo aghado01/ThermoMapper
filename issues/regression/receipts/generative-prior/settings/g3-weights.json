@@ -1,0 +1,7 @@
+{
+  "MasterSeed": 181204180, "Dimensions": [2, 8, 16], "Ratios": [8, 32, 128, 512],
+  "Repetitions": 10, "TrainingCases": 512, "ActiveCases": 20, "LocalProbability": 0.6666666666666666,
+  "Radii": [0.5, 1, 2], "Orientations": 4,
+  "Angles": [0, 0.2617993877991494, 0.7853981633974483, 1.5707963267948966, 2.356194490192345, 3.141592653589793],
+  "DecisionEpsilon": 0.1, "ReferenceTolerance": 1e-9, "WitnessStandardErrors": 4
+}
