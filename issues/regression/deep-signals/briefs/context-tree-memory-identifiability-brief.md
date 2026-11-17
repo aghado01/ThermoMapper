@@ -44,3 +44,37 @@ $$p_\varepsilon(s)=2^{-L}\big[1+\varepsilon(\chi_A(s)-\chi_{A'}(s))\big].$$
 Close the slice with the low-depth recovery theorem, the all-D high-depth source construction, and the asymmetric-cell witness, or record the first counterexample to the proposed boundary and the corrected scope. A stationary finite history chain with a verified invariant law suffices to realize the source. Link the named declarations, build and axiom checks in this brief under the [Lean harness conventions](../../../../lean/README.md).
 
 Drafting checks used exact integer enumeration. For each D = 1,…,7, group nonempty even subsets of an L-word by translations, sum χ_A within each group, and sum those columns over each labeled DC-power bin. The resulting ranks were 1, 2, 4, 6, 9, 12, 16 against 1, 2, 4, 8, 16, 32, 64 columns. For D = 4,…,7 the proposed perturbation summed to zero on every within-width autocorrelation-vector fiber, and shifted the asymmetric-cell event by ε/8. These checks support the posed statements. The general Lean proofs remain open.
+
+## Verified result — 2026-11-16
+
+The proposed cutoff holds for the stated experiment. The sufficiency result assumes a common known memory bound, stationary sign-symmetric binary sources, and positive probabilities for every word of length D+1. Each observation is a separate exact population law tagged by width.
+
+### Reconstruction through depth three
+
+Write \(M_0=0\) and \(M_1=1\). Expanding the square and grouping pairs by their lag gives
+
+$M_w=w+2\sum_{k=1}^{w-1}(w-k)r_k,\qquad r_k=\frac{M_{k+1}-2M_k+M_{k-1}}{2}\quad(k\ge1).$
+
+At width four, the event \(Y_4=16\) comprises just the two constant words. The fourth moment is \(q=8\Pr(Y_4=16)-1-3r_1-2r_2-r_3\). These identities are `power_mean_formula`, `mean_second_difference`, `mean_pair` and `fourth_from_dc`. [ContextTreeRecovery.lean](../../../../lean/Enthymemata/TimeFrequency/ContextTreeRecovery.lean)
+
+Sign symmetry annihilates odd moments. Pairing a word with its complement in the finite Walsh inversion leaves the constant term, the pair terms and, at width four, the four-way term. The two complementary atoms have equal probability. Thus every word mass through width D+1 is determined for D≤3. The positive prefix mass is the sum of its two extension masses. Dividing each extension mass by that sum gives the next-sign kernel for an order-at-most-D source. The minimal tree retains exactly the shortest suffixes on whose full-history extensions the kernel is constant. At D=0 the unique history is empty and each next sign has probability one half. The corresponding declarations are `odd_mean_zero`, `small_inversion`, `small_block_identified`, `prefix_mass`, `kernel_denominator_pos`, `low_depth_recovery`, `empty_history_kernel` and `constant_kernel_tree`.
+
+### Stationary collision at every greater depth
+
+The construction uses m=D−4, so D=m+4 and L=m+5 include the boundary case D=4. The length-L law adds the specified difference of even sign characters to the fair law with weight ε, where 0<ε<1/2. Reversing the word changes the sign of the difference. Strict positivity, total mass one, and simultaneous sign symmetry hold for every m. The two endpoint sums both equal 2⁻ᴰ for each fixed remaining word. On a uniform history h, append b with probability K(b∣h)=2ᴰpε(hb), then shift by one. The history and appended bit have joint mass pε(hb), and summing incoming masses preserves the uniform history distribution. `stationary_history` proves invariance against every real test of the destination. `path_sign_flip` verifies symmetry for any finite continuation. See `weight_positive`, `weight_total`, `weight_symmetric`, `outgoing_mass`, `incoming_mass`, `transition_stochastic` and `block_flow`. [ContextTreeCollision.lean](../../../../lean/Enthymemata/TimeFrequency/ContextTreeCollision.lean)
+
+With all interior signs positive except site 1, the histories differing only at the oldest site give next-positive probabilities (1−2ε)/2 and (1+2ε)/2, respectively for positive and negative oldest sign. Both histories have positive stationary mass. This proves exact memory D. Fair IID gives probability one half after every history and its sole context is the empty suffix. The perturbed tree lacks that leaf. See `exact_memory`, `fair_kernel`, `fair_tree` and `different_trees`.
+
+Every proper contiguous subblock has the fair word law. At full width, the antisymmetric perturbation sums to zero on every fiber of a reversal-invariant observable (`proper_observable`, `fiber_cancels`, `invariant_observable`). Reversing a real rectangular frame conjugates its DFT and multiplies each bin by a phase of modulus one. The entire labeled vector of powers is therefore invariant. `all_width_power_laws` and `all_width_dc_laws` prove equality of the full distributions for every width through D+1 and every admissible contiguous start. The former keeps the frequencies jointly within each width. The proof uses the existing unnormalized `frameDFT` and `framePower`. See `dft_reversal`, `rectangular_reversal`, `dc_is_rectangular` and the combined `high_depth_collision`. [ContextTreeFourier.lean](../../../../lean/Enthymemata/TimeFrequency/ContextTreeFourier.lean)
+
+The DC cell with weights one on A={0,1,2,L−1} and zero elsewhere reaches 16 exactly when the four selected signs agree. Fair IID gives those two assignments total probability 1/8. On that event χ_A=1. Flipping the reflected site L−2 preserves the event and negates χ_A′, so the reflected character contributes zero. The perturbed probability is (1+ε)/8. `asymmetric_taper_dc` identifies the sparse cell with the actual rectangular DC code, while `fair_asymmetric` and `perturbed_asymmetric` compute its two bin masses. This cell distinguishes the constructed pair. Recovery of every depth-D tree with augmented measurements and the effect of pairing successive windows remain open.
+
+### Verification
+
+The complete `lake build` passed (3,747 jobs). `lean/scripts/meta-ci.ps1 -NoBuild` passed and classified all three modules as proof-closed in `Enthymemata`. The 48 `#print axioms` listings cover every public theorem and the fair-source construction (15 in recovery, 24 in the stationary collision and 9 in the Fourier module). None contained an axiom outside `propext`, `Classical.choice` and `Quot.sound`. All three compiled without warnings.
+
+A separate integer enumeration at ε=1/4 tested all 32, 64, 128, 256 and 512 words for D=4 through 8, respectively. Summing the signed perturbation on each full circular-autocorrelation vector gave zero at every depth. The IID and perturbed asymmetric event masses were 1/8 and 5/32 in each case, and the two marked histories gave next-positive probabilities 1/4 and 3/4.
+
+### Doc changes owed
+
+Record the depth-three cutoff with the binary source assumptions and observation protocol. Give the depth-four boundary witness and the four-site taper as an example of a measurement choice that changes identifiability.

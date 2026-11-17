@@ -64,7 +64,8 @@ theorem full_power_law (m : ℕ) (ε : ℝ) (v : Fin (L m) → ℝ) :
 /-- All frequencies are delivered jointly within a width. The starts may be any
 contiguous subblocks. No joint experiment across widths is asserted. -/
 theorem all_width_power_laws {m w o : ℕ} (ho : o + w ≤ L m) (ε : ℝ) (v : Fin w → ℝ) :
-    bin (weight m ε) (fun x ↦ powerVector (slice x o w ho)) v = bin (fun _ ↦ uniform w) powerVector v := by
+    bin (weight m ε) (fun x ↦ powerVector (slice x o w ho)) v =
+      bin (fun _ ↦ uniform w) powerVector v := by
   by_cases hw : w = L m
   · subst w
     have hz : o = 0 := by omega
@@ -118,7 +119,8 @@ theorem high_depth_collision {d : ℕ} (hd : 4 ≤ d) {ε : ℝ} (hε : 0 < ε) 
     refine Fin.cases (by simp) (fun j _ ↦ congrFun ht j) i
   exact ⟨weight m ε, transition m ε, asymmetric, weight_positive hε hu, weight_total _ _,
     weight_symmetric _, transition_stochastic _ hε hu, block_flow _ _, stationary_history _ _,
-    ⟨h, h', he, hdiff⟩, fun _ _ h ↦ all_width_power_laws h ε, perturbed_asymmetric _ _, fair_asymmetric _⟩
+    ⟨h, h', he, hdiff⟩, fun _ _ h ↦ all_width_power_laws h ε,
+    perturbed_asymmetric _ _, fair_asymmetric _⟩
 
 #print axioms dft_reversal
 #print axioms rectangular_reversal

@@ -36,6 +36,15 @@ theorem bin_mean {X Y : Type*} [Fintype X] [DecidableEq Y] (p : X → ℝ) (f : 
     simp [Ne.symm hy]
   · simp
 
+private theorem mean_add {X : Type*} [Fintype X] (p : X → ℝ) (f g : X → ℤ) :
+    mean p (fun x ↦ f x + g x) = mean p f + mean p g := by
+  simp [mean, mul_add, sum_add_distrib]
+
+private theorem mean_scale {X : Type*} [Fintype X] (p : X → ℝ) (a : ℤ) (f : X → ℤ) :
+    mean p (fun x ↦ a * f x) = a * mean p f := by
+  simp only [mean, Int.cast_mul, mul_sum]
+  apply sum_congr rfl; intros; ring
+
 /-- Finite cylinder laws of a stationary sign-symmetric source. Translation consistency
 is stated against integer tests, which include every word indicator. -/
 structure Source where
@@ -57,11 +66,8 @@ private theorem agree_const (P Q : Source) (n : ℕ) (c : ℤ) : Agree P Q (fun 
 private theorem agree_linear {n : ℕ} {P Q : Source} {f g : Word n → ℤ}
     (a b : ℤ) (hf : Agree P Q f) (hg : Agree P Q g) :
     Agree P Q (fun x ↦ a * f x + b * g x) := by
-  have lin (p : Word n → ℝ) : mean p (fun x ↦ a * f x + b * g x) =
-      a * mean p f + b * mean p g := by
-    simp only [mean, Int.cast_add, Int.cast_mul, mul_add, sum_add_distrib, mul_sum]
-    congr 1 <;> apply sum_congr rfl <;> intros <;> ring
-  exact (lin _).trans ((congrArg₂ (fun u v : ℝ ↦ a * u + b * v) hf hg).trans (lin _).symm)
+  unfold Agree at *
+  rw [mean_add, mean_add, mean_scale, mean_scale, mean_scale, mean_scale, hf, hg]
 
 private theorem agree_sum {n : ℕ} {I : Type*} [Fintype I] {P Q : Source} (f : I → Word n → ℤ)
     (h : ∀ i, Agree P Q (f i)) : Agree P Q (fun x ↦ ∑ i, f i x) := by
@@ -91,15 +97,27 @@ theorem dc_second_difference (k : ℕ) (x : Word (k + 2)) :
     rw [Fin.sum_univ_castSucc, Fin.sum_univ_succ]; rfl
   have hb : (∑ i, sign (slice x 0 (k + 1) (by omega) i)) = sign (x 0) + s := by
     rw [Fin.sum_univ_succ]
-    simp [slice, s]
-    apply sum_congr rfl; intro i _; rfl
+    simp only [slice, Nat.zero_add, s, Fin.val_zero, Fin.val_succ]
+    rfl
   have hc : (∑ i, sign (slice x 1 (k + 1) (by omega) i)) = s + sign (x (Fin.last (k + 1))) := by
     rw [Fin.sum_univ_castSucc]
     congr 1
-    · apply sum_congr rfl; intro i _; unfold slice; apply congrArg (sign ∘ x); apply Fin.ext; simp; omega
+    · apply sum_congr rfl
+      intro i _
+      unfold slice
+      apply congrArg (sign ∘ x)
+      apply Fin.ext
+      simp
+      omega
     · unfold slice; apply congrArg (sign ∘ x); apply Fin.ext; simp; omega
   have hd : (∑ i, sign (slice x 1 k (by omega) i)) = s := by
-    apply sum_congr rfl; intro i _; unfold slice; apply congrArg (sign ∘ x); apply Fin.ext; simp; omega
+    apply sum_congr rfl
+    intro i _
+    unfold slice
+    apply congrArg (sign ∘ x)
+    apply Fin.ext
+    simp
+    omega
   simp only [dc, ha, hb, hc, hd]
   ring
 
@@ -113,14 +131,7 @@ theorem mean_second_difference (P : Source) (k : ℕ) :
   have lin {n : ℕ} (p : Word n → ℝ) (f g : Word n → ℤ) :
       mean p (fun x ↦ f x - g x) = mean p f - mean p g := by
     simp [mean, mul_sub, sum_sub_distrib]
-  have add {n : ℕ} (p : Word n → ℝ) (f g : Word n → ℤ) :
-      mean p (fun x ↦ f x + g x) = mean p f + mean p g := by
-    simp [mean, mul_add, sum_add_distrib]
-  have dbl {n : ℕ} (p : Word n → ℝ) (f : Word n → ℤ) :
-      mean p (fun x ↦ 2 * f x) = 2 * mean p f := by
-    simp only [mean, Int.cast_mul, Int.cast_ofNat, mul_sum]
-    apply sum_congr rfl; intros; ring
-  simp only [mul_assoc, add, lin, dbl] at h
+  simp only [mul_assoc, mean_add, lin, mean_scale, Int.cast_ofNat] at h
   rw [P.translation _ 0 (k + 1) _ dc, P.translation _ 1 (k + 1) _ dc, P.translation _ 1 k _ dc] at h
   unfold powerMean lag
   linarith
@@ -130,7 +141,8 @@ theorem mean_pair (P : Source) {n : ℕ} (i j : Fin n) (hij : i < j) :
   let d := j.val - i.val
   have hlen : i.val + (d + 1) ≤ n := by dsimp [d]; omega
   let f := fun y : Word (d + 1) ↦ sign (y 0) * sign (y (Fin.last d))
-  have he : (fun x : Word n ↦ sign (x i) * sign (x j)) = fun x ↦ f (slice x i.val (d + 1) hlen) := by
+  have he : (fun x : Word n ↦ sign (x i) * sign (x j)) =
+      fun x ↦ f (slice x i.val (d + 1) hlen) := by
     funext x
     have h := show i.val + d = j.val by dsimp [d]; omega
     simp [f, slice, h]
@@ -216,7 +228,8 @@ theorem small_block_identified {D n : ℕ} {P Q : Source} (h : SameDC D P Q)
         ((2: ℝ) ^ (n - 1)) * (p.law n t + p.law n t) := by
     calc _ = (2: ℝ) ^ (n - 1) * (mean (p.law n) (fun x ↦ hit x t) +
           mean (p.law n) (fun x ↦ hit x (flip t))) := by
-            simp only [mean, Int.cast_mul, Int.cast_pow, Int.cast_ofNat, Int.cast_add, ← sum_add_distrib, mul_sum]
+            simp only [mean, Int.cast_mul, Int.cast_pow, Int.cast_ofNat, Int.cast_add,
+              ← sum_add_distrib, mul_sum]
             apply sum_congr rfl; intros; ring
       _ = _ := by rw [mean_hit, mean_hit, p.symmetry]
   rw [ht, ht] at hall
@@ -229,7 +242,8 @@ noncomputable def nextKernel (D : ℕ) (p : Word (D + 1) → ℝ) (h : Word D) (
 /-- A suffix is a leaf when its next-sign law is constant over all full histories
 that end in it, and no proper suffix has that property. -/
 def minimalTree {D : ℕ} (K : Word D → Bool → ℝ) : Set (List Bool) :=
-  let constant := fun s : List Bool ↦ ∀ h h' : Word D, s <:+ List.ofFn h → s <:+ List.ofFn h' → K h = K h'
+  let constant := fun s : List Bool ↦ ∀ h h' : Word D,
+    s <:+ List.ofFn h → s <:+ List.ofFn h' → K h = K h'
   {s | (∃ h : Word D, s <:+ List.ofFn h) ∧ constant s ∧
     ∀ u : List Bool, u <:+ s → u.length < s.length → ¬ constant u}
 
@@ -241,15 +255,6 @@ theorem low_depth_recovery {D : ℕ} (hD : D ≤ 3) {P Q : Source} (h : SameDC D
 
 theorem kernel_denominator_pos {D : ℕ} {p : Word (D + 1) → ℝ} (hp : ∀ x, 0 < p x) (h : Word D) :
     0 < p (Fin.snoc h false) + p (Fin.snoc h true) := add_pos (hp _) (hp _)
-
-private theorem mean_add {X : Type*} [Fintype X] (p : X → ℝ) (f g : X → ℤ) :
-    mean p (fun x ↦ f x + g x) = mean p f + mean p g := by
-  simp [mean, mul_add, sum_add_distrib]
-
-private theorem mean_scale {X : Type*} [Fintype X] (p : X → ℝ) (a : ℤ) (f : X → ℤ) :
-    mean p (fun x ↦ a * f x) = a * mean p f := by
-  simp only [mean, Int.cast_mul, mul_sum]
-  apply sum_congr rfl; intros; ring
 
 theorem power_mean_formula (P : Source) (w : ℕ) :
     powerMean P w = w + 2 * ∑ i ∈ range w, ((w : ℝ) - (i + 1)) * lag P (i + 1) := by
@@ -277,7 +282,6 @@ theorem fourth_from_dc (P : Source) : 8 * bin (P.law 4) dc 16 =
   have he : (fun x : Word 4 ↦ 8 * hit (dc x) 16) = fun x ↦
       1 + p 0 1 x + p 0 2 x + p 0 3 x + p 1 2 x + p 1 3 x + p 2 3 x + character x := by
     funext x
-    change 8 * hit (dc x) 16 = _
     dsimp [p]
     decide +revert
   have h := congrArg (mean (P.law 4)) he
@@ -313,8 +317,8 @@ theorem prefix_mass (P : Source) (D : ℕ) (h : Word D) :
   rw [← (Fin.snocEquiv (fun _ : Fin (D + 1) ↦ Bool)).sum_comp g, Fintype.sum_prod_type] at hm
   change (∑ b : Bool, ∑ w : Word D, P.law _ (Fin.snoc w b) *
     ((hit (slice (Fin.snoc w b : Word (D + 1)) 0 D (by omega)) h : ℤ) : ℝ)) = _ at hm
-  simp only [he, Fintype.sum_bool, hit, Int.cast_ite, Int.cast_one, Int.cast_zero, mul_ite, mul_one, mul_zero,
-    sum_ite_eq', mem_univ, if_true] at hm
+  simp only [he, Fintype.sum_bool, hit, Int.cast_ite, Int.cast_one, Int.cast_zero, mul_ite,
+    mul_one, mul_zero, sum_ite_eq', mem_univ, if_true] at hm
   linarith
 
 theorem constant_kernel_tree {D : ℕ} (K : Word D → Bool → ℝ) (hc : ∀ h h', K h = K h') :

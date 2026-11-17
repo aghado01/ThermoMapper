@@ -9,7 +9,7 @@ open Finset
 noncomputable def uniform (n : ℕ) : ℝ := (2 ^ (n : ℕ) : ℝ)⁻¹
 
 theorem uniform_total (n : ℕ) : ∑ _ : Word n, uniform n = 1 := by
-  simp [uniform, Fintype.card_pi_const, Fintype.card_fun]
+  simp [uniform]
 
 private theorem uniform_succ (n : ℕ) : 2 * uniform (n + 1) = uniform n := by
   unfold uniform
@@ -71,7 +71,9 @@ def toggle {n : ℕ} (i : Fin n) (x : Word n) : Word n :=
   fun j ↦ if j = i then !(x j) else x j
 
 def toggleWords {n : ℕ} (i : Fin n) : Word n ≃ Word n :=
-  Function.Involutive.toPerm (f := toggle i) (by intro x; funext j; by_cases h : j = i <;> simp [toggle, h])
+  Function.Involutive.toPerm (f := toggle i) (by
+    intro x; funext j
+    by_cases h : j = i <;> simp [toggle, h])
 
 /-- An antisymmetric weight sums to zero on each invariant observable fiber. -/
 theorem fiber_cancels {X Y : Type*} [Fintype X] [DecidableEq Y]
@@ -91,8 +93,8 @@ namespace Collision
 abbrev L (m : ℕ) := m + 5
 abbrev D (m : ℕ) := m + 4
 
-def one (m : ℕ) : Fin (L m) := ⟨1, by dsimp [L] <;> omega⟩
-def two (m : ℕ) : Fin (L m) := ⟨2, by dsimp [L] <;> omega⟩
+def one (m : ℕ) : Fin (L m) := ⟨1, by dsimp [L]; omega⟩
+def two (m : ℕ) : Fin (L m) := ⟨2, by dsimp [L]; omega⟩
 
 def chi {m : ℕ} (x : Word (L m)) : ℤ :=
   sign (x 0) * sign (x (one m)) * sign (x (two m)) * sign (x (Fin.last (D m)))
@@ -109,7 +111,7 @@ theorem weight_positive {m : ℕ} {ε : ℝ} (hε : 0 < ε) (hu : ε < 1 / 2)
     (x : Word (L m)) : 0 < weight m ε x := by
   have h₁ := (abs_le.mp (le_of_eq (chi_abs x))).1
   have h₂ := (abs_le.mp (le_of_eq (chi_abs (reverse x)))).2
-  have hl : (-2: ℝ) ≤ (skew x : ℤ) := by exact_mod_cast (show -2 ≤ skew x by unfold skew <;> omega)
+  have hl : (-2: ℝ) ≤ (skew x : ℤ) := by exact_mod_cast (show -2 ≤ skew x by unfold skew; omega)
   unfold weight
   apply mul_pos (by unfold uniform; positivity)
   nlinarith [mul_le_mul_of_nonneg_left hl hε.le]
@@ -120,13 +122,16 @@ theorem weight_symmetric {m : ℕ} (ε : ℝ) (x : Word (L m)) : weight m ε (fl
 private theorem skew_reverse {m : ℕ} (x : Word (L m)) : skew (reverse x) = -skew x := by
   simp [skew]
 
-private theorem tilted_bin {Y : Type*} [DecidableEq Y] {m : ℕ} (ε : ℝ) (f : Word (L m) → Y) (y : Y) :
+private theorem tilted_bin {Y : Type*} [DecidableEq Y] {m : ℕ} (ε : ℝ)
+    (f : Word (L m) → Y) (y : Y) :
     bin (weight m ε) f y = bin (fun _ ↦ uniform (L m)) f y +
       (uniform (L m) * ε) * bin (fun x ↦ (skew x : ℝ)) f y := by
   simp only [bin, mul_sum, ← sum_add_distrib]
   apply sum_congr rfl
   intro x _
-  by_cases h : f x = y <;> simp [h, weight] <;> ring
+  by_cases h : f x = y
+  · simp only [h, if_true, weight]; ring
+  · simp [h]
 
 theorem invariant_observable {Y : Type*} [DecidableEq Y] {m : ℕ} (ε : ℝ) (f : Word (L m) → Y)
     (hf : ∀ x, f (reverse x) = f x) (y : Y) :
@@ -144,15 +149,16 @@ private theorem endpoint_toggle {m : ℕ} (x : Word (L m)) (i : Fin (L m))
   have neq (a b : Fin (L m)) (h : a.val ≠ b.val) : a ≠ b := fun e ↦ h (congrArg Fin.val e)
   have h1 : (one m) ≠ 0 := neq _ _ (by simp [one])
   have h2 : (two m) ≠ 0 := neq _ _ (by simp [two])
-  have h3 : (one m).rev ≠ 0 := neq _ _ (by simp [one, Fin.rev, L] <;> omega)
-  have h4 : (two m).rev ≠ 0 := neq _ _ (by simp [two, Fin.rev, L] <;> omega)
-  have h5 : (one m) ≠ Fin.last (D m) := neq _ _ (by simp [one, D] <;> omega)
-  have h6 : (two m) ≠ Fin.last (D m) := neq _ _ (by simp [two, D] <;> omega)
-  have h7 : (one m).rev ≠ Fin.last (D m) := neq _ _ (by simp [one, Fin.rev, L, D] <;> omega)
-  have h8 : (two m).rev ≠ Fin.last (D m) := neq _ _ (by simp [two, Fin.rev, L, D] <;> omega)
+  have h3 : (one m).rev ≠ 0 := neq _ _ (by simp [one, Fin.rev, L])
+  have h4 : (two m).rev ≠ 0 := neq _ _ (by simp [two, Fin.rev, L])
+  have h5 : (one m) ≠ Fin.last (D m) := neq _ _ (by simp [one, D])
+  have h6 : (two m) ≠ Fin.last (D m) := neq _ _ (by simp [two, D])
+  have h7 : (one m).rev ≠ Fin.last (D m) := neq _ _ (by simp [one, Fin.rev, L, D])
+  have h8 : (two m).rev ≠ Fin.last (D m) := neq _ _ (by simp [two, Fin.rev, L, D])
   have hn : (Fin.last (D m)) ≠ 0 := neq _ _ (by simp [D])
   rcases hi with rfl | rfl <;>
-    simp [skew, chi, reverse, toggle, h1, h2, h3, h4, h5, h6, h7, h8, hn, Ne.symm hn, sign_not] <;> ring
+    simp [skew, chi, reverse, toggle, h1, h2, h3, h4, h5, h6, h7, h8,
+      hn, Ne.symm hn, sign_not] <;> ring
 
 theorem proper_observable {Y : Type*} [DecidableEq Y] {m w o : ℕ} (hw : w < L m)
     (ho : o + w ≤ L m) (ε : ℝ) (f : Word w → Y) (y : Y) :
@@ -162,7 +168,12 @@ theorem proper_observable {Y : Type*} [DecidableEq Y] {m w o : ℕ} (hw : w < L 
   have avoid (j : Fin w) : (⟨o + j.val, by omega⟩ : Fin (L m)) ≠ i := by
     intro he
     have h := congrArg Fin.val he
-    by_cases hz : o = 0 <;> simp [i, hz, L, D] at h <;> dsimp [L] at hw ho <;> omega
+    dsimp [L] at hw ho
+    by_cases hz : o = 0
+    · simp only [i, if_pos hz, Fin.val_last, D] at h
+      omega
+    · simp only [i, if_neg hz, Fin.val_zero] at h
+      omega
   have hf (x : Word (L m)) : slice (toggle i x) o w ho = slice x o w ho := by
     funext j
     simp [slice, toggle, avoid]
@@ -170,7 +181,12 @@ theorem proper_observable {Y : Type*} [DecidableEq Y] {m w o : ℕ} (hw : w < L 
     change ((skew (toggle i x) : ℤ) : ℝ) = _; rw [endpoint_toggle _ _ hi, Int.cast_neg])
     (fun x ↦ congrArg f (hf x)) y, mul_zero, add_zero]
   let e := fun j : Fin w ↦ (⟨o + j.val, by omega⟩ : Fin (L m))
-  have he : Function.Injective e := by intro a b hab; apply Fin.ext; have := congrArg Fin.val hab; dsimp [e] at this <;> omega
+  have he : Function.Injective e := by
+    intro a b hab
+    apply Fin.ext
+    have := congrArg Fin.val hab
+    dsimp [e] at this
+    omega
   unfold bin slice
   simpa only [e, Function.comp_def, mul_ite, mul_one, mul_zero] using
     uniform_restrict e he (fun x ↦ if f x = y then 1 else 0)
@@ -206,7 +222,7 @@ theorem transition_stochastic (m : ℕ) {ε : ℝ} (hε : 0 < ε) (hu : ε < 1 /
     (∀ b, 0 < transition m ε h b) ∧ ∑ b, transition m ε h b = 1 := by
   have hpos : 0 < uniform (D m) := by unfold uniform; positivity
   refine ⟨fun _ ↦ div_pos (weight_positive hε hu _) hpos, ?_⟩
-  simp [transition, Fintype.sum_bool, ← add_div, add_comm, outgoing_mass, hpos.ne']
+  simp [transition, ← add_div, add_comm, outgoing_mass, hpos.ne']
 
 theorem transition_sign_flip (m : ℕ) (ε : ℝ) (h : Word (D m)) (b : Bool) :
     transition m ε (flip h) (!b) = transition m ε h b := by
@@ -246,7 +262,8 @@ theorem stationary_history (m : ℕ) (ε : ℝ) (f : Word (D m) → ℝ) :
   simp_rw [block_flow]
   let F := fun x : Word (L m) ↦ weight m ε x * f (Fin.tail x)
   calc _ = ∑ x : Word (L m), F x := by
-          rw [sum_comm, ← (Fin.snocEquiv (fun _ : Fin (L m) ↦ Bool)).sum_comp F, Fintype.sum_prod_type]
+          rw [sum_comm, ← (Fin.snocEquiv (fun _ : Fin (L m) ↦ Bool)).sum_comp F,
+            Fintype.sum_prod_type]
           rfl
     _ = _ := by
       rw [← (Fin.consEquiv (fun _ : Fin (L m) ↦ Bool)).sum_comp F, Fintype.sum_prod_type, sum_comm]
@@ -266,13 +283,12 @@ private theorem snoc_marked (m : ℕ) (a : Bool) :
 
 private theorem skew_marked (m : ℕ) (a : Bool) :
     skew (marked a : Word (L m)) = -2 * sign a := by
-  have h₁ : (one m).rev.val = m + 3 := by simp [one, Fin.rev, L] <;> omega
-  have h₂ : (two m).rev.val = m + 2 := by simp [two, Fin.rev, L] <;> omega
-  simp [skew, chi, reverse, marked, h₁, h₂, one, two, D, L, sign]
+  simp [skew, chi, reverse, marked, one, two, D, L, sign]
   split <;> ring
 
 theorem exact_memory (m : ℕ) {ε : ℝ} (hε : 0 < ε) :
-    ∃ h h' : Word (D m), Fin.tail h = Fin.tail h' ∧ transition m ε h true ≠ transition m ε h' true := by
+    ∃ h h' : Word (D m), Fin.tail h = Fin.tail h' ∧
+      transition m ε h true ≠ transition m ε h' true := by
   refine ⟨marked false, marked true, ?_, ?_⟩
   · funext i; simp [Fin.tail, marked]
   · have hu : 0 < uniform (L m) := by unfold uniform; positivity
@@ -288,7 +304,7 @@ theorem fair_kernel (m : ℕ) (h : Word (D m)) (b : Bool) :
     nextKernel (D m) (fun _ ↦ uniform (L m)) h b = 1 / 2 := by
   unfold nextKernel uniform
   field_simp
-  <;> ring
+  ring
 
 theorem fair_tree (m : ℕ) : minimalTree (nextKernel (D m) (fun _ ↦ uniform (L m))) = {[]} := by
   apply constant_kernel_tree
@@ -312,7 +328,8 @@ def selected (m : ℕ) (i : Fin 4) : Fin (L m) :=
 theorem selected_injective (m : ℕ) : Function.Injective (selected m) := by
   intro i j he
   have hv := congrArg Fin.val he
-  fin_cases i <;> fin_cases j <;> (first | rfl | (exfalso; norm_num [selected, one, two, D] at hv <;> omega))
+  fin_cases i <;> fin_cases j <;>
+    (first | rfl | (exfalso; norm_num [selected, one, two, D] at hv <;> omega))
 
 def asymmetric {m : ℕ} (x : Word (L m)) := dc (x ∘ selected m)
 
@@ -324,27 +341,33 @@ private theorem chi_at_top {m : ℕ} (x : Word (L m)) (h : asymmetric x = 16) : 
   rw [← selected_chi]
   exact h₄ _ h
 
-theorem fair_asymmetric (m : ℕ) : bin (fun _ : Word (L m) ↦ uniform (L m)) asymmetric 16 = 1 / 8 := by
-  have hu := uniform_restrict (selected m) (selected_injective m) (fun x ↦ if dc x = 16 then 1 else 0)
+theorem fair_asymmetric (m : ℕ) :
+    bin (fun _ : Word (L m) ↦ uniform (L m)) asymmetric 16 = 1 / 8 := by
+  have hu := uniform_restrict (selected m) (selected_injective m)
+    (fun x ↦ if dc x = 16 then 1 else 0)
   have hc : (∑ x : Word 4, hit (dc x) 16) = 2 := by decide
   have hr : (∑ x : Word 4, ((hit (dc x) 16 : ℤ) : ℝ)) = 2 := by exact_mod_cast hc
   calc _ = uniform 4 * ∑ x : Word 4, ((hit (dc x) 16 : ℤ) : ℝ) := by
           rw [mul_sum]
-          simpa only [bin, asymmetric, hit, Int.cast_ite, Int.cast_one, Int.cast_zero, mul_ite, mul_one, mul_zero] using hu
+          simpa only [bin, asymmetric, hit, Int.cast_ite, Int.cast_one, Int.cast_zero,
+            mul_ite, mul_one, mul_zero] using hu
     _ = _ := by rw [hr]; norm_num [uniform]
 
 private theorem reverse_character_bin (m : ℕ) :
     bin (fun x : Word (L m) ↦ (chi (reverse x) : ℝ)) asymmetric 16 = 0 := by
   let i := (one m).rev
-  have hv : i.val = m + 3 := by simp [i, one, Fin.rev, L] <;> omega
+  have hv : i.val = m + 3 := by simp [i, one, Fin.rev, L]
   have hl : Fin.last (D m) ≠ i := by intro he; have := congrArg Fin.val he; simp [hv, D] at this
   have hz : (0 : Fin (L m)) ≠ i := by intro he; have := congrArg Fin.val he; simp [hv] at this
-  have htwo : (two m).rev ≠ i := by intro he; have := congrArg Fin.val he; simp [hv, two, Fin.rev, L] at this <;> omega
+  have htwo : (two m).rev ≠ i := by
+    intro he
+    have := congrArg Fin.val he
+    simp [hv, two, Fin.rev, L] at this
   apply fiber_cancels (toggleWords i)
   · intro x
     change ((chi (reverse (toggle i x)) : ℤ) : ℝ) = _
     have he : chi (reverse (toggle i x)) = -chi (reverse x) := by
-      simp [chi, reverse, toggle, hl, hz, htwo, i, sign_not] <;> ring
+      simp [chi, reverse, toggle, hl, hz, htwo, i, sign_not]
     rw [he, Int.cast_neg]
   · intro x
     apply congrArg dc
@@ -353,7 +376,7 @@ private theorem reverse_character_bin (m : ℕ) :
     have hj : selected m j ≠ i := by
       intro he
       have h := congrArg Fin.val he
-      fin_cases j <;> simp [selected, hv, one, two, D] at h <;> omega
+      fin_cases j <;> simp [selected, hv, one, two, D] at h
     simp [toggle, hj]
 
 theorem perturbed_asymmetric (m : ℕ) (ε : ℝ) :
