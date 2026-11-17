@@ -18,5 +18,6 @@ import Enthymemata.GenerativePrior
 import Enthymemata.GuardedEstimator
 import Enthymemata.PenalizedAdmission
 import Enthymemata.PottsPK
+import Enthymemata.Spline.HatDesignRank
 import Enthymemata.Stability
 import Enthymemata.TimeFrequency
