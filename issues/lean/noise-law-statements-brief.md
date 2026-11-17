@@ -32,7 +32,7 @@ Numbering continues. Each is the coordinating session's posing; the formulas fro
 
 **S15. The variance of a Gaussian quadratic form** (closing S3's reading). For a real zero-mean vector x with covariance Σ whose fourth moments obey the pairing rule, and symmetric H, Var(xᵀHx) = 2·tr((HΣ)²).
 
-**S16, optional and last. Theorem 4.61 at order 2.** Discharge S7e's premise for hat functions, so the rank-from-greedy equivalence holds unconditionally for degree-1 splines.
+**S16. Theorem 4.61 at order 2 (required follow-up).** Discharge S7e's premise for hat functions, so the rank-from-greedy equivalence holds unconditionally for degree-1 splines.
 
 ## Part B: promotion review
 
@@ -69,6 +69,18 @@ The user has said additive engine work is acceptable so long as it is coherent. 
 ## Working rules
 
 Those of the [first brief](time-frequency-statements-brief.md#working-rules).
+
+## Follow-up queue — 2026-11-16
+
+The user commissioned the remaining proofs in addition to the Lean slices already assigned in the worker chat. Preserve those slices and their order. When an existing slice covers the same result, record its theorem and verification here once.
+
+- **S16.** Discharge `h461` for the actual order-2 hat basis under the admissible knot and site hypotheses, then specialize `fullRank_iff_greedy` to that basis.
+- **S10c.** Derive the log-power covariance for the jointly circular complex Gaussian pair from its law, including justification of the expansion and sum–integral interchange used by `LaguerreProductPremise`, or a direct proof of the same covariance. Identify the probabilistic endpoint at perfect coherence separately from the existing series value.
+- **S11 and S15.** Prove the needed Gaussian fourth moments and specialize the existing power covariance and quadratic-form variance theorems to the actual Gaussian laws. Include the pseudo-covariance term for the noncircular complex pair.
+- **S12.** Relate the expected maximum of independent unit exponentials to the tail integral already proved equal to the harmonic number.
+- **S14/S4.** Derive the Gaussian law of the linear response under independent Gaussian coefficients and noise, or the equivalent jointly Gaussian hypotheses, and identify its covariance with the existing S14 result. Uncorrelatedness suffices for the covariance calculation alone.
+
+Append the declarations, exact hypotheses, witnesses, build and axiom checks to the report as each slice lands. Hand the pinned revisions to the coordinator for independent clean-archive verification and the outstanding noise-law promotion review.
 
 ## Report
 
