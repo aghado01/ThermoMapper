@@ -67,6 +67,9 @@ How far each row was checked is in the last column. "Elaborated" means the coord
 | A range-restricted isometry bounds the squared norm of every generator secant and the compressed objective. At ε < 1 it preserves injectivity on each set where the generator is injective | `GenerativePrior/IsometryCondition.lean` | Elaborated |
 | For isotropic raw second moments σ²I, the expected squared norm after a fixed rank-k orthogonal projection is σ²k, against σ²n in the ambient space | `GenerativePrior/IsotropicProjection.lean` | Elaborated |
 | The exact ReLU angle map is strictly increasing and 1-Lipschitz on [0, π]. Its iterates decrease to zero from every positive starting angle and stay at zero when started there. A one-step angular error at most δ accumulates to at most dδ after d layers | `GenerativePrior/AngleMap.lean` | Elaborated, all 25 axiom prints checked |
+| For depth d ≥ 2 and nonzero codes, the deterministic linear comparison field vanishes exactly at x★ and −ρ_d x★. Its antipodal radius satisfies ρ₂ = 1/π, ρ_d > 0 and ρ_d → 1 | `GenerativePrior/ComparisonField.lean` | Elaborated, all 19 axiom prints checked |
+| For two planar unit directions at angle θ ∈ [0, π], the second moment of a standard Gaussian gated on both positive projections is Q(θ). Its cross term and the two output norms give the S17 angle map. The derivation includes the Gaussian radial integral | `GenerativePrior/WeightCondition.lean`, `GenerativePrior/GaussianWeightMoment.lean` | Elaborated both modules, all 17 axiom prints checked |
+| For n ≥ 1 central hyperplanes in ℝᵏ, the number of open regions is at most 2·Σ_{j<k} C(n − 1, j), including repeated hyperplanes. Each component of the complement realizes one strict sign pattern and the ReLU layer agrees with a single linear map there. Coordinate hyperplanes attain 2ᵏ regions when n = k | `GenerativePrior/SignPatterns.lean` | Elaborated, all 18 axiom prints checked |
 
 **Measured,** under gates written before their readings. The receipts are under `issues/regression/receipts/` in `latent-recovery/`, `spline-space/` and `generative-prior/`.
 
@@ -82,6 +85,7 @@ How far each row was checked is in the last column. "Elaborated" means the coord
 | Noiseless two-layer Gaussian ReLU generator, widths 250 and 600, k = 10, m = 150. Descent with a sign check recovered 30/30 codes at relative error < 10⁻³. One reached the 50,000-update cap with relative error 6.84 × 10⁻¹⁶ | Gate checked, endpoint errors recomputed and replay receipts matched |
 | At fixed m = 150 and widths 250/600, the signed recovery curve passed its preregistered comparison with all 15 published counts. At k = 80, 90, 100 it recovered 20, 9 and 1 out of 30, against 17, 7 and 4 in the paper | Recomputed the 450 signed outcomes and all 15 exact comparisons |
 | Across matched sign-on and sign-off runs at k = 10, 80 and 100, only k = 80 showed discordant pairs (six on-only, two off-only). Across all 540 signed and unsigned endpoints, all 105 missed recoveries reached the 50,000-update cap at angles of 105°–171° from the negative truth direction | Recomputed all endpoint classes and the three paired tests |
+| Holding k = 80, both layer widths and all 30 problems fixed, signed recovery reached 0/30, 4/30, 20/30 and 29/30 at m = 80, 120, 150 and 240. The primary paired comparison gained 29 recoveries with zero reversals (two-sided exact McNemar p = 3.73 × 10⁻⁹). Repetition 27 reached the cap at every m. | Recomputed all 120 relative errors and endpoint classes, all six paired comparisons and the 30 truth/start preservation checks |
 
 ## What was corrected
 
@@ -100,7 +104,7 @@ Each of these was claimed in the discussion and then turned by a proof or a read
 
 ## The compressed-sensing guarantees
 
-The coordinated work established the scalar angle map, the secant bounds and the projection identity. It reproduced the decline in signed recovery across the published noiseless depth-two linear experiment and compared the sign check on matched problems at three dimensions. The guarantees for learned decoders and audio measurements remain open. Statements below are from the papers' LaTeX (`1705.07576v3`, `1812.04176v1`, `1807.04261v1`, `2008.10579v1`, `1805.08855v2`, `2006.07953v2`). [S19 and S21](generative-prior-statements-brief.md#round-1-report--2026-11-16) · [S17](generative-prior-statements-brief.md#round-2-report--s17) · [G1 linear results](generative-prior-probes-brief.md#g1-report--linear-curve-and-paired-sign-comparison)
+All six Lean statements are proved. They cover the angle map and Gaussian gated second moment, the secant bounds, the deterministic comparison field's two zeros, isotropic projection energy and the count of central sign regions. The G1 probes reproduced the decline in signed recovery across the published noiseless depth-two linear experiment, compared the sign check on matched problems and isolated the effect of measurement count at fixed dimension. The guarantees for learned decoders and audio measurements remain open. Statements below are from the papers' LaTeX (`1705.07576v3`, `1812.04176v1`, `1807.04261v1`, `2008.10579v1`, `1805.08855v2`, `2006.07953v2`). [Lean reports](generative-prior-statements-brief.md#round-1-report--2026-11-16) · [G1 linear results](generative-prior-probes-brief.md#g1-report--linear-curve-and-paired-sign-comparison) · [Fixed-dimension results](generative-prior-probes-brief.md#g1-report--fixed-k-measurement-count)
 
 **What they say.**
 - *The setting.* A generator G : ℝᵏ → ℝⁿ, d ReLU layers with no bias, and a signal y₀ = G(x₀). Observe Ay₀ with m ≪ n rows and minimize f(x) = ½‖AG(x) − Ay₀‖².
@@ -122,14 +126,14 @@ The coordinated work established the scalar angle map, the secant bounds and the
 - The Bayesian analogue on a parametric synthesizer: a code recovered from 2k to 4k bins, and octave traps standing in for the impostor at −ρ_d·x₀.
 
 **What is untested.**
-- The published sweep changes both measurements per code dimension (150/k) and first-layer expansion (250/k). Varying m at fixed k and widths would isolate measurement count. Depth three, magnitudes and the calibration stack on a ReLU generator remain open.
+- Depth three, magnitude-only observations and the calibration stack on a ReLU generator remain open. The fixed-k experiment isolates measurement count in one depth-two noiseless setting. It measures the finite solver's recovery frequency. Whether another code exactly reproduces the measurements on an individual failed trial remains undetermined.
 - The weight condition has not been measured for anything of ours, such as a layer of directional hinges under its prior, which has sparse directions and thresholds.
 - The isometry condition has not been measured for spectrogram rows or magnitudes on any signal manifold, whitened or not.
 - The pilot's held-back log-power reconstruction error can be read against k/m. The rank-k projection identity concerns expected squared error in the coordinates carrying white noise. Here the pilot added white noise to the waveform before taking log power.
 
 **Remaining work in the two briefs.**
-- The Lean brief next treats the zero set of the deterministic comparison field (S20) and the angular integral for Q (S18). The Gaussian factorization may enter as a named premise. The scalar angle map needed by both is proved in S17.
-- *Numerically:* success against m/k for the papers' algorithm on random expansive networks; the same inverse problem through the calibration stack with G behind the emulator contract, reading threshold, coverage and the impostor; the weight condition's residual against width, for Gaussian layers and for directional-hinge layers; the isometry constant for structured views on the synthesizer's range.
+- S17–S22 complete the required Lean brief. S18 derives the angular integral for Q directly under the product standard Gaussian law. S22 proves the bound on full-dimensional sign regions with no general-position assumption. [Statements and reports](generative-prior-statements-brief.md)
+- The numerical brief orders the rest as G1 depth three and magnitude observations, G3 weight-condition errors across layer widths and direction priors, G4 distortion of secants under structured audio measurements, G2 calibration samplers against descent, and G5 analysis of noise in the existing pilot receipts. [Probe definitions and order](generative-prior-probes-brief.md#the-probes)
 - *What they would decide:* whether a gradient-informed move on the code is justified, which the benign landscape suggests; how wide a decoder must be; whether our views are isometric enough; and how the engine's inversion scales in k against descent.
 
 ### Analytical controls for the generative-prior probes
@@ -189,6 +193,20 @@ Stated for any application. The order follows the pilot's main finding: generato
 The new `deep-signals` project owns the initial audio path inside ThermoMapper. NAudio.Core decodes bounded WAV windows into channel-first TorchSharp tensors. Its CPU tests cover the recorder sample's 16 kHz mono PCM format, stereo IEEE-float audio and a known gradient update. The example recorder, player and waveform display in the workstream's `csharp/` folder remain references for later application work. [Audio project](../../../../src/deep-signals/README.md)
 
 For a first comparison, load identical G1 weights, measurements and initial codes into TorchSharp. Check forward outputs, signed losses and latent gradients in float64 against the C# reference before timing. Measure end-to-end recovery for one code and for the intended batch size, including transfers and peak native memory. Lower precision needs its own stopping tolerance and recovery check. Production adoption would depend on those measurements and a deployment test with the pinned CPU or CUDA LibTorch runtime on the intended host. [G1 probe](../../receipts/generative-prior/probe/Network.cs) · [Native runtime dependencies](https://www.nuget.org/packages/TorchSharp/0.107.0) · [Tensor lifetime management](https://github.com/dotnet/TorchSharp/blob/main/docfx/articles/memory.md)
+
+## Inspecting regression fits before training a network
+
+The current implementation work is the Lean and numerical briefs. The user wants to inspect audio fits, BASS uncertainty and the generative-prior results in that order. The first signal-processing literature pass examines windowed measurements, speech prediction residuals and sparse innovations. [Audio analysis brief](audio-analysis-brief.md)
+
+| Proposed view | What goes into it | What to check on the first example |
+|---|---|---|
+| 1. Waveform fit and residual | One WAV channel, the regression prediction at the same sample indices, and observed minus fitted amplitude. Use the recording's sample rate and starting frame to put both panels on one time axis. Identify the fit, channel and fitted or held-out interval. | Use a known tone with a second component deliberately omitted from the fit. The residual should contain the omitted component at the original amplitude. Then inspect a short recording, zoom across a transient, and compare its timing in both panels. |
+| 2. BASS predictions and uncertainty | Predictions from the existing regression engine on an identified output axis. Use posterior draws and their weights to show the fitted mean and a pointwise interval with its level and target. A predictive interval for a new observation includes the observation-noise model. | Replay the plotted quantiles from the draws and weights. An audio pilot that predicts log power gets a frequency axis and log-power units. A predicted waveform requires a fit whose output is waveform amplitude. |
+| 3. Generative-prior recovery | Read the probe receipts by matched trial ID. Show relative latent error, the recovery threshold, and aggregate counts at each measurement setting. Preserve the sign setting and update-cap flag. | Reproduce the signed recovery counts and identify any trial that recovers at one setting and fails at a larger one. |
+
+For a first inspection, a workstream probe can write a reproducible figure and its input readings under `artifacts/`, with the compact replay source and receipt alongside the existing regression receipts. Production WAV handling and audio measurements belong in `src/deep-signals/` (`projects/deep-signals/`, `tests/deep-signals.Tests/`). Existing regression fits and posterior prediction stay with their owners in `src/maths/regression/`.
+
+For permanent charts, the Viz v2 plan assigns producer-specific translation to `Viz.Adapters.*` and drawing to the workbench. A future audio adapter can map sample indices, physical units and fit provenance into `Viz.Contracts`. A chart panel can then share time selections across the observed, fitted and residual series. The current v2 implementation has neutral study and scene contracts. Chart panels are scheduled for phase 4, after the EyeTorus slice. This placement is a proposal for review before creating adapter or renderer projects. [Viz assembly direction](../../../viz/program.md#assembly-direction) · [Migration roadmap](../../../viz/migration-roadmap.md)
 
 ## Open questions for the user
 
