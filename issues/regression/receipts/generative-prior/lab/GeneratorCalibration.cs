@@ -117,7 +117,7 @@ internal static class GeneratorCalibration
         return denominator > 0 ? -Dot(gradient, direction) / denominator : 0;
     }
 
-    public static int Run(InversionSettings config, string output)
+    public static int Run(InversionSettings config, string output, bool replayCase = false)
     {
         var readings = new List<Reading>();
         using var rowsFile = new StreamWriter(Path.Combine(output, "calibrations.jsonl")) { AutoFlush = true };
@@ -129,6 +129,7 @@ internal static class GeneratorCalibration
         for (int dimension = 0; dimension < config.Dimensions.Length; dimension++)
         {
             int k = config.Dimensions[dimension];
+            if (replayCase && k != 2) continue;
             if (k == 16)
             {
                 expanded = Groups(readings, config).Where(g => g.K == 8 && g.Ratio >= 4).All(g =>
@@ -138,12 +139,14 @@ internal static class GeneratorCalibration
             int[] seeds = SeedTree.Derive(masters[dimension], config.Repetitions);
             for (int rep = 0; rep < seeds.Length; rep++)
             {
+                if (replayCase && rep != 0) continue;
                 int[] branches = SeedTree.Derive(seeds[rep], 10);
                 double[] truth = BoxCode(k, config.Box, branches[3]), start = BoxCode(k, config.Box, branches[4]);
                 var noiseRng = new Xoshiro256PlusPlus(branches[5]);
                 double[] noise = Enumerable.Range(0, k * config.Ratios.Max()).Select(_ => Normal.SampleStandard(noiseRng)).ToArray();
                 foreach (int ratio in config.Ratios)
                 {
+                    if (replayCase && ratio != 4) continue;
                     int m = k * ratio;
                     var settings = new Settings(k, 250, 600, m, 1, seeds[rep], 1, Math.ScaleB(1, -52),
                         50000, 0.001, config.ReferenceTolerance, true, true, false);

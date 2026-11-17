@@ -431,6 +431,8 @@ At k = 2, repetition 1, ratio 4, independently integrate out the variance analyt
 
 On a numerical-control failure replay the affected seeded problem before interpretation. A convergence or recovery failure is a result at the registered budget and is retained. No new seeds or tuning replace a failing cohort. A fresh replay checks one k = 2 calibration per method, with timing excluded from numerical equality. Heavy execution remains capped, serial and below normal priority.
 
+Before G2 readings, the replay selector is fixed as `-Selection k2-r1-ratio4`. It filters the declared full experiment after seed derivation, retaining all three methods and the grid control for that original problem. It changes no settings or streams. Timing fields are excluded from replay equality.
+
 ## G5 report — noise trend in existing reference receipts
 
 ### Protocol frozen before G5 readings

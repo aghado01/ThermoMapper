@@ -22,7 +22,8 @@ internal static class LabProgram
         return args[0] switch {
             "g3" => WeightConditions.Run(JsonSerializer.Deserialize<WeightSettings>(bytes)!, args[2]),
             "g4" => AudioGeometry.Run(JsonSerializer.Deserialize<AudioSettings>(bytes)!, args[2]),
-            "g2" => GeneratorCalibration.Run(JsonSerializer.Deserialize<InversionSettings>(bytes)!, args[2]),
+            "g2" => GeneratorCalibration.Run(JsonSerializer.Deserialize<InversionSettings>(bytes)!, args[2],
+                args.Length > 4 && args[4] == "k2-r1-ratio4"),
             _ => throw new ArgumentException("Unknown lab experiment.")
         };
     }

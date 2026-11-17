@@ -2,7 +2,8 @@ param(
     [Parameter(Mandatory)][string]$Revision,
     [Parameter(Mandatory)][ValidateSet('g3','g4','g2')][string]$Experiment,
     [Parameter(Mandatory)][ValidatePattern('^[a-zA-Z0-9_-]+$')][string]$RunName,
-    [switch]$BuildOnly
+    [switch]$BuildOnly,
+    [ValidateSet('all','k2-r1-ratio4')][string]$Selection = 'all'
 )
 $ErrorActionPreference = 'Stop'
 $PSNativeCommandUseErrorActionPreference = $true
@@ -37,9 +38,10 @@ $settingsName = switch ($Experiment) {
     g2 { 'g2-calibration.json' }
 }
 $settings = Join-Path $probe "settings/$settingsName"
+if ($Selection -ne 'all' -and $Experiment -ne 'g2') { throw 'Case selection is available only for G2.' }
 $consoleLog = Join-Path $run 'console.log'
 try {
-    dotnet (Join-Path $build 'bin/GenerativePriorLab/Release/net10.0/GenerativePriorLab.dll') $Experiment $settings (Join-Path $run 'results') $pin *> $consoleLog
+    dotnet (Join-Path $build 'bin/GenerativePriorLab/Release/net10.0/GenerativePriorLab.dll') $Experiment $settings (Join-Path $run 'results') $pin $Selection *> $consoleLog
 } catch {
     Get-Content -LiteralPath $consoleLog -Tail 12
     throw
