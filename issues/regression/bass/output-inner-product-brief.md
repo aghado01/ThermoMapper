@@ -60,7 +60,7 @@ Located by search on 2026-11-16. The building chip confirms each, and adds any t
 
 ## Decisions
 
-The user selected both coefficient-prior Grams and all three precision-weight patterns. Decisions 3–7 and the default prior Gram for nonidentity Q remain open.
+The user selected both coefficient-prior Grams, all three precision-weight patterns, and the three channel configurations below. The cross-channel covariance model for channel-specific R, decisions 4–7, and the default prior Gram for nonidentity Q remain open.
 
 1. **Which Gram matrix defines the coefficient prior under Q?** The user selected **both as configurable fit options**. For the unweighted, uncentred slice, write Ω = Iₙ ⊗ R. Both choices use XᵀΩ⁻¹X in the likelihood. The selected prior Gram P determines the coefficient covariance σ²(τP)⁻¹.
    - **Whitened Gram.** P = XᵀΩ⁻¹X = (AᵀA)∘(HᵀQH). The prior adapts to the declared output precision. The ordinary g-prior on the whitened design gives S4's exact reference.
@@ -72,11 +72,15 @@ The user selected both coefficient-prior Grams and all three precision-weight pa
    - **Individual location weights within each case.** Each case can supply its own vector of precisions. Accumulate contractions with its own Bᵢ. This covers arbitrary positive weight patterns, including the two factored cases above.
    - These choices specify likelihood precision. `WeightMeaning.Replication` counts copies of an observation, and a whole-case count repeats the joint likelihood of the case. Preserve the existing distinction and the semantics of `WeightedPriorGram` when resolving the coefficient prior. [Working-response conventions](../../../src/maths/regression/spline/bass/BassObservationModel.cs)
    - Slice 1 establishes the unweighted reference. Slice 4 implements and verifies all three patterns.
-3. **Several outputs (E34).**
-   - *Recommended:* refuse Q ≠ I with several outputs until E34's Σ and Q are stated together. A per-output Q and a shared Q are different models, and the choice is the user's.
-   - *Binds at:* slice 1, as a refusal.
+3. **One or several curves per case (E34).** All three configurations are in scope for exploration. The formulas give the residual covariance within one case at unit observation precision.
+   - **One curve.** A clip supplies one curve on the location grid, with covariance σ²R and Q = R⁻¹. This is the single-output reference in slices 1–5.
+   - **Several channels with shared R.** Each named channel has a curve on the same grid. For channels a, b and bins j, k, the covariance is Σₐᵦ Rⱼₖ. R has unit diagonal, so Σ is the channel covariance at any one bin. Stacking one curve per channel gives Σ ⊗ R. At fixed Σ this defines every block. With a shared design, whitening the bin axis gives a reference for E34's integration over Σ.
+   - **Several channels with channel-specific R.** Each channel a has frequency correlation Rₐ and variance sₐ², giving the diagonal covariance block sₐ²Rₐ. A complete model must also specify the off-diagonal blocks and make the joint covariance positive definite. Zero off-diagonal blocks describe independent channels. Correlated channels require an explicit coupling. The choice of coupling and treatment of its parameters remain open.
+     One candidate takes lower Cholesky factors Rₐ = LₐLₐᵀ in grid order and uses blocks Cₐᵦ = Sₐᵦ LₐLᵦᵀ, where S is the positive-definite channel covariance in whitened coordinates and Sₐₐ = sₐ². This gives a positive-definite joint covariance and recovers S ⊗ R when the Rₐ coincide. With unequal factors, the observed cross-channel covariance at a bin can vary across bins.
+   - Today's `MultiOutputResponse` holds one value per named output per case. Multiple curves require distinct case, channel and location axes. Slice 6 covers both multi-channel configurations. [Response contract](../../../src/maths/regression/spline/bass/BassData.cs) and [E34 model](multi-output-brief.md)
 4. **What the level-centred intercept reads.**
    - *Recommended:* the GLS level 1ᵀQȳ/1ᵀQ1, with mass n·1ᵀQ1. Centred columns are W-orthogonal to the constant, x − 1·(1ᵀWx)/(1ᵀW1) with W = I ⊗ Q.
+   - With the precisions from decision 2, the one-curve level is (Σᵢ 1ᵀBᵢyᵢ)/(Σᵢ 1ᵀBᵢ1). For named curves, the proposed analogue keeps one baseline per channel as in E34. If T contains the channel indicator columns and W is the stacked observation precision, the GLS levels solve (TᵀWT)ℓ = TᵀWy at fixed covariance parameters. A separately chosen prior reference level can be held fixed while the likelihood uses this projection.
    - *The other conventions:* the zero centre's energy is n·(1ᵀQȳ)²/(1ᵀQ1), and a frozen level's gap is measured in the same mass. The flat intercept integrates α against the whitened constant column L⁻¹1, spending one observation as today.
    - *Note:* the level equals the plain grand mean when Q's column sums are equal.
    - *Binds at:* slice 2.
@@ -124,6 +128,9 @@ Each ends at a gate. The [common gates](#gates-common-to-every-slice) apply to a
      - a fit to data simulated with residual covariance σ²(I ⊗ R) covers at 90% where the Q = I fit under-covers;
      - the whitened F11 reads about −1/m;
      - the pilot's Stage 1 rerun under B1's Q, read against its R1 and R2 with the gates pre-stated before the run.
+6. **Several named curves on a common grid.**
+   - Start with shared R. Compare a small two-channel, multi-bin likelihood at fixed Σ against a dense joint Gaussian with covariance Σ ⊗ R. Use unequal channel variances and nonzero cross-channel and cross-bin correlations so an axis swap is visible. Check the collapsed marginal against E34 on the explicitly whitened response and design, including the whitening Jacobian and the selected coefficient prior. At one channel check the single-curve fit under matched priors. At one bin check the existing named-output fit.
+   - For channel-specific R, first specify the joint covariance and how its parameters enter the fit. Check a pair of unequal Rₐ against a dense positive-definite block covariance with the specified cross-channel blocks. Verify the independent-channel and shared-R limits at matched covariance parameters. Check the pointwise density and predictive covariance against the same joint law.
 
 ## Gates common to every slice
 
@@ -134,7 +141,6 @@ Each ends at a gate. The [common gates](#gates-common-to-every-slice) apply to a
 ## Not in this brief
 
 - Sampling R's parameters.
-- Q with several outputs (E34).
 - The PCA mode, whose truncation residual already keeps the within-output dependence (D07).
 - Primitive 1's residual-set emulator, which needs only `TruncationResiduals()` for direct fits. It is a separate, smaller change.
 
