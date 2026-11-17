@@ -1,6 +1,6 @@
 # How much evidence supports memory at depth d?
 
-Research brief, 2026-11-17. **Proposed Lean investigation.** For a given observation design, how many independent records, spanning how many events, suffice to detect a dependence at lag \(d\), recover the minimal context tree, or predict the next event to a specified tolerance? The design decision for audio is whether to spend a recording budget on longer spans, different windows, or retaining the pairing between measurements.
+Research brief, 2026-11-17. **Commissioned Lean investigation; section 1 in progress.** For a given observation design, how many independent records, spanning how many events, suffice to detect a dependence at lag \(d\), recover the minimal context tree, or predict the next event to a specified tolerance? The design decision for audio is whether to spend a recording budget on longer spans, different windows, or retaining the pairing between measurements.
 
 The depth-four work supplies one case where a measurement design can be studied exactly. This follow-up starts from the already proved collision at **every** \(d\ge4\). Its first two questions can proceed independently of the depth-four completion proof. [Population cutoff and witness](../context-tree-memory-identifiability-brief.md#verified-result--2026-11-16) · [Depth-four measurement design](01-depth-four-completion-brief.md) · [Predictive ambiguity](02-predictive-ambiguity-brief.md)
 
@@ -53,3 +53,13 @@ Moving to one ordered recording changes the statistical experiment. Specify its 
 Kontoyiannis gives bounds on predictive likelihood and posterior consistency for observed discrete time series. Galves and Leonardi give nonuniform exponential bounds for empirical context trees. Use these as comparisons when stating what assumptions the power observations introduce. [Bayesian context trees](https://arxiv.org/abs/2211.02676) · [Empirical context-tree bounds](https://arxiv.org/abs/0710.5900)
 
 For each completed question, record the experiment, source class, estimator or test, error event, and a sufficient or necessary observation budget with its units. Link declarations and report module builds and axiom checks under the [Lean harness conventions](../../../../../lean/README.md). The formulas above are proposed proof targets. The first deliverable is the finite-sample upper and lower bound instantiated on the physical all-depth collision and its distinguishing measurement.
+
+## Commissioning and in-progress record — 2026-11-17
+
+The user, through the research coordinator, commissioned this as the next Lean assignment after depth-four completion and predictive ambiguity. Work begins with section 1, then the paired-observation and supported-depth questions. No depth-evidence theorem is yet reported as verified.
+
+The first implementation will separate the finite observed likelihood experiment, the Bernoulli testing budgets, and the link to the existing physical collision. Rectangular observations are independent ancillary observations with the same law under both hypotheses. A fixed count of independently sampled taper bits has probability (1+a)/8 under the alternative and 1/8 under the fair source. Randomized decisions must be included in the lower bound, or any restriction to deterministic tests must be explicit.
+
+Mathlib supplies bounded-variable Hoeffding through `ProbabilityTheory.hasSubgaussianMGF_of_mem_Icc` and `ProbabilityTheory.HasSubgaussianMGF.measure_sum_ge_le_of_iIndepFun`. The lower bound will require proved finite data processing and the binary decision divergence bound, not an assumed information inequality. The logarithm inequality log x ≤ x−1 gives the proposed per-bit upper bound a²/7. A candidate integer sufficiency statement uses ceil(128 a⁻² log(1/δ)); necessity uses ceil(7 kl(1−δ,δ)/a²).
+
+Proofs, axiom checks, corrections, and sample units will be recorded below as each slice closes. Later sections remain unverified.
