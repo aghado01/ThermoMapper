@@ -199,3 +199,34 @@ Record the exact two-point zero set and the finite-sum identity for its radius a
 Write θᵢ for the angle after i layers, aᵢ = (π − θᵢ)/π and bᵢ = sin(θᵢ)/π. Appending one layer to ζ multiplies every existing term by a_d and adds b_d with an empty tail product. Induction in the S17 cosine recurrence gives cos θ_d = ξ_d cos θ + ζ_d, where ξ_d is the product of the first d multipliers. At θ = π the first multiplier vanishes, so ζ_d = cos θ_d for d ≥ 1. At depth two this equals 1/π. The angles decrease within [0, π], so their cosines at later depths are at least 1/π. S17 gives θ_d → 0 and continuity gives ρ_d → 1.
 
 After canceling the common nonzero scale, a zero requires c x = ξ x★, where c = 1 − ζ ‖x★‖/‖x‖. For an interior angle ξ > 0. Balance would make c nonzero and force x★ onto one of the two rays through x, contradicting the interior angle. At angle zero the field reduces to 2⁻ᵈ(x − x★). In the normalized formula the bracket is ‖x‖/‖x★‖ and the leading term supplies the −1. At angle π, write x = r x★ with r < 0. Here ξ = 0, ζ = ρ_d and the norm ratio ‖x★‖/‖x‖ is 1/(−r), so balance is equivalent to r = −ρ_d. Both ray calculations are equivalences.
+
+## S18 report — 2026-11-16
+
+**Proof-closed on main in `45ae228`.** `Enthymemata.GenerativePrior.WeightCondition` proves the four angular integrals, their endpoint and right-angle values, and the S17 angle law for a finite ReLU layer. `Enthymemata.GenerativePrior.GaussianWeightMoment` proves integrability and the expectation under Mathlib’s product of two standard real Gaussian measures. The Gaussian factorization has no outstanding premise.
+
+`both_gates_iff` identifies the common positive arc on the polar chart for every θ ∈ [0, π]. `angularMoment_eq_weightQ` also holds algebraically for the oriented integral at every real θ. At 0 the matrix is ½I. At π the open arc is empty and the matrix is zero. The right-angle witness has diagonal ¼ and off-diagonal 1/(2π). At collinear inputs the paper defines the swap operator as a signed rank-one projector. The posed planar reflection has a different action on the perpendicular coordinate there. Its coefficient sin θ vanishes at both endpoints, giving exactly the paper’s Q.
+
+`gaussian_gatedMoment_eq_weightQ` concerns one standard row in the input plane. The paper expresses the expectation for a sum of n rows with covariance I/n. Positive scaling by 1/√n preserves each gate and scales its outer product by 1/n. The formal result covers the planar expectation. The finite-layer theorem `planarRelu_angle_of_exact_gram` takes the three exact Gram matrices for the two self pairs and the cross pair as hypotheses. It makes a pairwise deterministic inference. Concentration for a sampled layer remains a separate question.
+
+### Verification
+
+The two modules and their aggregate imports build. Direct elaboration audited all 17 theorem declarations, eleven angular and finite-layer results and six Gaussian results. Each printed exactly `propext`, `Classical.choice` and `Quot.sound`. The commands below replay the checks from `lean/` at below-normal process priority with `LEAN_NUM_THREADS=2` set in the environment.
+
+```powershell
+lake build +Enthymemata.GenerativePrior.WeightCondition +Enthymemata.GenerativePrior.GaussianWeightMoment +Enthymemata.GenerativePrior +Enthymemata
+lake env lean Enthymemata/GenerativePrior/WeightCondition.lean
+lake env lean Enthymemata/GenerativePrior/GaussianWeightMoment.lean
+pwsh -NoProfile -File scripts/meta-ci.ps1 -NoBuild
+```
+
+### Doc changes owed
+
+Record the Gaussian normalization, strict gate convention and endpoint values alongside Q. State the three pairwise finite-layer hypotheses with the S17 output-angle formula.
+
+### Methods
+
+For a row of direction φ, the two gates test cos φ and cos(φ − θ). Their positive intervals overlap on (θ − π/2, π/2) in the polar chart. Integrating cos² φ, sin² φ and sin φ cos φ over that arc gives the four entries. Lebesgue-null endpoints justify replacing the open arc by the interval used in the antiderivatives.
+
+The product density at (r cos φ, r sin φ) is exp(−r²/2)/(2π). The Jacobian contributes r and the outer product contributes r². The radial integral of r³ exp(−r²/2) is 2, leaving the coefficient 1/π. Each Cartesian coordinate is square-integrable under the product law, so each product remains integrable after restriction to the measurable gate. The change of variables and product integral then identify the expectation entry by entry.
+
+For a finite layer, expanding the output inner product sums exactly the outer products with both gates open. The two self matrices give squared norms ½. The cross matrix gives inner product ((π − θ)cos θ + sin θ)/(2π). Dividing by the product of the norms gives the S17 cosine, and taking arccos gives g(θ).
