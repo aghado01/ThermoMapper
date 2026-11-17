@@ -2,6 +2,8 @@
 
 Date: 2026-11-16. Status: **a direction record, written at the user's request** so the why and the what of this workstream survive the session. It assigns no work. Each item under [What is missing](#what-is-missing-in-build-order) gets its own brief when the user takes it up. Drafted by the coordinating session from one day's discussion with the user, two chips' reports, and three source collections.
 
+Research continuation: [Deep Teaching principles for an unsupervised audio model](deep-teaching-audio-research-brief.md) connects the public mathematical and patent evidence to candidate results on measurement design, predictive targets, stability and causal teaching. Its proposed results are not yet proved or commissioned.
+
 ## Why
 
 The aim is a **native audio foundation model trained on human conversation, without labels, and data-efficiently.** The regression engines cannot be that model: they sample shallow, low-order structure exactly, and audio needs deep composition at a scale they cannot touch. Their part is different and specific:
