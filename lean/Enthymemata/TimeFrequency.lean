@@ -1,3 +1,4 @@
+import Enthymemata.TimeFrequency.LogLaplace
 import Enthymemata.TimeFrequency.LogPowerCovariance
 import Enthymemata.TimeFrequency.PeakOfExponentials
 import Enthymemata.TimeFrequency.QuadraticFormVariance
