@@ -1,0 +1,205 @@
+{
+  "all_stored_controls_passed": true,
+  "decisions": [
+    {
+      "k": 2,
+      "law": "gaussian",
+      "radius": 1,
+      "first_sampled_ratio": 512,
+      "widest_median_gap": 0.06741106465917196
+    },
+    {
+      "k": 2,
+      "law": "sparse",
+      "radius": 1,
+      "first_sampled_ratio": null,
+      "widest_median_gap": 0.23935674741488644
+    },
+    {
+      "k": 2,
+      "law": "sparse-threshold",
+      "radius": 0.5,
+      "first_sampled_ratio": null,
+      "widest_median_gap": 0.7609690250418257
+    },
+    {
+      "k": 2,
+      "law": "sparse-threshold",
+      "radius": 1,
+      "first_sampled_ratio": null,
+      "widest_median_gap": 0.7453247761787564
+    },
+    {
+      "k": 2,
+      "law": "sparse-threshold",
+      "radius": 2,
+      "first_sampled_ratio": null,
+      "widest_median_gap": 0.7136558351319973
+    },
+    {
+      "k": 2,
+      "law": "sphere",
+      "radius": 1,
+      "first_sampled_ratio": 128,
+      "widest_median_gap": 0.05080143143725836
+    },
+    {
+      "k": 8,
+      "law": "gaussian",
+      "radius": 1,
+      "first_sampled_ratio": 512,
+      "widest_median_gap": 0.07567305761471654
+    },
+    {
+      "k": 8,
+      "law": "sparse",
+      "radius": 1,
+      "first_sampled_ratio": null,
+      "widest_median_gap": 0.44173880321288683
+    },
+    {
+      "k": 8,
+      "law": "sparse-threshold",
+      "radius": 0.5,
+      "first_sampled_ratio": null,
+      "widest_median_gap": 0.8153592814011128
+    },
+    {
+      "k": 8,
+      "law": "sparse-threshold",
+      "radius": 1,
+      "first_sampled_ratio": null,
+      "widest_median_gap": 0.8119251468668713
+    },
+    {
+      "k": 8,
+      "law": "sparse-threshold",
+      "radius": 2,
+      "first_sampled_ratio": null,
+      "widest_median_gap": 0.8017310239685804
+    },
+    {
+      "k": 8,
+      "law": "sphere",
+      "radius": 1,
+      "first_sampled_ratio": 512,
+      "widest_median_gap": 0.06593439216945021
+    },
+    {
+      "k": 16,
+      "law": "gaussian",
+      "radius": 1,
+      "first_sampled_ratio": 512,
+      "widest_median_gap": 0.07083313994151907
+    },
+    {
+      "k": 16,
+      "law": "sparse",
+      "radius": 1,
+      "first_sampled_ratio": null,
+      "widest_median_gap": 0.4768820560208724
+    },
+    {
+      "k": 16,
+      "law": "sparse-threshold",
+      "radius": 0.5,
+      "first_sampled_ratio": null,
+      "widest_median_gap": 0.8294614222517693
+    },
+    {
+      "k": 16,
+      "law": "sparse-threshold",
+      "radius": 1,
+      "first_sampled_ratio": null,
+      "widest_median_gap": 0.8281683429003304
+    },
+    {
+      "k": 16,
+      "law": "sparse-threshold",
+      "radius": 2,
+      "first_sampled_ratio": null,
+      "widest_median_gap": 0.8251983672101816
+    },
+    {
+      "k": 16,
+      "law": "sphere",
+      "radius": 1,
+      "first_sampled_ratio": 512,
+      "widest_median_gap": 0.06510168534502522
+    }
+  ],
+  "witnesses": [
+    {
+      "K": 2,
+      "Law": "gaussian",
+      "Mean": 0.4817020171755838,
+      "StandardError": 0.01020535256801325,
+      "Expected": 0.5,
+      "Passed": true
+    },
+    {
+      "K": 2,
+      "Law": "sphere",
+      "Mean": 0.4920493879020169,
+      "StandardError": 0.005807695807065364,
+      "Expected": 0.5,
+      "Passed": true
+    },
+    {
+      "K": 2,
+      "Law": "sparse",
+      "Mean": 0.2573584392911009,
+      "StandardError": 0.0065086590859268845,
+      "Expected": 0.25,
+      "Passed": true
+    },
+    {
+      "K": 8,
+      "Law": "gaussian",
+      "Mean": 0.5020100803608882,
+      "StandardError": 0.004503974919131437,
+      "Expected": 0.5,
+      "Passed": true
+    },
+    {
+      "K": 8,
+      "Law": "sphere",
+      "Mean": 0.5018653513260133,
+      "StandardError": 0.005028513669574868,
+      "Expected": 0.5,
+      "Passed": true
+    },
+    {
+      "K": 8,
+      "Law": "sparse",
+      "Mean": 0.06906550124804224,
+      "StandardError": 0.002233635851237579,
+      "Expected": 0.07142857142857142,
+      "Passed": true
+    },
+    {
+      "K": 16,
+      "Law": "gaussian",
+      "Mean": 0.5068257234454416,
+      "StandardError": 0.003899021520750497,
+      "Expected": 0.5,
+      "Passed": true
+    },
+    {
+      "K": 16,
+      "Law": "sphere",
+      "Mean": 0.49450000179236897,
+      "StandardError": 0.002401021367833234,
+      "Expected": 0.5,
+      "Passed": true
+    },
+    {
+      "K": 16,
+      "Law": "sparse",
+      "Mean": 0.03511538222043957,
+      "StandardError": 0.0016240120031801991,
+      "Expected": 0.03333333333333333,
+      "Passed": true
+    }
+  ]
+}

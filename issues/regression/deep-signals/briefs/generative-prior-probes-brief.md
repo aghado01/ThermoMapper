@@ -370,6 +370,33 @@ At the widest threshold-free layer, compare the pooled e₁/e₁ second-diagonal
 
 On a numerical-control failure replay that same seeded case and diagnose before interpreting the layer law. A lone witness deviation between four and five standard errors gets one replay on the same seeds to check reproducibility and is reported against its original gate. No new widths, seeds or tolerances are substituted. Preserve pair matrices for the widest k = 8 controls, scalar witness rows for every cell, and compact summaries. Execution remains serial, capped and below normal priority.
 
+### G3 readings and decision
+
+G3 is complete. All 720 scalar rows, 180 explicit k = 8 matrix controls, eigenvalue/eigenpair checks and knot checks passed. All nine population-witness comparisons passed their four-standard-error gate. A fresh build reproduced all three numerical output files byte for byte. [Tracked summary](../../receipts/generative-prior/results/g3-weights/summary.json) · [Independent audit](../../receipts/generative-prior/results/g3-weights/audit.json) · [Output/replay hashes](../../receipts/generative-prior/results/g3-weights/verification.json)
+
+| k | Gaussian: first sampled n/k | Sphere: first sampled n/k | Sparse: widest median gap | Thresholded sparse: widest median gaps, radii 0.5 / 1 / 2 |
+| ---: | ---: | ---: | ---: | --- |
+| 2 | 512 | 128 | 0.23936 | 0.76097 / 0.74532 / 0.71366 |
+| 8 | 512 | 512 | 0.44174 | 0.81536 / 0.81193 / 0.80173 |
+| 16 | 512 | 512 | 0.47688 | 0.82946 / 0.82817 / 0.82520 |
+
+Neither sparse law reached the sampled 0.1 target at any tested width. The widest Gaussian medians were 0.06741, 0.07567 and 0.07083; spherical medians were 0.05080, 0.06593 and 0.06510. These first tested ratios depend on the finite angle/orientation cohort and median rule. They provide no uniform WDC certificate or claim of a minimal sufficient width.
+
+At k = 8, the threshold-free sparse e₁/e₁ second-diagonal mean was 0.0690655 (SE 0.00223364), agreeing with 1/14. Its implied mean diagonal gap from 1/2 was 0.4309345, near the analytic 3/7 population obstruction. Gaussian and spherical means were 0.5020101 (SE 0.0045040) and 0.5018654 (SE 0.0050285). At k = 2 and 16 the sparse witness means were 0.2573584 and 0.0351154, agreeing with 1/4 and 1/30. Meanwhile the widest full-Gram median gaps for sparse directions were only 0.03525, 0.07740 and 0.08456. Thus approximate second-moment isotropy coexists with a substantial activation-conditioned defect. Increasing width concentrates this declared sparse law around a different kernel. Its Gaussian WDC premise cannot be justified by width alone. Spherical rows remain a plausible dense alternative on this sampled evidence.
+
+Thresholds further change the activation geometry and make it depend on radius. The table records the tested shifts without attributing each residual to a single mechanism. Negative knots can jointly activate opposite inputs; the threshold-free opposite-input control remains exactly zero. These are engine knot-law probes in standardized coordinates, with the training design and fitted scaling recorded in the source. They provide no claim that BASS's own inference requires Gaussian WDC.
+
+### G3 pins, replay and doc changes owed
+
+Protocol `0094720`; numerical source/settings `5de814a95db95da35fbceeb8ef18367a48b3a7b6`; settings SHA-256 `312054542a54dfc2fa9c1b76170cb7502088306f2fb7d8c480d81be490abbecd`. Actual primary and fresh replay directories are `artifacts/generative-prior/g3-weights-primary/` and `g3-weights-replay/`. The tracked receipts retain every scalar row and widest k = 8 matrix. Both builds completed with zero errors and 45 existing engine warnings. Execution was serial, capped and below normal priority.
+
+```powershell
+./issues/regression/receipts/generative-prior/lab-replay.ps1 -Revision 5de814a -Experiment g3 -RunName g3-review
+./artifacts/evidence-contrasts/venv/Scripts/python.exe ./issues/regression/receipts/generative-prior/audit-weights.py --results artifacts/generative-prior/g3-review/results --output artifacts/generative-prior/g3-review/analysis
+```
+
+Doc changes owed: record the sparse population floor, distinguish full-Gram isotropy from activation-conditioned isotropy, and qualify the Gaussian/spherical width table as finite sampled evidence. No production change is commissioned by G3.
+
 ## G4 report — structured measurement geometry
 
 ### Protocol frozen before G4 execution
