@@ -1,0 +1,38 @@
+{
+  "files": [
+    {
+      "actual": "artifacts/conformal-audio/risk-primary/results/execution.json",
+      "bytes": 241,
+      "sha256": "c61afcbd099814987b893f99115d5f6a53115e10e00d46e3a2bce13b4a637c6b",
+      "receipt": "issues/regression/receipts/conformal-audio/results/risk-primary/execution.json",
+      "receipt_sha256_lf": "52320fe6f96153d02460605708584c23fc16e9977819eeac626f1004161efa47"
+    },
+    {
+      "actual": "artifacts/conformal-audio/risk-primary/results/risk-conversations.jsonl",
+      "bytes": 34564608,
+      "sha256": "45de6d904e150d5b8f11cee59766ad29732ef9c0dd063ecb226b66fce6511541",
+      "raw_local_only": true
+    },
+    {
+      "actual": "artifacts/conformal-audio/risk-primary/results/risk-splits.jsonl",
+      "bytes": 24894,
+      "sha256": "e073e7df841ebd8d1cfe925efa8060ae2867f0879bf357898a644946acd04f72",
+      "receipt": "issues/regression/receipts/conformal-audio/results/risk-primary/risk-splits.jsonl",
+      "receipt_sha256_lf": "c118314ce8e198f55d1feda8bc5328f712222f10dac747694c5c4f7b71d8f99c"
+    },
+    {
+      "actual": "artifacts/conformal-audio/risk-primary/results/risk-summary.json",
+      "bytes": 864,
+      "sha256": "38e40ad079073352b8fffbc9297671b101b19c7cd29d17f463fd8baebee0256d",
+      "receipt": "issues/regression/receipts/conformal-audio/results/risk-primary/risk-summary.json",
+      "receipt_sha256_lf": "2bbb8e6c2ab43bddd4bc21c678397c155f82841464254746853ec9ab08c24177"
+    },
+    {
+      "actual": "artifacts/conformal-audio/risk-primary/analysis/audit.json",
+      "bytes": 3445,
+      "sha256": "280931a5c6fb88dcbbb03fb1e47d239d3045fc2b811fe80f2a9bc8e336d769d7",
+      "receipt": "issues/regression/receipts/conformal-audio/results/risk-primary/audit.json",
+      "receipt_sha256_lf": "3f25545606f6443d3e2644a2506b3bf72a3aadf8aa1d74aa2d174b6212a7c6ce"
+    }
+  ]
+}

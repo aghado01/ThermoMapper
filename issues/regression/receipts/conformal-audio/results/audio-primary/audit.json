@@ -1,0 +1,2183 @@
+{
+  "passed": true,
+  "conversations_matched": 8000,
+  "prediction_rows_checked": 24000,
+  "test_events_checked": 48000,
+  "split_rows_checked": 480,
+  "subgroup_diagnostics": [
+    {
+      "gap": 0,
+      "predictor": "baseline",
+      "event": "OneCase",
+      "length": 1,
+      "noise_sd": 0.005,
+      "groups": 353,
+      "coverage": {
+        "mean": 0.9518174071688172,
+        "se": 0.01307062779744079,
+        "lower": 0.9261994474305052,
+        "upper": 0.9774353669071293,
+        "splits": 20
+      }
+    },
+    {
+      "gap": 0,
+      "predictor": "baseline",
+      "event": "OneCase",
+      "length": 1,
+      "noise_sd": 0.025,
+      "groups": 350,
+      "coverage": {
+        "mean": 0.9306237010734588,
+        "se": 0.013656268231884403,
+        "lower": 0.9038579071757469,
+        "upper": 0.9573894949711708,
+        "splits": 20
+      }
+    },
+    {
+      "gap": 0,
+      "predictor": "baseline",
+      "event": "OneCase",
+      "length": 4,
+      "noise_sd": 0.005,
+      "groups": 322,
+      "coverage": {
+        "mean": 0.9694426406926407,
+        "se": 0.009545478521180152,
+        "lower": 0.950733846575927,
+        "upper": 0.9881514348093545,
+        "splits": 20
+      }
+    },
+    {
+      "gap": 0,
+      "predictor": "baseline",
+      "event": "OneCase",
+      "length": 4,
+      "noise_sd": 0.025,
+      "groups": 347,
+      "coverage": {
+        "mean": 0.929392300720574,
+        "se": 0.018566753140195676,
+        "lower": 0.8930021332559445,
+        "upper": 0.9657824681852035,
+        "splits": 20
+      }
+    },
+    {
+      "gap": 0,
+      "predictor": "baseline",
+      "event": "OneCase",
+      "length": 12,
+      "noise_sd": 0.005,
+      "groups": 321,
+      "coverage": {
+        "mean": 0.9933035714285714,
+        "se": 0.0046201639592920426,
+        "lower": 0.984248216465689,
+        "upper": 1.0023589263914539,
+        "splits": 20
+      }
+    },
+    {
+      "gap": 0,
+      "predictor": "baseline",
+      "event": "OneCase",
+      "length": 12,
+      "noise_sd": 0.025,
+      "groups": 307,
+      "coverage": {
+        "mean": 0.939417716786138,
+        "se": 0.012183287520708979,
+        "lower": 0.915538912032252,
+        "upper": 0.9632965215400239,
+        "splits": 20
+      }
+    },
+    {
+      "gap": 0,
+      "predictor": "baseline",
+      "event": "WorstCase",
+      "length": 1,
+      "noise_sd": 0.005,
+      "groups": 353,
+      "coverage": {
+        "mean": 0.9725316928831029,
+        "se": 0.007257232286661882,
+        "lower": 0.9583077789738044,
+        "upper": 0.9867556067924015,
+        "splits": 20
+      }
+    },
+    {
+      "gap": 0,
+      "predictor": "baseline",
+      "event": "WorstCase",
+      "length": 1,
+      "noise_sd": 0.025,
+      "groups": 350,
+      "coverage": {
+        "mean": 0.9650213538592695,
+        "se": 0.012077216195883407,
+        "lower": 0.9413504450818342,
+        "upper": 0.9886922626367047,
+        "splits": 20
+      }
+    },
+    {
+      "gap": 0,
+      "predictor": "baseline",
+      "event": "WorstCase",
+      "length": 4,
+      "noise_sd": 0.005,
+      "groups": 322,
+      "coverage": {
+        "mean": 0.9709713203463203,
+        "se": 0.010221073352307777,
+        "lower": 0.950938384692455,
+        "upper": 0.9910042560001856,
+        "splits": 20
+      }
+    },
+    {
+      "gap": 0,
+      "predictor": "baseline",
+      "event": "WorstCase",
+      "length": 4,
+      "noise_sd": 0.025,
+      "groups": 347,
+      "coverage": {
+        "mean": 0.9387725182204859,
+        "se": 0.018745860999671737,
+        "lower": 0.9020313058019352,
+        "upper": 0.9755137306390366,
+        "splits": 20
+      }
+    },
+    {
+      "gap": 0,
+      "predictor": "baseline",
+      "event": "WorstCase",
+      "length": 12,
+      "noise_sd": 0.005,
+      "groups": 321,
+      "coverage": {
+        "mean": 0.9933035714285714,
+        "se": 0.0046201639592920426,
+        "lower": 0.984248216465689,
+        "upper": 1.0023589263914539,
+        "splits": 20
+      }
+    },
+    {
+      "gap": 0,
+      "predictor": "baseline",
+      "event": "WorstCase",
+      "length": 12,
+      "noise_sd": 0.025,
+      "groups": 307,
+      "coverage": {
+        "mean": 0.8654668577036999,
+        "se": 0.028520861628626947,
+        "lower": 0.8095669961035407,
+        "upper": 0.9213667193038592,
+        "splits": 20
+      }
+    },
+    {
+      "gap": 0,
+      "predictor": "plus",
+      "event": "OneCase",
+      "length": 1,
+      "noise_sd": 0.005,
+      "groups": 353,
+      "coverage": {
+        "mean": 0.9849794483010597,
+        "se": 0.005331663049921381,
+        "lower": 0.9745295807455108,
+        "upper": 0.9954293158566085,
+        "splits": 20
+      }
+    },
+    {
+      "gap": 0,
+      "predictor": "plus",
+      "event": "OneCase",
+      "length": 1,
+      "noise_sd": 0.025,
+      "groups": 350,
+      "coverage": {
+        "mean": 0.9226277582509074,
+        "se": 0.015468661679906319,
+        "lower": 0.8923097384692561,
+        "upper": 0.9529457780325586,
+        "splits": 20
+      }
+    },
+    {
+      "gap": 0,
+      "predictor": "plus",
+      "event": "OneCase",
+      "length": 4,
+      "noise_sd": 0.005,
+      "groups": 322,
+      "coverage": {
+        "mean": 0.9868641774891774,
+        "se": 0.006191644263915532,
+        "lower": 0.974728777726819,
+        "upper": 0.9989995772515359,
+        "splits": 20
+      }
+    },
+    {
+      "gap": 0,
+      "predictor": "plus",
+      "event": "OneCase",
+      "length": 4,
+      "noise_sd": 0.025,
+      "groups": 347,
+      "coverage": {
+        "mean": 0.9040422136260047,
+        "se": 0.01425927560415298,
+        "lower": 0.8760945469962342,
+        "upper": 0.9319898802557751,
+        "splits": 20
+      }
+    },
+    {
+      "gap": 0,
+      "predictor": "plus",
+      "event": "OneCase",
+      "length": 12,
+      "noise_sd": 0.005,
+      "groups": 321,
+      "coverage": {
+        "mean": 0.9889995421245421,
+        "se": 0.005215097764614619,
+        "lower": 0.9787781383300421,
+        "upper": 0.9992209459190421,
+        "splits": 20
+      }
+    },
+    {
+      "gap": 0,
+      "predictor": "plus",
+      "event": "OneCase",
+      "length": 12,
+      "noise_sd": 0.025,
+      "groups": 307,
+      "coverage": {
+        "mean": 0.921730964254184,
+        "se": 0.010747059656509742,
+        "lower": 0.9006671143877215,
+        "upper": 0.9427948141206465,
+        "splits": 20
+      }
+    },
+    {
+      "gap": 0,
+      "predictor": "plus",
+      "event": "WorstCase",
+      "length": 1,
+      "noise_sd": 0.005,
+      "groups": 353,
+      "coverage": {
+        "mean": 0.9949754901960783,
+        "se": 0.0035136593416093087,
+        "lower": 0.9880888444325814,
+        "upper": 1.0018621359595754,
+        "splits": 20
+      }
+    },
+    {
+      "gap": 0,
+      "predictor": "plus",
+      "event": "WorstCase",
+      "length": 1,
+      "noise_sd": 0.025,
+      "groups": 350,
+      "coverage": {
+        "mean": 0.972132922263744,
+        "se": 0.0065913587149413,
+        "lower": 0.9592140965732748,
+        "upper": 0.9850517479542132,
+        "splits": 20
+      }
+    },
+    {
+      "gap": 0,
+      "predictor": "plus",
+      "event": "WorstCase",
+      "length": 4,
+      "noise_sd": 0.005,
+      "groups": 322,
+      "coverage": {
+        "mean": 0.9964285714285713,
+        "se": 0.0035714285714285696,
+        "lower": 0.989428700055214,
+        "upper": 1.0034284428019287,
+        "splits": 20
+      }
+    },
+    {
+      "gap": 0,
+      "predictor": "plus",
+      "event": "WorstCase",
+      "length": 4,
+      "noise_sd": 0.025,
+      "groups": 347,
+      "coverage": {
+        "mean": 0.9316506446215325,
+        "se": 0.013647755223349023,
+        "lower": 0.90490153591395,
+        "upper": 0.958399753329115,
+        "splits": 20
+      }
+    },
+    {
+      "gap": 0,
+      "predictor": "plus",
+      "event": "WorstCase",
+      "length": 12,
+      "noise_sd": 0.005,
+      "groups": 321,
+      "coverage": {
+        "mean": 0.9964285714285713,
+        "se": 0.0035714285714285696,
+        "lower": 0.989428700055214,
+        "upper": 1.0034284428019287,
+        "splits": 20
+      }
+    },
+    {
+      "gap": 0,
+      "predictor": "plus",
+      "event": "WorstCase",
+      "length": 12,
+      "noise_sd": 0.025,
+      "groups": 307,
+      "coverage": {
+        "mean": 0.8212184848175561,
+        "se": 0.02536508149203536,
+        "lower": 0.7715038386282433,
+        "upper": 0.8709331310068689,
+        "splits": 20
+      }
+    },
+    {
+      "gap": 0,
+      "predictor": "short",
+      "event": "OneCase",
+      "length": 1,
+      "noise_sd": 0.005,
+      "groups": 353,
+      "coverage": {
+        "mean": 0.9843544483010594,
+        "se": 0.005578398997148529,
+        "lower": 0.9734209871752539,
+        "upper": 0.995287909426865,
+        "splits": 20
+      }
+    },
+    {
+      "gap": 0,
+      "predictor": "short",
+      "event": "OneCase",
+      "length": 1,
+      "noise_sd": 0.025,
+      "groups": 350,
+      "coverage": {
+        "mean": 0.9298806025764567,
+        "se": 0.0120068505007995,
+        "lower": 0.9063476080271329,
+        "upper": 0.9534135971257804,
+        "splits": 20
+      }
+    },
+    {
+      "gap": 0,
+      "predictor": "short",
+      "event": "OneCase",
+      "length": 4,
+      "noise_sd": 0.005,
+      "groups": 322,
+      "coverage": {
+        "mean": 0.9868641774891774,
+        "se": 0.006191644263915532,
+        "lower": 0.974728777726819,
+        "upper": 0.9989995772515359,
+        "splits": 20
+      }
+    },
+    {
+      "gap": 0,
+      "predictor": "short",
+      "event": "OneCase",
+      "length": 4,
+      "noise_sd": 0.025,
+      "groups": 347,
+      "coverage": {
+        "mean": 0.8947279379852036,
+        "se": 0.0200410585132471,
+        "lower": 0.8554481850871793,
+        "upper": 0.9340076908832278,
+        "splits": 20
+      }
+    },
+    {
+      "gap": 0,
+      "predictor": "short",
+      "event": "OneCase",
+      "length": 12,
+      "noise_sd": 0.005,
+      "groups": 321,
+      "coverage": {
+        "mean": 0.9856112637362637,
+        "se": 0.0066296573932290185,
+        "lower": 0.9726173740156951,
+        "upper": 0.9986051534568323,
+        "splits": 20
+      }
+    },
+    {
+      "gap": 0,
+      "predictor": "short",
+      "event": "OneCase",
+      "length": 12,
+      "noise_sd": 0.025,
+      "groups": 307,
+      "coverage": {
+        "mean": 0.9255620841147157,
+        "se": 0.013549615144083316,
+        "lower": 0.899005326427934,
+        "upper": 0.9521188418014975,
+        "splits": 20
+      }
+    },
+    {
+      "gap": 0,
+      "predictor": "short",
+      "event": "WorstCase",
+      "length": 1,
+      "noise_sd": 0.005,
+      "groups": 353,
+      "coverage": {
+        "mean": 0.9928015771526002,
+        "se": 0.003990228875512645,
+        "lower": 0.9849808722665236,
+        "upper": 1.0006222820386768,
+        "splits": 20
+      }
+    },
+    {
+      "gap": 0,
+      "predictor": "short",
+      "event": "WorstCase",
+      "length": 1,
+      "noise_sd": 0.025,
+      "groups": 350,
+      "coverage": {
+        "mean": 0.9769854067357937,
+        "se": 0.008437197922702293,
+        "lower": 0.9604488026768611,
+        "upper": 0.9935220107947264,
+        "splits": 20
+      }
+    },
+    {
+      "gap": 0,
+      "predictor": "short",
+      "event": "WorstCase",
+      "length": 4,
+      "noise_sd": 0.005,
+      "groups": 322,
+      "coverage": {
+        "mean": 0.9933035714285714,
+        "se": 0.0046201639592920426,
+        "lower": 0.984248216465689,
+        "upper": 1.0023589263914539,
+        "splits": 20
+      }
+    },
+    {
+      "gap": 0,
+      "predictor": "short",
+      "event": "WorstCase",
+      "length": 4,
+      "noise_sd": 0.025,
+      "groups": 347,
+      "coverage": {
+        "mean": 0.9127892056177785,
+        "se": 0.014770726981118986,
+        "lower": 0.8838391127093113,
+        "upper": 0.9417392985262458,
+        "splits": 20
+      }
+    },
+    {
+      "gap": 0,
+      "predictor": "short",
+      "event": "WorstCase",
+      "length": 12,
+      "noise_sd": 0.005,
+      "groups": 321,
+      "coverage": {
+        "mean": 0.9872602887308769,
+        "se": 0.005960611286169794,
+        "lower": 0.9755777052841411,
+        "upper": 0.9989428721776127,
+        "splits": 20
+      }
+    },
+    {
+      "gap": 0,
+      "predictor": "short",
+      "event": "WorstCase",
+      "length": 12,
+      "noise_sd": 0.025,
+      "groups": 307,
+      "coverage": {
+        "mean": 0.8485988718883455,
+        "se": 0.023347216507924876,
+        "lower": 0.8028391683935537,
+        "upper": 0.8943585753831372,
+        "splits": 20
+      }
+    },
+    {
+      "gap": 64,
+      "predictor": "baseline",
+      "event": "OneCase",
+      "length": 1,
+      "noise_sd": 0.005,
+      "groups": 306,
+      "coverage": {
+        "mean": 0.9505964868464869,
+        "se": 0.01756743844022125,
+        "lower": 0.9161649402030287,
+        "upper": 0.985028033489945,
+        "splits": 20
+      }
+    },
+    {
+      "gap": 64,
+      "predictor": "baseline",
+      "event": "OneCase",
+      "length": 1,
+      "noise_sd": 0.025,
+      "groups": 320,
+      "coverage": {
+        "mean": 0.9703282186080173,
+        "se": 0.008846579669099016,
+        "lower": 0.952989241070219,
+        "upper": 0.9876671961458157,
+        "splits": 20
+      }
+    },
+    {
+      "gap": 64,
+      "predictor": "baseline",
+      "event": "OneCase",
+      "length": 4,
+      "noise_sd": 0.005,
+      "groups": 341,
+      "coverage": {
+        "mean": 0.9591870915032679,
+        "se": 0.016792083105210572,
+        "lower": 0.9262752133916516,
+        "upper": 0.9920989696148841,
+        "splits": 20
+      }
+    },
+    {
+      "gap": 64,
+      "predictor": "baseline",
+      "event": "OneCase",
+      "length": 4,
+      "noise_sd": 0.025,
+      "groups": 349,
+      "coverage": {
+        "mean": 0.9615120537674885,
+        "se": 0.010266236602577368,
+        "lower": 0.94139059976967,
+        "upper": 0.981633507765307,
+        "splits": 20
+      }
+    },
+    {
+      "gap": 64,
+      "predictor": "baseline",
+      "event": "OneCase",
+      "length": 12,
+      "noise_sd": 0.005,
+      "groups": 351,
+      "coverage": {
+        "mean": 0.9635384192578634,
+        "se": 0.010250569467641642,
+        "lower": 0.9434476722802599,
+        "upper": 0.9836291662354669,
+        "splits": 20
+      }
+    },
+    {
+      "gap": 64,
+      "predictor": "baseline",
+      "event": "OneCase",
+      "length": 12,
+      "noise_sd": 0.025,
+      "groups": 333,
+      "coverage": {
+        "mean": 0.963546365914787,
+        "se": 0.014581851746758762,
+        "lower": 0.9349664616632374,
+        "upper": 0.9921262701663367,
+        "splits": 20
+      }
+    },
+    {
+      "gap": 64,
+      "predictor": "baseline",
+      "event": "WorstCase",
+      "length": 1,
+      "noise_sd": 0.005,
+      "groups": 306,
+      "coverage": {
+        "mean": 0.9942857142857143,
+        "se": 0.003993071933163797,
+        "lower": 0.9864594371090356,
+        "upper": 1.002111991462393,
+        "splits": 20
+      }
+    },
+    {
+      "gap": 64,
+      "predictor": "baseline",
+      "event": "WorstCase",
+      "length": 1,
+      "noise_sd": 0.025,
+      "groups": 320,
+      "coverage": {
+        "mean": 0.9887301587301588,
+        "se": 0.006592960900996669,
+        "lower": 0.9758081928127246,
+        "upper": 1.001652124647593,
+        "splits": 20
+      }
+    },
+    {
+      "gap": 64,
+      "predictor": "baseline",
+      "event": "WorstCase",
+      "length": 4,
+      "noise_sd": 0.005,
+      "groups": 341,
+      "coverage": {
+        "mean": 0.9805514705882352,
+        "se": 0.006903632872902879,
+        "lower": 0.9670205987948588,
+        "upper": 0.9940823423816116,
+        "splits": 20
+      }
+    },
+    {
+      "gap": 64,
+      "predictor": "baseline",
+      "event": "WorstCase",
+      "length": 4,
+      "noise_sd": 0.025,
+      "groups": 349,
+      "coverage": {
+        "mean": 0.9431051587301587,
+        "se": 0.014080944287418904,
+        "lower": 0.9155070150585026,
+        "upper": 0.9707033024018147,
+        "splits": 20
+      }
+    },
+    {
+      "gap": 64,
+      "predictor": "baseline",
+      "event": "WorstCase",
+      "length": 12,
+      "noise_sd": 0.005,
+      "groups": 351,
+      "coverage": {
+        "mean": 0.8910952390813746,
+        "se": 0.015580117051655849,
+        "lower": 0.8605587707852107,
+        "upper": 0.9216317073775384,
+        "splits": 20
+      }
+    },
+    {
+      "gap": 64,
+      "predictor": "baseline",
+      "event": "WorstCase",
+      "length": 12,
+      "noise_sd": 0.025,
+      "groups": 333,
+      "coverage": {
+        "mean": 0.8617907904788711,
+        "se": 0.02085622518162116,
+        "lower": 0.8209133402694363,
+        "upper": 0.9026682406883059,
+        "splits": 20
+      }
+    },
+    {
+      "gap": 64,
+      "predictor": "plus",
+      "event": "OneCase",
+      "length": 1,
+      "noise_sd": 0.005,
+      "groups": 306,
+      "coverage": {
+        "mean": 1.0,
+        "se": 0.0,
+        "lower": 1.0,
+        "upper": 1.0,
+        "splits": 20
+      }
+    },
+    {
+      "gap": 64,
+      "predictor": "plus",
+      "event": "OneCase",
+      "length": 1,
+      "noise_sd": 0.025,
+      "groups": 320,
+      "coverage": {
+        "mean": 0.8888379033677021,
+        "se": 0.022898743908920046,
+        "lower": 0.8439571900150129,
+        "upper": 0.9337186167203912,
+        "splits": 20
+      }
+    },
+    {
+      "gap": 64,
+      "predictor": "plus",
+      "event": "OneCase",
+      "length": 4,
+      "noise_sd": 0.005,
+      "groups": 341,
+      "coverage": {
+        "mean": 0.996875,
+        "se": 0.0031249999999999997,
+        "lower": 0.9907501125483122,
+        "upper": 1.0029998874516877,
+        "splits": 20
+      }
+    },
+    {
+      "gap": 64,
+      "predictor": "plus",
+      "event": "OneCase",
+      "length": 4,
+      "noise_sd": 0.025,
+      "groups": 349,
+      "coverage": {
+        "mean": 0.9170839256408477,
+        "se": 0.01363658373514803,
+        "lower": 0.8903567126477929,
+        "upper": 0.9438111386339025,
+        "splits": 20
+      }
+    },
+    {
+      "gap": 64,
+      "predictor": "plus",
+      "event": "OneCase",
+      "length": 12,
+      "noise_sd": 0.005,
+      "groups": 351,
+      "coverage": {
+        "mean": 1.0,
+        "se": 0.0,
+        "lower": 1.0,
+        "upper": 1.0,
+        "splits": 20
+      }
+    },
+    {
+      "gap": 64,
+      "predictor": "plus",
+      "event": "OneCase",
+      "length": 12,
+      "noise_sd": 0.025,
+      "groups": 333,
+      "coverage": {
+        "mean": 0.8985444030084123,
+        "se": 0.020190053444895713,
+        "lower": 0.8589726254104779,
+        "upper": 0.9381161806063467,
+        "splits": 20
+      }
+    },
+    {
+      "gap": 64,
+      "predictor": "plus",
+      "event": "WorstCase",
+      "length": 1,
+      "noise_sd": 0.005,
+      "groups": 306,
+      "coverage": {
+        "mean": 1.0,
+        "se": 0.0,
+        "lower": 1.0,
+        "upper": 1.0,
+        "splits": 20
+      }
+    },
+    {
+      "gap": 64,
+      "predictor": "plus",
+      "event": "WorstCase",
+      "length": 1,
+      "noise_sd": 0.025,
+      "groups": 320,
+      "coverage": {
+        "mean": 0.9828196109446109,
+        "se": 0.0061615580963149145,
+        "lower": 0.9707431789871825,
+        "upper": 0.9948960429020393,
+        "splits": 20
+      }
+    },
+    {
+      "gap": 64,
+      "predictor": "plus",
+      "event": "WorstCase",
+      "length": 4,
+      "noise_sd": 0.005,
+      "groups": 341,
+      "coverage": {
+        "mean": 1.0,
+        "se": 0.0,
+        "lower": 1.0,
+        "upper": 1.0,
+        "splits": 20
+      }
+    },
+    {
+      "gap": 64,
+      "predictor": "plus",
+      "event": "WorstCase",
+      "length": 4,
+      "noise_sd": 0.025,
+      "groups": 349,
+      "coverage": {
+        "mean": 0.9488714663800476,
+        "se": 0.011542351325922958,
+        "lower": 0.9262488734843305,
+        "upper": 0.9714940592757647,
+        "splits": 20
+      }
+    },
+    {
+      "gap": 64,
+      "predictor": "plus",
+      "event": "WorstCase",
+      "length": 12,
+      "noise_sd": 0.005,
+      "groups": 351,
+      "coverage": {
+        "mean": 1.0,
+        "se": 0.0,
+        "lower": 1.0,
+        "upper": 1.0,
+        "splits": 20
+      }
+    },
+    {
+      "gap": 64,
+      "predictor": "plus",
+      "event": "WorstCase",
+      "length": 12,
+      "noise_sd": 0.025,
+      "groups": 333,
+      "coverage": {
+        "mean": 0.7878586282998048,
+        "se": 0.028909485834207254,
+        "lower": 0.7311970772531877,
+        "upper": 0.8445201793464219,
+        "splits": 20
+      }
+    },
+    {
+      "gap": 64,
+      "predictor": "short",
+      "event": "OneCase",
+      "length": 1,
+      "noise_sd": 0.005,
+      "groups": 306,
+      "coverage": {
+        "mean": 0.986962669683258,
+        "se": 0.00602416793555965,
+        "lower": 0.97515551749274,
+        "upper": 0.9987698218737759,
+        "splits": 20
+      }
+    },
+    {
+      "gap": 64,
+      "predictor": "short",
+      "event": "OneCase",
+      "length": 1,
+      "noise_sd": 0.025,
+      "groups": 320,
+      "coverage": {
+        "mean": 0.9103148934398935,
+        "se": 0.018019533078575577,
+        "lower": 0.8749972575876572,
+        "upper": 0.9456325292921297,
+        "splits": 20
+      }
+    },
+    {
+      "gap": 64,
+      "predictor": "short",
+      "event": "OneCase",
+      "length": 4,
+      "noise_sd": 0.005,
+      "groups": 341,
+      "coverage": {
+        "mean": 0.9877566425120772,
+        "se": 0.004962293371545783,
+        "lower": 0.9780307262231256,
+        "upper": 0.9974825588010288,
+        "splits": 20
+      }
+    },
+    {
+      "gap": 64,
+      "predictor": "short",
+      "event": "OneCase",
+      "length": 4,
+      "noise_sd": 0.025,
+      "groups": 349,
+      "coverage": {
+        "mean": 0.9086758439246998,
+        "se": 0.015234830544242944,
+        "lower": 0.8788161247474129,
+        "upper": 0.9385355631019867,
+        "splits": 20
+      }
+    },
+    {
+      "gap": 64,
+      "predictor": "short",
+      "event": "OneCase",
+      "length": 12,
+      "noise_sd": 0.005,
+      "groups": 351,
+      "coverage": {
+        "mean": 0.9887129588677576,
+        "se": 0.005230065639399098,
+        "lower": 0.9784622185777548,
+        "upper": 0.9989636991577603,
+        "splits": 20
+      }
+    },
+    {
+      "gap": 64,
+      "predictor": "short",
+      "event": "OneCase",
+      "length": 12,
+      "noise_sd": 0.025,
+      "groups": 333,
+      "coverage": {
+        "mean": 0.9255702061526365,
+        "se": 0.017265947622339836,
+        "lower": 0.8917295706538955,
+        "upper": 0.9594108416513776,
+        "splits": 20
+      }
+    },
+    {
+      "gap": 64,
+      "predictor": "short",
+      "event": "WorstCase",
+      "length": 1,
+      "noise_sd": 0.005,
+      "groups": 306,
+      "coverage": {
+        "mean": 1.0,
+        "se": 0.0,
+        "lower": 1.0,
+        "upper": 1.0,
+        "splits": 20
+      }
+    },
+    {
+      "gap": 64,
+      "predictor": "short",
+      "event": "WorstCase",
+      "length": 1,
+      "noise_sd": 0.025,
+      "groups": 320,
+      "coverage": {
+        "mean": 0.9711520424020424,
+        "se": 0.010649564080182177,
+        "lower": 0.9502792803538339,
+        "upper": 0.992024804450251,
+        "splits": 20
+      }
+    },
+    {
+      "gap": 64,
+      "predictor": "short",
+      "event": "WorstCase",
+      "length": 4,
+      "noise_sd": 0.005,
+      "groups": 341,
+      "coverage": {
+        "mean": 1.0,
+        "se": 0.0,
+        "lower": 1.0,
+        "upper": 1.0,
+        "splits": 20
+      }
+    },
+    {
+      "gap": 64,
+      "predictor": "short",
+      "event": "WorstCase",
+      "length": 4,
+      "noise_sd": 0.025,
+      "groups": 349,
+      "coverage": {
+        "mean": 0.9347301368539928,
+        "se": 0.016086138979573433,
+        "lower": 0.9032018838037229,
+        "upper": 0.9662583899042626,
+        "splits": 20
+      }
+    },
+    {
+      "gap": 64,
+      "predictor": "short",
+      "event": "WorstCase",
+      "length": 12,
+      "noise_sd": 0.005,
+      "groups": 351,
+      "coverage": {
+        "mean": 1.0,
+        "se": 0.0,
+        "lower": 1.0,
+        "upper": 1.0,
+        "splits": 20
+      }
+    },
+    {
+      "gap": 64,
+      "predictor": "short",
+      "event": "WorstCase",
+      "length": 12,
+      "noise_sd": 0.025,
+      "groups": 333,
+      "coverage": {
+        "mean": 0.8109717894334768,
+        "se": 0.026095853988339805,
+        "lower": 0.7598248554705148,
+        "upper": 0.8621187233964388,
+        "splits": 20
+      }
+    },
+    {
+      "gap": 192,
+      "predictor": "baseline",
+      "event": "OneCase",
+      "length": 1,
+      "noise_sd": 0.005,
+      "groups": 329,
+      "coverage": {
+        "mean": 0.9439837735793619,
+        "se": 0.010778419197398971,
+        "lower": 0.9228584601421849,
+        "upper": 0.965109087016539,
+        "splits": 20
+      }
+    },
+    {
+      "gap": 192,
+      "predictor": "baseline",
+      "event": "OneCase",
+      "length": 1,
+      "noise_sd": 0.025,
+      "groups": 321,
+      "coverage": {
+        "mean": 0.9162286939067125,
+        "se": 0.01769954306454483,
+        "lower": 0.8815382269573889,
+        "upper": 0.950919160856036,
+        "splits": 20
+      }
+    },
+    {
+      "gap": 192,
+      "predictor": "baseline",
+      "event": "OneCase",
+      "length": 4,
+      "noise_sd": 0.005,
+      "groups": 361,
+      "coverage": {
+        "mean": 0.9482189931335172,
+        "se": 0.011216076715073891,
+        "lower": 0.926235886724134,
+        "upper": 0.9702020995429004,
+        "splits": 20
+      }
+    },
+    {
+      "gap": 192,
+      "predictor": "baseline",
+      "event": "OneCase",
+      "length": 4,
+      "noise_sd": 0.025,
+      "groups": 311,
+      "coverage": {
+        "mean": 0.9405150772430184,
+        "se": 0.01644902556851868,
+        "lower": 0.9082755795479434,
+        "upper": 0.9727545749380935,
+        "splits": 20
+      }
+    },
+    {
+      "gap": 192,
+      "predictor": "baseline",
+      "event": "OneCase",
+      "length": 12,
+      "noise_sd": 0.005,
+      "groups": 333,
+      "coverage": {
+        "mean": 0.9594972725932479,
+        "se": 0.00824281786761645,
+        "lower": 0.9433416464415965,
+        "upper": 0.9756528987448994,
+        "splits": 20
+      }
+    },
+    {
+      "gap": 192,
+      "predictor": "baseline",
+      "event": "OneCase",
+      "length": 12,
+      "noise_sd": 0.025,
+      "groups": 345,
+      "coverage": {
+        "mean": 0.9177388797450885,
+        "se": 0.01236085618770182,
+        "lower": 0.8935120467991139,
+        "upper": 0.9419657126910631,
+        "splits": 20
+      }
+    },
+    {
+      "gap": 192,
+      "predictor": "baseline",
+      "event": "WorstCase",
+      "length": 1,
+      "noise_sd": 0.005,
+      "groups": 329,
+      "coverage": {
+        "mean": 1.0,
+        "se": 0.0,
+        "lower": 1.0,
+        "upper": 1.0,
+        "splits": 20
+      }
+    },
+    {
+      "gap": 192,
+      "predictor": "baseline",
+      "event": "WorstCase",
+      "length": 1,
+      "noise_sd": 0.025,
+      "groups": 321,
+      "coverage": {
+        "mean": 0.9576100413174716,
+        "se": 0.011203887403060692,
+        "lower": 0.9356508255206307,
+        "upper": 0.9795692571143125,
+        "splits": 20
+      }
+    },
+    {
+      "gap": 192,
+      "predictor": "baseline",
+      "event": "WorstCase",
+      "length": 4,
+      "noise_sd": 0.005,
+      "groups": 361,
+      "coverage": {
+        "mean": 0.9816307814992026,
+        "se": 0.009051823881150967,
+        "lower": 0.9638895326977471,
+        "upper": 0.999372030300658,
+        "splits": 20
+      }
+    },
+    {
+      "gap": 192,
+      "predictor": "baseline",
+      "event": "WorstCase",
+      "length": 4,
+      "noise_sd": 0.025,
+      "groups": 311,
+      "coverage": {
+        "mean": 0.9261378490790255,
+        "se": 0.011339706151931403,
+        "lower": 0.9039124334259727,
+        "upper": 0.9483632647320783,
+        "splits": 20
+      }
+    },
+    {
+      "gap": 192,
+      "predictor": "baseline",
+      "event": "WorstCase",
+      "length": 12,
+      "noise_sd": 0.005,
+      "groups": 333,
+      "coverage": {
+        "mean": 0.9748015873015874,
+        "se": 0.014739371034504588,
+        "lower": 0.9459129509191855,
+        "upper": 1.0036902236839893,
+        "splits": 20
+      }
+    },
+    {
+      "gap": 192,
+      "predictor": "baseline",
+      "event": "WorstCase",
+      "length": 12,
+      "noise_sd": 0.025,
+      "groups": 345,
+      "coverage": {
+        "mean": 0.8065739524792225,
+        "se": 0.021327075590958245,
+        "lower": 0.764773652425381,
+        "upper": 0.848374252533064,
+        "splits": 20
+      }
+    },
+    {
+      "gap": 192,
+      "predictor": "plus",
+      "event": "OneCase",
+      "length": 1,
+      "noise_sd": 0.005,
+      "groups": 329,
+      "coverage": {
+        "mean": 1.0,
+        "se": 0.0,
+        "lower": 1.0,
+        "upper": 1.0,
+        "splits": 20
+      }
+    },
+    {
+      "gap": 192,
+      "predictor": "plus",
+      "event": "OneCase",
+      "length": 1,
+      "noise_sd": 0.025,
+      "groups": 321,
+      "coverage": {
+        "mean": 0.9010148084199943,
+        "se": 0.022174104615034912,
+        "lower": 0.8575543619851025,
+        "upper": 0.944475254854886,
+        "splits": 20
+      }
+    },
+    {
+      "gap": 192,
+      "predictor": "plus",
+      "event": "OneCase",
+      "length": 4,
+      "noise_sd": 0.005,
+      "groups": 361,
+      "coverage": {
+        "mean": 0.9934873949579831,
+        "se": 0.004505542767734806,
+        "lower": 0.984656693402418,
+        "upper": 1.0023180965135483,
+        "splits": 20
+      }
+    },
+    {
+      "gap": 192,
+      "predictor": "plus",
+      "event": "OneCase",
+      "length": 4,
+      "noise_sd": 0.025,
+      "groups": 311,
+      "coverage": {
+        "mean": 0.902714451656015,
+        "se": 0.018661602605817864,
+        "lower": 0.8661383826548132,
+        "upper": 0.9392905206572169,
+        "splits": 20
+      }
+    },
+    {
+      "gap": 192,
+      "predictor": "plus",
+      "event": "OneCase",
+      "length": 12,
+      "noise_sd": 0.005,
+      "groups": 333,
+      "coverage": {
+        "mean": 1.0,
+        "se": 0.0,
+        "lower": 1.0,
+        "upper": 1.0,
+        "splits": 20
+      }
+    },
+    {
+      "gap": 192,
+      "predictor": "plus",
+      "event": "OneCase",
+      "length": 12,
+      "noise_sd": 0.025,
+      "groups": 345,
+      "coverage": {
+        "mean": 0.8909451751378995,
+        "se": 0.015715608373277932,
+        "lower": 0.8601431487311386,
+        "upper": 0.9217472015446604,
+        "splits": 20
+      }
+    },
+    {
+      "gap": 192,
+      "predictor": "plus",
+      "event": "WorstCase",
+      "length": 1,
+      "noise_sd": 0.005,
+      "groups": 329,
+      "coverage": {
+        "mean": 1.0,
+        "se": 0.0,
+        "lower": 1.0,
+        "upper": 1.0,
+        "splits": 20
+      }
+    },
+    {
+      "gap": 192,
+      "predictor": "plus",
+      "event": "WorstCase",
+      "length": 1,
+      "noise_sd": 0.025,
+      "groups": 321,
+      "coverage": {
+        "mean": 0.9938888888888888,
+        "se": 0.004225222079894908,
+        "lower": 0.9856076057856114,
+        "upper": 1.0021701719921663,
+        "splits": 20
+      }
+    },
+    {
+      "gap": 192,
+      "predictor": "plus",
+      "event": "WorstCase",
+      "length": 4,
+      "noise_sd": 0.005,
+      "groups": 361,
+      "coverage": {
+        "mean": 1.0,
+        "se": 0.0,
+        "lower": 1.0,
+        "upper": 1.0,
+        "splits": 20
+      }
+    },
+    {
+      "gap": 192,
+      "predictor": "plus",
+      "event": "WorstCase",
+      "length": 4,
+      "noise_sd": 0.025,
+      "groups": 311,
+      "coverage": {
+        "mean": 0.93732631339249,
+        "se": 0.014344468222975578,
+        "lower": 0.9092116722980785,
+        "upper": 0.9654409544869014,
+        "splits": 20
+      }
+    },
+    {
+      "gap": 192,
+      "predictor": "plus",
+      "event": "WorstCase",
+      "length": 12,
+      "noise_sd": 0.005,
+      "groups": 333,
+      "coverage": {
+        "mean": 1.0,
+        "se": 0.0,
+        "lower": 1.0,
+        "upper": 1.0,
+        "splits": 20
+      }
+    },
+    {
+      "gap": 192,
+      "predictor": "plus",
+      "event": "WorstCase",
+      "length": 12,
+      "noise_sd": 0.025,
+      "groups": 345,
+      "coverage": {
+        "mean": 0.7998295538609848,
+        "se": 0.036394278569118046,
+        "lower": 0.7284980786221955,
+        "upper": 0.871161029099774,
+        "splits": 20
+      }
+    },
+    {
+      "gap": 192,
+      "predictor": "short",
+      "event": "OneCase",
+      "length": 1,
+      "noise_sd": 0.005,
+      "groups": 329,
+      "coverage": {
+        "mean": 0.994949494949495,
+        "se": 0.0034952537104894184,
+        "lower": 0.9880989235601058,
+        "upper": 1.0018000663388842,
+        "splits": 20
+      }
+    },
+    {
+      "gap": 192,
+      "predictor": "short",
+      "event": "OneCase",
+      "length": 1,
+      "noise_sd": 0.025,
+      "groups": 321,
+      "coverage": {
+        "mean": 0.9146280080858255,
+        "se": 0.016138659562539615,
+        "lower": 0.8829968165844948,
+        "upper": 0.9462591995871561,
+        "splits": 20
+      }
+    },
+    {
+      "gap": 192,
+      "predictor": "short",
+      "event": "OneCase",
+      "length": 4,
+      "noise_sd": 0.005,
+      "groups": 361,
+      "coverage": {
+        "mean": 0.991313481914505,
+        "se": 0.004851341558360451,
+        "lower": 0.9818050271834161,
+        "upper": 1.000821936645594,
+        "splits": 20
+      }
+    },
+    {
+      "gap": 192,
+      "predictor": "short",
+      "event": "OneCase",
+      "length": 4,
+      "noise_sd": 0.025,
+      "groups": 311,
+      "coverage": {
+        "mean": 0.8812784418453923,
+        "se": 0.018668085479413208,
+        "lower": 0.8446896666454272,
+        "upper": 0.9178672170453573,
+        "splits": 20
+      }
+    },
+    {
+      "gap": 192,
+      "predictor": "short",
+      "event": "OneCase",
+      "length": 12,
+      "noise_sd": 0.005,
+      "groups": 333,
+      "coverage": {
+        "mean": 0.9970588235294118,
+        "se": 0.0029411764705882357,
+        "lower": 0.9912942235748822,
+        "upper": 1.0028234234839413,
+        "splits": 20
+      }
+    },
+    {
+      "gap": 192,
+      "predictor": "short",
+      "event": "OneCase",
+      "length": 12,
+      "noise_sd": 0.025,
+      "groups": 345,
+      "coverage": {
+        "mean": 0.9052928611523982,
+        "se": 0.019208153136701434,
+        "lower": 0.8676455727949333,
+        "upper": 0.942940149509863,
+        "splits": 20
+      }
+    },
+    {
+      "gap": 192,
+      "predictor": "short",
+      "event": "WorstCase",
+      "length": 1,
+      "noise_sd": 0.005,
+      "groups": 329,
+      "coverage": {
+        "mean": 1.0,
+        "se": 0.0,
+        "lower": 1.0,
+        "upper": 1.0,
+        "splits": 20
+      }
+    },
+    {
+      "gap": 192,
+      "predictor": "short",
+      "event": "WorstCase",
+      "length": 1,
+      "noise_sd": 0.025,
+      "groups": 321,
+      "coverage": {
+        "mean": 0.9808906882591094,
+        "se": 0.010779367482674931,
+        "lower": 0.9597635162169443,
+        "upper": 1.0020178603012744,
+        "splits": 20
+      }
+    },
+    {
+      "gap": 192,
+      "predictor": "short",
+      "event": "WorstCase",
+      "length": 4,
+      "noise_sd": 0.005,
+      "groups": 361,
+      "coverage": {
+        "mean": 1.0,
+        "se": 0.0,
+        "lower": 1.0,
+        "upper": 1.0,
+        "splits": 20
+      }
+    },
+    {
+      "gap": 192,
+      "predictor": "short",
+      "event": "WorstCase",
+      "length": 4,
+      "noise_sd": 0.025,
+      "groups": 311,
+      "coverage": {
+        "mean": 0.8939192272725555,
+        "se": 0.015783627056631045,
+        "lower": 0.8629838866961467,
+        "upper": 0.9248545678489642,
+        "splits": 20
+      }
+    },
+    {
+      "gap": 192,
+      "predictor": "short",
+      "event": "WorstCase",
+      "length": 12,
+      "noise_sd": 0.005,
+      "groups": 333,
+      "coverage": {
+        "mean": 0.9974999999999999,
+        "se": 0.0025000000000000022,
+        "lower": 0.9926000900386498,
+        "upper": 1.00239990996135,
+        "splits": 20
+      }
+    },
+    {
+      "gap": 192,
+      "predictor": "short",
+      "event": "WorstCase",
+      "length": 12,
+      "noise_sd": 0.025,
+      "groups": 345,
+      "coverage": {
+        "mean": 0.7847135723622632,
+        "se": 0.02709912156289739,
+        "lower": 0.7316002700863116,
+        "upper": 0.8378268746382149,
+        "splits": 20
+      }
+    },
+    {
+      "gap": 384,
+      "predictor": "baseline",
+      "event": "OneCase",
+      "length": 1,
+      "noise_sd": 0.005,
+      "groups": 326,
+      "coverage": {
+        "mean": 0.9913194444444444,
+        "se": 0.004749528677755165,
+        "lower": 0.9820105392925041,
+        "upper": 1.0006283495963846,
+        "splits": 20
+      }
+    },
+    {
+      "gap": 384,
+      "predictor": "baseline",
+      "event": "OneCase",
+      "length": 1,
+      "noise_sd": 0.025,
+      "groups": 300,
+      "coverage": {
+        "mean": 0.914609911287543,
+        "se": 0.014546998377613928,
+        "lower": 0.8860983183842571,
+        "upper": 0.9431215041908289,
+        "splits": 20
+      }
+    },
+    {
+      "gap": 384,
+      "predictor": "baseline",
+      "event": "OneCase",
+      "length": 4,
+      "noise_sd": 0.005,
+      "groups": 361,
+      "coverage": {
+        "mean": 0.9837949346405228,
+        "se": 0.007014302094145526,
+        "lower": 0.9700471551593137,
+        "upper": 0.9975427141217319,
+        "splits": 20
+      }
+    },
+    {
+      "gap": 384,
+      "predictor": "baseline",
+      "event": "OneCase",
+      "length": 4,
+      "noise_sd": 0.025,
+      "groups": 329,
+      "coverage": {
+        "mean": 0.9129340016708438,
+        "se": 0.01619106600671179,
+        "lower": 0.881200095426378,
+        "upper": 0.9446679079153096,
+        "splits": 20
+      }
+    },
+    {
+      "gap": 384,
+      "predictor": "baseline",
+      "event": "OneCase",
+      "length": 12,
+      "noise_sd": 0.005,
+      "groups": 336,
+      "coverage": {
+        "mean": 0.9976190476190476,
+        "se": 0.0023809523809523833,
+        "lower": 0.992952466703476,
+        "upper": 1.002285628534619,
+        "splits": 20
+      }
+    },
+    {
+      "gap": 384,
+      "predictor": "baseline",
+      "event": "OneCase",
+      "length": 12,
+      "noise_sd": 0.025,
+      "groups": 348,
+      "coverage": {
+        "mean": 0.908525522894718,
+        "se": 0.014398731732015833,
+        "lower": 0.8803045272769129,
+        "upper": 0.9367465185125231,
+        "splits": 20
+      }
+    },
+    {
+      "gap": 384,
+      "predictor": "baseline",
+      "event": "WorstCase",
+      "length": 1,
+      "noise_sd": 0.005,
+      "groups": 326,
+      "coverage": {
+        "mean": 1.0,
+        "se": 0.0,
+        "lower": 1.0,
+        "upper": 1.0,
+        "splits": 20
+      }
+    },
+    {
+      "gap": 384,
+      "predictor": "baseline",
+      "event": "WorstCase",
+      "length": 1,
+      "noise_sd": 0.025,
+      "groups": 300,
+      "coverage": {
+        "mean": 0.9793564074814075,
+        "se": 0.008431213023863265,
+        "lower": 0.9628315336086505,
+        "upper": 0.9958812813541645,
+        "splits": 20
+      }
+    },
+    {
+      "gap": 384,
+      "predictor": "baseline",
+      "event": "WorstCase",
+      "length": 4,
+      "noise_sd": 0.005,
+      "groups": 361,
+      "coverage": {
+        "mean": 1.0,
+        "se": 0.0,
+        "lower": 1.0,
+        "upper": 1.0,
+        "splits": 20
+      }
+    },
+    {
+      "gap": 384,
+      "predictor": "baseline",
+      "event": "WorstCase",
+      "length": 4,
+      "noise_sd": 0.025,
+      "groups": 329,
+      "coverage": {
+        "mean": 0.9350345655806181,
+        "se": 0.011817266477243895,
+        "lower": 0.9118731488895075,
+        "upper": 0.9581959822717288,
+        "splits": 20
+      }
+    },
+    {
+      "gap": 384,
+      "predictor": "baseline",
+      "event": "WorstCase",
+      "length": 12,
+      "noise_sd": 0.005,
+      "groups": 336,
+      "coverage": {
+        "mean": 1.0,
+        "se": 0.0,
+        "lower": 1.0,
+        "upper": 1.0,
+        "splits": 20
+      }
+    },
+    {
+      "gap": 384,
+      "predictor": "baseline",
+      "event": "WorstCase",
+      "length": 12,
+      "noise_sd": 0.025,
+      "groups": 348,
+      "coverage": {
+        "mean": 0.7997239812990588,
+        "se": 0.02867176352079325,
+        "lower": 0.7435283574250546,
+        "upper": 0.8559196051730629,
+        "splits": 20
+      }
+    },
+    {
+      "gap": 384,
+      "predictor": "plus",
+      "event": "OneCase",
+      "length": 1,
+      "noise_sd": 0.005,
+      "groups": 326,
+      "coverage": {
+        "mean": 0.9907096171802054,
+        "se": 0.005109960326116202,
+        "lower": 0.9806942789785892,
+        "upper": 1.0007249553818218,
+        "splits": 20
+      }
+    },
+    {
+      "gap": 384,
+      "predictor": "plus",
+      "event": "OneCase",
+      "length": 1,
+      "noise_sd": 0.025,
+      "groups": 300,
+      "coverage": {
+        "mean": 0.9373339416431522,
+        "se": 0.014493308387173642,
+        "lower": 0.9089275791874596,
+        "upper": 0.9657403040988448,
+        "splits": 20
+      }
+    },
+    {
+      "gap": 384,
+      "predictor": "plus",
+      "event": "OneCase",
+      "length": 4,
+      "noise_sd": 0.005,
+      "groups": 361,
+      "coverage": {
+        "mean": 0.9939338235294117,
+        "se": 0.00417715833684575,
+        "lower": 0.9857467436314729,
+        "upper": 1.0021209034273506,
+        "splits": 20
+      }
+    },
+    {
+      "gap": 384,
+      "predictor": "plus",
+      "event": "OneCase",
+      "length": 4,
+      "noise_sd": 0.025,
+      "groups": 329,
+      "coverage": {
+        "mean": 0.9337503614806246,
+        "se": 0.019497153102635067,
+        "lower": 0.8955366435983965,
+        "upper": 0.9719640793628528,
+        "splits": 20
+      }
+    },
+    {
+      "gap": 384,
+      "predictor": "plus",
+      "event": "OneCase",
+      "length": 12,
+      "noise_sd": 0.005,
+      "groups": 336,
+      "coverage": {
+        "mean": 0.987104012258811,
+        "se": 0.006124807898498935,
+        "lower": 0.9750996093655265,
+        "upper": 0.9991084151520954,
+        "splits": 20
+      }
+    },
+    {
+      "gap": 384,
+      "predictor": "plus",
+      "event": "OneCase",
+      "length": 12,
+      "noise_sd": 0.025,
+      "groups": 348,
+      "coverage": {
+        "mean": 0.8968502640290567,
+        "se": 0.018002506646051096,
+        "lower": 0.8615659993713536,
+        "upper": 0.9321345286867597,
+        "splits": 20
+      }
+    },
+    {
+      "gap": 384,
+      "predictor": "plus",
+      "event": "WorstCase",
+      "length": 1,
+      "noise_sd": 0.005,
+      "groups": 326,
+      "coverage": {
+        "mean": 0.9936507936507937,
+        "se": 0.004407592774232385,
+        "lower": 0.9850120705547792,
+        "upper": 1.0022895167468082,
+        "splits": 20
+      }
+    },
+    {
+      "gap": 384,
+      "predictor": "plus",
+      "event": "WorstCase",
+      "length": 1,
+      "noise_sd": 0.025,
+      "groups": 300,
+      "coverage": {
+        "mean": 0.985512360446571,
+        "se": 0.0073820210563117165,
+        "lower": 0.9710438650430837,
+        "upper": 0.9999808558500582,
+        "splits": 20
+      }
+    },
+    {
+      "gap": 384,
+      "predictor": "plus",
+      "event": "WorstCase",
+      "length": 4,
+      "noise_sd": 0.005,
+      "groups": 361,
+      "coverage": {
+        "mean": 0.9954166666666667,
+        "se": 0.0031689165599211814,
+        "lower": 0.9892057043392086,
+        "upper": 1.0016276289941248,
+        "splits": 20
+      }
+    },
+    {
+      "gap": 384,
+      "predictor": "plus",
+      "event": "WorstCase",
+      "length": 4,
+      "noise_sd": 0.025,
+      "groups": 329,
+      "coverage": {
+        "mean": 0.9495168610629137,
+        "se": 0.015370639477086839,
+        "lower": 0.9193909612684739,
+        "upper": 0.9796427608573535,
+        "splits": 20
+      }
+    },
+    {
+      "gap": 384,
+      "predictor": "plus",
+      "event": "WorstCase",
+      "length": 12,
+      "noise_sd": 0.005,
+      "groups": 336,
+      "coverage": {
+        "mean": 0.968685807656396,
+        "se": 0.009458938472206123,
+        "lower": 0.9501466289188917,
+        "upper": 0.9872249863939003,
+        "splits": 20
+      }
+    },
+    {
+      "gap": 384,
+      "predictor": "plus",
+      "event": "WorstCase",
+      "length": 12,
+      "noise_sd": 0.025,
+      "groups": 348,
+      "coverage": {
+        "mean": 0.8040433671935221,
+        "se": 0.023871033819937743,
+        "lower": 0.7572570006327065,
+        "upper": 0.8508297337543377,
+        "splits": 20
+      }
+    },
+    {
+      "gap": 384,
+      "predictor": "short",
+      "event": "OneCase",
+      "length": 1,
+      "noise_sd": 0.005,
+      "groups": 326,
+      "coverage": {
+        "mean": 1.0,
+        "se": 0.0,
+        "lower": 1.0,
+        "upper": 1.0,
+        "splits": 20
+      }
+    },
+    {
+      "gap": 384,
+      "predictor": "short",
+      "event": "OneCase",
+      "length": 1,
+      "noise_sd": 0.025,
+      "groups": 300,
+      "coverage": {
+        "mean": 0.9246425205771182,
+        "se": 0.01545219942522908,
+        "lower": 0.8943567662217387,
+        "upper": 0.9549282749324977,
+        "splits": 20
+      }
+    },
+    {
+      "gap": 384,
+      "predictor": "short",
+      "event": "OneCase",
+      "length": 4,
+      "noise_sd": 0.005,
+      "groups": 361,
+      "coverage": {
+        "mean": 0.9970588235294118,
+        "se": 0.0029411764705882357,
+        "lower": 0.9912942235748822,
+        "upper": 1.0028234234839413,
+        "splits": 20
+      }
+    },
+    {
+      "gap": 384,
+      "predictor": "short",
+      "event": "OneCase",
+      "length": 4,
+      "noise_sd": 0.025,
+      "groups": 329,
+      "coverage": {
+        "mean": 0.9301332979885611,
+        "se": 0.014683396604757034,
+        "lower": 0.9013543694725197,
+        "upper": 0.9589122265046026,
+        "splits": 20
+      }
+    },
+    {
+      "gap": 384,
+      "predictor": "short",
+      "event": "OneCase",
+      "length": 12,
+      "noise_sd": 0.005,
+      "groups": 336,
+      "coverage": {
+        "mean": 0.9970588235294118,
+        "se": 0.0029411764705882357,
+        "lower": 0.9912942235748822,
+        "upper": 1.0028234234839413,
+        "splits": 20
+      }
+    },
+    {
+      "gap": 384,
+      "predictor": "short",
+      "event": "OneCase",
+      "length": 12,
+      "noise_sd": 0.025,
+      "groups": 348,
+      "coverage": {
+        "mean": 0.8913630164984655,
+        "se": 0.02390479299124725,
+        "lower": 0.8445104831777354,
+        "upper": 0.9382155498191956,
+        "splits": 20
+      }
+    },
+    {
+      "gap": 384,
+      "predictor": "short",
+      "event": "WorstCase",
+      "length": 1,
+      "noise_sd": 0.005,
+      "groups": 326,
+      "coverage": {
+        "mean": 1.0,
+        "se": 0.0,
+        "lower": 1.0,
+        "upper": 1.0,
+        "splits": 20
+      }
+    },
+    {
+      "gap": 384,
+      "predictor": "short",
+      "event": "WorstCase",
+      "length": 1,
+      "noise_sd": 0.025,
+      "groups": 300,
+      "coverage": {
+        "mean": 0.9788267543859648,
+        "se": 0.008066189244836623,
+        "lower": 0.9630173139736007,
+        "upper": 0.9946361947983289,
+        "splits": 20
+      }
+    },
+    {
+      "gap": 384,
+      "predictor": "short",
+      "event": "WorstCase",
+      "length": 4,
+      "noise_sd": 0.005,
+      "groups": 361,
+      "coverage": {
+        "mean": 0.9974999999999999,
+        "se": 0.0025000000000000022,
+        "lower": 0.9926000900386498,
+        "upper": 1.00239990996135,
+        "splits": 20
+      }
+    },
+    {
+      "gap": 384,
+      "predictor": "short",
+      "event": "WorstCase",
+      "length": 4,
+      "noise_sd": 0.025,
+      "groups": 329,
+      "coverage": {
+        "mean": 0.9274089390142022,
+        "se": 0.016995988349074325,
+        "lower": 0.8940974139683542,
+        "upper": 0.9607204640600502,
+        "splits": 20
+      }
+    },
+    {
+      "gap": 384,
+      "predictor": "short",
+      "event": "WorstCase",
+      "length": 12,
+      "noise_sd": 0.005,
+      "groups": 336,
+      "coverage": {
+        "mean": 0.9976190476190476,
+        "se": 0.0023809523809523833,
+        "lower": 0.992952466703476,
+        "upper": 1.002285628534619,
+        "splits": 20
+      }
+    },
+    {
+      "gap": 384,
+      "predictor": "short",
+      "event": "WorstCase",
+      "length": 12,
+      "noise_sd": 0.025,
+      "groups": 348,
+      "coverage": {
+        "mean": 0.7766324959010718,
+        "se": 0.033476391742723474,
+        "lower": 0.7110199737529797,
+        "upper": 0.8422450180491639,
+        "splits": 20
+      }
+    }
+  ],
+  "replay": [
+    {
+      "file": "audio-splits.jsonl",
+      "exact_rows": 6
+    },
+    {
+      "file": "audio-tests.jsonl",
+      "exact_rows": 600
+    },
+    {
+      "file": "audio-predictions.jsonl",
+      "exact_rows": 300
+    }
+  ]
+}

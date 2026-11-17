@@ -1,0 +1,32 @@
+{
+  "files": [
+    {
+      "actual": "artifacts/conformal-audio/alarm-primary/results/alarm-streams.jsonl",
+      "bytes": 1802834,
+      "sha256": "7962e7f3b4f9e8df263e3ceb58b1aa958cb57275f9b848fc14e07064b98af10b",
+      "receipt": "issues/regression/receipts/conformal-audio/results/alarm-primary/alarm-streams.jsonl",
+      "receipt_sha256_lf": "83fd9c4369dc7815426dc9cf672b6642c4ee1253183a09e6e417c9e6b5593910"
+    },
+    {
+      "actual": "artifacts/conformal-audio/alarm-primary/results/alarm-summary.json",
+      "bytes": 1761,
+      "sha256": "12cf2a53a9645abfd37b211aaa2493391ff57ce4105efd8e85138141b2bd62af",
+      "receipt": "issues/regression/receipts/conformal-audio/results/alarm-primary/alarm-summary.json",
+      "receipt_sha256_lf": "e140526387539289859040b5ce76dbc89e875787f2af508abbc9809f45a3039a"
+    },
+    {
+      "actual": "artifacts/conformal-audio/alarm-primary/results/execution.json",
+      "bytes": 242,
+      "sha256": "4eeb7e91d554349fc292b195bafc9f2889dec376f3478624958e07a20643e46f",
+      "receipt": "issues/regression/receipts/conformal-audio/results/alarm-primary/execution.json",
+      "receipt_sha256_lf": "e98081de6aa0f06c1c597bc56762cb56234352338b05a214df87d4172364339a"
+    },
+    {
+      "actual": "artifacts/conformal-audio/alarm-primary/analysis/audit.json",
+      "bytes": 300,
+      "sha256": "787299bc4ffd4e53fa6265c4bf8c30630a1986745718ddaf3e5cf4e571d1bdb0",
+      "receipt": "issues/regression/receipts/conformal-audio/results/alarm-primary/audit.json",
+      "receipt_sha256_lf": "d70d8e1ec01f1ffe23a1ea4a27265414c06519c165c6d5d9ea6f4f2dc4e33351"
+    }
+  ]
+}

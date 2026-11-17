@@ -1,0 +1,32 @@
+{
+  "files": [
+    {
+      "actual": "artifacts/conformal-audio/transport-primary/results/execution.json",
+      "bytes": 245,
+      "sha256": "9f3848d2d2e6f3027d3156111a1e4f7796614f5c20bfbf24f8c58749b85f039a",
+      "receipt": "issues/regression/receipts/conformal-audio/results/transport-primary/execution.json",
+      "receipt_sha256_lf": "35a32d2891d812463d337d03d2b2eca61d88b2f9e4e3bb898fa1d12c40577039"
+    },
+    {
+      "actual": "artifacts/conformal-audio/transport-primary/results/transport-counts.jsonl",
+      "bytes": 1144088,
+      "sha256": "38d568ecc00fb690c4e5f74b344ce5bc49328ed5efa530d6b112fc5e79f26cfb",
+      "receipt": "issues/regression/receipts/conformal-audio/results/transport-primary/transport-counts.jsonl",
+      "receipt_sha256_lf": "3199eb858a2b6ae9e0755371f96a8679f1aab7a7ba4072e769557bb7a671e769"
+    },
+    {
+      "actual": "artifacts/conformal-audio/transport-primary/results/transport-summary.json",
+      "bytes": 842,
+      "sha256": "f7806c6df8bce587a3a5116e149f071f344a0494a662a7693fa566618a338218",
+      "receipt": "issues/regression/receipts/conformal-audio/results/transport-primary/transport-summary.json",
+      "receipt_sha256_lf": "d9eaa4635445e9a711e12ec4d1a83e013fb50674d0434dcd27a9ed9f52b8f5a7"
+    },
+    {
+      "actual": "artifacts/conformal-audio/transport-primary/analysis/audit.json",
+      "bytes": 169,
+      "sha256": "1d02b844835cc7c89b8c7a4ef98be0f6183d32b90e518199e81ed696de6b97a8",
+      "receipt": "issues/regression/receipts/conformal-audio/results/transport-primary/audit.json",
+      "receipt_sha256_lf": "33f7ff489720510f728e7177561deea50192916ce7be961d63d8293a1462d0f2"
+    }
+  ]
+}

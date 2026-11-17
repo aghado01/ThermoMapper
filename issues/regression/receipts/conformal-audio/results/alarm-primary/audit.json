@@ -1,0 +1,16 @@
+{
+  "passed": true,
+  "streams": 17000,
+  "counts": {
+    "continuous-null": 5000,
+    "tied-null": 5000,
+    "all-ties-null": 5000,
+    "noise-change": 2000
+  },
+  "alarms": {
+    "continuous-null": 140,
+    "tied-null": 135,
+    "all-ties-null": 143,
+    "noise-change": 1452
+  }
+}

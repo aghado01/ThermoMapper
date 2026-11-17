@@ -1,0 +1,77 @@
+{
+  "Passed": true,
+  "Horizon": 200,
+  "Threshold": 20,
+  "VilleBound": 0.05,
+  "Streams": [
+    {
+      "Law": "continuous-null",
+      "EverAlarm": {
+        "Count": 140,
+        "Total": 5000,
+        "Rate": 0.028,
+        "Lower": 0.023777044258476123,
+        "Upper": 0.03294766637765781
+      },
+      "PreChangeAlarms": null,
+      "DetectedAfterChange": null,
+      "Censored": 4860,
+      "MedianDetectedDelay": null
+    },
+    {
+      "Law": "tied-null",
+      "EverAlarm": {
+        "Count": 135,
+        "Total": 5000,
+        "Rate": 0.027,
+        "Lower": 0.022857553563632692,
+        "Upper": 0.031868692476391354
+      },
+      "PreChangeAlarms": null,
+      "DetectedAfterChange": null,
+      "Censored": 4865,
+      "MedianDetectedDelay": null
+    },
+    {
+      "Law": "all-ties-null",
+      "EverAlarm": {
+        "Count": 143,
+        "Total": 5000,
+        "Rate": 0.0286,
+        "Lower": 0.024329476978548193,
+        "Upper": 0.03359431241525167
+      },
+      "PreChangeAlarms": null,
+      "DetectedAfterChange": null,
+      "Censored": 4857,
+      "MedianDetectedDelay": null
+    },
+    {
+      "Law": "noise-change",
+      "EverAlarm": {
+        "Count": 1452,
+        "Total": 2000,
+        "Rate": 0.726,
+        "Lower": 0.7060338412002534,
+        "Upper": 0.7450996534286203
+      },
+      "PreChangeAlarms": 55,
+      "DetectedAfterChange": 1397,
+      "Censored": 548,
+      "MedianDetectedDelay": 48
+    }
+  ],
+  "DependentUniformControl": [
+    {
+      "P": 0.25,
+      "Capital": 4,
+      "Probability": 0.5
+    },
+    {
+      "P": 0.75,
+      "Capital": 0,
+      "Probability": 0.5
+    }
+  ],
+  "NegativeControlCrossingProbability": 0.5
+}

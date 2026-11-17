@@ -1,0 +1,124 @@
+{
+  "files": [
+    {
+      "actual": "artifacts/conformal-audio/audio-primary/results/audio-predictions.jsonl",
+      "bytes": 27340015,
+      "sha256": "d5a3f31db16fec3b6699c1d479dd246103cb022bd4cfb08281614c64c0c2d494",
+      "raw_local_only": true
+    },
+    {
+      "actual": "artifacts/conformal-audio/audio-primary/results/audio-splits.jsonl",
+      "bytes": 159456,
+      "sha256": "7946df984a4034a1f95f0d309066a4dd4ad780682a10b488c0abc2e4401b9eca",
+      "receipt": "issues/regression/receipts/conformal-audio/results/audio-primary/audio-splits.jsonl",
+      "receipt_sha256_lf": "9b18882d7d73086dd676bf7035a9253df1ec6856efa830462a891c543d074f1f"
+    },
+    {
+      "actual": "artifacts/conformal-audio/audio-primary/results/audio-summary.json",
+      "bytes": 21683,
+      "sha256": "7059f6d7b0354ce1dd631f3b1d7ea54f6e46c3954091be5f88123dd6cefb8532",
+      "receipt": "issues/regression/receipts/conformal-audio/results/audio-primary/audio-summary.json",
+      "receipt_sha256_lf": "e04b2db14877d3090d5f08943e9b5897012253680c764b271eaa542aca9ebda4"
+    },
+    {
+      "actual": "artifacts/conformal-audio/audio-primary/results/audio-tests.jsonl",
+      "bytes": 8536896,
+      "sha256": "250bb2d1e46293f0b8f3d82a9dc9cf7f55a6811dbb62ea92918ed1a785acc1dc",
+      "raw_local_only": true
+    },
+    {
+      "actual": "artifacts/conformal-audio/audio-primary/results/execution.json",
+      "bytes": 240,
+      "sha256": "75587e51fe84faf13ff9328056bbd11bf24ceac5a7ec102cf872a3e52d79b388",
+      "receipt": "issues/regression/receipts/conformal-audio/results/audio-primary/execution.json",
+      "receipt_sha256_lf": "8a4fcafab050135dd049f5fe068767f43849465e48484746c226b8716a43eefb"
+    },
+    {
+      "actual": "artifacts/conformal-audio/audio-primary/results/fit-gap0-plus.json",
+      "bytes": 3659,
+      "sha256": "3ea8aebb10cffaeb86316643843cc1f9ffaf62a6382e7c23500745e0222c4b3a",
+      "receipt": "issues/regression/receipts/conformal-audio/results/audio-primary/fit-gap0-plus.json",
+      "receipt_sha256_lf": "5917456b8f21709d8354bf3dab07fe579f147112d222ce2d4bd35e63d084ecec"
+    },
+    {
+      "actual": "artifacts/conformal-audio/audio-primary/results/fit-gap0-short.json",
+      "bytes": 3659,
+      "sha256": "c9e90b87b3c78577a14be02db0eab5961887708bf926235789bd3ce944faa2a6",
+      "receipt": "issues/regression/receipts/conformal-audio/results/audio-primary/fit-gap0-short.json",
+      "receipt_sha256_lf": "5f09f03d90880c0a5ed58508a4e118051dba84881be58fd5aa400fd84cf19d2d"
+    },
+    {
+      "actual": "artifacts/conformal-audio/audio-primary/results/fit-gap192-plus.json",
+      "bytes": 3652,
+      "sha256": "87f172c23cd1cba4c2f76bac7c07c6505baae88b708ca165b1057df794550573",
+      "receipt": "issues/regression/receipts/conformal-audio/results/audio-primary/fit-gap192-plus.json",
+      "receipt_sha256_lf": "2ec2cd93f552995a7c40dd229f56e949037b1d415802c10de60f67032aa68004"
+    },
+    {
+      "actual": "artifacts/conformal-audio/audio-primary/results/fit-gap192-short.json",
+      "bytes": 3386,
+      "sha256": "76cf1672b26baf6f4749dcdadb6887d74fd7fb5dee25f5f8478ead33503957d6",
+      "receipt": "issues/regression/receipts/conformal-audio/results/audio-primary/fit-gap192-short.json",
+      "receipt_sha256_lf": "7205eaeb8d163fb7eedd919aa507a8f12ce2371a0847db42f8ae6e1881cc4060"
+    },
+    {
+      "actual": "artifacts/conformal-audio/audio-primary/results/fit-gap384-plus.json",
+      "bytes": 3515,
+      "sha256": "1d68b9092e36abead2dd32a800a58a3916b6bfe10ac8a8f0d0da1068e8a51cf4",
+      "receipt": "issues/regression/receipts/conformal-audio/results/audio-primary/fit-gap384-plus.json",
+      "receipt_sha256_lf": "6f412154ece1e1edc142d1d872fc94ef796d0f659d264fa49e532eb9870580bd"
+    },
+    {
+      "actual": "artifacts/conformal-audio/audio-primary/results/fit-gap384-short.json",
+      "bytes": 3643,
+      "sha256": "d532f8290abceab4d7b5e7f67980726d87e4d61e119223475de80b918e2502cf",
+      "receipt": "issues/regression/receipts/conformal-audio/results/audio-primary/fit-gap384-short.json",
+      "receipt_sha256_lf": "d978d0fd7427a52a9e38a573efe65fa63f5edf50dabbe590d95853bea3979072"
+    },
+    {
+      "actual": "artifacts/conformal-audio/audio-primary/results/fit-gap64-plus.json",
+      "bytes": 3647,
+      "sha256": "dedad59f9e5ffa6f7de649b9a85e8cc8000d9cc344846cdb90dd2fbfa411a449",
+      "receipt": "issues/regression/receipts/conformal-audio/results/audio-primary/fit-gap64-plus.json",
+      "receipt_sha256_lf": "4150ebabffd1ecbc6947f928b2f8219c3c48eec53869e27983bb8cb2a2ee7902"
+    },
+    {
+      "actual": "artifacts/conformal-audio/audio-primary/results/fit-gap64-short.json",
+      "bytes": 3517,
+      "sha256": "ec71f57f853dbe88179af5a58e17767eb6b79d3d3e944efb83e3f0bfc9bfed5e",
+      "receipt": "issues/regression/receipts/conformal-audio/results/audio-primary/fit-gap64-short.json",
+      "receipt_sha256_lf": "ddadd5ac309f520268e12be1e11c9a89d500f31acb5ab7854f1476b50ad19d2b"
+    },
+    {
+      "actual": "artifacts/conformal-audio/audio-primary/results/training-gap0.json",
+      "bytes": 812882,
+      "sha256": "9699fca0ffc2ecc6a449064f66701bd618b1b044534a112e3d7f765fd45bcf91",
+      "raw_local_only": true
+    },
+    {
+      "actual": "artifacts/conformal-audio/audio-primary/results/training-gap192.json",
+      "bytes": 933746,
+      "sha256": "f5fc82aeb9c6908a6381a2ced30a78af9e68e09fb5f656ffbd99496c79fade08",
+      "raw_local_only": true
+    },
+    {
+      "actual": "artifacts/conformal-audio/audio-primary/results/training-gap384.json",
+      "bytes": 873248,
+      "sha256": "ee0253df47946c260d20fa3a9e208f3a4dacb65be8a0587a604960d575b8574b",
+      "raw_local_only": true
+    },
+    {
+      "actual": "artifacts/conformal-audio/audio-primary/results/training-gap64.json",
+      "bytes": 792485,
+      "sha256": "48422b711292d6a1632c9671b9ca7f5f08194786e0919a2e4ed91b0a6e45755f",
+      "raw_local_only": true
+    },
+    {
+      "actual": "artifacts/conformal-audio/audio-primary/analysis/audit.json",
+      "bytes": 51088,
+      "sha256": "50a9063b7f9bde88d7f8996011a35be1431547c443ff2a1a8063d5c77c0525cf",
+      "receipt": "issues/regression/receipts/conformal-audio/results/audio-primary/audit.json",
+      "receipt_sha256_lf": "2d1fa4bad460dfcdf82261a8f2d0cf57472bbe4d04908b3fa910667f6c285639"
+    }
+  ]
+}

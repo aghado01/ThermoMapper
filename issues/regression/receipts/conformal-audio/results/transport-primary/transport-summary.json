@@ -1,0 +1,21 @@
+{
+  "Passed": true,
+  "States": 5050,
+  "ProbabilitySum": 1.000000000000056,
+  "WeightedMarginalMiss": 0.005084283962885569,
+  "WeightedHighStratumMiss": 0.010168567925771138,
+  "WeightedLowStratumMiss": 0,
+  "UnweightedMarginalMiss": 0.24995105232356846,
+  "UnweightedHighStratumMiss": 0.4999021046471369,
+  "UnweightedLowStratumMiss": 0,
+  "WeightedCardinality": 1.9378817454538297,
+  "WeightedFullAlphabetFrequency": 0.9378817454538297,
+  "UnweightedCardinality": 1.0001957907058379,
+  "UnweightedFullAlphabetFrequency": 0.00019579070583786162,
+  "ExpectedCalibrationEss": 20.40399112655775,
+  "LiteralMarginalMiss": 0.005084283962885569,
+  "LiteralBoundaryDifferenceStates": 1,
+  "LiteralBoundaryDifferenceProbability": 5.027800949722686E-121,
+  "FailedConditionalLawMiss": 1,
+  "FailedConditionalLawCardinality": 1
+}

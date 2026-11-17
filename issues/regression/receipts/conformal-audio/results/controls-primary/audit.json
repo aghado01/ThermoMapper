@@ -1,0 +1,17 @@
+{
+  "passed": true,
+  "independent_dft_oracle": [
+    {
+      "visible_frequency_one_power": 0.9999999999999991,
+      "predicted_dc_power": 4,
+      "target_dc_power": 4.0
+    },
+    {
+      "visible_frequency_one_power": 3.0000000000000013,
+      "predicted_dc_power": 0,
+      "target_dc_power": 0.0
+    }
+  ],
+  "exact_randomized_coverage": "19/20",
+  "exact_cardinality": "19/10"
+}

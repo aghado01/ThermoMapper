@@ -1,0 +1,140 @@
+{
+  "passed": true,
+  "splits": 200,
+  "conversations": 100000,
+  "risk": {
+    "mean": 0.0,
+    "se": 0.0,
+    "lower": 0.0,
+    "upper": 0.0,
+    "splits": 200
+  },
+  "fixed_policy_curves": [
+    {
+      "policy": 0,
+      "delay": 0,
+      "eligible_turn_risk": {
+        "mean": 0.8996900000000007,
+        "se": 0.0010491535233596136,
+        "lower": 0.8976336968799625,
+        "upper": 0.9017463031200388,
+        "splits": 200
+      },
+      "start_fraction": {
+        "mean": 0.8996900000000007,
+        "se": 0.0010491535233596136,
+        "lower": 0.8976336968799625,
+        "upper": 0.9017463031200388,
+        "splits": 200
+      },
+      "starts": 405812,
+      "early_starts": 405812,
+      "pooled_delay_among_starts": 0.09999999999999991
+    },
+    {
+      "policy": 1,
+      "delay": 0.1,
+      "eligible_turn_risk": {
+        "mean": 0.7878007023809529,
+        "se": 0.0014598174217213583,
+        "lower": 0.7849395128103749,
+        "upper": 0.7906618919515309,
+        "splits": 200
+      },
+      "start_fraction": {
+        "mean": 0.8996900000000007,
+        "se": 0.0010491535233596136,
+        "lower": 0.8976336968799625,
+        "upper": 0.9017463031200388,
+        "splits": 200
+      },
+      "starts": 405812,
+      "early_starts": 355145,
+      "pooled_delay_among_starts": 0.19999999999999982
+    },
+    {
+      "policy": 2,
+      "delay": 0.2,
+      "eligible_turn_risk": {
+        "mean": 0.6360668690476196,
+        "se": 0.0015570831643170412,
+        "lower": 0.6330150421246244,
+        "upper": 0.6391186959706147,
+        "splits": 200
+      },
+      "start_fraction": {
+        "mean": 0.8996900000000007,
+        "se": 0.0010491535233596136,
+        "lower": 0.8976336968799625,
+        "upper": 0.9017463031200388,
+        "splits": 200
+      },
+      "starts": 405812,
+      "early_starts": 286509,
+      "pooled_delay_among_starts": 0.3
+    },
+    {
+      "policy": 3,
+      "delay": 0.4,
+      "eligible_turn_risk": {
+        "mean": 0.16795291666666678,
+        "se": 0.0009285377796281307,
+        "lower": 0.16613301606031086,
+        "upper": 0.1697728172730227,
+        "splits": 200
+      },
+      "start_fraction": {
+        "mean": 0.4518440714285714,
+        "se": 0.0011071359550984265,
+        "lower": 0.44967412483058916,
+        "upper": 0.45401401802655367,
+        "splits": 200
+      },
+      "starts": 203245,
+      "early_starts": 75671,
+      "pooled_delay_among_starts": 0.5
+    },
+    {
+      "policy": 4,
+      "delay": 0.8,
+      "eligible_turn_risk": {
+        "mean": 0.0,
+        "se": 0.0,
+        "lower": 0.0,
+        "upper": 0.0,
+        "splits": 200
+      },
+      "start_fraction": {
+        "mean": 0.0,
+        "se": 0.0,
+        "lower": 0.0,
+        "upper": 0.0,
+        "splits": 200
+      },
+      "starts": 0,
+      "early_starts": 0,
+      "pooled_delay_among_starts": null
+    },
+    {
+      "policy": 5,
+      "delay": null,
+      "eligible_turn_risk": {
+        "mean": 0.0,
+        "se": 0.0,
+        "lower": 0.0,
+        "upper": 0.0,
+        "splits": 200
+      },
+      "start_fraction": {
+        "mean": 0.0,
+        "se": 0.0,
+        "lower": 0.0,
+        "upper": 0.0,
+        "splits": 200
+      },
+      "starts": 0,
+      "early_starts": 0,
+      "pooled_delay_among_starts": null
+    }
+  ]
+}

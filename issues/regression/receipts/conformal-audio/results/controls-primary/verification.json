@@ -1,0 +1,25 @@
+{
+  "files": [
+    {
+      "actual": "artifacts/conformal-audio/controls-primary/results/controls.json",
+      "bytes": 917,
+      "sha256": "58ccfc64550d47ec3f8154d5b6f25fff4650a4931e5da17a225b04b33d77858c",
+      "receipt": "issues/regression/receipts/conformal-audio/results/controls-primary/controls.json",
+      "receipt_sha256_lf": "c0187eca4237ce426c9a40b8b36334a016741f79d9695eb73fd50d7530af5c57"
+    },
+    {
+      "actual": "artifacts/conformal-audio/controls-primary/results/execution.json",
+      "bytes": 243,
+      "sha256": "b07a99f3203cf1a8ca876f2c8b3e9dfae61306b35b37e957ca1e0a8e469e26c2",
+      "receipt": "issues/regression/receipts/conformal-audio/results/controls-primary/execution.json",
+      "receipt_sha256_lf": "7adb8d369cf42f60b943f19d7bdcd586b2a29e76aea18908978b3a34bdade78e"
+    },
+    {
+      "actual": "artifacts/conformal-audio/controls-primary/analysis/audit.json",
+      "bytes": 404,
+      "sha256": "09ea0568320cbf608d1488135f24f18cdeadae2fa45a167b01c64092243ecc6f",
+      "receipt": "issues/regression/receipts/conformal-audio/results/controls-primary/audit.json",
+      "receipt_sha256_lf": "1e66103fae8dabfe1065528631e9ccd541195b6ded603c73774b7c041b942321"
+    }
+  ]
+}

@@ -1,0 +1,200 @@
+{
+  "Revision": "a3eb7d0afe821a9dffc40418f256453265ee6444",
+  "SettingsHash": "a99b1d6b348f3dddd251bdd3563b9076568afdd4091cf1daeeeab15190d96124",
+  "NumericalControlsPassed": true,
+  "FirstSplitOnly": true,
+  "Groups": [
+    {
+      "Gap": 64,
+      "Predictor": "short",
+      "GroupEvent": "OneCase",
+      "MarkedCoverage": {
+        "Mean": 0.97,
+        "StandardError": 0,
+        "Lower": 0.97,
+        "Upper": 0.97,
+        "Splits": 1
+      },
+      "AllCoverage": {
+        "Mean": 0.93,
+        "StandardError": 0,
+        "Lower": 0.93,
+        "Upper": 0.93,
+        "Splits": 1
+      },
+      "Width": {
+        "Mean": 5.865866063406079,
+        "StandardError": 0,
+        "Lower": 5.865866063406079,
+        "Upper": 5.865866063406079,
+        "Splits": 1
+      },
+      "MeanRmse": 1.7022483517386962,
+      "FullSpaceFrequency": 0
+    },
+    {
+      "Gap": 64,
+      "Predictor": "short",
+      "GroupEvent": "WorstCase",
+      "MarkedCoverage": {
+        "Mean": 1,
+        "StandardError": 0,
+        "Lower": 1,
+        "Upper": 1,
+        "Splits": 1
+      },
+      "AllCoverage": {
+        "Mean": 0.98,
+        "StandardError": 0,
+        "Lower": 0.98,
+        "Upper": 0.98,
+        "Splits": 1
+      },
+      "Width": {
+        "Mean": 6.284987925771725,
+        "StandardError": 0,
+        "Lower": 6.284987925771725,
+        "Upper": 6.284987925771725,
+        "Splits": 1
+      },
+      "MeanRmse": 1.7022483517386962,
+      "FullSpaceFrequency": 0
+    },
+    {
+      "Gap": 64,
+      "Predictor": "plus",
+      "GroupEvent": "OneCase",
+      "MarkedCoverage": {
+        "Mean": 0.92,
+        "StandardError": 0,
+        "Lower": 0.92,
+        "Upper": 0.92,
+        "Splits": 1
+      },
+      "AllCoverage": {
+        "Mean": 0.79,
+        "StandardError": 0,
+        "Lower": 0.79,
+        "Upper": 0.79,
+        "Splits": 1
+      },
+      "Width": {
+        "Mean": 3.399286183983243,
+        "StandardError": 0,
+        "Lower": 3.399286183983243,
+        "Upper": 3.399286183983243,
+        "Splits": 1
+      },
+      "MeanRmse": 0.6059105104270117,
+      "FullSpaceFrequency": 0
+    },
+    {
+      "Gap": 64,
+      "Predictor": "plus",
+      "GroupEvent": "WorstCase",
+      "MarkedCoverage": {
+        "Mean": 0.97,
+        "StandardError": 0,
+        "Lower": 0.97,
+        "Upper": 0.97,
+        "Splits": 1
+      },
+      "AllCoverage": {
+        "Mean": 0.95,
+        "StandardError": 0,
+        "Lower": 0.95,
+        "Upper": 0.95,
+        "Splits": 1
+      },
+      "Width": {
+        "Mean": 4.3387523777904065,
+        "StandardError": 0,
+        "Lower": 4.3387523777904065,
+        "Upper": 4.3387523777904065,
+        "Splits": 1
+      },
+      "MeanRmse": 0.6059105104270117,
+      "FullSpaceFrequency": 0
+    },
+    {
+      "Gap": 64,
+      "Predictor": "baseline",
+      "GroupEvent": "OneCase",
+      "MarkedCoverage": {
+        "Mean": 0.96,
+        "StandardError": 0,
+        "Lower": 0.96,
+        "Upper": 0.96,
+        "Splits": 1
+      },
+      "AllCoverage": {
+        "Mean": 0.79,
+        "StandardError": 0,
+        "Lower": 0.79,
+        "Upper": 0.79,
+        "Splits": 1
+      },
+      "Width": {
+        "Mean": 5.516397249827147,
+        "StandardError": 0,
+        "Lower": 5.516397249827147,
+        "Upper": 5.516397249827147,
+        "Splits": 1
+      },
+      "MeanRmse": 1.7422379969528814,
+      "FullSpaceFrequency": 0
+    },
+    {
+      "Gap": 64,
+      "Predictor": "baseline",
+      "GroupEvent": "WorstCase",
+      "MarkedCoverage": {
+        "Mean": 1,
+        "StandardError": 0,
+        "Lower": 1,
+        "Upper": 1,
+        "Splits": 1
+      },
+      "AllCoverage": {
+        "Mean": 0.93,
+        "StandardError": 0,
+        "Lower": 0.93,
+        "Upper": 0.93,
+        "Splits": 1
+      },
+      "Width": {
+        "Mean": 5.642900169889932,
+        "StandardError": 0,
+        "Lower": 5.642900169889932,
+        "Upper": 5.642900169889932,
+        "Splits": 1
+      },
+      "MeanRmse": 1.7422379969528814,
+      "FullSpaceFrequency": 0
+    }
+  ],
+  "PairedWidthChanges": [
+    {
+      "Gap": 64,
+      "GroupEvent": "OneCase",
+      "Change": {
+        "Mean": -2.466579879422836,
+        "StandardError": 0,
+        "Lower": -2.466579879422836,
+        "Upper": -2.466579879422836,
+        "Splits": 1
+      }
+    },
+    {
+      "Gap": 64,
+      "GroupEvent": "WorstCase",
+      "Change": {
+        "Mean": -1.9462355479813187,
+        "StandardError": 0,
+        "Lower": -1.9462355479813187,
+        "Upper": -1.9462355479813187,
+        "Splits": 1
+      }
+    }
+  ]
+}

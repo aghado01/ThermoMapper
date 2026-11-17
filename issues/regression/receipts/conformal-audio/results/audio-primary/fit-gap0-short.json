@@ -1,0 +1,197 @@
+{
+  "Name": "gap0-short",
+  "Seed": 875002337,
+  "Settings": {
+    "Structure": {
+      "Degree": 1,
+      "MaxInteraction": 2,
+      "MaxCategoricalInteraction": 3,
+      "MaxFunctionalInteraction": 3,
+      "MaxBasis": 20,
+      "Support": {
+        "Kind": 0,
+        "Minimum": null,
+        "MinimumFunctional": null
+      },
+      "AngleFloor": 1E-10,
+      "MaxVarianceInflation": null,
+      "CategoricalSubsets": 0,
+      "OrderWeight": 5,
+      "VariableWeight": 5
+    },
+    "Count": {
+      "Shape": 10,
+      "Rate": 10
+    },
+    "Coefficients": {
+      "Form": {
+        "Kind": "G"
+      },
+      "Scale": {
+        "Kind": 0,
+        "Shape": 0.5,
+        "Tau": null
+      }
+    },
+    "Sigma2": {
+      "Kind": 0,
+      "Shape": 0.001,
+      "Scale": null
+    },
+    "Intercept": 1,
+    "Sampling": {
+      "Chains": 2,
+      "MasterSeed": 875002337,
+      "BurnIn": 300,
+      "Samples": 300,
+      "Thin": 2,
+      "RHatTarget": 0,
+      "BatchSize": 0,
+      "MinEssPerChain": 100,
+      "StoppingScope": 0,
+      "Moves": {
+        "Kind": "EqualOverAvailable"
+      },
+      "LocalSteps": null,
+      "FactorMoves": null,
+      "Tempering": null,
+      "Smc": null,
+      "FlatHistogram": null,
+      "ReportEvidence": true,
+      "MonitoredPoints": null
+    }
+  },
+  "TrainingHash": "0a3d0b9f7dbc8b46e70e8b4dea88bff2ac40c7bc379d2f5bd661c81b7492c2ff",
+  "Identity": {
+    "MasterSeed": 875002337,
+    "Chains": 2,
+    "Fingerprint": "5f296f88b7d6e42c"
+  },
+  "TotalDraws": 600,
+  "SelectedDraws": [
+    0,
+    9,
+    18,
+    28,
+    37,
+    46,
+    56,
+    65,
+    75,
+    84,
+    93,
+    103,
+    112,
+    121,
+    131,
+    140,
+    150,
+    159,
+    168,
+    178,
+    187,
+    196,
+    206,
+    215,
+    225,
+    234,
+    243,
+    253,
+    262,
+    271,
+    281,
+    290,
+    300,
+    309,
+    318,
+    328,
+    337,
+    346,
+    356,
+    365,
+    375,
+    384,
+    393,
+    403,
+    412,
+    421,
+    431,
+    440,
+    450,
+    459,
+    468,
+    478,
+    487,
+    496,
+    506,
+    515,
+    525,
+    534,
+    543,
+    553,
+    562,
+    571,
+    581,
+    590
+  ],
+  "Scale": 0.7181367505291882,
+  "Seconds": 0.2289269,
+  "Verdict": "NotConverged",
+  "Groups": [
+    {
+      "Name": "predictive",
+      "Outcome": "NotConverged",
+      "Failing": [
+        {
+          "Name": "sigma2",
+          "RHat": "2.032678290076464",
+          "Ess": "2.7237630045311865"
+        },
+        {
+          "Name": "fitted[890]",
+          "RHat": "1.6790138309747187",
+          "Ess": "3.223034798644244"
+        },
+        {
+          "Name": "fitted[1780]",
+          "RHat": "1.438496098395883",
+          "Ess": "4.154044773152284"
+        },
+        {
+          "Name": "fitted[2669]",
+          "RHat": "1.383288037745827",
+          "Ess": "5.050851828160208"
+        }
+      ]
+    },
+    {
+      "Name": "level",
+      "Outcome": "NotConverged",
+      "Failing": [
+        {
+          "Name": "log_posterior",
+          "RHat": "2.151361271992046",
+          "Ess": "2.6367320916441956"
+        }
+      ]
+    },
+    {
+      "Name": "structural",
+      "Outcome": "NotConverged",
+      "Failing": [
+        {
+          "Name": "M",
+          "RHat": "1.6364814569657442",
+          "Ess": "3.5416286195210276"
+        },
+        {
+          "Name": "tau",
+          "RHat": "1.1336697334978154",
+          "Ess": "10.921539356040858"
+        }
+      ]
+    }
+  ],
+  "AcceptanceRate": 0.17416666666666666,
+  "MassAtCap": 0.16666666666666666
+}

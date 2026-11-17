@@ -69,3 +69,106 @@ Generate observable prefix times P uniform on [0.5,1.5], an observable maximum-w
 Use the public inductive monitor with PowerBet(0.5), initial capital one, horizon 200 and first Ville alarm threshold 20. Run 5,000 independent streams for each of continuous frozen scores −|N(0,1)|, discrete tied fair-bit scores, and all-equal scores with fresh engine randomization. Give ever-alarm frequencies and Wilson 95% intervals; compare to 0.05 as a Monte Carlo check. Run 2,000 independent changed streams with noise SD rising from one to three at conversation 101, reporting pre-change alarms, detection delay and censoring. Independent stream seeds fan out into simulator and monitor streams. Verify the repeated-uniform negative control by enumerating p = 0.25 and 0.75 and betting 2·1{p≤1/2} twice outside the rank producer: capital four occurs with probability 1/2. No repeated-alarm or live-intervention claim is made.
 
 Any numerical-control failure triggers same-input diagnosis and replay before interpreting its block; no new seeds, geometry, tolerance or fit budget replaces a failing outcome. Retain original failures. Coverage and width readings are descriptive at the registered sampling law. Replay exact controls and at least one full audio split on a fresh pinned build; require all non-timing fields and prediction hashes to agree. Finish the remaining probes in the same registered scope and append their decisions and Doc changes owed.
+
+## Numerical report — all five synthetic probes complete
+
+Protocol `756aa05`; numerical source/settings `a3eb7d0afe821a9dffc40418f256453265ee6444`; independent audits `4234a46`. Settings SHA-256: `a99b1d6b348f3dddd251bdd3563b9076568afdd4091cf1daeeeab15190d96124`. Both isolated builds completed with zero errors and 45 existing engine warnings. Execution manifests verify one exposed processor and BelowNormal priority. All numerical controls and independent saved-output audits passed. No gate, seed, geometry or fit budget was replaced after outcomes.
+
+### 1–2. Exact ranks, ambiguity and matched spectral bands
+
+The four equally likely fair-bit cases gave one frame-ranked miss and zero conversation-ranked misses: probabilities 1/4 and 0. The rank level was zero at G = 18 and one at G = 19. The independent DFT calculation agreed to better than 3 × 10⁻¹⁵: DC powers 4/0 and frequency-one powers 1/3, with matching singleton magnitudes and adjacent two-sample powers. Exact rational enumeration gave coverage 19/20 and mean alphabet cardinality 19/10 for the randomized two-target rule. The distinguishing-bin oracle reconstructed each DC target exactly with a singleton. [Runtime controls](../../../receipts/conformal-audio/results/controls-primary/controls.json) · [Independent controls](../../../receipts/conformal-audio/results/controls-primary/audit.json)
+
+The audio experiment used four fixed geometry populations, 640 training conversations in total, 7,920 calibration conversations and 8,000 independent test conversations over 80 whole splits. Both feature arms and the training-mean baseline used identical test waveforms, held-back arrays and turn marks. The audit checked 24,000 predictor/conversation records, 48,000 group-event outcomes and all 480 split records, including physical band membership and each public group-rank decision. The band adapter calls public scalar calibration on negative maximum-error scores; its group cross-check carries exp(−score) as a single-draw term for each observed turn, verifying aggregation and rank semantics. All thresholds were finite; full-space frequency was zero in every audio family.
+
+| Geometry | Covered event / calibration | Short mean width | Added-view mean width | Paired added-minus-short width [MC 95% interval] | Short / added coverage |
+| --- | --- | ---: | ---: | --- | --- |
+| 64-sample separation | Sampled turn / OneCase | 5.79924 | 3.67663 | −2.12261 [−2.23234, −2.01287] | 0.9525 / 0.9510 |
+| 64-sample separation | All turns / WorstCase | 6.39026 | 4.63806 | −1.75220 [−1.95417, −1.55023] | 0.9535 / 0.9520 |
+| 192-sample separation | Sampled turn / OneCase | 5.65338 | 5.97771 | +0.32434 [+0.15442, +0.49425] | 0.9500 / 0.9505 |
+| 192-sample separation | All turns / WorstCase | 6.27337 | 7.70268 | +1.42931 [+1.22097, +1.63764] | 0.9430 / 0.9530 |
+| 384-sample separation | Sampled turn / OneCase | 5.05473 | 5.11291 | +0.05818 [−0.00027, +0.11664] | 0.9570 / 0.9570 |
+| 384-sample separation | All turns / WorstCase | 5.67148 | 5.71604 | +0.04456 [−0.00553, +0.09465] | 0.9445 / 0.9475 |
+| Resonance control | Sampled turn / OneCase | 4.75919 | 4.67459 | −0.08460 [−0.24265, +0.07344] | 0.9505 / 0.9505 |
+| Resonance control | All turns / WorstCase | 5.89305 | 5.78482 | −0.10823 [−0.23936, +0.02290] | 0.9530 / 0.9540 |
+
+Width is the per-bin interval length in natural log-power target units. Its scale is constant over bins and cases within each frozen arm, so standardization cancels from the calibrated physical width. MC intervals use the 20 paired split means, conditional on one frozen training fit per arm/geometry. They are pointwise Monte Carlo summaries, with no training-fit or family-wise qualification. All 24 marginal coverage intervals, including the baseline, contained 0.95. They do not certify the guarantee for an arbitrary audio population.
+
+The added view sharpened bands in the 64-sample geometry and widened them at 192 samples, even though both separations fit inside its support. No clear width change appeared beyond its support or on the resonance control at this Monte Carlo precision. Short/added target RMSEs were 1.67726/0.64400, 1.64499/1.18571, 1.47220/1.47526 and 0.71054/0.72143 respectively. The 192-sample mean-error improvement coexists with wider maximum-error bands. An improvement in average regression error therefore need not improve this simultaneous-band endpoint. The results do not identify the mechanism of its changed tail errors.
+
+Every BASS fit returned 600 draws, of which the registered 64 spaced indices were frozen. **All eight fits failed their mixing diagnostics.** The source retains each predictive, level and structural verdict and failing functional. The predictors are fixed finite computations; these results supply no qualification of their posterior approximation or of BASS's best attainable efficiency. The independent-training rank argument can use such a frozen function regardless of mixing. The scalar fitting likelihood also supplies no claim of independent training-bin or within-conversation residuals.
+
+The constant training-bin-mean, scale-one scoring baseline used the same visible-input interface and paired outcomes. Its mean sampled-turn/all-turn widths were 5.52315/5.66464, 5.29789/5.49133, 4.84021/5.49328 and 7.52457/8.18713 across the four geometries. This checks the scoring pipeline and illustrates that the fitted short predictor can be less efficient than a simple fixed predictor in an ambiguous geometry. The exact finite-alphabet singleton oracle is a separate information experiment. An optimal conditional oracle for the continuous noisy audio was not computed, so the observed fitted widths do not quantify its information limit. Cardinality 1.9 on {0,4} is not comparable numerically to continuous log-power width.
+
+Length/noise subgroup results are retained as diagnostics. For the added-view WorstCase bands, the high-noise, 12-turn subgroup had split-average all-turn coverage about 0.788, 0.800, 0.804 and 0.821 across the four geometries, while the low-noise subgroups were generally much higher. These subgroups were not separately calibrated. The marginal event travels with the full random length/content/noise conversation, so 0.95 marginal coverage supplies no 0.95 subgroup guarantee. The full 144-cell diagnostic table and both cross-event readings remain available. [Audio summary](../../../receipts/conformal-audio/results/audio-primary/audio-summary.json) · [Every split](../../../receipts/conformal-audio/results/audio-primary/audio-splits.jsonl) · [Audit and subgroup diagnostics](../../../receipts/conformal-audio/results/audio-primary/audit.json)
+
+Fresh-build replay matched the first complete 64-sample split exactly: six split rows, 600 test-event rows and 300 predictor/conversation records, with identical prediction hashes, training arrays and both fit manifests after excluding timing. The exact controls also matched their fresh-build replay. [Replay verification](../../../receipts/conformal-audio/results/audio-replay/verification.json)
+
+### 3. Exact weighting and a conditional-law failure
+
+All 5,050 source count states passed the integer-weight decision control. A separate combinatorial-probability audit reproduced the marginal results. With the candidate's weight included, exact weighted marginal miss was 0.00508428, versus 0.24995105 unweighted. In H = 1 the corresponding miss probabilities were 0.01016857 and 0.49990210; both were zero in H = 0. Weighted mean accepted cardinality was 1.93788175, with both signs accepted 0.93788175 of the time. Unweighted values were 1.00019579 and 0.00019579. Expected calibration weight ESS was 20.40399; it is a diagnostic and does not replace G = 99 in the rank contract.
+
+This is a deliberately discrete, tied-score example, and weighted miss is conservatively below α = 0.1. It establishes the registered finite-population control under its common conditional law. The target is a specified synthetic target distribution; no recorded real-audio conditional law was verified. When the source sign was always positive and the target sign always negative at the same short observations, equal-weight prediction returned the positive singleton and missed every target.
+
+The literal floating true weights differed from the exact common integer scaling at one canonical count state: H0-positive = 9, H1-positive = 81, H1-negative = 9. For the negative H0 candidate the mathematical p-value is exactly 0.1; the integer rule rejects at the strict boundary, while literal floating arithmetic accepted. Its source count-state probability was 5.0278 × 10⁻¹²¹, and that candidate has zero target probability in the declared law, leaving the reported marginal miss unchanged. This is an observed floating boundary sensitivity, retained as a candidate numerical follow-up; no production weight rule was altered. The literal check uses the declared canonical ordering of each count state and supplies no separate exact average over floating summation permutations. [Summary](../../../receipts/conformal-audio/results/transport-primary/transport-summary.json) · [Every count state](../../../receipts/conformal-audio/results/transport-primary/transport-counts.jsonl) · [Independent audit](../../../receipts/conformal-audio/results/transport-primary/audit.json)
+
+### 4. Fixed recorded outcomes, eligible loss and abstention
+
+All 200 corrected risk selections matched the independent rule, and all boundedness/monotonicity controls passed. The equality fixture selected index 1 at corrected reading 0.5 and α = 0.5. The separate G = 1, α = 0.1 fixture exercised last-policy fallback with `Met = false`. The actual timestamped two-turn witness gave eligible loss 1/2 at both policies while early fraction among starts increased from 1/2 to 1. All-abstain and empty-conversation losses were zero.
+
+In the registered synthetic cohort every calibration selected policy 4, the 0.8-second additional delay. Its total wait 0.9 exceeds every allowed wait budget [0.45,0.55], so it abstains on every turn. Across 100,000 test conversations, including 10,031 empty eligible sets, observed eligible loss and start fraction were both zero. Delay among starts is undefined and is stored as null. The zero estimated split standard error is a degenerate Monte Carlo reading; it supplies no confidence bound on the selection rule's unknown population risk. The expected-risk theorem's stated α bound and assumptions remain the relevant guarantee.
+
+| Fixed policy, same recorded completions | Equal-conversation eligible loss | Equal-conversation start fraction | Pooled delay among starts |
+| --- | ---: | ---: | ---: |
+| Additional delay 0 | 0.89969 | 0.89969 | 0.1 s |
+| Additional delay 0.1 s | 0.78780 | 0.89969 | 0.2 s |
+| Additional delay 0.2 s | 0.63607 | 0.89969 | 0.3 s |
+| Additional delay 0.4 s | 0.16795 | 0.45184 | 0.5 s |
+| Additional delay 0.8 s / explicit abstention | 0 | 0 | undefined |
+
+The selected rule prevented every one of the 405,812 baseline starts in this replay, all of which were early by the constructed completion law. The latest policy that still started had loss 0.16795, with MC interval [0.16613,0.16977], above 0.1. This grid demonstrates the cost of controlling interruption through abstention; it supplies no useful non-abstaining policy at the selected level. The original grid was retained. No labelled recording/completion files were found in the inspected project `datasets/`, `presets/` or regression-receipt locations. The result concerns synthetic fixed completions and says nothing about how speaking changes a live partner's completion. [Risk summary](../../../receipts/conformal-audio/results/risk-primary/risk-summary.json) · [Independent timestamp replay and policy curves](../../../receipts/conformal-audio/results/risk-primary/audit.json)
+
+### 5. First Ville alarm and the input-law control
+
+| Frozen null score law | Streams ever alarming / 5,000 | Rate | Wilson 95% interval |
+| --- | ---: | ---: | --- |
+| −|N(0,1)| | 140 | 0.0280 | [0.02378, 0.03295] |
+| Discrete tied fair bit | 135 | 0.0270 | [0.02286, 0.03187] |
+| All equal, fresh randomization | 143 | 0.0286 | [0.02433, 0.03359] |
+
+All three intervals lie below the 0.05 Ville bound. These are finite Monte Carlo checks of first-alarm-by-200 frequency under the registered nulls, not an empirical proof of the general anytime statement. All-tied scores still use fresh independent engine randomization.
+
+In 2,000 changed-noise scalar-score streams there were 55 pre-change alarms, 1,397 first detections at or after conversation 101 and 548 censored streams. Among the 1,945 streams without a pre-change alarm, 1,397 detected the change before the horizon. The detected-only median delay was 48 conversations, counting zero at the first changed conversation. It excludes censored streams and is not an unconditional detection-time median. The change run measures power under the specified scalar residual alternative; it supplies no new null guarantee or measured waveform-model detection performance.
+
+Bypassing the rank producer and using the same uniform p twice gave final capital four at p = 0.25 and zero at p = 0.75. The two halves each have probability 1/2, so crossing four has probability 1/2 rather than a claimed 1/4. Marginally uniform p-values alone therefore do not justify the alarm's product-law premise. [Alarm summary](../../../receipts/conformal-audio/results/alarm-primary/alarm-summary.json) · [All stream outcomes](../../../receipts/conformal-audio/results/alarm-primary/alarm-streams.jsonl) · [Independent count audit](../../../receipts/conformal-audio/results/alarm-primary/audit.json)
+
+### Receipts, replay and scope
+
+Actual outputs are under `artifacts/conformal-audio/{controls-primary,controls-replay,audio-primary,audio-replay,transport-primary,risk-primary,alarm-primary}/`. Compact copies and actual/LF-copy SHA-256 manifests are under `issues/regression/receipts/conformal-audio/results/` with the same run names. Full training arrays, test predictions and timestamped conversations remain local in those artifact directories, reproducible from the source pin and seeds. The primary audio and deployment runs reused the isolated controls build; the audio/control replay used a fresh isolated build. Each block's execution manifest records its derived seed and source/settings hashes.
+
+```powershell
+./issues/regression/receipts/conformal-audio/replay.ps1 -Revision a3eb7d0 -Block controls -RunName controls-review
+./issues/regression/receipts/conformal-audio/replay.ps1 -Revision a3eb7d0 -Block audio -RunName audio-review
+./issues/regression/receipts/conformal-audio/replay.ps1 -Revision a3eb7d0 -Block audio -RunName audio-review-replay -FirstSplit
+./artifacts/evidence-contrasts/venv/Scripts/python.exe ./issues/regression/receipts/conformal-audio/audit.py audio --results artifacts/conformal-audio/audio-review/results --replay artifacts/conformal-audio/audio-review-replay/results --output artifacts/conformal-audio/audio-review/analysis/audit.json
+```
+
+Use `-Block transport`, `risk` or `alarm` with fresh run names for the remaining blocks. All five registered synthetic probes are complete. Unqualified BASS mixing, the unavailable optimal noisy-audio oracle, the abstaining risk result, missing labelled recording evidence and unverified real-domain conditional laws remain substantive limits. No production `src/`, `tests/` or `docs/` edits were made by this work.
+
+## Doc changes owed
+
+- State the sampled-turn and all-turn events separately, including training independence, conversation length/content sampling and the fixed mask.
+- Add the exact 1/4 duplicated-frame witness and the finite-alphabet 1.9 sharpness/singleton distinction without equating cardinality with continuous width.
+- Record the matched width table, conditional-on-fit MC uncertainty, all eight failed mixing verdicts and the length/noise subgroup limitation.
+- Keep exact-weight transport conditional on the common latent law; record the equal-input failed-transfer control and the observed strict-boundary floating sensitivity.
+- Explain eligible-turn loss, empty conversations, undefined delay under abstention and this grid's zero-start result; keep fixed-recording and live-intervention questions separate.
+- State first-run Ville semantics and fresh randomization, the null Monte Carlo readings, censored change-detection result and repeated-uniform counterexample.
+
+## Exposition
+
+A band calibrated on whole conversations can target either all held-back spectral bins of one independently sampled turn or all bins of every evaluated turn in the new conversation. Those events require their corresponding one-turn or worst-turn calibration score. Duplicating one fair conversation score on twenty frames and treating them as independent calibration units produced miscoverage 1/4 at a nominal 5% level; ranking that conversation once accepted the whole space.
+
+In the registered audio experiment, a centred longer view reduced mean simultaneous log-power band width by 2.12261 units for sampled turns and 1.75220 for entire conversations at a 64-sample event separation. At 192 samples it increased widths by 0.32434 and 1.42931, while changes beyond its support and on a resonance control were unclear at the measured Monte Carlo precision. These results condition on frozen finite BASS fits that failed their mixing diagnostics. They measure the efficiency of those computations, without identifying an optimal noisy-audio predictor's information limit.
+
+Under a specified covariate shift with a common conditional sign law, exact candidate-inclusive weighting reduced marginal sign miscoverage from 0.249951 to 0.005084 while increasing mean accepted cardinality from 1.000196 to 1.937882. Equal input laws did not rescue coverage when the conditional sign law changed completely. In the timestamped risk experiment, the selected policy achieved zero observed early-start loss by abstaining on every turn. Both examples show why the numerical guarantee must travel with its law, event and efficiency cost.
+
+With one frozen score per conversation, fresh randomized sequential ranks and the registered power bet, first Ville alarms occurred in about 2.7–2.9% of independent 200-conversation null streams against a 5% anytime bound. Reusing one marginally uniform p-value twice instead made capital cross four with probability one half. The sequential input-law premise is therefore part of the alarm's interpretation; its null guarantee and power under a specified change are separate results.

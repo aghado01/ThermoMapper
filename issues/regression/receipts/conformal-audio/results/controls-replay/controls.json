@@ -1,0 +1,47 @@
+{
+  "Passed": true,
+  "RankCases": [
+    {
+      "Calibration": 0,
+      "Test": 0,
+      "FrameAccepted": true,
+      "GroupAccepted": true
+    },
+    {
+      "Calibration": 0,
+      "Test": 1,
+      "FrameAccepted": false,
+      "GroupAccepted": true
+    },
+    {
+      "Calibration": 1,
+      "Test": 0,
+      "FrameAccepted": true,
+      "GroupAccepted": true
+    },
+    {
+      "Calibration": 1,
+      "Test": 1,
+      "FrameAccepted": true,
+      "GroupAccepted": true
+    }
+  ],
+  "FrameMissProbability": 0.25,
+  "GroupMissProbability": 0,
+  "LevelAt18": 0,
+  "LevelAt19": 1,
+  "PlusDft": [
+    4,
+    0.9999999999999992,
+    1.0000000000000018
+  ],
+  "MinusDft": [
+    0,
+    3.000000000000001,
+    2.9999999999999982
+  ],
+  "RandomizedCoverage": 0.95,
+  "RandomizedCardinality": 1.9,
+  "DistinguishingOracleCoverage": 1,
+  "DistinguishingOracleCardinality": 1
+}

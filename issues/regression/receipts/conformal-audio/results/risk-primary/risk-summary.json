@@ -1,0 +1,44 @@
+{
+  "Passed": true,
+  "ExpectedEligibleTurnLoss": {
+    "Mean": 0,
+    "StandardError": 0,
+    "Lower": 0,
+    "Upper": 0,
+    "Splits": 200
+  },
+  "EqualConversationStartFraction": {
+    "Mean": 0,
+    "StandardError": 0,
+    "Lower": 0,
+    "Upper": 0,
+    "Splits": 200
+  },
+  "PooledDelayAmongStarts": null,
+  "TotalStarts": 0,
+  "EmptyTestConversations": 10031,
+  "PolicyCounts": [
+    {
+      "Policy": 4,
+      "Count": 200
+    }
+  ],
+  "EqualityControl": {
+    "Index": 1,
+    "Reading": 0.5,
+    "Met": true
+  },
+  "FallbackControl": {
+    "Index": 2,
+    "Reading": 0.5,
+    "Met": false
+  },
+  "DenominatorWitness": {
+    "EligibleLossBefore": 0.5,
+    "EligibleLossAfter": 0.5,
+    "AmongStartEarlyBefore": 0.5,
+    "AmongStartEarlyAfter": 1,
+    "AllAbstainEligibleLoss": 0,
+    "EmptyEligibleLoss": 0
+  }
+}
