@@ -7,6 +7,7 @@
   </PropertyGroup>
   <ItemGroup>
     <Compile Include="../probe/*.cs" Link="reference/%(Filename)%(Extension)" />
+    <Compile Include="../../latent-recovery/probe/Synthesizer.cs" Link="pilot/Synthesizer.cs" />
     <ProjectReference Include="$(RepositoryRoot)projects/Maths.Regression/Maths.Regression.csproj" />
   </ItemGroup>
 </Project>

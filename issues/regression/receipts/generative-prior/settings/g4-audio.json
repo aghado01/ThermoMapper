@@ -1,0 +1,6 @@
+{
+  "MasterSeed": 181204181, "Repetitions": 5, "Secants": 64, "RealRows": [6, 12, 24, 48, 96, 150, 240],
+  "Windows": [128, 256, 512], "SingleWindow": 256, "KeptBins": [3, 6, 12, 24],
+  "Rate": 8000, "LowHz": 150, "HighHz": 3600, "Floor": 1e-4,
+  "RankCutoff": 1e-8, "WhiteningTolerance": 1e-5, "ScaleTolerance": 1e-8, "DecisionEpsilon": 0.2
+}
