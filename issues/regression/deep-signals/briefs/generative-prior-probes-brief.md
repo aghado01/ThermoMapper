@@ -294,6 +294,10 @@ Continue G1, then G3, G4, G2 and G5. Each block receives committed settings and 
 
 ## G1 report — depth and magnitude extensions
 
+### In progress
+
+The protocol is `d579c14` and the numerical source/settings pin is `0fe9045`. The bridge matched all original signed k = 10 fields and endpoint bits. G1 output is accumulating in `artifacts/generative-prior/g1-extensions-primary/results/`; the independent audit is `receipts/generative-prior/audit-extensions.py`. New skipped cycle lengths require full controls before reporting. G3 and G4 protocols and sources have been prepared in `0094720` and `8e527e3`, with their execution queued after G1. No G3 or G4 numerical readings have been taken.
+
 ### Protocol registered before extension readings
 
 **Cells and pairing.** Use 30 repetitions per cell. Add magnitude-only observations at depth two, widths 250/600, k = 10, 80, 100, m = 150. Add depth-three widths 250/400/600 at k = 10 and 80, m = 150, for both linear and magnitude observations. Run every new cell with and without the per-iteration sign check. Reuse the original cell masters and repetition streams at the same k, so truth, start, W₁ and A remain paired across depths and objectives. Within each depth/objective all weights and observations are shared by the two sign arms. W₂ changes with the declared intermediate width at depth three. The third layer uses child 5 of `SeedTree.Derive(repetitionSeed,6)`; children 0–4 retain their original roles. Gaussian row variances remain 1/nᵢ and 1/m, and there are no biases.
@@ -337,6 +341,24 @@ For each pair of secants normalize distortion by their two original signal norms
 Report ε, fitted γ and its five-repetition range at each real row count, plus the matching Gaussian reading. A median ε ≤ 0.2 supplies sampled near-isometry evidence at that count. A larger sampled optimum supplies a lower bound ruling out a uniform ε ≤ 0.2 for that realization under any global scale. A passing finite search supplies no uniform certificate. Read the nonlinear log-power family separately, with its observable count and nonlinearity explicit.
 
 All source generators, settings, secant endpoints, normalized inner-product tables and rank/whitening controls are retained or reproducible from recorded seeds. On a numerical control failure, replay the affected map and diagnose before its geometric interpretation. Keep original scales, samples, cutoff and gates, adding no frequencies or centering changes after readings. Execute serially, capped and below normal priority.
+
+## G2 report — calibration through the exact Gaussian generator
+
+### Protocol frozen before G2 execution
+
+Execute after G4. Use bias-free depth-two widths 250/600 and linear Gaussian measurements, with k = 2, 4, 8, m/k = 2, 4, 8 and six paired problems per cell. Derive four k masters from `SeedTree.Derive(181204182,4)`, with the fourth reserved for the conditional k = 16 expansion, six repetition seeds per k and ten branches per repetition. Branches 0–4 retain G1's weight, measurement, truth and start roles. Draw truth and start from standard normals conditioned on the declared box [−3,3]^k. Branch 5 supplies a shared standard Gaussian measurement-noise prefix. Use A_m = U[1:m]/√m and noise 0.1·z[1:m]/√m, keeping expected total noise energy 0.01 while m changes. Branches 6–8 supply nested, tempered and SMC seeds, and branch 9 is reserved for replay. Pair networks, truth, noise prefixes and initial descent codes across m and samplers.
+
+Wrap the exact generator in the existing emulator contract, with one draw, zero emulator variance and no discrepancy. Use the engine's Gaussian variance group with an inverse-gamma prior of six degrees of freedom and deviation scale 0.1/√m. The actual noise deviation is fixed at that scale. The calibration prior is uniform on the declared box. The measured coverage is conditional on this truth-generating distribution and model specification.
+
+Run the nested sampler with three chains, burn-in 500, decorrelation every 100 scans, batches of 250 up to 1000 retained samples per chain, R̂ target 1.05 and minimum bulk/tail ESS per chain 50. Run the same sampler on the ladder [1,0.6,0.35,0.2,0.1,0.05]. Run cut SMC with 256 particles, one outer draw, target conditional ESS 0.95, five mutation scans per stage, resampling below 0.5 and at most 1000 stages per leg. Use three independently seeded SMC populations per problem, derived from branch 8. Report R̂/ESS convergence for chain methods and ESS, lineage and between-population agreement for SMC. A population's final normalized weights alone supply no independence claim.
+
+The inversion decision reads median relative code error ≤ 0.1 at ratios 4 and 8, plus at least five of six converged chain runs per cell. For SMC, require final ESS ≥ 0.25N in each population and coordinate-mean ranges across the three populations ≤ 0.5 pooled posterior standard deviations, in at least five of six problems. Report surviving initial lineages as a separate reading. Report 90% coordinate intervals and coverage, raw coordinate errors, noise estimates, negative-neighbourhood mass, wall time and all convergence failures. Pool unconverged chains only into labelled diagnostic readings. Report each method's frontier at these fixed budgets. Attempt k = 16 with the same six-repetition design only if every method meets its error and diagnostic gates at k = 8 and its median calibration time there is ≤ 120 seconds. A stopped expansion records this budget-defined frontier.
+
+Compare with the G1 signed descent recurrence on the same noisy forward problem, using the same start, unit step and 50,000-update cap. Retain the unconstrained descent's returned code and recovery score, with the calibration prior box explicit. For at most 200 deterministically spaced posterior states per run, compute the cosine between the direction to truth and the negative gradient of the noisy and clean quadratic losses. Separate states above and below relative error 0.1. Record the objective-specific negative-neighbourhood mass using the original 20-degree/±25% linear-radius definition.
+
+At k = 2, repetition 1, ratio 4, independently integrate out the variance analytically and evaluate the posterior on 201² and 401² midpoint grids over the box. Require grid posterior means to agree within 0.005 physical units and the 5%/95% quantiles within 0.02. Compare each sampler's posterior means with the 401² grid to 0.04 physical units, keeping the original statistical reading if a sampler fails. Verify emulator predictions and gradients with the scalar reference to 10⁻¹⁰ × max(1,|reference|), and retain raw posterior states locally with small tracked summaries.
+
+On a numerical-control failure replay the affected seeded problem before interpretation. A convergence or recovery failure is a result at the registered budget and is retained. No new seeds or tuning replace a failing cohort. A fresh replay checks one k = 2 calibration per method, with timing excluded from numerical equality. Heavy execution remains capped, serial and below normal priority.
 
 ## Exposition
 

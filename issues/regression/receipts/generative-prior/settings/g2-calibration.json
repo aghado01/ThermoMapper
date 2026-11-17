@@ -1,0 +1,12 @@
+{
+  "MasterSeed": 181204182, "Dimensions": [2, 4, 8, 16], "Ratios": [2, 4, 8], "Repetitions": 6,
+  "Box": 3, "TotalNoiseDeviation": 0.1, "VarianceDegreesOfFreedom": 6,
+  "BurnIn": 500, "DecorrelationEvery": 100, "Chains": 3, "MaxSamples": 1000, "BatchSize": 250,
+  "RHatTarget": 1.05, "MinEssPerChain": 50, "Ladder": [1, 0.6, 0.35, 0.2, 0.1, 0.05],
+  "Particles": 256, "SmcPopulations": 3, "TargetConditionalEss": 0.95, "MutationSteps": 5,
+  "ResampleBelow": 0.5, "MaxStagesPerLeg": 1000, "SmcEssFraction": 0.25,
+  "PopulationSpreadTarget": 0.5, "RequiredGoodProblems": 5, "RecoveryTarget": 0.1,
+  "ExpansionSeconds": 120, "AlignmentStates": 200, "GridSizes": [201, 401],
+  "GridMeanTolerance": 0.005, "GridQuantileTolerance": 0.02, "SamplerGridMeanTolerance": 0.04,
+  "ReferenceTolerance": 1e-10
+}

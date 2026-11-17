@@ -49,7 +49,7 @@ internal static class Program
         return Enumerable.Range(0, dimension).Select(_ => Normal.SampleStandard(rng)).ToArray();
     }
 
-    private sealed record Endpoint(double[] X, int Updates, int Checks, string Stop, int[] Flips, long Zeros,
+    internal sealed record Endpoint(double[] X, int Updates, int Checks, string Stop, int[] Flips, long Zeros,
         double InitialPlus, double InitialMinus, double Objective, double GradientNorm, double Discrepancy,
         int SkippedUpdates, int CycleLength, long MeasurementZeros);
 
@@ -62,7 +62,7 @@ internal static class Program
         return true;
     }
 
-    private static Endpoint Recover(Settings s, Network net, double[] y, double[] start)
+    internal static Endpoint Recover(Settings s, Network net, double[] y, double[] start)
     {
         double[] x = (double[])start.Clone();
         var negative = new double[x.Length];
