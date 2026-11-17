@@ -12,6 +12,8 @@ Posed 2026-11-16. The [audio approach](../approach-brief.md) proposes using one 
 
 The order after slice 2 sets reading priority. Slices 4 and 5 can use the conversation result directly. All five briefs pose statements for proof. Keep empirical claims about real conversations, simulators and shifts identifiable as hypotheses in the reports.
 
+The [numerical companion](numerical-probes-brief.md) pairs each proof with a probe and starts with the matched short-window and long-window comparison on the same held-back spectrum.
+
 **Proof and reporting.** Reuse the declarations in [ConformalValidity.lean](../../../../../lean/Enthymemata/ConformalValidity.lean) and follow the [Lean harness conventions](../../../../../lean/README.md). Append to each brief the exact conclusion and hypotheses, its witness or counterexample, the declarations and commit, and the verification commands and results. If a proposed implication fails, record the counterexample and the corrected claim. List any documentation work under **Doc changes owed**.
 
 **Local reading.** The versioned papers below have TeX sources under `codex-scientiae/supellex-private/gauntlet/conformal-bayes`. Each brief points to the paper that owns its statistical argument. The project-specific witnesses use the phaseless audio proofs.
