@@ -1,0 +1,1 @@
+This is some sample code from an open-source project to help the user understand some basic C# mechanics for handling audio data and visualizing it later 
