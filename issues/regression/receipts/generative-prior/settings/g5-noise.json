@@ -1,0 +1,18 @@
+{
+  "master_seed": 181204183,
+  "bootstrap_repetitions": 2000,
+  "rmse_quantum": 0.0001,
+  "stages": [
+    { "name": "s1", "files": [
+      "artifacts/latent-recovery/results/stage1/s1-k1-replicates.csv",
+      "artifacts/latent-recovery/results/stage1/s1-k2-replicates.csv",
+      "artifacts/latent-recovery/results/stage1/s1-k3-replicates.csv",
+      "artifacts/latent-recovery/results/stage1/s1-k4-replicates.csv",
+      "artifacts/latent-recovery/results/stage1/s1-k5-replicates.csv"
+    ] },
+    { "name": "s2", "files": [
+      "artifacts/latent-recovery/results/stage2/s2-k2-replicates.csv",
+      "artifacts/latent-recovery/results/stage2/s2-k3-replicates.csv"
+    ] }
+  ]
+}

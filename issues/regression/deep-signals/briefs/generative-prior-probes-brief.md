@@ -360,6 +360,22 @@ At k = 2, repetition 1, ratio 4, independently integrate out the variance analyt
 
 On a numerical-control failure replay the affected seeded problem before interpretation. A convergence or recovery failure is a result at the registered budget and is retained. No new seeds or tuning replace a failing cohort. A fresh replay checks one k = 2 calibration per method, with timing excluded from numerical equality. Heavy execution remains capped, serial and below normal priority.
 
+## G5 report — noise trend in existing reference receipts
+
+### Protocol frozen before G5 readings
+
+Execute after G2, using only the existing `artifacts/latent-recovery/results/stage1/s1-k<K>-replicates.csv` for k = 1..5 and `stage2/s2-k<K>-replicates.csv` for k = 2,3. Select emulator = oracle, method = nested and discrepancy = 0. Hash every original file and save the selected original fields and source row indices as a portable input receipt. No new inversions, synthesizer draws or noise realizations are added.
+
+Use per-repetition squared reconstruction RMSE at clean held-back log-power bins as the response. Report its median and quartiles against k/m and waveform noise variance in every cell, retaining unconverged original runs and reporting their fraction. Stage 1 has three waveform noise levels and four measurement ratios. Stage 2 has one waveform noise level, so it supplies no noise-level slope.
+
+Within each stage fit log MSE with a separate intercept per k, a log(k/m) slope and, where identifiable, a log waveform-noise-variance slope. Estimate 95% percentile intervals from 2000 cluster bootstrap resamples, drawing whole repetition clusters within k so paired ratios and noise levels remain together. Stage seeds are children of `SeedTree.Derive(181204183,2)`; bootstrap seeds derive structurally from each stage seed, using the pinned SplitMix64/xoshiro256++ streams. Verify those integer streams against the C# implementation.
+
+A positive 95% lower bound for the log(k/m) slope supports a decreasing-error trend as m grows in this saved cohort. An interval containing one is compatible with a proportional k/m shape within the fitted model. These are descriptive, specification-dependent readings. Also fit the converged-only rows as a sensitivity check, with their counts explicit.
+
+The stored RMSEs are rounded to four decimal places. Retain lower and upper squared-error bounds from max(0,RMSE − 0.00005) and RMSE + 0.00005, and repeat the point slope fit at those bounds. Zero rounded RMSE is left-censored and is omitted from the primary log fit, with its count recorded; the upper-bound sensitivity retains it. Do not substitute an arbitrary logarithm floor.
+
+S21 gives a fixed rank-k projector's expected k/n energy fraction under isotropic noise in the same coordinates. Here noise was added to the waveform and reconstruction is scored in nonlinear log-power coordinates, with a fitted variance and a finite posterior approximation. Interpret a measured trend in those coordinates, retaining that distinction from the projection identity. A data-shape, stream or arithmetic-control failure triggers same-input diagnosis and replay. Preserve all gates and original rows, and report rounding sensitivity or missing receipts rather than generating replacement data.
+
 ## Exposition
 
 In noiseless recovery through a bias-free Gaussian ReLU generator of widths 10 → 250 → 600, 150 Gaussian measurements sufficed to recover the generating code in all 30 independent repetitions of the signed descent experiment. At each iteration the method evaluated the quadratic measurement loss at both signs and took a unit gradient step from the lower-loss sign. Seventeen starts changed sign, all on the first comparison. No selected iterate had an exactly zero layer preactivation, so the practical gradient agreed with the paper's subgradient algorithm throughout these runs.
