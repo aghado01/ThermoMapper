@@ -189,6 +189,7 @@ def main():
         writer.writeheader()
         writer.writerows(rows)
     result = {"settings_sha256": hashlib.sha256(args.settings.read_bytes()).hexdigest(),
+              "analysis_source_sha256": hashlib.sha256(pathlib.Path(__file__).read_bytes()).hexdigest(),
               "source_manifest": manifest, "stages": analyze(rows, config)}
     (args.output / "summary.json").write_text(json.dumps(result, indent=2) + "\n")
     print(json.dumps([{key: value for key, value in s.items() if key != "cells"} for s in result["stages"]], indent=2))
