@@ -1,4 +1,4 @@
-import Enthymemata.TimeFrequency.LogPowerLaplaceLaw
+import Lemmas.TimeFrequency.LogPowerLaplaceLaw
 import Mathlib.Probability.Distributions.Gaussian.Real
 import Mathlib.Probability.HasLaw
 

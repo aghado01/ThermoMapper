@@ -1,4 +1,4 @@
-import Enthymemata.TimeFrequency.PeakOfExponentials
+import Lemmas.TimeFrequency.PeakOfExponentials
 import Mathlib.MeasureTheory.Integral.Layercake
 import Mathlib.Probability.Distributions.Exponential
 import Mathlib.Probability.Independence.Basic

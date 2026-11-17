@@ -1,5 +1,6 @@
 -- Lemmas tier: verified, reusable results with no apologies.
 import Lemmas.BamrsKroneckerGram
+import Lemmas.BassGaussianResponse
 import Lemmas.BassWhitenedMarginal
 import Lemmas.CumulativeField
 import Lemmas.EdwardsSokal

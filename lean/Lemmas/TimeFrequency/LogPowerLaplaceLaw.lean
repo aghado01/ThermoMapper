@@ -1,4 +1,4 @@
-import Enthymemata.TimeFrequency.DilogKernel
+import Lemmas.TimeFrequency.DilogKernel
 import Mathlib.Probability.Moments.Covariance
 
 /-! # The log-power covariance from the joint Laplace transform -/

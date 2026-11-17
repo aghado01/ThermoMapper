@@ -1,5 +1,5 @@
-import Enthymemata.TimeFrequency.LogPowerCovariance
-import Enthymemata.TimeFrequency.LogLaplace
+import Lemmas.TimeFrequency.LogPowerCovariance
+import Lemmas.TimeFrequency.LogLaplace
 import Mathlib.MeasureTheory.Integral.DominatedConvergence
 
 /-! # Evaluation of the bivariate log-power covariance kernel -/

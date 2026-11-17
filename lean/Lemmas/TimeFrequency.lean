@@ -1,7 +1,11 @@
 import Lemmas.TimeFrequency.Contraction
+import Lemmas.TimeFrequency.CircularGaussianPowers
+import Lemmas.TimeFrequency.ExponentialMaximum
 import Lemmas.TimeFrequency.FlatnessBound
+import Lemmas.TimeFrequency.GaussianComplexPowers
+import Lemmas.TimeFrequency.GaussianQuadraticVariance
 import Lemmas.TimeFrequency.PhasePropagation
 import Lemmas.TimeFrequency.WindowScaling
+import Lemmas.TimeFrequency.WindowTurnover
 
-/-! Time–frequency and phaseless-recovery lemmas, S1 to S3 and S6 of
-`issues/lean/time-frequency-statements-brief.md`, promoted 2026-11-16. -/
+/-! Time–frequency, phaseless recovery and noise-law lemmas (S1–S3, S6, S10–S13 and S15). -/

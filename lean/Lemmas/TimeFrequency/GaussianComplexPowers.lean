@@ -1,5 +1,5 @@
-import Enthymemata.TimeFrequency.GaussianFourthMoment
-import Enthymemata.TimeFrequency.LogPowerCovariance
+import Lemmas.TimeFrequency.GaussianFourthMoment
+import Lemmas.TimeFrequency.LogPowerCovariance
 
 /-! # Power covariance of a centered, potentially improper complex Gaussian pair -/
 

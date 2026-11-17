@@ -1,5 +1,5 @@
-import Enthymemata.TimeFrequency.GaussianFourthMoment
-import Enthymemata.TimeFrequency.QuadraticFormVariance
+import Lemmas.TimeFrequency.GaussianFourthMoment
+import Lemmas.TimeFrequency.QuadraticFormVariance
 
 /-! # Isserlis for the coordinates of a Gaussian vector, and the variance of its quadratic form -/
 
