@@ -1,6 +1,6 @@
 # How much evidence supports memory at depth d?
 
-Research brief, 2026-11-17. **Commissioned Lean investigation; section 1 proved, section 2 in progress.** For a given observation design, how many independent records, spanning how many events, suffice to detect a dependence at lag \(d\), recover the minimal context tree, or predict the next event to a specified tolerance? The design decision for audio is whether to spend a recording budget on longer spans, different windows, or retaining the pairing between measurements.
+Research brief, 2026-11-17. **Commissioned Lean investigation; sections 1–2 proved, section 3 in progress.** For a given observation design, how many independent records, spanning how many events, suffice to detect a dependence at lag \(d\), recover the minimal context tree, or predict the next event to a specified tolerance? The design decision for audio is whether to spend a recording budget on longer spans, different windows, or retaining the pairing between measurements.
 
 The depth-four work supplies one case where a measurement design can be studied exactly. This follow-up starts from the already proved collision at **every** \(d\ge4\). Its first two questions can proceed independently of the depth-four completion proof. [Population cutoff and witness](../context-tree-memory-identifiability-brief.md#verified-result--2026-11-16) · [Depth-four measurement design](01-depth-four-completion-brief.md) · [Predictive ambiguity](02-predictive-ambiguity-brief.md)
 
@@ -87,13 +87,54 @@ The midpoint test accepts the deep source when k≥n(2+a)/16. Each error is at m
 - [MemoryDepthObservations.lean](../../../../../lean/Enthymemata/TimeFrequency/MemoryDepthObservations.lean): actual raw-record pushforwards `raw_taper_records`, `raw_rectangular_records`; retained-law equality `rectangular_experiment_eq`; `taper_sites_and_span`, `every_depth`.
 - [MemoryDepthEvidence.lean](../../../../../lean/Enthymemata/TimeFrequency/MemoryDepthEvidence.lean): `common_only_obstruction`, `physical_budgets`, instantiating both rounded budgets with the actual independent rectangular observations.
 
-**Verification.** All five modules compile in the aggregate. The 49 public `#print axioms` outputs contain only subsets of `[propext, Classical.choice, Quot.sound]`; the new modules have no proof holes or postulated axioms. They remain in Enthymemata pending semantic review and promotion. Full `lake build` passed (3804 jobs), using BelowNormal priority and `LEAN_NUM_THREADS=2`. The new modules emitted no warnings; existing unrelated notices remain. Taxonomy is checked with the next registered section-2 slice.
+**Verification.** All five modules compile in the aggregate. The 49 public `#print axioms` outputs contain only subsets of `[propext, Classical.choice, Quot.sound]`; the new modules have no proof holes or postulated axioms. They remain in Enthymemata pending semantic review and promotion. Full `lake build` passed (3804 jobs), using BelowNormal priority and `LEAN_NUM_THREADS=2`. The new modules emitted no warnings; existing unrelated notices remain. The taxonomy gate also passed when section 2 was registered.
 
-## Section 2 in progress
+## Section 2 result — 2026-11-17
 
-`MemoryDepthPaired.lean` has passed its native check: adjacent powers determine relative signs, path propagation reconstructs each ordered block up to global reversal, and an independent fair sign exactly lifts a sign-symmetric law. Eight public axiom listings use only standard axioms. It is not yet registered or committed.
+**Paired experiment.** For any positive sign-symmetric law on ordered length-(d+1) binary blocks, retain d adjacent powers (X_i+X_(i+1))² from each block. Their values 0 and 4 specify the relative signs. Propagation along the path gives exactly two signed lifts. Choosing their initial sign with an independent fair coin reproduces the original signed block law. This statement needs sign symmetry, but not stationarity. Stationarity and the memory bound enter when interpreting the recovered block kernel as the source's transition law and minimal tree.
 
-The estimator will use history and next-positive counts, returning 1/2 for an unseen history. Concentration work uses finite exponential moments to include unseen histories in the transition-error event and separately bound too few visits. The candidate bound remains 16/(π_min γ²) times ln(2^(d+1)/δ); this constant is **not yet qualified**. The final report will state how the proof relates to the brief's conditional-on-visit-count route. Whole-tree lower-bound tightness remains a separate construction question. Section 3 has not begun.
+The proofs connect actual raw paired-power records, their relative-sign law, randomized lifted datasets, and history-response records. The observation cost is **n independent blocks, each spanning d+1 events and retaining d paired two-site powers**. Fair coins are internal randomization, not additional recordings.
+
+**Estimator and assumptions.** Let π_h be the probability of length-d history h and q_h its next-positive probability. Assume π_h≥π_min>0. For every suffix whose extensions have nonconstant q_h, assume some two extensions differ by at least γ, with 0<γ≤1. For n reconstructed blocks, let N_h count visits and S_h count positive responses. Set qhat_h=S_h/N_h when N_h>0 and qhat_h=1/2 otherwise. Treat a suffix as nonsplitting exactly when every pair of its extension estimates differs by at most γ/2; return the shortest such suffixes.
+
+For 0<t≤1/2 the proved bounds are
+
+\[
+\begin{aligned}
+ P(\exists h:\ |\widehat q_h-q_h|\ge t)
+ &\le 2^{d+1}\exp(-n\pi_{\min}t^2),\\
+ P(\exists h:\ N_h\le n\pi_h/2)
+ &\le 2^d\exp(-n\pi_{\min}/8).
+\end{aligned}
+\]
+
+The first bound includes unseen histories. It follows from a direct exponential-moment bound on the masked count-ratio numerator, rather than the brief's proposed intermediate conditioning on the visit count. The separate low-visit bound is also proved. No conditional-on-count theorem is claimed. On the simultaneous event |qhat_h−q_h|<γ/4, the empirical nonsplitting predicate equals true transition constancy for every suffix, hence the returned tree equals the minimal tree.
+
+Consequently a sufficient number of blocks for tree error at most δ is
+
+\[
+ n\ge\left\lceil
+ \frac{16}{\pi_{\min}\gamma^2}
+ \ln\frac{2^{d+1}}{\delta}
+ \right\rceil .
+\]
+
+This is an explicit sufficient bound, not an optimal sample complexity. Uniform histories already have π_min=2⁻ᵈ. Neither the π_min dependence nor the separation assumption can be omitted from this guarantee. The whole-tree lower-bound construction remains open, distinct from section 1's proved simple-pair testing necessity. Overlapping windows from one recording remain outside the experiment.
+
+**Declarations.** Namespace `TimeFrequency.ContextTree.DepthEvidence`.
+
+- [MemoryDepthPaired.lean](../../../../../lean/Enthymemata/TimeFrequency/MemoryDepthPaired.lean): `paired_reconstruction`, `paired_record_law`, `randomized_lift_law`, `randomized_lift_records`, `history_response_records`.
+- [MemoryDepthConcentration.lean](../../../../../lean/Enthymemata/TimeFrequency/MemoryDepthConcentration.lean): `finite_chernoff`, `bounded_mgf`, finite union bounds.
+- [MemoryDepthCounts.lean](../../../../../lean/Enthymemata/TimeFrequency/MemoryDepthCounts.lean): `estimate`, `masked_sum`, `ratio_mgf`, positive conditional-law parameters.
+- [MemoryDepthBounds.lean](../../../../../lean/Enthymemata/TimeFrequency/MemoryDepthBounds.lean): `transition_error`, `simultaneous_transition_error`, `transition_budget`, `too_few_visits`, `any_too_few_visits`.
+- [MemoryDepthTree.lean](../../../../../lean/Enthymemata/TimeFrequency/MemoryDepthTree.lean): `conditional_kernel`, `threshold_contexts`, `threshold_tree`, `paired_tree_budget`.
+
+**Verification.** Full `lake build` passed (3809 jobs), BelowNormal priority with `LEAN_NUM_THREADS=2`. The 42 public theorem axiom listings in section 2, and 91 across sections 1–2, contain only subsets of `[propext, Classical.choice, Quot.sound]`. The new modules emit no warnings. The taxonomy gate `lean/scripts/meta-ci.ps1 -NoBuild` passes for sections 1–2, with all ten new modules PROOF-CLOSED. They remain Enthymemata pending semantic review and promotion.
+
+## Section 3 in progress
+
+The next slice fixes a candidate maximum depth before data collection and constructs confidence sets of valid source laws, then projects to supported depths. Empty sets must return an explicit inconclusive outcome. The depth-four unpaired comparison will propagate observable errors through reconstruction and conditional probabilities with a stated history-mass floor. These confidence and reconstruction bounds are not yet qualified.
+
 
 ## Doc changes owed
 
