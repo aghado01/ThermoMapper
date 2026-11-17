@@ -11,6 +11,8 @@ Posed 2026-11-16 for the deep-signals statements session. Start with slice 1. Ea
 | [5. Paired views and waveform laws](05-paired-model-identification-brief.md) | When does the joint observation law determine the law of a waveform modulo sign? | Uses 1 for an exact witness. The general result is conditional on the operator and signal class. |
 | [6. Unpaired views and model identification](06-unpaired-model-identification-brief.md) | What can the separate image sets or marginal laws determine? | Reuses the witness from 5 |
 
+The [conformal audio sequence](../conformal-audio/README.md) uses slice 1's gap witness to bound the size of a valid prediction set and to test synthetic-to-real latent coverage.
+
 **Sources.** The local collection is `codex-scientiae/supellex-private/gauntlet/signal-processing`. The versioned directories contain PDFs and TeX. The following entry points identify the arguments used here.
 
 - [Jaganathan, Eldar and Hassibi](https://arxiv.org/abs/1508.02820v3), `1508.02820v3-tex/ProblemSetup.tex` and `Uniqueness.tex`, theorem labelled `STFTUN`. The authors use a specified finite boundary convention and resolve local Fourier ambiguities generically before propagating phase through overlaps.

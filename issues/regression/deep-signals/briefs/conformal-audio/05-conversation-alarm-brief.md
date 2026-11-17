@@ -1,0 +1,11 @@
+# Slice 5 — an anytime alarm on a stream of conversation scores
+
+**Null and claim.** Under the null, successive whole conversations follow an exchangeable law at every finite horizon, conditional on the frozen training fit. Use one prespecified score per conversation. Speaker alternation, dependence among its turns and its length are part of the conversation being scored. For a run starting at capital one, prove that the probability of ever crossing 1/δ is at most δ, for 0 < δ < 1.
+
+1. At each prefix prove equivariance of the scorer under permutations of its conversations. The held-back-view score from [slice 1](01-conversation-band-brief.md) with a fixed aggregation is a concrete instance. Specify the order of scores and the randomization at ties. Apply `seqRank_uniform` by invariant-law averaging, or `seqRank_law` for finite observations. Derive the joint law of the sequential randomized ranks at every horizon, including all-tied scores.
+2. At step t, counting from one, a randomized rank Rₜ lies in {1,…,t}. With independent uniform jitters Uₜ, also independent of the ranks, let pₜ = (Rₜ−1+Uₜ)/t. Prove the product-uniform law for each prefix. Show measurability and verify the exact finite-dimensional law required by `ville`. For measurable nonnegative bets selected using past p-values, with each bet's integral at most one, deduce the anytime bound. State the initial capital, threshold and single-run scope.
+3. Exhibit a failure if only marginal uniformity is checked. Let every pₜ be the same uniform U and bet twice with f(p) = 2·1{p ≤ 1/2}. Each reported p-value is uniform and the bet integrates to one. Prove that capital reaches four with probability 1/2, exceeding the claimed 1/4 bound. Thus the product-law step does real work.
+
+**Acceptance.** Verify the end-to-end null guarantee from the scored observations, the all-ties case and the dependent-p-value counterexample. The alarm tests the chosen null. Power against a new microphone, a speaker change or another specified alternative is a separate question.
+
+[Sequential ranks and Ville's inequality](../../../../../lean/Enthymemata/ConformalValidity.lean) · [Runtime betting and alarm contract](../../../../../src/maths/regression/conformal/ConformalTestMartingale.cs) · [Conformal test martingales for change-point detection](https://arxiv.org/abs/2102.10439v1)
