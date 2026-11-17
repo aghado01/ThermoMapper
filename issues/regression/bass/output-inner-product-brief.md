@@ -60,17 +60,18 @@ Located by search on 2026-11-16. The building chip confirms each, and adds any t
 
 ## Decisions
 
-Decision 1 is settled on support for both prior choices. Decisions 2–7 are open. Each entry identifies the slice where it first applies.
+The user selected both coefficient-prior Grams and all three precision-weight patterns. Decisions 3–7 and the default prior Gram for nonidentity Q remain open.
 
 1. **Which Gram matrix defines the coefficient prior under Q?** The user selected **both as configurable fit options**. For the unweighted, uncentred slice, write Ω = Iₙ ⊗ R. Both choices use XᵀΩ⁻¹X in the likelihood. The selected prior Gram P determines the coefficient covariance σ²(τP)⁻¹.
    - **Whitened Gram.** P = XᵀΩ⁻¹X = (AᵀA)∘(HᵀQH). The prior adapts to the declared output precision. The ordinary g-prior on the whitened design gives S4's exact reference.
    - **Ordinary Gram.** P = XᵀX = (AᵀA)∘(HᵀH). For a fixed design the prior stays the same across noise correlations. Use the separate likelihood and prior Grams, as supported by [`CollapsedPencilPrior`](../../../src/maths/regression/gprior/PriorPencil.cs). A direct Gaussian marginal gives an independent reference for this choice.
    - Expose the choice in the fit configuration and record the resolved choice with the fit. Both apply in slice 1. The default for a newly declared nonidentity Q is open.
-2. **How Q combines with observation weights.**
-   - *Recommended:* refuse weights with Q ≠ I in slice 1, then admit case-level weights in slice 4. Weights of the form wᵢ·1_m keep the Kronecker form, with L = diag(w)^{−½} ⊗ L_R.
-   - For positive precision weights, a location profile v shared across cases, wᵢⱼ = uᵢvⱼ, still factors. The precision is diag(u) ⊗ [diag(√v) Q diag(√v)]. If each case has its own profile Dᵢ = diag(wᵢⱼ), its precision block is Dᵢ^{½}QDᵢ^{½}. In general these blocks need separate contractions. Today's design leaves the Khatri–Rao path under observation weights (`BassDesign.cs:305`).
-   - The existing `WeightMeaning` distinguishes precision from replication, and `WeightedPriorGram` specifies how row weights enter the prior. A replication count for an entire case repeats its joint output likelihood. The formulas above describe precision weights. [Working-response conventions](../../../src/maths/regression/spline/bass/BassObservationModel.cs)
-   - *Binds at:* slices 1 and 4.
+2. **Where can observation precision vary?** The user selected all three patterns for the extension. Weights are positive and finite. For case i with Dᵢ = diag(wᵢⱼ), its likelihood precision apart from σ⁻² is Bᵢ = Dᵢ^{½}QDᵢ^{½}.
+   - **Case weights.** One precision uᵢ per case gives Bᵢ = uᵢQ. All cases share the output contraction.
+   - **Case weights with a shared location profile.** With wᵢⱼ = uᵢvⱼ, compute the shared output precision diag(√v) Q diag(√v) once and scale by uᵢ.
+   - **Individual location weights within each case.** Each case can supply its own vector of precisions. Accumulate contractions with its own Bᵢ. This covers arbitrary positive weight patterns, including the two factored cases above.
+   - These choices specify likelihood precision. `WeightMeaning.Replication` counts copies of an observation, and a whole-case count repeats the joint likelihood of the case. Preserve the existing distinction and the semantics of `WeightedPriorGram` when resolving the coefficient prior. [Working-response conventions](../../../src/maths/regression/spline/bass/BassObservationModel.cs)
+   - Slice 1 establishes the unweighted reference. Slice 4 implements and verifies all three patterns.
 3. **Several outputs (E34).**
    - *Recommended:* refuse Q ≠ I with several outputs until E34's Σ and Q are stated together. A per-output Q and a shared Q are different models, and the choice is the user's.
    - *Binds at:* slice 1, as a refusal.
@@ -113,11 +114,12 @@ Each ends at a gate. The [common gates](#gates-common-to-every-slice) apply to a
 3. **Tempering and evidence.**
    - *Build:* nothing new if slice 1 routed the constant. Check the ladder and the evidence estimators read it.
    - *Gate:* at b ∈ {0, 0.3, 1}, compare with an explicitly whitened likelihood **keeping the same chosen coefficient prior**. For either prior the log-marginal difference is (b/2)·n·ln\|Q\|. The evidence estimators agree with each other under Q as they do under Q = I (`evidence-estimator-disagreement-brief.md`'s tolerances).
-4. **Case-level weights.**
-   - *Build:* weights constant within each case keep the Kronecker form; per-location weights stay refused.
-   - *Gate:* for case precision weights, whiten with L = diag(w)^{−½} ⊗ L_R and preserve the selected prior Gram in the reference. Decision 2 sets how the weights enter the prior for each supported weight meaning.
+4. **Precision weights across cases and locations.**
+   - Use the shared output contractions for case weights and for a shared location profile. For arbitrary case-specific profiles, accumulate the Gram, cross-products, residual energy and intercept terms by case using Bᵢ. The log determinant contributed to the untempered log likelihood is ½[n·ln|Q| + Σᵢⱼ ln wᵢⱼ].
+   - Independently whiten each case's response and design by L_R⁻¹Dᵢ^{½}, where R = L_R L_Rᵀ. Check the contractions, intercept and log marginal with the same selected coefficient prior. Exercise all three patterns with a nondiagonal R, both prior-Gram options and a genuinely nonseparable weight array.
+   - Supply the same weights in factored and expanded form and check agreement to rounding. All-one weights must recover the unweighted-Q fit. At Q = I preserve the existing weighted behavior.
 5. **The readers downstream.**
-   - *Build:* `BassPointwise`'s block density under σ²R; predictive noise σ·L_R·z; F11 on whitened and raw residuals (decision 6); the emulator's σ²_e·R for calibration (primitive 2); B1's table as an `IInnerProduct` (decision 7).
+   - *Build:* `BassPointwise`'s block density under σ²R and predictive noise σ·L_R·z at unit precision. For a case with declared precisions use covariance σ²Dᵢ⁻¹ᐟ² R Dᵢ⁻¹ᐟ² and apply the same scaling to its noise draw. For F11 use the corresponding whitener alongside the raw residuals (decision 6). The slice also covers the emulator's σ²_e·R for calibration (primitive 2) and B1's table as an `IInnerProduct` (decision 7).
    - *Gate:*
      - a fit to data simulated with residual covariance σ²(I ⊗ R) covers at 90% where the Q = I fit under-covers;
      - the whitened F11 reads about −1/m;
@@ -132,7 +134,6 @@ Each ends at a gate. The [common gates](#gates-common-to-every-slice) apply to a
 ## Not in this brief
 
 - Sampling R's parameters.
-- Q with per-location weights.
 - Q with several outputs (E34).
 - The PCA mode, whose truncation residual already keeps the within-output dependence (D07).
 - Primitive 1's residual-set emulator, which needs only `TruncationResiduals()` for direct fits. It is a separate, smaller change.

@@ -162,7 +162,7 @@ Stated for any application. The order follows the pilot's main finding: generato
 
 | Piece | Why | Specification or evidence | State |
 |---|---|---|---|
-| The output inner product Q in BASS's core | Residuals correlated along the output index are counted as independent today | S4, the Khatri–Rao Gram, the level under Q; the Li₂ table needs no data | Five implementation slices are proposed. The user selected configurable whitened and ordinary coefficient-prior Grams. [Q extension decisions](../../bass/output-inner-product-brief.md#decisions) |
+| The output inner product Q in BASS's core | Residuals correlated along the output index are counted as independent today | S4, the Khatri–Rao Gram, the level under Q; the Li₂ table needs no data | Five implementation slices are proposed. Both prior Grams and all three precision-weight patterns are in scope, including a different location profile for each case. [Q extension decisions](../../bass/output-inner-product-brief.md#decisions) |
 | An emulator's error covariance across outputs, from held-out residual vectors | A functional emulator's residuals read lag-1 r of 0.70–0.83 while its draws carry σ²·I | The pilot's Stage 1 | Proposed |
 | A noise law for log power | Its noise is skewed with known shape; the Gaussian core is biased on it | The dilogarithm results; the Whittle model exists in BARS only | Not posed |
 
@@ -215,7 +215,7 @@ For permanent charts, the Viz v2 plan assigns producer-specific translation to `
 
 - Does the oscillatory term family earn its own brief?
 - Does the mass gate give way to "one site per support, in order", or stay as a declared prior beside it?
-- For the Q extension, decisions 2–7 and the default prior Gram for a newly declared nonidentity Q remain open. [Decision brief](../../bass/output-inner-product-brief.md#decisions)
+- For the Q extension, decisions 3–7 and the default prior Gram for a newly declared nonidentity Q remain open. [Decision brief](../../bass/output-inner-product-brief.md#decisions)
 - Promotion of the noise-law modules; the first nine are promoted.
 - Which reading leads, fitting the spectrogram's surface or fitting the waveform with atoms? For a linear transform with full column rank, Gram whitening preserves the waveform's squared residual norm. A fit to magnitudes or log powers still has its own observation model.
 - Two source notes from the numerical chip: a suspected misprint at the opening of Schumaker § 4.8, unverified, and a conversion defect at Lemma 10.16.
