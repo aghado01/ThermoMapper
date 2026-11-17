@@ -1,6 +1,6 @@
 # Generative-prior probes: the numerical chip's third brief
 
-Date: 2026-11-16. Status: **posed at the user's request on 2026-11-16** ("Yes, pose both", to Lean and numerical briefs on the compressed-sensing results). Drafted by the coordinating session. Its sibling is the Lean chip's [generative-prior statements brief](generative-prior-statements-brief.md). The direction it serves is in the [approach brief](approach-brief.md#the-compressed-sensing-guarantees-used-by-analogy-not-yet-tested).
+Date: 2026-11-16. Status: **G1–G5 complete at the registered finite scope**; k = 16 calibration was conditionally skipped by its original gate. Originally posed at the user's request on 2026-11-16 ("Yes, pose both", to Lean and numerical briefs on the compressed-sensing results). Drafted by the coordinating session. Its sibling is the Lean chip's [generative-prior statements brief](generative-prior-statements-brief.md). The direction it serves is in the [approach brief](approach-brief.md#the-compressed-sensing-guarantees-used-by-analogy-not-yet-tested).
 
 ## Why
 
@@ -290,7 +290,7 @@ The paired fixed-k experiment supports the named increase in recovery from m = 8
 
 ## Remaining numerical work — active sequence
 
-Continue G1, then G3, G4, G2 and G5. Each block receives committed settings and criteria before readings. Source inspection, implementation controls, finite-sample findings and engine gaps are recorded in this brief. The six Lean witnesses are mathematical controls under their stated hypotheses.
+The completed execution sequence was G1, then G3, G4, G2 and G5. Each block received committed settings and criteria before readings. Source inspection, implementation controls, finite-sample findings and engine gaps are recorded in this brief. The six Lean witnesses are mathematical controls under their stated hypotheses.
 
 ## G1 report — depth and magnitude extensions
 
@@ -533,6 +533,51 @@ The stored RMSEs are rounded to four decimal places. Retain lower and upper squa
 
 S21 gives a fixed rank-k projector's expected k/n energy fraction under isotropic noise in the same coordinates. Here noise was added to the waveform and reconstruction is scored in nonlinear log-power coordinates, with a fitted variance and a finite posterior approximation. Interpret a measured trend in those coordinates, retaining that distinction from the projection identity. A data-shape, stream or arithmetic-control failure triggers same-input diagnosis and replay. Preserve all gates and original rows, and report rounding sensitivity or missing receipts rather than generating replacement data.
 
+### G5 readings and decision
+
+G5 is complete using the original seven input files only. Data-shape gates passed for 1,800 stage-1 and 160 stage-2 rows, with no duplicate paired keys and no zero rounded RMSEs. Integer controls matched ten seed children, ten 64-bit outputs and ten bounded integers for each of three positive/negative seed cases against the isolated C# assembly. An analytic response with known slopes 1.25 and 0.75 reproduced both within 5 × 10⁻¹⁶, and the single-noise control correctly left its noise slope unidentified. A pinned portable-row replay reproduced every stage result and every portable CSV byte. [Full cells and source-file hashes](../../receipts/generative-prior/results/g5-noise/summary.json) · [Arithmetic/stream verification](../../receipts/generative-prior/results/g5-noise/stream-verification.json) · [Independent cell and replay audit](../../receipts/generative-prior/results/g5-noise/audit.json)
+
+| Saved cohort | Rows / wholly converged rows | Waveform noise variances | m/k values | log(k/m) slope, bootstrap 95% interval | log noise-variance slope, bootstrap 95% interval |
+| --- | --- | --- | --- | --- | --- |
+| Stage 1, k = 1..5 | 1,800 / 936 (52%) | 10⁻⁶, 10⁻⁵, 10⁻⁴ | 1,2,4,8 | 2.54197 [2.39159, 2.68489] | 0.45027 [0.41519, 0.48345] |
+| Stage 2, k = 2,3 | 160 / 12 (7.5%) | 10⁻³ | 2,4,8,16 | 1.65977 [1.25489, 2.05488] | unidentified |
+
+Both log(k/m) intervals have positive lower bounds, meeting the registered descriptive trend criterion. Neither interval includes one, so a proportional k/m shape is outside these fitted intervals. Stage 1 also has a positive fitted noise-variance slope. The model contains one intercept per k and common slopes, with no interaction terms. These are readings of finite stored reconstructions under that specification and bootstrap design, conditional on its repetition clusters.
+
+The stage-1 converged-only point slopes were 2.60991 for log(k/m) and 0.43415 for noise variance, retaining the same trend direction. The 12 converged stage-2 rows all have m/k = 2, so its converged-only ratio slope is unidentified after the k intercepts. Stage 2's primary trend therefore remains a diagnostic reading dominated by unconverged saved inversions. The analysis generated no replacements for them and supplies no additional qualification of those posteriors.
+
+| Example cell: k = 3 | Waveform variance | m/k | Median squared held-back log-power RMSE |
+| --- | ---: | ---: | ---: |
+| Stage 1 | 10⁻⁵ | 1 | 0.17413153 |
+| Stage 1 | 10⁻⁵ | 2 | 0.03542068 |
+| Stage 1 | 10⁻⁵ | 4 | 0.00561065 |
+| Stage 1 | 10⁻⁵ | 8 | 0.00085328 |
+| Stage 2 | 10⁻³ | 2 | 3.49145992 |
+| Stage 2 | 10⁻³ | 4 | 2.64490346 |
+| Stage 2 | 10⁻³ | 8 | 0.48613730 |
+| Stage 2 | 10⁻³ | 16 | 0.36088969 |
+
+All 68 cells retain quartiles, convergence counts and lower/upper rounded-error median bounds. Point fits at the two rounding bounds moved the stage-1 ratio slope over 2.53877–2.54521 and the noise slope over 0.44945–0.45111; the stage-2 ratio slope moved over 1.65946–1.66007. These two simultaneous bound fits are sensitivity checks, with no claim that they bound every possible coefficient over independently rounded rows. No censoring rule was activated because no selected RMSE rounded to zero.
+
+S21 concerns a fixed orthogonal projector and isotropic noise in those same coordinates. The saved pilot adds waveform noise, observes a nonlinear log power with a floor, fits a noise variance and approximates a posterior, then scores clean held-back log powers. Its fitted exponents provide evidence of decreasing prediction error with more measurements in these cohorts. They do not verify S21's k/n identity, a benign generator landscape or an asymptotic noise-reduction rate.
+
+### G5 pins, replay and doc changes owed
+
+Protocol/settings `9512c90`, input-shape controls `711d34b`, source-hash field `1f5fc7d`, stream controls `ef1b489` and analytic slope control `db5e882`. Numerical source/settings pin: `1667f0b`. Primary settings SHA-256 `6ff30860d58acf3f11ccd85e45ad574dada3b0768e989c6553ded39d356288e6`; analysis-source SHA-256 `9b9c7d78fc364ca29b253b908715e977a6a97974590afa9f1cbd749560d06502`; portable CSV SHA-256 `21f0dfc25eafe72cf151ad4128afe95e17ffcde9ca316c6a7bee05035d58d05f`. All three hashes also matched the replay. Actual outputs are `artifacts/generative-prior/g5-noise-primary/results/` and `g5-noise-replay/results/`; stream controls are in `g5-noise-controls/`. [Primary verification](../../receipts/generative-prior/results/g5-noise/verification.json) · [Replay verification](../../receipts/generative-prior/results/g5-noise/replay/verification.json)
+
+The initial bootstrap launch did not explicitly verify its process priority. The pinned replay used one worker and verified inherited BelowNormal priority inside Python before analysis; its complete numerical agreement is recorded. This was an execution-control correction, with no data, gate or statistical setting changed.
+
+```powershell
+./issues/regression/receipts/generative-prior/verify-noise-streams.ps1 -RngAssembly artifacts/generative-prior/g2-calibration-primary/build/bin/GenerativePriorLab/Release/net10.0/Maths.Rng.dll -Python ./artifacts/evidence-contrasts/venv/Scripts/python.exe -Output artifacts/generative-prior/g5-stream-review
+./issues/regression/receipts/generative-prior/noise-replay.ps1 -Revision 1667f0b -RunName g5-review -Python ./artifacts/evidence-contrasts/venv/Scripts/python.exe -Rows issues/regression/receipts/generative-prior/results/g5-noise/oracle-rows.csv
+```
+
+Doc changes owed: describe the coordinate-specific trend and its non-unit fitted slopes, rounding sensitivity, the stage-1 converged-only point check and the unidentified stage-2 sensitivity. Keep the distinction from fixed-projector noise energy explicit. No new inversion or primitive implementation was needed for G5.
+
+## Completion and remaining limits
+
+All five probes have their declared decisions, raw/compact receipts, source pins and controls above. No required numerical block remains open. The conditional k = 16 expansion was skipped as specified. The negative stationary neighbourhood was not observed as an optimizer destination, and no ordinary-chain impostor trap was established. Finite pair searches leave uniform WDC/RRIC qualification open; sampler frontiers and coverage remain budget/model-specific; G5's stage-2 convergence limitation remains unresolved by its saved data. The proposed derivative seam is future work requiring its own qualification. Production `src/`, `tests/` and `docs/` were not edited. The Exposition below supplies self-contained segments for later document work.
+
 ## Exposition
 
 In noiseless recovery through a bias-free Gaussian ReLU generator of widths 10 → 250 → 600, 150 Gaussian measurements sufficed to recover the generating code in all 30 independent repetitions of the signed descent experiment. At each iteration the method evaluated the quadratic measurement loss at both signs and took a unit gradient step from the lower-loss sign. Seventeen starts changed sign, all on the first comparison. No selected iterate had an exactly zero layer preactivation, so the practical gradient agreed with the paper's subgradient algorithm throughout these runs.
@@ -558,3 +603,5 @@ Structured audio measurements showed a separate row-space effect. At 240 real ro
 The exact Gaussian generator also served the existing Bayesian calibration contract. For k = 2,4,8, six problems at each m/k = 2,4,8 shared Gaussian measurement/noise prefixes and used a uniform code prior on [−3,3]ᵏ, an inferred scalar noise variance and no emulator uncertainty or discrepancy. At ratios 4 and 8, three independently seeded 256-particle SMC populations passed the registered mean-error and between-population diagnostic gates through k = 8. Tempered chains passed at k = 2; ordinary nested chains failed their convergence gates already there. All methods' medians could be close to truth while their diagnostic verdicts differed. These outcomes describe fixed computational budgets and this model, with no universal sampler dimension limit or coverage guarantee.
 
 The low-dimensional independent grid agreed with every sampler's mean within 0.00613 physical units. Nevertheless its ordinary nested run failed convergence, illustrating why agreement of one posterior functional does not certify the entire retained sample. The largest recorded mass near the declared negative neighbourhood was 0.004 in one tempered k = 2, ratio-2 run, with 0.00141 for SMC on the same problem. No ordinary nested run recorded mass there. These data support no attribution of chain failure to trapping at the predicted impostor. At retained diagnostic states, clean and noisy loss gradients usually pointed toward truth; the measured alignment motivates qualification of a general derivative-aware proposal seam, whose actual sampling benefit remains untested.
+
+Saved resonance-pilot reconstructions showed decreasing clean held-back log-power error as measurement count grew. A log-squared-error model with one intercept per code dimension gave log(k/m) slopes 2.54197 [2.39159, 2.68489] in the first cohort and 1.65977 [1.25489, 2.05488] in the second, using 2,000 whole-repetition cluster bootstrap resamples. Both intervals excluded zero and one. The first cohort's converged-only point slope was 2.60991; the second had only 12 wholly converged rows, all at one ratio, leaving that sensitivity unidentified. The trend concerns nonlinear log-power prediction under the saved finite inversions. It supplies no verification of the k/n noise-energy identity for a fixed projector in isotropic-noise coordinates.

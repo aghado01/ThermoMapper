@@ -1,0 +1,6 @@
+{
+  "workers": 1,
+  "rows": "D:\\aghado01\\ThermoMapper\\artifacts\\generative-prior\\g5-noise-primary\\results\\oracle-rows.csv",
+  "revision": "1667f0b54649d9ffef8db5502702db50fcc7ac18",
+  "priority": "BelowNormal, checked inside Python"
+}

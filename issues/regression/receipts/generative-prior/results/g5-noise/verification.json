@@ -1,0 +1,39 @@
+{
+  "files": [
+    {
+      "actual": "artifacts/generative-prior/g5-noise-primary/results/oracle-rows.csv",
+      "bytes": 210233,
+      "sha256": "21f0dfc25eafe72cf151ad4128afe95e17ffcde9ca316c6a7bee05035d58d05f",
+      "receipt": "issues/regression/receipts/generative-prior/results/g5-noise/oracle-rows.csv",
+      "receipt_sha256_lf": "795474381e095453f55973e5e8b717d862f696c3fbee10d80fd4f1ba09230900"
+    },
+    {
+      "actual": "artifacts/generative-prior/g5-noise-primary/results/stream-reference.json",
+      "bytes": 2649,
+      "sha256": "a304daf7bba205e84d68d19c18bca450feb1718710b4581d994760ffb2fe7f45",
+      "receipt": "issues/regression/receipts/generative-prior/results/g5-noise/stream-reference.json",
+      "receipt_sha256_lf": "8018a954a77a44dac9396ad28572927557769c48e1a55ba9d2b7460a5b540c3a"
+    },
+    {
+      "actual": "artifacts/generative-prior/g5-noise-primary/results/stream-verification.json",
+      "bytes": 469,
+      "sha256": "412f16ced50f8b175780636d4f59a72052ea8be6fe0cae8e04b1a6fe4db85e7c",
+      "receipt": "issues/regression/receipts/generative-prior/results/g5-noise/stream-verification.json",
+      "receipt_sha256_lf": "ced2206313bc6a412a36030f1629356dcf69709c2d267319a3a3a832796d8943"
+    },
+    {
+      "actual": "artifacts/generative-prior/g5-noise-primary/results/summary.json",
+      "bytes": 30971,
+      "sha256": "95cf4467042ff34e7db456f464be954ceb722ea952fde9911d6ce76fbc73e96f",
+      "receipt": "issues/regression/receipts/generative-prior/results/g5-noise/summary.json",
+      "receipt_sha256_lf": "423fc8fe42729010a655e3897d5cbe4105d3b4f3b5e21a2237e2e94b953eeca2"
+    },
+    {
+      "actual": "artifacts/generative-prior/g5-noise-primary/analysis/audit.json",
+      "receipt": "issues/regression/receipts/generative-prior/results/g5-noise/audit.json",
+      "bytes": 1130,
+      "sha256": "815bb18cc9220732e0a385fd17fdf6b234be21aee7836e162fbda1216e0e40da",
+      "receipt_sha256_lf": "8abebc43dee16d956daccf31e8379eaab2073d9db8e9a172bd424534f24dcd2d"
+    }
+  ]
+}

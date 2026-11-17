@@ -1,6 +1,6 @@
 param(
     [Parameter(Mandatory)][string]$Revision,
-    [Parameter(Mandatory)][string]$RunName,
+    [Parameter(Mandatory)][ValidatePattern('^[a-zA-Z0-9_-]+$')][string]$RunName,
     [Parameter(Mandatory)][string]$Python,
     [Parameter(Mandatory)][string]$Rows
 )

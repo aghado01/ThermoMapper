@@ -1,0 +1,25 @@
+{
+  "files": [
+    {
+      "actual": "artifacts/generative-prior/g5-noise-replay/results/execution.json",
+      "bytes": 248,
+      "sha256": "cf8306f61efa642c6753cdef930200c3b5f10691ac2786e9d9058b7f52a38474",
+      "receipt": "issues/regression/receipts/generative-prior/results/g5-noise/replay/execution.json",
+      "receipt_sha256_lf": "afc5360682b8895313013b79585f25d507362b606e8bb747eec7543a2c9a7dc4"
+    },
+    {
+      "actual": "artifacts/generative-prior/g5-noise-replay/results/oracle-rows.csv",
+      "bytes": 210233,
+      "sha256": "21f0dfc25eafe72cf151ad4128afe95e17ffcde9ca316c6a7bee05035d58d05f",
+      "receipt": "issues/regression/receipts/generative-prior/results/g5-noise/replay/oracle-rows.csv",
+      "receipt_sha256_lf": "795474381e095453f55973e5e8b717d862f696c3fbee10d80fd4f1ba09230900"
+    },
+    {
+      "actual": "artifacts/generative-prior/g5-noise-replay/results/summary.json",
+      "bytes": 29743,
+      "sha256": "73b4b36d5508ba3bef91daacf6ba7a3b69059df8975b4078df2f0fa63ec04589",
+      "receipt": "issues/regression/receipts/generative-prior/results/g5-noise/replay/summary.json",
+      "receipt_sha256_lf": "59be77c71377f957b958dd79bd5216603f29b49dee3bd72c504214bf96b5f8dc"
+    }
+  ]
+}

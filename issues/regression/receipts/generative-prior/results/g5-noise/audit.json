@@ -1,0 +1,47 @@
+{
+  "passed": true,
+  "exact_stage_payload_replay": true,
+  "exact_portable_rows_replay": true,
+  "portable_sha256": "21f0dfc25eafe72cf151ad4128afe95e17ffcde9ca316c6a7bee05035d58d05f",
+  "clusters_per_stage_k": [
+    {
+      "stage": "s1",
+      "k": 1,
+      "clusters": 30
+    },
+    {
+      "stage": "s1",
+      "k": 2,
+      "clusters": 30
+    },
+    {
+      "stage": "s1",
+      "k": 3,
+      "clusters": 30
+    },
+    {
+      "stage": "s1",
+      "k": 4,
+      "clusters": 30
+    },
+    {
+      "stage": "s1",
+      "k": 5,
+      "clusters": 30
+    },
+    {
+      "stage": "s2",
+      "k": 2,
+      "clusters": 20
+    },
+    {
+      "stage": "s2",
+      "k": 3,
+      "clusters": 20
+    }
+  ],
+  "primary_settings_sha256": "6ff30860d58acf3f11ccd85e45ad574dada3b0768e989c6553ded39d356288e6",
+  "replay_settings_sha256": "6ff30860d58acf3f11ccd85e45ad574dada3b0768e989c6553ded39d356288e6",
+  "primary_source_sha256": "9b9c7d78fc364ca29b253b908715e977a6a97974590afa9f1cbd749560d06502",
+  "replay_source_sha256": "9b9c7d78fc364ca29b253b908715e977a6a97974590afa9f1cbd749560d06502"
+}

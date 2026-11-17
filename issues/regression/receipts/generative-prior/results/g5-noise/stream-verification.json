@@ -1,0 +1,16 @@
+{
+  "passed": true,
+  "cases": 3,
+  "reference": "artifacts\\generative-prior\\g5-noise-controls\\csharp-reference.json",
+  "known_regression_slopes": {
+    "ratio_slope": 1.2499999999999996,
+    "noise_slope": 0.7500000000000003,
+    "rows": 36
+  },
+  "single_noise_control": {
+    "ratio_slope": 1.2500000000000002,
+    "noise_slope": null,
+    "rows": 12
+  },
+  "assembly_sha256": "457b8c6be57fcb6051cdea42e6fbdd01cfe829c238f081914477a5a5dde15cae"
+}
