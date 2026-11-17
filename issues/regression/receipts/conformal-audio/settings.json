@@ -1,0 +1,16 @@
+{
+  "MasterSeed": 181204190,
+  "Alpha": 0.05,
+  "FourierTolerance": 1e-10,
+  "Audio": { "TrainingGroups": 160, "CalibrationGroups": 99, "TestGroups": 100,
+    "Splits": 20, "Frame": 1024, "Rate": 8000, "ShortWindow": 64, "Hop": 32,
+    "LongWindow": 256, "Floor": 0.0001, "Gaps": [64,192,384], "Lengths": [1,4,12],
+    "NoiseSd": [0.005,0.025], "ShortHz": [0,500,1500], "LongHz": [125,375,875],
+    "TargetHz": [0,187.5,437.5,937.5], "Chains": 2, "BurnIn": 300, "Samples": 300,
+    "Thin": 2, "MaxBasis": 20, "MaxInteraction": 2, "PredictionDraws": 64 },
+  "Transport": { "Groups": 99, "Alpha": 0.1 },
+  "Risk": { "Splits": 200, "CalibrationGroups": 99, "TestGroups": 500, "Alpha": 0.1,
+    "Delays": [0,0.1,0.2,0.4,0.8] },
+  "Alarm": { "Streams": 5000, "ChangeStreams": 2000, "Horizon": 200,
+    "ChangeAt": 101, "ChangedNoiseSd": 3, "PowerEpsilon": 0.5, "Threshold": 20 }
+}
