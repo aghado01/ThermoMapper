@@ -1,6 +1,6 @@
 # Deep Teaching principles for an unsupervised audio model
 
-Date: 2026-11-17. Status: **research proposal**. This brief records the research direction and candidate mathematical questions; it commissions no implementation, probes, or Lean slices. The proposed results below have not been proved. Their novelty relative to the wider literature remains to be assessed.
+Date: 2026-11-17. Status: **questions 1 and 2 commissioned for Lean investigation**. The research direction and later questions remain proposals. Historical novelty remains unassessed.
 
 ## Purpose
 
@@ -171,6 +171,10 @@ For each later slice brief, require a concrete source class, actual observation 
 Use the [Lean harness conventions](../../../../lean/README.md), scoped imports and the existing modules. Record hypotheses remaining as premises, declaration paths, axiom checks, and build results in the owning slice's report. Distinguish established literature, project-proved statements, candidate extensions and empirical assumptions. A formal proof establishes the stated result, not its historical novelty or its empirical applicability to speech.
 
 Generator selection and engine implementation follow the resulting contracts. Borrowing a voice-network architecture and borrowing pretrained weights are different research choices; the latter must account for any transcript or other annotation supervision used in pretraining. Synthetic labels are exact relative to the chosen generator, while their relevance to real audio remains a model-validation question.
+
+## Commissioning record
+
+On 2026-11-17 the user authorized this Lean session to begin [depth-four measurement completion](deep-teaching/01-depth-four-completion-brief.md), followed by [predictive ambiguity and its repair](deep-teaching/02-predictive-ambiguity-brief.md). The owning slice briefs carry proof obligations and verification reports. Questions 3–5 will receive concrete statements informed by those results.
 
 ## Preparation record
 
