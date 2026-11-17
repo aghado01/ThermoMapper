@@ -1,0 +1,19 @@
+{
+  "Solver": {
+    "CodeDimension": 10, "HiddenWidth": 250, "OutputWidth": 600, "Measurements": 150,
+    "Repetitions": 30, "MasterSeed": 181204176, "Step": 1,
+    "GradientTolerance": 2.220446049250313e-16, "MaxUpdates": 50000,
+    "SuccessTolerance": 0.001, "ReferenceTolerance": 1e-10,
+    "SignCheck": true, "FastForward": true, "RequireAllRecovered": false
+  },
+  "ExtendedCells": [
+    { "Name": "bridge-k10", "K": 10, "MasterSeed": 181204176, "Depth": 2, "Magnitude": false, "Paired": false, "Bridge": true },
+    { "Name": "d2-mag-k10", "K": 10, "MasterSeed": 181204176, "Depth": 2, "Magnitude": true, "Paired": true },
+    { "Name": "d2-mag-k80", "K": 80, "MasterSeed": 1600914390, "Depth": 2, "Magnitude": true, "Paired": true },
+    { "Name": "d2-mag-k100", "K": 100, "MasterSeed": 1869502956, "Depth": 2, "Magnitude": true, "Paired": true },
+    { "Name": "d3-linear-k10", "K": 10, "MasterSeed": 181204176, "Depth": 3, "Magnitude": false, "Paired": true },
+    { "Name": "d3-linear-k80", "K": 80, "MasterSeed": 1600914390, "Depth": 3, "Magnitude": false, "Paired": true },
+    { "Name": "d3-mag-k10", "K": 10, "MasterSeed": 181204176, "Depth": 3, "Magnitude": true, "Paired": true },
+    { "Name": "d3-mag-k80", "K": 80, "MasterSeed": 1600914390, "Depth": 3, "Magnitude": true, "Paired": true }
+  ]
+}

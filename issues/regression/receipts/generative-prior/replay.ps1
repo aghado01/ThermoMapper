@@ -2,7 +2,7 @@
 param(
     [Parameter(Mandatory)][string]$Revision,
     [Parameter(Mandatory)][ValidatePattern('^[a-zA-Z0-9_-]+$')][string]$RunName,
-    [ValidateSet('checkpoint','linear','measurements')][string]$Experiment = 'checkpoint',
+    [ValidateSet('checkpoint','linear','measurements','extensions')][string]$Experiment = 'checkpoint',
     [string]$Cells = 'all',
     [string]$TrialIndices = 'all',
     [switch]$FullIterations
@@ -32,9 +32,13 @@ $env:DOTNET_CLI_TELEMETRY_OPTOUT = '1'
 $probe = Join-Path $source $receipts
 dotnet build (Join-Path $probe 'probe/GenerativePrior.csproj') -c Release "-p:ArtifactsRoot=$build/" --disable-build-servers -m:1 -p:UseSharedCompilation=false
 $assembly = Join-Path $build 'bin/GenerativePrior/Release/net10.0/GenerativePrior.dll'
-if ($Experiment -in @('linear','measurements')) {
+if ($Experiment -in @('linear','measurements','extensions')) {
     $mode = if ($FullIterations) { 'full' } else { 'accelerated' }
-    $settingsFile = if ($Experiment -eq 'linear') { 'g1-linear-curve.json' } else { 'g1-measurements.json' }
+    $settingsFile = switch ($Experiment) {
+        linear { 'g1-linear-curve.json' }
+        measurements { 'g1-measurements.json' }
+        extensions { 'g1-extensions.json' }
+    }
     dotnet $assembly (Join-Path $probe "settings/$settingsFile") $results $pin $Cells $TrialIndices $mode
 } else {
     dotnet $assembly (Join-Path $probe 'settings/g1-k10.json') $results $pin

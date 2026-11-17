@@ -21,8 +21,10 @@ internal static class Reference
                                double[]? gradient = null)
     {
         double[] h = Apply(net.W1, code).Select(v => Math.Max(0, v)).ToArray();
-        double[] g = Apply(net.W2, h).Select(v => Math.Max(0, v)).ToArray();
-        double[] r = Apply(net.A, g).Zip(y, (a, b) => a - b).ToArray();
+        double[] middle = Apply(net.W2, h).Select(v => Math.Max(0, v)).ToArray();
+        double[] g = net.W3 is null ? middle : Apply(net.W3, middle).Select(v => Math.Max(0, v)).ToArray();
+        double[] prediction = Apply(net.A, g);
+        double[] r = prediction.Zip(y, (a, b) => (net.Magnitude ? Math.Abs(a) : a) - b).ToArray();
         double discrepancy = Discrepancy(objective, 0.5 * Dot(r, r));
         if (gradient is null) return discrepancy;
 
@@ -30,9 +32,15 @@ internal static class Reference
         {
             double[] dh = net.W1.Rows.Select((row, i) => h[i] > 0 ? row[j] : 0).ToArray();
             double[] dg = Apply(net.W2, dh);
+            for (int i = 0; i < middle.Length; i++)
+                if (middle[i] == 0) dg[i] = 0;
+            if (net.W3 is not null) dg = Apply(net.W3, dg);
             for (int i = 0; i < g.Length; i++)
                 if (g[i] == 0) dg[i] = 0;
-            double component = Dot(r, Apply(net.A, dg));
+            double[] derivative = Apply(net.A, dg);
+            if (net.Magnitude)
+                for (int i = 0; i < derivative.Length; i++) derivative[i] *= Math.Sign(prediction[i]);
+            double component = Dot(r, derivative);
             discrepancy = Math.Max(discrepancy, Discrepancy(gradient[j], component));
         }
         return discrepancy;

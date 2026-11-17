@@ -35,7 +35,7 @@ def close(actual, expected):
     assert abs(actual - expected) <= 2e-12 * max(1, abs(expected)), (actual, expected)
 
 
-def validate(row, sign):
+def validate(row, sign, rho=1 / math.pi):
     truth, estimate = row["Truth"], row["Estimate"]
     truth_norm, estimate_norm = math.hypot(*truth), math.hypot(*estimate)
     error = math.dist(truth, estimate) / truth_norm
@@ -44,14 +44,14 @@ def validate(row, sign):
     cosine = max(-1, min(1, product / (truth_norm * estimate_norm))) if estimate_norm else 0
     angle = math.degrees(math.acos(-cosine)) if estimate_norm else None
     orientation = angle is not None and angle <= 20
-    radius_match = abs(radius - 1 / math.pi) <= 1 / (4 * math.pi)
+    radius_match = abs(radius - rho) <= rho / 4
     classification = "recovered" if error < 0.001 else (
         "negative-neighbourhood" if orientation and radius_match else "elsewhere"
     )
     for key, value in {
         "RelativeCodeError": error, "RadiusRatio": radius, "CosineToTruth": cosine,
         "AxialProjection": product / (truth_norm * truth_norm),
-        "PopulationRadiusDeviation": radius - 1 / math.pi,
+        "PopulationRadiusDeviation": radius - rho,
     }.items():
         close(row[key], value)
     # acos near its endpoints is sensitive to a final-bit cosine difference.
