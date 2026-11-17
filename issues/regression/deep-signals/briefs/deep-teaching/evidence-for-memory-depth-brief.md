@@ -1,6 +1,6 @@
 # How much evidence supports memory at depth d?
 
-Research brief, 2026-11-17. **Commissioned Lean investigation; section 1 in progress.** For a given observation design, how many independent records, spanning how many events, suffice to detect a dependence at lag \(d\), recover the minimal context tree, or predict the next event to a specified tolerance? The design decision for audio is whether to spend a recording budget on longer spans, different windows, or retaining the pairing between measurements.
+Research brief, 2026-11-17. **Commissioned Lean investigation; section 1 proved, section 2 in progress.** For a given observation design, how many independent records, spanning how many events, suffice to detect a dependence at lag \(d\), recover the minimal context tree, or predict the next event to a specified tolerance? The design decision for audio is whether to spend a recording budget on longer spans, different windows, or retaining the pairing between measurements.
 
 The depth-four work supplies one case where a measurement design can be studied exactly. This follow-up starts from the already proved collision at **every** \(d\ge4\). Its first two questions can proceed independently of the depth-four completion proof. [Population cutoff and witness](../context-tree-memory-identifiability-brief.md#verified-result--2026-11-16) · [Depth-four measurement design](01-depth-four-completion-brief.md) · [Predictive ambiguity](02-predictive-ambiguity-brief.md)
 
@@ -54,12 +54,47 @@ Kontoyiannis gives bounds on predictive likelihood and posterior consistency for
 
 For each completed question, record the experiment, source class, estimator or test, error event, and a sufficient or necessary observation budget with its units. Link declarations and report module builds and axiom checks under the [Lean harness conventions](../../../../../lean/README.md). The formulas above are proposed proof targets. The first deliverable is the finite-sample upper and lower bound instantiated on the physical all-depth collision and its distinguishing measurement.
 
-## Commissioning and in-progress record — 2026-11-17
+## Commissioning and sequence — 2026-11-17
 
-The user, through the research coordinator, commissioned this as the next Lean assignment after depth-four completion and predictive ambiguity. Work begins with section 1, then the paired-observation and supported-depth questions. No depth-evidence theorem is yet reported as verified.
+The user, through the research coordinator, commissioned section 1, then the paired-observation and supported-depth questions. After this brief's sequence, the user has queued [predictive information in audio](../predictive-information-in-audio-brief.md), starting with its one-bit obstruction and three-target joint-activity retention results.
 
-The first implementation will separate the finite observed likelihood experiment, the Bernoulli testing budgets, and the link to the existing physical collision. Rectangular observations are independent ancillary observations with the same law under both hypotheses. A fixed count of independently sampled taper bits has probability (1+a)/8 under the alternative and 1/8 under the fair source. Randomized decisions must be included in the lower bound, or any restriction to deterministic tests must be explicit.
+## Section 1 result — 2026-11-17
 
-Mathlib supplies bounded-variable Hoeffding through `ProbabilityTheory.hasSubgaussianMGF_of_mem_Icc` and `ProbabilityTheory.HasSubgaussianMGF.measure_sum_ge_le_of_iIndepFun`. The lower bound will require proved finite data processing and the binary decision divergence bound, not an assumed information inequality. The logarithm inequality log x ≤ x−1 gives the proposed per-bit upper bound a²/7. A candidate integer sufficiency statement uses ceil(128 a⁻² log(1/δ)); necessity uses ceil(7 kl(1−δ,δ)/a²).
+**Proved finite-experiment bounds.** Fix depth d=m+4, known strength 0<a<1/2, and error target 0<δ<1/2. Draw each recorded view from a fresh stationary length-(d+1) block. Choose all rectangular widths and offsets in advance; retain the complete Fourier power vector within each rectangular view. In addition, record n independent bits indicating DC power 16 on taper sites {0,1,2,d}. No temporal overlap or data-adaptive view allocation is covered.
 
-Proofs, axiom checks, corrections, and sample units will be recorded below as each slice closes. Later sections remain unverified.
+For k successful taper bits, the likelihood ratio of the specified deep source against the fair source is
+
+\[
+ (1+a)^k(1-a/7)^{n-k}.
+\]
+
+The independently recorded rectangular vectors have a common joint law under both hypotheses and cancel from the likelihood ratio. With n=0, that ratio is one on the common support; no test has both error probabilities below 1/2. Expected log evidence under the alternative is n kl((1+a)/8,1/8) nats, or this quantity divided by ln 2 in bits. For positive prior weights u,v on these two sources, posterior odds are (u/v) times the realized ratio.
+
+| Guarantee | Number n of retained taper bits |
+| --- | --- |
+| Necessary for any randomized test with both errors ≤δ | n ≥ ceil(7 kl(1−δ,δ)/a²) |
+| Sufficient for the midpoint count test | n ≥ ceil(128 ln(1/δ)/a²) |
+
+The midpoint test accepts the deep source when k≥n(2+a)/16. Each error is at most exp(−na²/128). Necessity uses proved finite data processing, including randomized decisions t(data)∈[0,1], and kl((1+a)/8,1/8)≤a²/7. Also kl(1−δ,δ)=(1−2δ)ln((1−δ)/δ)>0. Thus the bounds have the same small-δ order a⁻²log(1/δ); they are not an exact optimal constant.
+
+**Units and interpretation.** Each taper bit costs one independent block, four selected sites, and a span of d+1 ordered events. At fixed a, the bit budgets do not depend on d. Additional rectangular records cost blocks and measurements but carry no discrimination information for this pair. At fixed δ, the necessary bound diverges as a tends to zero, so exact-depth detection cannot have a uniform finite budget over arbitrarily weak members of this family. This is evidence between two known sources; it does not supply Bayesian marginal likelihoods for entire depth classes. The existing stationary finite-state construction supplies the block experiment; no infinite path-space measure or single-stream concentration claim is added.
+
+**Declarations.** All names are under `TimeFrequency.ContextTree.DepthEvidence`.
+
+- [MemoryDepthLikelihood.lean](../../../../../lean/Enthymemata/TimeFrequency/MemoryDepthLikelihood.lean): `taper_likelihood`, `zero_tapers`, `expected_log_evidence`, `expected_bits`, `posterior_odds`.
+- [MemoryDepthTesting.lean](../../../../../lean/Enthymemata/TimeFrequency/MemoryDepthTesting.lean): `binary_data_processing`, `testing_divergence`, `taper_divergence_upper`, `necessary_budget_rounded`, `decision_divergence_pos`.
+- [MemoryDepthUpper.lean](../../../../../lean/Enthymemata/TimeFrequency/MemoryDepthUpper.lean): finite-law/measure interface, `bit_upper_tail`, `bit_lower_tail`, `midpoint_errors`, `sufficient_budget_rounded`.
+- [MemoryDepthObservations.lean](../../../../../lean/Enthymemata/TimeFrequency/MemoryDepthObservations.lean): actual raw-record pushforwards `raw_taper_records`, `raw_rectangular_records`; retained-law equality `rectangular_experiment_eq`; `taper_sites_and_span`, `every_depth`.
+- [MemoryDepthEvidence.lean](../../../../../lean/Enthymemata/TimeFrequency/MemoryDepthEvidence.lean): `common_only_obstruction`, `physical_budgets`, instantiating both rounded budgets with the actual independent rectangular observations.
+
+**Verification.** All five modules compile in the aggregate. The 49 public `#print axioms` outputs contain only subsets of `[propext, Classical.choice, Quot.sound]`; the new modules have no proof holes or postulated axioms. They remain in Enthymemata pending semantic review and promotion. Full `lake build` passed (3804 jobs), using BelowNormal priority and `LEAN_NUM_THREADS=2`. The new modules emitted no warnings; existing unrelated notices remain. Taxonomy is checked with the next registered section-2 slice.
+
+## Section 2 in progress
+
+`MemoryDepthPaired.lean` has passed its native check: adjacent powers determine relative signs, path propagation reconstructs each ordered block up to global reversal, and an independent fair sign exactly lifts a sign-symmetric law. Eight public axiom listings use only standard axioms. It is not yet registered or committed.
+
+The estimator will use history and next-positive counts, returning 1/2 for an unseen history. Concentration work uses finite exponential moments to include unseen histories in the transition-error event and separately bound too few visits. The candidate bound remains 16/(π_min γ²) times ln(2^(d+1)/δ); this constant is **not yet qualified**. The final report will state how the proof relates to the brief's conditional-on-visit-count route. Whole-tree lower-bound tightness remains a separate construction question. Section 3 has not begun.
+
+## Doc changes owed
+
+After the evidence sequence closes, update the research overview with observation budgets, their sampling assumptions and units, and the distinction between pair discrimination, tree recovery, and prediction tolerance. No engine or documentation-site changes are included in this slice.
