@@ -176,6 +176,13 @@ def main():
         manifest = [{"portable_rows": str(args.rows), "sha256": hashlib.sha256(args.rows.read_bytes()).hexdigest()}]
     else:
         rows, manifest = read_originals(config, args.input_root)
+    keys = [(r["stage"], r["k"], r["rep"], r["noise"], r["ratio"]) for r in rows]
+    assert len(keys) == len(set(keys)), "Duplicate paired receipt rows."
+    for stage in config["stages"]:
+        assert sum(r["stage"] == stage["name"] for r in rows) == stage["expected_rows"], stage["name"]
+    for row in rows:
+        assert int(row["m"]) == int(row["k"]) * int(row["ratio"])
+        assert math.isfinite(float(row["rmse"])) and float(row["rmse"]) >= 0
     args.output.mkdir(parents=True, exist_ok=True)
     with (args.output / "oracle-rows.csv").open("w", newline="") as stream:
         writer = csv.DictWriter(stream, fieldnames=rows[0].keys())

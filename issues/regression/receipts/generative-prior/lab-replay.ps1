@@ -22,7 +22,14 @@ $env:DOTNET_PROCESSOR_COUNT = '1'
 $env:DOTNET_CLI_TELEMETRY_OPTOUT = '1'
 [Diagnostics.Process]::GetCurrentProcess().PriorityClass = 'BelowNormal'
 $probe = Join-Path $source $receipts
-dotnet build (Join-Path $probe 'lab/GenerativePriorLab.csproj') -c Release "-p:ArtifactsRoot=$build/" --disable-build-servers -m:1 -p:UseSharedCompilation=false
+$buildLog = Join-Path $run 'build.log'
+try {
+    dotnet build (Join-Path $probe 'lab/GenerativePriorLab.csproj') -c Release "-p:ArtifactsRoot=$build/" --disable-build-servers -m:1 -p:UseSharedCompilation=false *> $buildLog
+} catch {
+    Get-Content -LiteralPath $buildLog | Select-String 'error |Build FAILED'
+    throw
+}
+Get-Content -LiteralPath $buildLog | Select-String 'Build succeeded|Warning\(s\)|Error\(s\)'
 if ($BuildOnly) { return }
 $settingsName = switch ($Experiment) {
     g3 { 'g3-weights.json' }
@@ -30,4 +37,11 @@ $settingsName = switch ($Experiment) {
     g2 { 'g2-calibration.json' }
 }
 $settings = Join-Path $probe "settings/$settingsName"
-dotnet (Join-Path $build 'bin/GenerativePriorLab/Release/net10.0/GenerativePriorLab.dll') $Experiment $settings (Join-Path $run 'results') $pin
+$consoleLog = Join-Path $run 'console.log'
+try {
+    dotnet (Join-Path $build 'bin/GenerativePriorLab/Release/net10.0/GenerativePriorLab.dll') $Experiment $settings (Join-Path $run 'results') $pin *> $consoleLog
+} catch {
+    Get-Content -LiteralPath $consoleLog -Tail 12
+    throw
+}
+Write-Output "Completed $Experiment. Results at $run/results. Console log at $consoleLog"

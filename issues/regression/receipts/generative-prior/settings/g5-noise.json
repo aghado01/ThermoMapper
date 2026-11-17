@@ -3,14 +3,14 @@
   "bootstrap_repetitions": 2000,
   "rmse_quantum": 0.0001,
   "stages": [
-    { "name": "s1", "files": [
+    { "name": "s1", "expected_rows": 1800, "files": [
       "artifacts/latent-recovery/results/stage1/s1-k1-replicates.csv",
       "artifacts/latent-recovery/results/stage1/s1-k2-replicates.csv",
       "artifacts/latent-recovery/results/stage1/s1-k3-replicates.csv",
       "artifacts/latent-recovery/results/stage1/s1-k4-replicates.csv",
       "artifacts/latent-recovery/results/stage1/s1-k5-replicates.csv"
     ] },
-    { "name": "s2", "files": [
+    { "name": "s2", "expected_rows": 160, "files": [
       "artifacts/latent-recovery/results/stage2/s2-k2-replicates.csv",
       "artifacts/latent-recovery/results/stage2/s2-k3-replicates.csv"
     ] }
