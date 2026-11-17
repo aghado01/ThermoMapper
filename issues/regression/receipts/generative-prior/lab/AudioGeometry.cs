@@ -250,10 +250,11 @@ internal static class AudioGeometry
                     var fit = Fit(inner, original, rep == 0);
                     if (whiteningError > s.WhiteningTolerance || fit.CheckError > s.ScaleTolerance)
                         throw new ArithmeticException("Whitening/projector or scale control failed.");
-                    int rank = nonlinear ? Whiten(LogJacobian(map, secants[0].A, s.Floor), s).Rank : metadata.Rank;
+                    Whitening spectral = nonlinear ? Whiten(LogJacobian(map, secants[0].A, s.Floor), s) : metadata;
+                    int rank = spectral.Rank;
                     readings.Add(new(manifold, rep + 1, seeds[rep], name, nonlinear ? map.Length / 2 : map.Length,
-                        rank, metadata.Rank, nonlinear, fit.Scale, fit.Error, metadata.Condition, whiteningError,
-                        metadata.EigenResidual, fit.CheckError, inner, original));
+                        rank, metadata.Rank, nonlinear, fit.Scale, fit.Error, spectral.Condition, whiteningError,
+                        spectral.EigenResidual, fit.CheckError, inner, original));
                 }
                 foreach (int m in s.RealRows)
                 {
