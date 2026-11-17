@@ -413,6 +413,41 @@ Report ε, fitted γ and its five-repetition range at each real row count, plus 
 
 All source generators, settings, secant endpoints, normalized inner-product tables and rank/whitening controls are retained or reproducible from recorded seeds. On a numerical control failure, replay the affected map and diagnose before its geometric interpretation. Keep original scales, samples, cutoff and gates, adding no frequencies or centering changes after readings. Execute serially, capped and below normal priority.
 
+### G4 readings and decision
+
+G4 is complete at the registered maps and samples. All 470 normalized-inner-product tables and 640 generating secants passed their controls. Maximum whitening/projector discrepancy was 1.27480 × 10⁻⁸ against 10⁻⁵, maximum scale-reference discrepancy 2.22045 × 10⁻¹⁶ against 10⁻⁸, and maximum stored eigenpair residual 3.35835 × 10⁻⁹. An independent audit checked the saved minimax objectives, feasible scale intervals and infeasibility immediately below each optimum. [Summary for every count and scale range](../../receipts/generative-prior/results/g4-audio/summary.json) · [Independent audit](../../receipts/generative-prior/results/g4-audio/audit.json)
+
+| Map at 240 real rows | Retained row rank | Resonance median ε (range) | G1 median ε (range) |
+| --- | ---: | --- | --- |
+| Gaussian | 240 | 0.19214 (0.14536–0.22248) | 0.23373 (0.18439–0.27045) |
+| Single window, raw | 158 | 0.99063 (0.98731–0.99636) | 0.42379 (0.39127–0.50412) |
+| Single window, whitened | 158 | 0.17232 (0.06857–0.23357) | 0.29028 (0.23087–0.33946) |
+| Three windows, raw | 202 | 0.74291 (0.69585–0.79581) | 0.44899 (0.36976–0.50867) |
+| Three windows, whitened | 202 | 0.22146 (0.15290–0.26330) | 0.20454 (0.16819–0.23124) |
+
+The only median decisions reaching ε ≤ 0.2 were resonance/Gaussian and resonance/single-white, both first at 240 rows. Every other registered map/manifold family failed the median target at every tested count. The near value 0.20454 remains above the original gate. Individual passing realizations and failing realizations coexist in several widest cohorts; the full ranges are retained.
+
+| Kept-bin map at 24 bins | Real observables | Rank | Resonance median ε (range) | G1 median ε (range) |
+| --- | ---: | ---: | --- | --- |
+| Complex, raw | 48 | 48 | 0.83114 (0.75424–0.98484) | 0.47359 (0.41820–0.52471) |
+| Complex, whitened | 48 | 48 | 0.83442 (0.76206–0.98487) | 0.41040 (0.40532–0.46611) |
+| Nonlinear log power | 24 | 24, local Jacobian | 0.96339 (0.94952–0.96931) | 0.66577 (0.61443–0.73106) |
+
+Whitening removes correlations within the retained numerical row space. Its agreement with the independent orthonormal projector control confirms that interpretation at the declared cutoff. It leaves the retained row space fixed: at the widest count the single-window and three-window ranks were 158 and 202, and their largest retained Gram condition numbers across this study were 8.55144 × 10⁷ and 4.34908 × 10⁷. The observed differences between manifolds and maps therefore call for manifold-specific geometric checks. Whitened kept-complex rows still had large residuals, and the nonlinear log-power map had a separate, substantially larger finite distortion. The local Jacobian rank describes that map at the declared reference signal; it supplies no global injectivity statement.
+
+Each ε above is minimized over one nonnegative global squared scale for the entire finite constraint set. Whenever it exceeds 0.2, these sampled secants already rule out uniform ε ≤ 0.2 under every such scale for that realization. Passing a finite set supplies sampled evidence only. These measurements concern the declared secant products; they do not establish the complete range-restricted isometry premise on all generator differences. Treating the G1 output coordinates as ordered samples is also part of this experiment's scope.
+
+### G4 pins, replay and doc changes owed
+
+Protocol `8e527e3`; numerical source/settings `488f75c15ce573f69ec61663eb8fa27d903115d8`; settings SHA-256 `9e1f52cf8a56d1f5735dba7003b43354857eaebf503669da29392fae68db4bcc`. Actual primary output: `artifacts/generative-prior/g4-audio-primary/results/`. A fresh process using that isolated build reproduced all numerical output bytes in `g4-audio-replay/results/`. The tracked receipt includes all secant codes, norms and inner-product tables, with separate actual-file and LF-normalized copy hashes. [Verification](../../receipts/generative-prior/results/g4-audio/verification.json)
+
+```powershell
+./issues/regression/receipts/generative-prior/lab-replay.ps1 -Revision 488f75c -Experiment g4 -RunName g4-review
+./artifacts/evidence-contrasts/venv/Scripts/python.exe ./issues/regression/receipts/generative-prior/audit-audio.py --results artifacts/generative-prior/g4-review/results --output artifacts/generative-prior/g4-review/analysis
+```
+
+The isolated build had zero errors and 45 existing engine warnings. Execution remained serial, capped and below normal priority. Doc changes owed: keep real row counts, numerical rank, global scale and nonlinear observable counts explicit; explain whitening as the retained projector; record the finite counterexamples and the two median passing cases. No transform or engine change is commissioned by G4.
+
 ## G2 report — calibration through the exact Gaussian generator
 
 ### Protocol frozen before G2 execution

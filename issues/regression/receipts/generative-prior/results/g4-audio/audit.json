@@ -1,0 +1,298 @@
+{
+  "passed": true,
+  "readings": 470,
+  "secants": 640,
+  "decisions": [
+    {
+      "manifold": "g1",
+      "map": "gaussian",
+      "first_sampled_rows": null,
+      "widest": {
+        "Manifold": "g1",
+        "Map": "gaussian",
+        "Rows": 240,
+        "RankMinimum": 240,
+        "RankMaximum": 240,
+        "MedianEpsilon": 0.23373365239878496,
+        "MinimumEpsilon": 0.18439224644685503,
+        "MaximumEpsilon": 0.27044752897527036,
+        "MinimumScale": 0.9770559870575,
+        "MaximumScale": 1.0339269498888326,
+        "SampledNearIsometry": false
+      }
+    },
+    {
+      "manifold": "g1",
+      "map": "kept-complex",
+      "first_sampled_rows": null,
+      "widest": {
+        "Manifold": "g1",
+        "Map": "kept-complex",
+        "Rows": 48,
+        "RankMinimum": 48,
+        "RankMaximum": 48,
+        "MedianEpsilon": 0.47359068887987976,
+        "MinimumEpsilon": 0.4181960465947408,
+        "MaximumEpsilon": 0.5247144406643984,
+        "MinimumScale": 20.913793068914497,
+        "MaximumScale": 23.112087643718457,
+        "SampledNearIsometry": false
+      }
+    },
+    {
+      "manifold": "g1",
+      "map": "kept-complex-white",
+      "first_sampled_rows": null,
+      "widest": {
+        "Manifold": "g1",
+        "Map": "kept-complex-white",
+        "Rows": 48,
+        "RankMinimum": 48,
+        "RankMaximum": 48,
+        "MedianEpsilon": 0.41039818566965003,
+        "MinimumEpsilon": 0.4053194470458785,
+        "MaximumEpsilon": 0.46610509509308473,
+        "MinimumScale": 10.77484796240859,
+        "MaximumScale": 11.86602361260218,
+        "SampledNearIsometry": false
+      }
+    },
+    {
+      "manifold": "g1",
+      "map": "kept-log-power",
+      "first_sampled_rows": null,
+      "widest": {
+        "Manifold": "g1",
+        "Map": "kept-log-power",
+        "Rows": 24,
+        "RankMinimum": 24,
+        "RankMaximum": 24,
+        "MedianEpsilon": 0.6657663505812312,
+        "MinimumEpsilon": 0.6144335596164596,
+        "MaximumEpsilon": 0.7310555165620272,
+        "MinimumScale": 0.20889792179304867,
+        "MaximumScale": 0.23926304537676585,
+        "SampledNearIsometry": false
+      }
+    },
+    {
+      "manifold": "g1",
+      "map": "multi",
+      "first_sampled_rows": null,
+      "widest": {
+        "Manifold": "g1",
+        "Map": "multi",
+        "Rows": 240,
+        "RankMinimum": 202,
+        "RankMaximum": 202,
+        "MedianEpsilon": 0.4489879681012243,
+        "MinimumEpsilon": 0.3697551340496307,
+        "MaximumEpsilon": 0.5086650212997932,
+        "MinimumScale": 3.9711033150924115,
+        "MaximumScale": 5.003980660121851,
+        "SampledNearIsometry": false
+      }
+    },
+    {
+      "manifold": "g1",
+      "map": "multi-white",
+      "first_sampled_rows": null,
+      "widest": {
+        "Manifold": "g1",
+        "Map": "multi-white",
+        "Rows": 240,
+        "RankMinimum": 202,
+        "RankMaximum": 202,
+        "MedianEpsilon": 0.2045413602897539,
+        "MinimumEpsilon": 0.16819348214758412,
+        "MaximumEpsilon": 0.2312389894250504,
+        "MinimumScale": 2.8695594661290174,
+        "MaximumScale": 3.0744927586647983,
+        "SampledNearIsometry": false
+      }
+    },
+    {
+      "manifold": "g1",
+      "map": "single",
+      "first_sampled_rows": null,
+      "widest": {
+        "Manifold": "g1",
+        "Map": "single",
+        "Rows": 240,
+        "RankMinimum": 158,
+        "RankMaximum": 158,
+        "MedianEpsilon": 0.4237902438571416,
+        "MinimumEpsilon": 0.39126912268868286,
+        "MaximumEpsilon": 0.5041166664295473,
+        "MinimumScale": 4.3088551506679735,
+        "MaximumScale": 4.900849992634905,
+        "SampledNearIsometry": false
+      }
+    },
+    {
+      "manifold": "g1",
+      "map": "single-white",
+      "first_sampled_rows": null,
+      "widest": {
+        "Manifold": "g1",
+        "Map": "single-white",
+        "Rows": 240,
+        "RankMinimum": 158,
+        "RankMaximum": 158,
+        "MedianEpsilon": 0.2902800837808377,
+        "MinimumEpsilon": 0.23086625028540164,
+        "MaximumEpsilon": 0.3394636870727876,
+        "MinimumScale": 3.6603773827790986,
+        "MaximumScale": 3.8359243599223087,
+        "SampledNearIsometry": false
+      }
+    },
+    {
+      "manifold": "resonance",
+      "map": "gaussian",
+      "first_sampled_rows": 240,
+      "widest": {
+        "Manifold": "resonance",
+        "Map": "gaussian",
+        "Rows": 240,
+        "RankMinimum": 240,
+        "RankMaximum": 240,
+        "MedianEpsilon": 0.19214387362465846,
+        "MinimumEpsilon": 0.1453603569641959,
+        "MaximumEpsilon": 0.2224752911433845,
+        "MinimumScale": 0.9445844255541467,
+        "MaximumScale": 0.9979979876387925,
+        "SampledNearIsometry": true
+      }
+    },
+    {
+      "manifold": "resonance",
+      "map": "kept-complex",
+      "first_sampled_rows": null,
+      "widest": {
+        "Manifold": "resonance",
+        "Map": "kept-complex",
+        "Rows": 48,
+        "RankMinimum": 48,
+        "RankMaximum": 48,
+        "MedianEpsilon": 0.8311429592921362,
+        "MinimumEpsilon": 0.7542386549823639,
+        "MaximumEpsilon": 0.9848371273210738,
+        "MinimumScale": 5.612193577005405,
+        "MaximumScale": 9.102069751550433,
+        "SampledNearIsometry": false
+      }
+    },
+    {
+      "manifold": "resonance",
+      "map": "kept-complex-white",
+      "first_sampled_rows": null,
+      "widest": {
+        "Manifold": "resonance",
+        "Map": "kept-complex-white",
+        "Rows": 48,
+        "RankMinimum": 48,
+        "RankMaximum": 48,
+        "MedianEpsilon": 0.8344230675921576,
+        "MinimumEpsilon": 0.7620568693997233,
+        "MaximumEpsilon": 0.9848663666783863,
+        "MinimumScale": 2.492971062170943,
+        "MaximumScale": 4.273909002537917,
+        "SampledNearIsometry": false
+      }
+    },
+    {
+      "manifold": "resonance",
+      "map": "kept-log-power",
+      "first_sampled_rows": null,
+      "widest": {
+        "Manifold": "resonance",
+        "Map": "kept-log-power",
+        "Rows": 24,
+        "RankMinimum": 24,
+        "RankMaximum": 24,
+        "MedianEpsilon": 0.9633901887871393,
+        "MinimumEpsilon": 0.9495157147282032,
+        "MaximumEpsilon": 0.9693079437800293,
+        "MinimumScale": 0.044451560170559644,
+        "MaximumScale": 0.0656289937410115,
+        "SampledNearIsometry": false
+      }
+    },
+    {
+      "manifold": "resonance",
+      "map": "multi",
+      "first_sampled_rows": null,
+      "widest": {
+        "Manifold": "resonance",
+        "Map": "multi",
+        "Rows": 240,
+        "RankMinimum": 202,
+        "RankMaximum": 202,
+        "MedianEpsilon": 0.7429147275605664,
+        "MinimumEpsilon": 0.6958470398164643,
+        "MaximumEpsilon": 0.7958109803722587,
+        "MinimumScale": 2.7752889171862836,
+        "MaximumScale": 3.6318969990426897,
+        "SampledNearIsometry": false
+      }
+    },
+    {
+      "manifold": "resonance",
+      "map": "multi-white",
+      "first_sampled_rows": null,
+      "widest": {
+        "Manifold": "resonance",
+        "Map": "multi-white",
+        "Rows": 240,
+        "RankMinimum": 202,
+        "RankMaximum": 202,
+        "MedianEpsilon": 0.22146145365963998,
+        "MinimumEpsilon": 0.15290413005734482,
+        "MaximumEpsilon": 0.26329742450549676,
+        "MinimumScale": 1.153480030380664,
+        "MaximumScale": 1.2634574040220992,
+        "SampledNearIsometry": false
+      }
+    },
+    {
+      "manifold": "resonance",
+      "map": "single",
+      "first_sampled_rows": null,
+      "widest": {
+        "Manifold": "resonance",
+        "Map": "single",
+        "Rows": 240,
+        "RankMinimum": 158,
+        "RankMaximum": 158,
+        "MedianEpsilon": 0.9906273490185203,
+        "MinimumEpsilon": 0.9873090971017263,
+        "MaximumEpsilon": 0.9963572476593251,
+        "MinimumScale": 3.5500866453027458,
+        "MaximumScale": 6.211011574335577,
+        "SampledNearIsometry": false
+      }
+    },
+    {
+      "manifold": "resonance",
+      "map": "single-white",
+      "first_sampled_rows": 240,
+      "widest": {
+        "Manifold": "resonance",
+        "Map": "single-white",
+        "Rows": 240,
+        "RankMinimum": 158,
+        "RankMaximum": 158,
+        "MedianEpsilon": 0.1723249812426486,
+        "MinimumEpsilon": 0.0685666742675839,
+        "MaximumEpsilon": 0.23356943676262765,
+        "MinimumScale": 1.0692559355265714,
+        "MaximumScale": 1.1752299650743212,
+        "SampledNearIsometry": true
+      }
+    }
+  ],
+  "max_whitening_error": 1.2747982225391752e-08,
+  "max_eigen_residual": 3.358349649054287e-09,
+  "max_scale_control_error": 2.220446049250313e-16
+}

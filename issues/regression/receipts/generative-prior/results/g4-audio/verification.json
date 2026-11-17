@@ -1,0 +1,41 @@
+{
+  "files": [
+    {
+      "actual": "artifacts/generative-prior/g4-audio-primary/results/readings.jsonl",
+      "bytes": 1458615,
+      "sha256": "b3eba81fb940607d1c8ce186821ec48a853706fd3c2a4bb27e3b3befe047ebc6",
+      "receipt": "issues/regression/receipts/generative-prior/results/g4-audio/readings.jsonl",
+      "receipt_sha256_lf": "c6f2e9d4b7d9099d67ca3b80ee3e906258f7f550572f15e5fceed47bbc6de80e",
+      "replay": "artifacts/generative-prior/g4-audio-replay/results/readings.jsonl",
+      "replay_sha256": "b3eba81fb940607d1c8ce186821ec48a853706fd3c2a4bb27e3b3befe047ebc6",
+      "exact_replay": true
+    },
+    {
+      "actual": "artifacts/generative-prior/g4-audio-primary/results/secants.jsonl",
+      "bytes": 1112712,
+      "sha256": "4305c61e3bd2785de5ff50b7856b94945a9e1bbe93498e68b9325c54db2a843a",
+      "receipt": "issues/regression/receipts/generative-prior/results/g4-audio/secants.jsonl",
+      "receipt_sha256_lf": "e2f0fff5094c3f98dba2589ed1d59b0f4330d4bb0637ed5b12af376922fe6f11",
+      "replay": "artifacts/generative-prior/g4-audio-replay/results/secants.jsonl",
+      "replay_sha256": "4305c61e3bd2785de5ff50b7856b94945a9e1bbe93498e68b9325c54db2a843a",
+      "exact_replay": true
+    },
+    {
+      "actual": "artifacts/generative-prior/g4-audio-primary/results/summary.json",
+      "bytes": 37699,
+      "sha256": "714426be67263d23da3cbfee89214e4a292e245b8fb35284c6632e50f382ac8a",
+      "receipt": "issues/regression/receipts/generative-prior/results/g4-audio/summary.json",
+      "receipt_sha256_lf": "aecb53fc0c3c6761e24a749dc900a8b3f05c86d608e98bd7fa0a5094d33ab66d",
+      "replay": "artifacts/generative-prior/g4-audio-replay/results/summary.json",
+      "replay_sha256": "714426be67263d23da3cbfee89214e4a292e245b8fb35284c6632e50f382ac8a",
+      "exact_replay": true
+    },
+    {
+      "actual": "artifacts/generative-prior/g4-audio-primary/analysis/audit.json",
+      "receipt": "issues/regression/receipts/generative-prior/results/g4-audio/audit.json",
+      "bytes": 8932,
+      "sha256": "f892bd6153f16d9df0109a0faa6cd96880a1a21fff7826a6edd50433ad80e627",
+      "receipt_sha256_lf": "fe1fb44fefd44dc3dd2826f87cdf00a49c9e9400d96e1f6f29f77fc01436fd4e"
+    }
+  ]
+}
