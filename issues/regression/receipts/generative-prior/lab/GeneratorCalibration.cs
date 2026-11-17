@@ -36,7 +36,7 @@ internal static class GeneratorCalibration
 {
     private sealed record Reading(int K, int Ratio, int Repetition, int DataSeed, int SamplerSeed, string Method,
         double[] Truth, double[] Mean, double[] Q05, double[] Q95, int Covered, double RelativeError,
-        bool DiagnosticGate, double? MaximumRHat, double? MinimumEssPerChain, double? MinimumParticleEss,
+        bool DiagnosticGate, string Pooling, double? MaximumRHat, double? MinimumEssPerChain, double? MinimumParticleEss,
         int? MinimumFamilies, double? PopulationSpread, double NoiseDeviation, double NegativeMass, double Seconds,
         double[] AlignmentClean, double[] AlignmentNoisy, double? GridMeanError);
 
@@ -286,7 +286,9 @@ internal static class GeneratorCalibration
                         double sigma = Math.Sqrt(draws.Select((d, i) => weights[i] * d.Variances[0]).Sum() / total);
                         double? gridError = fineGrid.HasValue ? mean.Zip(fineGrid.Value.Mean, (a, b) => Math.Abs(a - b)).Max() : null;
                         var reading = new Reading(k, ratio, rep + 1, seeds[rep], samplerSeed, method, truth, mean, lower, upper,
-                            covered, error, diagnostic, maximumRhat, method == "smc" ? null : minimumEss,
+                            covered, error, diagnostic, method == "smc" ? "three independent particle populations" :
+                                diagnostic ? "converged inner ensemble" : "diagnostic pool including unconverged ensemble",
+                            maximumRhat, method == "smc" ? null : minimumEss,
                             method == "smc" ? minimumEss : null, method == "smc" ? families : null,
                             method == "smc" ? spread : null, sigma, negativeMass,
                             seconds, alignmentClean, alignmentNoisy, gridError);
@@ -304,6 +306,7 @@ internal static class GeneratorCalibration
     }
 
     private sealed record Group(int K, int Ratio, string Method, double MedianError, double Coverage,
+        double? DiagnosticQualifiedCoverage, bool IncludesFailedDiagnostics,
         int DiagnosticPasses, double MedianSeconds, double MeanNegativeMass, bool Passed);
 
     private static Group[] Groups(IEnumerable<Reading> readings, InversionSettings s) =>
@@ -311,7 +314,9 @@ internal static class GeneratorCalibration
             double[] errors = g.Select(r => r.RelativeError).Order().ToArray();
             double[] seconds = g.Select(r => r.Seconds).Order().ToArray();
             double median = 0.5 * (errors[(errors.Length - 1) / 2] + errors[errors.Length / 2]);
+            Reading[] good = g.Where(r => r.DiagnosticGate).ToArray();
             return new Group(g.Key.K, g.Key.Ratio, g.Key.Method, median, g.Sum(r => r.Covered) / (double)(g.Count() * g.Key.K),
+                good.Length > 0 ? good.Sum(r => r.Covered) / (double)(good.Length * g.Key.K) : null, good.Length < g.Count(),
                 g.Count(r => r.DiagnosticGate), 0.5 * (seconds[(seconds.Length - 1) / 2] + seconds[seconds.Length / 2]),
                 g.Average(r => r.NegativeMass), median <= s.RecoveryTarget && g.Count(r => r.DiagnosticGate) >= s.RequiredGoodProblems);
         }).ToArray();

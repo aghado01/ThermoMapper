@@ -1,7 +1,8 @@
 param(
     [Parameter(Mandatory)][string]$Revision,
     [Parameter(Mandatory)][ValidateSet('g3','g4','g2')][string]$Experiment,
-    [Parameter(Mandatory)][ValidatePattern('^[a-zA-Z0-9_-]+$')][string]$RunName
+    [Parameter(Mandatory)][ValidatePattern('^[a-zA-Z0-9_-]+$')][string]$RunName,
+    [switch]$BuildOnly
 )
 $ErrorActionPreference = 'Stop'
 $PSNativeCommandUseErrorActionPreference = $true
@@ -22,6 +23,7 @@ $env:DOTNET_CLI_TELEMETRY_OPTOUT = '1'
 [Diagnostics.Process]::GetCurrentProcess().PriorityClass = 'BelowNormal'
 $probe = Join-Path $source $receipts
 dotnet build (Join-Path $probe 'lab/GenerativePriorLab.csproj') -c Release "-p:ArtifactsRoot=$build/" --disable-build-servers -m:1 -p:UseSharedCompilation=false
+if ($BuildOnly) { return }
 $settingsName = switch ($Experiment) {
     g3 { 'g3-weights.json' }
     g4 { 'g4-audio.json' }
