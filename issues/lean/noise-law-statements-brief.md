@@ -218,8 +218,16 @@ lake build +Enthymemata.Spline.HatDesignRank +Enthymemata
 lake env lean Enthymemata/Spline/HatDesignRank.lean
 ```
 
-**In progress.** S10c uses a direct Laplace-transform calculation. The logarithm representation and absolute-integrability step for the product have elaborated locally. The Gaussian law and covariance series still need proofs. The phaseless-audio coordinator requested slice 1 next. The remaining noise-law queue includes S10c, S11/S15, S12 and S14/S4.
-
 #### Methods
 
 On a positive-length knot span, only the two adjoining hat pieces contribute. Their sum gives ordinary affine interpolation of the two control coefficients, with zero padding at the outer knots. Suppose a collocation-kernel coefficient is nonzero. Its selected zero must fall strictly to the right of its peak and the next coefficient must be nonzero. To see this inductively, a selected zero to the left either abuts a zero coefficient or shares its span with the preceding selected zero. The first case contradicts the interpolation weights. In the second, an affine piece with two distinct zeros has both endpoint values zero. Rightward propagation would therefore reach the padded zero, a contradiction. This proves nonsingularity and supplies S7’s missing premise.
+
+### 2026-11-16 — S10c Gaussian log-power covariance
+
+**Proof revisions `e6b9efa` and `2d9494c`.** `TimeFrequency.circularGaussian_logPower_covariance` proves that the covariance of log powers equals the sum of κⁿ/n² for n ≥ 1. Its law is the pushforward of four independent real N(0,½) variables giving two independent unit circular complex innovations A and Z. The pair is (A, u(cA+dZ)), where |u|=1, c²+d²=1 and κ=c². The theorem transfers to measurable observations with this joint law on any probability space. The canonical witness uses c=3/5 and d=4/5. At c=1 and d=0 the two canonical powers agree pointwise and `circularGaussian_logPower_variance` proves their log-power variance equals π²/6.
+
+`lake build` passed through the aggregate (3352 jobs). The four modules printed 26 declaration audits with only `propext`, `Classical.choice` and `Quot.sound`. The existing BARS, CumulativeField and Stability messages belong to other modules. The shared checkout’s taxonomy check found five later noise-law draft modules awaiting barrel imports. The combined queue report records the final taxonomy run.
+
+#### Methods
+
+Completing the square in each independent Gaussian block gives the joint power transform 1/((1+s)(1+t)−κst), including κ=1. The Frullani representation of log x has absolute kernel integral |log x|. The diagonal transform then gives finite second log moments, which justify Fubini for the mixed log product. Subtracting the two mean kernels leaves a nonnegative geometric expansion. Each separated term has double integral κⁿ/n², and ζ(2) bounds their sum through κ=1. This route proves the covariance and both interchanges directly.
