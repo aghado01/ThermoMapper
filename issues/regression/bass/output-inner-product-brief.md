@@ -60,16 +60,16 @@ Located by search on 2026-11-16. The building chip confirms each, and adds any t
 
 ## Decisions
 
-Each carries a recommendation and the slice where it first binds.
+Decision 1 is settled on support for both prior choices. Decisions 2–7 are open. Each entry identifies the slice where it first applies.
 
-1. **Where the coefficient prior's Gram reads under Q.**
-   - *Recommended:* on the whitened Gram XᵀΩ⁻¹X = (AᵀA)∘(HᵀQH).
-   - *Why:* it makes the marginal covariance a congruence of the unit-noise one, so S4's closed form holds unchanged and the oracle is exact.
-   - *The alternative:* the unweighted Gram (AᵀA)∘(HᵀH), as `CollapsedPencilPrior` does for observation weights. It breaks the congruence, needs a pencil, and gives no closed-form oracle.
-   - *Binds at:* slice 1.
+1. **Which Gram matrix defines the coefficient prior under Q?** The user selected **both as configurable fit options**. For the unweighted, uncentred slice, write Ω = Iₙ ⊗ R. Both choices use XᵀΩ⁻¹X in the likelihood. The selected prior Gram P determines the coefficient covariance σ²(τP)⁻¹.
+   - **Whitened Gram.** P = XᵀΩ⁻¹X = (AᵀA)∘(HᵀQH). The prior adapts to the declared output precision. The ordinary g-prior on the whitened design gives S4's exact reference.
+   - **Ordinary Gram.** P = XᵀX = (AᵀA)∘(HᵀH). For a fixed design the prior stays the same across noise correlations. Use the separate likelihood and prior Grams, as supported by [`CollapsedPencilPrior`](../../../src/maths/regression/gprior/PriorPencil.cs). A direct Gaussian marginal gives an independent reference for this choice.
+   - Expose the choice in the fit configuration and record the resolved choice with the fit. Both apply in slice 1. The default for a newly declared nonidentity Q is open.
 2. **How Q combines with observation weights.**
    - *Recommended:* refuse weights with Q ≠ I in slice 1, then admit case-level weights in slice 4. Weights of the form wᵢ·1_m keep the Kronecker form, with L = diag(w)^{−½} ⊗ L_R.
-   - *Why refuse the rest:* per-location weights give σ²·D^{−½}(I ⊗ R)D^{−½}, which is not a Kronecker product, so the Hadamard shortcut is lost. Today's design already leaves the Khatri–Rao path under weights (`BassDesign.cs:304`).
+   - For positive precision weights, a location profile v shared across cases, wᵢⱼ = uᵢvⱼ, still factors. The precision is diag(u) ⊗ [diag(√v) Q diag(√v)]. If each case has its own profile Dᵢ = diag(wᵢⱼ), its precision block is Dᵢ^{½}QDᵢ^{½}. In general these blocks need separate contractions. Today's design leaves the Khatri–Rao path under observation weights (`BassDesign.cs:305`).
+   - The existing `WeightMeaning` distinguishes precision from replication, and `WeightedPriorGram` specifies how row weights enter the prior. A replication count for an entire case repeats its joint output likelihood. The formulas above describe precision weights. [Working-response conventions](../../../src/maths/regression/spline/bass/BassObservationModel.cs)
    - *Binds at:* slices 1 and 4.
 3. **Several outputs (E34).**
    - *Recommended:* refuse Q ≠ I with several outputs until E34's Σ and Q are stated together. A per-output Q and a shared Q are different models, and the choice is the user's.
@@ -102,19 +102,20 @@ Each ends at a gate. The [common gates](#gates-common-to-every-slice) apply to a
    - *Build:*
      - lift `BassDesign`'s refusal for a direct functional response with no weights and one output;
      - add `DenseInnerProduct`, R given, Cholesky factor, ln\|Q\| from the factor;
-     - give `KhatriRao.Gram`, `Border` and `CrossProducts` the declared Q, with the prior on the whitened Gram (decision 1);
+     - give the likelihood Gram, border and response cross-products the declared Q. Construct the coefficient prior using the configured Gram from decision 1;
      - route n·ln\|Q\| into `SumLogWeights` (decision 5).
    - *Scope:* the zero centre only (no intercept apart).
-   - *Gate, the whitening oracle:* for fixed terms, `BassDesign`'s log marginal under Q equals `CollapsedGPrior` built on explicitly whitened (Z̃, ỹ) plus (n/2)·ln\|Q\|, to 1e-12 relative, over a seeded sweep of designs and dense R. This is S4's `gPrior_logMarginal_whiten`.
+   - For the whitened prior, compare the log marginal with `CollapsedGPrior` on explicitly whitened (Z̃, ỹ) plus (n/2)·ln\|Q\|. This is S4's `gPrior_logMarginal_whiten`.
+   - For both choices, independently evaluate the Gaussian log density of y with mean zero and covariance σ²[Ω + X(τP)⁻¹Xᵀ] on small full-rank designs at fixed positive σ² and τ. Use the seeded dense-R sweep and the 1e-12 relative tolerance. Include a correlated case where the two reference densities differ, to detect a setting silently routed to the other prior. In the unweighted Q = I case both choices must reproduce the existing identity path.
 2. **Centring under Q.**
    - *Build:* the Q-centred three-term Gram and border in `KhatriRao`, the GLS level and mass (decision 4), and `WorkingResponse.ResponseMean` and `ResponseSquares` under Q.
    - *Gate:* the centred block equals an explicit projection off the whitened constant column, to rounding, for each intercept convention. The level matches `level_one_kronecker` on an R without equal column sums, and equals the grand mean on one with them.
 3. **Tempering and evidence.**
    - *Build:* nothing new if slice 1 routed the constant. Check the ladder and the evidence estimators read it.
-   - *Gate:* at b ∈ {0, 0.3, 1}, the tempered marginal under Q minus the whitened one is (b/2)·n·ln\|Q\|. The evidence estimators agree with each other under Q as they do under Q = I (`evidence-estimator-disagreement-brief.md`'s tolerances).
+   - *Gate:* at b ∈ {0, 0.3, 1}, compare with an explicitly whitened likelihood **keeping the same chosen coefficient prior**. For either prior the log-marginal difference is (b/2)·n·ln\|Q\|. The evidence estimators agree with each other under Q as they do under Q = I (`evidence-estimator-disagreement-brief.md`'s tolerances).
 4. **Case-level weights.**
    - *Build:* weights constant within each case keep the Kronecker form; per-location weights stay refused.
-   - *Gate:* the whitening oracle with L = diag(w)^{−½} ⊗ L_R.
+   - *Gate:* for case precision weights, whiten with L = diag(w)^{−½} ⊗ L_R and preserve the selected prior Gram in the reference. Decision 2 sets how the weights enter the prior for each supported weight meaning.
 5. **The readers downstream.**
    - *Build:* `BassPointwise`'s block density under σ²R; predictive noise σ·L_R·z; F11 on whitened and raw residuals (decision 6); the emulator's σ²_e·R for calibration (primitive 2); B1's table as an `IInnerProduct` (decision 7).
    - *Gate:*
