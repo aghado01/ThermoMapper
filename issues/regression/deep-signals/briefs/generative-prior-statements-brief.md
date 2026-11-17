@@ -230,3 +230,37 @@ For a row of direction φ, the two gates test cos φ and cos(φ − θ). Their p
 The product density at (r cos φ, r sin φ) is exp(−r²/2)/(2π). The Jacobian contributes r and the outer product contributes r². The radial integral of r³ exp(−r²/2) is 2, leaving the coefficient 1/π. Each Cartesian coordinate is square-integrable under the product law, so each product remains integrable after restriction to the measurable gate. The change of variables and product integral then identify the expectation entry by entry.
 
 For a finite layer, expanding the output inner product sums exactly the outer products with both gates open. The two self matrices give squared norms ½. The cross matrix gives inner product ((π − θ)cos θ + sin θ)/(2π). Dividing by the product of the norms gives the S17 cosine, and taking arccos gives g(θ).
+
+## S22 report — 2026-11-16
+
+**Proof-closed on main in `ae2cba5`.** In `Enthymemata.GenerativePrior.SignPatterns`, `region_bound` gives at most 2·Σ_{0≤j<k} C(n−1,j) connected regions for n ≥ 1 central row forms on a real normed space of finite dimension k. Choosing any row supplies the nonempty-arrangement hypothesis. The row forms may repeat, be proportional, or satisfy other linear dependencies. In particular, the result covers every arrangement of proper central hyperplanes in ℝᵏ.
+
+`component_eq_signCell`, `mem_signRegions` and `card_signRegions` identify the enumerated sets with the connected components of the complement and give one realized strict sign mask per component. Each cell is open and convex. A point on any kernel has no strict mask and contributes no region. Coincident kernels give the same excluded set. Positive proportional rows have equal signs, and negative proportional rows have opposite signs. The upper bound uses the supplied row count even when rows coincide.
+
+`relu_eq_masked_linear` identifies the layer on each cell with the linear map obtained by retaining its positive rows and replacing the rest by zero. `empty_arrangement` gives one region, the entire ambient space, including when k = 0. In dimension zero there are no proper hyperplanes. If n > 0 and zero forms are admitted, `zero_dimensional_arrangement` gives zero regions. More generally, `no_regions_of_zero_row` proves that one zero form makes the strict complement empty in every dimension.
+
+`coordinate_regions` is a witness in every finite dimension. For the coordinate rows, choosing +1 or −1 independently in each coordinate realizes all 2ᵏ masks. The two coordinate axes in the plane give four regions, attaining 2·(C(1,0) + C(1,1)).
+
+### Verification
+
+Direct elaboration audited all 18 S22 theorems. Each printed exactly `propext`, `Classical.choice` and `Quot.sound`. The full default harness build passed with 3,333 jobs. The aggregate replayed existing warnings in `BARS`, `CumulativeField.Local` and `Stability`. The taxonomy gate passed and classified all three S18/S22 modules as proof-closed, with zero proof holes and zero declared axioms. The S22 ledger counted five definitions and 18 theorems. All six statements S17–S22 now have proofs and witnesses in the harness.
+
+The commands below replay the checks from `lean/` at below-normal process priority with `LEAN_NUM_THREADS=2` set in the environment.
+
+```powershell
+lake build
+lake env lean Enthymemata/GenerativePrior/SignPatterns.lean
+pwsh -NoProfile -File scripts/meta-ci.ps1 -NoBuild
+```
+
+### Doc changes owed
+
+Use the strict-component convention with the one-layer mask count in the sample-complexity discussion. Give the empty-arrangement case and distinguish a repeated kernel from an additional cut. The proved count applies to a fixed layer. A multilayer sample-complexity claim also needs the paper’s probabilistic argument.
+
+### Methods
+
+Fix one row a. Negating the input complements its strict mask, so exactly half the masks of a nonempty row family have positive sign at a. Call that subfamily P. If P shatters a set S of row indices, it realizes every choice of signs on S. This forces a ∉ S, since the sign at a is fixed. Negating a realization of the complementary signs supplies every choice on S with negative sign at a. Thus the full family shatters S ∪ {a}.
+
+Shattered rows are linearly independent in the dual. For any putative relation, realize the signs of its nonzero coefficients. Evaluating the relation at that input gives a sum of nonnegative terms, each strictly positive for a nonzero coefficient. The sum vanishes, forcing every coefficient to vanish. Hence |S| + 1 ≤ k. By the Sauer–Shelah inequality, |P| is at most the number of its shattered subsets. These lie among the subsets of the n−1 remaining indices of sizes 0 through k−1. Counting those subsets and doubling gives the bound, including when P is empty.
+
+A strict mask cuts out an intersection of open linear half-spaces, hence a convex, connected set. Conversely, if a row takes opposite signs at two points of a connected component, continuity forces a zero on that component. This contradicts membership in the complement. Therefore each realized cell is a whole component. Substituting its strict signs into the coordinate formula max(0, Aᵢx) gives the claimed linear restriction.
