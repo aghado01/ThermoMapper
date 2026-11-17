@@ -4,6 +4,8 @@ Date: 2026-11-16. Status: **a direction record, written at the user's request** 
 
 The Deep Teaching research brief connects the paper and patent evidence to the depth-four results and the open questions on stability and causal teaching. Its companion asks which self-supervised objectives preserve the predictive contribution of older audio and what data budget can establish the gain. [Deep Teaching research brief](deep-teaching-audio-research-brief.md) · [Predictive information in audio](predictive-information-in-audio-brief.md)
 
+The [wavelet speaker-signature brief](wavelet-speaker-signatures-brief.md) asks what can be inferred about a returning speaker from short, variable utterances. Its four proposed Lean slices connect acoustic measurements to a distance between learned codes defined by their predictions.
+
 ## Why
 
 The aim is a **native audio foundation model trained on human conversation, without labels, and data-efficiently.** The regression engines cannot be that model: they sample shallow, low-order structure exactly, and audio needs deep composition at a scale they cannot touch. Their part is different and specific:

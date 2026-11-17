@@ -1,0 +1,38 @@
+# Can a wavelet representation learn the recurring shape of a voice?
+
+Research brief · 2026-11-17. Four proposed Lean slices for follow-up.
+
+**Can a short segment predict how the same voice will sound on a different turn, after pitch, articulation, and recording conditions have changed? Which wavelet measurements supply that evidence, and what geometry of a learned representation can the observations determine?** Start with two recurring, unnamed speakers and single-speaker segments. Here speaker discrimination means deciding whether two segments have a common source. Tracking a source through simultaneous speech requires an additional mixture model.
+
+## What “shape” could mean
+
+A person produces a range of spectra. During voiced speech, harmonic spacing follows the fundamental, while the amplitudes across the harmonics sample a spectral envelope. Changing the vowel changes that envelope too. A plausible signature is a *profile across conditions*: how the speaker's distribution of wavelet responses varies with a comparable acoustic context. Two speakers could sound alike on one vowel and differ consistently on another. Gaudrain et al.'s listening experiment independently varied pulse rate and apparent vocal-tract length and found different sensitivities to those cues in speaker judgments. [Perception study](https://www.isca-archive.org/interspeech_2009/gaudrain09_interspeech.html)
+
+There are three geometries to connect. A generator \(G(s,u)\) traces a **set of waveforms** as the utterance conditions \(u\) vary at fixed speaker \(s\). A wavelet bank maps those waveforms to a **set of measurements**, with possible collisions. A learned encoder maps an observed segment to a **code**. One can give the code a measurable geometry by decoding it at the same collection of future contexts and comparing the resulting predictions. That definition survives an invertible change of latent coordinates accompanied by the inverse change of decoder. A claim about Euclidean clusters in the raw code needs additional metric constraints. Recordings alone permit rescaling or shearing those plots without changing any prediction.
+
+Voroninski and collaborators analyze conditions for recovery through a supplied deep generator. Here we can use their question about separation on a generator's range twice. First ask which wavelet measurements distinguish the acoustic factors on a specified range. Then ask whether training on unlabeled, linked observations identifies *which factors recur across turns*. A solver can succeed at the first and still attribute a shared microphone to a speaker at the second. [Hand and Voroninski](https://arxiv.org/abs/1705.07576) · [Generative phase retrieval](https://arxiv.org/abs/1807.04261) · [Local restricted-isometry statements](../../../../lean/Enthymemata/GenerativePrior/IsometryCondition.lean)
+
+## Choosing a wavelet for the question
+
+| Measurement | Decision it lets us investigate |
+| --- | --- |
+| Sampled complex continuous wavelet transform, e.g. Morlet | Compare bandwidth at a harmonic with the local harmonic spacing. A higher quality factor resolves closer components at the cost of longer temporal support. State the frequency grid, bandwidth, hop, padding and averaging. |
+| Discrete wavelets and wavelet packets | Choose the subdivisions of the frequency axis and the translation sampling. A critically sampled packet tree and an undecimated bank can respond differently to shifts. Siafarikas et al. used speaker verification performance to allocate resolution across bands. [Objective wavelet packet features](https://www.isca-archive.org/interspeech_2004/siafarikas04_interspeech.pdf) |
+| Joint or spiral scattering | Measure changes across time, log-frequency and octave. Lostanlen and Mallat derive a response approximation for a time-varying harmonic source–filter model. This gives a candidate mechanism for following pitch and envelope motion across a syllable. [Wavelet scattering on the pitch spiral](https://arxiv.org/abs/1601.00287) |
+
+The first formal model uses the Haar mother and translation-averaged energies because its frequency responses can be calculated exactly. It deliberately averages away within-block timing. The practical comparison would hold segment duration, feature budget, readout and available channels fixed, then compare a wavelet packet or scattering bank with STFT band energies and a learned filterbank. Cross pitch and vowel within each speaker, match those conditions across speakers, and cross microphones and sessions. A learned speaker filterbank and the channel shortcut in self-supervised positive pairs both have direct precedents. [SincNet](https://arxiv.org/abs/1808.00158) · [Self-supervised positive sampling](https://www.isca-archive.org/interspeech_2025/lepage25_interspeech.html)
+
+## Follow-up sequence
+
+| Order | Question the proof should settle | What it buys |
+| --- | --- | --- |
+| [1. Which scales resolve a harmonic balance?](wavelet-speakers/01-harmonic-measurements-brief.md) | Do two different pitches and balances collide for two scales and separate at three? | An exact test of a frontend choice on actual waveforms. |
+| [2. When do two voice families separate?](wavelet-speakers/02-speaker-family-separation-brief.md) | How much articulation and measurement error can a matched comparison tolerate? What ambiguity can a channel create? | A separation margin with acoustic assumptions and units. |
+| [3. Which unlabeled pairings identify a profile?](wavelet-speakers/03-linked-context-profiles-brief.md) | Which pairings across contexts recover two speaker profiles up to exchange of their names? | An acquisition or self-supervision requirement for learning a profile. |
+| [4. What geometry must a learned code preserve?](wavelet-speakers/04-predictive-speaker-geometry-brief.md) | Does accurate cross-context prediction retain the evidence needed to decide whether two snippets share a speaker? How much can independent segments add? | A distance between codes, a same-speaker error bound from population prediction risk, and a proposed evidence bound across segments. |
+
+The first two slices use a fixed, deliberately small signal generator. The last two use a two-component population model whose response is read from those signals. For the positive learning claims, pair membership or a controlled continuation is observed, speaker names are hidden, and context is observed or set by design. Prove the failure cases when this side information disappears. A real single-channel conversation would also require a justified way to acquire such pairs. The evidence in the model is strongest on informative voiced segments and can be ambiguous on an individual snippet.
+
+The eventual audio claim concerns held-out speakers, turns, and recording conditions. Its unit of evidence is a new recording or an explicitly modeled dependent sequence. The mathematical slices concern operator choice, population identification and prediction risk under their stated models. Publish any later sample bound with the pair-construction errors and domain assumptions it uses. [Predictive information in audio](predictive-information-in-audio-brief.md) · [Evidence for memory depth](deep-teaching/evidence-for-memory-depth-brief.md)
+
+For follow-up, each linked slice owns its statement, witness, proof or corrected boundary, and verification report. Use the [Lean harness conventions](../../../../lean/README.md). Record public declarations, scoped imports, build and axiom checks, and doc changes owed. The general ingredients have prior art. The proposed contributions are their concrete consequences for these measurements and learning experiments.
