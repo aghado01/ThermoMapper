@@ -24,6 +24,8 @@ The first formal model uses the Haar mother and translation-averaged energies be
 
 ## Follow-up sequence
 
+Slice 1 establishes that two translation-averaged Haar energies collide at distinct interior harmonic fractions on the 24-sample generator. The third energy identifies pitch and fraction, with a certified cross-pitch separation greater than 1/16 in normalized energy coordinates. Slice 2 can use this bound directly. [Exact gains, waveform witnesses and proof receipt](wavelet-speakers/01-harmonic-measurements-brief.md#slice-1-result-and-proof-report--2026-11-17)
+
 | Order | Question the proof should settle | What it buys |
 | --- | --- | --- |
 | [1. Which scales resolve a harmonic balance?](wavelet-speakers/01-harmonic-measurements-brief.md) | Do two different pitches and balances collide for two scales and separate at three? | An exact test of a frontend choice on actual waveforms. |

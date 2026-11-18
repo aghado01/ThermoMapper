@@ -13,5 +13,6 @@ import Enthymemata.TimeFrequency.MemoryDepthTree
 import Enthymemata.TimeFrequency.MemoryDepthPowerConfidence
 import Enthymemata.TimeFrequency.PredictiveActivityObstruction
 import Enthymemata.TimeFrequency.PredictiveInformationContext
+import Enthymemata.TimeFrequency.HaarFourierControl
 
 /-! Phaseless audio recovery statements. -/
