@@ -24,7 +24,9 @@ The first formal model uses the Haar mother and translation-averaged energies be
 
 ## Follow-up sequence
 
-Slice 1 establishes that two translation-averaged Haar energies collide at distinct interior harmonic fractions on the 24-sample generator. The third energy identifies pitch and fraction, with a certified cross-pitch separation greater than 1/16 in normalized energy coordinates. Slice 2 can use this bound directly. [Exact gains, waveform witnesses and proof receipt](wavelet-speakers/01-harmonic-measurements-brief.md#slice-1-result-and-proof-report--2026-11-17)
+Slice 1 establishes that two translation-averaged Haar energies collide at distinct interior harmonic fractions on the 24-sample generator. The third energy identifies pitch and fraction, with a certified cross-pitch separation greater than 1/16 in normalized energy coordinates. [Exact gains, waveform witnesses and proof receipt](wavelet-speakers/01-harmonic-measurements-brief.md#slice-1-result-and-proof-report--2026-11-17)
+
+Slice 2 separates known disjoint fraction intervals at a matched context. For [0.238, 0.240] and [0.630, 0.632], relative waveform RMS error below 0.0852% guarantees correct nearest-family assignment. Independently varying harmonic gains can produce identical samples from distinct source fractions. A shared gain ratio preserves differences in log odds across recordings. [Family margin, noise tolerance and channel collision](wavelet-speakers/02-speaker-family-separation-brief.md#slice-2-result-and-proof-report)
 
 | Order | Question the proof should settle | What it buys |
 | --- | --- | --- |

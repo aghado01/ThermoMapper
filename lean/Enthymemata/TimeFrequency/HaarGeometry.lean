@@ -27,7 +27,7 @@ private theorem cauchy (x y : Point) : (dot x y)^2 ≤ dot x x * dot y y := by
   nlinarith [sq_nonneg (x 0*y 1-x 1*y 0), sq_nonneg (x 0*y 2-x 2*y 0),
     sq_nonneg (x 1*y 2-x 2*y 1)]
 
-private theorem directions :
+theorem directions :
     direction .three = ![Real.sqrt 2/2,1-Real.sqrt 2/2,-(2+Real.sqrt 2)] ∧
     direction .four = ![1,-3/2,-3/4] ∧
     offset = ![Real.sqrt 2/2-1/2,5/4-Real.sqrt 2/2,-7/8-Real.sqrt 2] := by
@@ -147,6 +147,7 @@ theorem three_scale_identification (p q : Pitch) {t u : ℝ}
   · exact ⟨rfl, balance_identified _ h⟩
 
 #print axioms normal_offset
+#print axioms directions
 #print axioms directions_nonzero
 #print axioms normal_certificate
 #print axioms cross_pitch_gap
