@@ -28,6 +28,8 @@ Slice 1 establishes that two translation-averaged Haar energies collide at disti
 
 Slice 2 separates known disjoint fraction intervals at a matched context. For [0.238, 0.240] and [0.630, 0.632], relative waveform RMS error below 0.0852% guarantees correct nearest-family assignment. Independently varying harmonic gains can produce identical samples from distinct source fractions. A shared gain ratio preserves differences in log odds across recordings. [Family margin, noise tolerance and channel collision](wavelet-speakers/02-speaker-family-separation-brief.md#slice-2-result-and-proof-report)
 
+Slice 3 identifies balanced two-source mean profiles from reliable same-source pairs on a connected context graph with nonzero contrasts and an odd cycle or an independent same-context repeat. Two models have identical Haar pair laws on a three-context path and predict probabilities of 17/64 and 5/16 for two high readings on its missing edge. [Profile identification, missing-pair prediction and recording-condition control](wavelet-speakers/03-linked-context-profiles-brief.md#slice-3-result-and-proof-report)
+
 | Order | Question the proof should settle | What it buys |
 | --- | --- | --- |
 | [1. Which scales resolve a harmonic balance?](wavelet-speakers/01-harmonic-measurements-brief.md) | Do two different pitches and balances collide for two scales and separate at three? | An exact test of a frontend choice on actual waveforms. |

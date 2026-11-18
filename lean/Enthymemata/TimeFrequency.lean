@@ -16,5 +16,6 @@ import Enthymemata.TimeFrequency.PredictiveInformationContext
 import Enthymemata.TimeFrequency.HaarFourierControl
 import Enthymemata.TimeFrequency.HaarFamilyNoise
 import Enthymemata.TimeFrequency.HaarChannels
+import Enthymemata.TimeFrequency.ProfilePairConfounding
 
 /-! Phaseless audio recovery statements. -/
