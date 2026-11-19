@@ -71,11 +71,7 @@ Ran verify ambiguous SplineWavelets and other titles
 Almost the entire [reading-list.md](file:///d:/aghado01/ThermoMapper/issues/regression/deep-signals/reading-list.md) is already in your `PDFs` or `gauntlet` inventories (including Lee, Barber & Willett and Gibbs & Candès, which are now in `gauntlet/conformal-bayes`).
 
 Here is the exact gap list:
-
-### Missing
-* **Gröchenig**, *Foundations of Time-Frequency Analysis* — not present *(the `Time-Frequency Analysis` hit in `SplineWavelets` is Ch. 4 of `9780470926994` / *Fundamentals of Wavelets*, not Gröchenig)*.
-* **Lyche & Schumaker**, *"L-spline wavelets"* (1994) — not present.
-* **Bora, Price & Dimakis**, *"AmbientGAN: Generative models from lossy measurements"* (ICLR 2018 / OpenReview `Hy7fDog0b`) — you have the third-party reproduction `1810.10108v1` in `gauntlet/signal-processing`, not the original paper.
+Measurements"* (ICLR 2018 / OpenReview `Hy7fDog0b`) — you have the third-party reproduction `1810.10108v1` in `gauntlet/signal-processing`, not the original paper.
 
 ### Partial / Chapter-only
 * **Unser & Tafti**, *An Introduction to Sparse Stochastic Processes* — only [UnserTafti-preview.pdf](file:///d:/aghado01/codex-scientiae/supellex-private/PDFs/other/UnserTafti-preview.pdf) in `PDFs/other`.
